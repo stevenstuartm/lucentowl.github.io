@@ -1,0 +1,46 @@
+---
+layout: default
+---
+
+{% assign author = site.data.authors[page.author] %}
+
+{% if author %}
+<div class="author-page">
+
+    <div class="author-profile">
+        <img src="{{ author.avatar | relative_url }}" alt="{{ author.name }}" class="author-avatar">
+        <div class="author-info">
+            <h1 class="author-name">{{ author.name }}</h1>
+            <p class="author-title">{{ author.title }}</p>
+            <p class="author-bio">{{ author.bio }}</p>
+            <div class="author-links">
+                {% include social-links.html author=page.author %}
+                {% if author.personal_site %}
+                <a href="{{ author.personal_site }}" target="_blank" rel="noopener noreferrer" class="author-personal-site">
+                    Full profile →
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% assign author_posts = site.posts | where: "author", page.author %}
+    {% if author_posts.size > 0 %}
+    <section class="author-posts">
+        <h2>Articles</h2>
+        <div class="author-posts-list">
+            {% for post in author_posts limit: 20 %}
+            <article class="author-post-card">
+                <div class="author-post-meta">
+                    <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%B %d, %Y" }}</time>
+                </div>
+                <h3><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h3>
+                {% if post.description %}<p class="author-post-description">{{ post.description }}</p>{% endif %}
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+</div>
+{% endif %}

@@ -1,0 +1,19 @@
+{% comment %}
+  Author card for grid display (e.g., about page).
+  Parameters:
+    - author_key: author key matching assets/data/authors.yml (e.g. "steven-stuart")
+{% endcomment %}
+
+{% assign author_key = include.author_key %}
+{% assign author = site.data.authors[author_key] %}
+
+{% if author %}
+<a href="{{ author.url | relative_url }}" class="author-card">
+    <img src="{{ author.avatar | relative_url }}" alt="{{ author.name }}" class="author-card-avatar">
+    <div class="author-card-body">
+        <div class="author-card-name">{{ author.name }}</div>
+        <div class="author-card-title">{{ author.title }}</div>
+        <span class="author-card-link">View profile →</span>
+    </div>
+</a>
+{% endif %}

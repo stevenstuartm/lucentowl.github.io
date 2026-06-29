@@ -1,0 +1,186 @@
+---
+layout: default
+---
+
+<div class="guides-page" id="guidesPage">
+    <section class="guides-hero">
+        <h1>{{ page.title }}</h1>
+        {% if page.subtitle %}
+        <p class="subtitle">{{ page.subtitle }}</p>
+        {% endif %}
+        {{ content }}
+    </section>
+
+    {% include continue-reading-card.html %}
+
+    <div class="page-listing">
+
+    <div class="guides-search-sticky" id="guidesSearchSticky">
+        <div class="guides-search-wrapper">
+            <svg class="guides-search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="search" id="searchInput" class="guides-search-input"
+                   placeholder="Search by title, topic, or tag — press Enter to add as filter"
+                   autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <div id="activeFiltersBar" class="active-filters-bar" style="display:none">
+        <div class="active-filter-chips" id="activeFilterChips"></div>
+        <button id="clearAllFilters" class="clear-all-link" type="button">Clear all</button>
+    </div>
+
+    <section class="category-browser" id="categoryBrowser">
+
+        <div class="category-cards-grid" id="categoryCardsGrid">
+            {% for category_pair in site.data.study_guides_config.categories %}
+                {% assign category_name = category_pair[0] %}
+                {% assign category_config = category_pair[1] %}
+                {% assign total_guides = 0 %}
+                {% for subcat in category_config.subcategories %}
+                    {% assign total_guides = total_guides | plus: subcat.guides.size %}
+                {% endfor %}
+                {% assign color_index = forloop.index0 | modulo: 8 %}
+                <button class="category-card"
+                        type="button"
+                        data-category="{{ category_name | slugify }}"
+                        data-category-name="{{ category_name }}"
+                        data-color-index="{{ color_index }}">
+                    <span class="category-card-name">{{ category_name }}</span>
+                    <span class="category-card-count">{{ total_guides }} guides</span>
+                </button>
+            {% endfor %}
+        </div>
+
+        <div class="category-collapsed-bar" id="categoryCollapsedBar" style="display:none">
+            <button class="category-collapsed-browse" id="categoryCollapsedBrowse" type="button">
+                Browse categories
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="category-collapsed-chevron">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+            <span class="category-collapsed-divider" aria-hidden="true">/</span>
+            <span class="category-collapsed-name" id="categoryCollapsedName"></span>
+            <button class="category-collapsed-clear" id="categoryCollapsedClear" type="button" aria-label="Clear category">&#x2715;</button>
+        </div>
+
+    </section>
+
+    {% for category_pair in site.data.study_guides_config.categories %}
+        {% assign category_name = category_pair[0] %}
+        {% assign category_config = category_pair[1] %}
+        <section class="subcategory-browser"
+                 id="subcat-{{ category_name | slugify }}"
+                 data-category="{{ category_name | slugify }}"
+                 style="display:none">
+            <div class="subcategory-cards-row">
+                <button class="subcategory-card subcategory-card--all"
+                        type="button"
+                        data-category="{{ category_name | slugify }}"
+                        data-subcategory="all">
+                    <span class="subcategory-card-name">All</span>
+                </button>
+                {% for subcategory in category_config.subcategories %}
+                    <button class="subcategory-card"
+                            type="button"
+                            data-category="{{ category_name | slugify }}"
+                            data-subcategory="{{ subcategory.name | slugify }}">
+                        <span class="subcategory-card-name">{{ subcategory.name }}</span>
+                        <span class="subcategory-card-count">{{ subcategory.guides.size }}</span>
+                    </button>
+                {% endfor %}
+            </div>
+        </section>
+    {% endfor %}
+
+    <div class="guides-content">
+        <div class="guides-result-bar">
+            <span id="resultCount" class="result-count"></span>
+        </div>
+
+        <div class="guides-grid" id="guidesGrid">
+            {% for category_pair in site.data.study_guides_config.categories %}
+                {% assign category_name = category_pair[0] %}
+                {% assign category_config = category_pair[1] %}
+
+                <section class="category-section"
+                         id="{{ category_name | slugify }}"
+                         data-category="{{ category_name | slugify }}">
+                    <h2 class="category-heading">{{ category_name }}</h2>
+
+                    {% for subcategory in category_config.subcategories %}
+                        <div class="subcategory-group"
+                             data-subcategory="{{ subcategory.name | slugify }}">
+                            <h3 class="subcategory-title-inline">
+                                {{ subcategory.name }}
+                                <span class="subcategory-guide-count-inline">{{ subcategory.guides.size }}</span>
+                            </h3>
+                            <div class="guide-cards">
+                                {% for guide_filename in subcategory.guides %}
+                                    {% assign expected_path = "_guides/" | append: guide_filename %}
+                                    {% assign guide = site.guides | where: "path", expected_path | first %}
+                                    {% if guide %}
+                                        {% assign reading_order = forloop.index %}
+                                        {% assign show_order = false %}
+                                        {% if subcategory.guides.size > 1 %}
+                                            {% assign show_order = true %}
+                                        {% endif %}
+                                        {% assign guide_words = guide.content | strip_html | number_of_words %}
+                                        {% assign guide_minutes = guide_words | divided_by: 200 %}
+                                        {% if guide_minutes < 1 %}{% assign guide_minutes = 1 %}{% endif %}
+
+                                        <article class="guide-card filterable-item"
+                                                 data-title="{{ guide.title | downcase }}"
+                                                 data-description="{{ guide.description | downcase }}"
+                                                 data-category="{{ category_name | slugify }}"
+                                                 data-subcategory="{{ subcategory.name | slugify }}"
+                                                 data-tags="{% if guide.tags %}{{ guide.tags | join: ',' | downcase }}{% endif %}">
+                                            <a href="{{ guide.url | relative_url }}" class="guide-link">
+                                                {% if show_order %}
+                                                <div class="reading-order-badge">
+                                                    <span class="order-number">{{ reading_order }}</span>
+                                                </div>
+                                                {% endif %}
+                                                <h3>{{ guide.title }}</h3>
+                                                <div class="guide-card-meta">
+                                                    <span class="reading-time-badge">{{ guide_minutes }} min</span>
+                                                </div>
+                                                {% if guide.description %}
+                                                <p class="guide-excerpt">{{ guide.description }}</p>
+                                                {% elsif guide.excerpt %}
+                                                {% assign clean_excerpt = guide.excerpt | strip_html | remove: 'Table of Contents' | remove: 'Overview' | remove: '[' | remove: ']' | remove: '(' | remove: ')' | remove: '#' %}
+                                                <p class="guide-excerpt">{{ clean_excerpt | truncatewords: 30 }}</p>
+                                                {% endif %}
+                                                <span class="read-more">Read guide →</span>
+                                            </a>
+                                            {% if guide.tags %}
+                                            <div class="guide-card-tags">
+                                                {% for tag in guide.tags limit: 4 %}
+                                                <button class="guide-tag"
+                                                        type="button"
+                                                        data-tag="{{ tag | downcase }}">{{ tag }}</button>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                        </article>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </section>
+            {% endfor %}
+        </div>
+
+        <div id="noResults" class="no-results" style="display: none;">
+            <p>No study guides match your filters.</p>
+            <button id="clearNoResults" class="clear-filters-btn" type="button">Clear filters</button>
+        </div>
+    </div>
+
+    </div><!-- /.page-listing -->
+</div>
+
+<script src="{{ '/assets/js/guides-browser.js' | relative_url }}"></script>

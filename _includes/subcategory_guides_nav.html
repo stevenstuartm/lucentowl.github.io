@@ -1,0 +1,41 @@
+{% comment %}
+  Generic navigation for guides using guides_config.json
+  Displays subcategories and guides in defined order for any category
+
+  Parameters:
+    - category_name: The category to display (e.g., "Architecture")
+{% endcomment %}
+
+{% assign category_config = site.data.study_guides_config.categories[include.category_name] %}
+
+{% if category_config %}
+  <div class="subcategory-guides-nav">
+    {% for subcategory in category_config.subcategories %}
+      <section class="subcategory-section" data-subcategory="{{ subcategory.name | slugify }}">
+        <h3 class="subcategory-heading">
+          <span class="subcategory-number">{{ subcategory.order }}.</span>
+          {{ subcategory.name }}
+        </h3>
+        {% if subcategory.description %}
+          <p class="subcategory-description">{{ subcategory.description }}</p>
+        {% endif %}
+
+        <ol class="subcategory-guides">
+          {% for guide_ref in subcategory.guides %}
+            {% assign guide_file = guide_ref.file %}
+            {% assign guide = site.guides | where_exp: "item", "item.path contains guide_file" | first %}
+
+            {% if guide %}
+              <li class="guide-item" data-order="{{ guide_ref.order }}">
+                <a href="{{ guide.url | relative_url }}" class="guide-link">
+                  <span class="nav-guide-number">{{ subcategory.order }}.{{ guide_ref.order }}</span>
+                  <span class="nav-guide-title">{{ guide.title | default: guide_file | remove: ".md" | replace: "_", " " | capitalize }}</span>
+                </a>
+              </li>
+            {% endif %}
+          {% endfor %}
+        </ol>
+      </section>
+    {% endfor %}
+  </div>
+{% endif %}

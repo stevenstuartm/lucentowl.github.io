@@ -1,0 +1,30 @@
+---
+layout: default
+---
+
+<div class="home">
+    <section class="hero">
+        <h2>{{ page.title }}</h2>
+        {% if page.subtitle %}
+        <p class="subtitle">{{ page.subtitle }}</p>
+        {% endif %}
+    </section>
+
+    {% include continue-reading-card.html %}
+
+    <!-- Editorial Feed -->
+    {% if page.featured_items %}
+    <section class="editorial-feed">
+        {% for item in page.featured_items %}
+        <a href="{{ item.url | relative_url }}" class="editorial-item" aria-label="{{ item.title }}">
+            <div class="editorial-label">{{ item.label }}</div>
+            <div class="editorial-body">
+                <h3 class="editorial-title">{{ item.title }}</h3>
+                <p class="editorial-description">{{ item.description }}</p>
+                <span class="editorial-cta">{{ item.cta }} →</span>
+            </div>
+        </a>
+        {% endfor %}
+    </section>
+    {% endif %}
+</div>

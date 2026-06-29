@@ -1,0 +1,211 @@
+---
+layout: default
+---
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "{{ page.title }}",
+  "datePublished": "{{ page.date | date_to_xmlschema }}",
+  "dateModified": "{{ page.date | date_to_xmlschema }}",
+  {% assign json_author = site.data.authors[page.author] %}"author": {
+    "@type": "Person",
+    "name": "{{ json_author.name | default: site.author.name }}",
+    "url": "{{ site.url }}{{ json_author.url }}"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "{{ site.title }}"
+  },
+  "description": "{% if page.description %}{{ page.description }}{% elsif page.excerpt %}{{ page.excerpt | strip_html | strip_newlines | truncate: 160 }}{% else %}{{ site.description }}{% endif %}",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "{{ page.url | absolute_url }}"
+  }{% if page.image %},
+  "image": "{{ page.image | absolute_url }}"{% endif %}
+}
+</script>
+
+{% comment %} Add prev/next navigation at top {% endcomment %}
+{% include post_navigation.html %}
+
+<header class="page-header-card">
+    <div class="post-header">
+        <nav class="breadcrumb">
+            <a href="{{ '/blog.html' | relative_url }}">Blog</a>
+        </nav>
+        <h1 class="post-title">{{ page.title }}</h1>
+        <div class="post-meta">
+            <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: "%B %d, %Y" }}</time>
+            {% if page.author %} • {% include author-byline.html author=page.author %}{% endif %}
+        </div>
+        {% assign words = content | strip_html | number_of_words %}
+        {% assign minutes = words | divided_by: 200 %}
+        {% if minutes < 1 %}{% assign minutes = 1 %}{% endif %}
+        <div class="reading-time">
+            <span class="reading-time-icon">📖</span>
+            <span class="reading-time-text">{{ minutes }} min read</span>
+        </div>
+    </div>
+</header>
+
+<article class="post">
+
+    <!-- TOC Toggle Button -->
+    <button class="toc-toggle" id="tocToggle" aria-label="Toggle table of contents">
+        <span class="toc-toggle-icon">☰</span>
+        <span class="toc-toggle-text">Contents</span>
+    </button>
+
+    <div class="post-container" id="postContainer">
+        <!-- Table of Contents (auto-generated from headings) -->
+        <aside class="post-toc" id="postToc">
+            <div class="toc-wrapper">
+                <h3>Table of Contents</h3>
+                <nav id="TableOfContents"></nav>
+            </div>
+        </aside>
+
+        <div class="post-content">
+            {{ content }}
+        </div>
+    </div>
+
+    <div class="post-share">
+        <p>Found this helpful? Share it with your network:</p>
+        {% include share-linkedin.html %}
+    </div>
+
+    {% comment %} Add prev/next navigation {% endcomment %}
+    {% include post_navigation.html %}
+
+    <footer class="post-footer">
+        <a href="{{ '/blog.html' | relative_url }}" class="back-link">← Back to all posts</a>
+    </footer>
+</article>
+
+<!-- Scroll to Top Button -->
+<button class="scroll-to-top" id="scrollToTop" aria-label="Scroll to top">
+    ↑
+</button>
+
+<script>
+// Auto-generate table of contents from h2 and h3 headings
+document.addEventListener('DOMContentLoaded', function() {
+    const content = document.querySelector('.post-content');
+    const toc = document.getElementById('TableOfContents');
+
+    if (!content || !toc) return;
+
+    const headings = content.querySelectorAll('h2, h3');
+
+    if (headings.length === 0) {
+        document.querySelector('.post-toc').style.display = 'none';
+        document.querySelector('.toc-toggle').style.display = 'none';
+        return;
+    }
+
+    let tocHTML = '<ul class="toc-list">';
+    let currentLevel = 2;
+
+    headings.forEach((heading, index) => {
+        const level = parseInt(heading.tagName.charAt(1));
+        const text = heading.textContent;
+        const id = heading.id || 'heading-' + index;
+
+        if (!heading.id) {
+            heading.id = id;
+        }
+
+        if (level > currentLevel) {
+            tocHTML += '<ul class="toc-sublist">';
+        } else if (level < currentLevel) {
+            tocHTML += '</ul>';
+        }
+
+        const itemClass = level === 2 ? 'toc-item' : 'toc-subitem';
+        tocHTML += `<li class="${itemClass}"><a href="#${id}">${text}</a></li>`;
+
+        currentLevel = level;
+    });
+
+    tocHTML += '</ul>';
+    toc.innerHTML = tocHTML;
+
+    // Highlight current section on scroll
+    const tocLinks = toc.querySelectorAll('a');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const id = entry.target.id;
+            const tocLink = toc.querySelector(`a[href="#${id}"]`);
+
+            if (entry.isIntersecting) {
+                tocLinks.forEach(link => link.classList.remove('active'));
+                if (tocLink) tocLink.classList.add('active');
+            }
+        });
+    }, {
+        rootMargin: '-80px 0px -80% 0px'
+    });
+
+    headings.forEach(heading => observer.observe(heading));
+});
+
+// TOC Toggle Functionality
+(function() {
+    const tocToggle = document.getElementById('tocToggle');
+    const postToc = document.getElementById('postToc');
+    const postContainer = document.getElementById('postContainer');
+
+    if (!tocToggle || !postToc || !postContainer) return;
+
+    function toggleTOC(forceClose = false) {
+        if (forceClose) {
+            tocToggle.classList.remove('expanded');
+            postToc.classList.remove('expanded');
+        } else {
+            tocToggle.classList.toggle('expanded');
+            postToc.classList.toggle('expanded');
+        }
+    }
+
+    tocToggle.addEventListener('click', function() {
+        toggleTOC();
+    });
+
+    // Close TOC when clicking on a link
+    postToc.addEventListener('click', function(e) {
+        if (e.target.tagName === 'A') {
+            toggleTOC(true);
+        }
+    });
+})();
+
+// Scroll to Top Button
+(function() {
+    const scrollBtn = document.getElementById('scrollToTop');
+    const scrollThreshold = window.innerHeight;
+
+    function toggleScrollButton() {
+        if (window.scrollY > scrollThreshold) {
+            scrollBtn.classList.add('visible');
+        } else {
+            scrollBtn.classList.remove('visible');
+        }
+    }
+
+    window.addEventListener('scroll', toggleScrollButton);
+
+    scrollBtn.addEventListener('click', function() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+
+    // Initial check
+    toggleScrollButton();
+})();
+</script>

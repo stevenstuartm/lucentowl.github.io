@@ -1,0 +1,66 @@
+<!-- Continue Reading Card (reusable component) -->
+<a href="#" id="continueReadingCard" class="continue-reading-card">
+    <button class="continue-reading-close" id="closeReadingCard" aria-label="Dismiss for now">×</button>
+    <span class="compact-icon">📖</span>
+    <div class="compact-info">
+        <span class="compact-label">Continue Reading</span>
+        <h3 class="compact-title" id="homeGuideTitle"></h3>
+        <span class="compact-meta" id="homeGuideLastRead"></span>
+    </div>
+</a>
+
+<script>
+// Populate continue reading card
+(function() {
+    const DISMISS_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+    const DISMISS_KEY = 'continueReadingDismissed';
+
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initContinueReading);
+    } else {
+        initContinueReading();
+    }
+
+    function initContinueReading() {
+        const card = document.getElementById('continueReadingCard');
+        if (!card) return;
+
+        // Check if ReadingProgressTracker is available
+        if (typeof ReadingProgressTracker === 'undefined') {
+            console.warn('ReadingProgressTracker not loaded yet');
+            return;
+        }
+
+        const tracker = new ReadingProgressTracker();
+        const progress = tracker.getCurrentProgress();
+
+        if (!progress) {
+            return; // No saved progress
+        }
+
+        // Check if card was dismissed recently
+        const dismissedUntil = sessionStorage.getItem(DISMISS_KEY);
+        if (dismissedUntil && Date.now() < parseInt(dismissedUntil)) {
+            return; // Still dismissed
+        }
+
+        // Populate card with progress data (using textContent to avoid HTML encoding)
+        document.getElementById('homeGuideTitle').textContent = progress.title;
+        document.getElementById('homeGuideLastRead').textContent = ReadingProgressTracker.formatTimeAgo(progress.lastRead);
+        card.href = progress.url;
+
+        // Show the card
+        card.classList.add('visible');
+
+        // Handle close button (prevent navigation when dismissing)
+        document.getElementById('closeReadingCard').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            card.classList.remove('visible');
+            // Dismiss for 5 minutes
+            sessionStorage.setItem(DISMISS_KEY, (Date.now() + DISMISS_DURATION_MS).toString());
+        });
+    }
+})();
+</script>

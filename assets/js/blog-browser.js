@@ -1,0 +1,237 @@
+class BlogBrowser {
+    constructor() {
+        this.state = {
+            tags: new Set(),
+            searches: new Set()
+        };
+        this.liveSearch = '';
+        this.elements = {};
+        this.init();
+    }
+
+    init() {
+        this.cacheElements();
+        this.bindSearch();
+        this.bindTagsOnCards();
+        this.bindClearAll();
+        this.loadFromURL();
+        this.applyState();
+    }
+
+    cacheElements() {
+        this.elements.postItems = document.querySelectorAll('.filterable-item');
+        this.elements.searchInput = document.getElementById('searchInput');
+        this.elements.resultCount = document.getElementById('resultCount');
+        this.elements.noResults = document.getElementById('noResults');
+        this.elements.activeFiltersBar = document.getElementById('activeFiltersBar');
+        this.elements.activeFilterChips = document.getElementById('activeFilterChips');
+        this.elements.clearAllBtn = document.getElementById('clearAllFilters');
+    }
+
+    bindSearch() {
+        const input = this.elements.searchInput;
+        if (!input) return;
+
+        let timer;
+        input.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                this.liveSearch = input.value.toLowerCase().trim();
+                this.applyFiltersOnly();
+            }, 200);
+        });
+
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const term = input.value.trim();
+                if (term) {
+                    this.state.searches.add(term.toLowerCase());
+                    input.value = '';
+                    this.liveSearch = '';
+                    this.applyState();
+                    this.updateURL();
+                }
+            }
+            if (e.key === 'Escape') {
+                input.value = '';
+                this.liveSearch = '';
+                this.applyFiltersOnly();
+            }
+        });
+    }
+
+    bindTagsOnCards() {
+        document.querySelectorAll('.guide-tag[data-tag]').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                const tag = btn.dataset.tag;
+                if (this.state.tags.has(tag)) {
+                    this.state.tags.delete(tag);
+                } else {
+                    this.state.tags.add(tag);
+                }
+                this.applyState();
+                this.updateURL();
+            });
+        });
+    }
+
+    bindClearAll() {
+        if (this.elements.clearAllBtn) {
+            this.elements.clearAllBtn.addEventListener('click', () => this.clearAll());
+        }
+        const clearNoResults = document.getElementById('clearNoResults');
+        if (clearNoResults) {
+            clearNoResults.addEventListener('click', () => this.clearAll());
+        }
+    }
+
+    clearAll() {
+        this.state = { tags: new Set(), searches: new Set() };
+        this.liveSearch = '';
+        if (this.elements.searchInput) this.elements.searchInput.value = '';
+        this.applyState();
+        this.updateURL();
+    }
+
+    applyState() {
+        const count = this.filterPostCards();
+        this.updateActiveFiltersBar();
+        this.updateResultCount(count);
+    }
+
+    applyFiltersOnly() {
+        const count = this.filterPostCards();
+        this.updateResultCount(count);
+    }
+
+    filterPostCards() {
+        const { tags, searches } = this.state;
+        let visible = 0;
+
+        this.elements.postItems.forEach(item => {
+            const show = this.itemMatches(item, tags, searches, this.liveSearch);
+            item.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        if (this.elements.noResults) {
+            this.elements.noResults.style.display = visible === 0 ? '' : 'none';
+        }
+
+        return visible;
+    }
+
+    itemMatches(item, tags, searches, liveSearch) {
+        if (tags.size > 0) {
+            const itemTags = (item.dataset.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+            for (const tag of tags) {
+                if (!itemTags.includes(tag)) return false;
+            }
+        }
+
+        const title = item.dataset.title || '';
+        const desc = item.dataset.description || '';
+        const itemTagStr = item.dataset.tags || '';
+
+        for (const term of searches) {
+            if (!title.includes(term) && !desc.includes(term) && !itemTagStr.includes(term)) return false;
+        }
+
+        if (liveSearch) {
+            if (!title.includes(liveSearch) && !desc.includes(liveSearch) && !itemTagStr.includes(liveSearch)) return false;
+        }
+
+        return true;
+    }
+
+    updateActiveFiltersBar() {
+        const { searches, tags } = this.state;
+        const chips = [];
+
+        for (const term of searches) {
+            chips.push({ type: 'search', label: term, value: term });
+        }
+        for (const tag of tags) {
+            chips.push({ type: 'tag', label: tag, value: tag });
+        }
+
+        if (this.elements.activeFiltersBar) {
+            this.elements.activeFiltersBar.style.display = chips.length > 0 ? '' : 'none';
+        }
+
+        if (!this.elements.activeFilterChips) return;
+
+        this.elements.activeFilterChips.innerHTML = chips.map(chip =>
+            `<button class="filter-chip filter-chip--${chip.type}" data-type="${chip.type}" data-value="${this.escAttr(chip.value)}" type="button">
+                <span class="filter-chip-label">${this.escHtml(chip.label)}</span>
+                <span class="filter-chip-remove" aria-hidden="true">&times;</span>
+            </button>`
+        ).join('');
+
+        this.elements.activeFilterChips.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const type = chip.dataset.type;
+                const value = chip.dataset.value;
+                if (type === 'search') this.state.searches.delete(value);
+                else if (type === 'tag') this.state.tags.delete(value);
+                this.applyState();
+                this.updateURL();
+            });
+        });
+
+        document.querySelectorAll('.guide-tag[data-tag]').forEach(btn => {
+            btn.classList.toggle('active', this.state.tags.has(btn.dataset.tag));
+        });
+    }
+
+    updateResultCount(visible) {
+        if (!this.elements.resultCount) return;
+        const total = this.elements.postItems.length;
+        const hasFilters = this.state.tags.size > 0 || this.state.searches.size > 0 || this.liveSearch;
+        this.elements.resultCount.textContent = hasFilters
+            ? `${visible} of ${total} posts`
+            : `${total} posts`;
+    }
+
+    loadFromURL() {
+        const params = new URLSearchParams(window.location.search);
+
+        const search = params.get('search');
+        if (search) {
+            search.split(',').forEach(t => { if (t.trim()) this.state.searches.add(t.trim()); });
+        }
+
+        const tags = params.get('tags');
+        if (tags) {
+            tags.split(',').forEach(t => { if (t.trim()) this.state.tags.add(t.trim()); });
+        }
+    }
+
+    updateURL() {
+        const params = new URLSearchParams();
+        if (this.state.searches.size > 0) params.set('search', Array.from(this.state.searches).join(','));
+        if (this.state.tags.size > 0) params.set('tags', Array.from(this.state.tags).join(','));
+
+        const url = params.toString() ? `${location.pathname}?${params}` : location.pathname;
+        history.replaceState({}, '', url);
+    }
+
+    escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    escAttr(str) {
+        return String(str).replace(/"/g, '&quot;');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.blogBrowser = new BlogBrowser();
+});

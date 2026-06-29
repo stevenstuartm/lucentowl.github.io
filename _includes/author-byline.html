@@ -1,0 +1,15 @@
+{% comment %}
+  Compact author byline for post/case-study headers.
+  Parameters:
+    - author: author key matching _data/authors.yml (e.g. "steven-stuart")
+{% endcomment %}
+
+{% assign author_key = include.author | default: "steven-stuart" %}
+{% assign author = site.data.authors[author_key] %}
+
+{% if author %}
+<a href="{{ author.url | relative_url }}" class="author-byline">
+    <img src="{{ author.avatar | relative_url }}" alt="{{ author.name }}" class="author-byline-avatar">
+    <span class="author-byline-name">{{ author.name }}</span>
+</a>
+{% endif %}

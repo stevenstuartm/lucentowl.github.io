@@ -1,0 +1,36 @@
+{% comment %}
+  Generate prev/next navigation for blog posts in chronological order.
+  Uses Jekyll's built-in page.previous and page.next variables.
+{% endcomment %}
+
+{% if page.previous or page.next %}
+<nav class="guide-navigation">
+  <div class="guide-nav-container">
+    {% comment %} Previous post (older) {% endcomment %}
+    {% if page.next %}
+      <a href="{{ page.next.url | relative_url }}" class="guide-nav-link guide-nav-prev">
+        <span class="nav-arrow">←</span>
+        <div class="nav-content">
+          <span class="nav-label">Previous</span>
+          <span class="nav-guide-title">{{ page.next.title }}</span>
+        </div>
+      </a>
+    {% else %}
+      <div class="guide-nav-spacer"></div>
+    {% endif %}
+
+    {% comment %} Next post (newer) {% endcomment %}
+    {% if page.previous %}
+      <a href="{{ page.previous.url | relative_url }}" class="guide-nav-link guide-nav-next">
+        <div class="nav-content">
+          <span class="nav-label">Next</span>
+          <span class="nav-guide-title">{{ page.previous.title }}</span>
+        </div>
+        <span class="nav-arrow">→</span>
+      </a>
+    {% else %}
+      <div class="guide-nav-spacer"></div>
+    {% endif %}
+  </div>
+</nav>
+{% endif %}

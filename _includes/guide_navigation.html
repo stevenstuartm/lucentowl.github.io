@@ -1,0 +1,60 @@
+{% comment %}
+  Generate prev/next navigation for guides based on guides_config.json
+  Works across subcategories within the same parent category
+{% endcomment %}
+
+{% assign current_category = page.category %}
+{% assign current_path = page.path %}
+{% assign category_config = site.data.study_guides_config.categories[current_category] %}
+
+{% if category_config %}
+  {% comment %} Flatten all guides in order across subcategories {% endcomment %}
+  {% assign all_guides = "" | split: "" %}
+  {% for subcategory in category_config.subcategories %}
+    {% for guide_filename in subcategory.guides %}
+      {% assign guide = site.guides | where_exp: "item", "item.path contains guide_filename" | first %}
+      {% if guide %}
+        {% assign all_guides = all_guides | push: guide %}
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+
+  {% comment %} Find current guide index {% endcomment %}
+  {% assign current_index = -1 %}
+  {% for guide in all_guides %}
+    {% if guide.url == page.url %}
+      {% assign current_index = forloop.index0 %}
+      {% break %}
+    {% endif %}
+  {% endfor %}
+
+  {% if current_index >= 0 %}
+    <nav class="guide-navigation">
+      <div class="guide-nav-container">
+        {% comment %} Previous guide {% endcomment %}
+        {% if current_index > 0 %}
+          {% assign prev_index = current_index | minus: 1 %}
+          {% assign prev_guide = all_guides[prev_index] %}
+          <a href="{{ prev_guide.url | relative_url }}" class="guide-nav-link guide-nav-prev">
+            <span class="nav-arrow">←</span>
+            <span class="nav-guide-title">{{ prev_guide.title }}</span>
+          </a>
+        {% else %}
+          <div class="guide-nav-spacer"></div>
+        {% endif %}
+
+        {% comment %} Next guide {% endcomment %}
+        {% assign next_index = current_index | plus: 1 %}
+        {% if next_index < all_guides.size %}
+          {% assign next_guide = all_guides[next_index] %}
+          <a href="{{ next_guide.url | relative_url }}" class="guide-nav-link guide-nav-next">
+            <span class="nav-guide-title">{{ next_guide.title }}</span>
+            <span class="nav-arrow">→</span>
+          </a>
+        {% else %}
+          <div class="guide-nav-spacer"></div>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+{% endif %}

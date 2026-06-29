@@ -1,0 +1,1064 @@
+{
+  "categories": {
+    "Leadership & Team Management": {
+      "subcategories": [
+        {
+          "name": "Team Leadership",
+          "description": "Practical leadership for dev team leads and managers",
+          "guides": [
+            "leadership/dev-team-leadership-foundations.md"
+          ]
+        },
+        {
+          "name": "Architecture Leadership",
+          "description": "Leadership skills specific to software architects",
+          "guides": [
+            "leadership/architecture-leadership-foundations.md",
+            "architecture/architecture-decision-making.md"
+          ]
+        }
+      ]
+    },
+    "Software Development Lifecycle": {
+      "subcategories": [
+        {
+          "name": "SDLC Fundamentals",
+          "description": "Core SDLC concepts, phases, and methodology comparison",
+          "guides": [
+            "sdlc/sdlc.md",
+            "sdlc/sdlc-methodologies.md",
+            "sdlc/team-organization.md"
+          ]
+        },
+        {
+          "name": "AAA Cycle",
+          "description": "Guiding discipline for architects: Align-Agree-Apply",
+          "guides": [
+            "sdlc/aaa-cycle.md",
+            "sdlc/aaa-phase1-align.md",
+            "sdlc/aaa-phase2-agree.md",
+            "sdlc/aaa-phase3-apply.md",
+            "sdlc/aaa-scenarios.md"
+          ]
+        },
+        {
+          "name": "SDLC Frameworks",
+          "description": "Comprehensive guides to major software development methodologies",
+          "guides": [
+            "sdlc/waterfall.md",
+            "sdlc/scrum.md",
+            "sdlc/kanban.md",
+            "sdlc/lean.md",
+            "sdlc/extreme-programming.md",
+            "sdlc/shape-up.md"
+          ]
+        },
+        {
+          "name": "DevOps & Delivery",
+          "description": "CI/CD, deployment automation, and security integration",
+          "guides": [
+            "sdlc/devops.md",
+            "sdlc/cicd.md",
+            "sdlc/devsecops.md"
+          ]
+        }
+      ]
+    },
+    "Architecture": {
+      "subcategories": [
+        {
+          "name": "Foundations",
+          "description": "Core concepts and principles of software architecture",
+          "guides": [
+            "architecture/ArchitectureFoundations.md",
+            "architecture/modularity-coupling.md",
+            "architecture/architecture-characteristics.md",
+            "architecture/distributed-computing.md"
+          ]
+        },
+        {
+          "name": "Styles",
+          "description": "Architectural styles from monolithic to distributed",
+          "guides": [
+            "architecture/ArchitectureStyles.md",
+            "architecture/layered-architecture.md",
+            "architecture/pipeline-architecture.md",
+            "architecture/microkernel-architecture.md",
+            "architecture/modular-monolith-architecture.md",
+            "architecture/service-based-architecture.md",
+            "architecture/event-driven-architecture.md",
+            "architecture/microservices-architecture.md",
+            "architecture/soa-architecture.md",
+            "architecture/space-based-architecture.md"
+          ]
+        },
+        {
+          "name": "Governance",
+          "description": "Architecture governance frameworks, processes, and tools",
+          "guides": [
+            "architecture/governance.md",
+            "architecture/governance-frameworks.md",
+            "architecture/governance-tools.md"
+          ]
+        },
+        {
+          "name": "Design",
+          "description": "Component design and risk analysis",
+          "guides": [
+            "architecture/DesignImplementation.md",
+            "architecture/domain-driven-design.md",
+            "architecture/api-design-architecture.md",
+            "architecture/grpc-architecture-design.md",
+            "architecture/testing-strategy-architecture.md",
+            "architecture/performance-engineering.md"
+          ]
+        },
+        {
+          "name": "Modeling",
+          "description": "Visual modeling and diagramming techniques",
+          "guides": [
+            "architecture/c4-model.md",
+            "architecture/uml-diagrams.md"
+          ]
+        },
+        {
+          "name": "Patterns",
+          "description": "Architectural and design patterns for distributed systems",
+          "guides": [
+            "architecture/communication_patterns.md",
+            "architecture/messaging_patterns.md",
+            "architecture/coordination_patterns.md",
+            "architecture/orchestration_choreography.md",
+            "architecture/integration_patterns.md",
+            "architecture/data_management_patterns.md",
+            "architecture/performance_scalability_patterns.md",
+            "architecture/reliability_patterns.md",
+            "architecture/deployment_infrastructure_patterns.md",
+            "architecture/legacy-modernization-strategies.md",
+            "architecture/service-mesh-architecture.md"
+          ]
+        },
+        {
+          "name": "Business & Economics",
+          "description": "Cost analysis, ROI, and financial aspects of architecture",
+          "guides": [
+            "architecture/total-cost-of-ownership.md",
+            "architecture/return-on-investment.md"
+          ]
+        }
+      ]
+    },
+    "Security": {
+      "subcategories": [
+        {
+          "name": "Security Fundamentals",
+          "description": "Core security concepts and principles",
+          "guides": [
+            "security/security-foundations.md",
+            "security/frameworks-standards.md",
+            "security/security-best-practices.md"
+          ]
+        },
+        {
+          "name": "Threats & Defense",
+          "description": "Understanding and defending against security threats",
+          "guides": [
+            "security/threats-and-vulnerabilities.md",
+            "security/modern-attack-vectors.md",
+            "security/security-controls-defense.md"
+          ]
+        },
+        {
+          "name": "Application Security",
+          "description": "Securing applications and data",
+          "guides": [
+            "security/application-security.md",
+            "security/data-protection.md",
+            "security/security-testing.md"
+          ]
+        },
+        {
+          "name": "Governance & Response",
+          "description": "Compliance, incident response, and governance",
+          "guides": [
+            "security/compliance-governance.md",
+            "security/incident-response-recovery.md",
+            "security/emerging-technologies.md",
+            "security/security-tools-resources.md"
+          ]
+        }
+      ]
+    },
+    "Data Structures & Algorithms": {
+      "subcategories": [
+        {
+          "name": "Fundamentals",
+          "description": "Core data structures and complexity analysis",
+          "guides": [
+            "dsa/big-o-basics.md",
+            "dsa/asymptotic-notation.md",
+            "dsa/complexity-cheatsheet.md",
+            "dsa/decision-guide.md",
+            "dsa/algorithm-design.md"
+          ]
+        },
+        {
+          "name": "Linear Data Structures",
+          "description": "Arrays, lists, stacks, and queues",
+          "guides": [
+            "dsa/arrays-lists.md",
+            "dsa/linked-lists.md",
+            "dsa/stacks-queues.md"
+          ]
+        },
+        {
+          "name": "Trees & Heaps",
+          "description": "Tree structures and heap-based data structures",
+          "guides": [
+            "dsa/trees-basics.md",
+            "dsa/trees.md",
+            "dsa/trees-advanced.md",
+            "dsa/heaps.md"
+          ]
+        },
+        {
+          "name": "Graphs",
+          "description": "Graph structures and algorithms",
+          "guides": [
+            "dsa/graphs-basics.md",
+            "dsa/graphs.md",
+            "dsa/graphs-advanced.md"
+          ]
+        },
+        {
+          "name": "Hash Tables & Algorithms",
+          "description": "Hashing, searching, sorting, and recursion",
+          "guides": [
+            "dsa/hash-tables.md",
+            "dsa/search-algorithms.md",
+            "dsa/sorting-algorithms.md",
+            "dsa/recursion.md"
+          ]
+        }
+      ]
+    },
+    "Programming Patterns": {
+      "subcategories": [
+        {
+          "name": "OOP Foundations",
+          "description": "Core object-oriented concepts and principles",
+          "guides": [
+            "oop/oop-fundamentals.md",
+            "oop/solid-principles.md",
+            "oop/modern-best-practices.md",
+            "oop/oop-quick-reference.md"
+          ]
+        },
+        {
+          "name": "GoF Patterns",
+          "description": "Gang of Four design patterns and their applications",
+          "guides": [
+            "oop/creational-patterns.md",
+            "oop/structural-patterns.md",
+            "oop/behavioral-patterns.md"
+          ]
+        }
+      ]
+    },
+    "Observability": {
+      "subcategories": [
+        {
+          "name": "Monitoring & Observability",
+          "description": "System monitoring and observability fundamentals",
+          "guides": [
+            "observability-fundamentals.md",
+            "architecture/observability-architecture.md"
+          ]
+        }
+      ]
+    },
+    "Networking": {
+      "subcategories": [
+        {
+          "name": "Network Fundamentals",
+          "description": "Core networking concepts for developers",
+          "guides": [
+            "networking.md",
+            "networking/http-protocol-versions.md"
+          ]
+        }
+      ]
+    },
+    "Databases": {
+      "subcategories": [
+        {
+          "name": "Database Fundamentals",
+          "description": "Core database concepts, CAP theorem, ACID properties, and data modeling",
+          "guides": [
+            "data/database-fundamentals.md",
+            "data/data-architecture.md"
+          ]
+        },
+        {
+          "name": "Database Types",
+          "description": "Deep dives into each database type with use cases and trade-offs",
+          "guides": [
+            "data/relational-databases.md",
+            "data/key-value-stores.md",
+            "data/document-databases.md",
+            "data/wide-column-stores.md",
+            "data/graph-databases.md",
+            "data/time-series-databases.md",
+            "data/vector-databases.md",
+            "data/search-engines.md",
+            "data/in-memory-databases.md",
+            "data/multi-model-databases.md",
+            "data/newsql-databases.md"
+          ]
+        }
+      ]
+    },
+    "AWS": {
+      "subcategories": [
+        {
+          "name": "Architecture Principles",
+          "description": "Well-Architected Framework and architectural decision-making",
+          "guides": [
+            "infrastructure/aws/aws-well-architected-framework.md"
+          ]
+        },
+        {
+          "name": "Identity & Access Management",
+          "description": "IAM, Identity Center, Organizations, and security controls",
+          "guides": [
+            "infrastructure/aws/aws-iam-fundamentals.md"
+          ]
+        },
+        {
+          "name": "Networking",
+          "description": "VPC, subnets, routing, PrivateLink, and network connectivity",
+          "guides": [
+            "infrastructure/aws/aws-vpc-architecture.md",
+            "infrastructure/aws/aws-route53.md",
+            "infrastructure/aws/aws-cloudfront.md",
+            "infrastructure/aws/aws-elastic-load-balancing.md",
+            "infrastructure/aws/aws-api-gateway.md",
+            "infrastructure/aws/aws-direct-connect-vpn.md",
+            "infrastructure/aws/aws-privatelink-transit-gateway.md"
+          ]
+        },
+        {
+          "name": "Compute Services",
+          "description": "EC2, Lambda, ECS, EKS, and compute service selection",
+          "guides": [
+            "infrastructure/aws/aws-ec2-fundamentals.md",
+            "infrastructure/aws/aws-lambda-fundamentals.md",
+            "infrastructure/aws/aws-container-services.md"
+          ]
+        },
+        {
+          "name": "Storage Services",
+          "description": "S3, EBS, EFS, and storage architecture patterns",
+          "guides": [
+            "infrastructure/aws/aws-s3-fundamentals.md",
+            "infrastructure/aws/aws-ebs-efs.md"
+          ]
+        },
+        {
+          "name": "Database Services",
+          "description": "RDS, DynamoDB, Aurora, and database selection",
+          "guides": [
+            "infrastructure/aws/aws-rds-aurora.md",
+            "infrastructure/aws/aws-dynamodb.md",
+            "infrastructure/aws/aws-elasticache.md",
+            "infrastructure/aws/aws-redshift.md",
+            "infrastructure/aws/aws-database-selection.md"
+          ]
+        },
+        {
+          "name": "Infrastructure as Code",
+          "description": "CloudFormation for infrastructure automation and management",
+          "guides": [
+            "infrastructure/aws/cloudformation-fundamentals.md",
+            "infrastructure/aws/cloudformation-templates.md",
+            "infrastructure/aws/cloudformation-advanced.md",
+            "infrastructure/aws/cloudformation-migration.md"
+          ]
+        },
+        {
+          "name": "Application Integration & Messaging",
+          "description": "SQS, SNS, EventBridge, Step Functions, Kinesis, and messaging patterns",
+          "guides": [
+            "infrastructure/aws/aws-sqs-sns.md",
+            "infrastructure/aws/aws-eventbridge.md",
+            "infrastructure/aws/aws-step-functions.md",
+            "infrastructure/aws/aws-kinesis.md"
+          ]
+        },
+        {
+          "name": "Security & Compliance",
+          "description": "Threat detection, security posture, compliance monitoring, and encryption",
+          "guides": [
+            "infrastructure/aws/aws-security-hub-guardduty.md",
+            "infrastructure/aws/aws-cloudtrail-config.md",
+            "infrastructure/aws/aws-waf-shield.md",
+            "infrastructure/aws/aws-kms-secrets-manager.md",
+            "infrastructure/aws/aws-organizations-control-tower.md"
+          ]
+        },
+        {
+          "name": "Management & Governance",
+          "description": "Monitoring, observability, systems management, and cost optimization",
+          "guides": [
+            "infrastructure/aws/aws-cloudwatch.md",
+            "infrastructure/aws/aws-xray.md",
+            "infrastructure/aws/aws-systems-manager.md",
+            "infrastructure/aws/aws-cost-management.md"
+          ]
+        },
+        {
+          "name": "Developer Tools & CI/CD",
+          "description": "CI/CD pipelines, build automation, and deployment orchestration",
+          "guides": [
+            "infrastructure/aws/aws-codepipeline-codebuild.md",
+            "infrastructure/aws/aws-codedeploy.md",
+            "infrastructure/aws/aws-cdk.md"
+          ]
+        },
+        {
+          "name": "Analytics & Data Processing",
+          "description": "ETL, data lakes, serverless analytics, and BI tools",
+          "guides": [
+            "infrastructure/aws/aws-glue.md",
+            "infrastructure/aws/aws-athena.md",
+            "infrastructure/aws/aws-quicksight.md",
+            "infrastructure/aws/aws-data-architecture.md"
+          ]
+        },
+        {
+          "name": "Machine Learning & AI",
+          "description": "SageMaker ML platform and AWS AI services for production workloads",
+          "guides": [
+            "infrastructure/aws/aws-sagemaker.md",
+            "infrastructure/aws/aws-rekognition-textract.md",
+            "infrastructure/aws/aws-comprehend-translate.md",
+            "infrastructure/aws/aws-transcribe-polly.md",
+            "infrastructure/aws/aws-ml-service-selection.md"
+          ]
+        },
+        {
+          "name": "Migration & Hybrid Cloud",
+          "description": "Cloud migration strategies, planning, and execution best practices",
+          "guides": [
+            "infrastructure/aws/aws-migration-strategy.md",
+            "infrastructure/aws/aws-migration-services.md",
+            "infrastructure/aws/aws-hybrid-cloud-architecture.md"
+          ]
+        },
+        {
+          "name": "Serverless Architecture",
+          "description": "Serverless patterns, event-driven design, and production best practices",
+          "guides": [
+            "infrastructure/aws/serverless-architecture-patterns.md",
+            "infrastructure/aws/aws-sam.md"
+          ]
+        },
+        {
+          "name": "Container Orchestration (Advanced)",
+          "description": "Advanced container patterns, security, and service mesh architectures",
+          "guides": [
+            "infrastructure/aws/aws-ecr-container-security.md",
+            "infrastructure/aws/advanced-container-patterns.md"
+          ]
+        },
+        {
+          "name": "Architecture Patterns (Advanced)",
+          "description": "Multi-region architectures and disaster recovery strategies",
+          "guides": [
+            "infrastructure/aws/multi-region-architecture.md",
+            "infrastructure/aws/disaster-recovery.md"
+          ]
+        }
+      ]
+    },
+    "Azure": {
+      "subcategories": [
+        {
+          "name": "Architecture Principles",
+          "description": "Well-Architected Framework and architectural decision-making for Azure",
+          "guides": [
+            "infrastructure/azure/azure-well-architected-framework.md"
+          ]
+        },
+        {
+          "name": "Identity & Access Management",
+          "description": "Entra ID, RBAC, Managed Identities, and workload identity for Azure",
+          "guides": [
+            "infrastructure/azure/azure-entra-id.md",
+            "infrastructure/azure/azure-rbac-managed-identities.md"
+          ]
+        },
+        {
+          "name": "Subscription & Resource Organization",
+          "description": "Tenant architecture, management groups, subscriptions, resource groups, and billing",
+          "guides": [
+            "infrastructure/azure/azure-subscription-architecture.md",
+            "infrastructure/azure/azure-resource-organization.md",
+            "infrastructure/azure/azure-billing-enrollment.md"
+          ]
+        },
+        {
+          "name": "Networking & Content Delivery",
+          "description": "VNets, load balancing, CDN, DNS, and network connectivity for Azure",
+          "guides": [
+            "infrastructure/azure/azure-vnet-architecture.md",
+            "infrastructure/azure/azure-dns-traffic-manager.md",
+            "infrastructure/azure/azure-front-door-cdn.md",
+            "infrastructure/azure/azure-load-balancer-app-gateway.md",
+            "infrastructure/azure/azure-api-management.md",
+            "infrastructure/azure/azure-expressroute-vpn.md",
+            "infrastructure/azure/azure-private-link-virtual-wan.md"
+          ]
+        },
+        {
+          "name": "Compute Services",
+          "description": "Virtual machines, serverless, containers, and PaaS compute on Azure",
+          "guides": [
+            "infrastructure/azure/azure-virtual-machines.md",
+            "infrastructure/azure/azure-functions.md",
+            "infrastructure/azure/azure-container-services.md",
+            "infrastructure/azure/azure-app-service.md"
+          ]
+        },
+        {
+          "name": "Storage Services",
+          "description": "Blob storage, managed disks, file shares, and storage patterns on Azure",
+          "guides": [
+            "infrastructure/azure/azure-blob-storage.md",
+            "infrastructure/azure/azure-managed-disks-files.md"
+          ]
+        },
+        {
+          "name": "Database Services",
+          "description": "Managed database services including relational databases, NoSQL, caching, and data solutions",
+          "guides": [
+            "infrastructure/azure/azure-database-selection.md",
+            "infrastructure/azure/azure-synapse-analytics.md",
+            "infrastructure/azure/azure-sql-database.md",
+            "infrastructure/azure/azure-cache-redis.md",
+            "infrastructure/azure/azure-cosmos-db.md"
+          ]
+        },
+        {
+          "name": "Application Integration & Messaging",
+          "description": "Enterprise messaging, event-driven patterns, workflow orchestration, and asynchronous communication on Azure",
+          "guides": [
+            "infrastructure/azure/azure-service-bus.md",
+            "infrastructure/azure/azure-event-hubs.md",
+            "infrastructure/azure/azure-event-grid.md",
+            "infrastructure/azure/azure-logic-apps.md"
+          ]
+        },
+        {
+          "name": "Infrastructure as Code",
+          "description": "Azure infrastructure automation using Bicep and ARM templates",
+          "guides": [
+            "infrastructure/azure/azure-bicep-fundamentals.md",
+            "infrastructure/azure/azure-bicep-advanced.md",
+            "infrastructure/azure/azure-arm-templates.md"
+          ]
+        },
+        {
+          "name": "Security & Compliance",
+          "description": "Cloud security posture management, threat detection, SIEM, firewalls, secrets management, and governance",
+          "guides": [
+            "infrastructure/azure/azure-defender-sentinel.md",
+            "infrastructure/azure/azure-monitor-diagnostic-settings.md",
+            "infrastructure/azure/azure-firewall-ddos.md",
+            "infrastructure/azure/azure-key-vault.md",
+            "infrastructure/azure/azure-policy-governance.md"
+          ]
+        },
+        {
+          "name": "Management & Governance",
+          "description": "Monitoring, observability, automation, hybrid management, and cost optimization",
+          "guides": [
+            "infrastructure/azure/azure-monitor.md",
+            "infrastructure/azure/azure-application-insights.md",
+            "infrastructure/azure/azure-automation-arc.md",
+            "infrastructure/azure/azure-cost-management.md"
+          ]
+        },
+        {
+          "name": "Analytics & Data Processing",
+          "description": "Data integration, ETL/ELT orchestration, analytics services, and data warehouse solutions",
+          "guides": [
+            "infrastructure/azure/azure-data-factory.md",
+            "infrastructure/azure/azure-synapse-analytics-query.md",
+            "infrastructure/azure/azure-power-bi.md",
+            "infrastructure/azure/azure-data-architecture.md"
+          ]
+        },
+        {
+          "name": "Developer Tools & CI/CD",
+          "description": "CI/CD pipelines, source control, package management, and deployment orchestration",
+          "guides": [
+            "infrastructure/azure/azure-devops-pipelines.md",
+            "infrastructure/azure/azure-devops-repos-artifacts.md",
+            "infrastructure/azure/github-actions-azure.md"
+          ]
+        },
+        {
+          "name": "Machine Learning & AI",
+          "description": "Azure AI and ML services including machine learning platform, vision, language, speech, and service selection",
+          "guides": [
+            "infrastructure/azure/azure-machine-learning.md",
+            "infrastructure/azure/azure-ai-vision.md",
+            "infrastructure/azure/azure-ai-language.md",
+            "infrastructure/azure/azure-ai-speech.md",
+            "infrastructure/azure/azure-ai-service-selection.md"
+          ]
+        },
+        {
+          "name": "Migration & Hybrid Cloud",
+          "description": "Cloud migration strategies, Azure Migrate tools, and hybrid cloud architecture patterns",
+          "guides": [
+            "infrastructure/azure/azure-migration-strategy.md",
+            "infrastructure/azure/azure-migrate-services.md",
+            "infrastructure/azure/azure-hybrid-cloud-architecture.md"
+          ]
+        },
+        {
+          "name": "Serverless Architecture",
+          "description": "Serverless composition patterns, event-driven design, and advanced Azure Functions",
+          "guides": [
+            "infrastructure/azure/serverless-architecture-patterns-azure.md",
+            "infrastructure/azure/azure-functions-advanced.md"
+          ]
+        },
+        {
+          "name": "Container Orchestration (Advanced)",
+          "description": "Advanced AKS patterns, container registry, service mesh, and container security",
+          "guides": [
+            "infrastructure/azure/azure-acr-container-security.md",
+            "infrastructure/azure/advanced-container-patterns-azure.md"
+          ]
+        },
+        {
+          "name": "Architecture Patterns (Advanced)",
+          "description": "Multi-region architectures and disaster recovery strategies on Azure",
+          "guides": [
+            "infrastructure/azure/multi-region-architecture-azure.md",
+            "infrastructure/azure/disaster-recovery-azure.md"
+          ]
+        }
+      ]
+    },
+    "Infrastructure & Cloud": {
+      "subcategories": [
+        {
+          "name": "Infrastructure as Code",
+          "description": "Multi-cloud IaC fundamentals, tools, patterns, and best practices",
+          "guides": [
+            "infrastructure/iac-fundamentals.md",
+            "infrastructure/iac-tools-comparison.md",
+            "infrastructure/iac-implementation-patterns.md",
+            "infrastructure/iac-state-management.md",
+            "infrastructure/iac-environment-lifecycle.md",
+            "infrastructure/iac-testing.md",
+            "infrastructure/iac-governance.md"
+          ]
+        },
+        {
+          "name": "Cloud Operations",
+          "description": "Deployment strategies, disaster recovery, and operational resilience",
+          "guides": [
+            "infrastructure/deployment-strategies.md",
+            "infrastructure/disaster-recovery-patterns.md"
+          ]
+        }
+      ]
+    },
+    "Web Development": {
+      "subcategories": [
+        {
+          "name": "SEO & Web",
+          "description": "Search engine optimization and web best practices",
+          "guides": [
+            "seo.md"
+          ]
+        }
+      ]
+    },
+    "Data & Analytics": {
+      "subcategories": [
+        {
+          "name": "Analytics",
+          "description": "Statistics and data analysis",
+          "guides": [
+            "analytics-and-statistics.md"
+          ]
+        }
+      ]
+    },
+    "AI & Machine Learning": {
+      "subcategories": [
+        {
+          "name": "Machine Learning",
+          "description": "Core ML concepts and techniques",
+          "guides": [
+            "ai/machine-learning.md"
+          ]
+        },
+        {
+          "name": "Generative AI",
+          "description": "Generative AI fundamentals, tools, techniques, and practical applications",
+          "guides": [
+            "ai/core-ai-concepts.md",
+            "ai/generative-ai.md",
+            "ai/prompt-engineering.md",
+            "ai/ai-assisted-development.md",
+            "ai/rag-retrieval-augmented-generation.md",
+            "ai/model-context-protocol.md",
+            "ai/ai-agents.md",
+            "ai/ai-security-for-organizations.md",
+            "ai/scaling-ai-workflows.md",
+            "ai/llm-fine-tuning.md"
+          ]
+        }
+      ]
+    },
+    ".NET & C#": {
+      "subcategories": [
+        {
+          "name": "Foundations",
+          "description": "Essential programming concepts and terminology that underpin C# and modern software development",
+          "guides": [
+            "dotnet/c-sharp/foundations/programming-terminology.md",
+            "dotnet/c-sharp/foundations/compilation-and-runtime.md"
+          ]
+        },
+        {
+          "name": "Language Fundamentals",
+          "description": "Core C# language features: types, operators, control flow, methods, and more",
+          "guides": [
+            "dotnet/c-sharp/fundamentals/types-and-variables.md",
+            "dotnet/c-sharp/fundamentals/operators-and-expressions.md",
+            "dotnet/c-sharp/fundamentals/control-flow.md",
+            "dotnet/c-sharp/fundamentals/methods-and-parameters.md",
+            "dotnet/c-sharp/fundamentals/delegates-and-events.md",
+            "dotnet/c-sharp/fundamentals/strings-and-text.md",
+            "dotnet/c-sharp/fundamentals/exceptions-and-errors.md",
+            "dotnet/c-sharp/fundamentals/attributes-and-reflection.md",
+            "dotnet/c-sharp/fundamentals/memory-management.md",
+            "dotnet/c-sharp/modern/nullable-reference-types.md"
+          ]
+        },
+        {
+          "name": "Object-Oriented Programming",
+          "description": "Classes, structs, records, interfaces, inheritance, and properties",
+          "guides": [
+            "dotnet/c-sharp/oop/classes-and-structs.md",
+            "dotnet/c-sharp/oop/interfaces-and-inheritance.md",
+            "dotnet/c-sharp/oop/properties-and-indexers.md"
+          ]
+        },
+        {
+          "name": "Async & Concurrency",
+          "description": "Asynchronous programming, parallel processing, streaming, and synchronization",
+          "guides": [
+            "dotnet/c-sharp/async/async-await-fundamentals.md",
+            "dotnet/c-sharp/async/parallel-and-concurrent.md",
+            "dotnet/c-sharp/async/streaming-and-pipelines.md",
+            "dotnet/c-sharp/async/synchronization-primitives.md"
+          ]
+        },
+        {
+          "name": "Collections & Data",
+          "description": "Collections, generics, Span, Memory, and high-performance data handling",
+          "guides": [
+            "dotnet/c-sharp/collections/collections-overview.md",
+            "dotnet/c-sharp/collections/generics.md",
+            "dotnet/c-sharp/collections/span-and-memory.md"
+          ]
+        },
+        {
+          "name": "Core Libraries",
+          "description": "Essential .NET libraries: LINQ, Entity Framework, DI, networking, configuration, logging, and common utilities",
+          "guides": [
+            "dotnet/c-sharp/libraries/linq.md",
+            "dotnet/c-sharp/libraries/entity-framework-core.md",
+            "dotnet/c-sharp/libraries/console-and-environment.md",
+            "dotnet/c-sharp/libraries/dependency-injection.md",
+            "dotnet/c-sharp/libraries/httpclient-and-networking.md",
+            "dotnet/c-sharp/libraries/caching-patterns.md",
+            "dotnet/c-sharp/libraries/configuration-and-options.md",
+            "dotnet/c-sharp/libraries/logging.md",
+            "dotnet/c-sharp/libraries/json-serialization.md",
+            "dotnet/c-sharp/libraries/regular-expressions.md",
+            "dotnet/c-sharp/libraries/timers-and-scheduling.md",
+            "dotnet/c-sharp/libraries/file-system.md",
+            "dotnet/c-sharp/libraries/cryptography-basics.md"
+          ]
+        },
+        {
+          "name": "Advanced Topics",
+          "description": "Source generators, unsafe code, expression trees, and native interop",
+          "guides": [
+            "dotnet/c-sharp/advanced/source-generators.md",
+            "dotnet/c-sharp/advanced/unsafe-code-and-pointers.md",
+            "dotnet/c-sharp/advanced/expression-trees.md",
+            "dotnet/c-sharp/advanced/native-interop.md"
+          ]
+        },
+        {
+          "name": "Tooling",
+          "description": "Developer tooling for code quality, formatting, and project configuration",
+          "guides": [
+            "dotnet/c-sharp/tooling/code-formatting-standards.md"
+          ]
+        }
+      ]
+    },
+    "Developer Tools": {
+      "subcategories": [
+        {
+          "name": "Git Fundamentals",
+          "description": "Core Git concepts, workflows, and version control mastery",
+          "guides": [
+            "developer-tools/git-quick-reference.md",
+            "developer-tools/git-core-concepts.md",
+            "developer-tools/git-branching-strategies.md",
+            "developer-tools/git-advanced-operations.md"
+          ]
+        },
+        {
+          "name": "GitHub",
+          "description": "Platform features for collaboration, automation, and governance",
+          "guides": [
+            "developer-tools/github-quick-reference.md",
+            "developer-tools/github-collaboration.md",
+            "developer-tools/github-actions.md",
+            "developer-tools/github-administration-security.md"
+          ]
+        }
+      ]
+    },
+    "ASP.NET Core": {
+      "subcategories": [
+        {
+          "name": "ASP.NET Fundamentals",
+          "description": "ASP.NET Core hosting, HTTP pipeline, middleware, and routing",
+          "guides": [
+            "dotnet/asp/aspnet-core-fundamentals.md",
+            "dotnet/asp/aspnet-middleware.md",
+            "dotnet/asp/aspnet-routing.md"
+          ]
+        },
+        {
+          "name": "API Programming Models",
+          "description": "Controller-based APIs, minimal APIs, gRPC, and real-time communication",
+          "guides": [
+            "dotnet/asp/aspnet-controller-apis.md",
+            "dotnet/asp/aspnet-minimal-apis.md",
+            "dotnet/asp/aspnet-grpc.md",
+            "dotnet/asp/aspnet-signalr-realtime.md"
+          ]
+        },
+        {
+          "name": "API Security & Resilience",
+          "description": "Authentication, authorization, rate limiting, and API hardening",
+          "guides": [
+            "dotnet/asp/aspnet-auth.md",
+            "dotnet/asp/aspnet-api-security.md",
+            "dotnet/asp/aspnet-rate-limiting-resilience.md"
+          ]
+        },
+        {
+          "name": "API Design & Data",
+          "description": "Validation, serialization, versioning, and OpenAPI documentation",
+          "guides": [
+            "dotnet/asp/aspnet-validation-data-handling.md",
+            "dotnet/asp/aspnet-versioning-openapi.md",
+            "dotnet/asp/aspnet-api-documentation-strategy.md"
+          ]
+        },
+        {
+          "name": "Testing & Quality",
+          "description": "Integration testing, architecture testing, and performance testing",
+          "guides": [
+            "dotnet/asp/aspnet-api-testing.md"
+          ]
+        },
+        {
+          "name": "Performance & Operations",
+          "description": "Caching, health checks, deployment, and background services",
+          "guides": [
+            "dotnet/asp/aspnet-caching-performance.md",
+            "dotnet/asp/aspnet-health-checks-diagnostics.md",
+            "dotnet/asp/aspnet-hosting-deployment.md",
+            "dotnet/asp/aspnet-background-services.md"
+          ]
+        },
+        {
+          "name": ".NET Aspire",
+          "description": "Cloud-native orchestration, service defaults, dashboard, and integrations for distributed .NET applications",
+          "guides": [
+            "dotnet/aspire/aspire-fundamentals.md",
+            "dotnet/aspire/aspire-distributed-applications.md"
+          ]
+        }
+      ]
+    },
+    "IoT": {
+      "subcategories": [
+        {
+          "name": "IoT Foundations",
+          "description": "Core IoT concepts, protocols, communication technologies, and hardware fundamentals",
+          "guides": [
+            "iot/iot-fundamentals.md",
+            "iot/iot-protocols-communication.md",
+            "iot/iot-hardware-electronics.md"
+          ]
+        },
+        {
+          "name": "Architecture & Security",
+          "description": "IoT architecture patterns, security fundamentals, firmware updates, and data pipeline design",
+          "guides": [
+            "iot/iot-architecture-patterns.md",
+            "iot/iot-security-fundamentals.md",
+            "iot/iot-firmware-ota-updates.md",
+            "iot/iot-data-pipelines.md"
+          ]
+        },
+        {
+          "name": ".NET IoT Development",
+          "description": "Using C# for IoT development with .NET IoT Libraries, MQTTnet, and .NET nanoFramework",
+          "guides": [
+            "iot/dotnet-iot-libraries.md",
+            "iot/mqttnet-iot-communication.md",
+            "iot/dotnet-nanoframework.md"
+          ]
+        },
+        {
+          "name": "Azure IoT Services",
+          "description": "Azure IoT Hub, Device Provisioning Service, and IoT Edge for cloud-connected device management",
+          "guides": [
+            "iot/azure-iot-hub.md",
+            "iot/azure-iot-dps.md",
+            "iot/azure-iot-edge-architecture.md",
+            "iot/azure-iot-edge-operations.md"
+          ]
+        },
+        {
+          "name": "Dashboards & Apps",
+          "description": "Real-time IoT dashboards with SignalR and cross-platform companion apps with MAUI",
+          "guides": [
+            "iot/signalr-iot-dashboards.md",
+            "iot/maui-iot-companion-apps.md"
+          ]
+        },
+        {
+          "name": "Advanced IoT",
+          "description": "Digital twins, IoT Central, industrial IoT, edge ML, fleet management, and data serialization",
+          "guides": [
+            "iot/azure-digital-twins.md",
+            "iot/azure-iot-central.md",
+            "iot/iiot-foundations-control-systems.md",
+            "iot/iiot-security-maintenance-safety.md",
+            "iot/iiot-architecture-implementation.md",
+            "iot/ml-at-the-edge.md",
+            "iot/iot-fleet-management-lifecycle.md",
+            "iot/iot-fleet-management-operations.md",
+            "iot/iot-data-serialization.md"
+          ]
+        }
+      ]
+    },
+    "WinUI 3": {
+      "subcategories": [
+        {
+          "name": "WinUI Fundamentals",
+          "description": "Architecture, XAML foundations, and layout system for WinUI 3 desktop applications",
+          "guides": [
+            "dotnet/winui/winui-architecture-and-setup.md",
+            "dotnet/winui/winui-xaml-fundamentals.md",
+            "dotnet/winui/winui-layout-system.md"
+          ]
+        },
+        {
+          "name": "Controls & UI",
+          "description": "Built-in and custom controls for building WinUI 3 interfaces",
+          "guides": [
+            "dotnet/winui/winui-input-controls.md",
+            "dotnet/winui/winui-text-and-status-controls.md",
+            "dotnet/winui/winui-collection-controls.md",
+            "dotnet/winui/winui-navigation-controls.md",
+            "dotnet/winui/winui-dialogs-flyouts-commands.md",
+            "dotnet/winui/winui-custom-controls.md"
+          ]
+        },
+        {
+          "name": "Data & MVVM",
+          "description": "Data binding, MVVM pattern, dependency injection, and data access in WinUI 3",
+          "guides": [
+            "dotnet/winui/winui-data-binding.md",
+            "dotnet/winui/winui-mvvm-toolkit.md",
+            "dotnet/winui/winui-dependency-injection.md",
+            "dotnet/winui/winui-file-and-data-access.md",
+            "dotnet/winui/winui-advanced-data-patterns.md"
+          ]
+        },
+        {
+          "name": "Styling & Resources",
+          "description": "Visual styling, theming, resource management, and animations in WinUI 3",
+          "guides": [
+            "dotnet/winui/winui-styling-and-theming.md",
+            "dotnet/winui/winui-resource-management.md",
+            "dotnet/winui/winui-animations-and-motion.md"
+          ]
+        },
+        {
+          "name": "Window & Input",
+          "description": "Window management, input handling, and gesture recognition in WinUI 3",
+          "guides": [
+            "dotnet/winui/winui-window-management.md",
+            "dotnet/winui/winui-input-handling.md"
+          ]
+        },
+        {
+          "name": "Platform Integration",
+          "description": "App lifecycle, packaging, notifications, networking, interop, and migration",
+          "guides": [
+            "dotnet/winui/winui-notifications.md",
+            "dotnet/winui/winui-networking.md",
+            "dotnet/winui/winui-app-lifecycle.md",
+            "dotnet/winui/winui-packaging-and-deployment.md",
+            "dotnet/winui/winui-win32-interop.md",
+            "dotnet/winui/winui-migration-wpf-uwp.md"
+          ]
+        },
+        {
+          "name": "Advanced Features",
+          "description": "Media, graphics, community toolkit, security, and AI integration",
+          "guides": [
+            "dotnet/winui/winui-media-and-graphics.md",
+            "dotnet/winui/winui-community-toolkit.md",
+            "dotnet/winui/winui-security.md",
+            "dotnet/winui/winui-ai-integration.md"
+          ]
+        },
+        {
+          "name": "Quality & Testing",
+          "description": "Accessibility, localization, performance optimization, and testing strategies",
+          "guides": [
+            "dotnet/winui/winui-accessibility.md",
+            "dotnet/winui/winui-localization.md",
+            "dotnet/winui/winui-performance.md",
+            "dotnet/winui/winui-testing.md"
+          ]
+        }
+      ]
+    }
+  }
+}

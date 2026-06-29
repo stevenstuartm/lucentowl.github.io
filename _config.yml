@@ -1,0 +1,79 @@
+# Site settings
+title: Lucent Owl
+description: Practical insights on building software that serve real needs and deliver genuine value.
+baseurl: ""
+url: "https://lucentowl.com"
+version: 1.0.16
+
+# Author information (used by the author system — not displayed as site identity)
+author:
+  name: Steven Stuart
+
+# Build settings
+markdown: kramdown
+permalink: /blog/:year/:month/:day/:title.html
+excerpt_separator: "<!--more-->"
+
+# Sass/CSS settings
+sass:
+  style: compressed
+  sass_dir: _sass
+
+# Data files location
+data_dir: assets/data
+
+# Plugins
+plugins:
+  - jekyll-sitemap
+  # - jekyll-feed
+  - jekyll-redirect-from
+
+# Feed settings (disabled — jekyll-feed slows builds significantly)
+# feed:
+#   path: feed-blog.xml
+#   collections:
+#     - posts
+
+# Collections
+collections:
+  posts:
+    output: true
+    permalink: /blog/:year/:month/:day/:title.html
+  guides:
+    output: true
+    permalink: /study-guides/:path.html
+  case_studies:
+    output: true
+    permalink: /case-studies/:title.html
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      author: "steven-stuart"
+  - scope:
+      path: ""
+      type: "guides"
+    values:
+      layout: "guide"
+  - scope:
+      path: ""
+      type: "case_studies"
+    values:
+      layout: "case-study"
+      author: "steven-stuart"
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - README.md
+  - CLAUDE.md
