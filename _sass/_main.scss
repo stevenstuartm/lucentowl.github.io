@@ -9,6 +9,7 @@
     --color-border: #DDE3EB;       /* Cool light border */
     --color-card-bg: #FFFFFF;      /* White for cards */
     --color-hover: #134C72;        /* Darker blue for hover */
+    --color-gold: #C9A227;         /* Gold illumination accent */
 
     --spacing-xs: 0.5rem;
     --spacing-sm: 1rem;
@@ -107,7 +108,8 @@ main {
 /* ===== Header ===== */
 .site-header {
     background-color: var(--color-card-bg);
-    border-bottom: 2px solid var(--color-primary);
+    border-bottom: 2px solid transparent;
+    border-image: linear-gradient(to right, transparent 0%, var(--color-gold) 40%, var(--color-gold) 60%, transparent 100%) 1;
     padding: 0.25rem 0;
     margin-bottom: var(--spacing-lg);
     position: sticky;
@@ -156,6 +158,17 @@ main {
 
 .site-title a:hover .site-name {
     color: var(--color-primary);
+}
+
+/* Home page: site title defaults to primary color, darkens on hover */
+body.home-layout .site-title a,
+body.home-layout .site-title a .site-name {
+    color: var(--color-primary);
+}
+
+body.home-layout .site-title a:hover,
+body.home-layout .site-title a:hover .site-name {
+    color: #124568;
 }
 
 /* Hamburger Menu Button */
@@ -466,6 +479,10 @@ main {
     margin-bottom: var(--spacing-lg);
 }
 
+.hero-gold {
+    color: var(--color-gold);
+}
+
 .hero h2 {
     font-size: 2.5rem;
     color: var(--color-text);
@@ -508,7 +525,7 @@ main {
     padding: var(--spacing-md);
     background: var(--color-card-bg);
     border: 1px solid var(--color-border);
-    border-left: 4px solid var(--color-secondary);
+    border-left: 4px solid var(--color-gold);
     border-radius: var(--border-radius);
     text-decoration: none;
     color: inherit;
@@ -4039,6 +4056,7 @@ main {
 .author-card {
     background: var(--color-card-bg);
     border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-gold);
     border-radius: var(--border-radius);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 

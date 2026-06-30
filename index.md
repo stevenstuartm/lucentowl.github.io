@@ -1,6 +1,7 @@
 ---
 layout: home
 title: Illuminating the Why Behind the How
+hero_title: "Illuminating the <span class=\"hero-gold\">Why</span> Behind the How"
 subtitle: Practical insights on building software that serve real needs and deliver genuine value.
 
 featured_items:

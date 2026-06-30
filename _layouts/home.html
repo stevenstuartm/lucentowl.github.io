@@ -4,7 +4,7 @@ layout: default
 
 <div class="home">
     <section class="hero">
-        <h2>{{ page.title }}</h2>
+        <h2>{% if page.hero_title %}{{ page.hero_title }}{% else %}{{ page.title }}{% endif %}</h2>
         {% if page.subtitle %}
         <p class="subtitle">{{ page.subtitle }}</p>
         {% endif %}
