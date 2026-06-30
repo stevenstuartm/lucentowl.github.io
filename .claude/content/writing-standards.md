@@ -213,6 +213,12 @@ Every sentence must earn its place. The most common way sentences fail is by res
 - ❌ "These come from different traditions. Trace the failures each one prevents, though, and they converge."
 - ✅ "These come from different traditions. But if you trace the failures each one prevents, they converge."
 
+**Never open a contrast with a combined summary sentence.** When elaborating two contrasted things (A vs B), do not open with a sentence that packages both sides before elaborating each. The opener is scaffolding — cut it and go directly to the first thing, then the second.
+- ❌ "Reactive separation minimizes upfront cost; intentional separation accepts more of it to gain adaptability. Reactive requires no write-path changes, but... Intentional costs more to build, but..."
+- ✅ "Reactive requires no write-path changes, but... Intentional costs more to build, but..."
+
+The combined opener restates what the elaboration is about to show. It adds nothing and creates a pattern of merge-then-separate that reads as stalling.
+
 **The test**: After drafting, read each sentence and ask — does this add something the surrounding prose doesn't already say? If not, cut it.
 
 ### Avoid Choppy and Generic Content

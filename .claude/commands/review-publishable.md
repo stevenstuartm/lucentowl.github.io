@@ -1,8 +1,10 @@
 # review-publishable
 
-Review publishable content against the site's highest quality standards before it goes live. Accepts a file path as argument.
+Review publishable content against the site's highest quality standards before it goes live. Accepts an optional file path as argument.
 
 **Usage**: `/review-publishable _posts/YYYY-MM-DD-title.md`
+
+**File resolution**: If no argument is provided, use the file currently open in the IDE (visible in `ide_opened_file` context). If there is no open file and no argument, ask the user which file to review.
 
 ---
 
@@ -28,7 +30,7 @@ Work through each step in order. Do not skip any step. Report findings for each 
 
 ### Step 1 — Read and identify
 
-Read the file at `$ARGUMENTS`. Identify:
+Resolve the target file: use `$ARGUMENTS` if provided; otherwise use the file currently open in the IDE (from `ide_opened_file` context); otherwise ask the user. Read the resolved file. Identify:
 - Content type (blog post in `_posts/`, study guide in `_guides/`, other)
 - Title, date, and description from front matter
 - Approximate word count and structure (number of H2/H3 sections)
@@ -39,7 +41,7 @@ State these facts before proceeding.
 
 Run:
 ```bash
-python lint_content.py "$ARGUMENTS"
+python lint_content.py "<resolved file path from Step 1>"
 ```
 
 Report the full output verbatim. Do not fix anything yet. If there are violations, note them as blockers. Style suggestions are informational.

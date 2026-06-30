@@ -804,6 +804,29 @@ body.home-layout .site-title a:hover .site-name {
     font-style: italic;
 }
 
+.post-content table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    border-collapse: collapse;
+    margin-bottom: var(--spacing-md);
+    font-size: 0.9rem;
+}
+
+.post-content th,
+.post-content td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border: 1px solid var(--color-border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.post-content th {
+    background-color: var(--color-bg);
+    font-weight: 600;
+}
+
 .post-share {
     margin-top: var(--spacing-xl);
     padding: var(--spacing-lg);
