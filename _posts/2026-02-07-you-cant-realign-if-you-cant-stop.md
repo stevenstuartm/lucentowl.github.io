@@ -24,7 +24,7 @@ The mechanism explains why awareness alone isn't enough. When the original plan 
 
 ## "Let Me Just Get This Working First"
 
-The idea of finishing first and then reevaluating sounds reasonable. Finish what you've started, then evaluate from a position of knowledge rather than speculation. But watch carefully what actually happens. You spend another hour building out the current approach. You write tests around it. Other code starts depending on it. A colleague reviews it and builds understanding of how it works. All the while diving deeper and deeper into the work for an idea which has not yet proven its worth. At that point, "considering the other approach" means throwing away not just your work but the organizational investment in reviewing, understanding, and integrating what you've built.
+The idea of finishing first and then reevaluating sounds reasonable. But watch carefully what actually happens. You spend another hour building out the current approach. You write tests around it. Other code starts depending on it. A colleague reviews it and builds understanding of how it works. All the while, you're sinking deeper into an approach that hasn't yet proven it's the right one. At that point, "considering the other approach" means throwing away not just your work but the organizational investment in reviewing, understanding, and integrating what you've built.
 
 The impulse to finish manufactures the very sunk costs that now appear to justify not switching.
 
@@ -40,7 +40,7 @@ Classic groupthink involves the active suppression of dissent: people silencing 
 
 This isn't the bystander effect, where people assume someone else will act. It's that adding your force to the herd's direction feels rational because the herd is already moving. If everyone is going this way, someone must have confirmed it's right. And even if nobody confirmed anything, the sheer mass of collective effort makes the direction feel too established to question.
 
-This compounds with individual plan continuation bias. Each person on the team is locked into "finish what I'm doing" mode while simultaneously treating the group's momentum as confirmation that the direction is right. The herd moving fast feels like progress. Questioning the direction doesn't just feel unproductive; it feels like you're slowing the team down, which in most team cultures carries real social cost.
+This compounds with individual plan continuation bias. Each person on the team is locked into "finish what I'm doing" mode while simultaneously treating the group's momentum as confirmation that the direction is right. The herd moving fast feels like progress. Questioning the direction doesn't just feel unproductive; it feels like you're slowing the team down, which in most team cultures marks you as the obstacle rather than the one asking the right question.
 
 The result is collective plan continuation bias. Individuals who can't self-interrupt, operating inside a group that punishes interruption. Each person's contribution feels small and the aggregate momentum feels like validation. Sometimes the herd is just running.
 
@@ -64,7 +64,7 @@ Think about what "realign after discovery" actually requires. When new informati
 
 Some methodologies make this worse. Scrum's sprint commitment locks the herd in for two weeks. Daily standups reinforce the current plan by asking everyone to report progress against committed work. Mid-sprint, questioning the direction isn't just socially expensive; it's structurally framed as disruption. Sprint reviews happen after two weeks of sunk cost have already accumulated, which means the only official moment for course correction comes when the bias is at its strongest. Scrum doesn't fail to address plan continuation bias; it amplifies it.
 
-[Shaped Kanban](/blog/2025/11/17/shaped-kanban.html){:target="_blank" rel="noopener noreferrer"} comes closest to accounting for this flaw. Circuit breakers assume that initial plans will prove wrong and someone will need permission to stop. Appetite-based time bounds treat abandoning work as a valid outcome rather than a failure. Shaping before commitment means less is invested when the "this isn't right" signal arrives, giving the signal a chance to compete with momentum. Of the methodologies I've examined, it's the only one that treats the inability to stop as a design constraint rather than a character flaw to overcome.
+Shaped Kanban comes closest to accounting for this flaw. Circuit breakers assume that initial plans will prove wrong and someone will need permission to stop. Appetite-based time bounds treat abandoning work as a valid outcome rather than a failure. Shaping before commitment means less is invested when the "this isn't right" signal arrives, giving the signal a chance to compete with momentum. Of the methodologies I've examined, it's the only one that treats the inability to stop as a design constraint rather than a character flaw to overcome.
 
 But even the best structural design can't fully overcome a pre-rational impulse. Circuit breakers trip at defined boundaries; they don't catch the continuous stream of smaller discoveries that arrive between them, the "this approach isn't quite right" signal on a Tuesday afternoon that gets overridden by the impulse to finish before reconsidering.
 
@@ -76,13 +76,13 @@ If the problem were purely intellectual, knowing about plan continuation bias wo
 
 ### Reframing what "stop" means
 
-For most people, stopping feels like failure or waste. You were making progress and now you're not. The reframe is that evaluation is itself the cheapest possible action, always cheaper than building more on a flawed foundation. This changes the emotional calculus even when the impulse is still there.
+For most people, stopping feels like failure or waste. You were making progress and now you're not. The reframe is that evaluation is itself the cheapest possible action, almost always cheaper than building more on a flawed foundation. This changes the emotional calculus even when the impulse is still there.
 
 ### Keeping switching costs low
 
 The impulse to continue draws power from real switching costs that accumulate with every hour of continued execution. The less you've invested, the easier it is to hear the signal telling you to change direction. Practices like cheap experiments before commitment, small commits, well-defined interfaces, and feature flags all serve the same purpose by keeping the cost of being wrong low for as long as possible.
 
-This is why shaping work before committing to it matters. When you've defined clear boundaries and identified risks upfront, the moment of "this isn't right" arrives before you've built the organizational investment that makes switching feel impossible.
+When you've defined clear boundaries and identified risks upfront, the moment of "this isn't right" arrives before you've built the organizational investment that makes switching feel impossible.
 
 ### Building external pause points
 
@@ -92,11 +92,17 @@ Circuit breakers, time boundaries, and explicit checkpoints make "keep going" an
 
 ### Stopping more often
 
-The natural objection is that questioning costs real productivity. Context switching is expensive, and developers invoke this constantly. But how much of that argument is genuine, and how much is the bias protecting itself? Four hours of uninterrupted coding on a misunderstood problem doesn't produce the right solution. If you couldn't stop to reconsider in the first place, then your "focused work" wasn't productive flow; it was the bias running unchecked. Context switching away from something you didn't understand and weren't willing to re-examine isn't losing momentum. It's gaining perspective.
+The natural objection is that questioning costs working hours that would otherwise ship something. Context switching is expensive, and developers invoke this constantly. But how much of that argument is genuine, and how much is the bias protecting itself? Four hours of uninterrupted coding on a misunderstood problem doesn't produce the right solution. If you couldn't stop to reconsider in the first place, then your "focused work" wasn't productive flow; it was the bias running unchecked. Context switching away from something you didn't understand and weren't willing to re-examine isn't losing momentum. It's gaining perspective.
 
 The [Pomodoro technique](https://en.wikipedia.org/wiki/Pomodoro_Technique){:target="_blank" rel="noopener noreferrer"} was designed for productivity, but it accidentally created exactly the kind of permission structure this bias requires. Every 25 minutes, you stop. Not because something went wrong, but because the rhythm demands it. That forced pause is a moment where "am I still working on the right thing?" can surface without carrying the social or psychological cost that usually prevents reassessment. The number doesn't matter. What matters is that stopping becomes part of the rhythm rather than an interruption of it.
 
-Random interruption does carry a cost, and that's exactly the argument that makes "wait until the sprint review" feel reasonable. But two weeks from now is almost always too late. If an individual can create a reassessment moment every half hour, the gap between that and a two-week sprint review reveals how rarely most teams actually pause to reconsider. Structural interrupts at the team level like circuit breakers, checkpoints, and hill chart reviews serve the same purpose at a larger scale by creating moments where questioning is expected rather than disruptive. There's a difference between [being present in the moment and being focused to the exclusion of all else](/blog/2025/09/19/rethinking-focus-software-development.html){:target="_blank" rel="noopener noreferrer"}. Presence means being receptive to signals while they're still cheap to act on. Tunnel vision means the signal arrives and can't get through.
+Four countermeasures work against the impulse:
+- Reframe stopping as the cheapest possible action, not a failure or a waste
+- Keep switching costs low through small commits, feature flags, and shaping work before committing to it
+- Build external pause points like circuit breakers and checkpoints that don't depend on self-awareness
+- Stop on a fixed rhythm instead of waiting for permission to reconsider
+
+Random interruption does carry a cost, and that's exactly the argument that makes "wait until the sprint review" feel reasonable. But two weeks from now is almost always too late. If an individual can create a reassessment moment every half hour, the gap between that and a two-week sprint review reveals how rarely most teams actually pause to reconsider. Structural interrupts at the team level like circuit breakers, checkpoints, and hill chart reviews serve the same purpose at a larger scale by creating moments where questioning is expected rather than disruptive. There's a difference between being present in the moment and being focused to the exclusion of all else. Presence means being receptive to signals while they're still cheap to act on. Tunnel vision means the signal arrives and can't get through.
 
 ## The Foundation
 

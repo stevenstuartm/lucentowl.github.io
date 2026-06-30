@@ -4,7 +4,7 @@ Review publishable content against the site's highest quality standards before i
 
 **Usage**: `/review-publishable _posts/YYYY-MM-DD-title.md`
 
-**File resolution**: If no argument is provided, use the file currently open in the IDE (visible in `ide_opened_file` context). If there is no open file and no argument, ask the user which file to review.
+**File resolution**: Use the file path argument if one is given. Otherwise use the file currently open in the IDE (`ide_opened_file` context) — this is the common case and should not require confirmation. Only ask the user which file to review if neither signal is present (no argument and no `ide_opened_file` context at all).
 
 ---
 
