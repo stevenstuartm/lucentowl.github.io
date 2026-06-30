@@ -6,7 +6,7 @@ description: "Shared libraries promise reuse and consistency but more often bind
 tags: [architecture, distributed-systems, microservices, governance]
 ---
 
-This is a highly opinionated take on shared libraries and the damage they do to team autonomy and development tempo. Teams deliver value faster and more consistantly when they can make decisions, ship changes, and evolve their domains without coordinating across organizational boundaries. Shared libraries erode exactly that independence.
+This is a highly opinionated take on shared libraries and the damage they do to team autonomy and development tempo. Teams deliver value faster and more consistently when they can make decisions, ship changes, and evolve their domains without coordinating across organizational boundaries. Shared libraries erode exactly that independence.
 
 The principle applies anywhere domains and teams need independence, but this post focuses on distributed architectures because that's where the consequences are most severe. When independently deployable components, owned and operated by different teams, get bound together by shared packages, those packages undermine the very independence the architecture was designed to provide.
 
@@ -18,25 +18,33 @@ Distributing components isn't just about distributing work. It's about the Singl
 
 Shared libraries violate these principles. They couple teams through shared implementation despite being distributed in name, creating little monoliths that bind development tempo across teams that were meant to operate independently. What's at stake isn't code organization; it's each team's ability to make decisions, ship changes, and evolve their domain without waiting on teams that have different priorities and different timelines.
 
-Yet the pitch keeps coming: "We have this code in three places. Let's consolidate it into a shared library. We'll save time, ensure consistency, and make everyone's life easier." It sounds reasonable, it really does, yet it ignores decades of architectural pain and lessons learned. The decision only calculates the cost of duplication while potentially ignoring or incorrectly calculating the cost of sharing across teams, domains, and technical boundaries.
+Yet the pitch keeps coming: "We have this code in three places. Let's consolidate it into a shared library. We'll save time, ensure consistency, and make everyone's life easier." It sounds reasonable, it really does, yet the decision only calculates the cost of duplication while ignoring the cost of sharing across teams, domains, and technical boundaries.
 
-There are important distinctions to draw here, like external libraries versus internal ones, SDKs versus shared packages, and whether this applies beyond distributed systems. We'll address all of those. But first, the costs.
-
-## The Costs Nobody Calculates
+## The Costs
 
 When someone proposes a shared library, they calculate the savings: "This code exists in five services. If we consolidate, we only maintain it once."
 
 What they don't always sufficiently calculate:
 
-**Version conflicts and upgrade pain.** Five teams (at worst) now depend on your library. They release on different cadences and at some point one or more teams require a breaking change. Now you're either maintaining multiple versions indefinitely or forcing upgrades on teams that have other priorities. The "one place to maintain" becomes "one place that blocks everyone."
+### Version conflicts and upgrade pain
 
-**Teams blocked waiting for changes.** A team needs functionality the library doesn't have. They can't just add it. They need to coordinate with the library owners, get the change approved, wait for a release, and then upgrade. What would have been a two-hour change becomes a two-week dependency chain.
+Five teams (at worst) now depend on your library. They release on different cadences and at some point one or more teams require a breaking change. Now you're either maintaining multiple versions indefinitely or forcing upgrades on teams that have other priorities. The "one place to maintain" becomes "one place that blocks everyone."
 
-**Debugging across boundaries.** When something breaks, the investigation now spans your code and the library code. Your team doesn't own the library. Maybe they don't fully understand it. The abstraction that was supposed to simplify their lives has added a layer they have to dig through.
+### Teams blocked waiting for changes
 
-**Bloat or fragmentation, pick your poison.** The library starts focused. Then another team needs something slightly different. Then another. The library accumulates features to serve multiple masters, becoming a grab-bag of loosely related functionality coupled together because they share a package, not because they belong together. The disciplined alternative is to split it into many small, focused packages, but that creates its own problem: an entourage of dependencies that each consuming team must track, version, and coordinate with. Instead of one bloated library blocking you, ten focused ones collectively recreate the same burden.
+A team needs functionality the library doesn't have. They can't just add it. They need to coordinate with the library owners, get the change approved, wait for a release, and then upgrade. What would have been a two-hour change becomes a two-week dependency chain.
 
-**Obscured accountability.** Shared libraries don't reduce your quality burden; they move it somewhere less visible. If the library has a bug, your service has a bug. Every service still needs its own load testing, chaos testing, penetration testing, and UAT regardless of whether the underlying code is shared or duplicated. The library doesn't absorb responsibility for your service's behavior. It just adds a dependency you don't own and can't fully verify.
+### Debugging across boundaries
+
+When something breaks, the investigation now spans your code and the library code. Your team doesn't own the library. Maybe they don't fully understand it. The abstraction that was supposed to simplify their lives has added a layer they have to dig through.
+
+### Bloat or fragmentation, pick your poison
+
+The library starts focused. Then another team needs something slightly different. Then another. The library accumulates features to serve multiple masters, becoming a grab-bag of loosely related functionality coupled together because they share a package, not because they belong together. The disciplined alternative is to split it into many small, focused packages, but that creates its own problem: an entourage of dependencies that each consuming team must track, version, and coordinate with. Instead of one bloated library blocking you, ten focused ones collectively recreate the same burden.
+
+### Obscured accountability
+
+Shared libraries don't reduce your quality burden; they move it somewhere less visible. If the library has a bug, your service has a bug. Every service still needs its own load testing, chaos testing, penetration testing, and UAT regardless of whether the underlying code is shared or duplicated. The library doesn't absorb responsibility for your service's behavior. It just adds a dependency you don't own and can't fully verify.
 
 ## The Cohesion and Coupling Diagnosis
 
@@ -54,8 +62,6 @@ The common rebuttal is "but if there's a bug, I fix it once and it propagates ev
 
 ## Don't Reinvent the Wheel vs. Don't Share Internal Types
 
-There's a meaningful distinction between using established external libraries and sharing internal abstractions.
-
 Using mature, well-tested libraries for universal problems makes sense. Logging frameworks, HTTP clients, serialization libraries, and authentication middleware exist because these problems are universal and well-understood. Someone else solved them better than you would, and the cost of depending on their solution is low because the solution is stable.
 
 Sharing your internal `CustomerDto` across services is different. Sharing your "standard" repository pattern is different. Sharing your domain models between bounded contexts is different. These aren't universal problems with stable solutions. They're your internal abstractions, and forcing them on other teams assumes those teams should think the same way you do.
@@ -63,8 +69,6 @@ Sharing your internal `CustomerDto` across services is different. Sharing your "
 External libraries abstract universal problems. Internal shared libraries impose your specific mental model on teams that might have legitimately different needs.
 
 ## SDKs Are Different
-
-There's also an important distinction between shared libraries and SDKs published for external consumers.
 
 An SDK abstracts what you expose: the public contract of a service or platform. A good SDK earns its existence by encoding integration complexity that would be expensive and error-prone for every consumer to reimplement: orchestrating multi-step workflows, managing state across API calls, handling idempotency, and abstracting version differences. The value isn't hiding HTTP calls (documentation handles that); it's centralizing integration logic complex enough to justify the maintenance cost across supported runtimes.
 
@@ -97,13 +101,21 @@ Layered architectures sidestep this by design because layers already enforce sep
 
 The shared library pitch assumes that code reuse across boundaries is inherently valuable. But examine any coherent architectural paradigm and the opposite becomes clear.
 
-**Layered architecture** separates concerns into distinct layers. If your presentation layer and your data layer share a library, you've coupled what you explicitly designed to be independent.
+### Layered architecture
 
-**Domain-driven architecture** creates autonomous domains with clear boundaries. If Domain A and Domain B share implementation code, they're not really autonomous. They're a distributed monolith with extra steps.
+Layered architecture separates concerns into distinct layers. If your presentation layer and your data layer share a library, you've coupled what you explicitly designed to be independent.
 
-**Functional/technical architecture** defines components accessed through explicit interfaces. The behavior should live in a component that others call, not in a library that everyone imports.
+### Domain-driven architecture
 
-**Polyglot architectures make it worse.** The shared library pitch assumes a homogeneous technology landscape that rarely exists. If your organization has services in C#, Java, Python, and Go, do you maintain and keep four versions of every shared library in sync? In polyglot environments, the "shared" library becomes a second-class citizen in every language except the one the authoring team actually uses. The promise of consistency becomes a guarantee of inconsistency across language boundaries.
+Domain-driven architecture creates autonomous domains with clear boundaries. If Domain A and Domain B share implementation code, they're not really autonomous. They're a distributed monolith with extra steps.
+
+### Functional/technical architecture
+
+Functional/technical architecture defines components accessed through explicit interfaces. The behavior should live in a component that others call, not in a library that everyone imports.
+
+### Polyglot architectures make it worse
+
+The shared library pitch assumes a homogeneous technology landscape that rarely exists. If your organization has services in C#, Java, Python, and Go, do you maintain and keep four versions of every shared library in sync? In polyglot environments, the "shared" library becomes a second-class citizen in every language except the one the authoring team actually uses. The promise of consistency becomes a guarantee of inconsistency across language boundaries.
 
 ## The API Client Library Obsession
 
@@ -119,7 +131,7 @@ The pitch sounds reasonable: "We'll publish a client library so consumers don't 
 
 A client library buries these decisions in application code where they're invisible to operations and impossible to change without a coordinated release across every consumer. The library author predicts traffic patterns and failures as if every consumer will behave identically. They won't.
 
-**The absurdity becomes obvious with frontend consumers.** Nobody would publish an npm package for their React app to import API contracts, or a Swift package for iOS. Frontend teams read documentation, call endpoints, and map responses to whatever structures suit their application. Backend services have the same needs. The consumer's requirements don't change based on what language they're written in.
+**The absurdity becomes obvious with frontend consumers.** Few teams would publish an npm package for their React app to import API contracts, or a Swift package for iOS. Frontend teams read documentation, call endpoints, and map responses to whatever structures suit their application. Backend services have the same needs. The consumer's requirements don't change based on what language they're written in.
 
 This reflexive reach for client libraries has been conditioned by years of cargo-culting patterns from contexts where they made sense (public cloud SDKs with complex auth flows) into contexts where they don't (internal services with straightforward REST endpoints). It's a tax on every consumer and a maintenance burden on every producer, justified by an efficiency that never materializes.
 
@@ -156,13 +168,13 @@ Even here, the library should be as minimal as possible. Provide the security pr
 
 When you feel the urge to create a shared library, pause and diagnose the actual problem:
 
-**If it's a capability multiple services need:** Build a service, not a library. Expose an API. Now there's clear ownership, independent deployment, and consumers that can't get version-locked.
+- **If it's a capability multiple services need:** Build a service, not a library. Expose an API. Now there's clear ownership, independent deployment, and consumers that can't get version-locked.
 
-**If it's a pattern you want to standardize:** Write documentation. Explain the principles, the tradeoffs, and the reasoning. Let teams implement the pattern in their own codebases. They'll understand it better than if they'd just imported your abstraction.
+- **If it's a pattern you want to standardize:** Write documentation. Explain the principles, the tradeoffs, and the reasoning. Let teams implement the pattern in their own codebases. They'll understand it better than if they'd just imported your abstraction.
 
-**If it's truly just duplicated code:** Let it be duplicated. The coordination cost of sharing exceeds the maintenance cost of duplication. And the duplicates can evolve independently as needs diverge.
+- **If it's truly just duplicated code:** Let it be duplicated. The coordination cost of sharing exceeds the maintenance cost of duplication. And the duplicates can evolve independently as needs diverge.
 
-**If it's a security primitive:** Fine. Build the library. Keep it minimal, stable, and focused. Recognize it's a necessary evil, not a model to emulate.
+- **If it's a security primitive:** Fine. Build the library. Keep it minimal, stable, and focused. Recognize it's a necessary evil, not a model to emulate.
 
 The shared library is a solution to a problem that rarely exists in the form people imagine. Code duplication isn't what slows teams down. Coordination overhead is. Obsessing over shared code compliance and version alignment diverts attention from what actually produces consistency: shared understanding of principles, tradeoffs, and what "good" looks like. Teams that understand the reasoning make good decisions without needing a library to make decisions for them.
 
