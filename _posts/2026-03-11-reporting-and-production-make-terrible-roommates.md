@@ -6,13 +6,13 @@ description: "Reporting pressure gradually distorts production schemas until the
 tags: [architecture, databases, design-patterns, distributed-systems, data-modeling, event-sourcing, cqrs]
 ---
 
-I tend to think of reporting and production as incompatible roommates. They need the same space, they optimize for completely different things, and every accommodation one makes for the other is a debt that gets called in later. The production schema is usually what accumluates the most debt and gets hit the hardest.
+I tend to think of reporting and production as incompatible roommates. They need the same space, they optimize for completely different things, and every accommodation one makes for the other is a debt that gets called in later. The production schema is usually what accumulates the most debt and gets hit the hardest.
 
 Consider what happens when the analytics team asks for a denormalized `order_summary` view on the production database so their dashboards load faster. The DBA obliges, adds a materialized view, and now every schema migration has to account for it. Six months later the team wants to split the `orders` table into `orders` and `order_line_items`, but the view is embedded in 10 dashboard queries and a nightly export job. The refactor stalls, and the production schema fossilizes around a reporting concern.
 
 The cause is structural. A transactional schema optimizes for write consistency, referential integrity, and the access patterns of the application that owns it. A reporting schema optimizes for read throughput, aggregation, and the access patterns of analysts and dashboards. When both share a schema, every design decision becomes a negotiation, and reporting usually wins, because it's the most visible to leadership and the most painful to change after the fact.
 
-Not every system needs a separation on day one. A small team with a single database, low reporting complexity, and a schema that's still fluid can query production directly without meaningful friction. But this fossilization is predictable, not surprising. It emerges when reporting consumers multiply, when dashboards become load-bearing, and when schema changes require cross-team coordination. Architects who recognize this trajectory can keep the door open for separation without building the full pipeline prematurely, by resisting the urge to denormalize production schemas for reporting convenience and by keeping reporting access patterns from becoming implicit contracts on the production schema. When the separation does happen, it can be reactive, tapping into what the database already captures, or intentional, making the application responsible for producing reporting-quality records in the write path.
+Not every system needs a separation on day one. A small team with a single database, low reporting complexity, and a schema that's still fluid can query production directly without meaningful friction. But this fossilization is predictable. It emerges when reporting consumers multiply, when dashboards become load-bearing, and when schema changes require cross-team coordination. Architects who recognize this trajectory can keep the door open for separation without building the full pipeline prematurely, by resisting the urge to denormalize production schemas for reporting convenience and by keeping reporting access patterns from becoming implicit contracts on the production schema. When the separation does happen, it can be reactive, tapping into what the database already captures, or intentional, making the application responsible for producing reporting-quality records in the write path.
 
 ## Reactive Separation
 
@@ -39,9 +39,7 @@ The simplest place to start is to point reporting tools at a read replica of the
 
 This is a feasible fit when reporting needs are straightforward, the production schema is close enough to what reporting consumers need, and data that's a few seconds stale is acceptable. "A few seconds stale" is the optimistic case, though. Heavy analytical queries on the replica can cause replication lag to spike well beyond that, especially during peak reporting windows.
 
-The replica also serves as the foundation for ETL. Rather than querying the replica live, teams extract data from it on a schedule, transform it into reporting-friendly shapes, and load it into a warehouse or data lake. Live queries hit the replica directly for near-real-time results while ETL jobs use it as a source for batch aggregation and historical snapshots.
-
-The replica breaks down, for both live queries and ETL, when reporting needs diverge far enough from the production schema's shape. Reporting consumers write increasingly complex queries with multiple joins, or they start requesting schema changes to production to make their queries simpler, which is exactly the distortion this post is about. The replica can't capture intermediate transitions. It reflects whatever state the database holds at query time, so if a record changes twice between one poll and the next, the intermediate state is gone.
+The replica breaks down when reporting needs diverge far enough from the production schema's shape. Reporting consumers write increasingly complex queries with multiple joins, or they start requesting schema changes to production to make their queries simpler, which is exactly the distortion this post is about. The replica can't capture intermediate transitions. It reflects whatever state the database holds at query time, so if a record changes twice between one poll and the next, the intermediate state is gone.
 
 ### Change Data Capture: State History Without Intent
 
@@ -77,17 +75,17 @@ CDC tools like Debezium tap the database's transaction log and emit changes as e
             └────────────────┘
 ```
 
-CDC's greatest strength is that it requires no application code changes, no additional transaction overhead, and no new abstractions in the write path. For legacy systems where the risk of changing the write path is too high, or for teams that need separation now and can't afford to modify every service that writes data, CDC is often the only viable option. It also solves payload completeness for free: the transaction log captures the full row state after each write regardless of whether the application only updated a single field, so downstream consumers never have to wonder whether a missing field means "unchanged" or "removed."
+CDC's greatest strength is that it requires no application code changes, no additional transaction overhead, and no new abstractions in the write path. For legacy systems where the risk of changing the write path is too high, or for teams that need separation now and can't afford to modify every service that writes data, CDC is often the only viable option. It also solves payload completeness for free: the transaction log captures the full row state after each write, regardless of whether the application only updated a single field.
 
 The first limitation is semantic. CDC events originate from the database layer, so they capture *what* changed but not *why* it changed. A row update that represents a customer canceling an order looks identical to a row update that represents a system correcting a data entry error. The database can't distinguish between them because it only sees the state change, not the business intent. For financial ledgers or audit-critical workflows, where intent is as important as state, event sourcing is the appropriate tool because it captures the intent as the primary record.
 
 The second limitation is the absence of a contract boundary. The table structure *is* the contract, implicitly. When that schema changes, nothing fails at build time. The CDC pipeline either silently emits differently shaped events or breaks at runtime, and reporting consumers discover the problem in production rather than in development. A schema registry can partially close this gap by enforcing compatibility rules at deserialization, but that's added infrastructure catching incompatibility at runtime rather than at build time.
 
-The third limitation is database dependency. Not every database has a strong CDC story. PostgreSQL and DynamoDB have mature options, but weaker change stream capabilities can push teams toward application-layer alternatives earlier than expected.
+The third limitation is database dependency. PostgreSQL and DynamoDB have mature CDC options, but weaker change stream capabilities can push teams toward application-layer alternatives earlier than expected.
 
 ## Intentional Separation
 
-Reactive approaches separate the workload but not the context. They can tell you *what* changed, but not *who* changed it or *why*. That context exists at the application layer when the write happens, and it's lost the moment the data hits the database unless someone deliberately captures it.
+Reactive approaches separate the workload but not the context: they capture *what* changed, not *who* changed it or *why*. That context exists at the application layer when the write happens, and it's lost the moment the data hits the database unless someone deliberately captures it.
 
 ### The Outbox Pattern
 
@@ -163,7 +161,7 @@ CREATE TABLE outbox (
 }
 ```
 
-This also gives the outbox an explicit, versionable contract boundary. The application decides what the downstream record looks like and versions it independently. A breaking change to the outbox record is a code change that has to compile, pass tests, and go through review. If a developer renames a column in the production schema, the outbox record doesn't change unless someone deliberately updates it. And because the outbox doesn't rely on transaction log capabilities or vendor-specific change feed APIs, any database that supports transactions supports the pattern.
+The outbox has an explicit, versionable contract boundary. The application decides what the downstream record looks like and versions it independently. A breaking change to the outbox record is a code change that has to compile, pass tests, and go through review. If a developer renames a column in the production schema, the outbox record doesn't change unless someone deliberately updates it. And because the outbox doesn't rely on transaction log capabilities or vendor-specific change feed APIs, any database that supports transactions supports the pattern.
 
 The outbox does not require a record for every database write. It only fires when a specific entity type has a meaningful state change, and only for the types that reporting cares about. Background jobs updating internal timestamps produce nothing. Even deletions produce a record, because knowing that an entity was removed and who removed it is itself meaningful. This keeps the coupling concentrated in write paths that produce meaningful state transitions, not spread across every query and update in the codebase.
 
