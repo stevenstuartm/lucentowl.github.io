@@ -117,7 +117,6 @@ function renderRadar() {
       grid: "#bbb",
       inactive: "#ddd"
     },
-    title: "Tech Radar",
     quadrants: radarData.quadrants,
     rings: radarData.rings,
     print_layout: true,
