@@ -74,7 +74,7 @@ a:hover {
 /* Links within prose content should be clearly visible */
 .post-content a:not(.tag),
 .guide-content a:not(.category-badge):not(.guide-link),
-.page-content a:not(.case-study-link),
+.page-content a:not(.case-study-link):not(.author-card-inner),
 .case-study-content a {
     text-decoration: underline;
     text-decoration-color: rgba(31, 107, 67, 0.3);
@@ -4037,25 +4037,33 @@ main {
 }
 
 .author-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: var(--spacing-lg);
     background: var(--color-card-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius);
-    text-decoration: none;
-    color: inherit;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
     &:hover {
         border-color: var(--color-primary);
         box-shadow: 0 4px 16px rgba(26, 95, 138, 0.1);
 
-        .author-card-link {
+        .author-card-cta {
             color: var(--color-hover);
         }
+    }
+}
+
+.author-card-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: var(--spacing-lg);
+    text-decoration: none;
+    color: inherit;
+
+    &:hover {
+        text-decoration: none;
+        color: inherit;
     }
 }
 
@@ -4089,7 +4097,7 @@ main {
     margin-bottom: var(--spacing-sm);
 }
 
-.author-card-link {
+.author-card-cta {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-primary);

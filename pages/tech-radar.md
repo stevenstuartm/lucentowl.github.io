@@ -1,7 +1,7 @@
 ---
 layout: radar
 title: Tech Radar
-description: "My technology recommendations and assessments: tools, techniques, platforms, and frameworks I adopt, trial, assess, or avoid—and why."
+description: "Lucent Owl's technology assessments: tools, techniques, platforms, and frameworks we adopt, trial, assess, or hold—and why."
 permalink: /tech-radar.html
 ---
 
@@ -35,14 +35,14 @@ permalink: /tech-radar.html
       <button class="modal-close" id="closeModal" aria-label="Close modal">&times;</button>
     </div>
     <div class="modal-body">
-      <p>My personal technology radar reflecting current assessments based on real-world experience. These recommendations evolve as technologies mature and new options emerge.</p>
+      <p>Lucent Owls's technology radar reflecting current assessments based on real-world experience. These recommendations evolve as technologies mature and new options emerge.</p>
 
       <h3>The Rings</h3>
       <ul>
-        <li><strong>ADOPT</strong> — Technologies I use in production and confidently recommend</li>
-        <li><strong>TRIAL</strong> — Technologies I'm actively testing in real projects</li>
-        <li><strong>ASSESS</strong> — Technologies I'm evaluating for specific use cases</li>
-        <li><strong>HOLD</strong> — Technologies I recommend caution with or avoid</li>
+        <li><strong>ADOPT</strong> — Technologies in active production use, confidently recommended</li>
+        <li><strong>TRIAL</strong> — Technologies being tested in real projects</li>
+        <li><strong>ASSESS</strong> — Technologies under evaluation for specific use cases</li>
+        <li><strong>HOLD</strong> — Technologies warranting caution or best avoided</li>
       </ul>
 
       <h3>The Quadrants</h3>
@@ -117,7 +117,7 @@ function renderRadar() {
       grid: "#bbb",
       inactive: "#ddd"
     },
-    title: "My Tech Radar",
+    title: "Tech Radar",
     quadrants: radarData.quadrants,
     rings: radarData.rings,
     print_layout: true,
