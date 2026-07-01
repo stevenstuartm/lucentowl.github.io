@@ -45,6 +45,9 @@ collections:
   case_studies:
     output: true
     permalink: /case-studies/:title.html
+  resources:
+    output: true
+    permalink: /resources/:path.html
 
 # Defaults
 defaults:
@@ -67,6 +70,11 @@ defaults:
       author: "steven-stuart"
   - scope:
       path: ""
+      type: "resources"
+    values:
+      layout: "resource"
+  - scope:
+      path: ""
     values:
       layout: "default"
 
@@ -77,3 +85,4 @@ exclude:
   - vendor
   - README.md
   - CLAUDE.md
+  - RESOURCES-PLAN.md

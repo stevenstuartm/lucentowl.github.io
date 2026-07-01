@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`writing-standards.md`](.claude/content/writing-standards.md) | **Always** — universal linter rules, voice, flow, punctuation, bullet point usage |
 | [`blog-post-guide.md`](.claude/content/blog-post-guide.md) | Writing or editing blog posts, creating social media summaries |
 | [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, quality standards |
+| [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
 
 After drafting content, run `python lint_content.py <filepath>` to catch mechanical violations.
 
@@ -130,6 +131,50 @@ tags: [tag1, tag2, tag3, tag4]
 **CRITICAL: Always update `assets/data/study_guides_config.json`** when adding or removing guides. Guides that exist in `_guides/` but aren't listed in this config file will not appear on the website. Always modify both files together.
 
 For format details, tag vocabulary, configuration requirements, organization patterns, and quality standards, see [`.claude/content/study-guide-guide.md`](.claude/content/study-guide-guide.md).
+
+### Resource Format
+
+Resources are standalone reference artifacts (tables, cheatsheets, diagrams, code, charts) — not long-form learning content.
+
+All resources must:
+- Be placed in `_resources/` (flat directory — no subdirectories)
+- Include YAML front matter with: layout, title, type, description, last_updated, and tags
+- Use `layout: resource`
+
+```yaml
+---
+title: "Resource Title"
+layout: resource
+type: table
+description: "Concise description of what this reference artifact contains"
+last_updated: 2025-01-01
+tags: [tag1, tag2, tag3]
+related_guides:
+  - /study-guides/some-guide.html
+related_posts:
+  - /blog/2025/01/01/some-post.html
+---
+```
+
+**Valid types:** `cheatsheet`, `diagram`, `table`, `chart`, `code`
+
+**`last_updated`**: date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise an existing resource's content. It renders on the resource page and on its listing card.
+
+**Optional fields:** `related_guides` and `related_posts` — arrays of site-relative URLs. Titles are resolved automatically from Jekyll's `site.guides` and `site.posts` collections at build time.
+
+**CRITICAL: Always update `assets/data/resources_config.json`** when adding or removing resources. Resources that exist in `_resources/` but aren't listed in this config file will not appear on the Resources listing page. The config controls display order.
+
+```json
+{
+  "resources": [
+    "my-resource.md"
+  ]
+}
+```
+
+**Permalinks:** `/resources/<filename>.html` (no category prefix — flat structure)
+
+**NEVER rename resource files** — same rule as posts and guides.
 
 ## Tech Radar
 

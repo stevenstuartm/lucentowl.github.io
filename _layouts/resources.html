@@ -1,0 +1,94 @@
+---
+layout: default
+---
+
+<div class="resources-page" id="resourcesPage">
+    <section class="guides-hero">
+        <h1>{{ page.title }}</h1>
+        {% if page.subtitle %}
+        <p class="subtitle">{{ page.subtitle }}</p>
+        {% endif %}
+        {{ content }}
+    </section>
+
+    <div class="page-listing">
+
+        <div class="guides-search-sticky">
+            <div class="guides-search-wrapper">
+                <svg class="guides-search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="search" id="searchInput" class="guides-search-input"
+                       placeholder="Search by title, topic, or tag — press Enter to add as filter"
+                       autocomplete="off" spellcheck="false">
+            </div>
+        </div>
+
+        <div id="activeFiltersBar" class="active-filters-bar" style="display:none">
+            <div class="active-filter-chips" id="activeFilterChips"></div>
+            <button id="clearAllFilters" class="clear-all-link" type="button">Clear all</button>
+        </div>
+
+        {% assign resource_types = "" | split: "" %}
+        {% for resource_filename in site.data.resources_config.resources %}
+            {% assign expected_path = "_resources/" | append: resource_filename %}
+            {% assign r = site.resources | where: "path", expected_path | first %}
+            {% if r.type %}
+                {% unless resource_types contains r.type %}
+                    {% assign resource_types = resource_types | push: r.type %}
+                {% endunless %}
+            {% endif %}
+        {% endfor %}
+        {% assign resource_types = resource_types | sort %}
+
+        {% if resource_types.size > 1 %}
+        <div class="resource-type-filters" id="resourceTypeFilters">
+            <button class="resource-type-pill" data-type="" type="button">All</button>
+            {% for type in resource_types %}
+            <button class="resource-type-pill" data-type="{{ type }}" type="button">{{ type | capitalize }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="guides-result-bar">
+            <span id="resultCount" class="result-count"></span>
+        </div>
+
+        <div class="resource-cards" id="resourcesGrid">
+            {% for resource_filename in site.data.resources_config.resources %}
+                {% assign expected_path = "_resources/" | append: resource_filename %}
+                {% assign resource = site.resources | where: "path", expected_path | first %}
+                {% if resource %}
+                    <article class="resource-card filterable-item"
+                             data-title="{{ resource.title | downcase }}"
+                             data-description="{{ resource.description | downcase }}"
+                             data-type="{{ resource.type | downcase }}"
+                             data-tags="{% if resource.tags %}{{ resource.tags | join: ',' | downcase }}{% endif %}">
+                        <a href="{{ resource.url | relative_url }}" class="resource-link">
+                            {% if resource.type %}
+                            <span class="resource-type-badge resource-type-badge--{{ resource.type }}">{{ resource.type }}</span>
+                            {% endif %}
+                            <h3>{{ resource.title }}</h3>
+                            {% if resource.description %}
+                            <p class="resource-excerpt">{{ resource.description }}</p>
+                            {% endif %}
+                            {% if resource.last_updated %}
+                            <p class="resource-card-meta">Updated {{ resource.last_updated | date: "%B %d, %Y" }}</p>
+                            {% endif %}
+                            <span class="read-more">View →</span>
+                        </a>
+                    </article>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div id="noResults" class="no-results" style="display: none;">
+            <p>No resources match your filters.</p>
+            <button id="clearNoResults" class="clear-filters-btn" type="button">Clear filters</button>
+        </div>
+
+    </div><!-- /.page-listing -->
+</div>
+
+<script src="{{ '/assets/js/resources-browser.js' | relative_url }}"></script>

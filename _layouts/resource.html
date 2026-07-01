@@ -1,0 +1,130 @@
+---
+layout: default
+---
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "{{ page.title }}",
+  "author": {
+    "@type": "Person",
+    "name": "{{ site.author.name }}",
+    "url": "{{ site.url }}"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "{{ site.author.name }}"
+  },
+  "description": "{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "{{ page.url | absolute_url }}"
+  }
+}
+</script>
+
+<article class="resource" data-type="{{ page.type }}">
+    <header class="page-header-card">
+        <div class="resource-header">
+            <nav class="breadcrumb">
+                <a href="{{ '/resources.html' | relative_url }}">Resources</a>
+            </nav>
+            <h1 class="resource-title">{{ page.title }}</h1>
+            {% if page.last_updated %}
+            <p class="resource-meta">Last updated: <time datetime="{{ page.last_updated | date_to_xmlschema }}">{{ page.last_updated | date: "%B %d, %Y" }}</time></p>
+            {% endif %}
+            {% if page.tags %}
+            <div class="resource-header-tags">
+                {% for tag in page.tags %}
+                <a href="{{ '/resources.html' | relative_url }}?tags={{ tag | downcase }}" class="guide-tag">{{ tag }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="resource-content">
+        {% if page.related_guides or page.related_posts %}
+        <div class="resource-related">
+            {% if page.related_guides %}
+            <div class="resource-related-group">
+                <h3>Related guides</h3>
+                <ul>
+                {% for guide_url in page.related_guides %}
+                    {% assign found = site.guides | where: "url", guide_url | first %}
+                    <li><a href="{{ guide_url | relative_url }}">{% if found %}{{ found.title }}{% else %}{{ guide_url }}{% endif %}</a></li>
+                {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if page.related_posts %}
+            <div class="resource-related-group">
+                <h3>Related posts</h3>
+                <ul>
+                {% for post_url in page.related_posts %}
+                    {% assign found = site.posts | where: "url", post_url | first %}
+                    <li><a href="{{ post_url | relative_url }}">{% if found %}{{ found.title }}{% else %}{{ post_url }}{% endif %}</a></li>
+                {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {{ content }}
+
+        <div class="guide-share">
+            <p>Found this useful? Share it:</p>
+            {% include share-linkedin.html %}
+        </div>
+    </div>
+
+    <footer class="resource-footer">
+        <a href="{{ '/resources.html' | relative_url }}" class="back-link">← Back to Resources</a>
+    </footer>
+</article>
+
+<button class="scroll-to-top" id="scrollToTop" aria-label="Scroll to top">↑</button>
+
+{% if page.type == "code" %}
+<script>
+(function() {
+    document.querySelectorAll('.resource-content pre').forEach(function(pre) {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        btn.addEventListener('click', function() {
+            const text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+            navigator.clipboard.writeText(text).then(function() {
+                btn.textContent = 'Copied!';
+                setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+            });
+        });
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+    });
+})();
+</script>
+{% endif %}
+
+<script>
+(function() {
+    const scrollBtn = document.getElementById('scrollToTop');
+    const scrollThreshold = window.innerHeight;
+
+    function toggleScrollButton() {
+        if (window.scrollY > scrollThreshold) {
+            scrollBtn.classList.add('visible');
+        } else {
+            scrollBtn.classList.remove('visible');
+        }
+    }
+
+    window.addEventListener('scroll', toggleScrollButton);
+    scrollBtn.addEventListener('click', function() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    toggleScrollButton();
+})();
+</script>
