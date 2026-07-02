@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Topology Is Not a Trust Model"
+title: "Topology Is Not a Trust Model: Position vs Identity"
 date: 2026-06-19
 description: "Whether a service request is legitimate is treated as an authentication question, but the answer is also an architectural one: whether legitimacy comes from network position or from verified ownership. That distinction shapes service structure, security posture, and team dynamics in ways that compound as systems grow."
 tags: [architecture, api-design, distributed-systems, security, design-patterns, microservices]
