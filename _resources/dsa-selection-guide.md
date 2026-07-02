@@ -2,7 +2,8 @@
 title: "Data Structure and Algorithm Selection Guide"
 layout: resource
 type: reference
-description: "Quick lookup for choosing the right data structure or algorithm by need — first choice, alternative, and what to avoid."
+category: "Data Structures & Algorithms"
+description: "Quick lookup for choosing the right data structure or algorithm by need, with the first choice, an alternative, and what to avoid for each."
 last_updated: 2026-07-02
 tags: [algorithms, data-structures, decision-making]
 related_guides:

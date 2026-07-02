@@ -2,7 +2,8 @@
 title: "Big-O Complexity Quick Reference"
 layout: resource
 type: reference
-description: "Time complexity growth rates, practical input limits, and complexity of common algorithms — a fast lookup for algorithm analysis."
+category: "Data Structures & Algorithms"
+description: "Time complexity growth rates, practical input limits, and complexity of common algorithms, for fast lookup during algorithm analysis."
 last_updated: 2026-07-02
 tags: [algorithms, complexity-analysis, data-structures, performance]
 related_guides:

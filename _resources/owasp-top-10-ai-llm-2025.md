@@ -2,6 +2,7 @@
 title: "OWASP Top 10 for AI/LLM Applications (2025)"
 layout: resource
 type: reference
+category: "Security"
 description: "OWASP's top ten security risks specific to Large Language Model applications, with mitigation strategies for each."
 last_updated: 2026-07-02
 tags: [security, ai-security, owasp, threats, llm]

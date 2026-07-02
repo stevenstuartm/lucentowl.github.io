@@ -2,6 +2,7 @@
 title: "API Authentication Mechanisms"
 layout: resource
 type: reference
+category: "Architecture"
 description: "API Keys, OAuth 2.0, JWT, and mTLS authentication mechanisms compared by use case, pros, and cons, with common pattern-to-context mappings."
 last_updated: 2026-07-02
 tags: [architecture, api-design, security, authentication]

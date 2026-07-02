@@ -138,7 +138,7 @@ Resources are standalone reference artifacts (cheatsheets, reference material, c
 
 All resources must:
 - Be placed in `_resources/` (flat directory — no subdirectories)
-- Include YAML front matter with: layout, title, type, description, last_updated, and tags
+- Include YAML front matter with: layout, title, type, category, description, last_updated, and tags
 - Use `layout: resource`
 
 ```yaml
@@ -146,6 +146,7 @@ All resources must:
 title: "Resource Title"
 layout: resource
 type: reference
+category: "Architecture"
 description: "Concise description of what this reference artifact contains"
 last_updated: 2025-01-01
 tags: [tag1, tag2, tag3]
@@ -161,6 +162,8 @@ related_posts:
 - `cheatsheet`: immediately actionable — used as-is, no interpretation required (git commands, HTTP status codes)
 - `reference`: information you internalize and apply yourself in some deeper way (glossaries, comparisons, decision guides)
 - `code`: templates or code snippets meant to be copied into a project
+
+**`category`**: must exactly match one of the top-level category names in `assets/data/study_guides_config.json` (e.g., `"Architecture"`, `"Security"`). Drives the category filter on the Resources listing page — use the category of the guide(s) in `related_guides`, or the closest topical fit if there is no related guide.
 
 **`last_updated`**: date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise an existing resource's content. It renders on the resource page and on its listing card.
 

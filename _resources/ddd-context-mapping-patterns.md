@@ -2,6 +2,7 @@
 title: "DDD Context Mapping Patterns"
 layout: resource
 type: reference
+category: "Architecture"
 description: "The eight standard relationship patterns between bounded contexts in Domain-Driven Design, with when to use each."
 last_updated: 2026-07-02
 tags: [architecture, domain-driven-design, design-patterns, microservices]

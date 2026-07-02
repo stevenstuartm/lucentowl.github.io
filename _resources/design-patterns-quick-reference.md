@@ -2,7 +2,8 @@
 title: "Design Patterns Quick Reference (GoF)"
 layout: resource
 type: reference
-description: "All 23 Gang of Four design patterns — intent, problem solved, when to use, and when to avoid — grouped by Creational, Structural, and Behavioral."
+category: "Programming Patterns"
+description: "All 23 Gang of Four design patterns, with intent, problem solved, when to use, and when to avoid, grouped by Creational, Structural, and Behavioral."
 last_updated: 2026-07-02
 tags: [oop, design-patterns, software-design]
 related_guides:

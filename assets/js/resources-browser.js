@@ -2,6 +2,7 @@ class ResourceBrowser {
     constructor() {
         this.state = {
             type: null,
+            category: null,
             tags: new Set(),
             searches: new Set()
         };
@@ -13,6 +14,7 @@ class ResourceBrowser {
     init() {
         this.cacheElements();
         this.bindTypePills();
+        this.bindCategoryPills();
         this.bindSearch();
         this.bindTagsOnCards();
         this.bindClearAll();
@@ -23,6 +25,7 @@ class ResourceBrowser {
     cacheElements() {
         this.elements.resourceItems = document.querySelectorAll('.filterable-item');
         this.elements.typePills = document.querySelectorAll('.resource-type-pill');
+        this.elements.categoryPills = document.querySelectorAll('.resource-category-pill');
         this.elements.searchInput = document.getElementById('searchInput');
         this.elements.resultCount = document.getElementById('resultCount');
         this.elements.noResults = document.getElementById('noResults');
@@ -36,6 +39,17 @@ class ResourceBrowser {
             pill.addEventListener('click', () => {
                 const type = pill.dataset.type || null;
                 this.state.type = (type && this.state.type !== type) ? type : null;
+                this.applyState();
+                this.updateURL();
+            });
+        });
+    }
+
+    bindCategoryPills() {
+        this.elements.categoryPills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                const category = pill.dataset.category || null;
+                this.state.category = (category && this.state.category !== category) ? category : null;
                 this.applyState();
                 this.updateURL();
             });
@@ -103,7 +117,7 @@ class ResourceBrowser {
     }
 
     clearAll() {
-        this.state = { type: null, tags: new Set(), searches: new Set() };
+        this.state = { type: null, category: null, tags: new Set(), searches: new Set() };
         this.liveSearch = '';
         if (this.elements.searchInput) this.elements.searchInput.value = '';
         this.applyState();
@@ -112,6 +126,7 @@ class ResourceBrowser {
 
     applyState() {
         this.updateTypePills();
+        this.updateCategoryPills();
         const count = this.filterCards();
         this.updateActiveFiltersBar();
         this.updateResultCount(count);
@@ -129,12 +144,19 @@ class ResourceBrowser {
         });
     }
 
+    updateCategoryPills() {
+        this.elements.categoryPills.forEach(pill => {
+            const pillCategory = pill.dataset.category || null;
+            pill.classList.toggle('resource-category-pill--active', pillCategory === this.state.category);
+        });
+    }
+
     filterCards() {
-        const { type, tags, searches } = this.state;
+        const { type, category, tags, searches } = this.state;
         let visible = 0;
 
         this.elements.resourceItems.forEach(item => {
-            const show = this.itemMatches(item, type, tags, searches, this.liveSearch);
+            const show = this.itemMatches(item, type, category, tags, searches, this.liveSearch);
             item.style.display = show ? '' : 'none';
             if (show) visible++;
         });
@@ -146,8 +168,9 @@ class ResourceBrowser {
         return visible;
     }
 
-    itemMatches(item, type, tags, searches, liveSearch) {
+    itemMatches(item, type, category, tags, searches, liveSearch) {
         if (type && item.dataset.type !== type) return false;
+        if (category && item.dataset.category !== category) return false;
 
         if (tags.size > 0) {
             const itemTags = (item.dataset.tags || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -172,9 +195,14 @@ class ResourceBrowser {
     }
 
     updateActiveFiltersBar() {
-        const { searches, tags, type } = this.state;
+        const { searches, tags, type, category } = this.state;
         const chips = [];
 
+        if (category) {
+            const pill = document.querySelector(`.resource-category-pill[data-category="${category}"]`);
+            const label = pill ? pill.textContent : category;
+            chips.push({ chipType: 'category', label, value: category });
+        }
         if (type) chips.push({ chipType: 'type', label: type, value: type });
         for (const term of searches) chips.push({ chipType: 'search', label: term, value: term });
         for (const tag of tags) chips.push({ chipType: 'tag', label: tag, value: tag });
@@ -197,6 +225,7 @@ class ResourceBrowser {
                 const chipType = chip.dataset.type;
                 const value = chip.dataset.value;
                 if (chipType === 'type') this.state.type = null;
+                else if (chipType === 'category') this.state.category = null;
                 else if (chipType === 'search') this.state.searches.delete(value);
                 else if (chipType === 'tag') this.state.tags.delete(value);
                 this.applyState();
@@ -212,7 +241,8 @@ class ResourceBrowser {
     updateResultCount(visible) {
         if (!this.elements.resultCount) return;
         const total = this.elements.resourceItems.length;
-        const hasFilters = this.state.type || this.state.tags.size > 0 || this.state.searches.size > 0 || this.liveSearch;
+        const hasFilters = this.state.type || this.state.category || this.state.tags.size > 0
+            || this.state.searches.size > 0 || this.liveSearch;
         this.elements.resultCount.textContent = hasFilters
             ? `${visible} of ${total} resources`
             : `${total} resources`;
@@ -224,6 +254,9 @@ class ResourceBrowser {
         const type = params.get('type');
         if (type) this.state.type = type;
 
+        const category = params.get('category');
+        if (category) this.state.category = category;
+
         const search = params.get('search');
         if (search) search.split(',').forEach(t => { if (t.trim()) this.state.searches.add(t.trim()); });
 
@@ -234,6 +267,7 @@ class ResourceBrowser {
     updateURL() {
         const params = new URLSearchParams();
         if (this.state.type) params.set('type', this.state.type);
+        if (this.state.category) params.set('category', this.state.category);
         if (this.state.searches.size > 0) params.set('search', Array.from(this.state.searches).join(','));
         if (this.state.tags.size > 0) params.set('tags', Array.from(this.state.tags).join(','));
 

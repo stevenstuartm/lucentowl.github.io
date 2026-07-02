@@ -2,7 +2,8 @@
 title: "Eleven Fallacies of Distributed Computing"
 layout: resource
 type: reference
-description: "The eight original fallacies (Deutsch, 1994) plus three modern additions — false assumptions that break distributed systems in production, with mitigations for each."
+category: "Architecture"
+description: "The eight original fallacies (Deutsch, 1994) plus three modern additions, covering false assumptions that break distributed systems in production, with mitigations for each."
 last_updated: 2026-07-02
 tags: [architecture, distributed-systems, microservices, reliability]
 related_guides:

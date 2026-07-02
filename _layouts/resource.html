@@ -29,6 +29,10 @@ layout: default
         <div class="resource-header">
             <nav class="breadcrumb">
                 <a href="{{ '/resources.html' | relative_url }}">Resources</a>
+                {% if page.category %}
+                <span class="separator">/</span>
+                <a href="{{ '/resources.html' | relative_url }}?category={{ page.category | slugify }}" class="category">{{ page.category }}</a>
+                {% endif %}
             </nav>
             <h1 class="resource-title">{{ page.title }}</h1>
             {% if page.last_updated %}

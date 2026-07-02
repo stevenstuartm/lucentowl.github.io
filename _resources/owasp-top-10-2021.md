@@ -2,6 +2,7 @@
 title: "OWASP Top 10 Web Application Security Risks (2021)"
 layout: resource
 type: reference
+category: "Security"
 description: "The ten most critical web application security risks as ranked by OWASP, with impact and mitigation guidance for each."
 last_updated: 2026-07-02
 tags: [security, web-security, vulnerabilities, owasp, threats]
@@ -9,7 +10,7 @@ related_guides:
   - /study-guides/security/frameworks-standards.html
 ---
 
-The OWASP Top 10 has been the de facto standard for web application security since its first publication in 2003, updated approximately every 3-4 years based on community data and security research. This is the 2021 edition — the most recent published ranking as of this writing.
+The OWASP Top 10 has been the de facto standard for web application security since its first publication in 2003, updated approximately every 3-4 years based on community data and security research. This is the 2021 edition, the most recent published ranking as of this writing.
 
 | Rank | Vulnerability | Impact | Mitigation |
 | --- | --- | --- | --- |

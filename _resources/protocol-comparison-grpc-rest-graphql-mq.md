@@ -2,7 +2,8 @@
 title: "Protocol Comparison: gRPC vs REST vs GraphQL vs Message Queues"
 layout: resource
 type: reference
-description: "Nine-dimension comparison of gRPC, REST, GraphQL, and message queues — protocol, coupling, streaming, tooling, and best-fit use case for each."
+category: "Architecture"
+description: "Nine-dimension comparison of gRPC, REST, GraphQL, and message queues, covering protocol, coupling, streaming, tooling, and best-fit use case for each."
 last_updated: 2026-07-02
 tags: [architecture, api-design, distributed-systems, integration]
 related_guides:

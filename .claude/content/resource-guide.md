@@ -42,7 +42,7 @@ Not every resource exists as a ready-made table. Some guides explain a set of pa
 
 ## Format Requirements
 
-**File location**: Place in `_resources/` — flat directory, no subdirectories. Resources are isolated artifacts, not a curriculum, so they don't need the category/subcategory nesting that guides use.
+**File location**: Place in `_resources/` — flat directory, no subdirectories. Resources are isolated artifacts, not a curriculum, so the directory itself doesn't nest by category the way `_guides/` does — but each resource still declares a single top-level `category` in its front matter (see below) for filtering on the listing page.
 
 **Required front matter**:
 ```yaml
@@ -50,6 +50,7 @@ Not every resource exists as a ready-made table. Some guides explain a set of pa
 title: "Resource Title"
 layout: resource
 type: reference
+category: "Architecture"
 description: "Concise description of what this reference artifact contains"
 last_updated: 2025-01-01
 tags: [tag1, tag2, tag3]
@@ -60,10 +61,11 @@ related_posts:
 ---
 ```
 
-**Required fields**: `title`, `layout`, `type`, `description`, `last_updated`, `tags`
+**Required fields**: `title`, `layout`, `type`, `category`, `description`, `last_updated`, `tags`
 **Optional fields**: `related_guides`, `related_posts` — arrays of site-relative URLs
 
 - **type**: Must be one of the three valid types above. Drives the type badge and the listing page's type filter.
+- **category**: Must exactly match one of the top-level category names in `assets/data/study_guides_config.json` (e.g., `"Architecture"`, `"Security"`, `"Data Structures & Algorithms"`). Use the category of the study guide the resource is most closely tied to — usually the guide(s) in `related_guides`. Drives the listing page's category filter. If a resource has no natural related guide, pick the category that best matches its subject and tags.
 - **last_updated**: Date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise a resource's content — it renders on both the resource page and its listing card.
 - **description**: A 1-2 sentence summary of what the artifact contains. Write it to stand alone in a listing card.
 
@@ -116,4 +118,4 @@ Always modify both the resource file and the config file together.
 
 ## Organization
 
-Resources have no category hierarchy. Type and tags are sufficient for filtering. When choosing tags, reuse the existing tag vocabulary from [study-guide-guide.md](study-guide-guide.md) where the concept overlaps (e.g., `distributed-systems`, `algorithms`, `security`) rather than inventing new tags for concepts that already have one.
+Resources have no subcategory hierarchy — just a single top-level `category` (matching the study guide categories) plus type and tags for filtering. When choosing tags, reuse the existing tag vocabulary from [study-guide-guide.md](study-guide-guide.md) where the concept overlaps (e.g., `distributed-systems`, `algorithms`, `security`) rather than inventing new tags for concepts that already have one.

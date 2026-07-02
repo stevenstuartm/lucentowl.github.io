@@ -2,7 +2,8 @@
 title: "Architecture Style Comparison"
 layout: resource
 type: reference
-description: "Nine software architecture styles compared by type, core strength, primary tradeoff, and typical use cases — from layered monoliths to space-based architecture."
+category: "Architecture"
+description: "Nine software architecture styles compared by type, core strength, primary tradeoff, and typical use cases, from layered monoliths to space-based architecture."
 last_updated: 2026-07-02
 tags: [architecture, design-patterns, distributed-systems, microservices, monolithic]
 related_guides:

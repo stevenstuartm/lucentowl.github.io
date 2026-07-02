@@ -31,6 +31,7 @@ layout: default
         </div>
 
         {% assign resource_types = "" | split: "" %}
+        {% assign resource_categories = "" | split: "" %}
         {% for resource_filename in site.data.resources_config.resources %}
             {% assign expected_path = "_resources/" | append: resource_filename %}
             {% assign r = site.resources | where: "path", expected_path | first %}
@@ -39,12 +40,27 @@ layout: default
                     {% assign resource_types = resource_types | push: r.type %}
                 {% endunless %}
             {% endif %}
+            {% if r.category %}
+                {% unless resource_categories contains r.category %}
+                    {% assign resource_categories = resource_categories | push: r.category %}
+                {% endunless %}
+            {% endif %}
         {% endfor %}
         {% assign resource_types = resource_types | sort %}
+        {% assign resource_categories = resource_categories | sort %}
+
+        {% if resource_categories.size > 1 %}
+        <div class="resource-category-filters" id="resourceCategoryFilters">
+            <button class="resource-category-pill" data-category="" type="button">All Categories</button>
+            {% for category in resource_categories %}
+            <button class="resource-category-pill" data-category="{{ category | slugify }}" type="button">{{ category }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         {% if resource_types.size > 1 %}
         <div class="resource-type-filters" id="resourceTypeFilters">
-            <button class="resource-type-pill" data-type="" type="button">All</button>
+            <button class="resource-type-pill" data-type="" type="button">All Types</button>
             {% for type in resource_types %}
             <button class="resource-type-pill" data-type="{{ type }}" type="button">{{ type | capitalize }}</button>
             {% endfor %}
@@ -64,10 +80,14 @@ layout: default
                              data-title="{{ resource.title | downcase }}"
                              data-description="{{ resource.description | downcase }}"
                              data-type="{{ resource.type | downcase }}"
+                             data-category="{{ resource.category | slugify }}"
                              data-tags="{% if resource.tags %}{{ resource.tags | join: ',' | downcase }}{% endif %}">
                         <a href="{{ resource.url | relative_url }}" class="resource-link">
                             {% if resource.type %}
                             <span class="resource-type-badge resource-type-badge--{{ resource.type }}">{{ resource.type }}</span>
+                            {% endif %}
+                            {% if resource.category %}
+                            <span class="resource-category-label">{{ resource.category }}</span>
                             {% endif %}
                             <h3>{{ resource.title }}</h3>
                             {% if resource.description %}

@@ -18,6 +18,12 @@
     "api-authentication-mechanisms.md",
     "api-versioning-strategies.md",
     "governance-models-comparison.md",
-    "governance-antipatterns.md"
+    "governance-antipatterns.md",
+    "prompt-engineering-technique-selection.md",
+    "http-version-comparison.md",
+    "git-branching-merge-strategy-guide.md",
+    "database-selection-decision-matrix.md",
+    "security-framework-selection-guide.md",
+    "sdlc-methodology-selection-guide.md"
   ]
 }

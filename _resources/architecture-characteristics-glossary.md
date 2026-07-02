@@ -2,6 +2,7 @@
 title: "Architecture Characteristics Glossary"
 layout: resource
 type: reference
+category: "Architecture"
 description: "22 architecture characteristics (operational, structural, cloud-specific, cross-cutting) with definitions, plus how to measure the most commonly prioritized ones."
 last_updated: 2026-07-02
 tags: [architecture, fundamentals, decision-making, performance, scalability, reliability, maintainability]

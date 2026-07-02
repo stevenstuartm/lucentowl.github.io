@@ -2,6 +2,7 @@
 title: "Assumptions-First Task Planning Skill"
 layout: resource
 type: code
+category: "Software Development Lifecycle"
 last_updated: 2026-07-01
 description: "A Claude Code skill that structures ticket intake around assumption clarity. Writes a self-contained ticket MD file, proves assumptions before writing implementation code, and gates on human review."
 tags: [workflow, planning, ai-agents, assumptions, sdlc, productivity]

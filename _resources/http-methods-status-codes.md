@@ -2,16 +2,18 @@
 title: "HTTP Methods and Status Codes Reference"
 layout: resource
 type: cheatsheet
+category: "Networking"
 description: "HTTP method semantics (safe/idempotent) and a categorized status code reference for designing and debugging REST APIs."
 last_updated: 2026-07-02
-tags: [architecture, api-design, rest, http, web-development]
+tags: [networking, api-design, rest, http, web-development]
 related_guides:
   - /study-guides/architecture/api-design-architecture.html
+  - /study-guides/networking.html
 ---
 
 ## HTTP Methods
 
-**Safe**: no side effects on the server (read-only). **Idempotent**: repeating the request produces the same result as a single request — safe to retry after a network failure.
+**Safe**: no side effects on the server (read-only). **Idempotent**: repeating the request produces the same result as a single request, so it's safe to retry after a network failure.
 
 | Method | Semantics | Safe? | Idempotent? | Use For |
 | --- | --- | --- | --- | --- |

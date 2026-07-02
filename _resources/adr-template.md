@@ -2,6 +2,7 @@
 title: "Architecture Decision Record (ADR) Template"
 layout: resource
 type: code
+category: "Leadership & Team Management"
 description: "A ready-to-use markdown template for documenting architecturally significant decisions, including status, context, consequences, and compliance tracking."
 last_updated: 2026-07-02
 tags: [architecture, decision-making, adrs, documentation]
@@ -9,7 +10,7 @@ related_guides:
   - /study-guides/architecture/architecture-decision-making.html
 ---
 
-**Status values:** `Proposed` (under consideration) · `Accepted` (approved and in effect) · `Superseded` (replaced — link to the new ADR) · `RFC` (open for feedback until a deadline)
+**Status values:** `Proposed` (under consideration) · `Accepted` (approved and in effect) · `Superseded` (replaced, with a link to the new ADR) · `RFC` (open for feedback until a deadline)
 
 ````markdown
 # [Number]. [Title]
