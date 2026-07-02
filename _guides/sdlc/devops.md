@@ -853,6 +853,8 @@ DevOps relies on integrated tooling across the software delivery lifecycle.
 **Medium:** 16-30%
 **Low:** 16-30%
 
+*Note: Unlike the other three keys, change failure rate has not consistently separated High, Medium, and Low performers across DORA's State of DevOps reports — some years show these tiers in the same band, and the 2024 report even found Medium performers outperforming High performers on this metric. Treat it as a directional signal, not a precise ranking tool.*
+
 **Why it matters:**
 - Quality of deployment process
 - Effectiveness of testing

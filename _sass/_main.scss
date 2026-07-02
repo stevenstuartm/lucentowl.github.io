@@ -10,6 +10,8 @@
     --color-card-bg: #FFFFFF;      /* White for cards */
     --color-hover: #134C72;        /* Darker blue for hover */
     --color-gold: #C9A227;         /* Gold illumination accent */
+    --color-purple: #6B3FA0;       /* Violet accent (WCAG AA compliant 5:1) */
+    --color-green: #3C8D53;        /* Green accent (WCAG AA compliant 4.6:1) */
 
     --spacing-xs: 0.5rem;
     --spacing-sm: 1rem;
@@ -2003,7 +2005,8 @@ body.home-layout .site-title a:hover .site-name {
     font-size: 0.9em;
 }
 
-.guide-content pre {
+.guide-content pre,
+.resource-content pre {
     background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius);
@@ -2013,12 +2016,14 @@ body.home-layout .site-title a:hover .site-name {
     max-width: 100%;
 }
 
-.guide-content pre code {
+.guide-content pre code,
+.resource-content pre code {
     background: none;
     padding: 0;
 }
 
-.guide-content table {
+.guide-content table,
+.resource-content table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: var(--spacing-md);
@@ -2029,7 +2034,9 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 .guide-content th,
-.guide-content td {
+.guide-content td,
+.resource-content th,
+.resource-content td {
     border: 1px solid var(--color-border);
     padding: var(--spacing-sm);
     text-align: left;
@@ -2039,23 +2046,27 @@ body.home-layout .site-title a:hover .site-name {
     max-width: 300px;
 }
 
-.guide-content th {
+.guide-content th,
+.resource-content th {
     background: var(--color-bg);
     font-weight: 600;
 }
 
-.guide-content blockquote {
+.guide-content blockquote,
+.resource-content blockquote {
     border-left: 4px solid var(--color-accent);
     padding-left: var(--spacing-md);
     margin: var(--spacing-md) 0;
     color: var(--color-text-light);
 }
 
-.guide-content blockquote > *:last-child {
+.guide-content blockquote > *:last-child,
+.resource-content blockquote > *:last-child {
     margin-bottom: 0;
 }
 
-.guide-content blockquote p {
+.guide-content blockquote p,
+.resource-content blockquote p {
     margin-bottom: var(--spacing-sm);
 }
 
@@ -4160,10 +4171,8 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 .resource-type-badge--cheatsheet { background: var(--color-gold); }
-.resource-type-badge--diagram    { background: #2D7D6F; }
-.resource-type-badge--table      { background: var(--color-primary); }
-.resource-type-badge--chart      { background: var(--color-accent); }
-.resource-type-badge--code       { background: var(--color-secondary); }
+.resource-type-badge--reference  { background: var(--color-green); }
+.resource-type-badge--code       { background: var(--color-purple); }
 
 /* Resources listing page */
 .resources-page {

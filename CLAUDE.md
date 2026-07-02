@@ -134,7 +134,7 @@ For format details, tag vocabulary, configuration requirements, organization pat
 
 ### Resource Format
 
-Resources are standalone reference artifacts (tables, cheatsheets, diagrams, code, charts) — not long-form learning content.
+Resources are standalone reference artifacts (cheatsheets, reference material, code) — not long-form learning content.
 
 All resources must:
 - Be placed in `_resources/` (flat directory — no subdirectories)
@@ -145,7 +145,7 @@ All resources must:
 ---
 title: "Resource Title"
 layout: resource
-type: table
+type: reference
 description: "Concise description of what this reference artifact contains"
 last_updated: 2025-01-01
 tags: [tag1, tag2, tag3]
@@ -156,7 +156,11 @@ related_posts:
 ---
 ```
 
-**Valid types:** `cheatsheet`, `diagram`, `table`, `chart`, `code`
+**Valid types:** `cheatsheet`, `reference`, `code`
+
+- `cheatsheet`: immediately actionable — used as-is, no interpretation required (git commands, HTTP status codes)
+- `reference`: information you internalize and apply yourself in some deeper way (glossaries, comparisons, decision guides)
+- `code`: templates or code snippets meant to be copied into a project
 
 **`last_updated`**: date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise an existing resource's content. It renders on the resource page and on its listing card.
 
@@ -175,6 +179,10 @@ related_posts:
 **Permalinks:** `/resources/<filename>.html` (no category prefix — flat structure)
 
 **NEVER rename resource files** — same rule as posts and guides.
+
+`related_guides`/`related_posts` are declared on the resource, never on the guide or post being linked to — adding a resource never requires editing existing content files.
+
+For the Lookup Test (deciding whether content qualifies as a resource), quality standards, and organization guidance, see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
 
 ## Tech Radar
 

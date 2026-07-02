@@ -8,9 +8,35 @@ This guide covers format requirements, organization, and quality standards for r
 
 A resource is a self-contained visual or reference artifact — not prose, not a guide, not a post. The unit of value is the artifact itself: a table you screenshot, a diagram you reference in a PR, a cheatsheet you keep open in a tab. Readers glance at a resource; they don't read it front to back.
 
-**Valid types**: `cheatsheet`, `diagram`, `table`, `chart`, `code`
+**Valid types**: `cheatsheet`, `reference`, `code`
+
+- **`cheatsheet`**: Immediately actionable — used as-is, no interpretation required (git commands, HTTP status codes, keyboard shortcuts)
+- **`reference`**: Information you internalize and then apply yourself in some deeper way (glossaries, comparisons, decision guides, conceptual lookups)
+- **`code`**: Templates or code snippets meant to be copied into a project (ADR templates, skill definitions)
 
 If content requires sustained reading to understand — narrative explanation, reasoning through trade-offs, building up a concept step by step — it belongs in a study guide or blog post, not a resource.
+
+### The Lookup Test
+
+Well-organized content is not automatically a resource candidate. A three-item quoted list ("The Core Laws of Software Architecture") can be memorable and well-formatted without being something anyone looks up independent of the guide it lives in. Before flagging something as a candidate, apply both filters:
+
+- **Density**: Does it have enough data points to justify its own page? Count rows × meaningful comparison dimensions, not raw row count — a 2-row table compared across several dimensions (e.g., Scrum vs. Kanban across cadence, roles, WIP limits) is dense enough even with few rows, while a 3-item list of one-line statements (e.g., three quoted "laws") is thin even though it clears a raw item-count floor. Roughly 4+ data points is the practical floor.
+- **Self-contained meaning**: Would someone search for or bookmark this independent of ever reading the source guide? "OWASP Top 10" passes — it's canonical, enumerable, and answers a "what/which/when" lookup question with no context required. "Core Laws of Software Architecture" fails — it's a "why" statement that only lands with the surrounding argument.
+
+When auditing content for candidates, reject anything that fails either filter rather than flagging it as "Review." The goal is a short list of high-confidence extractions, not an index of every well-organized paragraph.
+
+### Synthesis Candidates
+
+Not every resource exists as a ready-made table. Some guides explain a set of parallel concepts in prose — one subsection per concept, same shape each time (a name, a definition, maybe a metric) — without ever presenting them together. That's still a resource candidate; it just needs compiling before it's extractable.
+
+**How to recognize one**: look for a guide section broken into parallel subsections with a consistent shape — e.g., "Operational Characteristics," "Structural Characteristics," "Cloud-Specific Characteristics" each defining a handful of terms the same way. The parallelism itself is the signal: the author already organized these as a set, they just didn't table them.
+
+**The test still applies to the output, not the source.** Don't ask "is this already a table?" — ask "if I compiled this into a table, would it pass the lookup test?" A guide with four sections defining 22 total characteristics compiles into a dense, self-contained glossary that clearly passes. A guide with one paragraph explaining a single concept doesn't get to become a resource just because you could technically put it in a two-cell table.
+
+**Guardrails against overreach**:
+- Only synthesize categorization the source actually uses (headers, explicit groupings). Don't invent a taxonomy the guide doesn't have.
+- It's fine — often better — to pull in a second, non-adjacent section of the same guide if it answers the same lookup question (e.g., merging a "what does X mean" glossary with a separate "how do you measure X" section later in the same file). Readers looking up a concept want both.
+- If compiling requires rewriting the author's explanations rather than just reformatting them, that's a sign this is guide content, not resource content — stop.
 
 ---
 
@@ -23,7 +49,7 @@ If content requires sustained reading to understand — narrative explanation, r
 ---
 title: "Resource Title"
 layout: resource
-type: table
+type: reference
 description: "Concise description of what this reference artifact contains"
 last_updated: 2025-01-01
 tags: [tag1, tag2, tag3]
@@ -37,7 +63,7 @@ related_posts:
 **Required fields**: `title`, `layout`, `type`, `description`, `last_updated`, `tags`
 **Optional fields**: `related_guides`, `related_posts` — arrays of site-relative URLs
 
-- **type**: Must be one of the five valid types above. Drives the type badge and the listing page's type filter.
+- **type**: Must be one of the three valid types above. Drives the type badge and the listing page's type filter.
 - **last_updated**: Date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise a resource's content — it renders on both the resource page and its listing card.
 - **description**: A 1-2 sentence summary of what the artifact contains. Write it to stand alone in a listing card.
 
