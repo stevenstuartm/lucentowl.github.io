@@ -2,7 +2,7 @@
 title: "Architecture Decision Record (ADR) Template"
 layout: resource
 type: code
-category: "Leadership & Team Management"
+category: "Architecture"
 description: "A ready-to-use markdown template for documenting architecturally significant decisions, including status, context, consequences, and compliance tracking."
 last_updated: 2026-07-02
 tags: [architecture, decision-making, adrs, documentation]

@@ -2,7 +2,7 @@
 title: "Big-O Complexity Quick Reference"
 layout: resource
 type: reference
-category: "Data Structures & Algorithms"
+category: "DSA"
 description: "Time complexity growth rates, practical input limits, and complexity of common algorithms, for fast lookup during algorithm analysis."
 last_updated: 2026-07-02
 tags: [algorithms, complexity-analysis, data-structures, performance]

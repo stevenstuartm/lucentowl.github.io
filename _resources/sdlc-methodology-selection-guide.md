@@ -2,7 +2,7 @@
 title: "SDLC Methodology Selection Guide"
 layout: resource
 type: reference
-category: "Software Development Lifecycle"
+category: "SDLC"
 description: "Decision matrix and selection questions for choosing a software development methodology (Waterfall, Scrum, Kanban, XP, Shape Up, Lean, DevOps, and others) by project characteristics."
 last_updated: 2026-07-02
 tags: [sdlc, methodology, agile, decision-making]

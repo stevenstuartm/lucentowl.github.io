@@ -2,7 +2,7 @@
 title: "Prompt Engineering Technique Selection Guide"
 layout: resource
 type: reference
-category: "AI & Machine Learning"
+category: "AI"
 description: "Prompting technique definitions, a task-to-technique selection table, and common pitfalls to avoid."
 last_updated: 2026-07-02
 tags: [ai, generative-ai, llm, prompt-engineering, decision-making]

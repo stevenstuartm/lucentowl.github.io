@@ -2,7 +2,7 @@
 title: "AI Batch Generation Pipeline Template"
 layout: resource
 type: code
-category: "AI & Machine Learning"
+category: "AI"
 description: "A copy-paste plan file and orchestrator prompt for running parallel AI agents through a batch content-generation pipeline, with model tiering and validation built in."
 last_updated: 2026-07-02
 tags: [ai, generative-ai, llm, agents, automation, workflow]

@@ -2,7 +2,7 @@
 title: "Deployment Strategy Comparison"
 layout: resource
 type: reference
-category: "Infrastructure & Cloud"
+category: "Infrastructure"
 description: "Rolling, Blue-Green, Canary, A/B Testing, and Chaos Engineering deployment strategies compared by downtime, cost, complexity, rollback speed, and best fit."
 last_updated: 2026-07-02
 tags: [infrastructure, deployment, devops, reliability]
