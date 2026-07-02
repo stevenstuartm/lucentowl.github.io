@@ -1,29 +1,16 @@
 {
   "resources": [
     "plan-task-skill.md",
-    "owasp-top-10-2021.md",
     "big-o-complexity-quick-reference.md",
     "adr-template.md",
     "http-methods-status-codes.md",
-    "fallacies-of-distributed-computing.md",
-    "owasp-top-10-ai-llm-2025.md",
-    "dsa-selection-guide.md",
     "design-patterns-quick-reference.md",
     "architecture-style-comparison.md",
     "architecture-characteristics-glossary.md",
-    "ddd-context-mapping-patterns.md",
     "deployment-strategy-comparison.md",
-    "protocol-comparison-grpc-rest-graphql-mq.md",
-    "common-api-antipatterns.md",
-    "api-authentication-mechanisms.md",
-    "api-versioning-strategies.md",
-    "governance-models-comparison.md",
-    "governance-antipatterns.md",
     "prompt-engineering-technique-selection.md",
     "http-version-comparison.md",
-    "git-branching-merge-strategy-guide.md",
-    "database-selection-decision-matrix.md",
-    "security-framework-selection-guide.md",
-    "sdlc-methodology-selection-guide.md"
+    "sdlc-methodology-selection-guide.md",
+    "ai-batch-generation-pipeline-template.md"
   ]
 }
