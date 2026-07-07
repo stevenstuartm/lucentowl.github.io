@@ -17,6 +17,7 @@ technologies:
   - AWS DynamoDB
   - AWS ECS
   - MessagePack
+author: steven-stuart
 ---
 
 ## The Problem

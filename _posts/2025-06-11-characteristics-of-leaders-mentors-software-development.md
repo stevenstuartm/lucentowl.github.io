@@ -4,6 +4,7 @@ title: "What Engineering Leaders Ask That Others Don't"
 date: 2025-06-11
 tags: [leadership, mentorship, career, software-engineering]
 description: "Key characteristics that define effective leaders and mentors in software development: accountability, continuous learning, and building others."
+author: steven-stuart
 ---
 
 I've worked with engineers who had senior titles but didn't lead anyone. I've also worked with junior engineers who mentored half the team. The difference wasn't in their resume or their technical depth; it was in how they approached their work, their growth, and their responsibility to others.

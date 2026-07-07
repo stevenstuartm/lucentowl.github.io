@@ -19,6 +19,7 @@ technologies:
   - Dapper
   - SQLite
   - Serilog
+author: steven-stuart
 ---
 
 ## The Project

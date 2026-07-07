@@ -18,6 +18,7 @@ technologies:
   - AWS Parameter Store
   - JWT
   - HotChocolate (GraphQL)
+author: steven-stuart
 ---
 
 ## The Problem

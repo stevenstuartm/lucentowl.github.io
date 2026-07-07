@@ -4,6 +4,7 @@ title: "Reporting and Production Make Terrible Roommates"
 date: 2026-03-11
 description: "Reporting pressure gradually distorts production schemas until they serve two masters and compromise for both. Separating the workloads lets each model evolve for the consumers it was designed to serve."
 tags: [architecture, databases, design-patterns, distributed-systems, data-modeling, event-sourcing, cqrs]
+author: steven-stuart
 ---
 
 I tend to think of reporting and production as incompatible roommates. They need the same space, they optimize for completely different things, and every accommodation one makes for the other is a debt that gets called in later. The production schema is usually what accumulates the most debt and gets hit the hardest.

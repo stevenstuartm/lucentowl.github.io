@@ -14,6 +14,7 @@ technologies:
   - Event Sourcing
   - SQL Server
   - Multi-Tenant
+author: steven-stuart
 ---
 
 ## Executive Summary

@@ -15,6 +15,7 @@ technologies:
   - AWS Aurora (MySQL)
   - AWS ECS
   - HotChocolate (GraphQL)
+author: steven-stuart
 ---
 
 ## The Problem

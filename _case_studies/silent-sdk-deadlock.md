@@ -17,6 +17,7 @@ technologies:
   - Entity Framework
   - Dapper
   - .NET
+author: steven-stuart
 ---
 
 ## Executive Summary

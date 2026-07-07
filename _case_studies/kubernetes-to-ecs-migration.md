@@ -15,6 +15,7 @@ technologies:
   - AWS ECS Fargate
   - CloudFormation
   - Docker
+author: steven-stuart
 ---
 
 ## The Situation

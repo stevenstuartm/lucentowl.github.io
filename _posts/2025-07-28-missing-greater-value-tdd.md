@@ -4,6 +4,7 @@ title: "TDD Tests Assumptions, Not Just Code"
 date: 2025-07-28
 tags: [tdd, testing, software-design, best-practices]
 description: "TDD's real value isn't code coverage, it's catching wrong assumptions before you deliver the wrong thing."
+author: steven-stuart
 ---
 
 In software development, the more expensive mistake isn't buggy code; it's building the wrong thing. Teams should be focused on preventing the delivery of features that don't match what users need, implementing requirements that were misunderstood, or discovering halfway through that the domain model was wrong. Test-Driven Development (TDD) is one solution to this problem, but it's often a very poorly understood concept and even those who do understand it can still do TDD wrong.

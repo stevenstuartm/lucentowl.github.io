@@ -4,6 +4,7 @@ title: "Single-Minded Focus Atrophies Everything Else"
 date: 2025-09-19
 tags: [career, productivity, learning, software-engineering]
 description: "Single-minded focus atrophies everything else you know. Real focus means being fully present with what matters right now, shifting attention as the work reveals what needs it."
+author: steven-stuart
 ---
 
 I spent years believing that focus meant exclusion: pick one thing, master it completely, then move to the next. But that approach has a hidden cost.

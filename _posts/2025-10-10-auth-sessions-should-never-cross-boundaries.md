@@ -4,6 +4,7 @@ title: "Auth Sessions Should Never Be Transient Across Boundaries"
 date: 2025-10-10
 description: "Authentication sessions belong at security boundaries, not flowing through internal systems. Treating them as ambient context violates architectural boundaries, creates coupling, and breaks down in async and event-driven scenarios."
 tags: [security, architecture, authentication, distributed-systems, event-driven]
+author: steven-stuart
 ---
 
 It is tempting to treat user authentication sessions as ambient context. You pass them through API layers, into service calls, across event processors, and through background jobs. If a component needs to know who the user is, it needs the user's session, right?

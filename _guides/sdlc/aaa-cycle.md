@@ -4,6 +4,7 @@ layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
 description: "A guiding discipline for architects that emphasizes human connection, shared agreement, and value delivery - transcending any specific SDLC methodology."
+author: steven-stuart
 tags: [sdlc, methodology, collaboration, stakeholder-management, leadership, fundamentals]
 ---
 

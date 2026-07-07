@@ -4,6 +4,7 @@ layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
 description: "Design the solution and secure commitment to the approach."
+author: steven-stuart
 tags: [sdlc, aaa-cycle, planning, architecture, collaboration, practical]
 ---
 

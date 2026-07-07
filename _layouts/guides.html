@@ -32,6 +32,26 @@ layout: default
         <button id="clearAllFilters" class="clear-all-link" type="button">Clear all</button>
     </div>
 
+    {% assign guide_authors = "" | split: "" %}
+    {% for guide in site.guides %}
+        {% if guide.author %}
+            {% unless guide_authors contains guide.author %}
+                {% assign guide_authors = guide_authors | push: guide.author %}
+            {% endunless %}
+        {% endif %}
+    {% endfor %}
+    {% assign guide_authors = guide_authors | sort %}
+
+    {% if guide_authors.size > 1 %}
+    <div class="author-filters" id="authorFilters">
+        <button class="author-pill" data-author="" type="button">All Authors</button>
+        {% for author_key in guide_authors %}
+        {% assign author_data = site.data.authors[author_key] %}
+        <button class="author-pill" data-author="{{ author_key }}" type="button">{{ author_data.name | default: author_key }}</button>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <section class="category-browser" id="categoryBrowser">
 
         <div class="category-cards-grid" id="categoryCardsGrid">
@@ -136,7 +156,8 @@ layout: default
                                                  data-description="{{ guide.description | downcase }}"
                                                  data-category="{{ category_name | slugify }}"
                                                  data-subcategory="{{ subcategory.name | slugify }}"
-                                                 data-tags="{% if guide.tags %}{{ guide.tags | join: ',' | downcase }}{% endif %}">
+                                                 data-tags="{% if guide.tags %}{{ guide.tags | join: ',' | downcase }}{% endif %}"
+                                                 data-author="{{ guide.author }}">
                                             <a href="{{ guide.url | relative_url }}" class="guide-link">
                                                 {% if show_order %}
                                                 <div class="reading-order-badge">

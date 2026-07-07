@@ -1,6 +1,7 @@
-class BlogBrowser {
+class CaseStudyBrowser {
     constructor() {
         this.state = {
+            category: null,
             author: null,
             tags: new Set(),
             searches: new Set()
@@ -12,16 +13,18 @@ class BlogBrowser {
 
     init() {
         this.cacheElements();
-        this.bindSearch();
-        this.bindTagsOnCards();
+        this.bindCategoryPills();
         this.bindAuthorPills();
+        this.bindSearch();
         this.bindClearAll();
         this.loadFromURL();
         this.applyState();
     }
 
     cacheElements() {
-        this.elements.postItems = document.querySelectorAll('.filterable-item');
+        this.elements.caseStudyItems = document.querySelectorAll('.filterable-item');
+        this.elements.categorySections = document.querySelectorAll('.category-section[data-section]');
+        this.elements.categoryPills = document.querySelectorAll('.resource-category-pill');
         this.elements.authorPills = document.querySelectorAll('.author-pill');
         this.elements.searchInput = document.getElementById('searchInput');
         this.elements.resultCount = document.getElementById('resultCount');
@@ -29,6 +32,17 @@ class BlogBrowser {
         this.elements.activeFiltersBar = document.getElementById('activeFiltersBar');
         this.elements.activeFilterChips = document.getElementById('activeFilterChips');
         this.elements.clearAllBtn = document.getElementById('clearAllFilters');
+    }
+
+    bindCategoryPills() {
+        this.elements.categoryPills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                const category = pill.dataset.category || null;
+                this.state.category = (category && this.state.category !== category) ? category : null;
+                this.applyState();
+                this.updateURL();
+            });
+        });
     }
 
     bindAuthorPills() {
@@ -75,23 +89,6 @@ class BlogBrowser {
         });
     }
 
-    bindTagsOnCards() {
-        document.querySelectorAll('.guide-tag[data-tag]').forEach(btn => {
-            btn.addEventListener('click', e => {
-                e.preventDefault();
-                e.stopPropagation();
-                const tag = btn.dataset.tag;
-                if (this.state.tags.has(tag)) {
-                    this.state.tags.delete(tag);
-                } else {
-                    this.state.tags.add(tag);
-                }
-                this.applyState();
-                this.updateURL();
-            });
-        });
-    }
-
     bindClearAll() {
         if (this.elements.clearAllBtn) {
             this.elements.clearAllBtn.addEventListener('click', () => this.clearAll());
@@ -103,7 +100,7 @@ class BlogBrowser {
     }
 
     clearAll() {
-        this.state = { author: null, tags: new Set(), searches: new Set() };
+        this.state = { category: null, author: null, tags: new Set(), searches: new Set() };
         this.liveSearch = '';
         if (this.elements.searchInput) this.elements.searchInput.value = '';
         this.applyState();
@@ -111,10 +108,23 @@ class BlogBrowser {
     }
 
     applyState() {
+        this.updateCategoryPills();
         this.updateAuthorPills();
-        const count = this.filterPostCards();
+        const count = this.filterCards();
         this.updateActiveFiltersBar();
         this.updateResultCount(count);
+    }
+
+    applyFiltersOnly() {
+        const count = this.filterCards();
+        this.updateResultCount(count);
+    }
+
+    updateCategoryPills() {
+        this.elements.categoryPills.forEach(pill => {
+            const pillCategory = pill.dataset.category || null;
+            pill.classList.toggle('resource-category-pill--active', pillCategory === this.state.category);
+        });
     }
 
     updateAuthorPills() {
@@ -124,19 +134,19 @@ class BlogBrowser {
         });
     }
 
-    applyFiltersOnly() {
-        const count = this.filterPostCards();
-        this.updateResultCount(count);
-    }
-
-    filterPostCards() {
-        const { author, tags, searches } = this.state;
+    filterCards() {
+        const { category, author, searches } = this.state;
         let visible = 0;
 
-        this.elements.postItems.forEach(item => {
-            const show = this.itemMatches(item, author, tags, searches, this.liveSearch);
+        this.elements.caseStudyItems.forEach(item => {
+            const show = this.itemMatches(item, category, author, searches, this.liveSearch);
             item.style.display = show ? '' : 'none';
             if (show) visible++;
+        });
+
+        this.elements.categorySections.forEach(section => {
+            const hasVisible = section.querySelectorAll('.filterable-item:not([style*="display: none"])').length > 0;
+            section.style.display = hasVisible ? '' : 'none';
         });
 
         if (this.elements.noResults) {
@@ -146,46 +156,39 @@ class BlogBrowser {
         return visible;
     }
 
-    itemMatches(item, author, tags, searches, liveSearch) {
+    itemMatches(item, category, author, searches, liveSearch) {
+        if (category && item.dataset.category !== category) return false;
         if (author && item.dataset.author !== author) return false;
-
-        if (tags.size > 0) {
-            const itemTags = (item.dataset.tags || '').split(',').map(t => t.trim()).filter(Boolean);
-            for (const tag of tags) {
-                if (!itemTags.includes(tag)) return false;
-            }
-        }
 
         const title = item.dataset.title || '';
         const desc = item.dataset.description || '';
-        const itemTagStr = item.dataset.tags || '';
 
         for (const term of searches) {
-            if (!title.includes(term) && !desc.includes(term) && !itemTagStr.includes(term)) return false;
+            if (!title.includes(term) && !desc.includes(term)) return false;
         }
 
         if (liveSearch) {
-            if (!title.includes(liveSearch) && !desc.includes(liveSearch) && !itemTagStr.includes(liveSearch)) return false;
+            if (!title.includes(liveSearch) && !desc.includes(liveSearch)) return false;
         }
 
         return true;
     }
 
     updateActiveFiltersBar() {
-        const { author, searches, tags } = this.state;
+        const { searches, category, author } = this.state;
         const chips = [];
 
+        if (category) {
+            const pill = document.querySelector(`.resource-category-pill[data-category="${category}"]`);
+            const label = pill ? pill.textContent : category;
+            chips.push({ chipType: 'category', label, value: category });
+        }
         if (author) {
             const pill = document.querySelector(`.author-pill[data-author="${author}"]`);
             const label = pill ? pill.textContent : author;
-            chips.push({ type: 'author', label, value: author });
+            chips.push({ chipType: 'author', label, value: author });
         }
-        for (const term of searches) {
-            chips.push({ type: 'search', label: term, value: term });
-        }
-        for (const tag of tags) {
-            chips.push({ type: 'tag', label: tag, value: tag });
-        }
+        for (const term of searches) chips.push({ chipType: 'search', label: term, value: term });
 
         if (this.elements.activeFiltersBar) {
             this.elements.activeFiltersBar.style.display = chips.length > 0 ? '' : 'none';
@@ -194,7 +197,7 @@ class BlogBrowser {
         if (!this.elements.activeFilterChips) return;
 
         this.elements.activeFilterChips.innerHTML = chips.map(chip =>
-            `<button class="filter-chip filter-chip--${chip.type}" data-type="${chip.type}" data-value="${this.escAttr(chip.value)}" type="button">
+            `<button class="filter-chip filter-chip--${chip.chipType}" data-type="${this.escAttr(chip.chipType)}" data-value="${this.escAttr(chip.value)}" type="button">
                 <span class="filter-chip-label">${this.escHtml(chip.label)}</span>
                 <span class="filter-chip-remove" aria-hidden="true">&times;</span>
             </button>`
@@ -202,52 +205,44 @@ class BlogBrowser {
 
         this.elements.activeFilterChips.querySelectorAll('.filter-chip').forEach(chip => {
             chip.addEventListener('click', () => {
-                const type = chip.dataset.type;
+                const chipType = chip.dataset.type;
                 const value = chip.dataset.value;
-                if (type === 'author') this.state.author = null;
-                else if (type === 'search') this.state.searches.delete(value);
-                else if (type === 'tag') this.state.tags.delete(value);
+                if (chipType === 'category') this.state.category = null;
+                else if (chipType === 'author') this.state.author = null;
+                else if (chipType === 'search') this.state.searches.delete(value);
                 this.applyState();
                 this.updateURL();
             });
-        });
-
-        document.querySelectorAll('.guide-tag[data-tag]').forEach(btn => {
-            btn.classList.toggle('active', this.state.tags.has(btn.dataset.tag));
         });
     }
 
     updateResultCount(visible) {
         if (!this.elements.resultCount) return;
-        const total = this.elements.postItems.length;
-        const hasFilters = this.state.author || this.state.tags.size > 0 || this.state.searches.size > 0 || this.liveSearch;
+        const total = this.elements.caseStudyItems.length;
+        const hasFilters = this.state.category || this.state.author || this.state.searches.size > 0 || this.liveSearch;
         this.elements.resultCount.textContent = hasFilters
-            ? `${visible} of ${total} posts`
-            : `${total} posts`;
+            ? `${visible} of ${total} case studies`
+            : `${total} case studies`;
     }
 
     loadFromURL() {
         const params = new URLSearchParams(window.location.search);
 
+        const category = params.get('category');
+        if (category) this.state.category = category;
+
         const author = params.get('author');
         if (author) this.state.author = author;
 
         const search = params.get('search');
-        if (search) {
-            search.split(',').forEach(t => { if (t.trim()) this.state.searches.add(t.trim()); });
-        }
-
-        const tags = params.get('tags');
-        if (tags) {
-            tags.split(',').forEach(t => { if (t.trim()) this.state.tags.add(t.trim()); });
-        }
+        if (search) search.split(',').forEach(t => { if (t.trim()) this.state.searches.add(t.trim()); });
     }
 
     updateURL() {
         const params = new URLSearchParams();
+        if (this.state.category) params.set('category', this.state.category);
         if (this.state.author) params.set('author', this.state.author);
         if (this.state.searches.size > 0) params.set('search', Array.from(this.state.searches).join(','));
-        if (this.state.tags.size > 0) params.set('tags', Array.from(this.state.tags).join(','));
 
         const url = params.toString() ? `${location.pathname}?${params}` : location.pathname;
         history.replaceState({}, '', url);
@@ -267,5 +262,5 @@ class BlogBrowser {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    window.blogBrowser = new BlogBrowser();
+    window.caseStudyBrowser = new CaseStudyBrowser();
 });

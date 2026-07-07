@@ -4,6 +4,7 @@ title: "First to Market, First to Fail: The Economics of Architectural Decisions
 date: 2025-10-10
 description: "Rushing to market creates delayed costs that compound over time. Second movers learn from pioneers' mistakes while building on solid foundations. Architectural decisions are economic decisions, and the bill always comes due."
 tags: [architecture, technical-debt, software-engineering, leadership]
+author: steven-stuart
 ---
 
 Every architect has sat in a meeting where leadership demands faster delivery. "Our competitors ship features weekly!" "We need to be first to market!" "We'll fix the technical issues later!" That pressure shapes the decision made in that moment, and that decision determines whether your company thrives or struggles.

@@ -4,6 +4,7 @@ title: "Architecture Is a Belief About Where Authority Belongs"
 date: 2026-06-12
 description: "SOLID, normalization, least privilege, and bounded contexts share a structural belief: that where authority lives determines what the system can absorb. This post develops that into two measurable properties, contour and bond, and traces through an order workflow how authority correctly placed is quietly eroded by optimization."
 tags: [architecture, design-patterns, solid, software-design, system-design, ddd]
+author: steven-stuart
 ---
 
 When I encounter a system or data design decision I'm unsure about, I endeavor to ask the same thing: **where does authority live, and how bounded is it**?

@@ -4,6 +4,7 @@ title: "Why 'Tech Debt' Does Not Get Fixed"
 date: 2025-11-11
 description: "The term 'tech debt' perpetuates the communication failures that created the problem. It's ambiguous, defensive, and guarantees deprioritization. Replace it with Corrections, Optimizations, and Re-Alignments to break the cycle."
 tags: [architecture, communication, technical-debt, leadership]
+author: steven-stuart
 ---
 
 Most engineering teams have a backlog of work they call "tech debt." Developers understand how it can slow down feature development, increase support costs, and threaten system stability. Yet when they bring these concerns to stakeholders, the work often stays deprioritized indefinitely. So why is that? Why would something so obviously important be ignored. In most cases, it is because the term 'tech debt' positions engineering work as backward-looking cleanup rather than forward-looking value creation. It's defensive, it's ambiguous, and it guarantees the work never gets prioritized.

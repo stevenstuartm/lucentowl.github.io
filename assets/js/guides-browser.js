@@ -3,6 +3,7 @@ class GuideBrowser {
         this.state = {
             category: null,
             subcategory: null,
+            author: null,
             tags: new Set(),
             searches: new Set()   // committed search chips (Enter to add)
         };
@@ -19,6 +20,7 @@ class GuideBrowser {
         this.bindSubcategoryCards();
         this.bindSearch();
         this.bindTagsOnCards();
+        this.bindAuthorPills();
         this.bindClearAll();
         this.loadFromURL();
         this.applyState();
@@ -33,6 +35,7 @@ class GuideBrowser {
         this.elements.subcategoryBrowsers = document.querySelectorAll('.subcategory-browser');
         this.elements.subcategoryCards = document.querySelectorAll('.subcategory-card');
         this.elements.guideItems = document.querySelectorAll('.filterable-item');
+        this.elements.authorPills = document.querySelectorAll('.author-pill');
         this.elements.categorySections = document.querySelectorAll('.category-section');
         this.elements.subcategoryGroups = document.querySelectorAll('.subcategory-group');
         this.elements.searchInput = document.getElementById('searchInput');
@@ -165,6 +168,17 @@ class GuideBrowser {
         });
     }
 
+    bindAuthorPills() {
+        this.elements.authorPills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                const author = pill.dataset.author || null;
+                this.state.author = (author && this.state.author !== author) ? author : null;
+                this.applyState();
+                this.updateURL();
+            });
+        });
+    }
+
     bindClearAll() {
         if (this.elements.clearAllBtn) {
             this.elements.clearAllBtn.addEventListener('click', () => this.clearAll());
@@ -176,7 +190,7 @@ class GuideBrowser {
     }
 
     clearAll() {
-        this.state = { category: null, subcategory: null, tags: new Set(), searches: new Set() };
+        this.state = { category: null, subcategory: null, author: null, tags: new Set(), searches: new Set() };
         this.liveSearch = '';
         if (this.elements.searchInput) this.elements.searchInput.value = '';
         this.expandCategoryGrid();
@@ -188,10 +202,18 @@ class GuideBrowser {
     applyState() {
         this.updateCategoryCards();
         this.updateSubcategoryBrowser();
+        this.updateAuthorPills();
         const count = this.filterGuideCards();
         this.updateGridHeadings();
         this.updateActiveFiltersBar();
         this.updateResultCount(count);
+    }
+
+    updateAuthorPills() {
+        this.elements.authorPills.forEach(pill => {
+            const pillAuthor = pill.dataset.author || null;
+            pill.classList.toggle('author-pill--active', pillAuthor === this.state.author);
+        });
     }
 
     // Filter-only update (skip UI chrome — used for live search typing)
@@ -221,11 +243,11 @@ class GuideBrowser {
     }
 
     filterGuideCards() {
-        const { category, subcategory, tags, searches } = this.state;
+        const { category, subcategory, author, tags, searches } = this.state;
         let visible = 0;
 
         this.elements.guideItems.forEach(item => {
-            const show = this.itemMatches(item, category, subcategory, tags, searches, this.liveSearch);
+            const show = this.itemMatches(item, category, subcategory, author, tags, searches, this.liveSearch);
             item.style.display = show ? '' : 'none';
             if (show) visible++;
         });
@@ -247,9 +269,10 @@ class GuideBrowser {
         return visible;
     }
 
-    itemMatches(item, category, subcategory, tags, searches, liveSearch) {
+    itemMatches(item, category, subcategory, author, tags, searches, liveSearch) {
         if (category && item.dataset.category !== category) return false;
         if (subcategory && item.dataset.subcategory !== subcategory) return false;
+        if (author && item.dataset.author !== author) return false;
 
         if (tags.size > 0) {
             const itemTags = (item.dataset.tags || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -282,9 +305,14 @@ class GuideBrowser {
     }
 
     updateActiveFiltersBar() {
-        const { searches, tags } = this.state;
+        const { author, searches, tags } = this.state;
         const chips = [];
 
+        if (author) {
+            const pill = document.querySelector(`.author-pill[data-author="${author}"]`);
+            const label = pill ? pill.textContent : author;
+            chips.push({ type: 'author', label, value: author });
+        }
         for (const term of searches) {
             chips.push({ type: 'search', label: term, value: term });
         }
@@ -312,7 +340,9 @@ class GuideBrowser {
                 const type = chip.dataset.type;
                 const value = chip.dataset.value;
 
-                if (type === 'search') {
+                if (type === 'author') {
+                    this.state.author = null;
+                } else if (type === 'search') {
                     this.state.searches.delete(value);
                 } else if (type === 'tag') {
                     this.state.tags.delete(value);
@@ -331,7 +361,7 @@ class GuideBrowser {
     updateResultCount(visible) {
         if (!this.elements.resultCount) return;
         const total = this.elements.guideItems.length;
-        const hasFilters = this.state.category || this.state.subcategory
+        const hasFilters = this.state.category || this.state.subcategory || this.state.author
             || this.state.tags.size > 0 || this.state.searches.size > 0 || this.liveSearch;
         this.elements.resultCount.textContent = hasFilters
             ? `${visible} of ${total} guides`
@@ -353,6 +383,9 @@ class GuideBrowser {
         const subcategory = params.get('subcategory');
         if (subcategory) this.state.subcategory = subcategory;
 
+        const author = params.get('author');
+        if (author) this.state.author = author;
+
         const search = params.get('search');
         if (search) {
             search.split(',').forEach(t => { if (t.trim()) this.state.searches.add(t.trim()); });
@@ -368,6 +401,7 @@ class GuideBrowser {
         const params = new URLSearchParams();
         if (this.state.category) params.set('category', this.state.category);
         if (this.state.subcategory) params.set('subcategory', this.state.subcategory);
+        if (this.state.author) params.set('author', this.state.author);
         if (this.state.searches.size > 0) params.set('search', Array.from(this.state.searches).join(','));
         if (this.state.tags.size > 0) params.set('tags', Array.from(this.state.tags).join(','));
 

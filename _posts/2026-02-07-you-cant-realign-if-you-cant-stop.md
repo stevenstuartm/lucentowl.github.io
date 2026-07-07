@@ -4,6 +4,7 @@ title: "The Most Dangerous Sentence in Software Development"
 date: 2026-02-07
 description: "Every methodology assumes that when discovery arrives, someone will stop and act on it. Plan continuation bias is the pre-rational impulse that prevents exactly that."
 tags: [plan-continuation-bias, decision-making, leadership, cognitive-bias, software-development]
+author: steven-stuart
 ---
 
 Something is broken in my approach to problem-solving, and I suspect it's broken in yours too.

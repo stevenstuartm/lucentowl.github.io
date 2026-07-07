@@ -4,6 +4,7 @@ title: "Making Invalid States Unrepresentable: The Billion-Dollar Mistake That W
 date: 2025-12-18
 description: "Structure your data so invalid states cannot exist. Validate at construction, trust internally, and let null crash loudly rather than masking absence with defaults that propagate corruption silently through your system."
 tags: [software-design, patterns, security, defensive-programming]
+author: steven-stuart
 ---
 
 The billion-dollar mistake. That's what Tony Hoare called his invention of the null reference in 1965. The quote gets repeated so often that "null is dangerous" has become conventional wisdom, especially among entry-level and intermediate developers who hear it as dogma without understanding the context or the alternatives that can be far worse.

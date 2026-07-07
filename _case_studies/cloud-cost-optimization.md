@@ -15,6 +15,7 @@ technologies:
   - DataDog
   - AWS ECS
   - AWS QuickSight
+author: steven-stuart
 ---
 
 ## The Problem

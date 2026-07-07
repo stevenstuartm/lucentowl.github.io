@@ -4,6 +4,7 @@ title: "Observability Is Authored, Not Installed"
 date: 2026-02-11
 description: "Most observability failures trace back to code that doesn't classify its own behavior. When your system can't distinguish 'handled correctly' from 'actually broken,' no platform can compensate."
 tags: [observability, devops, architecture, operations]
+author: steven-stuart
 ---
 
 I have been a part of a dev team where poor observability constantly brought us to a standstill. Not because the tooling was missing, but because the data it collected never carried meaningful context. Alerts fired constantly, so operation teams ignored them, and dashboards existed for every service, but none of them answered the questions that mattered during incidents. Investigations that should have taken minutes took hours. It got bad enough that observability failures alone caused significant SLA violations.

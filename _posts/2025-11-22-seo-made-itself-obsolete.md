@@ -4,6 +4,7 @@ title: "SEO Still Works, Just Not How We Hoped"
 date: 2025-11-22
 tags: [industry, infrastructure, innovation, search]
 description: "The 'SEO is dead' narrative draws a false binary between SEO and social media. SEO has a real problem: authority signals that once filtered spam now create insurmountable barriers for newcomers. But it still excels at surfacing authority and trust. Use social channels for democratic reach and speed; let SEO compound as a long-term credibility asset."
+author: steven-stuart
 ---
 
 A few months ago, I read a post about how SEO is dead and that we need to let the past die and find greener pastures. I'm finally getting around to writing my thoughts on it. That contention was correct in many ways, but it also drew an undeserved binary between SEO and social media as two means to the same end. I think that framing misses the point.

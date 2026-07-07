@@ -4,6 +4,7 @@ title: "Avoid Forcing REST onto Domain-Driven Architectures"
 date: 2025-09-27
 tags: [architecture, api-design, ddd, microservices]
 description: "Why REST's resource-centric design conflicts with domain-driven architectures and how RPC provides better alignment with business operations."
+author: steven-stuart
 ---
 
 For years I have seen teams wrestle with REST in domain-driven systems. They start with clean REST endpoints then gradually compromise as business operations don't map to resource CRUD. After years or just months, they've abandoned most REST principles anyway. They invent phantom resources, hide operations in request bodies, and add gateway routing layers, all while gaining none of the architectural benefits REST was supposed to provide.

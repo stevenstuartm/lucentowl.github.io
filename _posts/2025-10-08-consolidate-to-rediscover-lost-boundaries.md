@@ -4,6 +4,7 @@ title: "Consolidate Architecture to Rediscover Lost Agility"
 date: 2025-10-08
 tags: [architecture, distributed-systems, refactoring, system-design, technical-debt, microservices]
 description: "When distributed systems lose their rationale through team churn, consolidation reveals true boundaries. Merge tightly-coupled services to discover what boundaries actually make sense, then split correctly when justified."
+author: steven-stuart
 ---
 
 Most of us have lived this at least once: you arrive at a new organization, team, or project and find a distributed system that nobody recalls the reasoning for. Components were divided early based on assumptions that stopped being valid long ago, databases are fragmented across services with unclear ownership, and team churn has erased whatever rationale once justified the boundaries. Every deployment requires coordinating releases across multiple services and database migrations. You have only just arrived and you already have distributed complexity without distributed benefits.

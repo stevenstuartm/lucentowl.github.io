@@ -530,6 +530,10 @@ function makeRadarBlipsClickable() {
   position: relative;
 }
 
+#itemDetailModal .modal-content {
+  max-width: 760px;
+}
+
 @keyframes modalFadeIn {
   from {
     opacity: 0;

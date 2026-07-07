@@ -12,11 +12,11 @@ layout: default
         <div class="author-info">
             <h1 class="author-name">{{ author.name }}</h1>
             <p class="author-title">{{ author.title }}</p>
-            <p class="author-bio">{{ author.bio }}</p>
+            <p class="author-bio">{{ page.bio }}</p>
             <div class="author-links">
-                {% include social-links.html author=page.author %}
-                {% if author.personal_site %}
-                <a href="{{ author.personal_site }}" target="_blank" rel="noopener noreferrer" class="author-personal-site">
+                {% include social-links.html social=page.social %}
+                {% if page.personal_site %}
+                <a href="{{ page.personal_site }}" target="_blank" rel="noopener noreferrer" class="author-personal-site">
                     Full profile →
                 </a>
                 {% endif %}
@@ -24,12 +24,14 @@ layout: default
         </div>
     </div>
 
-    {% assign author_posts = site.posts | where: "author", page.author %}
+    {% assign content_cap = 3 %}
+
+    {% assign author_posts = site.posts | where: "author", page.author | sort: 'date' | reverse %}
     {% if author_posts.size > 0 %}
     <section class="author-posts">
         <h2>Articles</h2>
         <div class="author-posts-list">
-            {% for post in author_posts limit: 20 %}
+            {% for post in author_posts limit: content_cap %}
             <article class="author-post-card">
                 <div class="author-post-meta">
                     <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%B %d, %Y" }}</time>
@@ -39,6 +41,63 @@ layout: default
             </article>
             {% endfor %}
         </div>
+        {% if author_posts.size > content_cap %}
+        <a href="{{ '/blog.html' | relative_url }}?author={{ page.author }}" class="read-more">View all articles by {{ author.name }} →</a>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {% assign author_guides = site.guides | where: "author", page.author %}
+    {% if author_guides.size > 0 %}
+    <section class="author-posts">
+        <h2>Study Guides</h2>
+        <div class="author-posts-list">
+            {% for guide in author_guides limit: content_cap %}
+            <article class="author-post-card">
+                <h3><a href="{{ guide.url | relative_url }}">{{ guide.title }}</a></h3>
+                {% if guide.description %}<p class="author-post-description">{{ guide.description }}</p>{% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% if author_guides.size > content_cap %}
+        <a href="{{ '/study-guides.html' | relative_url }}?author={{ page.author }}" class="read-more">View all guides by {{ author.name }} →</a>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {% assign author_resources = site.resources | where: "author", page.author %}
+    {% if author_resources.size > 0 %}
+    <section class="author-posts">
+        <h2>Resources</h2>
+        <div class="author-posts-list">
+            {% for resource in author_resources limit: content_cap %}
+            <article class="author-post-card">
+                <h3><a href="{{ resource.url | relative_url }}">{{ resource.title }}</a></h3>
+                {% if resource.description %}<p class="author-post-description">{{ resource.description }}</p>{% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% if author_resources.size > content_cap %}
+        <a href="{{ '/resources.html' | relative_url }}?author={{ page.author }}" class="read-more">View all resources by {{ author.name }} →</a>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {% assign author_case_studies = site.case_studies | where: "author", page.author | sort: 'date' | reverse %}
+    {% if author_case_studies.size > 0 %}
+    <section class="author-posts">
+        <h2>Case Studies</h2>
+        <div class="author-posts-list">
+            {% for case_study in author_case_studies limit: content_cap %}
+            <article class="author-post-card">
+                <h3><a href="{{ case_study.url | relative_url }}">{{ case_study.title }}</a></h3>
+                {% if case_study.subtitle %}<p class="author-post-description">{{ case_study.subtitle }}</p>{% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% if author_case_studies.size > content_cap %}
+        <a href="{{ '/case-studies.html' | relative_url }}?author={{ page.author }}" class="read-more">View all case studies by {{ author.name }} →</a>
+        {% endif %}
     </section>
     {% endif %}
 

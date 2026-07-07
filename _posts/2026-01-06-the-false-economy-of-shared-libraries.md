@@ -4,6 +4,7 @@ title: "How Shared Libraries Become Shared Shackles"
 date: 2026-01-06
 description: "Shared libraries promise reuse and consistency but more often bind team autonomy and development tempo through coupling and coordination overhead. The consistency they claim to provide is better achieved by sharing principles, tradeoffs, and values rather than sharing implementation."
 tags: [architecture, distributed-systems, microservices, governance]
+author: steven-stuart
 ---
 
 This is a highly opinionated take on shared libraries and the damage they do to team autonomy and development tempo. Teams deliver value faster and more consistently when they can make decisions, ship changes, and evolve their domains without coordinating across organizational boundaries. Shared libraries erode exactly that independence.

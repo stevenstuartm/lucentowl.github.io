@@ -4,6 +4,7 @@ title: "Learning Platforms Sell Badges, Not Skills"
 date: 2025-08-27
 tags: [learning, career, productivity, software-engineering]
 description: "Building real projects teaches more than passive learning platforms ever could. Real capability comes from doing, failing, and fixing, not collecting completion checkmarks."
+author: steven-stuart
 ---
 
 I cancelled all my learning platform subscriptions a while back, and I haven't looked back. Not because those platforms are worthless, but because I realized they were optimizing for the wrong outcome. They sell completion badges and the feeling of progress, not actual capability.

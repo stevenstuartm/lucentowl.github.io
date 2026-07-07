@@ -4,6 +4,7 @@ title: "Package Updates Are Investments, Not Hygiene Tasks"
 date: 2025-11-07
 description: "Treating package updates as investments rather than chores means making deliberate, context-driven decisions based on value and risk instead of following dogma or chasing version uniformity."
 tags: [dependency-management, distributed-systems, risk-management, testing]
+author: steven-stuart
 ---
 
 It is time to update a third-party package in your repository, or at least to consider it. So how do you know what is safe, what is needed, what is prudent, and what will keep our company from melting down in record time? To address these questions, most teams pick one of two general reflexes: always update immediately to "stay current," or ignore updates entirely until forced.

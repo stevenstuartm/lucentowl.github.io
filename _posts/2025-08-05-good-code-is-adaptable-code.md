@@ -4,6 +4,7 @@ title: "Adaptability Over Cleverness: What Makes Code Actually Good"
 date: 2025-08-05
 tags: [software-design, best-practices, architecture]
 description: "Good code isn't clever or fast; it's adaptable. Systems that survive change, not chase perfection, win over time."
+author: steven-stuart
 ---
 
 ## Adaptability Over Cleverness

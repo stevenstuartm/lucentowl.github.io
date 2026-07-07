@@ -4,6 +4,7 @@ layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
 description: "Understand the problem before committing to a solution."
+author: steven-stuart
 tags: [sdlc, aaa-cycle, requirements, stakeholder-management, collaboration, practical]
 ---
 

@@ -4,6 +4,7 @@ title: "Are You Using Hexagonal Architecture, or Just Dependency Injection?"
 date: 2025-09-29
 tags: [architecture, design-patterns, software-design]
 description: "Most developers achieve hexagonal architecture's goals without implementing its structure. Modern frameworks offer testability and decoupling through different means, and understanding this distinction clarifies what you're actually building."
+author: steven-stuart
 ---
 
 I've noticed something curious after having read certain posts or having talked with certain teams about their architecture. Some describe themselves as "using hexagonal architecture" because they have repository interfaces and dependency injection. But when the conversation turns to symmetric treatment of UI and database as external actors, or how they swap adapters in production, the pattern doesn't quite match. They've achieved testability and decoupling (which were Cockburn's original goals) but through standard layered architecture and modern framework patterns rather than hexagonal structure.

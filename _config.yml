@@ -56,23 +56,23 @@ defaults:
       type: "posts"
     values:
       layout: "post"
-      author: "steven-stuart"
   - scope:
       path: ""
       type: "guides"
     values:
       layout: "guide"
+      author: "lucent"
   - scope:
       path: ""
       type: "case_studies"
     values:
       layout: "case-study"
-      author: "steven-stuart"
   - scope:
       path: ""
       type: "resources"
     values:
       layout: "resource"
+      author: "lucent"
   - scope:
       path: ""
     values:

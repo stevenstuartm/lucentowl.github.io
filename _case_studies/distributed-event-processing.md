@@ -16,6 +16,7 @@ technologies:
   - AWS DynamoDB
   - Akka
   - Microservices
+author: steven-stuart
 ---
 
 ## Executive Summary

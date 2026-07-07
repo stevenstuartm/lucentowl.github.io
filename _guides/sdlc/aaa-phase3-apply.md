@@ -4,6 +4,7 @@ layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
 description: "Execute with discipline while maintaining alignment."
+author: steven-stuart
 tags: [sdlc, aaa-cycle, implementation, delivery, governance, practical]
 ---
 

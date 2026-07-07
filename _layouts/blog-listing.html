@@ -30,6 +30,26 @@ layout: default
             <button id="clearAllFilters" class="clear-all-link" type="button">Clear all</button>
         </div>
 
+        {% assign post_authors = "" | split: "" %}
+        {% for post in site.posts %}
+            {% if post.author %}
+                {% unless post_authors contains post.author %}
+                    {% assign post_authors = post_authors | push: post.author %}
+                {% endunless %}
+            {% endif %}
+        {% endfor %}
+        {% assign post_authors = post_authors | sort %}
+
+        {% if post_authors.size > 1 %}
+        <div class="author-filters" id="authorFilters">
+            <button class="author-pill" data-author="" type="button">All Authors</button>
+            {% for author_key in post_authors %}
+            {% assign author_data = site.data.authors[author_key] %}
+            <button class="author-pill" data-author="{{ author_key }}" type="button">{{ author_data.name | default: author_key }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div class="guides-content">
             <div class="guides-result-bar">
                 <span id="resultCount" class="result-count"></span>
@@ -45,6 +65,7 @@ layout: default
                              data-title="{{ post.title | downcase }}"
                              data-description="{{ post.description | downcase }}"
                              data-tags="{% if post.tags %}{{ post.tags | join: ',' | downcase }}{% endif %}"
+                             data-author="{{ post.author }}"
                              data-date="{{ post.date | date: '%Y-%m-%d' }}">
                         <a href="{{ post.url | relative_url }}" class="guide-link">
                             <h3>{{ post.title }}</h3>

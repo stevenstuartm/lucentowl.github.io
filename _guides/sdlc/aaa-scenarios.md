@@ -4,6 +4,7 @@ layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
 description: "Real-world scenarios demonstrating how AAA discipline applies to common challenges architects face."
+author: steven-stuart
 tags: [sdlc, aaa-cycle, stakeholder-management, collaboration, practical]
 ---
 

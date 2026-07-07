@@ -4,6 +4,7 @@ title: "Why I Changed My Mind About Exceptions"
 date: 2025-10-29
 description: "Evaluating arguments for Result types versus exceptions for handling expected failures in modern distributed C# systems, examining which claims have measurable backing and which are subjective preference."
 tags: [error-handling, patterns, security, performance]
+author: steven-stuart
 ---
 
 I prefer the clean code that is more often produced by throwing exceptions. With the happy path uncluttered by error handling, the implicit propagation of errors to appropriate orchestration layers, and the clean separation of concerns. It's aesthetically cleaner and moves the complexity of error handling to a one or just a few decision points.

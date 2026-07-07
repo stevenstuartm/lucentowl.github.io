@@ -16,5 +16,6 @@ If you have something to contribute, we are open to it.
 ## Illuminators
 
 <div class="author-grid">
+  {% include author-card.html author_key="lucent" %}
   {% include author-card.html author_key="steven-stuart" %}
 </div>

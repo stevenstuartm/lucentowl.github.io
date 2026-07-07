@@ -14,6 +14,7 @@ technologies:
   - OAuth 2.0
   - DDD
   - Microservices
+author: steven-stuart
 ---
 
 ## Executive Summary

@@ -4,6 +4,7 @@ title: "Monoliths for Discovery, Microservices for Optimization"
 date: 2025-06-21
 tags: [architecture, microservices, monoliths, system-design]
 description: "Why monoliths are effective for discovery and microservices are optimizations: principles for choosing the right architecture for your context."
+author: steven-stuart
 ---
 
 I know, I know. It is another post about microservices versus monoliths. The debate feels exhausted at this point. Yet every time I start a new project, I find myself weighing the same questions. Not because the answer is unclear, but because the answer genuinely depends on where you are and what you're trying to learn.

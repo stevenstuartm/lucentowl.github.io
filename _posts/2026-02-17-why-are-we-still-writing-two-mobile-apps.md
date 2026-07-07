@@ -4,6 +4,7 @@ title: "How One Screen Holds the Entire Industry Hostage"
 date: 2026-02-17
 tags: [architecture, web-development, mobile, pwa, cross-platform]
 description: "The web platform already does what most apps do, but Apple's control of the phone screen keeps the industry building native. The 'users prefer native' narrative is circular logic created by the constraint itself."
+author: steven-stuart
 ---
 
 Frameworks like React Native, Flutter, and MAUI keep promising to end the "write it twice" problem across mobile platforms. One codebase, every platform, native-quality results. Yet every time, the abstraction leaks, and then it floods so fast that bailing water is all you have time to do. I've been working with MAUI recently, and the experience crystallized a question I should have asked sooner: why am I not just building a website?

@@ -4,6 +4,7 @@ title: "How Weak Leaders Weaponize Empowerment"
 date: 2025-10-11
 description: "Personal development goals, family culture, and unlimited PTO sound empowering. In practice, they're often control mechanisms that externalize leadership failures onto employees through ambiguity, emotional manipulation, and blame-shifting."
 tags: [leadership, management, culture, organizational-health]
+author: steven-stuart
 ---
 
 I've been thinking about the management practices that we all encounter: the ones that feel wrong but are hard to name. Personal development goals that feel invasive. "We're a family" rhetoric that breeds guilt. Criticism so vague it becomes impossible to address. Performance improvement plans that feel predetermined. "Unlimited PTO" that results in taking less vacation.

@@ -4,6 +4,7 @@ title: "Why LeetCode Interviews Measure the Wrong Thing"
 date: 2025-08-19
 tags: [hiring, interviews, career, industry]
 description: "Algorithm interviews optimize for pattern memorization while ignoring the multidisciplinary skills that define effective software engineering."
+author: steven-stuart
 ---
 
 Coding tests can effectively filter out candidates who can't write working code. That's a legitimate purpose. The problem emerges when organizations test for low-level algorithm optimization skills for roles that require entirely different capabilities: system design, debugging distributed systems, architectural decision-making, or cross-functional collaboration.

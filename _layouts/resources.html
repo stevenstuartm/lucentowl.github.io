@@ -32,6 +32,7 @@ layout: default
 
         {% assign resource_types = "" | split: "" %}
         {% assign resource_categories = "" | split: "" %}
+        {% assign resource_authors = "" | split: "" %}
         {% for resource_filename in site.data.resources_config.resources %}
             {% assign expected_path = "_resources/" | append: resource_filename %}
             {% assign r = site.resources | where: "path", expected_path | first %}
@@ -45,9 +46,15 @@ layout: default
                     {% assign resource_categories = resource_categories | push: r.category %}
                 {% endunless %}
             {% endif %}
+            {% if r.author %}
+                {% unless resource_authors contains r.author %}
+                    {% assign resource_authors = resource_authors | push: r.author %}
+                {% endunless %}
+            {% endif %}
         {% endfor %}
         {% assign resource_types = resource_types | sort %}
         {% assign resource_categories = resource_categories | sort %}
+        {% assign resource_authors = resource_authors | sort %}
 
         {% if resource_categories.size > 1 %}
         <div class="resource-category-filters" id="resourceCategoryFilters">
@@ -67,6 +74,16 @@ layout: default
         </div>
         {% endif %}
 
+        {% if resource_authors.size > 1 %}
+        <div class="author-filters" id="authorFilters">
+            <button class="author-pill" data-author="" type="button">All Authors</button>
+            {% for author_key in resource_authors %}
+            {% assign author_data = site.data.authors[author_key] %}
+            <button class="author-pill" data-author="{{ author_key }}" type="button">{{ author_data.name | default: author_key }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div class="guides-result-bar">
             <span id="resultCount" class="result-count"></span>
         </div>
@@ -81,7 +98,8 @@ layout: default
                              data-description="{{ resource.description | downcase }}"
                              data-type="{{ resource.type | downcase }}"
                              data-category="{{ resource.category | slugify }}"
-                             data-tags="{% if resource.tags %}{{ resource.tags | join: ',' | downcase }}{% endif %}">
+                             data-tags="{% if resource.tags %}{{ resource.tags | join: ',' | downcase }}{% endif %}"
+                             data-author="{{ resource.author }}">
                         <a href="{{ resource.url | relative_url }}" class="resource-link">
                             {% if resource.type %}
                             <span class="resource-type-badge resource-type-badge--{{ resource.type }}">{{ resource.type }}</span>

@@ -4017,9 +4017,16 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 .author-posts {
+    margin-bottom: var(--spacing-md);
+
     h2 {
         margin-bottom: var(--spacing-md);
     }
+}
+
+.author-posts + .author-posts {
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
 }
 
 .author-posts-list {
@@ -4250,6 +4257,42 @@ body.home-layout .site-title a:hover .site-name {
 .resource-category-pill--active:hover {
     background: var(--color-secondary);
     border-color: var(--color-secondary);
+    color: white;
+}
+
+.author-filters {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-md);
+}
+
+.author-pill {
+    padding: 0.375rem 0.875rem;
+    border-radius: 20px;
+    border: 1.5px solid var(--color-border);
+    background: var(--color-card-bg);
+    color: var(--color-text-light);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.author-pill:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.author-pill--active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+}
+
+.author-pill--active:hover {
+    background: var(--color-hover);
+    border-color: var(--color-hover);
     color: white;
 }
 
