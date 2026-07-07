@@ -3,8 +3,8 @@ title: "Assumptions-First Task Planning Skill"
 layout: resource
 type: code
 category: "AI"
-last_updated: 2026-07-01
-description: "A Claude Code skill that structures ticket intake around assumption clarity. Writes a self-contained ticket MD file, proves assumptions before writing implementation code, and gates on human review."
+description: "A Claude Code skill that structures ticket intake around assumption clarity. Writes a self-contained ticket MD file, tags every assumption with its source, proves assumptions before writing implementation code, and gates on human review."
+last_updated: 2026-07-07
 tags: [workflow, planning, ai-agents, assumptions, sdlc, productivity]
 related_posts:
   - /blog/2025/11/17/shaped-kanban.html
@@ -13,7 +13,7 @@ related_posts:
 
 A Claude Code skill for structured ticket intake. The problem it solves: AI agents fail not because they can't code, but because they code against unvalidated assumptions. Once momentum builds, plan-continuation bias makes those assumptions invisible until they've already caused damage and wasted time.
 
-This skill forces assumption clarity before a single line of implementation is written. It writes a self-contained ticket MD file, runs a proof plan (tests, code research, spikes, user confirmation), and gates on your explicit sign-off before proceeding.
+This skill forces assumption clarity before a single line of implementation is written. It writes a self-contained ticket MD file, runs a proof plan (tests, code research, spikes, user confirmation), and gates on your explicit sign-off before proceeding. It also tags every assumption with where it came from — code just read, docs, the user, or prior-session memory — so recalled context has to be re-verified before it counts as established, rather than quietly riding along as fact.
 
 Install it by saving the file below to `.claude/commands/plan-task.md` in any project, or `~/.claude/commands/plan-task.md` for global availability.
 
@@ -22,21 +22,24 @@ Install it by saving the file below to `.claude/commands/plan-task.md` in any pr
 ```markdown
 ---
 name: plan-task
-version: 1.3.0
+version: 1.4.0
 description: >
   Structured intake ritual for a new bug or feature ticket inside Claude Code.
-  Triggers on: "plan task", "new ticket", "scs-plan-task", describing a new
-  feature or bug. Reads CLAUDE.md and linked resources silently, explores
+  Triggers on: "plan task", "new ticket", describing a new
+  feature or bug. Reads CLAUDE.md and linked resources, explores
   relevant code, writes a self-contained ticket MD file with full agent
-  instructions, assumption proof strategies, and progress tracking. Asks
-  minimum clarifying questions driven by assumption gaps, proves each assumption
-  via the best available method: unit tests, integration tests, code research,
-  doc review, spikes, or user confirmation. Not all proofs are tests. Tests
-  scoped to unit and integration only — no UI automation or E2E. Gates on
-  human review of the full assumption proof plan before any implementation.
-  The generated MD is fully self-contained — all behavioral rules are stamped
-  into it so any future session can resume without re-running this skill.
-  Combats plan-continuation bias. Use for any ticket, bug, or feature.
+  instructions, assumption proof strategies, and progress tracking. Tags every
+  assumption and fact with its source (code, docs, user, or prior-session
+  memory) so stale recall can't pass as established without re-verification.
+  Asks minimum clarifying questions driven by assumption gaps, proves each
+  assumption via the best available method: unit tests, integration tests,
+  code research, doc review, spikes, or user confirmation. Not all proofs are
+  tests. Tests scoped to unit and integration only — no UI automation or E2E.
+  Gates on human review of the full assumption proof plan before any
+  implementation. The generated MD is fully self-contained — all behavioral
+  rules are stamped into it so any future session can resume without
+  re-running this skill. Combats plan-continuation bias. Use for any ticket,
+  bug, or feature.
 ---
 
 # scs-plan-task
@@ -95,15 +98,22 @@ Activate this skill when the user says any of the following (or close variations
 This workflow runs once. When complete, the skill's job is done.
 All subsequent work is driven by the generated MD file.
 
-### Step 1 — Silent Context Load
+### Step 1 — Context Load
 
-Do this silently. No narration.
+Read this before doing anything else. Don't narrate the process — just report what you read when you're done.
 
 - Read `CLAUDE.md` at the repo root if it exists
 - Follow any linked resources it references (app map, architecture docs, etc.)
 - Do not ask the user to explain things already documented there
+- Do not treat prior-session memory or recollection of this codebase as
+  established fact — anything recalled rather than read this session gets
+  tagged `prior-session/memory` as a source in Step 3, not folded in silently
 
 If no `CLAUDE.md` exists, note it internally and proceed.
+
+When this step is done, output one line before continuing:
+
+`Context read: <CLAUDE.md and/or files read>. Prior-session memory consulted: <none | what, and why>.`
 
 ---
 
@@ -126,7 +136,9 @@ Create `docs/<ticket-slug>.md` immediately after exploration.
 Create `docs/` if it does not exist.
 
 Write it now, while assumptions are forming — not after they've hardened
-into code. Leave gaps honest. "unknown" is a valid value.
+into code. Leave gaps honest. "unknown" is a valid value. Tag every
+assumption with where it came from — code just read, docs, the user, or
+prior-session memory — so the user can spot untrusted context at a glance.
 
 **Stamp the full file as shown below. Every section is required.**
 The Agent Instructions block at the top is what makes this file
@@ -192,8 +204,11 @@ decided against. "None identified" if nothing was ruled out.>
 
 ### Rules that apply for the life of this ticket
 
-- Every assumption needs a proof strategy — `[to prove]` is not a valid
-  final state. Only `[proved]`, `[invalidated]`, or `[manual]` close an assumption
+- Every assumption needs a source and a proof strategy — `[to prove]` is not
+  a valid final state. Only `[proved]`, `[invalidated]`, or `[manual]` close an assumption
+- Assumptions sourced from `prior-session/memory` never start as `[proved]` —
+  they must be re-verified against the current codebase this session before
+  they count as established
 - Tests are unit and integration only — no UI automation, no E2E browser tests
 - If a test cannot be written, pick another proof strategy:
   `code research` | `doc review` | `spike` | `user confirmation` | `manual verification`
@@ -208,11 +223,6 @@ decided against. "None identified" if nothing was ruled out.>
 
 ---
 
-## What We Know
-
-- <established fact from codebase or ticket description>
-- ...
-
 ## What We Don't Know Yet
 
 - <open question or gap — to be resolved via clarifying questions or proof>
@@ -220,16 +230,27 @@ decided against. "None identified" if nothing was ruled out.>
 
 ## Assumptions
 
-Every assumption needs a proof strategy. Status flows:
+Every row needs a source and a proof strategy. Status flows:
 `[to prove]` → `[proved]` or `[invalidated]`
+
+Facts confirmed directly during Step 2 exploration can enter straight as
+`[proved]` with source `code:file:line` and proof strategy `code research`.
+Nothing else gets to start as `[proved]` — see the memory rule below.
+
+Source values: `code:file:line` | `docs` | `user` | `prior-session/memory` | `inferred`
 
 Proof strategies: `unit test` | `integration test` | `code research` |
 `doc review` | `spike` | `user confirmation` | `manual verification`
 
-| Status | Assumption | Proof Strategy | Notes |
-|--------|------------|----------------|-------|
-| [to prove] | <assumption> | <strategy> | |
-| [to prove] | <assumption> | <strategy> | |
+**Anything sourced from `prior-session/memory` must enter as `[to prove]`
+with proof strategy `code research` (or another applicable strategy) — it
+cannot be marked `[proved]` until re-verified against the current codebase
+in this session.**
+
+| Status | Assumption | Source | Proof Strategy | Notes |
+|--------|------------|--------|----------------|-------|
+| [to prove] | <assumption> | <source> | <strategy> | |
+| [to prove] | <assumption> | <source> | <strategy> | |
 
 ## Proposed Approach
 
