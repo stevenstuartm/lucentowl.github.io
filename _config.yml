@@ -85,6 +85,3 @@ exclude:
   - vendor
   - README.md
   - CLAUDE.md
-  - RESOURCES-PLAN.md
-  - RESOURCES-AUDIT.md
-  - SEARCH-FEATURE-RESEARCH.md

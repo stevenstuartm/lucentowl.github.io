@@ -39,19 +39,14 @@ State these facts before proceeding.
 
 ### Step 2 — Run the mechanical linter
 
-Run:
-```bash
-python lint_content.py "<resolved file path from Step 1>"
-```
-
-Report the full output verbatim. Do not fix anything yet. If there are violations, note them as blockers. Style suggestions are informational.
+Invoke `/refine-prose` on the resolved file. It runs the linter to a clean state (looping fixes until zero Errors) and reports which Style suggestions it applied or intentionally left. Fold its final report into this review's LINTER RESULTS section — do not re-run the raw script separately or re-describe the loop here.
 
 ### Step 3 — Apply content-type guidelines
 
 Read the relevant guide(s) from `.claude/content/`:
 - **Blog posts**: `.claude/content/blog-post-guide.md`
 - **Study guides**: `.claude/content/study-guide-guide.md`
-- **All content**: `.claude/content/writing-standards.md`
+- **All content**: `.claude/skills/refine-prose/writing-standards.md`
 
 Check compliance and report any format issues, missing front matter fields, or type-specific requirements not met.
 
@@ -156,7 +151,7 @@ Deliver the report in this exact structure:
 ---
 
 **LINTER RESULTS**
-[Full verbatim output from Step 2. If clean, say so explicitly.]
+[Summary from Step 2's `/refine-prose` run: final lint status, what was fixed, any Style suggestions intentionally left. If clean, say so explicitly.]
 
 **CONTENT TYPE COMPLIANCE**
 [Format issues, missing front matter, type-specific requirement failures. If compliant, say so.]

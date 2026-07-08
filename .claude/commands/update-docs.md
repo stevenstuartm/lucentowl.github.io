@@ -3,7 +3,7 @@ Review the work we've done in this session and update the relevant documentation
 The project has two documentation locations — route each type of learning to the right place:
 
 **`.claude/content/` guides** (check these first):
-- `.claude/content/writing-standards.md` — voice, tone, punctuation, bullet rules, universal linter rules
+- `.claude/skills/refine-prose/writing-standards.md` — voice, tone, punctuation, bullet rules, universal linter rules
 - `.claude/content/blog-post-guide.md` — blog post format, required fields, social media summaries, series conventions
 - `.claude/content/study-guide-guide.md` — study guide format, tag vocabulary, organization patterns, quality standards
 

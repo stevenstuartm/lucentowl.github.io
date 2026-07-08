@@ -1,55 +1,70 @@
 # Writing Standards
 
-These standards apply to ALL narrative content on the site: blog posts, study guides, page content, descriptions, and social media summaries. Content-type-specific rules live in the per-type guides; the rules here are universal.
-
-After drafting any content, run the linter:
-```bash
-python lint_content.py <filepath>
-```
+These standards apply to ALL narrative content: blog posts, page content, descriptions, and social media summaries. Content-type-specific rules live in the per-type guides; the rules here are universal.
 
 ---
 
-## Automated Linter Rules
+## Mechanical Checks
 
-The linter catches these violations automatically. Fix all flagged issues before review.
+These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file with the Grep tool (case-insensitive, skip frontmatter and code blocks). Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
+
+The Grep tool's engine (ripgrep, Rust regex) does not support lookahead/lookbehind — it silently returns zero matches on a pattern that uses `(?!...)` or `(?=...)` instead of erroring, which would produce false negatives. None of the patterns below use them; where the Python version of this linter once used a lookahead to carve out an exception, that exception is now a written note instead (see "the insight" below).
 
 **AI-tell phrases**:
-- "the key insight", "the insight", "the takeaway"
-- "it's important to note", "it's worth noting", "it should be noted"
-- "in conclusion", "in summary", "final version", "final conclusion"
-- "ultimately", "essentially", "fundamentally" (when used as filler)
-- "at the end of the day", "the bottom line is"
-- "X is/are/was/were real" (e.g., "the costs are real") — describe specifically what you mean instead
-- "[verb] real [noun]" (e.g., "does real work", "adds real value") — state what it does specifically instead
-- "something real/genuine/tangible/meaningful" (e.g., "owns something real") — vague qualifier; state what the thing actually is
-- "The [noun] is understandable" (e.g., "The resistance is understandable")
-- "The question isn't" / "The question is" — rhetorical framing that avoids direct statements
-- "worth [gerund]" (e.g., "worth examining", "worth sitting with", "worth stating", "worth naming", "worth investigating") — often meta-commentary telling the reader what to pay attention to; state the point directly instead. Not always wrong, but there is usually a more direct way to make the same thought.
-- "is reasonable" (e.g., "this tradeoff is reasonable", "the approach is reasonable") — vague; state specifically what makes it acceptable or why it works
-- "distinction matters" — announces that a distinction is important without actually stating why; state the distinction and its consequence directly
-- "failure mode" — describe the specific failure instead
+```
+\b(the key insight|the insight|the takeaway|it'?s (important to note|worth noting)|it should be noted|in conclusion|in summary|final version|final conclusion|ultimately|essentially|fundamentally|at the end of the day|the bottom line is|something (real|genuine|tangible|meaningful)|the question isn'?t|the question is|worth \w+ing|is reasonable|distinction matters|failure modes?)\b
+```
+Each of these announces or hedges instead of stating the point directly:
+- "the key insight" / "the insight" / "the takeaway" → state the point, drop the label. Exception: skip a hit where "the insight" is immediately followed by "into" (e.g. "the insight into the problem") — that's legitimate usage, not the AI-tell phrase.
+- "it's important to note" / "it's worth noting" / "it should be noted" → state the point directly, no meta-commentary
+- "in conclusion" / "in summary" / "final version" / "final conclusion" → cut; the section boundary already signals this
+- "ultimately" / "essentially" / "fundamentally" (as filler, not as precise qualifiers) → cut
+- "at the end of the day" / "the bottom line is" → cut, state the point
+- "something real/genuine/tangible/meaningful" (e.g., "owns something real") → state what the thing actually is
+- "the question isn't" / "the question is" → rhetorical framing that avoids a direct statement; make the statement
+- "worth [gerund]" (e.g., "worth examining", "worth naming") → usually meta-commentary telling the reader what to pay attention to; state the point directly instead
+- "is reasonable" → vague; state specifically what makes it acceptable or why it works
+- "distinction matters" → announces importance without stating it; state the distinction and its consequence directly
+- "failure mode(s)" → describe the specific failure instead
+
+**"Real" as filler** (two separate patterns — the adjective form and the noun-modifier form):
+```
+\b(is|are|was|were)\s+real([^-\w]|$)
+```
+```
+\b\w+\s+real\s+(work|value|output|results?|impact|progress|problems?|issues?|cost|benefit|change|difference|data|code|tests?|features?|improvements?|gains?|savings?|performance|quality|effort|time|speed|scale)\b
+```
+"X is/are real" (e.g., "the costs are real") and "[verb] real [noun]" (e.g., "does real work") are both vague qualifiers — describe specifically what you mean instead. The first pattern's trailing `([^-\w]|$)` excludes compounds like "real-time" or "real-world" (no lookahead needed — it just requires the character after "real", if any, to not continue the word or start a hyphenated compound).
 
 **AI-tell colon constructions**:
-- "What's converging:", "A critical distinction:", "The difference:", "The key:", "The point:", "Here's why:"
-- These announce importance rather than stating it directly
+```
+(What's converging|A critical distinction|The difference|The key|The point|Here's why):
+```
+These announce importance rather than stating it directly.
 
 **Em-dashes in sentences**:
-- Avoid em-dashes (—) in prose; use semicolons, commas, or periods instead
-- Parentheses are acceptable for clarifying asides
+```
+—
+```
+Avoid em-dashes in prose; use semicolons, commas, or periods instead. Parentheses are acceptable for clarifying asides.
 
-**Missing articles**:
-- ❌ "masquerading as process" → ✅ "masquerading as a process"
-- ❌ "reconsolidate agreement" → ✅ "reconsolidate the agreement"
+**Fixing a hit** — restate the point directly, don't just delete the flagged phrase:
+```
+❌ The key insight: this pattern applies at any scale
+✅ This pattern applies at any scale
 
-**Run-on sentences**:
-- Sentences with 2+ semicolons will be flagged
-- Sentences over 150 characters with multiple semicolons and commas will be flagged
-- These are warnings; use judgment about whether to break them up
+❌ It's important to note that alignment comes first
+✅ Alignment comes first
 
-**Choppy parallel structures**:
-- Pattern: "X says Y. The other says Z." → Should be: "X says Y and the other says Z."
-- Pattern: "One side does X. Another does Y." → Should be: "One side does X while another does Y."
-- These create staccato rhythm instead of natural narrative flow
+❌ This framework is fundamentally about how we value
+✅ This framework is about how we value
+
+❌ What's converging -
+✅ Several trends are converging...
+
+❌ A critical distinction:
+✅ State the distinction directly (e.g., "X behaves differently from Y because...")
+```
 
 ---
 
@@ -76,6 +91,7 @@ Prefer "tend to", "might", "can", "often", "rarely" over absolute constructions.
 - Break long sections into digestible subsections with clear headers
 - Ensure section titles accurately reflect their content
 - If a point can be made in fewer words, do so
+- Watch for missing articles ("a", "the"), especially around nominalized verbs: ❌ "masquerading as process" → ✅ "masquerading as a process"; ❌ "made expected failures high-frequency" → ✅ "made expected failures more frequent". Not mechanically checkable — there's no reliable literal pattern for a missing article, so this is a self-review item, not a grep target.
 
 **CRITICAL: Never fabricate personal experiences**:
 - Do not write "I've watched...", "I've seen...", "I've observed..." unless the user explicitly provided those experiences
@@ -148,14 +164,14 @@ Each H2 section should cover one distinct topic, argument, or concept. When a se
 
 **Warning sign**: A long H2 section without H3s is almost always hiding multiple distinct points in undifferentiated prose. When reviewing a draft, long unmarked sections are the first place to look for structural problems.
 
-**Reference example**: `_posts/2025-11-17-shaped-kanban.md` demonstrates the pattern well. "The Timebox Problem" (H2) contains three H3s: "The Calendar Fills Itself," "Different Teams, Forced Cadence," and "Ceremony Fuels Continuation Bias." Each H3 names a distinct failure mode; the H2 names the category they share. The complete header tree tells the entire post's argument at a glance.
+A well-applied outline looks like this: an H2 called "The Timebox Problem" containing three H3s — "The Calendar Fills Itself," "Different Teams, Forced Cadence," "Ceremony Fuels Continuation Bias" — each naming a distinct failure mode, with the H2 naming the category they share. The complete header tree tells the entire argument at a glance. (A `platforms/` doc may point to a real worked example from your project's own content, if one applies.)
 
 ---
 
 ### Title-Content Alignment
 
 - Section titles should clearly indicate what the section contains
-- Avoid generic titles like "The Problem"; be specific
+- Avoid generic titles like "The Problem", "The Insight", "The Solution", "The Key"; be specific
 - Readers should understand the section's purpose from the title alone
 
 ### Natural List Integration
@@ -172,7 +188,7 @@ When listing items within flowing prose, use natural connectors like "like," "su
 - "publish on platforms like Medium, LinkedIn, Substack, and dev.to that provide distribution"
 - "Alternative models like subscriptions, public infrastructure, or non-profit foundations could realign incentives"
 
-The linter detects three patterns automatically:
+Watch for three patterns during self-review — these are prose-rhythm judgment calls, not exact-match violations, so they aren't part of the Mechanical Checks above:
 1. **Em-dash lists**: `signals—X, Y, Z—to filter`
 2. **Colon lists**: `models: X, Y, and Z could`
 3. **Bare lists**: `platforms. Medium, LinkedIn, and X provide` (list after period without connector)
@@ -241,46 +257,6 @@ The combined opener restates what the elaboration is about to show. It adds noth
   - ❌ "State the real problem. Define measurable success criteria. Evaluate the alternatives."
   - ✅ Use bold headers with explanatory follow-ups: "**State the real problem, not the symptom.** The symptom is 'AWS is expensive.' The real problem is..."
 
-### Avoid AI-Tell Phrases and Choppy Grammar
-
-❌ Never use:
-- "The key insight" / "The insight" / "The takeaway"
-- "It's important to note" / "It's worth noting" / "It should be noted"
-- "In conclusion" / "In summary"
-- "Ultimately" / "Essentially" / "Fundamentally" (as filler)
-- "At the end of the day" / "The bottom line is"
-- Section headers like "The Insight", "The Problem", "The Solution", "The Key"
-- Colon constructions announcing importance: "What's converging:", "A critical distinction:"
-- Missing articles creating choppy grammar: "masquerading as process", "made expected failures high-frequency"
-
-✅ Write naturally instead:
-- State insights directly without meta-commentary
-- Use active voice and direct statements
-- Let the content speak for itself
-- Use complete grammar with articles ("a", "the")
-- Write as you would speak to someone in person
-
-**Example transformations**:
-```
-❌ The key insight: AAA applies at any scale
-✅ AAA applies at any scale
-
-❌ It's important to note that alignment comes first
-✅ Alignment comes first
-
-❌ AAA is fundamentally about how we value
-✅ AAA is about how we value
-
-❌ What's converging -
-✅ Several trends are converging...
-
-❌ A critical distinction:
-✅ State the distinction directly (e.g., "X behaves differently from Y because...")
-
-❌ Distributed systems made expected failures high-frequency
-✅ Distributed systems made expected failures more frequent
-```
-
 ### Avoid Lazy Parentheticals
 
 Parentheses should flow with narrative thought, not serve as shortcuts to avoid proper sentence structure.
@@ -311,12 +287,12 @@ Specific details make abstract concepts concrete and credible:
 
 ### Formatting and Markdown
 
-- Headers must have blank lines before them (Jekyll/Kramdown requirement)
 - Use tables for comparisons instead of prose when appropriate
 - Keep sections focused; if a section is too long, break it up
-- Tables must have a blank line before them to render correctly
 - Use proper header hierarchy (H1 → H2 → H3)
 - Use triple backticks with language specification for code blocks
+
+Some markdown processors have stricter block-level whitespace requirements (e.g., a blank line required before a header or table for it to parse correctly). Check `platforms/` for a doc matching your project's markdown engine.
 
 ---
 
@@ -359,45 +335,12 @@ Think about what reproduction actually proves. If you can trigger the issue deli
 
 ### Blog Post Voice
 
-**Introduction voice**:
-- Start with relatable, personal framing that acknowledges common knowledge or shared experiences
-- Be conversational and authentic; avoid rigid formulas or templates
-- Use varied, creative openings that fit the specific post's tone and subject
-- Make it clear you're sharing experience and observations, not prescribing universal truths
-- The intro should feel like you're having a conversation with a colleague
-
-**Voice balance throughout the post**:
-- **Introduction (1-3 paragraphs)**: Personal voice with "I" statements to establish credibility and relatability
-- **Main content (principles, analysis, examples)**: More objective observations without excessive "I've seen...", "I like...", "I follow..."
-- **Approach/recommendations sections**: Can use "I" sparingly, but prefer direct imperative ("Start with...") or inclusive ("We can...")
-
-**Example**:
-```
-✅ Good opening — personal, relatable, fits the topic:
-"I know, I know—another post about microservices versus monoliths. The debate feels exhausted
-at this point. Yet every time I start a new project, I find myself weighing the same questions."
-
-❌ Too distant and declarative:
-"Microservices versus monoliths is an important architectural decision. Organizations must
-choose the architecture that fits their context."
-
-❌ Overused "I" throughout the body:
-"I've come to see microservices as... I've seen plenty of terrible monoliths... I like
-introducing API gateways... I tend to start with..."
-```
+Blog voice conventions (introduction style, first-person balance across a post) are project-specific rather than universal. Check `platforms/` for a doc matching your project, or define your own if none exists yet.
 
 ---
 
 ## Content Quality Workflow
 
 1. **Draft**: Write content applying the principles above
-2. **Lint**: Run `python lint_content.py <filepath>` and fix all violations
-3. **Self-review**: Check for issues the linter cannot detect:
-   - Is the narrative flow natural, or does it feel choppy?
-   - Are examples specific with concrete numbers and consequences?
-   - Do section titles accurately reflect their content?
-   - Are bullet points used strategically or as a crutch?
-   - Is punctuation serving a purpose (flow/clarity) or just chaining thoughts?
-4. **Manual review**: User reviews for nuanced issues, content accuracy, and overall quality
-
-The linter catches mechanical issues. You must still apply judgment for voice, flow, examples, and narrative quality.
+2. **Refine**: Run `/refine-prose` on the file — it runs the mechanical checks to a clean state, then self-reviews for narrative flow, concrete examples, section titles, and bullet-vs-prose balance
+3. **Manual review**: User reviews for nuanced issues, content accuracy, and overall quality

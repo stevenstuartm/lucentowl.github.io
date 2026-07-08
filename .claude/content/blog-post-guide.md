@@ -1,6 +1,6 @@
 # Blog Post Guide
 
-This guide covers format requirements and writing standards specific to blog posts. Always also read [writing-standards.md](writing-standards.md) — the universal rules apply to every post.
+This guide covers format requirements and writing standards specific to blog posts. Always also read [writing-standards.md](../../skills/refine-prose/writing-standards.md) — the universal rules apply to every post.
 
 ---
 
@@ -71,7 +71,7 @@ This rule is non-negotiable and applies to all narrative blog content.
 
 ## Writing Standards
 
-All universal rules in [writing-standards.md](writing-standards.md) apply. Blog posts additionally require:
+All universal rules in [writing-standards.md](../../skills/refine-prose/writing-standards.md) apply. Blog posts additionally require:
 
 **Introductions** should be personal and relatable — see the "Blog Post Voice" section in writing-standards.md for the voice balance guidance and examples.
 
@@ -135,7 +135,7 @@ When creating LinkedIn or social media summaries of blog posts:
 - More direct than elaborate constructions
 
 **Testing the summary**:
-- Run `python lint_content.py --text "<summary_text>"` to check for AI-tell phrases
+- Grep the draft summary text against the AI-tell patterns in [`writing-standards.md`](../skills/refine-prose/writing-standards.md)'s "Mechanical Checks" section
 - Read it aloud — does it sound like how you'd explain it in person?
 - Could an intelligent reader grasp the thesis and solution in 30 seconds?
 

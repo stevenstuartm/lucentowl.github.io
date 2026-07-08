@@ -21,7 +21,7 @@ Practically, this means: **lead with the deliverable, not the setup.** Don't tea
 The post should read as a confident, declarative statement that showed up in the reader's feed on its own merits, not as a personal anecdote and not as motivational or upbeat framing. Two reasons, both downstream of "value is the brand":
 
 1. **Credibility with this audience.** Senior engineers and architects trust a claim they can test more than they trust enthusiasm or relatability. Optimistic or hype framing ("excited to share," "game-changer") reads as generic LinkedIn thought-leadership and undercuts the same credibility the payload-first structure is built to earn.
-2. **Consistency with the site's own voice rule.** [`writing-standards.md`](.claude/content/writing-standards.md) prohibits fabricating personal experience — no "I've seen," "I've watched," "I've observed" unless the user explicitly provided that experience. A personal, anecdotal tone on LinkedIn would contradict a rule the long-form content already follows, and the two should not diverge just because the medium changed.
+2. **Consistency with the site's own voice rule.** [`writing-standards.md`](.claude/skills/refine-prose/writing-standards.md) prohibits fabricating personal experience — no "I've seen," "I've watched," "I've observed" unless the user explicitly provided that experience. A personal, anecdotal tone on LinkedIn would contradict a rule the long-form content already follows, and the two should not diverge just because the medium changed.
 
 In practice: state claims in third person or as flat assertions about the domain, not through a first-person narrator. Avoid enthusiasm markers, exclamation points, and "I'm thrilled/excited to..." openers. The confidence should come from the claim being correct and testable, not from the tone asserting that it's exciting.
 
@@ -124,15 +124,13 @@ Derive the URL from the filename: `_posts/YYYY-MM-DD-slug.md` → `/blog/YYYY/MM
 
 ### Step 5 — Lint the draft
 
-The [writing standards](.claude/content/writing-standards.md) apply to this content too — LinkedIn copy is still Lucent Owl prose, just in a different container. Enforce it the same way the site enforces it on posts:
+The [writing standards](.claude/skills/refine-prose/writing-standards.md) apply to this content too — LinkedIn copy is still Lucent Owl prose, just in a different container. Enforce it the same way the site enforces it on posts:
 
 1. Write the LinkedIn post body and the first-comment sentence (skip the URL and hashtags — they aren't prose) to a temporary file in your scratchpad directory.
-2. Run `python lint_content.py <path>` from the repo root against that file.
-3. Fix every blocking violation (printed under "VIOLATIONS FOUND"). Treat "STYLE SUGGESTIONS" as judgment calls, not requirements — apply them where they genuinely improve the post, skip them where they don't fit the compressed LinkedIn format.
-4. Re-run the linter after fixing until no blocking violations remain.
-5. Pay particular attention to em-dashes and AI-tell phrases/colon constructions ("the key insight", "worth noting", "Here's why:") — these are easy to reintroduce while punching up a line for the "hit hard" tone, and the linter catches them mechanically rather than relying on self-review.
+2. Run `/refine-prose` on that temporary file. Treat its "STYLE SUGGESTIONS" judgment calls with the compressed LinkedIn format in mind — skip ones that don't fit the format's brevity.
+3. Pay particular attention to em-dashes and AI-tell phrases/colon constructions ("the key insight", "worth noting", "Here's why:") — these are easy to reintroduce while punching up a line for the "hit hard" tone, and `/refine-prose` catches them mechanically rather than relying on self-review alone.
 
-Discard the temporary file once linting is clean; it isn't part of the deliverable.
+Discard the temporary file once `/refine-prose` reports clean; it isn't part of the deliverable.
 
 ---
 

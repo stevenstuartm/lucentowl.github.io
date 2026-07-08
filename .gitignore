@@ -9,4 +9,5 @@ Gemfile.lock
 .claude/*
 !.claude/content/
 !.claude/commands/
+!.claude/skills/
 .DS_Store

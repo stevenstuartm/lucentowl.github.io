@@ -1,6 +1,6 @@
 # Study Guide Guide
 
-This guide covers format requirements, tagging, organization, and quality standards for study guides. Always also read [writing-standards.md](writing-standards.md) — the universal rules apply to all guide content.
+This guide covers format requirements, tagging, organization, and quality standards for study guides. Always also read [writing-standards.md](../../skills/refine-prose/writing-standards.md) — the universal rules apply to all guide content.
 
 ---
 

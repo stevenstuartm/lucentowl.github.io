@@ -1,6 +1,6 @@
 # Resource Guide
 
-This guide covers format requirements, organization, and quality standards for resources — standalone reference artifacts. Always also read [writing-standards.md](writing-standards.md) — the universal rules apply to resource content too.
+This guide covers format requirements, organization, and quality standards for resources — standalone reference artifacts. Always also read [writing-standards.md](../../skills/refine-prose/writing-standards.md) — the universal rules apply to resource content too.
 
 ---
 
