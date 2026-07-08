@@ -1,6 +1,7 @@
 {
   "resources": [
     "plan-task-skill.md",
+    "refine-prose-skill.md",
     "big-o-complexity-quick-reference.md",
     "adr-template.md",
     "http-methods-status-codes.md",

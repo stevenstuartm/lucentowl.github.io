@@ -65,7 +65,7 @@ related_posts:
 **Optional fields**: `related_guides`, `related_posts` — arrays of site-relative URLs
 
 - **type**: Must be one of the three valid types above. Drives the type badge and the listing page's type filter.
-- **category**: Must exactly match one of the top-level category names in `assets/data/study_guides_config.json` (e.g., `"Architecture"`, `"Security"`, `"Data Structures & Algorithms"`). Use the category of the study guide the resource is most closely tied to — usually the guide(s) in `related_guides`. Drives the listing page's category filter. If a resource has no natural related guide, pick the category that best matches its subject and tags.
+- **category**: The listing page's category filter pills are generated dynamically from whatever `category` values already appear across `_resources/*.md` (`_layouts/resources.html`) — there is no fixed enum, and it is not validated against `assets/data/study_guides_config.json`. Before picking one, check existing categories with `grep -h "^category:" _resources/*.md` and reuse a match if the resource's topic fits one already in use (existing values include `Architecture`, `AI`, `DSA`, `Infrastructure`, `Programming Patterns`, `Networking`, `SDLC`, `Security` — note some are short forms, not the full study-guide category names). Only introduce a new category value if none of the existing ones fit; a new value becomes its own filter pill immediately.
 - **last_updated**: Date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise a resource's content — it renders on both the resource page and its listing card.
 - **description**: A 1-2 sentence summary of what the artifact contains. Write it to stand alone in a listing card.
 

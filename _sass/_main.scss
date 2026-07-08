@@ -4480,6 +4480,51 @@ body.home-layout .site-title a:hover .site-name {
     margin-top: var(--spacing-md);
 }
 
+.resource-content details {
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-md);
+    overflow: hidden;
+}
+
+.resource-content details summary {
+    cursor: pointer;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--color-bg);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+}
+
+.resource-content details summary::-webkit-details-marker {
+    display: none;
+}
+
+.resource-content details summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--color-text-light);
+    transition: transform 0.15s ease;
+}
+
+.resource-content details[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.resource-content details summary code {
+    background: none;
+    padding: 0;
+}
+
+.resource-content details pre {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    border-top: 1px solid var(--color-border);
+}
+
 /* Code-type resource: terminal-window chrome on the pre block only */
 .resource[data-type="code"] .resource-content pre {
     padding: 0;
