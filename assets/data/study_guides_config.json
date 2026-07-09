@@ -109,6 +109,7 @@
             "architecture/domain-driven-design.md",
             "architecture/api-design-architecture.md",
             "architecture/grpc-architecture-design.md",
+            "architecture/expressing-change-intent-in-api-payloads.md",
             "architecture/testing-strategy-architecture.md",
             "architecture/performance-engineering.md"
           ]

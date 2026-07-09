@@ -84,16 +84,19 @@ Also identify:
 - The single fact that best proves the deliverable's cost — a number, a failure mode, a concrete before/after — compressed to one sentence, stripped of its narrative setup
 - The target reader — who is this written for?
 
+**Ground the theme in the conclusion, not the most vivid middle section.** Read the post's actual conclusion (or nut graf, if the synthesis lives up front) and state the theme in that section's own terms. Long-form posts often spend their middle sections drawing a sharp, dramatic contrast (approach A vs. approach B, pattern X vs. anti-pattern Y) that reads more quotably than the piece's actual resolution — but the conclusion frequently complicates that contrast into something subtler (e.g., "either approach is fine when it's a deliberate, earned trade-off; the failure is defaulting into either one unexamined"). A theme pulled from the dramatic middle section instead of the conclusion produces a payload that's punchier to write but misrepresents what the post argues. If the conclusion's framing differs from the middle sections' sharpest material, the conclusion wins.
+
 Do not write the LinkedIn post yet.
 
 ### Step 2 — Extract the payload
 
 The payload is the theme and the deliverable fused together, not the deliverable alone: the theme is why it matters, the deliverable is how it becomes usable. A payload with only the deliverable reads as a disconnected tactic ("here's a two-question test"); a payload with only the theme reads as an unearned abstraction ("architecture is about authority"). Together they read as a claim with a tool attached.
 
-The payload must meet three criteria:
+The payload must meet four criteria:
 1. Is genuinely usable on its own — a reader could apply it in their next design review without reading anything else
 2. Carries the theme, not just the mechanics — a reader should know what belief the deliverable is in service of
-3. Does not start with "I" and does not contain a link
+3. Matches the post's actual stance — if the post's real argument is a nuanced trade-off ("X is fine when earned deliberately, wrong when defaulted into"), the payload must carry that nuance rather than flattening it into a cleaner-sounding "X is bad, Y is good." A payload that picks a side the post itself doesn't take is easier to write but misrepresents the piece.
+4. Does not start with "I" and does not contain a link
 
 Draft 2–3 payload options. Select the strongest one and explain why briefly.
 
@@ -109,6 +112,7 @@ After writing, check:
 - Is there a sentence after the cost that just spells out what the reader should now do? If it adds nothing the cost and closing line don't already imply, cut it.
 - Does the closing line require reflection, or is it generic?
 - Would this post give a reader real value even if they never click through?
+- Does the argument's polarity match the post's actual conclusion, or has it been sharpened into a simpler dichotomy (a clear villain, a clear hero) that the post itself doesn't endorse?
 
 ### Step 4 — Write the first comment
 
