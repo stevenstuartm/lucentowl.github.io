@@ -6,9 +6,9 @@ These standards apply to ALL narrative content: blog posts, page content, descri
 
 ## Mechanical Checks
 
-These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file with the Grep tool (case-insensitive, skip frontmatter and code blocks). Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
+These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file's text (case-insensitive, skip frontmatter and code blocks), using the Grep tool where available (Claude Code), `grep -inE` via a bash/terminal tool, or a direct regex scan of the file's text otherwise. Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
 
-The Grep tool's engine (ripgrep, Rust regex) does not support lookahead/lookbehind — it silently returns zero matches on a pattern that uses `(?!...)` or `(?=...)` instead of erroring, which would produce false negatives. None of the patterns below use them; where the Python version of this linter once used a lookahead to carve out an exception, that exception is now a written note instead (see "the insight" below).
+The ripgrep engine that backs Claude Code's Grep tool does not support lookahead/lookbehind — it silently returns zero matches on a pattern that uses `(?!...)` or `(?=...)` instead of erroring, which would produce false negatives. None of the patterns below use them; where the Python version of this linter once used a lookahead to carve out an exception, that exception is now a written note instead (see "the insight" below). If you're running these patterns with a regex engine that does support lookahead (e.g. Python's `re`, or grep -P), that's fine too — the patterns below work either way.
 
 **AI-tell phrases**:
 ```
@@ -109,7 +109,7 @@ Prefer "tend to", "might", "can", "often", "rarely" over absolute constructions.
 **Historical claims require verification**:
 - When making claims about "original visions," "promises," or historical context, verify with research
 - Don't assume what systems "were supposed to do" without evidence
-- Use WebSearch to verify historical context before making sweeping statements
+- Use web search to verify historical context before making sweeping statements
 - Stronger arguments cite specific sources rather than paraphrasing
 
 ### Sentence Flow and Punctuation

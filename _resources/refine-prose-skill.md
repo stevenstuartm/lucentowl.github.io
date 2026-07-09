@@ -1,16 +1,24 @@
 ---
-title: "AI Prose Linter"
+title: "Claude Prose Linter"
 layout: resource
 type: code
 category: "AI"
-description: "A Claude Code skill that mechanically lints prose against a fixed rule set of AI-tell phrases, em-dashes, and filler words, then runs a self-review pass for judgment calls a grep can't catch."
-last_updated: 2026-07-08
+description: "A portable Claude skill (v1.0.0) that mechanically lints prose against a fixed rule set of AI-tell phrases, em-dashes, and filler words, then runs a self-review pass for judgment calls a grep can't catch."
+last_updated: 2026-07-09
 tags: [ai-agents, workflow, writing, editing, documentation, automation]
 ---
 
-A Claude Code skill for linting and refining prose: blog posts, docs, drafts. It runs two passes. First, a set of exact-match mechanical checks (AI-tell phrases like "the key insight," em-dashes, filler words) looped until every pattern returns zero matches. Second, a self-review pass for the things a literal grep cannot catch: header outline quality, bullet-vs-prose balance, generic examples, choppy rhythm.
+A skill for linting and refining prose: blog posts, docs, drafts. It runs in Claude Code, Claude.ai, and Cowork alike. It runs two passes. First, a set of exact-match mechanical checks (AI-tell phrases like "the key insight," em-dashes, filler words) looped until every pattern returns zero matches. Second, a self-review pass for the things a literal grep cannot catch: header outline quality, bullet-vs-prose balance, generic examples, choppy rhythm.
 
-The skill is self-contained and portable. It carries its own ruleset (`writing-standards.md`) and a `platforms/` directory for stack-specific rules that only apply when a project matches their `detect:` condition, so it drops into any project without depending on anything else. Install by saving the three files below into `.claude/skills/refine-prose/`, preserving the folder structure:
+The base skill is two files, self-contained and portable: `SKILL.md` carries the orchestration, `writing-standards.md` carries the ruleset, including the mechanical-check patterns. Neither depends on anything else to run. Install by saving both into `.claude/skills/refine-prose/` (or wherever your environment keeps skills):
+
+```
+.claude/skills/refine-prose/
+├── SKILL.md
+└── writing-standards.md
+```
+
+On top of that base, the skill supports an optional `platforms/` directory for stack-specific rules that only apply when a project matches their `detect:` condition. This isn't part of the shipped package; it's an extension point a project adds for its own quirks. The third file below, `platforms/jekyll-kramdown.md`, is a worked example for Jekyll/Kramdown sites, add it (or a sibling file for your own stack) only if you want that layer. Nothing in `SKILL.md` or `writing-standards.md` needs to change either way:
 
 ```
 .claude/skills/refine-prose/
@@ -20,8 +28,6 @@ The skill is self-contained and portable. It carries its own ruleset (`writing-s
     └── jekyll-kramdown.md
 ```
 
-`platforms/jekyll-kramdown.md` is an example platform doc for Jekyll/Kramdown sites. Drop it if your project doesn't use Kramdown, or add a sibling file in `platforms/` for your own stack. Nothing in `SKILL.md` or `writing-standards.md` needs to change either way.
-
 ---
 
 <details markdown="1">
@@ -30,6 +36,7 @@ The skill is self-contained and portable. It carries its own ruleset (`writing-s
 ~~~markdown
 ---
 name: refine-prose
+version: 1.0.0
 description: Use when asked to lint, refine, clean up, polish, or "run the linter and fix" a piece of prose content (blog post or draft). Formalizes the loop of running the mechanical linter to a clean state and then doing the narrative self-review the linter can't do. Do not use for a full publishability/editorial review (thesis, scholarly quality, title options).
 ---
 
@@ -39,15 +46,15 @@ Formal, self-contained orchestration for "run the linter and refine as needed." 
 
 ## File resolution
 
-Explicit file path argument > file currently open in the IDE (`ide_opened_file` context) > ask the user. Don't ask if either of the first two signals is present.
+Explicit file path argument > file currently open in the IDE (`ide_opened_file` context, when available — this signal only exists in IDE-connected environments like Claude Code; skip it elsewhere) > file the user has uploaded or is discussing in the current conversation > ask the user. Don't ask if an earlier signal is present.
 
 ## Orchestration — follow in order, don't skip steps
 
 **1. Resolve the target file** and read it.
 
-**2. Check for a matching platform doc.** Enumerate `.claude/skills/refine-prose/platforms/*.md`. Each file's frontmatter has a `detect:` field describing, in plain English, the signal that makes it apply (a config-file fingerprint, or the user naming the tech explicitly). If one or more match the current project, read them — their mechanical patterns and rules layer on top of `writing-standards.md` for steps 3–4 and 7 below. No match is the common case when sharing this skill outside its original project and is not an error; just proceed with the universal rules only.
+**2. Check for a matching platform doc.** Enumerate the `platforms/*.md` files in this skill's own directory (in Claude Code that's `.claude/skills/refine-prose/platforms/`; in other environments, wherever this skill is installed). Each file's frontmatter has a `detect:` field describing, in plain English, the signal that makes it apply (a config-file fingerprint, or the user naming the tech explicitly). If one or more match the current project, read them — their mechanical patterns and rules layer on top of `writing-standards.md` for steps 3–4 and 7 below. No match is the common case when sharing this skill outside its original project and is not an error; just proceed with the universal rules only.
 
-**3. Run the mechanical checks.** `writing-standards.md`'s "Mechanical Checks" section (plus any matched platform doc's own patterns) lists a small set of regex patterns — literal phrases, em-dashes, and any platform-specific syntax checks. Run each one against the target file with the Grep tool. These are exact-match, not heuristics: a hit is always an Error, never a judgment call.
+**3. Run the mechanical checks.** `writing-standards.md`'s "Mechanical Checks" section (plus any matched platform doc's own patterns) lists a small set of regex patterns — literal phrases, em-dashes, and any platform-specific syntax checks. Run each one against the target file's text, skipping frontmatter and code blocks. Use whichever text-search tool is available in the current environment: the Grep tool in Claude Code, `grep -inE` via a bash/terminal tool, or scanning the file's text directly with regex if no search tool is available. These are exact-match, not heuristics: a hit is always an Error, never a judgment call.
 
 **4. Fix every Error**, one at a time, against the rule that flagged it in `writing-standards.md` or the matched platform doc — not a mechanical find/replace. Each fix should restate the point directly, not just delete the flagged phrase.
 
@@ -64,7 +71,7 @@ Explicit file path argument > file currently open in the IDE (`ide_opened_file` 
 
 ## Portability
 
-To use this in a different project: copy the whole `.claude/skills/refine-prose/` directory into the target project's `.claude/skills/`. `writing-standards.md` and the orchestration in this file are both platform-agnostic as written — step 2 never names a specific platform; it only ever reads whatever `detect:` condition each file in `platforms/` declares for itself and applies that file's rules when the condition matches. SKILL.md doesn't know or care what's currently inside `platforms/` — whatever ships in that directory, gets added to it, or gets deleted from it, this file's logic doesn't change. If no file's `detect:` condition matches the target project, the skill runs with the universal rules only. No manual stripping needed, and no code to port — everything is a markdown doc plus regex patterns the agent runs directly with the Grep tool.
+To use this in a different project or environment: copy the whole `refine-prose/` directory (in Claude Code, that lives at `.claude/skills/refine-prose/`; in Claude.ai or Cowork, a user's skill directory) to the target location. `writing-standards.md` and the orchestration in this file are both platform-agnostic as written — step 2 never names a specific platform; it only ever reads whatever `detect:` condition each file in `platforms/` declares for itself and applies that file's rules when the condition matches. SKILL.md doesn't know or care what's currently inside `platforms/` — whatever ships in that directory, gets added to it, or gets deleted from it, this file's logic doesn't change. If no file's `detect:` condition matches the target project, the skill runs with the universal rules only. No manual stripping needed, and no code to port — everything is a markdown doc plus regex patterns run directly against the file's text.
 
 To add support for a project's own platform quirks (a static-site generator, a docs framework with its own markdown dialect, a house voice convention), add a new file to `platforms/` following the same shape: frontmatter with a `detect:` field, then the additional mechanical patterns and judgment-call rules. Nothing outside `platforms/` needs to change to support it.
 ~~~
@@ -83,9 +90,9 @@ These standards apply to ALL narrative content: blog posts, page content, descri
 
 ## Mechanical Checks
 
-These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file with the Grep tool (case-insensitive, skip frontmatter and code blocks). Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
+These are exact-match violations: fixed strings and literal characters, not judgment calls. Run each pattern below against the target file's text (case-insensitive, skip frontmatter and code blocks), using the Grep tool where available (Claude Code), `grep -inE` via a bash/terminal tool, or a direct regex scan of the file's text otherwise. Treat every hit as an Error — fix it against the guidance here, not a mechanical find/replace, then re-run the pattern. Loop until each one returns no matches.
 
-The Grep tool's engine (ripgrep, Rust regex) does not support lookahead/lookbehind — it silently returns zero matches on a pattern that uses `(?!...)` or `(?=...)` instead of erroring, which would produce false negatives. None of the patterns below use them; where the Python version of this linter once used a lookahead to carve out an exception, that exception is now a written note instead (see "the insight" below).
+The ripgrep engine that backs Claude Code's Grep tool does not support lookahead/lookbehind — it silently returns zero matches on a pattern that uses `(?!...)` or `(?=...)` instead of erroring, which would produce false negatives. None of the patterns below use them; where the Python version of this linter once used a lookahead to carve out an exception, that exception is now a written note instead (see "the insight" below). If you're running these patterns with a regex engine that does support lookahead (e.g. Python's `re`, or grep -P), that's fine too — the patterns below work either way.
 
 **AI-tell phrases**:
 ```
@@ -186,7 +193,7 @@ Prefer "tend to", "might", "can", "often", "rarely" over absolute constructions.
 **Historical claims require verification**:
 - When making claims about "original visions," "promises," or historical context, verify with research
 - Don't assume what systems "were supposed to do" without evidence
-- Use WebSearch to verify historical context before making sweeping statements
+- Use web search to verify historical context before making sweeping statements
 - Stronger arguments cite specific sources rather than paraphrasing
 
 ### Sentence Flow and Punctuation
