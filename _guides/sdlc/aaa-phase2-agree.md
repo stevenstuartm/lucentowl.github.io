@@ -86,7 +86,38 @@ Regardless of project size or methodology, agreement follows these steps:
 
 ---
 
-### 2. Architecture Documentation
+### 2. Architecture Risk Validation
+
+**Confirm the candidate architecture actually earns the commitment you're about to ask for.**
+
+Once a candidate architecture exists, validate it against the top-3 quality attributes prioritized during Align, before investing further in documentation, POCs, or planning. This borrows the SEI's [ATAM](https://en.wikipedia.org/wiki/Architecture_tradeoff_analysis_method){:target="_blank" rel="noopener noreferrer"} vocabulary without the full multi-day workshop.
+
+**Catalog three things per quality attribute, not a single score**:
+- **Risks**: Specific ways the architecture might fail to meet the target (e.g., "cross-region replication may not hit the 200ms p95 target under peak load")
+- **Sensitivity points**: Decisions where a small change has an outsized effect on a quality attribute (e.g., choice of consistency model drives both availability and correctness)
+- **Tradeoff points**: Decisions that pull two attributes in opposite directions (e.g., synchronous validation improves correctness but costs availability)
+
+**Why not a single risk score**: A blended number is easy to argue upward once a team is invested in a design, but a catalog of specific, named risks isn't. Each one has to be individually resolved, deferred with a named owner, or accepted in writing.
+
+**Resolve what you can now**:
+- Risks with cheap validation → route to the POC (see [Technical Proof of Concept](#4-technical-proof-of-concept) below)
+- Risks that are expensive to validate → accept explicitly, with an owner and a trigger for revisiting
+- Risks with no mitigation and high impact → these are your disqualifiers
+
+The catalog is what you bring to the room, not what replaces the room. A risk list stakeholders and the team haven't seen and challenged is paperwork, not validation.
+
+<div class="callout callout--warning">
+<p class="callout__title">Red Flags</p>
+<ul>
+<li><strong>No named risks</strong>: If the architecture has zero risks against its top-3 characteristics, you haven't looked hard enough</li>
+<li><strong>Risks without owners</strong>: An accepted risk with no one responsible for it isn't accepted, it's ignored</li>
+<li><strong>Skipping straight to documentation</strong>: Producing C4 diagrams before the design has survived this check just documents an unvalidated architecture</li>
+</ul>
+</div>
+
+---
+
+### 3. Architecture Documentation
 
 **Create the minimum documentation needed to achieve genuine agreement on high-risk decisions.**
 
@@ -109,9 +140,11 @@ During Agree, diagrams codify decisions and create shared commitment. Use docume
 
 ---
 
-### 3. Technical Proof of Concept
+### 4. Technical Proof of Concept
 
 **Validate critical technical assumptions before full commitment.**
+
+Most POC candidates should already be named as risks with a cheap validation path in your Architecture Risk Validation catalog. If a trigger below isn't backed by a named risk there, name it first.
 
 **When to Build a POC**:
 - Using new or unfamiliar technology
@@ -142,7 +175,7 @@ During Agree, diagrams codify decisions and create shared commitment. Use docume
 
 ---
 
-### 4. Quality & Testing Strategy
+### 5. Quality & Testing Strategy
 
 **Define how you'll ensure quality throughout development.**
 
@@ -163,7 +196,7 @@ During Agree, diagrams codify decisions and create shared commitment. Use docume
 
 ---
 
-### 5. SLA/SLO Definition
+### 6. SLA/SLO Definition
 
 **Establish measurable performance and availability targets.**
 
@@ -180,7 +213,7 @@ During Agree, diagrams codify decisions and create shared commitment. Use docume
 
 ---
 
-### 6. Planning & Budget
+### 7. Planning & Budget
 
 #### Appetite vs. Estimation
 
@@ -304,6 +337,7 @@ Sign-offs and approved documents don't guarantee genuine agreement. Before movin
 **You're ready for Apply when**:
 - [ ] Architecture design is documented and approved
 - [ ] Key design decisions are captured in ADRs
+- [ ] Architecture risks, sensitivity points, and tradeoff points are cataloged, with named owners for anything accepted rather than resolved
 - [ ] Critical technical assumptions are validated (POC complete if needed)
 - [ ] Quality and testing strategy is defined
 - [ ] SLOs are established with stakeholder buy-in

@@ -49,8 +49,8 @@ The depth and formality scale with scope and risk, but these questions remain co
 - What keeps you up at night about this project?
 
 **How to Do This Well**:
-- Listen more than you talk—take notes, ask clarifying questions, observe dynamics
-- Don't jump to solutions yet—stay neutral and build trust first
+- Listen more than you talk, taking notes, asking clarifying questions, and observing dynamics
+- Don't jump to solutions yet; stay neutral and build trust first
 - Demonstrate genuine interest in stakeholder needs, not just their requirements
 - In every meeting, ask "Who else should be involved?"
 
@@ -89,7 +89,7 @@ The depth and formality scale with scope and risk, but these questions remain co
 
 **How to Do This Well**:
 - Ask "why" repeatedly to get to root needs
-- Probe for architectural characteristics explicitly—stakeholders often forget them
+- Probe for architectural characteristics explicitly, since stakeholders often forget them
 - Push for measurable, testable criteria (not "it should be fast" but "page loads < 2 seconds")
 - Document acceptance criteria clearly so there's no ambiguity later
 
@@ -124,12 +124,12 @@ The depth and formality scale with scope and risk, but these questions remain co
 - Operational: Deployment complexity, support readiness
 
 **How to Do This Well**:
-- Extract implicit constraints—stakeholders often assume you know their limitations
+- Extract implicit constraints, since stakeholders often assume you know their limitations
 - Challenge "requirements" that are actually preferences
 - Quantify risks with likelihood and impact scoring
 - Map dependencies on other teams/systems explicitly
 - Budget time for organizational overhead (approvals, procurement, access delays)
-- Be honest about uncertainties—don't sugarcoat risks
+- Be honest about uncertainties; don't sugarcoat risks
 
 <div class="callout callout--warning">
 <p class="callout__title">Red Flags</p>
@@ -146,25 +146,54 @@ The depth and formality scale with scope and risk, but these questions remain co
 
 ### 4. Initial Sizing & Estimation
 
-**Provide realistic ballpark estimates for go/no-go decisions.**
+**Deliverable: one Go / Pivot / No-Go recommendation, built from an effort estimate and a risk tier.**
 
-**Estimation Approach**:
+The two inputs answer different questions: how much work, and how likely the estimate is to be wrong. Neither alone is enough. A small, well-understood project still needs to fit the calendar, and a project that fits the calendar can still be too novel to trust the estimate. Both feed a single recommendation at the end of this section, not two separate go/no-go calls.
+
+#### Effort Estimate
+
 - Break the solution into major components or epics
 - Estimate effort using analogous estimation, planning poker, or t-shirt sizing
 - Include infrastructure, operational costs, testing, deployment, and documentation
 - Add a contingency buffer (typically 20-30%)
 - Involve the team; engineers doing the work should validate estimates
-
-**Provide Ranges, Not Point Estimates**: "4-6 months" is more honest than "5 months." Explain your methodology and assumptions clearly so stakeholders understand the reasoning, and flag high-uncertainty areas explicitly.
+- Provide ranges, not point estimates: "4-6 months" is more honest than "5 months." Explain your methodology and assumptions clearly so stakeholders understand the reasoning, and flag high-uncertainty areas explicitly
 
 <blockquote class="pull-quote">
 <p>Be realistic, not optimistic. Frame alignment as risk mitigation.</p>
 </blockquote>
 
-**Feasibility Assessment**:
-- Go: Estimates fit within constraints
-- No-Go: Not feasible, recommend cancellation
-- Pivot: Adjust scope/timeline/approach to make feasible
+#### Risk Tier
+
+Rate two axes instead of trusting a gut call on feasibility.
+
+**Scope size**: rate each domain the system touches using function-point-style complexity tiers, then sum across domains for an overall size of small, medium, or large:
+- **Simple**: Thin integration, reading a few fields from an existing system
+- **Average**: Moderate new logic layered on existing capabilities
+- **Complex**: A new subsystem you fully own
+
+**Novelty**: draw this rating from the Technical and Organizational risk categories you already surfaced above, rather than assessing novelty from scratch. Rate how well-understood the problem and technology are for *this team*, not in the abstract:
+- **Well-understood**: You've built something like this before; known patterns apply
+- **Unfamiliar**: Understood in principle, but new to this team or this combination of systems
+- **Novel**: No clear precedent; the approach itself needs discovery before it can be estimated
+
+| | Small scope | Medium scope | Large scope |
+|---|---|---|---|
+| **Well-understood** | Low | Low | Medium |
+| **Unfamiliar** | Medium | Medium | High |
+| **Novel** | High | High | Extreme |
+
+Keep the two axes separate when scoring them. A single blended score lets a strong scope rating mask a disqualifying novelty rating, or the reverse.
+
+#### The Recommendation
+
+Check the effort estimate against your actual constraints (timeline, budget, staffing, dependencies), then combine that with the risk tier into one call:
+
+- **Go**: The estimate fits your constraints and the risk tier is Low or Medium
+- **Pivot**: The estimate doesn't fit, or the tier is High: cut scope, extend the timeline, add resources, or resolve the novelty with a targeted POC before re-estimating (see [Technical Proof of Concept](aaa-phase2-agree.html#4-technical-proof-of-concept){:target="_blank" rel="noopener noreferrer"})
+- **No-Go**: The tier is Extreme, or no combination of scope, timeline, and resource adjustments brings the estimate inside your constraints: recommend cancellation, or fund a small discovery spike as its own project before chartering the real one
+
+The recommendation is a starting position for the conversation with stakeholders, not a substitute for it. A Go they don't actually believe in is worse than an honest No-Go.
 
 <div class="callout callout--warning">
 <p class="callout__title">Red Flags</p>
@@ -173,6 +202,7 @@ The depth and formality scale with scope and risk, but these questions remain co
 <li>Ignoring non-development work (testing, deployment, documentation)</li>
 <li>No contingency buffer</li>
 <li>Estimating without team input</li>
+<li>Rating novelty by the architect's own familiarity rather than the team's</li>
 </ul>
 </div>
 
@@ -195,7 +225,7 @@ During Align, visualization serves discovery. The goal is to ensure stakeholders
 
 **Simple Box-and-Arrow Sketches**:
 - Whiteboard-level clarity for exploring ideas
-- No formal notation required—focus on communication
+- No formal notation required; focus on communication
 - Easy to change as understanding evolves
 
 **Data Flow Diagrams**:
@@ -209,7 +239,7 @@ During Align, visualization serves discovery. The goal is to ensure stakeholders
 <li><strong>Make it collaborative</strong>: Sketch together with stakeholders, don't present finished diagrams</li>
 <li><strong>Focus on boundaries</strong>: What's in scope? What's out? Who owns what?</li>
 <li><strong>Iterate quickly</strong>: Diagrams should evolve as understanding evolves</li>
-<li><strong>Don't over-invest</strong>: These are discovery tools, not deliverables—skip them when everyone already shares the same mental model or you're still discovering the problem</li>
+<li><strong>Don't over-invest</strong>: These are discovery tools, not deliverables, so skip them when everyone already shares the same mental model or you're still discovering the problem</li>
 <li><strong>Test understanding</strong>: Ask stakeholders to explain the diagram back to you</li>
 </ul>
 </div>
@@ -289,6 +319,7 @@ Success =
 - How decisions will be documented
 
 #### 6. Risk Register (Top 5-10)
+Open with the Scope & Novelty tier as the headline entry, then list supporting risks beneath it.
 - Risk description, likelihood, impact
 - Mitigation strategy and owner
 
@@ -310,7 +341,7 @@ Present the charter in person; don't just email it. Walk through key sections to
 
 ## Readiness: Transitioning to Agree
 
-Artifacts can be completed without genuine alignment. Before moving to Phase 2 (Agree), verify that alignment is real, not just documented.
+Artifacts can be completed without genuine alignment. Before moving to Phase 2 (Agree), verify that alignment holds up under questioning, not just on paper.
 
 **Test alignment with these questions**:
 - Can each stakeholder explain the project's purpose and success criteria without referring to the charter?
