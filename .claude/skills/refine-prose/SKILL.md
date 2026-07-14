@@ -29,6 +29,7 @@ Explicit file path argument > file currently open in the IDE (`ide_opened_file` 
 - Are examples concrete (specific numbers, named tradeoffs) or generic and dismissible?
 - Is prose used for explaining/reasoning, with bullets reserved for actual lists, steps, or comparisons — not as a crutch?
 - Any AI-tell pattern too variable for an exact-match grep: announcement sentences ("Here's what this means:"), redundant restatements of a point the prose just made, scaffolding sentences that only introduce what follows, choppy rhythm from missing conjunctions
+- Semicolon/colon overuse: for each semicolon or colon joining two clauses, confirm it's a genuine parallel contrast (semicolon) or formal enumeration (colon) per `writing-standards.md`'s "Sentence Flow and Punctuation" section — if not, split into two sentences
 - Any matched platform doc's own voice/formatting conventions (e.g. blog-post voice balance)
 
 **7. Report back**: final mechanical-check status (should be zero matches across all patterns), a summary of what changed, which judgment-call issues were intentionally left as-is and why, and any open judgment calls to flag for the user's own read-through. Do not declare the document "done" — final judgment on accuracy and nuance stays with the user.

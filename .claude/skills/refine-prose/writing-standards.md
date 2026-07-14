@@ -46,7 +46,7 @@ These announce importance rather than stating it directly.
 ```
 —
 ```
-Avoid em-dashes in prose; use semicolons, commas, or periods instead. Parentheses are acceptable for clarifying asides.
+Avoid em-dashes in prose. Use commas or periods instead. Parentheses are acceptable for clarifying asides.
 
 **Fixing a hit** — restate the point directly, don't just delete the flagged phrase:
 ```
@@ -114,29 +114,35 @@ Prefer "tend to", "might", "can", "often", "rarely" over absolute constructions.
 
 ### Sentence Flow and Punctuation
 
-**Semicolons are for parallel contrast; comma+and is for sequential cause.** Using a semicolon where "and" belongs creates a false equivalence:
-- ❌ "The lag is measured in years; by the time the drift is painful, the decision is untraceable." (the second clause is a consequence, not a parallel)
-- ✅ "The lag is measured in years, and by the time the drift is painful, the decision is untraceable."
-- ✅ "Reads are fast; writes are slow." (genuine parallel contrast — semicolon is correct)
+**Default to two sentences.** When two clauses could be joined with a semicolon or colon, a period is usually the clearer choice, and it's the safer one when it's not obvious which reads better. Reach for a semicolon or colon only when it earns its place: a genuine parallel contrast, or a formal enumeration. They are not banned, but they should be a deliberate exception, not the reflexive way to avoid two sentences in a row.
 
-**Use semicolons and commas for natural flow**:
-- ❌ "Something is broken in production. You need to fix it." (choppy)
-- ✅ "Something is broken in production, and you need to fix it." (natural)
-- ❌ "Most troubleshooting failures aren't from lack of effort. Engineers work hard during incidents."
-- ✅ "Most troubleshooting failures aren't from lack of effort; engineers work hard during incidents."
+**Semicolons are for parallel contrast, not for gluing sequential or causal clauses together:**
+- ❌ "The lag is measured in years; by the time the drift is painful, the decision is untraceable." (the second clause is a consequence, not a parallel — split it)
+- ✅ "The lag is measured in years. By the time the drift is painful, the decision is untraceable."
+- ✅ "Reads are fast; writes are slow." (genuine parallel contrast — semicolon earns its place)
+- ❌ "Most troubleshooting failures aren't from lack of effort; engineers work hard during incidents." (the second clause supports the first, it's not a parallel)
+- ✅ "Most troubleshooting failures aren't from lack of effort. Engineers work hard during incidents."
 
-**Avoid run-on sentences that force buffering**:
-- Don't chain too many thoughts together; the reader shouldn't need to hold an entire sentence in memory to understand the conclusion
+**Colons follow the same rule.** Use a colon to set up a list or a formal enumeration, not as a way to tack an explanation onto a sentence instead of starting a new one:
+- ❌ "The fix is simple: update the config and redeploy." (the colon is just deferring a second sentence)
+- ✅ "The fix is simple. Update the config and redeploy."
+- ✅ "Three factors matter: latency, cost, and reliability." (formal enumeration — colon earns its place)
+
+**Two short related sentences are not "choppy" — they're usually the clearest option.** Don't reach for a semicolon, colon, or comma+and just to avoid two short sentences in a row:
+- ✅ "Something is broken in production. You need to fix it."
+- Join with "and" only when splitting would actually lose a tight sequential or causal link, and even then prefer it over a semicolon — a semicolon implies parallel structure that a causal "and" doesn't have.
+
+**Avoid run-on sentences that force buffering.** Don't chain too many thoughts together. The reader shouldn't need to hold an entire sentence in memory to understand the conclusion:
 - ❌ "With reproduction, you have a test case that consistently triggers the race condition; after your fix, the test passes, and you know it works before it touches production."
 - ✅ "With reproduction, you have a test case that consistently triggers the race condition. After your fix, the test passes. You know it works before it touches production."
 - ❌ "If the answer is 'exception in cleanup code path,' the fix isn't just patching that one path; it's recognizing that error-handling code paths lack test coverage across the system."
 - ✅ "If the answer is 'exception in cleanup code path,' the fix isn't just patching that one path. It's recognizing that error-handling code paths lack test coverage across the system."
 
 **Guidelines**:
-- Use commas/semicolons to connect two related thoughts
-- Use periods when adding a third thought or when the combined sentence becomes too long
-- Write as you think: natural internal narrative, not telegraphic fragments
-- Each sentence should carry one clear idea or two closely related ideas, not three or more
+- Default to periods. Reserve a semicolon for genuine parallel contrast and a colon for a list or formal enumeration — nothing else.
+- If it's not obvious whether a semicolon or colon is earning its place, split into two sentences instead. That's the safe default, not a fallback.
+- Write as you think: natural internal narrative, not telegraphic fragments. "Natural" means varied sentence length, not compressed sentences stitched together with punctuation.
+- Each sentence should carry one clear idea. Don't reach for a semicolon or colon to cram a second idea into the same sentence when two sentences would read more clearly.
 
 ### Section Structure and Header Hierarchy
 
@@ -201,7 +207,8 @@ Watch for three patterns during self-review — these are prose-rhythm judgment 
 **When colons ARE appropriate**:
 - Introducing bulleted lists that stand alone as their own paragraph
 - Setting up a formal enumeration ("Three factors matter: first, second, third")
-- After complete independent clauses that introduce what follows
+
+See "Sentence Flow and Punctuation" below for the general rule on colons that join two independent clauses instead of setting up a list — default to a period there.
 
 ### Prose Economy
 
