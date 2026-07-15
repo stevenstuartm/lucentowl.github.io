@@ -1,0 +1,117 @@
+<!-- Shelf Panel (global, lists everything shelved) -->
+<div class="shelf-panel-overlay" id="shelfPanelOverlay">
+    <div class="shelf-panel" role="dialog" aria-modal="true" aria-labelledby="shelfPanelTitle">
+        <div class="shelf-panel-header">
+            <h2 id="shelfPanelTitle">Shelf</h2>
+            <button class="shelf-panel-close" id="shelfPanelClose" aria-label="Close shelf">&times;</button>
+        </div>
+        <div class="shelf-panel-body" id="shelfPanelBody"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    function init() {
+        var indicator = document.getElementById('shelfIndicator');
+        var badge = document.getElementById('shelfBadge');
+        var overlay = document.getElementById('shelfPanelOverlay');
+        var closeBtn = document.getElementById('shelfPanelClose');
+        var body = document.getElementById('shelfPanelBody');
+
+        if (!indicator || typeof ShelfManager === 'undefined') return;
+
+        var shelf = new ShelfManager();
+
+        function renderIndicator() {
+            var count = shelf.count();
+            badge.textContent = String(count);
+            indicator.classList.toggle('visible', count > 0);
+        }
+
+        function renderPanel() {
+            var items = shelf.getAll();
+            body.textContent = '';
+
+            if (items.length === 0) {
+                var empty = document.createElement('p');
+                empty.className = 'shelf-panel-empty';
+                empty.textContent = 'Nothing shelved yet.';
+                body.appendChild(empty);
+                return;
+            }
+
+            items.forEach(function(item) {
+                var row = document.createElement('div');
+                row.className = 'shelf-item';
+
+                var link = document.createElement('a');
+                link.className = 'shelf-item-link';
+                link.href = item.url;
+
+                var type = document.createElement('span');
+                type.className = 'shelf-item-type';
+                type.textContent = ShelfManager.getTypeLabel(item.type);
+
+                var title = document.createElement('span');
+                title.className = 'shelf-item-title';
+                title.textContent = item.title;
+
+                link.appendChild(type);
+                link.appendChild(title);
+
+                var removeBtn = document.createElement('button');
+                removeBtn.className = 'shelf-item-remove';
+                removeBtn.setAttribute('aria-label', 'Remove ' + item.title + ' from shelf');
+                removeBtn.dataset.shelfUrl = item.url;
+                removeBtn.textContent = '×';
+
+                row.appendChild(link);
+                row.appendChild(removeBtn);
+                body.appendChild(row);
+            });
+        }
+
+        function openPanel() {
+            overlay.classList.add('open');
+            indicator.setAttribute('aria-expanded', 'true');
+            renderPanel();
+        }
+
+        function closePanel() {
+            overlay.classList.remove('open');
+            indicator.setAttribute('aria-expanded', 'false');
+        }
+
+        indicator.addEventListener('click', openPanel);
+        closeBtn.addEventListener('click', closePanel);
+
+        overlay.addEventListener('click', function(event) {
+            if (event.target === overlay) closePanel();
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && overlay.classList.contains('open')) closePanel();
+        });
+
+        body.addEventListener('click', function(event) {
+            var removeBtn = event.target.closest('.shelf-item-remove');
+            if (!removeBtn) return;
+            shelf.remove(removeBtn.dataset.shelfUrl);
+            renderPanel();
+        });
+
+        window.addEventListener('shelf:change', function() {
+            renderIndicator();
+            if (overlay.classList.contains('open')) renderPanel();
+        });
+
+        renderIndicator();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

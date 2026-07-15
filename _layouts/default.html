@@ -62,12 +62,16 @@
 <body class="{{ page.layout }}-layout">
     {% include header.html %}
 
-    <!-- Load reading progress tracker for homepage card -->
-    <script src="{{ '/assets/js/reading-progress.js' | relative_url }}"></script>
+    <script src="{{ '/assets/js/shelf.js' | relative_url }}"></script>
 
     <main class="container">
         {{ content }}
     </main>
+
+    {% assign shelfable_layouts = "post,guide,resource,case-study" | split: "," %}
+    {% if shelfable_layouts contains page.layout %}
+    {% include shelf-button.html %}
+    {% endif %}
 
     {% include footer.html %}
 </body>

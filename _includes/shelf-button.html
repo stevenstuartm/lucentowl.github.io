@@ -1,0 +1,48 @@
+<!-- Shelf Button (floating, content pages only) -->
+<button class="shelf-button" id="shelfButton"
+        data-shelf-url="{{ page.url | relative_url }}"
+        data-shelf-title="{{ page.title | escape }}"
+        data-shelf-type="{{ page.collection }}"
+        aria-label="Save to shelf" aria-pressed="false">
+    <svg class="shelf-button-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"></path>
+    </svg>
+</button>
+
+<script>
+(function() {
+    function init() {
+        var btn = document.getElementById('shelfButton');
+        if (!btn || typeof ShelfManager === 'undefined') return;
+
+        var shelf = new ShelfManager();
+        var item = {
+            url: btn.dataset.shelfUrl,
+            title: btn.dataset.shelfTitle,
+            type: btn.dataset.shelfType
+        };
+
+        function render() {
+            var shelved = shelf.isShelved(item.url);
+            btn.classList.toggle('shelved', shelved);
+            btn.setAttribute('aria-pressed', String(shelved));
+            btn.setAttribute('aria-label', shelved ? 'Remove from shelf' : 'Save to shelf');
+        }
+
+        btn.addEventListener('click', function() {
+            shelf.toggle(item);
+            render();
+        });
+
+        window.addEventListener('shelf:change', render);
+
+        render();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

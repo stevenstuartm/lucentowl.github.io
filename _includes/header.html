@@ -7,6 +7,12 @@
                     <span class="site-name">Lucent Owl</span>
                 </a>
             </h1>
+            <button class="shelf-indicator" id="shelfIndicator" aria-label="Open shelf" aria-haspopup="dialog" aria-expanded="false">
+                <svg class="shelf-indicator-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"></path>
+                </svg>
+                <span class="shelf-badge" id="shelfBadge">0</span>
+            </button>
             <button class="hamburger" aria-label="Toggle menu" aria-expanded="false">
                 <span></span>
                 <span></span>
@@ -25,6 +31,8 @@
         </div>
     </div>
 </header>
+
+{% include shelf-panel.html %}
 
 <script>
     (function() {
