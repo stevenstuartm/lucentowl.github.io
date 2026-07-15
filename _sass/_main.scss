@@ -283,6 +283,10 @@ body.home-layout .site-title a:hover .site-name {
         align-items: center;
         gap: 0;
         justify-content: center;
+        z-index: auto; /* the mobile-dropdown z-index (1000) otherwise carries
+                           over here; grid items apply z-index even at
+                           position:static, so it would sit above and
+                           swallow clicks meant for .shelf-indicator */
     }
 
     .site-nav {
