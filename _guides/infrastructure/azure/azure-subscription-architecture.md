@@ -3,8 +3,8 @@ title: "Azure Subscription & Tenant Architecture"
 layout: guide
 category: Azure
 subcategory: Subscription & Resource Organization
-description: "How Azure's organizational hierarchy works from Entra ID tenants through management groups, subscriptions, and resource groups, including design patterns for multi-subscription environments, workload isolation, and environment separation."
-tags: [infrastructure, azure, governance, architecture, scalability, fundamentals]
+description: "How Azure's organizational hierarchy works from Entra ID tenants through management groups, subscriptions, and resource groups, including design patterns for multi-subscription and multi-resource-group environments, workload isolation, environment separation, and how Azure Landing Zones implement this hierarchy end-to-end."
+tags: [landing-zones, management-groups, subscriptions, resource-groups, governance, fundamentals]
 ---
 
 ## What Is Azure's Organizational Hierarchy
@@ -100,7 +100,7 @@ Most organizations use a single Entra ID tenant. Multi-tenant configurations are
 
 [Management groups](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview){:target="_blank" rel="noopener noreferrer"} sit between the tenant and subscriptions in the hierarchy. They allow you to apply Azure Policy and RBAC role assignments at a scope above individual subscriptions, so governance decisions cascade down to every subscription underneath.
 
-Every Entra ID tenant has a single **root management group** created automatically. All other management groups and subscriptions nest beneath it, up to six levels deep (root plus five additional levels).
+Every Entra ID tenant has a single **root management group** created automatically. All other management groups and subscriptions nest beneath it, up to six levels deep. That six-level limit counts neither the root level nor the subscription level, so the usable depth is root plus six. A single directory supports up to 10,000 management groups.
 
 ### Why Management Groups Exist
 
@@ -172,14 +172,7 @@ Subscriptions serve three roles simultaneously:
 
 #### Pattern 1: Environment-Based Subscriptions
 
-Separate subscriptions for each environment (development, testing, staging, production).
-
-```
-├── sub-prod
-├── sub-staging
-├── sub-dev
-└── sub-sandbox
-```
+Separate subscriptions for each environment: `sub-prod`, `sub-staging`, `sub-dev`, and `sub-sandbox`.
 
 **When to use:** Teams that need clear cost separation by environment, different RBAC assignments per environment (developers get Contributor on dev but Reader on prod), and different policies per environment (prod requires encryption, dev allows more flexibility).
 
@@ -187,16 +180,7 @@ Separate subscriptions for each environment (development, testing, staging, prod
 
 #### Pattern 2: Workload-Based Subscriptions
 
-Separate subscriptions per application or workload, regardless of environment.
-
-```
-├── sub-webapp
-│   (prod + dev resources for the web app)
-├── sub-dataplatform
-│   (prod + dev resources for data services)
-└── sub-shared-services
-    (DNS, monitoring, networking hub)
-```
+Separate subscriptions per application or workload, regardless of environment: `sub-webapp` (prod and dev resources for the web app), `sub-dataplatform` (prod and dev resources for data services), and `sub-shared-services` (DNS, monitoring, networking hub).
 
 **When to use:** When different workloads have different compliance requirements, cost ownership, or team boundaries. Useful when workloads need strong blast-radius isolation.
 
@@ -204,15 +188,7 @@ Separate subscriptions per application or workload, regardless of environment.
 
 #### Pattern 3: Combined (Environment + Workload)
 
-Separate subscriptions by both environment and workload.
-
-```
-├── sub-webapp-prod
-├── sub-webapp-dev
-├── sub-dataplatform-prod
-├── sub-dataplatform-dev
-└── sub-shared-services
-```
+Separate subscriptions by both environment and workload: `sub-webapp-prod`, `sub-webapp-dev`, `sub-dataplatform-prod`, `sub-dataplatform-dev`, and `sub-shared-services`.
 
 **When to use:** Enterprise environments that need both workload isolation and environment isolation. This is the most common pattern at scale and aligns with the Azure Landing Zone reference architecture.
 
@@ -224,14 +200,15 @@ Azure enforces [per-subscription quotas](https://learn.microsoft.com/en-us/azure
 
 Examples of common default quotas:
 
-| Resource | Default Limit (per subscription per region) |
-|----------|---------------------------------------------|
-| Virtual Machines (per VM series) | 10-350 vCPUs depending on series |
-| Virtual Networks | 1,000 |
-| Storage Accounts | 250 |
-| Public IP Addresses | 1,000 |
-| Network Security Groups | 5,000 |
-| Azure SQL Databases | 500 per server |
+| Resource | Default Limit |
+|----------|---------------|
+| Virtual Machines (per VM series) | 10-350 vCPUs per subscription per region, depending on series |
+| Virtual Networks | 1,000 per subscription per region |
+| Storage Accounts | 250 per subscription per region (500 by request) |
+| Public IP Addresses | Varies by offer type: 1,000 on Enterprise Agreement, 20 on pay-as-you-go |
+| Network Security Groups | 5,000 per subscription per region |
+| Azure SQL logical servers | 250 per subscription per region |
+| Azure SQL Databases | 5,000 per logical server |
 
 When a workload's resource needs approach subscription limits, splitting into additional subscriptions is the standard mitigation. This is another driver of multi-subscription architectures.
 
@@ -239,7 +216,7 @@ When a workload's resource needs approach subscription limits, splitting into ad
 
 Multiple subscriptions introduce cross-subscription concerns that must be addressed:
 
-- **Networking**: VNets in different subscriptions communicate through [VNet peering](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview){:target="_blank" rel="noopener noreferrer"} or through a hub-and-spoke topology using a shared connectivity subscription. Peering works within and across subscriptions within the same tenant.
+- **Networking**: VNets in different subscriptions communicate through [VNet peering](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview){:target="_blank" rel="noopener noreferrer"} or through a hub-and-spoke topology using a shared connectivity subscription. Peering works across subscriptions, and across tenants as well once the trust configuration is in place.
 - **Shared services**: Resources like DNS zones, container registries, monitoring workspaces, and Key Vaults often live in a shared-services subscription accessible by other subscriptions.
 - **RBAC**: Role assignments at the management group level cascade to all subscriptions beneath, which simplifies access management across multiple subscriptions.
 - **Resource moves**: Some resources can be [moved between subscriptions](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/move-support-resources){:target="_blank" rel="noopener noreferrer"}, but not all. Check move support before assuming a resource can be relocated.
@@ -270,15 +247,7 @@ Resource groups are more than organizational folders. They serve as:
 
 #### Pattern 1: Lifecycle-Based Grouping
 
-Group resources that share the same lifecycle (created, updated, and deleted together).
-
-```
-rg-webapp-prod
-├── App Service Plan
-├── App Service
-├── Application Insights
-└── Key Vault (app-specific secrets)
-```
+Group resources that share the same lifecycle (created, updated, and deleted together), such as `rg-webapp-prod` holding the App Service Plan, App Service, Application Insights, and a Key Vault for app-specific secrets.
 
 **When to use:** This is the default recommendation. Resources that deploy together and are managed as a unit belong in the same resource group.
 
@@ -286,17 +255,10 @@ rg-webapp-prod
 
 Group resources by type (all databases together, all networking together).
 
-```
-rg-databases-prod
-├── SQL Server
-├── SQL Database
-└── Cosmos DB Account
-
-rg-networking-prod
-├── Virtual Network
-├── NSGs
-└── Application Gateway
-```
+| Resource Group | Contents |
+|---|---|
+| `rg-databases-prod` | SQL Server, SQL Database, Cosmos DB Account |
+| `rg-networking-prod` | Virtual Network, NSGs, Application Gateway |
 
 **When to use:** When infrastructure teams manage specific resource types (networking team manages all VNets, database team manages all databases). Aligns RBAC with team responsibilities.
 
@@ -306,22 +268,11 @@ rg-networking-prod
 
 Group resources by application component (frontend, backend, data tier).
 
-```
-rg-webapp-frontend-prod
-├── CDN Profile
-├── Static Web App
-└── Front Door
-
-rg-webapp-backend-prod
-├── App Service
-├── API Management
-└── Service Bus
-
-rg-webapp-data-prod
-├── SQL Database
-├── Redis Cache
-└── Storage Account
-```
+| Resource Group | Contents |
+|---|---|
+| `rg-webapp-frontend-prod` | CDN Profile, Static Web App, Front Door |
+| `rg-webapp-backend-prod` | App Service, API Management, Service Bus |
+| `rg-webapp-data-prod` | SQL Database, Redis Cache, Storage Account |
 
 **When to use:** When different teams own different tiers of the same application and need separate RBAC boundaries and deployment scopes.
 

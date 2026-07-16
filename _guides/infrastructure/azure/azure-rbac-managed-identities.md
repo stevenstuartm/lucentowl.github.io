@@ -3,8 +3,8 @@ title: "Azure RBAC & Managed Identities"
 layout: guide
 category: Azure
 subcategory: Identity & Access Management
-description: "How Azure Role-Based Access Control works across the resource hierarchy, including built-in and custom roles, role assignment scope, Managed Identities for workload authentication, and Privileged Identity Management for just-in-time access."
-tags: [infrastructure, azure, security, access-control, architecture, practical]
+description: "How Azure Role-Based Access Control works across the resource hierarchy, including built-in and custom roles, role assignment scope, Managed Identities and workload identity federation for credential-free authentication, and Privileged Identity Management for just-in-time access."
+tags: [rbac, managed-identity, workload-identity, entra-id, pim, access-control, practical]
 ---
 
 ## What Is Azure RBAC
@@ -13,15 +13,11 @@ tags: [infrastructure, azure, security, access-control, architecture, practical]
 
 ### How RBAC Works
 
-Every RBAC role assignment is a combination of three elements:
-
-```
-Role Assignment = Security Principal + Role Definition + Scope
-```
+Every RBAC role assignment combines three elements: who is requesting access, what they can do, and where the permission applies.
 
 **Security principal** is the identity requesting access. This can be a user, a group, a service principal, or a Managed Identity.
 
-**Role definition** is a collection of permissions. Each permission specifies allowed or denied actions on Azure resource types. Azure provides over 300 built-in roles, and you can create custom roles.
+**Role definition** is a collection of permissions. Each permission specifies allowed or denied actions on Azure resource types. Azure provides hundreds of built-in roles, and you can create custom roles.
 
 **Scope** is the level in the resource hierarchy where the role assignment applies. Scopes follow the Azure hierarchy: management group, subscription, resource group, or individual resource.
 
@@ -29,16 +25,9 @@ Role Assignment = Security Principal + Role Definition + Scope
 
 Role assignments inherit downward through the hierarchy. A role assigned at a management group applies to every subscription, resource group, and resource beneath it. A role assigned at a subscription applies to all resource groups and resources within it.
 
-```
-Management Group (Reader assigned here)
-└── Subscription (Reader inherited)
-    └── Resource Group (Reader inherited)
-        └── Resource (Reader inherited)
-```
+This inheritance is additive. If a user has Reader at the subscription level and Contributor on a specific resource group, they can read everything in the subscription and modify resources in that one resource group. Permissions accumulate. They are never subtracted by a lower-scope assignment.
 
-This inheritance is additive. If a user has Reader at the subscription level and Contributor on a specific resource group, they can read everything in the subscription and modify resources in that one resource group. Permissions accumulate; they are never subtracted by a lower-scope assignment.
-
-**Deny assignments** are the exception. Deny assignments explicitly block specific actions and override allow assignments. However, deny assignments cannot be created directly by users. They are created by Azure Blueprints and certain Azure managed applications to protect resources from modification.
+**Deny assignments** are the exception. Deny assignments explicitly block specific actions and override allow assignments. You cannot create one directly; Azure creates and owns them all. The path you are most likely to meet is specifying deny settings on a [deployment stack](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deployment-stacks){:target="_blank" rel="noopener noreferrer"}, which generates a deny assignment protecting that stack's managed resources from deletion or modification. Certain Azure managed applications create them as well. Azure Blueprints was the older mechanism here, but it is being retired, with deployment stacks as the replacement, so treat any Blueprints-created deny assignments you find in an existing estate as something to migrate.
 
 ---
 
@@ -83,7 +72,7 @@ Azure distinguishes between management plane operations (creating, configuring, 
 
 **Data plane** operations go directly to the resource. For example, reading a blob in a storage account or querying a SQL database are data plane operations.
 
-This distinction matters because Contributor on a storage account does not grant the ability to read blob data. You need a data plane role like Storage Blob Data Reader for that. Conversely, Storage Blob Data Contributor does not grant the ability to delete the storage account itself.
+Contributor on a storage account does not grant the ability to read blob data. You need a data plane role like Storage Blob Data Reader for that. Conversely, Storage Blob Data Contributor does not grant the ability to delete the storage account itself.
 
 **Common confusion:** A developer with Contributor on a resource group can create a storage account but cannot read the blobs inside it without an additional data plane role assignment. This is intentional separation of duties.
 
@@ -119,7 +108,7 @@ A custom role definition specifies:
 
 ### Custom Role Red Flags
 
-- **Creating custom roles before checking built-in roles**: Azure has over 300 built-in roles. Most access requirements can be met without custom roles.
+- **Creating custom roles before checking built-in roles**: Azure has hundreds of built-in roles. Most access requirements can be met without custom roles.
 - **Overly broad custom roles**: A custom role with `*/read` and `*/write` is just Contributor with extra steps. Custom roles should be narrower than the built-in alternatives.
 - **Custom roles with wildcard actions**: Using `Microsoft.Compute/*` grants all compute actions including ones you may not intend. Be explicit about which actions are needed.
 - **Orphaned custom roles**: Custom roles that are no longer assigned to anyone but still exist create confusion during audits.
@@ -138,16 +127,21 @@ This approach has well-known problems: credentials can leak, they need to be rot
 
 ### How Managed Identities Work
 
+Enabling a Managed Identity on an Azure resource is a one-time setup step: Azure creates a corresponding service principal in Entra ID for that identity automatically.
+
+At runtime, the application exchanges that identity for a token on every call:
+
 ```
-1. Azure resource (VM, App Service, Function) has a Managed Identity enabled
-2. Azure creates a service principal in Entra ID for that identity
-3. Application code requests a token from the Azure Instance Metadata Service (IMDS)
-4. Azure issues a token scoped to the target resource
-5. Application uses the token to authenticate to the target service
-6. No credentials are stored, managed, or rotated by the developer
+Application (VM / App Service / Function)
+   ↓ 1. request token
+Instance Metadata Service (IMDS)
+   ↓ 2. token scoped to target resource
+Application
+   ↓ 3. present token
+Target Azure Service (Key Vault, Storage, SQL, ...)
 ```
 
-The token request happens locally on the resource (via the metadata endpoint at `169.254.169.254` for VMs or an environment variable for App Service/Functions). No network call to Entra ID is needed from the application's perspective; Azure handles it transparently.
+The token request happens locally on the resource, via the metadata endpoint at `169.254.169.254` for VMs or an environment variable for App Service/Functions. No network call to Entra ID is needed from the application's perspective. Azure handles it transparently, and no credentials are ever stored, managed, or rotated by the developer.
 
 ### System-Assigned vs. User-Assigned
 
@@ -224,12 +218,18 @@ Managed Identities only work for code running on Azure compute resources. For sc
 
 [Workload identity federation](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation){:target="_blank" rel="noopener noreferrer"} allows external workloads to authenticate to Entra ID without storing secrets. Instead of a client secret or certificate, the external workload presents a token from its own identity provider (GitHub, AWS, GCP, Kubernetes), and Entra ID trusts that token through a configured federation relationship.
 
-**How it works:**
-1. Create an app registration in Entra ID
-2. Configure a federated credential that trusts tokens from the external identity provider (e.g., GitHub Actions OIDC)
-3. The external workload requests a token from its identity provider
-4. The workload exchanges that token for an Entra ID access token
-5. The workload uses the Entra ID token to access Azure resources
+Setting it up means creating an app registration in Entra ID and configuring a federated credential that trusts tokens from the external identity provider (for example, GitHub Actions OIDC). At runtime, the exchange looks like this:
+
+```
+External Identity Provider (GitHub, AWS, Kubernetes)
+   ↓ 1. issues provider token (OIDC/STS)
+External Workload
+   ↓ 2. presents provider token, requests an Entra ID token
+Entra ID (validates against the configured federated credential)
+   ↓ 3. issues Entra ID access token
+External Workload
+   ↓ 4. authenticates to Azure resource with the Entra ID token
+```
 
 **Common federation scenarios:**
 - **GitHub Actions**: OIDC tokens from GitHub workflows authenticate to Azure without storing Azure credentials as GitHub secrets
@@ -256,7 +256,7 @@ When federation is not possible, service principals authenticate with:
 
 [Privileged Identity Management](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure){:target="_blank" rel="noopener noreferrer"} provides just-in-time (JIT) and time-limited access to privileged roles. Instead of permanently assigning powerful roles like Owner or Contributor, PIM makes users eligible for the role. When they need it, they activate the role for a limited duration (typically 1-8 hours), optionally with approval and justification requirements.
 
-PIM requires Entra ID P2 licensing.
+PIM requires Entra ID P2 or Entra ID Governance licensing, and the license is needed for every user who is eligible for a role, approves activations, or performs access reviews.
 
 ### Why PIM Matters
 
@@ -293,14 +293,7 @@ PIM also manages Entra ID directory roles like Global Administrator, User Admini
 
 ### Pattern 1: Group-Based Role Assignments
 
-Assign RBAC roles to Entra ID groups rather than individual users. When a user joins or leaves a team, you add or remove them from the group instead of modifying role assignments on Azure resources.
-
-```
-Entra ID Group: "sg-webapp-developers"
-  └── Role Assignment: Contributor on rg-webapp-dev
-  └── Role Assignment: Reader on rg-webapp-prod
-  └── Role Assignment: Key Vault Secrets User on kv-webapp-prod
-```
+Assign RBAC roles to Entra ID groups rather than individual users. When a user joins or leaves a team, you add or remove them from the group instead of modifying role assignments on Azure resources. An Entra ID group like `sg-webapp-developers` might hold Contributor on `rg-webapp-dev`, Reader on `rg-webapp-prod`, and Key Vault Secrets User on `kv-webapp-prod`.
 
 Group-based assignments scale better, are easier to audit, and align with how organizations manage team membership.
 
@@ -326,9 +319,9 @@ Break-glass accounts should have strong, unique passwords stored in a physical s
 ## Key Takeaways
 
 - Azure RBAC combines three elements: a security principal (who), a role definition (what), and a scope (where). Role assignments inherit downward through the management group, subscription, resource group, and resource hierarchy.
-- Use built-in roles whenever possible (Azure has over 300). Create custom roles only when no built-in role matches and you need a narrower permission set.
-- Management plane and data plane are separate. Contributor on a storage account does not grant the ability to read blobs; you need a data plane role like Storage Blob Data Reader.
+- Use built-in roles whenever possible (Azure has hundreds). Create custom roles only when no built-in role matches and you need a narrower permission set.
+- Management plane and data plane are separate. Contributor on a storage account does not grant the ability to read blobs. You need a data plane role like Storage Blob Data Reader.
 - Managed Identities eliminate credentials for Azure-hosted workloads. System-assigned identities are simpler; user-assigned identities are better for shared access and IaC scenarios where resources are recreated.
 - For workloads outside Azure (CI/CD pipelines, on-premises, multi-cloud), use workload identity federation to avoid storing secrets. Use certificates over client secrets when federation is not available.
-- Privileged Identity Management provides just-in-time access for sensitive roles. No identity should have permanent Owner or Global Administrator; use eligible assignments with activation requirements instead.
+- Privileged Identity Management provides just-in-time access for sensitive roles. No identity should have permanent Owner or Global Administrator. Use eligible assignments with activation requirements instead.
 - Assign roles to groups, not individuals. Scope assignments as narrowly as possible. Maintain break-glass accounts excluded from Conditional Access.

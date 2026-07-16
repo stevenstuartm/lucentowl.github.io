@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Architecture Principles
 description: "The five pillars of the Azure Well-Architected Framework and how they guide architectural decision-making for building reliable, secure, cost-effective, and high-performing cloud workloads."
-tags: [infrastructure, azure, best-practices, framework, architecture, reference]
+tags: [well-architected, architecture, trade-offs, reliability, cost-optimization, fundamentals]
 ---
 
 ## What Is the Azure Well-Architected Framework
@@ -114,7 +114,7 @@ Right-size resources based on actual utilization data from Azure Monitor and Azu
 
 **Example Decisions:**
 - Purchasing Azure Reservations for steady-state VMs and databases
-- Using Azure Functions (Consumption plan) instead of always-on VMs for infrequent tasks
+- Using Azure Functions (Flex Consumption plan) instead of always-on VMs for infrequent tasks
 - Implementing auto-scaling to scale down during low-traffic periods
 - Moving infrequently accessed blobs to Cool or Archive tiers with lifecycle policies
 - Using Azure Spot VMs for batch processing and CI/CD agents
@@ -245,18 +245,13 @@ Every architectural decision involves trade-offs. Optimizing for one pillar ofte
 
 ### Common Trade-Offs
 
-<div class="callout callout--note">
-<p class="callout__title">Understanding Trade-Offs</p>
-<p>Every optimization improves some pillars while compromising others. The framework helps you make intentional trade-offs based on your specific business requirements.</p>
-</div>
-
 | Optimization | Gain | Trade-Off |
 |--------------|------|-----------|
 | Zone-redundant deployments (SQL Database, AKS, App Service) | **Reliability:** Survive availability zone failures | **Cost:** Pay for resources across zones<br>**Performance:** Slight latency for synchronous replication |
 | Managed Identities instead of connection strings | **Security:** No secrets to rotate or leak<br>**Operational Excellence:** Fewer credentials to manage | **Complexity:** Requires understanding of Entra ID and RBAC model |
-| Azure Functions (Consumption plan) instead of always-on VMs | **Cost:** Pay only for execution time<br>**Operational Excellence:** No server management | **Performance:** Cold start latency<br>**Reliability:** Execution time limits (10 minutes default) |
+| Azure Functions (Flex Consumption plan) instead of always-on VMs | **Cost:** Pay only for execution time<br>**Operational Excellence:** No server management | **Performance:** Cold start latency when scaled to zero<br>**Reliability:** Work that must outlive an instance needs Durable Functions or a different host |
 | Azure Front Door with WAF | **Performance:** Global edge acceleration<br>**Security:** DDoS and application-layer protection | **Cost:** Per-request pricing adds up at scale<br>**Operational Excellence:** WAF rule tuning requires ongoing attention |
-| Azure Reservations or Savings Plans | **Cost:** 40-72% savings vs. pay-as-you-go | **Flexibility:** Committed capacity may not match changing needs |
+| Azure Reservations or Savings Plans | **Cost:** Up to 72% savings vs. pay-as-you-go for reservations, up to 65% for savings plans | **Flexibility:** Committed capacity may not match changing needs |
 | Multi-region deployment with Traffic Manager | **Reliability:** Survive entire region failures<br>**Performance:** Lower latency for global users | **Cost:** Resources in multiple regions<br>**Operational Excellence:** More complex deployments and data synchronization |
 | Private Endpoints for all PaaS services | **Security:** Resources not exposed to public internet | **Cost:** Per-endpoint pricing<br>**Operational Excellence:** DNS configuration complexity increases |
 
@@ -304,13 +299,13 @@ The framework guides service selection by mapping workload requirements to the f
 |--------|----------------|----------------|-----------------|
 | **Reliability** | Auto-scaling, built-in retry | Auto-scaling with KEDA, self-healing | Must implement auto-scaling and health checks |
 | **Security** | Managed Identity, VNet integration | Managed Identity, built-in ingress | Must configure NSGs and patching |
-| **Cost** | Pay per execution (Consumption plan) | Pay for running time, scale to zero | Always-on cost or scaling complexity |
+| **Cost** | Pay per execution (Flex Consumption plan) | Pay for running time, scale to zero | Always-on cost or scaling complexity |
 | **Operational Excellence** | No server management | Managed container runtime, Dapr integration | Manage OS, patching, runtime |
-| **Performance** | Cold starts, 10-minute default timeout | No execution time limits, custom scaling rules | Dedicated resources, full control |
+| **Performance** | Cold starts when scaled to zero, 30-minute default timeout | No execution time limits, custom scaling rules | Dedicated resources, full control |
 
 **Decision:**
-- Short-lived, event-driven processing (<10 minutes): **Azure Functions**
-- Long-running containerized workloads or microservices: **Container Apps**
+- Event-driven processing that fits the Functions programming model: **Azure Functions**
+- Workloads needing control of the container image, or long-running microservices: **Container Apps**
 - GPU processing or highly specific OS/hardware configurations: **Virtual Machines**
 
 ---
@@ -330,4 +325,4 @@ The Well-Architected Framework focuses on **individual workload quality**. For b
 - **[Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/){:target="_blank" rel="noopener noreferrer"}**: Portfolio-level cloud strategy, migration planning, and organizational readiness. Use this for deciding what to move to Azure and how to organize your cloud estate.
 - **[Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/){:target="_blank" rel="noopener noreferrer"}**: Reference architectures, design patterns, and best practices for specific workload types. Use this for concrete implementation blueprints.
 
-The Well-Architected Framework sits between these: it guides the quality of individual workloads once you've decided to build them on Azure.
+The Well-Architected Framework sits between these in scope, guiding the quality of individual workloads once you've decided to build them on Azure.

@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Networking & Content Delivery
 description: "VNet fundamentals for architects including subnets, NSGs, Application Security Groups, route tables, NAT Gateway, and multi-VNet patterns for building secure and scalable network architectures on Azure."
-tags: [infrastructure, azure, networking, security, scalability, practical]
+tags: [vnet, nsg, nat-gateway, private-endpoints, hub-spoke, vnet-peering, practical]
 ---
 
 ## What Is a Virtual Network
@@ -45,6 +45,27 @@ Architects familiar with AWS should note several important differences:
 ---
 
 ## Core VNet Components
+
+Most of what follows attaches to either a subnet or a NIC, and which one determines what a control can express. This is the map:
+
+```
+VNet  (regional; address space 10.0.0.0/16)
+│
+├── Subnet: frontend  10.0.1.0/24
+│     ├── NSG           0 or 1     one NSG can serve many subnets
+│     ├── Route table   0 or 1     holds UDRs; can serve many subnets
+│     ├── NAT Gateway   0 or 1     one gateway can serve many subnets
+│     └── Delegation    0 or 1     locks the subnet to one PaaS service
+│
+└── Subnet: app  10.0.2.0/24
+      ├── NSG           0 or 1
+      │
+      └── NIC (VM)  10.0.2.4
+            ├── NSG     0 or 1     evaluated with the subnet NSG, not instead of it
+            └── ASGs    0 or many  named in NSG rules as source/destination
+```
+
+The asymmetry drives much of what follows. NSGs are the only control that attaches at both levels, which is why their evaluation order needs its own explanation below. Route tables, NAT Gateways, and delegation attach to subnets only, so each one is a decision you make for every resource in the subnet at once. ASGs attach to NICs only, and they are never attached to an NSG at all. Rules reference them by name.
 
 ### Address Space
 
@@ -183,17 +204,21 @@ The `VirtualNetwork` service tag includes the VNet address space, all connected 
 
 ### NSG Evaluation: Subnet vs NIC
 
-When an NSG is applied at both the subnet and the NIC, both must allow the traffic for it to flow. The evaluation order differs by direction:
+When an NSG is applied at both the subnet and the NIC, both must allow the traffic for it to flow. The order they run in reverses with direction:
 
-**Inbound traffic:**
-1. Subnet NSG evaluates first
-2. If the subnet NSG allows the traffic, the NIC NSG evaluates next
-3. Traffic is allowed only if both NSGs allow it
+```
+INBOUND  (source → VM)              OUTBOUND  (VM → destination)
 
-**Outbound traffic:**
-1. NIC NSG evaluates first
-2. If the NIC NSG allows the traffic, the subnet NSG evaluates next
-3. Traffic is allowed only if both NSGs allow it
+   source                              VM
+     ↓                                  ↓
+  Subnet NSG ──deny──→ dropped       NIC NSG ──deny──→ dropped
+     ↓ allow                            ↓ allow
+  NIC NSG ──deny──→ dropped          Subnet NSG ──deny──→ dropped
+     ↓ allow                            ↓ allow
+    VM                               destination
+```
+
+The NSG closest to the VM is always the last one an inbound packet crosses and the first one an outbound packet crosses. Either way both must allow the traffic, so the order does not change *whether* a packet gets through. What it changes is which NSG records the deny, and that is exactly what you are reading when you go to the flow logs to find out why traffic disappeared.
 
 **Best practice:** Apply NSGs at the subnet level for broad rules that apply to all resources in a subnet, and at the NIC level only when specific resources need different rules from their subnet peers. Many organizations use subnet-level NSGs exclusively to avoid complexity.
 
@@ -244,6 +269,8 @@ When an NSG is applied at both the subnet and the NIC, both must allow the traff
 ### What ASGs Solve
 
 [Application Security Groups](https://learn.microsoft.com/en-us/azure/virtual-network/application-security-groups){:target="_blank" rel="noopener noreferrer"} (ASGs) provide logical grouping of VMs and NICs for use in NSG rules. Instead of writing NSG rules with IP addresses or CIDR ranges, you reference ASGs as sources and destinations. This is conceptually similar to using AWS Security Groups as sources in other Security Group rules.
+
+**ASGs are VNet-scoped.** An ASG groups NICs within a single virtual network, not across a subscription or a peered topology. Establish that up front, because it bounds the design: an ASG cannot express "all web servers everywhere," only "all web servers in this VNet." In a hub-and-spoke estate, that means per-VNet ASGs and per-VNet rules rather than one global grouping.
 
 **Without ASGs:**
 - NSG rules reference specific IP addresses or CIDR ranges
@@ -338,7 +365,7 @@ Forced tunneling redirects all internet-bound traffic (`0.0.0.0/0`) from a subne
 
 <div class="callout callout--tip">
 <p class="callout__title">Azure Firewall vs NVA</p>
-<p>Azure Firewall is Microsoft's managed firewall service that eliminates the operational overhead of managing NVA instances. For most organizations, Azure Firewall is the recommended choice over third-party NVAs unless you have specific feature requirements that only a third-party product satisfies. See the <a href="/study-guides/infrastructure/azure/azure-firewall-ddos.html">Firewall & DDoS Protection</a> guide for details.</p>
+<p>Azure Firewall is Microsoft's managed firewall service that eliminates the operational overhead of managing NVA instances. For most organizations, Azure Firewall is the recommended choice over third-party NVAs unless you have specific feature requirements that only a third-party product satisfies.</p>
 </div>
 
 ---
@@ -351,24 +378,42 @@ Forced tunneling redirects all internet-bound traffic (`0.0.0.0/0`) from a subne
 
 ### Why NAT Gateway Matters
 
-Azure is deprecating default outbound internet access for new VMs and scale sets. Starting in late 2025, new resources will not have implicit outbound connectivity. Explicit outbound connectivity through NAT Gateway, Azure Firewall, or a public IP on the resource itself becomes required.
+Azure is retiring default outbound internet access, and the mechanism is easy to over- or under-react to.
+
+The change lands at the subnet level, not the VM level. In API versions released after March 31, 2026, subnets in **new** virtual networks default to private (`defaultOutboundAccess = false`), so VMs in them cannot reach public endpoints without an explicit outbound method. The Azure portal already defaulted to private subnets ahead of that. Existing virtual networks are untouched: VMs in them, including newly created ones, keep getting default outbound IPs until you make the subnet private yourself. You can still explicitly create nonprivate subnets if something genuinely depends on the old behavior.
+
+The practical upshot is that new environments need explicit outbound connectivity through NAT Gateway, Azure Firewall, or a public IP on the resource, and older IaC pinned to earlier API versions will keep silently getting the old behavior until it is updated.
 
 Even before this change, NAT Gateway is preferred over other outbound options because it avoids SNAT port exhaustion, a common problem when many VMs share Azure Load Balancer's outbound rules.
 
 ### How NAT Gateway Works
 
-- NAT Gateway is associated with one or more subnets
+- NAT Gateway is associated with one or more subnets, and becomes the default next hop for their internet-bound traffic with no route configuration required
 - All outbound traffic from associated subnets uses the NAT Gateway's public IP(s)
-- Supports up to 16 public IP addresses (providing up to 1,024,000 concurrent SNAT ports)
-- Provides 50 Gbps of throughput per public IP
-- Idle timeout is configurable from 4 to 120 minutes (default 4 minutes)
-- Fully managed and zone-redundant (no need to deploy per-zone like AWS)
+- Supports up to 16 public IP addresses, each providing 64,512 SNAT ports, so a single gateway scales past a million SNAT ports
+- TCP idle timeout is configurable from 4 to 120 minutes (default 4 minutes). UDP is fixed at 4 minutes
+- Cannot be attached to a `GatewaySubnet`, and each subnet can have at most one NAT Gateway
+
+### SKUs and Zone Resiliency
+
+This is the detail that most often gets designed wrong, because the two SKUs behave differently under zone failure:
+
+| Aspect | Standard | StandardV2 |
+|--------|----------|------------|
+| **Availability zones** | **Zonal.** Deployed into one zone and resilient only within it | **Zone-redundant by default**, spanning zones in the region |
+| **Throughput** | 50 Gbps per gateway resource, split 25 Gbps outbound / 25 Gbps inbound | 100 Gbps per gateway resource |
+| **IP support** | IPv4 only, Standard public IPs | IPv4 and IPv6, requires StandardV2 public IPs |
+| **Packets per second** | Up to 5 million | Up to 10 million |
+
+A Standard NAT Gateway is **not** zone-redundant. If you deploy one without specifying a zone, it is *nonzonal*, meaning Azure picks the zone for you and a failure in that zone takes out outbound connectivity for every attached subnet, including VMs sitting in healthy zones. Microsoft explicitly recommends against nonzonal deployment for this reason.
+
+For zone-resilient outbound, use **StandardV2**. If you are pinned to the Standard SKU, the alternative is a zonal stack per zone: a separate subnet, a zonal NAT Gateway, and VMs placed in the matching zone. Note that you cannot upgrade Standard to StandardV2 in place; it requires a redeploy onto new StandardV2 public IPs.
 
 ### NAT Gateway vs Other Outbound Options
 
 | Outbound Method | SNAT Ports | Throughput | Management | Cost |
 |----------------|------------|------------|------------|------|
-| **NAT Gateway** | Up to 64,000 per IP per destination | 50 Gbps per IP | Managed, zone-redundant | Hourly + per-GB data processed |
+| **NAT Gateway** | 64,512 per public IP | 50 Gbps (Standard) / 100 Gbps (StandardV2) per gateway | Managed. Zone-redundant only on StandardV2 | Hourly + per-GB data processed |
 | **Load Balancer outbound rules** | Configurable, shared across backend pool | Varies | Manual SNAT port allocation | Included with LB |
 | **VM public IP** | 64,000 (dedicated) | VM SKU dependent | Per-VM management | Per-IP cost |
 | **Azure Firewall** | ~2,000 per IP | 30 Gbps | Managed, more features | Higher cost |
@@ -420,6 +465,34 @@ Azure provides two mechanisms for connecting VNet resources to PaaS services (li
 
 ### Service Endpoints vs Private Endpoints
 
+The two are routinely conflated because both are described as "private access to PaaS." They are not the same shape. A service endpoint changes the *route* your traffic takes to the service's public endpoint; a Private Endpoint changes *what you connect to*:
+
+```
+SERVICE ENDPOINT — the target is still the service's public endpoint
+
+  Subnet 10.0.2.0/24  (Microsoft.Storage endpoint enabled)
+    VM 10.0.2.4
+      │   DNS unchanged: mystorage.blob.core.windows.net → public IP
+      │   source IP seen by Storage = 10.0.2.4, the VM's private IP
+      ↓   optimized system route over the Azure backbone, not the internet
+  Storage account PUBLIC endpoint
+      service firewall: allow 10.0.2.0/24
+      endpoint still exists, reachable by anything the firewall allows
+
+
+PRIVATE ENDPOINT — the service gets a NIC inside your VNet
+
+  Subnet 10.0.2.0/24               Subnet 10.0.3.0/24
+    VM 10.0.2.4 ───────────────────→ Private Endpoint NIC 10.0.3.4
+      DNS: mystorage.blob...           │
+        → 10.0.3.4 (private zone)      │ Private Link
+      traffic never leaves the VNet    ↓
+                                     Storage account
+                                     public endpoint can be disabled
+```
+
+That difference is what drives every row in the table below. Because a service endpoint's target is still a public endpoint, the service's own firewall is the only thing keeping anyone else out, and the grant is per subnet. Because a Private Endpoint's target is an ordinary NIC in your address space, everything that already works for private IPs, including peering, VPN, ExpressRoute, NSGs, and UDRs, works for it without special cases.
+
 | Aspect | Service Endpoints | Private Endpoints |
 |--------|-------------------|-------------------|
 | **Cost** | Free | Hourly + data charges |
@@ -435,8 +508,6 @@ Azure provides two mechanisms for connecting VNet resources to PaaS services (li
 - **Service endpoints:** Cost-sensitive workloads that only need VNet-to-PaaS access, without on-premises connectivity requirements and where the public endpoint remaining active is acceptable
 - **Private Endpoints:** Security-sensitive workloads, on-premises access to PaaS services, or compliance requirements that mandate no public endpoint exposure
 
-**For detailed Private Endpoint architecture patterns, Private Link services, and Virtual WAN integration, see the [Private Link & Virtual WAN](/study-guides/infrastructure/azure/azure-private-link-virtual-wan.html) guide.**
-
 ---
 
 ## Architectural Patterns
@@ -445,21 +516,11 @@ Azure provides two mechanisms for connecting VNet resources to PaaS services (li
 
 **Use case:** Small web application with a frontend tier and managed database.
 
-```
-Internet
-   ↓
-Public IP on VM / Load Balancer
-   ↓
-Frontend Subnet (NSG: allow 443 inbound)
-   ↓
-Backend Subnet (NSG: allow 8080 from frontend only)
-   ↓
-Private Endpoint → Azure SQL Database
-```
+Traffic arrives on a public IP attached to a load balancer or the VM itself, lands in the frontend subnet, and reaches the backend subnet only on the port the backend NSG permits from the frontend range. The database is never in the path from the internet at all, because it is reached through a Private Endpoint on a private IP.
 
 **Components:**
 - Single VNet with three subnets (frontend, backend, private-endpoints)
-- NSGs enforcing tier-to-tier isolation
+- Frontend NSG allowing 443 inbound from the internet; backend NSG allowing 8080 from the frontend subnet only
 - Private Endpoint for Azure SQL (no public database endpoint)
 - NAT Gateway on the backend subnet for outbound patching and API calls
 
@@ -475,26 +536,23 @@ Private Endpoint → Azure SQL Database
 **Use case:** Production application requiring zone redundancy.
 
 ```
-Region (East US)
-├── Zone 1
-│   ├── Frontend Subnet (Application Gateway)
-│   ├── App Subnet (VM Scale Set instances)
-│   └── Data Subnet (Private Endpoint to SQL)
-├── Zone 2
-│   ├── Frontend Subnet (Application Gateway)
-│   ├── App Subnet (VM Scale Set instances)
-│   └── Data Subnet (Private Endpoint to SQL)
-└── Zone 3
-    ├── Frontend Subnet (Application Gateway)
-    ├── App Subnet (VM Scale Set instances)
-    └── Data Subnet (Private Endpoint to SQL)
+Region (East US) — each subnet spans all three zones
+│
+├── Frontend Subnet (10.0.1.0/24)
+│      Application Gateway (zone-redundant)   → Zone 1 │ Zone 2 │ Zone 3
+│
+├── App Subnet (10.0.2.0/24)
+│      VM Scale Set instances (zone-spread)   → Zone 1 │ Zone 2 │ Zone 3
+│
+└── Data Subnet (10.0.3.0/24)
+       Private Endpoint → Azure SQL (zone-redundant)
 ```
 
 **Components:**
 - Application Gateway (zone-redundant) in frontend subnet
 - VM Scale Sets or AKS with zone spreading in the app subnet
 - Azure SQL Database with zone-redundant configuration
-- NAT Gateway (zone-redundant by default) for outbound
+- NAT Gateway on the StandardV2 SKU for outbound, which is the SKU that is actually zone-redundant. A Standard NAT Gateway here would reintroduce a single zonal failure point into an otherwise zone-redundant design
 - NSGs on each subnet tier
 
 Azure Availability Zones provide physically separate data centers within a region. Unlike AWS (where you create separate subnets per AZ), Azure subnets span all zones in a region. Zone redundancy is configured on the individual resources, not at the subnet level.
@@ -534,6 +592,22 @@ Spoke VNet 2 - Internal App (10.2.0.0/16)  ←peered→  Hub
 - Gateway transit allows spoke VNets to use the hub's VPN/ExpressRoute gateway for on-premises connectivity
 - Spokes do not peer with each other directly; all inter-spoke traffic flows through Azure Firewall
 
+That last point is the one the topology above cannot show, because the path is created by routing rather than by peering:
+
+```
+Spoke 1 (10.1.0.0/16)                        Spoke 2 (10.2.0.0/16)
+  app 10.1.2.4                                 app 10.2.1.5
+     │                                              ↑
+     │ 1. dst is 10.2.1.5, but the subnet's         │ 3. firewall forwards it
+     │    UDR sends 10.2.0.0/16 → 10.0.1.4          │    over spoke 2's peering
+     │                                              │
+     └──── peering ──→ Azure Firewall 10.0.1.4 ─────┘
+                       (AzureFirewallSubnet, hub 10.0.0.0/16)
+                       2. rules evaluated, traffic allowed or dropped
+```
+
+Remove the UDRs and spoke 1 cannot reach spoke 2 at all, even though both are peered to the hub. Peering is non-transitive: the hub's two peerings do not relay traffic between each other. What makes spoke-to-spoke work is that each spoke's route table points the other spoke's range at the firewall, which then forwards over its own peering. This is also why the firewall sees every inter-spoke flow, which is the security property the pattern is bought for.
+
 **Trade-offs:**
 - Centralized security policy and inspection
 - Single point of management for hybrid connectivity
@@ -549,17 +623,7 @@ Spoke VNet 2 - Internal App (10.2.0.0/16)  ←peered→  Hub
 
 **Use case:** Connect on-premises data centers to Azure securely.
 
-```
-On-Premises Data Center
-   ↓
-VPN Connection (IPsec over internet)
-   or
-ExpressRoute (private dedicated connection)
-   ↓
-GatewaySubnet → VPN Gateway / ExpressRoute Gateway
-   ↓
-Hub VNet → Spoke VNets (via peering)
-```
+On-premises connects over either a Site-to-Site VPN (IPsec across the public internet) or ExpressRoute (a private dedicated circuit). Either one terminates on a gateway in the hub's `GatewaySubnet`. Spokes then reach on-premises through gateway transit over their existing hub peering, rather than each running a gateway of its own, which is the main reason the gateway belongs in the hub.
 
 **Connectivity options:**
 
@@ -568,8 +632,6 @@ Hub VNet → Spoke VNets (via peering)
 | **Site-to-Site VPN** | Up to 10 Gbps (VpnGw5) | Variable (internet-dependent) | Lower | Small-medium data transfer, initial cloud adoption |
 | **ExpressRoute** | 50 Mbps to 100 Gbps | Low, predictable | Higher | Large data transfer, latency-sensitive workloads, compliance |
 | **ExpressRoute + VPN** | Both | Both | Highest | Maximum resiliency (VPN as failover for ExpressRoute) |
-
-**For detailed ExpressRoute and VPN Gateway architecture, see the [ExpressRoute & VPN Gateway](/study-guides/infrastructure/azure/azure-expressroute-vpn.html) guide.**
 
 ---
 
@@ -602,8 +664,6 @@ Hub VNet → Spoke VNets (via peering)
 | Hub-and-spoke with 10+ spokes | Complex to manage | Designed for this |
 | Multi-region with many VNets | Complex routing | Native multi-region hub support |
 | Branch office connectivity | Manual VPN configuration | Automated branch connectivity |
-
-**For large-scale hub-and-spoke and multi-region architectures, see the [Private Link & Virtual WAN](/study-guides/infrastructure/azure/azure-private-link-virtual-wan.html) guide.**
 
 ---
 
@@ -663,9 +723,9 @@ Hub VNet → Spoke VNets (via peering)
 
 **Problem:** Relying on Azure's default outbound internet access for VMs without configuring explicit outbound connectivity.
 
-**Result:** New VMs lose outbound internet access after Microsoft completes the deprecation of default outbound.
+**Result:** VMs in new virtual networks have no outbound internet access, because their subnets are now private by default. The failure is confusing because it depends on which API version created the VNet, not on anything visible about the VM: identical templates produce working or broken outbound depending on the API version pinned.
 
-**Solution:** Always configure explicit outbound connectivity. Use NAT Gateway for general workloads, Azure Firewall for workloads requiring inspection, or a public IP on the resource when appropriate.
+**Solution:** Always configure explicit outbound connectivity. Use NAT Gateway for general workloads, Azure Firewall for workloads requiring inspection, or a public IP on the resource when appropriate. Note that Windows activation and Windows Update need an explicit egress path and will fail on a private subnet without one.
 
 ---
 
@@ -679,7 +739,7 @@ Hub VNet → Spoke VNets (via peering)
 
 4. **Azure subnets span all Availability Zones in a region.** Unlike AWS, you do not create separate subnets per zone. Zone redundancy is configured on individual resources like VM Scale Sets, Application Gateway, and SQL Database.
 
-5. **Use NAT Gateway for explicit outbound connectivity.** Default outbound access is being deprecated. NAT Gateway provides reliable, scalable outbound with predictable IPs and eliminates SNAT port exhaustion.
+5. **Use NAT Gateway for explicit outbound connectivity.** Subnets in new virtual networks are private by default, so default outbound access is no longer something to rely on. NAT Gateway provides reliable, scalable outbound with predictable IPs and eliminates SNAT port exhaustion. Choose the StandardV2 SKU if you need zone resiliency, because the Standard SKU is zonal.
 
 6. **Private Endpoints provide the strongest PaaS integration.** They give PaaS services a private IP in your VNet, work across peering and hybrid connectivity, and allow disabling public endpoints entirely. Service endpoints are free but limited to VNet-only access.
 

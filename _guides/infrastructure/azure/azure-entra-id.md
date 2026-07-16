@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Identity & Access Management
 description: "How Microsoft Entra ID works as the identity platform for Azure, covering tenant architecture, authentication protocols, Conditional Access, B2B/B2C identity, app registrations, and integration with on-premises Active Directory."
-tags: [infrastructure, azure, security, access-control, architecture, fundamentals]
+tags: [entra-id, identity, conditional-access, oauth, zero-trust, hybrid-identity, fundamentals]
 ---
 
 ## What Is Microsoft Entra ID
@@ -24,7 +24,7 @@ The name causes confusion. Entra ID (Azure AD) and Windows Server Active Directo
 | **Network model** | On-premises network boundary | Internet-accessible, Zero Trust |
 | **Query language** | LDAP | Microsoft Graph API |
 
-Most enterprises use both. Entra ID Connect synchronizes identities from on-premises AD to Entra ID, giving users a single identity that works across domain-joined servers and cloud applications. But Entra ID is not a replacement for AD DS if you still have domain-joined infrastructure; it is a companion.
+Most enterprises use both. Microsoft Entra Connect synchronizes identities from on-premises AD to Entra ID, giving users a single identity that works across domain-joined servers and cloud applications. But Entra ID is not a replacement for AD DS if you still have domain-joined infrastructure; it is a companion.
 
 ### What Problems Entra ID Solves
 
@@ -50,7 +50,9 @@ Most enterprises use both. Entra ID Connect synchronizes identities from on-prem
 
 An Entra ID tenant is a dedicated instance of the identity service, created automatically when an organization signs up for Azure or Microsoft 365. The tenant is the security and identity boundary. Users, groups, app registrations, and policies all exist within a tenant.
 
-Most organizations have one tenant. Multi-tenant scenarios (covered in the [Subscription & Tenant Architecture](/study-guides/infrastructure/azure/azure-subscription-architecture.html) guide) are rare and reserved for regulatory isolation or acquisition scenarios.
+Entra ID sits at the top of Azure's scope hierarchy, above management groups and subscriptions, not inside a subscription like most Azure resources. This trips up people used to subscription-scoped services. You do not create an Entra ID instance per subscription. A single tenant can back many subscriptions, and each subscription trusts exactly one tenant for authentication. Because every subscription authenticates against the tenant, moving a subscription to a different tenant is a deliberate and disruptive operation, not a routine change.
+
+Most organizations have one tenant. Multi-tenant scenarios are rare and reserved for regulatory isolation or acquisition scenarios.
 
 ### Users
 
@@ -58,7 +60,7 @@ Entra ID supports several user types:
 
 **Cloud-only users** exist only in Entra ID. They are created directly in the tenant and have no on-premises counterpart. Suitable for organizations that are fully cloud-native or for user populations that do not need on-premises access.
 
-**Synced users** originate in on-premises Active Directory and are synchronized to Entra ID through [Entra ID Connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect){:target="_blank" rel="noopener noreferrer"} (or the newer Entra Cloud Sync). Changes to these users are made on-premises and replicate to the cloud. This is the most common model for enterprises with existing AD infrastructure.
+**Synced users** originate in on-premises Active Directory and are synchronized to Entra ID through [Microsoft Entra Connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect){:target="_blank" rel="noopener noreferrer"} (or the newer Entra Cloud Sync). Changes to these users are made on-premises and replicate to the cloud. This is the most common model for enterprises with existing AD infrastructure.
 
 **Guest users** are external identities invited into the tenant through B2B collaboration. They authenticate with their home organization's identity provider and are granted limited access to resources in the inviting tenant.
 
@@ -80,11 +82,11 @@ When an application needs to authenticate with Entra ID (whether to sign in user
 
 **Service principal** is the local instance of that app registration within a specific tenant. When a multi-tenant application is registered in Tenant A and consented to in Tenant B, Tenant B gets its own service principal representing that application. The service principal is what RBAC role assignments target.
 
-**The distinction matters because:**
+**This separation has practical consequences:**
 - App registrations are global definitions; service principals are tenant-local instances
 - RBAC roles are assigned to service principals, not app registrations
 - Deleting a service principal revokes access in that tenant without affecting the app registration or other tenants
-- Managed Identities (covered in the [RBAC & Managed Identities](/study-guides/infrastructure/azure/azure-rbac-managed-identities.html) guide) are a special type of service principal that Azure manages automatically
+- Managed Identities are a special type of service principal that Azure manages automatically
 
 ---
 
@@ -200,9 +202,11 @@ Assignments: All users, condition: sign-in risk level is medium or high. Grant: 
 
 ### B2C (Customer Identity)
 
-[Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/customers/overview-customers-ciam){:target="_blank" rel="noopener noreferrer"} (formerly Azure AD B2C) provides customer-facing identity management. While B2B is for inviting known external partners, B2C is for consumer-scale self-service sign-up, sign-in, and profile management.
+[Microsoft Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/customers/overview-customers-ciam){:target="_blank" rel="noopener noreferrer"} provides customer-facing identity management. While B2B is for inviting known external partners, this is for consumer-scale self-service sign-up, sign-in, and profile management.
 
-**B2C is a separate tenant** from your organization's Entra ID tenant. It has its own user store, authentication flows, and branding customization. B2C users (your customers) never appear in your organizational directory.
+External ID is a distinct next-generation product rather than a rename of Azure AD B2C, and the difference matters when you are choosing a platform. Azure AD B2C closed to new customers on May 1, 2025, so new customer-facing applications go to External ID. Microsoft has committed to supporting existing B2C tenants until at least May 2030, which gives current deployments a long runway but an eventual migration.
+
+**Customer identity lives in a separate tenant** from your organization's Entra ID tenant. It has its own user store, authentication flows, and branding customization. Your customers never appear in your organizational directory.
 
 **Use B2C when:**
 - You are building a customer-facing application that needs sign-up/sign-in
@@ -215,7 +219,7 @@ Assignments: All users, condition: sign-in risk level is medium or high. Grant: 
 | Aspect | B2B | B2C |
 |--------|-----|-----|
 | **Target users** | Partners, contractors, vendors | Consumers, customers |
-| **User store** | Guest objects in your tenant | Separate B2C tenant |
+| **User store** | Guest objects in your tenant | Separate external tenant |
 | **Scale** | Thousands | Millions |
 | **Identity providers** | Work accounts, Microsoft accounts | Social, local accounts, OIDC/SAML |
 | **Branding** | Your tenant's sign-in page | Fully customizable |
@@ -229,11 +233,11 @@ Assignments: All users, condition: sign-in risk level is medium or high. Grant: 
 
 Most enterprises did not start in the cloud. They have years of user accounts, group memberships, and access policies in on-premises Active Directory. Hybrid identity synchronizes these identities to Entra ID so users have a single set of credentials that works both on-premises and in the cloud.
 
-### Entra ID Connect
+### Microsoft Entra Connect
 
-[Entra ID Connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect){:target="_blank" rel="noopener noreferrer"} (formerly Azure AD Connect) is a synchronization tool installed on-premises that replicates users, groups, and contacts from AD DS to Entra ID. It runs on a schedule (default: every 30 minutes) and supports filtering so you can synchronize only specific OUs or groups.
+[Microsoft Entra Connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect){:target="_blank" rel="noopener noreferrer"} (formerly Azure AD Connect) is a synchronization tool installed on-premises that replicates users, groups, and contacts from AD DS to Entra ID. It runs on a schedule (default: every 30 minutes) and supports filtering so you can synchronize only specific OUs or groups.
 
-**Authentication methods with Entra ID Connect:**
+**Authentication methods with Microsoft Entra Connect:**
 
 | Method | How It Works | Best For |
 |--------|-------------|----------|
@@ -245,9 +249,15 @@ Most enterprises did not start in the cloud. They have years of user accounts, g
 
 ### Entra Cloud Sync
 
-[Entra Cloud Sync](https://learn.microsoft.com/en-us/entra/identity/hybrid/cloud-sync/what-is-cloud-sync){:target="_blank" rel="noopener noreferrer"} is the newer, lighter alternative to Entra ID Connect. It uses cloud-provisioning agents instead of a heavyweight on-premises sync server. Cloud Sync supports multi-forest environments and is easier to deploy, but it does not yet support all scenarios that Entra ID Connect handles (like device writeback or group writeback).
+[Entra Cloud Sync](https://learn.microsoft.com/en-us/entra/identity/hybrid/cloud-sync/what-is-cloud-sync){:target="_blank" rel="noopener noreferrer"} is the newer, lighter alternative to Microsoft Entra Connect. It uses cloud-provisioning agents instead of a heavyweight on-premises sync server. Multiple agents can run at once, which removes the single point of failure a Connect server represents, and Cloud Sync handles disconnected forests that Connect cannot.
 
-For new deployments, evaluate Cloud Sync first and fall back to Entra ID Connect if you need features Cloud Sync does not yet support.
+Microsoft now treats Cloud Sync as its strategic direction for hybrid identity, and new synchronization features land there first. Some capabilities go the other way: cloud-to-AD group provisioning exists only in Cloud Sync. The gaps that remain are real but specific:
+
+- **Device synchronization for Hybrid Azure AD Join** is not supported, and device writeback is discontinued in favor of Cloud Kerberos Trust
+- **Scale ceilings** of 150,000 objects per domain and 50,000 members per group, where Connect is unbounded
+- **Advanced sync rules and cross-forest references**, where Cloud Sync offers only an expression builder and OU-based scoping
+
+For new deployments, evaluate Cloud Sync first and fall back to Microsoft Entra Connect only if you hit one of those limits.
 
 ---
 
@@ -262,7 +272,7 @@ Entra ID features are gated by license tier. Understanding the licensing boundar
 | MFA | Yes (security defaults) | Yes (Conditional Access) | Yes |
 | Conditional Access | No | Yes | Yes |
 | Dynamic groups | No | Yes | Yes |
-| Self-service password reset | No | Yes | Yes |
+| Self-service password reset | Yes (cloud-only users) | Yes (adds writeback to on-premises AD) | Yes |
 | Entra ID Protection (risk-based policies) | No | No | Yes |
 | Privileged Identity Management (PIM) | No | No | Yes |
 | Access reviews | No | No | Yes |
@@ -270,6 +280,8 @@ Entra ID features are gated by license tier. Understanding the licensing boundar
 **P1** is required for Conditional Access, which is the foundation of Zero Trust. Most production Azure environments need at least P1 for users who interact with Azure resources or protected applications.
 
 **P2** adds risk-based access policies (automatic detection and response to suspicious sign-ins) and Privileged Identity Management (just-in-time elevation of privileged roles). P2 is typically assigned to administrators and users with access to sensitive resources rather than all users.
+
+**Microsoft Entra ID Governance** is a separate SKU layered on top of P1 or P2, and it now holds the deeper governance features: entitlement management, lifecycle workflows, and the newer access review capabilities. P2 still covers PIM and the access review functionality that predates the split, so the table above remains the right mental model for most architecture decisions. Check the current licensing documentation before committing to a governance design, because this boundary has moved and will likely move again.
 
 ---
 
@@ -300,5 +312,5 @@ In a Zero Trust architecture, identity is the primary security boundary, replaci
 - App registrations define an application's identity, while service principals are tenant-local instances of that identity. RBAC targets service principals, and Managed Identities are a special type of service principal managed by Azure.
 - Conditional Access is the Zero Trust policy engine. Start with baseline policies (require MFA, block legacy auth, protect Azure management), use report-only mode to validate, and always exclude emergency access accounts.
 - B2B invites external partners as guest users who authenticate with their home identity. B2C provides consumer-scale identity in a separate tenant for customer-facing applications.
-- Hybrid identity connects on-premises AD to Entra ID through Entra ID Connect or Cloud Sync. Password Hash Sync is the simplest and most resilient authentication method; use PTA or federation only when specific requirements demand it.
+- Hybrid identity connects on-premises AD to Entra ID through Microsoft Entra Connect or Cloud Sync. Password Hash Sync is the simplest and most resilient authentication method; use PTA or federation only when specific requirements demand it.
 - Entra ID P1 licensing is the practical minimum for production environments because Conditional Access requires it. P2 adds risk-based policies and Privileged Identity Management for administrative roles.

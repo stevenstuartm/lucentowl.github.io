@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Subscription & Resource Organization
 description: "Practical strategies for naming conventions, tagging policies, resource locks, resource moves, and cross-subscription access patterns that keep Azure environments organized and governable at scale."
-tags: [infrastructure, azure, governance, best-practices, cost-analysis, practical]
+tags: [tagging, naming-conventions, resource-locks, resource-moves, cross-subscription, governance, practical]
 ---
 
 ## Why Resource Organization Matters
@@ -53,7 +53,7 @@ Microsoft publishes a [recommended list of abbreviations](https://learn.microsof
 | Subnet | `snet` |
 | Network Security Group | `nsg` |
 | App Service | `app` |
-| App Service Plan | `plan` |
+| App Service Plan | `asp` |
 | SQL Database | `sqldb` |
 | SQL Server | `sql` |
 | Storage Account | `st` |
@@ -63,7 +63,8 @@ Microsoft publishes a [recommended list of abbreviations](https://learn.microsof
 | Application Insights | `appi` |
 | Managed Identity | `id` |
 | Public IP Address | `pip` |
-| Load Balancer | `lb` |
+| Load Balancer (internal) | `lbi` |
+| Load Balancer (external) | `lbe` |
 
 ### Naming Constraints to Watch
 
@@ -150,6 +151,17 @@ Tags are only useful if they are consistently applied. [Azure Policy](https://le
 Tags do not automatically inherit down the hierarchy. A tag on a subscription does not appear on its resource groups, and a tag on a resource group does not appear on its resources unless an Azure Policy explicitly copies it.
 
 This is an important distinction from how RBAC and Azure Policy assignments work (those do inherit). Tag inheritance requires explicit policy configuration.
+
+### Tag Limits and Constraints
+
+A few hard limits shape how far a taxonomy can stretch:
+
+- **50 tag name-value pairs** per resource, resource group, or subscription. A handful of resource types cap at 15, including Azure Automation, Azure CDN, public and private DNS zones and records, and Log Analytics saved searches.
+- **Tag names are limited to 512 characters and values to 256.** Storage accounts are stricter, capping names at 128 characters.
+- **Tags stop at the subscription level.** Management groups do not support them, which is why management group structure rather than tagging carries governance above the subscription.
+- **Tag names cannot contain** `<`, `>`, `%`, `&`, `\`, `?`, or `/`.
+
+Tags are also stored as plain text, and they surface in cost reports, deployment history, exported templates, and monitoring logs. Never put secrets, connection strings, or personal data in a tag value.
 
 ### Tagging Red Flags
 

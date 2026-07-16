@@ -4,12 +4,12 @@ layout: guide
 category: Azure
 subcategory: Subscription & Resource Organization
 description: "How Azure billing works across agreement types including Enterprise Agreement, Microsoft Customer Agreement, CSP, and Pay-As-You-Go, covering billing hierarchies, cost allocation, spending controls, and commitment-based discounts."
-tags: [infrastructure, azure, cost-analysis, governance, fundamentals]
+tags: [enterprise-agreement, mca, csp, reservations, savings-plans, cost-allocation, fundamentals]
 ---
 
 ## Why Billing Architecture Matters
 
-Azure billing is not just a finance concern. The billing model you choose determines your subscription structure, discount eligibility, spending controls, and cost allocation capabilities. Architects need to understand billing because subscription design decisions (covered in the [Subscription & Tenant Architecture](/study-guides/infrastructure/azure/azure-subscription-architecture.html) guide) are constrained by the billing agreement in place.
+Azure billing is not just a finance concern. The billing model you choose determines your subscription structure, discount eligibility, spending controls, and cost allocation capabilities. Architects need to understand billing because subscription design decisions are constrained by the billing agreement in place.
 
 ---
 
@@ -21,12 +21,7 @@ Azure offers several purchasing models, each with a different billing hierarchy,
 
 The simplest model. You create an Azure account with a credit card, and Microsoft bills monthly based on actual resource consumption.
 
-**Billing hierarchy:**
-```
-Azure Account (credit card)
-└── Subscription
-    └── Resources
-```
+**Billing hierarchy:** an Azure account tied to a payment method, holding subscriptions, which hold resources. There is no grouping layer above the subscription, which is precisely the limitation that pushes organizations off PAYG.
 
 **When it fits:**
 - Individual developers and small teams
@@ -69,9 +64,11 @@ Billing Account
 **Invoice Section** groups subscriptions within a billing profile for cost organization. Invoice sections appear as line items on the billing profile's invoice, making it easy to see costs by department, project, or team without needing separate invoices.
 
 **When it fits:**
-- Small to mid-size organizations purchasing directly from Microsoft
+- Organizations purchasing directly from Microsoft, anywhere from a single web-direct subscription up to an enterprise-scale agreement negotiated through a Microsoft sales representative
 - Organizations wanting flexible cost organization without enterprise agreement complexity
 - Teams that need multiple invoices for different departments or cost centers
+
+Do not read MCA as the small-organization option. It is Microsoft's modern billing structure across the size range, and the ceiling on it is not the reason to pick an EA.
 
 **Advantages over PAYG:**
 - Structured billing hierarchy for cost allocation
@@ -119,7 +116,7 @@ Enrollment (EA contract)
 - Negotiated pricing below standard list prices
 - Azure Prepayment for budget predictability
 - Department and account hierarchy for cost allocation
-- EA Portal (being migrated to Azure portal) for enrollment management
+- Enrollment management through Cost Management + Billing in the Azure portal. The standalone EA portal at `ea.azure.com` was retired in February 2024 and is read-only, so any runbook or documentation still pointing there is out of date
 - Dev/Test subscription offer with discounted rates for non-production workloads
 
 ---
@@ -128,13 +125,7 @@ Enrollment (EA contract)
 
 In the [CSP model](https://learn.microsoft.com/en-us/partner-center/csp-overview){:target="_blank" rel="noopener noreferrer"}, organizations purchase Azure through a Microsoft partner rather than directly from Microsoft. The partner manages billing, provides first-line support, and may offer managed services on top of Azure.
 
-**Billing hierarchy:**
-```
-CSP Partner
-└── Customer Tenant
-    └── Subscription (partner-managed)
-        └── Resources
-```
+**Billing hierarchy:** the partner owns the billing relationship with Microsoft. Beneath it sits your tenant, then partner-managed subscriptions and their resources. You do not have a direct billing account with Microsoft at all, which is what makes partner choice consequential.
 
 **When it fits:**
 - Organizations that want a single vendor for Azure and managed services
@@ -153,7 +144,7 @@ CSP Partner
 
 | Factor | PAYG | MCA | EA | CSP |
 |--------|------|-----|-----|-----|
-| **Organization size** | Individual/small | Small to mid | Large enterprise | Small to mid |
+| **Organization size** | Individual/small | Individual to enterprise | Large enterprise | Small to mid |
 | **Annual Azure spend** | Low/variable | Variable | $100K+ | Variable |
 | **Commitment** | None | None | Multi-year | Varies by partner |
 | **Volume discounts** | None | Standard | Negotiated | Partner-dependent |
@@ -175,7 +166,7 @@ When multiple teams share an Azure environment, the question "who is paying for 
 
 **Subscription-level allocation** is the simplest approach. If each team or workload has its own subscription, costs are naturally separated. This works well when the subscription design pattern already isolates teams, but it breaks down for shared services consumed by multiple teams.
 
-**Tag-based allocation** uses tags like `cost-center`, `team`, or `application` to attribute costs to organizational units. Azure Cost Management can filter and group costs by tag, enabling chargeback reports without subscription-per-team overhead. Tag-based allocation requires consistent tagging enforcement (covered in the [Resource Organization & Tagging](/study-guides/infrastructure/azure/azure-resource-organization.html) guide).
+**Tag-based allocation** uses tags like `cost-center`, `team`, or `application` to attribute costs to organizational units. Azure Cost Management can filter and group costs by tag, enabling chargeback reports without subscription-per-team overhead. Tag-based allocation requires consistent tagging enforcement to be worth anything, because untagged resources silently fall out of every report built on it.
 
 **Invoice section allocation** (MCA) groups subscriptions into invoice sections that map to departments or projects. Costs appear as separate line items on the invoice, providing built-in cost separation without relying on tags.
 
@@ -211,7 +202,7 @@ Azure Policy can enforce cost-related guardrails:
 
 - **Allowed VM SKUs**: Restrict which VM sizes can be deployed, preventing teams from spinning up expensive GPU or high-memory instances without justification
 - **Allowed regions**: Limit deployments to specific regions, preventing accidental deployments in premium-priced regions
-- **Require tags**: Ensure cost-allocation tags are present on all resources (covered in the Resource Organization guide)
+- **Require tags**: Ensure cost-allocation tags are present on all resources, so chargeback and showback reports have something to group by
 
 ---
 
@@ -225,11 +216,16 @@ Azure Policy can enforce cost-related guardrails:
 - You purchase a reservation for a specific VM size, database tier, or other resource configuration
 - The reservation discount automatically applies to matching running resources
 - Unused reservation capacity is wasted (you pay whether you use it or not)
-- Reservations can be scoped to a single subscription, a resource group, or shared across all subscriptions in a billing account
+- Reservations can be scoped narrowly to one resource group or broadly across a whole billing account
 
-**Reservation scope matters:**
+**Reservation scope matters.** There are four options, and the choice determines how much of the commitment you actually recover:
+
+- **Single resource group**: Discount applies only to matching resources in that resource group
 - **Single subscription**: Discount applies only to matching resources in that subscription
-- **Shared**: Discount applies to matching resources across all subscriptions in the billing account, maximizing utilization
+- **Management group**: Discount applies to matching resources across every subscription in the management group hierarchy that also sits in the billing scope
+- **Shared**: Discount applies to matching resources across all eligible subscriptions in the billing context, maximizing utilization
+
+Scope can be changed after purchase, so a reservation that is underutilized at subscription scope can be widened rather than written off.
 
 ### Azure Savings Plans
 
@@ -252,7 +248,9 @@ Azure Policy can enforce cost-related guardrails:
 
 ### Dev/Test Pricing
 
-Enterprise Agreement customers have access to [Azure Dev/Test pricing](https://azure.microsoft.com/en-us/pricing/dev-test/){:target="_blank" rel="noopener noreferrer"}, which offers discounted rates on select Azure services for non-production workloads. Dev/Test subscriptions have lower rates for VMs (no Windows license charge), discounted PaaS services, and no SLA commitment from Microsoft.
+[Azure Dev/Test pricing](https://azure.microsoft.com/en-us/pricing/dev-test/){:target="_blank" rel="noopener noreferrer"} offers discounted rates on select Azure services for non-production workloads. Dev/Test subscriptions have lower rates for VMs (no Windows license charge), discounted PaaS services, and no SLA commitment from Microsoft.
+
+It is not EA-only. Enterprise Dev/Test runs on an Enterprise Agreement, while MCA customers who purchase through a Microsoft sales representative get the Azure Plan for Dev/Test, and individual Visual Studio subscribers get a pay-as-you-go Dev/Test offer. What all three share is the eligibility requirement: access is tied to Visual Studio subscriptions, and the workloads must genuinely be non-production.
 
 Dev/Test subscriptions must be designated at creation time and should only contain non-production workloads. Running production workloads in a Dev/Test subscription violates the terms of use.
 
