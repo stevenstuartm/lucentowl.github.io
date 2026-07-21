@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Compute Services
 description: "App Service fundamentals for architects including App Service Plans, deployment slots, scaling strategies, WebJobs, and PaaS hosting patterns for web applications and APIs on Azure."
-tags: [infrastructure, azure, cloud-computing, scalability, reliability, practical]
+tags: [app-service, app-service-plans, deployment-slots, app-service-environment, webjobs, easy-auth, practical]
 ---
 
 ## What Is Azure App Service
@@ -44,7 +44,7 @@ There is no single AWS service that directly maps to Azure App Service. App Serv
 | **Background tasks** | No built-in equivalent (use SQS + Lambda) | WebJobs (integrated into the same plan) |
 | **Built-in auth** | Cognito + ALB integration | Easy Auth (zero-code identity provider integration) |
 | **Scaling unit** | EB environment instances | App Service Plan instances (shared across apps) |
-| **Network isolation** | EB in VPC | VNet integration (Standard+) or ASE for full isolation |
+| **Network isolation** | EB in VPC | VNet integration (Basic+) or ASE for full isolation |
 | **Managed SSL** | ACM (free, must be in us-east-1 for CloudFront) | Free managed certificates, auto-rotating, no region restriction |
 
 Elastic Beanstalk is the closest AWS equivalent, but it operates at a lower abstraction level. EB provisions actual EC2 instances, load balancers, and auto-scaling groups that you can see and modify. App Service abstracts all of this away; there are no visible VMs, no load balancer resources to manage, and no EC2 instance types to select. The trade-off is that EB offers more customization of the underlying infrastructure while App Service prioritizes operational simplicity.
@@ -69,7 +69,7 @@ App Service Plans are organized into tiers that determine the available features
 |------|----------------|------------|-----------------|-----------------|---------------------|-----|
 | **Free (F1)** | Learning, prototyping | No | No | No | No custom domains | None |
 | **Shared (D1)** | Low-traffic dev/test | No | No | No | Custom domains, no SSL | None |
-| **Basic (B1-B3)** | Dev/test, low-traffic production | No (manual scale only) | No | No | Yes | 99.95% |
+| **Basic (B1-B3)** | Dev/test, low-traffic production | No (manual scale only) | No | Regional VNet integration | Yes | 99.95% |
 | **Standard (S1-S3)** | Production workloads | Yes (up to 10 instances) | Up to 5 | Regional VNet integration | Yes | 99.95% |
 | **Premium v3 (P0v3-P3mv3)** | High-performance production | Yes (up to 30 instances) | Up to 20 | Regional VNet integration | Yes | 99.95% |
 | **Isolated v2 (I1v2-I6v2)** | Compliance, full network isolation | Yes (up to 100 instances) | Up to 20 | ASE (dedicated VNet deployment) | Yes | 99.95% |
@@ -85,7 +85,7 @@ App Service Plans are organized into tiers that determine the available features
 
 **Basic** is the entry point for apps that need dedicated compute and custom SSL, but do not need auto-scaling or deployment slots. It suits internal tools and dev/test environments where manual scaling is acceptable.
 
-**Standard** is the starting point for most production workloads. It adds auto-scaling, deployment slots, and VNet integration, which are the features that separate "running an app" from "running a production service." Standard should be the default choice unless you have specific reasons to go higher or lower.
+**Standard** is the starting point for most production workloads. It adds auto-scaling and deployment slots on top of the dedicated compute and VNet integration that Basic already provides, which are the features that separate "running an app" from "running a production service." Standard should be the default choice unless you have specific reasons to go higher or lower.
 
 **Premium v3** provides faster processors, more memory per instance, and higher instance limits than Standard. It also supports predictive autoscaling (which uses machine learning to pre-scale based on historical traffic patterns), larger deployment slot counts, and enhanced networking performance. Premium v3 costs roughly 2-3x more than Standard for equivalent instance sizes, but the performance improvement is often more than proportional because the underlying hardware is newer.
 
@@ -190,11 +190,11 @@ By default, all apps in a plan scale together. [Per-app scaling](https://learn.m
 
 ### Default Networking Behavior
 
-By default, App Service apps are publicly accessible via their `*.azurewebsites.net` hostname. Outbound traffic from the app uses a set of shared outbound IP addresses that are visible in the app's properties. There is no VNet integration at the Free, Shared, or Basic tiers.
+By default, App Service apps are publicly accessible via their `*.azurewebsites.net` hostname. Outbound traffic from the app uses a set of shared outbound IP addresses that are visible in the app's properties. There is no regional VNet integration at the Free or Shared tiers.
 
 ### VNet Integration
 
-[Regional VNet integration](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration){:target="_blank" rel="noopener noreferrer"} (available on Standard tier and above) connects the app's outbound traffic to a subnet in your VNet. Once configured, outbound traffic from the app uses a private IP within the delegated subnet, allowing the app to reach private resources like databases behind Private Endpoints, VMs on private subnets, or on-premises resources through VPN/ExpressRoute gateways.
+[Regional VNet integration](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration){:target="_blank" rel="noopener noreferrer"} (available on Basic tier and above) connects the app's outbound traffic to a subnet in your VNet. Once configured, outbound traffic from the app uses a private IP within the delegated subnet, allowing the app to reach private resources like databases behind Private Endpoints, VMs on private subnets, or on-premises resources through VPN/ExpressRoute gateways.
 
 VNet integration controls outbound traffic only. Inbound traffic still arrives through the public `*.azurewebsites.net` endpoint unless you configure additional controls.
 
@@ -203,13 +203,11 @@ VNet integration controls outbound traffic only. Inbound traffic still arrives t
 - The subnet must have enough available IPs (one per plan instance, plus one for scaling headroom)
 - The VNet must be in the same region as the App Service Plan
 
-For a detailed explanation of subnet delegation and VNet design patterns, see the [Azure VNet Architecture](/study-guides/infrastructure/azure/azure-vnet-architecture.html) guide.
-
 ### Private Endpoints for Inbound Traffic
 
 To restrict inbound access to your app from within a VNet (eliminating the public endpoint), configure a [Private Endpoint](https://learn.microsoft.com/en-us/azure/app-service/networking/private-endpoint){:target="_blank" rel="noopener noreferrer"} for the app. This places a network interface with a private IP in your VNet that routes to the App Service app. Once a Private Endpoint is enabled, the public endpoint can be disabled entirely.
 
-This creates a fully private networking posture: outbound traffic goes through VNet integration and inbound traffic arrives through the Private Endpoint. The app is invisible to the public internet. For more on Private Endpoint architecture, see the [Private Link & Virtual WAN](/study-guides/infrastructure/azure/azure-private-link-virtual-wan.html) guide.
+This creates a fully private networking posture. Outbound traffic goes through VNet integration and inbound traffic arrives through the Private Endpoint. The app is invisible to the public internet.
 
 ### Hybrid Connections
 
@@ -219,7 +217,7 @@ Hybrid Connections are useful for legacy scenarios where VPN connectivity is not
 
 ### Access Restrictions
 
-[Access restrictions](https://learn.microsoft.com/en-us/azure/app-service/overview-access-restrictions){:target="_blank" rel="noopener noreferrer"} allow you to filter inbound traffic to the app's public endpoint by IP address, CIDR range, service tag, or VNet subnet (using service endpoints). This is useful when you need to restrict access to specific networks without configuring Private Endpoints, such as allowing access only from your corporate IP range or from an [Azure Front Door](/study-guides/infrastructure/azure/azure-front-door-cdn.html) instance.
+[Access restrictions](https://learn.microsoft.com/en-us/azure/app-service/overview-access-restrictions){:target="_blank" rel="noopener noreferrer"} allow you to filter inbound traffic to the app's public endpoint by IP address, CIDR range, service tag, or VNet subnet (using service endpoints). This is useful when you need to restrict access to specific networks without configuring Private Endpoints, such as allowing access only from your corporate IP range or from an Azure Front Door instance.
 
 ---
 
@@ -322,7 +320,7 @@ Custom domains require Basic tier or above. Free and Shared tiers do not support
 
 App Service provides several certificate options:
 
-**App Service Managed Certificates (free):** Automatically provisioned and renewed for custom domains. They support standard SSL (SNI-based) but do not support wildcard domains or naked/apex domain certificates. For most applications, managed certificates are sufficient and eliminate certificate management overhead entirely.
+**App Service Managed Certificates (free):** Automatically provisioned and renewed for custom domains. They support standard SNI-based SSL for both subdomains and apex/naked domains, but do not support wildcard domains. For most applications, managed certificates are sufficient and eliminate certificate management overhead entirely.
 
 **App Service Certificates:** Purchased through Azure and stored in Key Vault. They support wildcard domains and provide a managed lifecycle within the Azure ecosystem.
 
@@ -425,7 +423,7 @@ Private Endpoints → Azure SQL / Cosmos DB
 ```
 
 **Components:**
-- [Azure Front Door](/study-guides/infrastructure/azure/azure-front-door-cdn.html) for global load balancing, WAF, and edge caching
+- Azure Front Door for global load balancing, WAF, and edge caching
 - App Service instances in two regions with VNet integration
 - Front Door routes to both regions with priority-based routing (active-passive) or latency-based routing (active-active)
 - Private Endpoints for database connectivity from each region
@@ -454,7 +452,7 @@ Private Endpoints → Azure SQL, Service Bus, Redis
 **Components:**
 - Multiple App Service apps on a shared Premium v3 plan (cost efficiency)
 - Each service deploys independently with its own deployment slots
-- An API gateway app or [Application Gateway](/study-guides/infrastructure/azure/azure-load-balancer-app-gateway.html) handles routing to individual services
+- An API gateway app or Application Gateway handles routing to individual services
 - VNet integration for secure access to backend services
 
 This pattern works for small-to-medium microservice architectures where the operational overhead of Kubernetes is not justified. For larger microservice estates, AKS or Container Apps provides better service discovery, independent scaling, and resource isolation.
@@ -481,7 +479,7 @@ Private Endpoints → Azure SQL, Key Vault, Storage
 **Components:**
 - ILB ASE deployed in a dedicated VNet peered with the hub
 - No public internet exposure (ILB provides only private VIP)
-- Access from corporate network through [ExpressRoute or VPN](/study-guides/infrastructure/azure/azure-expressroute-vpn.html)
+- Access from corporate network through ExpressRoute or VPN
 - All dependent services accessed through Private Endpoints
 
 Reserve this pattern for workloads that genuinely require single-tenant compute isolation. For most internal applications, regular App Service with Private Endpoints and VNet integration provides sufficient network isolation at a fraction of the cost.
@@ -516,7 +514,7 @@ Reserve this pattern for workloads that genuinely require single-tenant compute 
 
 **Result:** Connections to downstream services break because the new outbound IPs are not allowlisted.
 
-**Solution:** Use VNet integration with a NAT Gateway that has a static public IP. All outbound traffic from the app uses the NAT Gateway's predictable IP address, which does not change with scaling events. For details on NAT Gateway configuration, see the [Azure VNet Architecture](/study-guides/infrastructure/azure/azure-vnet-architecture.html) guide.
+**Solution:** Use VNet integration with a NAT Gateway that has a static public IP. All outbound traffic from the app uses the NAT Gateway's predictable IP address, which does not change with scaling events.
 
 ---
 

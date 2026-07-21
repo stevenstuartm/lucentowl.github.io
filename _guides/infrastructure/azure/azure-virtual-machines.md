@@ -4,12 +4,12 @@ layout: guide
 category: Azure
 subcategory: Compute Services
 description: "VM fundamentals for architects including instance families, VM Scale Sets, Availability Sets and Zones, Spot VMs, and cost optimization strategies for running compute workloads on Azure."
-tags: [infrastructure, azure, cloud-computing, scalability, reliability, cost-analysis, practical]
+tags: [virtual-machines, vm-scale-sets, spot-vms, availability-zones, reserved-instances, azure-hybrid-benefit, practical]
 ---
 
 ## What Is an Azure Virtual Machine
 
-An [Azure Virtual Machine](https://learn.microsoft.com/en-us/azure/virtual-machines/overview){:target="_blank" rel="noopener noreferrer"} (VM) is Infrastructure-as-a-Service (IaaS) compute on Azure. You choose the operating system, VM size, disk configuration, and networking, and Azure handles the underlying physical infrastructure. VMs run inside a [Virtual Network](/study-guides/infrastructure/azure/azure-vnet-architecture.html) and can be placed in Availability Sets or Availability Zones for resilience.
+An [Azure Virtual Machine](https://learn.microsoft.com/en-us/azure/virtual-machines/overview){:target="_blank" rel="noopener noreferrer"} (VM) is Infrastructure-as-a-Service (IaaS) compute on Azure. You choose the operating system, VM size, disk configuration, and networking, and Azure handles the underlying physical infrastructure. VMs run inside a Virtual Network and can be placed in Availability Sets or Availability Zones for resilience.
 
 VMs are the most flexible compute option on Azure. They support any workload that runs on a standard operating system, whether that is Windows Server, a variety of Linux distributions, or specialized marketplace images for databases, firewalls, and development tools.
 
@@ -59,7 +59,7 @@ Architects familiar with AWS should note several differences:
 | **License portability** | License included or BYOL for some | Azure Hybrid Benefit for Windows Server and SQL Server licenses |
 | **Reserved pricing** | Reserved Instances (1yr/3yr) | Reserved VM Instances (1yr/3yr) + Savings Plans |
 | **Ephemeral storage** | Instance store (lost on stop) | Ephemeral OS disk (re-imaged on redeployment) |
-| **SLA (single VM)** | 99.5% with EBS optimization | 99.9% with Premium SSD (all disks) |
+| **SLA (single VM)** | 99.5% instance-level SLA | 99.9% with Premium SSD (all disks) |
 
 ---
 
@@ -155,17 +155,12 @@ Each VM has at least one disk (the OS disk) and can attach additional data disks
 | Disk Type | Performance Tier | IOPS Range | Throughput Range | Use Case |
 |-----------|-----------------|------------|------------------|----------|
 | **Ultra Disk** | Highest | Up to 400,000 | Up to 10,000 MB/s | Transaction-heavy databases, SAP HANA |
-| **Premium SSD v2** | High (granular) | Up to 80,000 | Up to 1,200 MB/s | Production databases, latency-sensitive apps |
+| **Premium SSD v2** | High (granular) | Up to 80,000 | Up to 2,000 MB/s | Production databases, latency-sensitive apps |
 | **Premium SSD** | High | Up to 20,000 | Up to 900 MB/s | Production workloads, most databases |
 | **Standard SSD** | Medium | Up to 6,000 | Up to 750 MB/s | Web servers, lightly used application servers |
 | **Standard HDD** | Low | Up to 2,000 | Up to 500 MB/s | Backup, infrequently accessed data, dev/test |
 
 Premium SSD v2 allows you to independently configure IOPS and throughput without changing disk size, unlike Premium SSD where performance scales with the provisioned disk size. This makes v2 more cost-effective for workloads that need high IOPS on smaller disks.
-
-<div class="callout callout--note">
-<p class="callout__title">Disk Guide Cross-Reference</p>
-<p>For detailed coverage of managed disk architecture, performance tiers, encryption options, disk bursting, snapshots, and backup strategies, see the <a href="/study-guides/infrastructure/azure/azure-managed-disks-files.html">Managed Disks & Azure Files</a> guide.</p>
-</div>
 
 ### Ephemeral OS Disks
 
@@ -223,6 +218,22 @@ An [Availability Set](https://learn.microsoft.com/en-us/azure/virtual-machines/a
 - **Fault Domains (FDs):** Groups of VMs that share a common power source and network switch. Azure supports up to 3 fault domains per Availability Set. If a rack fails, only VMs in that fault domain are affected.
 - **Update Domains (UDs):** Groups of VMs that Azure reboots together during planned maintenance. Up to 20 update domains per Availability Set. Azure reboots one update domain at a time, ensuring that a portion of your VMs remains running during platform updates.
 
+Azure assigns each VM a fault domain and an update domain, spreading instances across both axes so no single rack failure or maintenance reboot can take the whole set down at once:
+
+```
+Availability Set placement (3 fault domains x 2 update domains shown)
+
+              UD0     UD1
+       FD0    VM1     VM4
+       FD1    VM2     VM5
+       FD2    VM3     VM6
+
+  Fault domain (row) = shared power + network switch. A rack failure takes one row
+                       (e.g. FD1 drops VM2 and VM5); the other rows keep serving.
+  Update domain (col) = planned-maintenance reboot group. Azure reboots one column
+                       at a time (UD0, then UD1), so most instances stay up.
+```
+
 **SLA:** VMs in an Availability Set with 2+ instances across 2+ fault domains receive a 99.95% SLA.
 
 Availability Sets are a legacy construct from before Availability Zones became widely available. They still serve a purpose for regions that do not support zones or for workloads constrained to a single data center, but Availability Zones provide stronger isolation for most production scenarios.
@@ -244,7 +255,7 @@ Availability Sets are a legacy construct from before Availability Zones became w
 
 ### Single VM SLA
 
-A single VM (not in an Availability Set or Zone) with all OS and data disks using Premium SSD or Ultra Disk receives a 99.9% SLA. This is unique to Azure; AWS does not offer an SLA for a single EC2 instance.
+A single VM (not in an Availability Set or Zone) with all OS and data disks using Premium SSD or Ultra Disk receives a 99.9% SLA. AWS also publishes a single-instance SLA for EC2, but at 99.5%, so Azure's single-VM commitment is the higher of the two.
 
 <div class="callout callout--tip">
 <p class="callout__title">Choosing an Availability Strategy</p>
@@ -478,8 +489,6 @@ Spoke VNet 2 (Development)  ←peered→  Hub
 - Development VMs use auto-shutdown schedules to reduce cost
 - Azure Bastion replaces traditional jump boxes for secure RDP/SSH access
 
-For detailed hub-and-spoke architecture, see the [VNet Architecture](/study-guides/infrastructure/azure/azure-vnet-architecture.html) guide.
-
 ---
 
 ## Cost Optimization
@@ -515,8 +524,8 @@ Use Reserved Instances for stable, well-understood workloads that will not chang
 [Azure Hybrid Benefit](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/hybrid-use-benefit-licensing){:target="_blank" rel="noopener noreferrer"} lets you use existing on-premises Windows Server and SQL Server licenses (with active Software Assurance) on Azure VMs. This eliminates the Windows or SQL license cost from the VM price, which represents a substantial portion of Windows VM pricing.
 
 **Eligible licenses:**
-- Windows Server Standard (covers up to 2 VMs with up to 8 cores each)
-- Windows Server Datacenter (covers unlimited VMs on up to 16 cores of allocated Azure physical infrastructure)
+- Windows Server Standard or Datacenter with active Software Assurance or a qualifying subscription. Each VM needs a minimum of 8 core licenses and scales up to the VM's actual core count, with each processor license counting as 16 core licenses.
+- Datacenter edition additionally grants dual-use rights, meaning the same license can run on-premises and in Azure at the same time, whereas Standard requires moving the license to Azure. (The "run unlimited VMs per host" entitlement applies only to Azure Dedicated Host and Azure VMware Solution, not standard multi-tenant VMs.)
 - SQL Server Standard and Enterprise
 
 Hybrid Benefit stacks with Reserved Instances and Savings Plans for maximum savings. An organization running Windows Server workloads on reserved, right-sized VMs with Hybrid Benefit applied can achieve cost reductions exceeding 70% compared to pay-as-you-go Linux-equivalent pricing.
@@ -574,7 +583,7 @@ A VM running 10 hours per day instead of 24 reduces compute cost by roughly 58%.
 
 **Result:** New VMs created after Microsoft completes the default outbound access deprecation lose internet connectivity. Even before deprecation, the default outbound mechanism does not provide predictable IP addresses for allowlisting.
 
-**Solution:** Always configure explicit outbound connectivity via NAT Gateway, Azure Firewall, or a public IP. See the [VNet Architecture](/study-guides/infrastructure/azure/azure-vnet-architecture.html) guide for NAT Gateway details.
+**Solution:** Always configure explicit outbound connectivity via NAT Gateway, Azure Firewall, or a public IP.
 
 ---
 
@@ -628,4 +637,4 @@ A VM running 10 hours per day instead of 24 reduces compute cost by roughly 58%.
 
 9. **Check VM core quotas before configuring autoscale maximums.** Quota exhaustion during a traffic spike is one of the most preventable and most impactful scaling failures. Verify and increase quotas proactively.
 
-10. **Single VM SLA with Premium SSD is unique to Azure.** A single VM with all Premium SSD disks receives a 99.9% SLA without requiring multiple instances. This makes Azure VMs viable for workloads that cannot be load-balanced, such as legacy single-instance applications.
+10. **A single VM with Premium SSD carries a 99.9% SLA.** No multiple instances required, and it beats AWS's 99.5% instance-level SLA for EC2. This makes Azure VMs viable for workloads that cannot be load-balanced, such as legacy single-instance applications.

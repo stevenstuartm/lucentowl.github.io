@@ -3,8 +3,8 @@ title: "Azure Cache for Redis"
 layout: guide
 category: Azure
 subcategory: Database Services
-description: "Architecture patterns, tier selection, clustering, and operational strategies for Azure Cache for Redis, including geo-replication, data persistence, and cache-aside patterns."
-tags: [azure, caching, performance, scalability, databases, cloud-computing, fundamentals]
+description: "Architecture patterns, tier selection, clustering, and operational strategies for Azure Cache for Redis and its successor Azure Managed Redis, including geo-replication, data persistence, and cache-aside patterns."
+tags: [azure-cache-for-redis, azure-managed-redis, redis, cache-aside, clustering, geo-replication, fundamentals]
 ---
 
 ## What Is Azure Cache for Redis
@@ -12,6 +12,11 @@ tags: [azure, caching, performance, scalability, databases, cloud-computing, fun
 [Azure Cache for Redis](https://learn.microsoft.com/en-us/azure/azure-cache-for-redis/cache-overview){:target="_blank" rel="noopener noreferrer"} is a managed implementation of the open-source Redis in-memory data store, hosted on Azure's infrastructure. Redis holds data structures like strings, hashes, lists, sets, and sorted sets in memory, providing sub-millisecond read/write latency. The service handles replication, failover, patching, and scaling so you focus on application logic rather than operational complexity.
 
 Common use cases include session storage, real-time analytics, rate limiting, distributed locks, leaderboards, and pub/sub messaging. Any scenario where you need fast access to data that changes frequently or where serving from disk is too slow benefits from Redis caching.
+
+<div class="callout callout--warning">
+<p class="callout__title">Azure Cache for Redis is retiring in favor of Azure Managed Redis</p>
+<p>Microsoft has announced retirement of the entire Azure Cache for Redis product family: the <strong>Enterprise and Enterprise Flash</strong> tiers retire on <strong>March 31, 2027</strong>, and the <strong>Basic, Standard, and Premium</strong> tiers retire on <strong>September 30, 2028</strong>. <strong>Azure Managed Redis</strong> (built on Redis Software from Redis Ltd.) is the single successor for all of them, with a unified tier structure and migration tooling rolling out from late 2025. Greenfield projects should start on Azure Managed Redis, and existing caches should be planned for migration before their retirement date. Most concepts in this guide carry over directly to Azure Managed Redis: clustering, persistence, the cache-aside and write patterns, geo-replication, and connection management. The tier names and per-tier limits below apply to the classic offering you may still be running or migrating off.</p>
+</div>
 
 ### What Problems Azure Cache for Redis Solves
 
@@ -114,7 +119,7 @@ Single or multi-node configuration with replication, data persistence, clusterin
 - Data persistence: RDB snapshots or AOF logging
 - Clustering enabled (distribute data across shards)
 - Zone-redundant deployment (replica in different zone)
-- Sizes: 6 GB to 1.2 TB
+- Sizes: 6 GB to 120 GB single-node (P1-P5); up to ~1.2 TB with clustering (10 shards of P5)
 - Supports VNet injection and Private Link
 
 **When to use:**
@@ -125,8 +130,8 @@ Single or multi-node configuration with replication, data persistence, clusterin
 - Compliance environments requiring network isolation
 
 **Premium capabilities:**
-- **Data persistence:** RDB snapshots every 6-60 minutes, or AOF continuous logging
-- **Clustering:** Data automatically distributed across shards; supports up to 500 shards
+- **Data persistence:** RDB snapshots (15, 30, or 60 minutes, or 6/12/24 hours), or AOF continuous logging
+- **Clustering:** Data automatically distributed across shards; up to 10 shards generally available (up to 30 in preview, and lower when replicas are added)
 - **Geo-replication:** Passive replica in another region for disaster recovery
 - **VNet injection:** Deploy Redis instance inside your VNet
 - **Firewall rules:** IP-based or firewall rules for network access
@@ -239,7 +244,7 @@ Horizontal scaling is preferred for large, growing datasets because it avoids re
 RDB (Redis Database) persistence periodically snapshots the entire dataset to durable storage. On recovery, Redis loads the snapshot into memory.
 
 **Characteristics:**
-- Snapshots occur every 6, 15, 30, or 60 minutes (configurable)
+- Snapshots occur every 15, 30, or 60 minutes, or every 6, 12, or 24 hours (configurable)
 - Asynchronous: snapshots do not block client operations
 - Point-in-time recovery: restore from any snapshot
 - Suitable when losing recent changes (since last snapshot) is acceptable

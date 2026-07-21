@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Storage Services
 description: "Blob Storage fundamentals for architects including storage account types, access tiers, lifecycle management, redundancy options, security controls, and object storage patterns on Azure."
-tags: [infrastructure, azure, cloud-computing, scalability, cost-analysis, security, practical]
+tags: [blob-storage, access-tiers, lifecycle-management, storage-redundancy, adls-gen2, sas-tokens, practical]
 ---
 
 ## What Is Azure Blob Storage
@@ -331,7 +331,7 @@ Common built-in roles for blob storage:
 | **Storage Blob Data Reader** | Read-only access to blobs and containers |
 | **Storage Blob Delegator** | Generate user delegation keys for creating user delegation SAS tokens |
 
-For application workloads, use [managed identities](/study-guides/infrastructure/azure/azure-rbac-managed-identities.html) assigned the appropriate blob data role. This eliminates the need to store credentials entirely.
+For application workloads, use managed identities assigned the appropriate blob data role. This eliminates the need to store credentials entirely.
 
 <div class="callout callout--tip">
 <p class="callout__title">Security Best Practice</p>
@@ -389,7 +389,18 @@ Service endpoints do not give the storage account a private IP address. The stor
 
 Private Endpoints require [Private DNS zone](https://learn.microsoft.com/en-us/azure/dns/private-dns-overview){:target="_blank" rel="noopener noreferrer"} configuration so that the storage account's FQDN resolves to the private IP instead of the public endpoint. Without proper DNS configuration, applications will continue resolving to the public IP and bypass the Private Endpoint.
 
-For a detailed comparison of service endpoints and Private Endpoints, see the [VNet Architecture](/study-guides/infrastructure/azure/azure-vnet-architecture.html) guide.
+The two features differ in the shape of the traffic path, not just in configuration:
+
+```
+Service endpoint: traffic still targets the PUBLIC endpoint
+  VM in subnet ──(Azure backbone)──▶ account.blob.core.windows.net (public IP)
+                                     firewall sees the subnet identity; no private IP assigned
+
+Private endpoint: traffic targets a PRIVATE IP inside the subnet
+  VM in subnet ──▶ NIC (private IP in subnet) ──▶ storage account
+                   account.blob.core.windows.net resolves to that private IP
+                   public endpoint can be disabled entirely
+```
 
 ---
 
@@ -454,7 +465,7 @@ Azure Blob Storage includes [built-in static website hosting](https://learn.micr
 - Serve static files directly from blob storage without a web server
 - Configure index document (default page) and error document (404 page)
 - Support for custom domains using CNAME records
-- Integration with [Azure CDN](/study-guides/infrastructure/azure/azure-front-door-cdn.html) or [Azure Front Door](/study-guides/infrastructure/azure/azure-front-door-cdn.html) for global content delivery, HTTPS with custom domains, and caching
+- Integration with Azure CDN or Azure Front Door for global content delivery, HTTPS with custom domains, and caching
 
 **Limitations:**
 - No server-side processing (static files only)

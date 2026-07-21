@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Storage Services
 description: "Managed Disks and Azure Files fundamentals for architects including disk types, performance tiers, shared disks, Azure Files SMB and NFS shares, Azure NetApp Files, and block and file storage patterns on Azure."
-tags: [infrastructure, azure, cloud-computing, reliability, performance, cost-analysis, practical]
+tags: [managed-disks, azure-files, azure-netapp-files, azure-file-sync, ultra-disk, premium-ssd-v2, practical]
 ---
 
 ## What Are Azure Managed Disks and Azure Files
@@ -49,7 +49,7 @@ These two services address different storage needs. Managed disks are block stor
 | Concept | AWS | Azure |
 |---------|-----|-------|
 | **Block storage for VMs** | EBS (Elastic Block Store) | Managed Disks |
-| **High-performance block storage** | io2 Block Express (up to 256K IOPS) | Ultra Disk / Premium SSD v2 (up to 160K IOPS per disk) |
+| **High-performance block storage** | io2 Block Express (up to 256K IOPS) | Ultra Disk (up to 400K IOPS per disk) / Premium SSD v2 |
 | **General purpose SSD** | gp3 | Premium SSD (P-series) |
 | **Throughput-optimized HDD** | st1 | Standard HDD |
 | **Managed NFS file shares** | EFS (Elastic File System) | Azure Files (NFS) or Azure NetApp Files |
@@ -98,15 +98,15 @@ Azure offers five managed disk types optimized for different workload characteri
 
 | Disk Type | Max IOPS (per disk) | Max Throughput (per disk) | Max Size | Latency | Best For |
 |-----------|-------------------|-------------------------|----------|---------|----------|
-| **Ultra Disk** | 160,000 | 4,000 MiB/s | 65,536 GiB | Sub-millisecond | SAP HANA, top-tier databases, transaction-heavy workloads |
-| **Premium SSD v2** | 80,000 | 1,200 MiB/s | 65,536 GiB | Sub-millisecond | Production databases, latency-sensitive workloads needing flexible tuning |
+| **Ultra Disk** | 400,000 | 10,000 MB/s | 65,536 GiB | Sub-millisecond | SAP HANA, top-tier databases, transaction-heavy workloads |
+| **Premium SSD v2** | 80,000 | 2,000 MB/s | 65,536 GiB | Sub-millisecond | Production databases, latency-sensitive workloads needing flexible tuning |
 | **Premium SSD** | 20,000 | 900 MiB/s | 32,767 GiB | Single-digit millisecond | Production VMs, web servers, medium databases |
 | **Standard SSD** | 6,000 | 750 MiB/s | 32,767 GiB | Single-digit millisecond | Web servers, dev/test, lightly used applications |
 | **Standard HDD** | 2,000 | 500 MiB/s | 32,767 GiB | Higher | Backup, disaster recovery, infrequent access |
 
 #### Ultra Disk
 
-[Ultra Disks](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#ultra-disks){:target="_blank" rel="noopener noreferrer"} deliver the highest performance available on Azure. They allow you to independently set disk size, IOPS (up to 160,000), and throughput (up to 4,000 MiB/s), and you can dynamically adjust these parameters without detaching the disk or stopping the VM. This flexibility makes Ultra Disks suitable for data-intensive workloads like SAP HANA, top-tier SQL Server deployments, and high-frequency transaction processing.
+[Ultra Disks](https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#ultra-disks){:target="_blank" rel="noopener noreferrer"} deliver the highest performance available on Azure. They allow you to independently set disk size, IOPS (up to 400,000), and throughput (up to 10,000 MB/s), and you can dynamically adjust these parameters without detaching the disk or stopping the VM. This flexibility makes Ultra Disks suitable for data-intensive workloads like SAP HANA, top-tier SQL Server deployments, and high-frequency transaction processing.
 
 Ultra Disks have some constraints. They are not available in all regions or with all VM sizes. They cannot be used as OS disks. They do not support disk snapshots, VM images, availability sets, or Azure Site Recovery. These constraints mean Ultra Disks are typically reserved for data disks on workloads that genuinely require sub-millisecond latency at very high IOPS.
 
@@ -286,7 +286,7 @@ NFS shares on Azure Files require the Premium tier (FileStorage account). NFS sh
 
 <div class="callout callout--note">
 <p class="callout__title">Port 445 and ISP Blocking</p>
-<p>Many internet service providers block port 445 (SMB) for security reasons. Mounting an Azure SMB file share over the public internet may fail if the client's ISP blocks this port. For reliable access from on-premises or home networks, use Azure VPN Gateway, ExpressRoute, or Azure Private Endpoints to route SMB traffic over a private connection. See the <a href="/study-guides/infrastructure/azure/azure-expressroute-vpn.html">ExpressRoute & VPN Gateway</a> guide for connectivity options.</p>
+<p>Many internet service providers block port 445 (SMB) for security reasons. Mounting an Azure SMB file share over the public internet may fail if the client's ISP blocks this port. For reliable access from on-premises or home networks, use Azure VPN Gateway, ExpressRoute, or Azure Private Endpoints to route SMB traffic over a private connection.</p>
 </div>
 
 ### Identity-Based Access for SMB Shares
@@ -339,7 +339,7 @@ Azure Files integrates with [Azure Backup](https://learn.microsoft.com/en-us/azu
 
 Azure file shares are accessible through the storage account's public endpoint by default, but production deployments typically restrict access using private networking.
 
-**Private Endpoints:** Create a [Private Endpoint](https://learn.microsoft.com/en-us/azure/storage/common/storage-private-endpoints){:target="_blank" rel="noopener noreferrer"} for the storage account to assign it a private IP address within your VNet. All SMB and NFS traffic then flows over the private network without traversing the public internet. Private Endpoints work across VNet peering and VPN/ExpressRoute connections, enabling on-premises access to Azure Files over private links. See the [Private Link & Virtual WAN](/study-guides/infrastructure/azure/azure-private-link-virtual-wan.html) guide for architecture patterns.
+**Private Endpoints:** Create a [Private Endpoint](https://learn.microsoft.com/en-us/azure/storage/common/storage-private-endpoints){:target="_blank" rel="noopener noreferrer"} for the storage account to assign it a private IP address within your VNet. All SMB and NFS traffic then flows over the private network without traversing the public internet. Private Endpoints work across VNet peering and VPN/ExpressRoute connections, enabling on-premises access to Azure Files over private links.
 
 **Service Endpoints:** A lower-cost alternative to Private Endpoints that routes traffic over the Azure backbone but does not assign a private IP. The storage account's public endpoint remains active. Service endpoints restrict access to specific VNet subnets but do not support on-premises access.
 
@@ -381,7 +381,7 @@ Choosing between Managed Disks, Azure Files, and Azure Blob Storage depends on t
 | **Access pattern** | Single VM (or clustered with shared disks) | Multiple clients via SMB/NFS | Application code via REST/SDK |
 | **Protocol** | Block device (mounted as disk) | SMB 3.x, NFS 4.1, REST | REST, SDK, Data Lake Storage Gen2 |
 | **Sharing** | Single VM attachment (shared disks for clusters) | Thousands of concurrent clients | Unlimited concurrent clients via REST |
-| **Performance** | Up to 160K IOPS, sub-millisecond latency | Up to 100K IOPS (Premium), single-digit ms | Varies by tier and access pattern |
+| **Performance** | Up to 400K IOPS, sub-millisecond latency | Up to 100K IOPS (Premium), single-digit ms | Varies by tier and access pattern |
 | **Maximum size** | 64 TiB per disk | 100 TiB per share | 5 PiB per account |
 | **Persistence** | Independent of VM lifecycle | Independent of any VM | Independent of compute |
 | **Cost model** | Per-GiB provisioned + performance tier | Per-GiB used (Standard) or provisioned (Premium) + transactions | Per-GiB stored + transactions + retrieval |

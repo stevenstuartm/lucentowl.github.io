@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Database Services
 description: "Architecture patterns, tier selection, and operational considerations for Azure SQL Database and SQL Managed Instance, including elastic pools, Hyperscale, and migration strategies."
-tags: [azure, databases, cloud-computing, scalability, reliability, performance, fundamentals]
+tags: [azure-sql-database, sql-managed-instance, hyperscale, elastic-pools, geo-replication, serverless, fundamentals]
 ---
 
 ## What Is Azure SQL Database
@@ -25,7 +25,7 @@ tags: [azure, databases, cloud-computing, scalability, reliability, performance,
 
 **With Azure SQL Database or Managed Instance:**
 - Microsoft applies patches and security updates automatically with no downtime (or scheduled windows)
-- Automated backups with point-in-time restore to any moment in the last 35 days
+- Automated backups with point-in-time restore to any moment within the retention window (default 7 days, configurable up to 35 days), plus long-term retention up to 10 years
 - Built-in high availability and geo-replication with transparent failover
 - Compute scaling happens in seconds without downtime or connection interruption
 - Vulnerability scanning and threat detection run continuously
@@ -61,9 +61,9 @@ The DTU model is a bundled measure of compute, memory, and IO. You select a tier
 
 | Tier | DTU Range | Use Case |
 |------|-----------|----------|
-| **Basic** | 5-100 DTUs | Development, testing, or very small applications |
-| **Standard** | 100-3,000 DTUs | General production workloads with moderate performance needs |
-| **Premium** | 1,250-4,000 DTUs | High-performance workloads; Hyperscale not available in DTU model |
+| **Basic** | 5 DTUs | Development, testing, or very small applications |
+| **Standard** | 10-3,000 DTUs (S0-S12) | General production workloads with moderate performance needs |
+| **Premium** | 125-4,000 DTUs (P1-P15) | High-performance workloads; Hyperscale not available in DTU model |
 
 **DTU advantages:**
 - Simpler pricing model (all-in-one resource bundling)
@@ -81,8 +81,8 @@ The vCore model separates compute, memory, and storage as independent dimensions
 
 | Tier | vCore Options | Key Features |
 |------|---------------|--------------|
-| **General Purpose** | 2-80 vCores | Balanced compute and memory, zone-redundant option, best for most workloads |
-| **Business Critical** | 2-80 vCores | Premium storage, in-memory OLTP, higher availability SLA |
+| **General Purpose** | 2-128 vCores | Balanced compute and memory, zone-redundant option, best for most workloads |
+| **Business Critical** | 2-128 vCores | Premium storage, in-memory OLTP, higher availability SLA |
 | **Hyperscale** | 1-128 vCores | Log service architecture, rapid scaling, thousands of concurrent connections |
 
 **vCore advantages:**
@@ -144,8 +144,8 @@ Hyperscale is a cloud-native architecture separate from General Purpose and Busi
 - Compute and storage completely decoupled
 - Up to 128 TB of data per database (vs 4 TB in other tiers)
 - Rapid scaling of compute without data movement
-- Multiple secondary replicas for read scaling (up to 30 read replicas)
-- Supports databases up to 100 GB without performance degradation
+- Multiple secondary replicas for read scaling (up to 30 named replicas)
+- Fast, size-independent backups and near-instant restore via storage snapshots
 - Very high IO throughput (100,000+ IOPs)
 
 **Hyperscale Architecture:**
@@ -173,18 +173,18 @@ When you scale compute in Hyperscale, only the compute layer scales. Data remain
 
 ### Serverless Compute Tier
 
-Serverless is only available in General Purpose tier (vCore model). It automatically pauses compute when idle and resumes on the next connection.
+Serverless auto-pause is a General Purpose feature (vCore model). It automatically pauses compute when idle and resumes on the next connection. Hyperscale also offers a serverless compute option, but without auto-pause; Business Critical does not offer serverless.
 
 **How serverless works:**
-- Database pauses automatically after a configurable idle period (default 1 hour)
+- Database pauses automatically after a configurable idle period
 - Next connection triggers automatic resume (takes 10-30 seconds)
 - You pay only for the seconds the compute is active
 - Storage is always charged (serverless saves on compute only)
 
 **Characteristics:**
-- Auto-pause after idle period (configurable 1-4 hours)
+- Auto-pause delay configurable from 15 minutes up to 7 days (or disabled)
 - Auto-resume when activity detected
-- Min 0.5 vCores (pause tier), max 16 vCores
+- Min 0.5 vCores, max 40 vCores (General Purpose serverless)
 - Billed per second of compute usage
 
 **When to use:**
@@ -478,9 +478,9 @@ Does your database use:
 - Solution: Refactor code to use supported features or migrate to Managed Instance
 
 **Issue: Windows authentication required**
-- On-premises uses Windows logins
-- Azure SQL Database supports only SQL authentication
-- Solution: Create SQL logins and update connection strings, or use Managed Instance with Windows auth via domain join
+- On-premises uses Windows (Active Directory) logins
+- Azure SQL Database supports SQL authentication and Microsoft Entra ID authentication, but not legacy on-premises Windows (Kerberos/NTLM) auth directly
+- Solution: Move users to Entra ID authentication (the recommended path) or SQL logins and update connection strings; for apps that must keep Kerberos-based Windows auth, use Managed Instance with Entra Domain Services or domain-joined connectivity
 
 **Issue: Large database cannot import via BACPAC**
 - BACPAC export limited to ~200 GB

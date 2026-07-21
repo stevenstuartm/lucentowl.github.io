@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Compute Services
 description: "Azure container platform comparison for architects covering Azure Container Instances, Azure Kubernetes Service, and Azure Container Apps with selection frameworks and architecture patterns."
-tags: [infrastructure, azure, cloud-computing, kubernetes, scalability, practical]
+tags: [aks, container-apps, aci, kubernetes, keda, dapr, practical]
 ---
 
 ## What Are Azure Container Services
@@ -34,7 +34,7 @@ Architects familiar with AWS container services should note several important di
 | Concept | AWS | Azure |
 |---------|-----|-------|
 | **Simple container execution** | AWS Fargate (runs on ECS or EKS) | Azure Container Instances (standalone service) |
-| **Managed Kubernetes** | Amazon EKS ($73/month control plane) | Azure Kubernetes Service (free control plane on free and standard tiers) |
+| **Managed Kubernetes** | Amazon EKS ($73/month control plane) | Azure Kubernetes Service (free control plane on the Free tier; Standard and Premium charge per cluster hour) |
 | **Serverless containers with app platform** | AWS App Runner | Azure Container Apps (more feature-rich, built on KEDA + Envoy + Dapr) |
 | **Container-native orchestration** | Amazon ECS (proprietary orchestrator) | No equivalent; Azure uses Kubernetes as the orchestration layer for both AKS and Container Apps |
 | **Control plane cost** | EKS charges for the control plane | AKS free tier has no control plane charge; standard and premium tiers charge for uptime SLA and additional features |
@@ -138,7 +138,18 @@ AKS supports three layers of autoscaling that operate at different levels of the
 
 **KEDA (Kubernetes Event-Driven Autoscaling)** is available as an [AKS add-on](https://learn.microsoft.com/en-us/azure/aks/keda-about){:target="_blank" rel="noopener noreferrer"} and provides event-driven scaling based on external event sources. KEDA can scale pods based on Azure Service Bus queue depth, Event Hubs partition lag, Cosmos DB change feed activity, HTTP request rate, cron schedules, and dozens of other event sources. KEDA can also scale pods to zero, which HPA cannot do.
 
-These three scaling mechanisms work together: KEDA or HPA scale pods, and when the cluster cannot accommodate the new pods, the cluster autoscaler provisions additional nodes.
+These three scaling mechanisms work together across two levels: KEDA or HPA scale pods, and when the cluster cannot accommodate the new pods, the cluster autoscaler provisions additional nodes.
+
+```
+Pod-level scaling
+├── HPA   → replicas from CPU / memory / custom metrics
+└── KEDA  → replicas from event sources (queue depth, lag, cron); can reach zero
+        ↓
+   more replicas requested than current nodes can schedule
+        ↓
+Node-level scaling
+└── Cluster Autoscaler → provisions nodes; drains and removes idle ones
+```
 
 ### Networking
 
@@ -148,7 +159,7 @@ AKS supports several [networking models](https://learn.microsoft.com/en-us/azure
 
 **Azure CNI Overlay** assigns pods IP addresses from a private overlay network that is not part of the VNet address space. Only node IPs consume VNet addresses, dramatically reducing IP requirements. Pod-to-pod communication works through encapsulation. This is the recommended model when VNet IP conservation is a priority.
 
-**Kubenet** is the simplest model, where nodes receive VNet IPs but pods receive addresses from a separate CIDR that is managed by Kubernetes. Route tables are required for cross-node pod communication, and there is a limit of 400 nodes per cluster. Kubenet is generally not recommended for production due to its limitations.
+**Kubenet** is the simplest model, where nodes receive VNet IPs but pods receive addresses from a separate CIDR that is managed by Kubernetes. Route tables are required for cross-node pod communication, and there is a limit of 400 nodes per cluster. Kubenet is not recommended for new clusters. Microsoft is retiring kubenet for AKS on March 31, 2028, and both new and existing clusters must move to Azure CNI Overlay before then.
 
 For most new clusters, Azure CNI Overlay provides the best balance of VNet integration and IP conservation. Use standard Azure CNI when pods must be directly addressable from VNet resources without any NAT or overlay.
 
@@ -286,7 +297,23 @@ The following comparison captures the primary dimensions that drive the choice b
 | **Stateful workloads** | Shared volumes within group | Persistent volumes, StatefulSets | Limited (no persistent volumes, use external stores) |
 | **Traffic splitting** | Not supported | Requires ingress controller or service mesh | Built-in revision-based traffic splitting |
 | **Custom controllers/operators** | Not applicable | Full support | Not supported |
-| **Maximum scale** | 100 container groups per subscription (default) | 5,000 nodes per cluster | 300 replicas per app (consumption), higher with dedicated profiles |
+| **Maximum scale** | 100 container groups per subscription per region (default) | 5,000 nodes per cluster | 1,000 replicas per app (300 via the portal, 1,000 via CLI/ARM) |
+
+### Decision Tree
+
+```
+Need the full Kubernetes API (custom operators, StatefulSets,
+DaemonSets, service mesh, GPU or node-level control)?
+├── Yes → AKS
+└── No
+    │
+    Is the workload short-lived (batch job, build agent, test run)
+    or a burst target from an AKS cluster?
+    ├── Yes → ACI
+    └── No  → Container Apps
+             (long-running HTTP services, APIs, event-driven
+              processors; scale-to-zero, traffic splitting, Dapr)
+```
 
 ### Decision Guidance
 
@@ -476,7 +503,7 @@ Some architectures benefit from running both AKS and Container Apps. Workloads t
 
 **Result:** Pod scheduling fails when the subnet runs out of IP addresses. The cluster cannot scale, and new deployments fail with IP exhaustion errors. Resizing the subnet after deployment is disruptive.
 
-**Solution:** Calculate IP requirements before creating the cluster: (max pods per node) x (max nodes) + (node count) + (buffer for upgrades). Use a /22 or larger subnet for production AKS clusters with Azure CNI. Consider Azure CNI Overlay if VNet IP conservation is a priority, since it only consumes VNet IPs for nodes rather than for every pod. See the [VNet Architecture](/study-guides/infrastructure/azure/azure-vnet-architecture.html) guide for subnet sizing details.
+**Solution:** Calculate IP requirements before creating the cluster: (max pods per node) x (max nodes) + (node count) + (buffer for upgrades). Use a /22 or larger subnet for production AKS clusters with Azure CNI. Consider Azure CNI Overlay if VNet IP conservation is a priority, since it only consumes VNet IPs for nodes rather than for every pod.
 
 ---
 

@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Networking & Content Delivery
 description: "How Azure Private Link and Virtual WAN provide private connectivity and managed network topology, covering Private Endpoints, Private Link Service, DNS integration, Service Endpoints, Virtual WAN hub architecture, routing intent, and when to choose each approach."
-tags: [infrastructure, azure, networking, security, architecture, scalability, practical]
+tags: [private-link, private-endpoints, virtual-wan, private-dns-zones, service-endpoints, routing-intent, practical]
 ---
 
 ## What Problems These Services Solve
@@ -90,6 +90,25 @@ Both [Service Endpoints](https://learn.microsoft.com/en-us/azure/virtual-network
 | **Cost** | Free | Per-endpoint hourly fee + data processing fee |
 | **Data exfiltration protection** | Limited (can restrict to specific resource via service endpoint policies for Storage) | Full (endpoint maps to a single resource instance) |
 
+The difference is where the traffic lands. A Service Endpoint sends the client to the service's public IP and only guarantees the packets ride the Azure backbone instead of the internet. A Private Endpoint puts a private IP inside your subnet that maps to one specific resource instance, so the client never targets a public address.
+
+```
+Service Endpoint — service keeps its public IP; only the route is optimized
+   VNet subnet                                   PaaS service
+   ┌─────────┐   backbone route (service tag)   ┌──────────────────┐
+   │   VM ────┼─────────────────────────────────▶│ public endpoint  │
+   └─────────┘   DNS still resolves public IP    │ (firewall admits │
+                                                 │  the subnet)     │
+                                                 └──────────────────┘
+
+Private Endpoint — a NIC with a private IP lands in your subnet
+   VNet subnet                                   PaaS resource
+   ┌────────────────────────┐   backbone        ┌──────────────────┐
+   │   VM ──▶ PE NIC 10.0.0.5│──────────────────▶│ one instance,    │
+   └────────────────────────┘   DNS resolves    │  mapped 1:1      │
+                                 to 10.0.0.5     └──────────────────┘
+```
+
 **When to use Service Endpoints:** For simple scenarios where traffic originates only from Azure VNets, cross-region and on-premises access are not needed, and cost is a concern. Service Endpoints are free and simpler to configure.
 
 **When to use Private Endpoints:** For production workloads that need on-premises access, cross-region connectivity, data exfiltration protection (each endpoint maps to a specific resource, not just a service type), or cross-tenant access. Private Endpoints are the recommended approach for most enterprise scenarios.
@@ -123,7 +142,7 @@ Basic can be upgraded to Standard but not downgraded.
 
 ### Routing Infrastructure
 
-Virtual WAN hubs contain a virtual hub router that manages all routing between connections. The hub router supports aggregate throughput up to 50 Gbps and can handle up to 10,000 routes from connected VNets and branches.
+Virtual WAN hubs contain a virtual hub router that manages all routing between connections. The router is sized in routing infrastructure units: it starts at 2 units (3 Gbps aggregate, 2,000 connected VMs) and scales in 1-Gbps/1,000-VM increments up to 50 units (50 Gbps). Regardless of capacity, a hub accepts at most 10,000 routes from its connected VNets, branches, and other hubs.
 
 **Route tables** control which connections can communicate. By default, all connections associate with and propagate to the Default route table, enabling any-to-any connectivity. Custom route tables enable network segmentation (for example, isolating production VNets from development VNets while both can reach shared services).
 
@@ -134,6 +153,21 @@ Virtual WAN hubs contain a virtual hub router that manages all routing between c
 A [secured virtual hub](https://learn.microsoft.com/en-us/azure/firewall-manager/secured-virtual-hub){:target="_blank" rel="noopener noreferrer"} is a Virtual WAN hub with Azure Firewall or a supported third-party NVA deployed inside it, managed through Azure Firewall Manager. With routing intent configured, the hub automatically routes all inter-spoke, branch-to-VNet, and internet-bound traffic through the firewall without requiring UDRs on spoke VNets.
 
 This eliminates one of the most operationally complex aspects of traditional hub-and-spoke networks: maintaining UDRs on every spoke subnet to force traffic through a central firewall.
+
+```
+Secured hub with routing intent — every path detours through the firewall
+                    Region 1 virtual hub
+  Spoke A ─────┐   ┌───────────────────────────┐
+               └──▶│  hub router ─▶ Azure       │──▶ internet
+  Spoke B ────────▶│              Firewall      │
+  Branch ─────────▶│  (routing intent forces    │◀──┐ auto
+  (VPN/ER)         │   private + internet        │   │ hub-to-hub
+                   │   traffic through firewall) │   │ mesh
+                   └────────────────────────────┘   ▼
+                                            Region 2 hub (same model)
+
+  A-to-B traffic:  Spoke A ─▶ hub firewall ─▶ Spoke B   (no UDRs on spokes)
+```
 
 ### Any-to-Any Connectivity
 

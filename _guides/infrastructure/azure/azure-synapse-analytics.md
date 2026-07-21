@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Database Services
 description: "Architecture patterns, pool types, and workload management for Azure Synapse Analytics, including dedicated SQL pools, Spark pools, and data warehouse design considerations."
-tags: [azure, databases, analytics, scalability, performance, cloud-computing, fundamentals]
+tags: [synapse-analytics, dedicated-sql-pool, apache-spark, data-warehouse, data-distribution, microsoft-fabric, fundamentals]
 ---
 
 ## What Is Azure Synapse Analytics
@@ -12,6 +12,11 @@ tags: [azure, databases, analytics, scalability, performance, cloud-computing, f
 [Azure Synapse Analytics](https://learn.microsoft.com/en-us/azure/synapse-analytics/overview-what-is){:target="_blank" rel="noopener noreferrer"} is Microsoft's answer to distributed analytics platforms. Unlike single-purpose database systems, Synapse integrates multiple computation engines and storage layers into one workspace, allowing data engineers to conduct exploratory analysis, load data at scale, and run complex queries on massive datasets.
 
 The platform combines three core components: dedicated SQL pools (formerly Azure SQL Data Warehouse) for traditional MPP data warehousing, Apache Spark pools for distributed data processing and machine learning, and built-in data integration through pipelines and linked services. This convergence of technologies eliminates the need to stitch together separate services.
+
+<div class="callout callout--note">
+<p class="callout__title">Synapse and Microsoft Fabric</p>
+<p>Microsoft positions <strong>Microsoft Fabric</strong> as the successor to Synapse, and new analytics investment (OneLake, Direct Lake, Fabric Data Warehouse, real-time analytics) is going into Fabric rather than Synapse. Synapse workspaces and dedicated SQL pools remain generally available and supported for existing workloads, with no announced retirement date, but greenfield analytics projects should evaluate Fabric first. The dedicated SQL pool, distribution, and workload-management concepts in this guide carry over directly to Fabric's warehouse experience.</p>
+</div>
 
 ### What Problems Synapse Solves
 
@@ -67,15 +72,17 @@ DWUs represent compute capacity and are the primary scaling metric. A DWU encomp
 
 **DWU scaling tiers:**
 
-| DWU Level | Compute Nodes | vCores per Node | Memory per Node | Use Case |
-|-----------|---------------|-----------------|-----------------|----------|
-| DW100c | 2 | 4 | 32 GB | Development, testing, small workloads |
-| DW500c | 5 | 4 | 32 GB | Small production workloads |
-| DW1000c | 10 | 4 | 32 GB | Medium workloads with standard concurrency |
-| DW2000c | 20 | 4 | 32 GB | Medium-large workloads |
-| DW5000c | 50 | 4 | 32 GB | Large workloads with high concurrency |
-| DW10000c | 100 | 4 | 32 GB | Very large workloads |
-| DW30000c | 300 | 4 | 32 GB | Extreme scale (enterprise workloads) |
+| DWU Level | Compute Nodes | Distributions per Node | Use Case |
+|-----------|---------------|------------------------|----------|
+| DW100c | 1 | 60 | Development, testing, small workloads |
+| DW500c | 1 | 60 | Small production workloads |
+| DW1000c | 2 | 30 | Medium workloads with standard concurrency |
+| DW2000c | 4 | 15 | Medium-large workloads |
+| DW5000c | 10 | 6 | Large workloads with high concurrency |
+| DW10000c | 20 | 3 | Very large workloads |
+| DW30000c | 60 | 1 | Extreme scale (enterprise workloads) |
+
+Data always lands in 60 distributions regardless of DWU level; scaling up spreads those 60 distributions across more compute nodes, so query parallelism improves as each node owns fewer distributions (from 60 per node at DW100c down to 1 per node at DW30000c). The underlying node hardware is abstracted and Microsoft treats these node counts as reference values, not a sizing guarantee.
 
 **Scaling rules of thumb:**
 - Start with DW500c or DW1000c for initial workloads
@@ -131,6 +138,21 @@ When you create a table without specifying distribution, Synapse defaults to rou
 - Storage overhead: Replicated table occupies (number of nodes) × (table size) storage
 
 Use case: A Customers table (100 MB) replicated across 10 nodes occupies 1 GB total.
+
+The reason distribution keys matter so much is that they decide whether a join runs locally or forces the engine to move data across nodes first:
+
+```
+Collocated join (both tables HASH-distributed on CustomerID):
+  Node 1: Orders[cust 1-100]    + Customers[cust 1-100]    -> join locally
+  Node 2: Orders[cust 101-200]  + Customers[cust 101-200]  -> join locally
+  (no data movement)
+
+Shuffle join (tables distributed on different keys):
+  Node 1: Orders[cust 1-100]    + Customers[region A]
+  Node 2: Orders[cust 101-200]  + Customers[region B]
+        \  engine reshuffles rows across nodes to align keys  /
+  (network movement before the join can run = the slow path)
+```
 
 **Distribution design pattern:**
 1. Identify your largest fact table
@@ -192,7 +214,7 @@ GROUP BY OrderDate, ProductID;
 
 Queries referencing the underlying tables may automatically use the materialized view if the result matches. This is called automatic query rewrite and does not require changing application code.
 
-**When to use:** High-cost aggregations that are queried repeatedly (dashboards, reports). Maintenance occurs through manual refresh (incremental refresh is not available in Synapse dedicated SQL pools).
+**When to use:** High-cost aggregations that are queried repeatedly (dashboards, reports). Synapse maintains materialized views automatically: base-table changes are applied to the view synchronously, in the same transaction, with no manual refresh needed. That automatic maintenance is not free, though (see Pitfall 5).
 
 **2. Result Set Caching**
 
@@ -323,7 +345,7 @@ This separation (storage separate from compute) allows independent scaling: you 
 [Apache Spark pools](https://learn.microsoft.com/en-us/azure/synapse-analytics/spark/apache-spark-overview){:target="_blank" rel="noopener noreferrer"} provide distributed big data processing within Synapse. Unlike dedicated SQL pools which require structured, schema-enforced data, Spark handles unstructured data (images, logs, raw text) and complex transformations.
 
 **Key characteristics:**
-- On-demand auto-scaling (0 to 600 nodes)
+- On-demand auto-scaling (up to 200 nodes)
 - Support for PySpark (Python), Spark SQL, Scala, and .NET Spark
 - Integration with notebooks for interactive development
 - Access to the same data lake as SQL pools
@@ -432,13 +454,13 @@ Pipelines are triggered on schedule, via webhooks, or manually.
 
 ---
 
-### Pitfall 5: Not Pausing Materialized View Refreshes
+### Pitfall 5: Over-Creating Materialized Views on Write-Heavy Tables
 
-**Problem:** Refreshing materialized views during peak usage hours when the pool should be reserved for user queries.
+**Problem:** Building many materialized views over base tables that receive frequent loads or DML, on the assumption that views are refreshed separately from ingestion.
 
-**Result:** View refreshes consume resources, slowing user queries and violating query SLAs.
+**Result:** Because Synapse maintains materialized views synchronously (every base-table change updates the view's delta store in the same transaction), each view adds write amplification to every load. Ingestion and DML slow down in proportion to the number of overlapping views, and heavy load windows stretch out.
 
-**Solution:** Schedule materialized view refreshes during off-peak hours (late night, early morning). Use MAXDOP and SET SESSION settings to limit the resources a refresh job consumes.
+**Solution:** Create materialized views only for high-cost aggregations that are read far more often than their base tables are written. On write-heavy tables, weigh the read speedup against the added load cost, and use `ALTER MATERIALIZED VIEW ... REBUILD` sparingly for a full rebuild when the view fragments. Check `sys.pdw_materialized_view_column_distribution_properties` to confirm views are being used before keeping them.
 
 ---
 

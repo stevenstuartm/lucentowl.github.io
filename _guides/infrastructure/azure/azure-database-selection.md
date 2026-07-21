@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Database Services
 description: "A decision framework for selecting the right Azure database service, comparing Azure SQL Database, Cosmos DB, Cache for Redis, Synapse Analytics, and other data services across workload types, consistency requirements, and cost models."
-tags: [azure, databases, decision-making, architecture, cloud-computing, scalability, practical]
+tags: [database-selection, azure-sql-database, cosmos-db, azure-cache-redis, synapse-analytics, polyglot-persistence, practical]
 ---
 
 ## What Is Azure Database Service Selection
@@ -61,10 +61,29 @@ The first question is: what does the application need the database to do? Differ
 | **Key-value cache** | Sub-millisecond reads, session state, ephemeral data | Azure Cache for Redis | Cosmos DB (Table API) |
 | **Graph relationships** | Complex relationships, traversals, social networks | Cosmos DB (Gremlin API) | Azure Database for PostgreSQL (with pg_graphql) |
 | **Time-series** | High ingestion rate, time-ordered queries, telemetry | Azure Data Explorer (Kusto) | Cosmos DB (with partitioning on timestamp) |
-| **Full-text search** | Text search, faceted search, relevance ranking | Azure Cognitive Search | Cosmos DB (with integrated search), Azure Database for PostgreSQL (full-text search) |
+| **Full-text search** | Text search, faceted search, relevance ranking | Azure AI Search | Cosmos DB (with integrated search), Azure Database for PostgreSQL (full-text search) |
 | **Geospatial** | Location-based queries, distance calculations | Cosmos DB (geospatial indexing), Azure Database for PostgreSQL (PostGIS) | Azure SQL Database (spatial types) |
 
 **Key principle:** Start with workload type, not with a preferred database technology. The workload defines requirements, and requirements drive service selection.
+
+### Selection Decision Tree
+
+```
+Is the workload relational with ACID transactions?
+├── Yes
+│   ├── Need SQL Server / T-SQL / Microsoft ecosystem?
+│   │   ├── Instance-level features (cross-DB queries, SQL Agent, CLR)? → SQL Managed Instance
+│   │   └── Otherwise → Azure SQL Database
+│   ├── PostgreSQL app or extensions (JSONB, PostGIS)? → Azure Database for PostgreSQL
+│   └── MySQL app (WordPress, Drupal, PHP)?          → Azure Database for MySQL
+└── No (non-relational)
+    ├── Large analytical scans over TB–PB?      → Synapse (or SQL Hyperscale + columnstore under ~a few TB)
+    ├── Time-series / logs / telemetry?         → Azure Data Explorer
+    ├── Sub-ms cache / session / leaderboard?   → Azure Cache for Redis
+    ├── Full-text / faceted search?             → Azure AI Search
+    └── Flexible schema, global distribution, horizontal scale? → Cosmos DB
+            (choose API: SQL / MongoDB / Cassandra / Gremlin / Table)
+```
 
 ---
 
@@ -95,7 +114,7 @@ Azure SQL Database offers three deployment models:
 |------------------|-----------|-------------|
 | **Single database** | One database with dedicated or shared compute | Most applications, microservices, isolated workloads |
 | **Elastic pool** | Shared compute across multiple databases | SaaS applications with many small databases (one per tenant) |
-| **Hyperscale** | Distributed architecture supporting up to 100 TB | Very large databases requiring fast scaling and read replicas |
+| **Hyperscale** | Distributed architecture supporting up to 128 TB | Very large databases requiring fast scaling and read replicas |
 
 ### Pricing Models: DTU vs vCore vs Serverless
 
@@ -155,7 +174,7 @@ Both services offer two deployment tiers:
 | Tier | What It Is | When to Use |
 |------|-----------|-------------|
 | **Flexible Server** | Latest deployment model with zone-redundant HA, more control, broader feature set | All new workloads (recommended) |
-| **Single Server** | Legacy deployment model (deprecated for PostgreSQL, limited feature set for MySQL) | Existing workloads only; migrate to Flexible Server |
+| **Single Server** | Retired deployment model (PostgreSQL Single Server and MySQL Single Server are both retired) | Migrate any remaining instances to Flexible Server |
 
 **Flexible Server is the recommended option for all new deployments.** It supports availability zones, read replicas, and better performance tuning.
 
@@ -251,7 +270,7 @@ Cosmos DB charges based on provisioned throughput (Request Units per second, RU/
 | **Premium** | Standard + clustering, persistence, VNet integration, geo-replication | Mission-critical workloads, large datasets, multi-region replication |
 | **Enterprise** | Redis Enterprise with advanced features (RedisJSON, RediSearch, RedisBloom) | Advanced use cases requiring Redis Enterprise modules |
 
-**Standard tier is the baseline for production. Premium adds clustering for scale beyond a single node and persistence for durability.**
+**Standard tier is the baseline for production. Premium adds clustering for scale beyond a single node and persistence for durability.** Note that Microsoft is retiring the entire Azure Cache for Redis family (Enterprise/Enterprise Flash in March 2027, Basic/Standard/Premium in September 2028) in favor of **Azure Managed Redis**. New caching workloads should start there rather than on these classic tiers.
 
 ---
 
@@ -277,7 +296,7 @@ Cosmos DB charges based on provisioned throughput (Request Units per second, RU/
 |--------|-------------------|----------------------------------|
 | **Architecture** | Symmetric multiprocessing (SMP) | Massively parallel processing (MPP) |
 | **Optimal query pattern** | OLTP (transactional queries, row-level operations) | OLAP (large scans, aggregations, star schemas) |
-| **Max database size** | Up to 100 TB (Hyperscale) | Petabyte scale |
+| **Max database size** | Up to 128 TB (Hyperscale) | Petabyte scale |
 | **Pricing model** | vCore or DTU (always running unless serverless) | Data Warehouse Units (DWU), can pause when not querying |
 | **Use case** | Transactional applications, small to medium analytical workloads | Large-scale analytics, data warehousing |
 
@@ -332,7 +351,7 @@ Polyglot persistence is the practice of using multiple database technologies wit
 - **Cosmos DB** stores user profiles and session data (global distribution, low latency)
 - **Azure Cache for Redis** caches product catalog and pricing (sub-millisecond reads)
 - **Azure Synapse Analytics** aggregates historical sales data for reporting (large scans, analytics)
-- **Azure Cognitive Search** indexes product descriptions for full-text search (relevance ranking, facets)
+- **Azure AI Search** indexes product descriptions for full-text search (relevance ranking, facets)
 
 **Trade-offs of polyglot persistence:**
 - **Benefit:** Each workload uses the best-fit database, optimizing performance and cost
@@ -384,15 +403,15 @@ Polyglot persistence is the practice of using multiple database technologies wit
 
 | Service | Workload Type | Consistency | Max Scale | Pricing Model | Multi-Region |
 |---------|--------------|-------------|-----------|---------------|-------------|
-| **Azure SQL Database** | OLTP (relational) | Strong (ACID) | 100 TB (Hyperscale) | vCore, DTU, serverless | Geo-replication (4 secondaries) |
+| **Azure SQL Database** | OLTP (relational) | Strong (ACID) | 128 TB (Hyperscale) | vCore, DTU, serverless | Geo-replication (4 secondaries) |
 | **Azure SQL Managed Instance** | OLTP (SQL Server compatible) | Strong (ACID) | 16 TB | vCore | Failover groups (1 secondary) |
-| **Azure Database for PostgreSQL** | OLTP (relational) | Strong (ACID) | 16 TB (Flexible Server) | vCore + storage | Read replicas |
-| **Azure Database for MySQL** | OLTP (relational) | Strong (ACID) | 16 TB (Flexible Server) | vCore + storage | Read replicas |
+| **Azure Database for PostgreSQL** | OLTP (relational) | Strong (ACID) | 32 TiB (64 TiB on Premium SSD v2) | vCore + storage | Read replicas |
+| **Azure Database for MySQL** | OLTP (relational) | Strong (ACID) | 32 TiB (Memory Optimized) | vCore + storage | Read replicas |
 | **Cosmos DB** | NoSQL (document, key-value, graph) | Configurable (5 levels) | Unlimited (horizontal scale) | RU/s + storage | Native multi-region writes |
-| **Azure Cache for Redis** | In-memory cache | Eventual | 1.2 TB (P5 Premium) | Per GB memory per hour | Geo-replication (Premium+) |
+| **Azure Cache for Redis** | In-memory cache | Eventual | 1.2 TB (P5 Premium, 10-shard cluster) | Per GB memory per hour | Geo-replication (Premium+) |
 | **Azure Synapse Analytics** | OLAP (data warehouse) | Strong | Petabyte scale | DWU (can pause) | Geo-redundant backups |
 | **Azure Data Explorer** | Time-series, logs | Eventual | Petabyte scale | Per cluster size + storage | Follower clusters (read replicas) |
-| **Azure Table Storage** | Key-value (simple) | Strong (within partition) | 500 TB per account | Per GB storage + transactions | LRS, GRS, RA-GRS replication |
+| **Azure Table Storage** | Key-value (simple) | Strong (within partition) | 5 PiB per account | Per GB storage + transactions | LRS, GRS, RA-GRS replication |
 
 ---
 
