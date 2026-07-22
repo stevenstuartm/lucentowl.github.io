@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Application Integration & Messaging
 description: "High-throughput event streaming on Azure with Event Hubs, covering partitions, consumer groups, capture, Kafka compatibility, and patterns for real-time data ingestion at scale."
-tags: [azure, infrastructure, messaging, distributed-systems, scalability, analytics, practical]
+tags: [event-hubs, event-streaming, partitions, consumer-groups, kafka, event-hubs-capture, practical]
 ---
 
 ## What Is Azure Event Hubs
@@ -41,11 +41,11 @@ Architects familiar with AWS should note key differences between Event Hubs and 
 | **Throughput units** | Shards (specify per shard) | Throughput units or processing units (allocated at namespace level) |
 | **Consumer model** | Shard iterator, lease-based coordination | Consumer groups with automatic offset management |
 | **Partition key** | Explicit partition key used for sharding | Partition key optional; round-robin if not specified |
-| **Retention** | Default 24 hours, extendable to 365 days | Default 1 day, extendable to 90 days |
-| **Event size** | Up to 1 MB per record | Up to 1 MB per event |
-| **Kafka compatibility** | Not supported | Supported natively via Event Hubs protocol |
+| **Retention** | Default 24 hours, extendable to 365 days | Default 1 day; Standard up to 7 days, Premium/Dedicated up to 90 days |
+| **Event size** | Up to 1 MB per record | 1 MB (Standard/Premium); 256 KB on Basic, 20 MB on Dedicated |
+| **Kafka compatibility** | Not supported | Supported natively via Event Hubs protocol (Standard tier and above) |
 | **Schema management** | Use third-party or Schema Registry | [Azure Schema Registry](https://learn.microsoft.com/en-us/azure/event-hubs/schema-registry-overview){:target="_blank" rel="noopener noreferrer"} integrated |
-| **Auto-scaling** | Manual shard management | Auto-inflate (Premium tier) |
+| **Auto-scaling** | Manual shard management | Auto-inflate (Standard tier); dynamic PU/CU changes (Premium/Dedicated) |
 | **Archive/capture** | Amazon S3 via Kinesis Firehose | Blob Storage or Data Lake Storage built-in |
 | **Pricing model** | Per-shard-hour | Per-throughput-unit-hour or capacity unit-hour |
 
@@ -76,7 +76,20 @@ Most production scenarios use 4-16 partitions as a balance between scale and man
 
 ### Consumer Groups
 
-A [consumer group](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-features#consumer-groups){:target="_blank" rel="noopener noreferrer"} is a logical grouping of consumers that read from an Event Hub independently. Multiple consumer groups can consume the same events without interfering with each other.
+A [consumer group](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-features#consumer-groups){:target="_blank" rel="noopener noreferrer"} is a logical grouping of consumers that read from an Event Hub independently. Multiple consumer groups can consume the same events without interfering with each other. This is the structural difference from a queue. The events stay in the partition log, and each consumer group holds its own offset (read position) into every partition.
+
+```
+                  ┌── Partition 0: [e0 e1 e2 e3 e4 e5 e6 ...]
+Producers ──hash──┼── Partition 1: [e0 e1 e2 e3 e4 ...]
+                  └── Partition 2: [e0 e1 e2 e3 e4 e5 ...]
+                            ▲              ▲
+   consumer group "analytics" offset ─────┘              (reading behind, at e2)
+   consumer group "alerts"    offset ────────────────────┘   (caught up, at e5)
+```
+
+Consumers don't remove events. They advance their group's offset instead. The same event at partition 1 / position 3 can be unread by "analytics", already processed by "alerts", and captured to storage by a third group, all at once. Retention (not consumption) is what eventually drops an event from the log.
+
+The Basic tier supports only the single default consumer group, so independent multi-consumer fan-out requires Standard or above (Standard allows 20 groups per event hub, Premium 100, Dedicated 1,000).
 
 **How consumer groups work:**
 - Create a consumer group for each independent consumer or consumer application
@@ -108,18 +121,16 @@ Event Hubs pricing and scaling depend on throughput allocation. Azure offers thr
 - Cost: Fixed hourly charge per TU
 
 **Premium Tier (processing units):**
-- Processing Unit (PU) = 1 MB/sec inbound, 2 MB/sec outbound
-- Same throughput as TU but with better isolation and performance
-- Dedicated infrastructure per namespace
-- Base allocation: 1-128 PUs
-- Auto-scaling: Automatically scales between minimum and maximum PUs
-- Cost: Hourly charge per PU; includes a base capacity reservation
+- Capacity is allocated in Processing Units (PUs): 1, 2, 4, 6, 8, 10, 12, or 16 per namespace
+- Unlike a TU, a PU is not a fixed throughput throttle. It reserves isolated CPU, memory, and storage, and effective throughput depends on payload size, partition count, and consumer count (a namespace scales into the ~160 MB/sec range)
+- PUs can be adjusted dynamically without downtime, but Premium has no automatic auto-inflate (that is a Standard-tier feature)
+- Cost: Hourly charge per PU
 
 **Dedicated Tier (capacity units):**
-- Capacity Units (CUs) provide complete isolation with guaranteed resources
-- 1 CU = 200 MB/sec throughput (approximately)
-- Suitable for massive scale (1000s of events/sec) and compliance requirements
-- Separate cluster provisioned exclusively for your namespace
+- Capacity Units (CUs) provide a single-tenant cluster with the most isolation
+- Throughput is capacity-based rather than a fixed per-CU rate; Dedicated targets workloads beyond Premium's practical namespace range, scaled by adding CUs
+- Suitable for massive scale (terabytes per day) and strict compliance isolation
+- Availability-zone support requires a minimum of 8 CUs
 - Cost: Monthly charge per CU; highest cost but maximum performance and isolation
 
 **When to use each tier:**
@@ -135,7 +146,7 @@ Event Hubs pricing and scaling depend on throughput allocation. Azure offers thr
 1. Enable Capture on the Event Hub
 2. Specify a storage account and container (or Data Lake Storage path)
 3. All events are automatically written to storage in Avro format
-4. Events are organized by partition and time window (every 1-5 minutes by default)
+4. Events are organized by partition and flushed on whichever comes first: a time window (1-15 minutes) or a size window (10-500 MB)
 5. A separate consumer group captures events without affecting application consumers
 
 **Capture file structure:**
@@ -167,6 +178,8 @@ Event Hubs pricing and scaling depend on throughput allocation. Azure offers thr
 
 Event Hubs supports the Apache Kafka protocol natively, allowing Kafka producers and consumers to connect to Event Hubs without code changes.
 
+Kafka protocol requires the Standard tier or above; Basic does not support it.
+
 **How it works:**
 - Enable Kafka protocol on your Event Hub
 - Kafka clients connect to the Event Hubs broker endpoint (e.g., `myns.servicebus.windows.net:9093`)
@@ -181,7 +194,7 @@ Event Hubs supports the Apache Kafka protocol natively, allowing Kafka producers
 - Organizations with Kafka expertise can work with Event Hubs without learning new APIs
 
 **Limitations:**
-- Not all Kafka features are supported (e.g., transactions, compacted topics)
+- Not all Kafka features are supported. Kafka transactions are unavailable, though log compaction is now supported on Standard and above
 - Performance may differ from native Kafka clusters due to Azure infrastructure
 - Schema formats differ slightly from Kafka (Event Hubs uses its own schema handling)
 
@@ -274,20 +287,30 @@ IoT Devices → Event Hub ← Spark Cluster (Databricks)
 
 | Feature | Basic | Standard | Premium | Dedicated |
 |---------|-------|----------|---------|-----------|
-| **Throughput** | 1 MB/sec | Configurable (TU) | Configurable (PU) | 200 MB/sec per CU |
-| **Max partitions** | 32 | 32 | 32 | 1,024 |
-| **Retention** | 1 day | 1 day (up to 90) | 1 day (up to 90) | 1 day (up to 90) |
-| **Capture** | Not available | Available | Available | Available |
+| **Throughput** | 1 TU | Configurable (up to 40 TU) | Configurable (up to 16 PU) | Capacity-based (up to 20 CU) |
+| **Max partitions per event hub** | 32 | 32 | 100 | 1,024 |
+| **Consumer groups per event hub** | 1 (default only) | 20 | 100 | 1,000 |
+| **Max retention** | 1 day | 7 days | 90 days | 90 days |
+| **Max event size** | 256 KB | 1 MB | 1 MB | 20 MB |
+| **Capture** | Not available | Priced separately | Included | Included |
 | **Schema Registry** | Not available | Available | Available | Available |
-| **Auto-scale** | No | Optional (auto-inflate) | Yes (auto-scale) | Manual scaling |
+| **Kafka protocol** | Not available | Available | Available | Available |
+| **Scaling** | Fixed | Optional auto-inflate | Dynamic PU changes | Manual CU changes |
 | **Cost** | Per message | Per TU-hour | Per PU-hour | Per CU-month |
 | **Best for** | Dev/test | Production | High-isolation production | Massive scale |
 
-**Tier selection decision tree:**
-- **Basic:** Quick proof-of-concepts, learning, or very small throughput
-- **Standard:** Most production workloads; balance cost and features
-- **Premium:** When Standard's isolated performance is insufficient or compliance requires isolation
-- **Dedicated:** Massive ingestion (>1 TB/day), strict isolation, or cost efficiency at extreme scale
+**Tier selection:**
+
+```
+Need Capture, Kafka, more than one consumer group, or retention beyond 1 day?
+├─ No — POC, learning, tiny throughput ─────────────────────────▶ Basic
+└─ Yes
+   ├─ Terabytes/day, single-tenant cluster, or sustained load
+   │  beyond Premium's namespace range? ────────────────────────▶ Dedicated
+   ├─ Need resource isolation, predictable low latency, CMK,
+   │  90-day retention, or dynamic partition scale-out? ────────▶ Premium
+   └─ Most production workloads (retention ≤ 7 days) ───────────▶ Standard
+```
 
 ---
 
@@ -329,7 +352,7 @@ IoT Devices → Event Hub ← Spark Cluster (Databricks)
 
 **Result:** Consumer restart causes data loss. Events older than retention are discarded and cannot be replayed.
 
-**Solution:** Explicitly set retention to the maximum your use case requires (up to 90 days). For longer retention or full history, enable Capture to archive events to storage. Communicate retention limits to teams that depend on replay capability.
+**Solution:** Explicitly set retention to what your use case requires, but know the ceiling depends on tier. Standard caps at 7 days, while Premium and Dedicated reach 90. For anything longer (or full history), enable Capture to archive events to storage rather than relying on the retention window. Communicate retention limits to teams that depend on replay capability.
 
 ---
 
@@ -367,7 +390,7 @@ IoT Devices → Event Hub ← Spark Cluster (Databricks)
 
 6. **Schema Registry provides governance without brittleness.** Use it to centralize schema definitions and manage evolution. Avoid hardcoding schemas in producer/consumer code.
 
-7. **Throughput allocation must match your scale model.** Standard tier with auto-inflate suits most production workloads. Premium tier auto-scales and provides isolation. Dedicated tier is for massive scale and compliance isolation.
+7. **Throughput allocation must match your scale model.** Standard tier with auto-inflate suits most production workloads. Premium provides resource isolation and lets you adjust PUs dynamically (no automatic auto-inflate). Dedicated tier is for massive scale and compliance isolation.
 
 8. **Consumer lag is a real-time operational metric.** Monitor it continuously. Lag indicates whether consumers are keeping up with incoming events. Act on growing lag immediately.
 

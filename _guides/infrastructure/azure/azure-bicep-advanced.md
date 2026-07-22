@@ -3,8 +3,8 @@ title: "Azure Bicep: Advanced Patterns"
 layout: guide
 category: Azure
 subcategory: Infrastructure as Code
-description: "Advanced Bicep patterns including modules, conditional deployments, loops, template specs, deployment stacks, user-defined types, and enterprise-scale IaC strategies."
-tags: [azure, infrastructure, cloud-computing, devops, automation, advanced, design-patterns]
+description: "Advanced Bicep patterns including module design, registries and template specs, loops and conditions, user-defined types, deployment stacks, extensions, and enterprise-scale IaC strategies."
+tags: [bicep, bicep-modules, user-defined-types, bicep-registry, template-specs, deployment-stacks, advanced]
 ---
 
 ## Building Complex Infrastructure with Bicep
@@ -89,7 +89,7 @@ module vnet 'br:myregistry.azurecr.io/modules/network/vnet:v1.0' = {
 }
 ```
 
-**Linked Modules** live in storage accounts or are referenced by file path and work well for single-project module libraries. They are simpler to set up but require you to manage module versioning and access control yourself.
+**Local path modules** are files in your own repository. They version with the repository and need no registry infrastructure, at the cost of being copied rather than shared when another team wants them.
 
 ```bicep
 module app 'modules/compute/app-service.bicep' = {
@@ -101,14 +101,45 @@ module app 'modules/compute/app-service.bicep' = {
 }
 ```
 
+A Bicep module reference is either a local file path or a registry reference. There is no third form. ARM's "linked templates," which pull JSON from a storage account URL, are a different mechanism from ARM JSON, and Bicep modules do not work that way.
+
 **When to use each:**
 
-- **Registry modules:** Shared across teams, multiple projects, require versioning and governance, need community discoverability
-- **Linked modules:** Single project, team-owned library, rapid iteration without versioning overhead
+- **Registry modules:** shared across teams and repositories, need independent versioning and access control
+- **Local path modules:** single repository, versioned with the code that uses them, iterated on rapidly
 
-### Nested vs Linked
+Repeating the full registry path everywhere is noisy and makes bumping a version a find-and-replace. Define an alias in `bicepconfig.json` instead:
 
-Bicep itself does not distinguish between "nested" and "linked" the way CloudFormation does. Any module reference creates a child deployment, though Azure allows you to structure the actual files differently. The pattern that matters is whether modules are co-located in your file system or stored centrally.
+```json
+{
+  "moduleAliases": {
+    "br": {
+      "CoreModules": {
+        "registry": "myregistry.azurecr.io",
+        "modulePath": "bicep/modules"
+      }
+    }
+  }
+}
+```
+
+```bicep
+module vnet 'br/CoreModules:network/vnet:v1.0' = {
+  name: 'vnetDeployment'
+  params: {
+    location: location
+  }
+}
+```
+
+### Every Module Is a Nested Deployment
+
+Bicep does not distinguish "nested" from "linked" the way CloudFormation does. Every module reference compiles to a `Microsoft.Resources/deployments` resource, which has consequences that surface at scale:
+
+- The `name` you give a module is the **deployment name**, and it must be unique within its scope. Two modules with the same name in the same resource group overwrite each other's deployment history, which is why looped modules need the index in the name
+- Deployment names are limited to 64 characters
+- Nested deployments count against ARM's expansion limits, and what-if stops expanding at 500 of them
+- A module's outputs are available only after that nested deployment completes, which is what serializes otherwise independent work when you chain modules through outputs unnecessarily
 
 ### Module Design Best Practices
 
@@ -175,22 +206,24 @@ resource secondaryStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = if (d
   properties: {}
 }
 
-resource monitoring 'Microsoft.Insights/diagnosticSettings@2017-05-01-preview' = if (environment == 'prod') {
+resource monitoring 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (environment == 'prod') {
+  // diagnosticSettings is an extension resource: scope is required
+  // and names the resource being monitored.
+  scope: primaryStorage
   name: 'prodDiagnostics'
   properties: {
-    logs: [
+    workspaceId: logAnalyticsWorkspaceId
+    metrics: [
       {
-        category: 'StorageRead'
+        category: 'Transaction'
         enabled: true
-        retentionPolicy: {
-          enabled: true
-          days: 90
-        }
       }
     ]
   }
 }
 ```
+
+Two details in that block do most of the work. **Extension resources need a `scope`**, and a diagnostic setting without one has no resource to attach to. And **retention is no longer configured through diagnostic settings**, because the `retentionPolicy` property was retired. Retention now belongs to the destination, either Log Analytics table retention or a storage lifecycle policy.
 
 ### Ternary Operators for Properties
 
@@ -290,8 +323,10 @@ module storageAccounts 'modules/storage.bicep' = [for (location, index) in locat
   }
 }]
 
-output storageIds array = [for (i, location) in locations: storageAccounts[i].outputs.storageId]
+output storageIds array = [for (location, i) in locations: storageAccounts[i].outputs.storageAccountId]
 ```
+
+**The loop variable order is `(item, index)`, not `(index, item)`.** Writing `for (i, location) in locations` binds `i` to the region string and `location` to the integer, and the failure is a confusing type error at a line that looks correct. Including the index in the module `name` is not optional either, because module names are deployment names and must be unique within the scope.
 
 ### Loops Over Output Properties
 
@@ -300,6 +335,7 @@ Loops are useful for transforming outputs from multiple resources.
 ```bicep
 param vmCount int = 3
 param location string
+param subnetId string
 
 resource nics 'Microsoft.Network/networkInterfaces@2023-05-01' = [for i in range(0, vmCount): {
   name: 'nic-${i}'
@@ -310,7 +346,7 @@ resource nics 'Microsoft.Network/networkInterfaces@2023-05-01' = [for i in range
         name: 'ipconfig'
         properties: {
           subnet: {
-            id: '${vnet.id}/subnets/default'
+            id: subnetId
           }
         }
       }
@@ -318,9 +354,11 @@ resource nics 'Microsoft.Network/networkInterfaces@2023-05-01' = [for i in range
   }
 }]
 
-output nicIds array = [for (i, nic) in nics: nic.id]
-output nicPrivateIPs array = [for nic in nics: nic.properties.ipConfigurations[0].properties.privateIPAddress]
+output nicIds array = [for i in range(0, vmCount): nics[i].id]
+output nicPrivateIPs array = [for i in range(0, vmCount): nics[i].properties.ipConfigurations[0].properties.privateIPAddress]
 ```
+
+Indexing the collection is clearer than destructuring it, and it avoids the `(item, index)` ordering trap entirely. Note also that `privateIPAddress` is assigned by Azure at deployment time, so what-if cannot predict it and will report it as changing on every run.
 
 ### Index-Based vs Name-Based Loops
 
@@ -369,40 +407,44 @@ User-defined types allow you to create reusable, validated object structures tha
 
 ### Defining Custom Types
 
+**`@allowed` is permitted only on `param` statements.** Inside a `type` declaration, constrain values with union type syntax instead, using the `|` operator. Likewise `@minValue` and `@maxValue` apply to `int` only, and `@minLength`/`@maxLength` to strings and arrays.
+
 ```bicep
+// types.bicep
+@export()
+type delegationService = 'Microsoft.Web/serverFarms' | 'Microsoft.Sql/managedInstances'
+
 @export()
 type subnetConfig = {
   name: string
   addressPrefix: string
-  @minValue(0)
-  @maxValue(1)
-  delegated: bool
-  @allowed([
-    'Microsoft.Web/serverFarms'
-    'Microsoft.Sql/managedInstances'
-    null
-  ])
-  delegation: string?
+
+  @description('Service to delegate the subnet to. Omit for no delegation.')
+  delegation: delegationService?
 }
 
 @export()
+@sealed()
 type vmConfig = {
   name: string
   vmSize: string
-  @allowed([
-    'UbuntuLTS'
-    'WindowsServer2022'
-  ])
-  imageOffer: string
+  imageOffer: 'UbuntuLTS' | 'WindowsServer2022'
+
   @minValue(1)
   @maxValue(10)
   diskCount: int
 }
 ```
 
+A property is optional when its type carries the `?` marker, which replaces the awkward pattern of allowing `null` in a value list. `@sealed()` raises an unrecognized property name from a warning to an error, so a typo like `vmSizes` fails the build instead of being silently ignored.
+
 ### Using Custom Types in Modules
 
+Types declared with `@export()` are not automatically visible elsewhere. The consuming file has to import them:
+
 ```bicep
+import { subnetConfig, vmConfig } from 'types.bicep'
+
 param subnets subnetConfig[]
 param vmConfiguration vmConfig
 
@@ -423,12 +465,55 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
 }
 ```
 
+The same `import`/`@export()` mechanism works for variables and user-defined functions, which is how a repository shares constants and naming logic without a module deployment.
+
 **Benefits of user-defined types:**
 
-- **Validation at definition time:** Type decorators enforce constraints before deployment
-- **Reusability:** Define once, use in multiple modules
+- **Validation at definition time:** Type constraints are enforced by the compiler, before deployment
+- **Reusability:** Define once, import in multiple modules
 - **Self-documenting:** Type definitions serve as documentation of expected input structure
 - **IDE support:** Editors provide better autocomplete and validation with custom types
+
+### Types Derived from Resource Schemas
+
+Rather than hand-writing a type that mirrors part of a resource, derive it. `resourceInput<>` gives the writable properties of a resource type and `resourceOutput<>` gives the readable ones, so the type tracks the API version instead of drifting from it.
+
+```bicep
+// Exactly the values this API version accepts, no hand-maintained list
+type accountKind = resourceInput<'Microsoft.Storage/storageAccounts@2024-01-01'>.kind
+
+param storageProps resourceInput<'Microsoft.Storage/storageAccounts@2024-01-01'>.properties = {
+  accessTier: 'Hot'
+  minimumTlsVersion: 'TLS1_2'
+  allowBlobPublicAccess: false
+}
+```
+
+Bicep checks resource-derived types when you compile, but Azure Resource Manager does not check them at deployment time, so they are a local authoring guard rather than a service-side guarantee.
+
+### Tagged Unions
+
+When a parameter accepts several shapes that are distinguished by one field, `@discriminator()` tells Bicep which field selects the shape, and you get per-shape validation instead of `object`.
+
+```bicep
+type blobBackup = {
+  kind: 'blob'
+  containerName: string
+}
+
+type sqlBackup = {
+  kind: 'sql'
+  databaseName: string
+  retentionDays: int
+}
+
+@discriminator('kind')
+type backupTarget = blobBackup | sqlBackup
+
+param target backupTarget
+```
+
+Set `kind` to `'sql'` and the compiler now requires `databaseName` and `retentionDays` and rejects `containerName`.
 
 ---
 
@@ -469,72 +554,140 @@ output storageId string = storageAccount.id
 output planId string = appServicePlan.id
 ```
 
-When deployed as a stack, the entire set of resources is tracked together, enabling operations like:
+The stack is created with the `az stack` command family rather than `az deployment`, and two switches define its whole behavior:
 
-- **Deny modifications:** Prevent accidental changes to managed resources
-- **Detach on delete:** Remove the stack definition while keeping resources running
-- **Managed deletions:** Automatically delete resources when the stack is deleted
-- **Dependency tracking:** Understand which resources depend on which
+```bash
+az stack group create \
+  --name platform-stack \
+  --resource-group myresourcegroup \
+  --template-file bicep/infrastructure.bicep \
+  --action-on-unmanage deleteResources \
+  --deny-settings-mode denyWriteAndDelete \
+  --deny-settings-excluded-principals '<pipeline-object-id>'
+```
+
+**`--action-on-unmanage`** decides what happens to a resource once it leaves the template: `detachAll` (the default, leave it running but stop tracking it), `deleteResources` (delete resources, keep resource groups), or `deleteAll`.
+
+**`--deny-settings-mode`** creates a deny assignment over the managed resources: `none`, `denyDelete`, or `denyWriteAndDelete`. This is a control-plane block that applies regardless of the caller's RBAC, which is what makes it different from a resource lock or a role assignment.
+
+### Enterprise Considerations
+
+Deny settings behave differently from how most people first read them, and each of these has bitten someone:
+
+- They cover **control plane only**. Deleting a storage account is blocked; deleting a blob inside it is not
+- They apply only to **explicitly declared** resources. An AKS cluster's implicitly created node-pool VMs are not protected by a stack that declares only the cluster
+- The **excluded-principals list caps at five**, and passing more fails silently rather than erroring. Exclude a Microsoft Entra group instead of individuals, and manage the exemption through group membership
+- Place the stack **one scope above** what it protects. A stack at subscription scope deploying into a resource group keeps the teams working in that resource group from editing the stack that constrains them
+- If the stack's tracked resource list drifts from reality, updates fail with a stack-out-of-sync error rather than deleting anything, which is the intended safe default. Resolve it by reviewing the managed resource list, not by reflexively passing the bypass flag
 
 ### When to Use Deployment Stacks
 
-Deployment stacks are most valuable in enterprise scenarios where resource lifecycle management is complex. Use them when you need coordinated deletion, prevent accidental modifications, or enforce that resources stay synchronized with template definition.
+Reach for a stack when you need coordinated deletion of resources that left the template, or when you need to stop people from editing what the template owns. Both are things a plain deployment cannot do, and both were previously attempted with complete mode, which Microsoft is now gradually deprecating in favor of stacks.
 
-For simple deployments or rapid iteration, traditional Bicep deployments are often sufficient.
+For simple deployments or rapid iteration, a plain incremental deployment is often sufficient.
 
 ---
 
 ## Bicep Extensibility
 
-Bicep allows extending functionality through providers and user-defined functions.
+Bicep allows extending functionality through extensions and user-defined functions.
 
-### Providers
+### Extensions
 
-Providers enable you to use external systems as part of your Bicep deployments. Kubernetes provider, for example, allows you to manage Kubernetes resources alongside Azure infrastructure.
+Extensions let a Bicep file manage resources outside Azure Resource Manager. The Kubernetes extension is the canonical example, and it lets a deployment create Kubernetes objects alongside the cluster that hosts them.
 
-```bicep
-import kubernetes as k8s
+The declaration keyword is `extension`, not `import`. It is still a **preview feature** that must be enabled in `bicepconfig.json`:
 
-param clusterName string
-param location string
-
-resource managedCluster 'Microsoft.ContainerService/managedClusters@2023-09-01' = {
-  name: clusterName
-  location: location
-  properties: {
-    kubernetesVersion: '1.27'
+```json
+{
+  "experimentalFeaturesEnabled": {
+    "extensibility": true
   }
 }
-
-resource namespace = k8s.core.v1.Namespace.new('kube-system')
 ```
 
-Other providers include Kubernetes, Docker, and HTTP (for calling external APIs as part of deployment).
+Because the cluster credentials are a secret, the Kubernetes objects go in their own module and the parent passes the kubeconfig into a `@secure()` parameter:
+
+```bicep
+// kubernetes.bicep
+@secure()
+param kubeConfig string
+
+extension kubernetes with {
+  namespace: 'default'
+  kubeConfig: kubeConfig
+} as k8s
+
+resource appService 'core/Service@v1' = {
+  metadata: {
+    name: 'my-app'
+  }
+  spec: {
+    type: 'LoadBalancer'
+    ports: [
+      {
+        port: 80
+        targetPort: 8080
+      }
+    ]
+  }
+}
+```
+
+```bicep
+// main.bicep
+resource aks 'Microsoft.ContainerService/managedClusters@2024-10-01' existing = {
+  name: 'demoAKSCluster'
+}
+
+module kubernetes './kubernetes.bicep' = {
+  name: 'k8sDeployment'
+  params: {
+    kubeConfig: aks.listClusterAdminCredential().kubeconfigs[0].value
+  }
+}
+```
+
+Two constraints decide whether this is usable for you. The extension **does not support private clusters**, which rules it out for most production AKS estates, and it needs cluster-admin credentials at deployment time, which is a meaningful privilege for a pipeline to hold. Microsoft Graph is the other notable extension, used to create Entra ID groups and app registrations from Bicep.
 
 ### User-Defined Functions
 
-User-defined functions encapsulate reusable logic that doesn't map cleanly to a resource definition.
+User-defined functions encapsulate reusable logic that doesn't map cleanly to a resource definition. **The return type is required**, between the parameter list and the `=>`.
 
 ```bicep
+// naming.bicep
 @export()
-func storageName(environment string, region string) => 'stor${environment}${region}${uniqueString(resourceGroup().id)}'
+func storageName(environment string, region string, salt string) string =>
+  'stor${environment}${region}${uniqueString(salt)}'
 
 @export()
-func getStorageSku(environment string) => environment == 'prod' ? 'Standard_GRS' : 'Standard_LRS'
+func getStorageSku(environment string) string =>
+  environment == 'prod' ? 'Standard_GRS' : 'Standard_LRS'
+```
+
+```bicep
+import { storageName, getStorageSku } from 'naming.bicep'
 
 param environment string
 param region string
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: storageName(environment, region)
+  name: storageName(environment, region, resourceGroup().id)
   location: region
   sku: {
     name: getStorageSku(environment)
   }
   kind: 'StorageV2'
-  properties: {}
 }
 ```
+
+Functions are deliberately limited so they stay evaluable at compile time:
+
+- They **cannot use `reference()` or any `list*` function**, so a function cannot read a deployed resource's state or fetch a key
+- Their parameters **cannot have default values**
+- They can read variables in the same file, and imported variables, but nothing else from the surrounding template
+
+Passing `resourceGroup().id` in as a `salt` parameter rather than calling scope functions inside the function keeps the function pure and testable, and it lets the same function serve a subscription-scope template.
 
 ---
 
@@ -550,12 +703,14 @@ targetScope = 'subscription'
 param location string
 param environment string
 
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = {
+// Avoid naming a symbol 'resourceGroup': it shadows the
+// resourceGroup() function for the rest of the file.
+resource primaryRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: 'rg-${environment}-primary'
   location: location
 }
 
-resource managementGroupAssignment 'Microsoft.Authorization/policyAssignments@2023-04-01' = {
+resource auditPolicy 'Microsoft.Authorization/policyAssignments@2023-04-01' = {
   name: 'auditDiagnosticsPolicy'
   properties: {
     policyDefinitionId: '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/policyDefinitions/auditDiagnostics'
@@ -563,13 +718,15 @@ resource managementGroupAssignment 'Microsoft.Authorization/policyAssignments@20
   }
 }
 
-output resourceGroupId string = resourceGroup.id
-output resourceGroupName string = resourceGroup.name
+output resourceGroupId string = primaryRg.id
+output resourceGroupName string = primaryRg.name
 ```
+
+The assignment lands on the subscription this deployment targets. `properties.scope` is read-only on `policyAssignments`, so scope comes from the deployment, not from a property you set.
 
 ### Mixed Scope with Modules
 
-You can deploy resources at subscription scope while using modules that deploy at resource group scope.
+The `scope` property on a module is what lets one file span the hierarchy. The parent runs at one scope, and each module runs as a nested deployment at whatever scope you point it to.
 
 ```bicep
 targetScope = 'subscription'
@@ -592,6 +749,33 @@ module vnetModule 'modules/networking.bicep' = {
 }
 ```
 
+```
+  targetScope = 'subscription'
+  ┌─────────────────────────────────────────────────┐
+  │ Subscription deployment                         │
+  │                                                 │
+  │  resource rg  ────────► creates rg-prod         │
+  │                                                 │
+  │  module vnetModule                              │
+  │    scope: rg  ─────┐                            │
+  │  module dbModule   │                            │
+  │    scope: rg  ───┐ │                            │
+  └──────────────────┼─┼────────────────────────────┘
+                     │ │  each becomes its own
+                     ▼ ▼  nested deployment
+        ┌────────────────────────────────┐
+        │ Resource group: rg-prod        │
+        │   vnetDeployment  ──► VNet,NSG │
+        │   dbDeployment    ──► SQL      │
+        └────────────────────────────────┘
+
+  The resource group must exist before a module can target it,
+  which the scope reference establishes automatically. Module
+  names are deployment names and are unique per scope.
+```
+
+A module's own `targetScope` must be compatible with the scope you give it. A module written for resource group scope (the default) can be pointed at any resource group, including one in another subscription via `resourceGroup(subId, rgName)`, but it cannot be deployed at subscription scope.
+
 ---
 
 ## Parameterization Strategies
@@ -610,39 +794,43 @@ infrastructure/
 │   │   └── storage.bicep
 │   └── types.bicep
 ├── parameters/
-│   ├── common.json          // Shared across all environments
-│   ├── dev.json
-│   ├── staging.json
-│   └── prod.json
+│   ├── shared.bicepparam     // Base values, extended by the others
+│   ├── dev.bicepparam
+│   ├── staging.bicepparam
+│   └── prod.bicepparam
 └── README.md
 ```
 
 **Parameter file structure:**
 
-```json
-{
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
-  "contentVersion": "1.0.0.0",
-  "parameters": {
-    "environment": {
-      "value": "prod"
-    },
-    "location": {
-      "value": "eastus"
-    },
-    "vmSize": {
-      "value": "Standard_D4s_v3"
-    },
-    "tags": {
-      "value": {
-        "environment": "prod",
-        "owner": "platform-team",
-        "costCenter": "engineering"
-      }
-    }
-  }
+```bicep
+// prod.bicepparam
+using '../bicep/main.bicep'
+
+param environment = 'prod'
+param location = 'eastus'
+param vmSize = 'Standard_D4s_v3'
+param tags = {
+  environment: 'prod'
+  owner: 'platform-team'
+  costCenter: 'engineering'
 }
 ```
+
+`.bicepparam` files are type-checked against the template named in `using`, so a renamed parameter or a wrong type fails at build rather than at deployment. JSON parameter files still work and are what `--parameters @file.json` expects, but they get none of that checking.
+
+Shared values across environments are handled with `extends`, which inherits from a base parameter file and lets each environment override selectively:
+
+```bicep
+// prod.bicepparam
+using '../bicep/main.bicep'
+extends 'shared.bicepparam'
+
+param environment = 'prod'
+param vmSize = 'Standard_D4s_v3'
+```
+
+Parameter files are plain text in source control. Keep secrets out of them and pull them from Key Vault with `getSecret` at deployment time.
 
 ### Environment-Specific Logic
 
@@ -701,9 +889,61 @@ module storage 'br:mymodules.azurecr.io/bicep/modules/storage:v1.0' = {
 ### Registry Module Best Practices
 
 - **Semantic versioning:** Use version tags (v1.0, v1.1, v2.0) to communicate breaking changes
+- **Immutable tags:** Never republish over an existing tag. A consumer pinned to `v1.0` should get the same bytes forever
 - **Documentation:** Include README files in modules explaining parameters, outputs, and use cases
 - **Examples:** Provide example parameter files showing how to consume the module
-- **Access control:** Use Azure Container Registry RBAC to control who can publish and consume modules
+- **Access control:** Use Azure Container Registry RBAC to control who can publish and consume modules. Publishers need `AcrPush`, consumers only `AcrPull`
+- **Restore in CI:** Registry modules are downloaded at build time, so build agents need network access to the registry and an identity that can pull
+
+### Template Specs
+
+A **template spec** (`Microsoft.Resources/templateSpecs`) is a different sharing mechanism with a different audience. It stores a versioned template as a first-class Azure resource, secured with Azure RBAC and deployable directly.
+
+```bash
+az ts create \
+  --name storage-baseline \
+  --version 1.0 \
+  --resource-group platform-rg \
+  --template-file modules/storage.bicep
+
+az deployment group create \
+  --resource-group app-rg \
+  --template-spec "/subscriptions/<sub>/resourceGroups/platform-rg/providers/Microsoft.Resources/templateSpecs/storage-baseline/versions/1.0"
+```
+
+The distinction that matters: a **registry module is a building block** that someone composes into their own template, while a **template spec is a finished deployable** that someone runs. A platform team publishes a template spec when it wants application teams to deploy an approved topology without being able to modify it, and Azure RBAC on the spec controls who can.
+
+Template specs can also be referenced as modules with the `ts:` scheme:
+
+```bicep
+module storage 'ts:/subscriptions/<sub>/resourceGroups/platform-rg/providers/Microsoft.Resources/templateSpecs/storage-baseline/versions/1.0' = {
+  name: 'storageDeployment'
+  params: {
+    location: location
+  }
+}
+```
+
+### Choosing a Sharing Mechanism
+
+```
+Is the template consumed outside the repository that defines it?
+  │
+  ├─ no ──► Local path module. Versioned with your code, no
+  │         registry infrastructure, no publish step.
+  │
+  └─ yes ──► Do consumers compose it into their own templates,
+             or deploy it as-is?
+               │
+               ├─ compose ──► Bicep registry module (br:).
+               │              Versioned artifacts in ACR,
+               │              access via AcrPull/AcrPush.
+               │
+               └─ deploy ────► Template spec (ts:).
+                               An Azure resource with RBAC,
+                               deployable directly by consumers
+                               who never see or edit the source.
+```
 
 ---
 
@@ -720,10 +960,14 @@ The what-if operation shows what changes will occur without actually deploying.
 az deployment group what-if \
   --resource-group mygroup \
   --template-file main.bicep \
-  --parameters environment=prod location=eastus
+  --parameters parameters/prod.bicepparam
 
-# Output shows: Create, Modify, Delete, NoChange, Ignore
+# Change types: Create, Delete, Ignore, NoChange, NoEffect, Modify, Deploy
 ```
+
+In a pipeline, treat what-if output as something a human reads rather than something a gate parses. Expressions it cannot evaluate outside a real deployment (`utcNow()`, `newGuid()`, `listKeys()`, secure parameters, `reference()`) report as changes on every run, and nested-template expansion stops at 500 templates, marking the remainder `Ignore`. A what-if diff that always shows the same twelve phantom changes trains reviewers to skim it.
+
+For a check that needs no Azure connection at all, `bicep snapshot` compares a normalized JSON rendering of your templates between commits, which catches unintended logic changes during code review.
 
 ### Template Validation
 
@@ -832,62 +1076,72 @@ on:
     branches: [main]
     paths: ['infrastructure/**']
 
+# Required for OIDC federated credentials
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Validate Bicep
+      - name: Build Bicep
         run: az bicep build --file infrastructure/bicep/main.bicep
 
       - name: Lint Bicep
         run: az bicep lint --file infrastructure/bicep/main.bicep
 
   what-if:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: What-If Staging
         run: |
           az deployment group what-if \
             --resource-group staging-rg \
-            --template-file infrastructure/bicep/main.bicep \
-            --parameters @infrastructure/parameters/staging.json
+            --parameters infrastructure/parameters/staging.bicepparam
 
   deploy-staging:
-    needs: [validate, what-if]
+    needs: what-if
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     environment: staging
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Staging
         run: |
           az deployment group create \
             --resource-group staging-rg \
-            --template-file infrastructure/bicep/main.bicep \
-            --parameters @infrastructure/parameters/staging.json
+            --parameters infrastructure/parameters/staging.bicepparam
 ```
+
+Authenticate with **OIDC federated credentials** rather than a long-lived service principal secret in `AZURE_CREDENTIALS`. The workflow requests a short-lived token scoped to that run, so there is no stored secret to rotate or leak, and the `id-token: write` permission is what makes it work.
 
 ### Integration Principles
 
-- **Validation first:** Always validate before what-if, always what-if before deploy
-- **Environment separation:** Separate deployments for dev, staging, and production with different Azure credentials and approvals
-- **Rollback strategy:** Plan for rolling back failed deployments; consider using separate stacks or blue-green deployments
-- **Audit trail:** Log what was deployed, by whom, and when; use deployment history for forensics
+- **Validation first:** Always build and lint before what-if, always what-if before deploy
+- **Environment separation:** Separate deployments for dev, staging, and production with distinct identities and approval gates
+- **Least privilege per stage:** The what-if job needs only read access. Grant deploy permissions to the deploy job's identity, not to every job
+- **Rollback strategy:** There is no rollback command. Redeploying the previous commit is the realistic path, which is an argument for keeping templates deployable from any tagged commit
+- **Audit trail:** Deployment history records what was deployed and when. Attach the commit SHA as a tag or deployment name so a resource can be traced back to a pull request
 
 ---
 
@@ -899,7 +1153,7 @@ Understanding where Bicep fits compared to other IaC tools helps you choose the 
 |--------|-------|-----------|----------------|
 | **Learning curve** | Low (similar to JSON, Azure-focused) | Medium (general-purpose, steeper learning) | Medium (verbose, lots of boilerplate) |
 | **Language** | Bicep (domain-specific) | HCL (domain-specific) | YAML/JSON (configuration) |
-| **State management** | Implicit (stored in Azure deployments) | Explicit (separate state files) | Implicit (stored in AWS) |
+| **State management** | None; Azure Resource Manager is the source of truth | Explicit (separate state files you store and lock) | None; AWS tracks stack resources |
 | **Multi-cloud** | Azure-only | AWS, Azure, GCP, others | AWS-only |
 | **Module ecosystem** | Growing (Bicep Registry) | Large (Terraform Registry) | Limited (few reusable modules) |
 | **Conditional logic** | Native `if` expressions | Complex nested conditionals | CloudFormation conditions |
@@ -907,7 +1161,7 @@ Understanding where Bicep fits compared to other IaC tools helps you choose the 
 | **IDE support** | Good (VS Code Bicep extension) | Excellent | Good |
 | **Community** | Growing | Large and mature | Established |
 | **Cost** | Free | Free (state storage costs) | Free |
-| **Drift detection** | Manual | `terraform plan` | AWS-native drift detection |
+| **Drift detection** | `what-if`, or deny settings on a deployment stack to prevent drift | `terraform plan` | AWS-native drift detection |
 
 **Choose Bicep when:**
 - Your infrastructure is Azure-only and unlikely to change
@@ -996,7 +1250,7 @@ Understanding where Bicep fits compared to other IaC tools helps you choose the 
 
 2. **Parameterize everything that varies.** Use parameters for environment-specific values, not conditionals. Create separate parameter files for dev, staging, and production, and use the same Bicep file for all.
 
-3. **Validate inputs with decorators and user-defined types.** The earlier invalid input is caught, the better. Use `@minLength()`, `@maxLength()`, `@allowed()`, and custom types to enforce constraints.
+3. **Validate inputs with decorators and user-defined types.** The earlier invalid input is caught, the better. Use `@minLength()`, `@maxLength()`, and `@allowed()` on parameters. Inside a `type` declaration, `@allowed()` is not permitted, so constrain values with union syntax (`'dev' | 'prod'`) instead, and add `@sealed()` so a mistyped property name fails the build.
 
 4. **Use loops and conditionals to reduce duplication.** Loops over arrays or objects are clearer than repeating resource definitions. Conditionals control which resources exist, not environment-specific logic.
 
@@ -1004,10 +1258,12 @@ Understanding where Bicep fits compared to other IaC tools helps you choose the 
 
 6. **Test before deploying.** Use what-if to preview changes, bicep lint for style issues, and bicep build for validation. Integrate validation into CI/CD so errors are caught early.
 
-7. **Deployment stacks provide managed resource lifecycle.** Use them for coordinated deletion, preventing manual changes, and syncing resources with template definitions. They are most valuable in enterprise environments.
+7. **Deployment stacks provide managed resource lifecycle.** `actionOnUnmanage` decides what happens to resources that leave the template, and deny settings block control-plane changes to what the stack owns. Both cover only explicitly declared resources, and the excluded-principals list silently caps at five.
 
-8. **Choose Bicep registries for shared modules.** If modules are used across teams or projects, publish them to an ACR-backed Bicep registry with semantic versioning.
+8. **Registries and template specs answer different questions.** Publish a registry module when consumers compose it into their own templates. Publish a template spec when consumers deploy it as-is and Azure RBAC should decide who can.
 
-9. **User-defined types enforce consistency.** Define custom types for complex objects like subnet configurations or VM settings. Types serve as self-documenting schemas.
+9. **User-defined types enforce consistency, and `import` is what shares them.** `@export()` marks a type, variable, or function as shareable, but the consuming file still needs an `import` statement. Derive types from resource schemas with `resourceInput<>` when you would otherwise hand-maintain a list that tracks an API version.
 
-10. **Bicep is Azure-specific; know when to use alternatives.** Bicep is the right choice for Azure-only deployments. Choose Terraform for multi-cloud or CloudFormation for AWS-only scenarios.
+10. **Every module is a nested deployment.** Module names are deployment names, unique per scope and capped at 64 characters, which is why looped modules need the index in the name. The `scope` property is what lets one file span the resource hierarchy.
+
+11. **Bicep is Azure-specific; know when to use alternatives.** Bicep is the right choice for Azure-only deployments. Choose Terraform for multi-cloud or CloudFormation for AWS-only scenarios.

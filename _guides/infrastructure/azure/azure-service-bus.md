@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Application Integration & Messaging
 description: "Enterprise messaging on Azure with Service Bus queues, topics and subscriptions, sessions, dead-lettering, and patterns for reliable asynchronous communication."
-tags: [azure, infrastructure, messaging, distributed-systems, reliability, scalability, practical]
+tags: [service-bus, topics-subscriptions, message-sessions, dead-letter-queue, duplicate-detection, scheduled-delivery, practical]
 ---
 
 ## What Is Azure Service Bus
@@ -41,7 +41,7 @@ Architects familiar with AWS should note that Service Bus combines SQS and SNS i
 | **Publish-subscribe** | SNS topics + SQS subscriptions | Service Bus topic + subscriptions |
 | **Message ordering** | FIFO queues (with throughput limits) | Message sessions (any tier) |
 | **Dead-lettering** | Manual DLQ configuration per queue | Built-in dead-letter queue per queue/subscription |
-| **Duplicate detection** | Application-level deduplication | Built-in with automatic deduplication window |
+| **Duplicate detection** | SQS FIFO: built-in, fixed 5-minute window; standard queues: application-level | Built-in, configurable window (default 10 minutes, up to 7 days) |
 | **Message expiration** | TTL via message attributes | Built-in auto-delete after TTL |
 | **Scheduled messages** | Via SQS scheduled delivery | Built-in scheduled delivery |
 | **Transactions** | Limited (batches only) | Full ACID transactions across queues and topics |
@@ -58,31 +58,38 @@ Architects familiar with AWS should note that Service Bus combines SQS and SNS i
 A namespace is a container for queues and topics. All messaging operations route through a single namespace endpoint. Namespaces exist in one of three tiers:
 
 **Basic Tier:**
-- Single queue support (no topics)
-- Maximum 256 MB queue size
-- 1 million messages per day
-- No message sessions
-- No scheduled delivery or dead-lettering (basic support only)
-- Use for: Simple request-response patterns, development, light workloads
+- Queues only (no topics or subscriptions)
+- Up to 5 GB per queue (80 GB with partitioning); 256 KB max message size
+- Scheduled delivery and dead-lettering supported
+- No message sessions, no duplicate detection, no transactions
+- Use for: Simple point-to-point patterns, development, light workloads
 
 **Standard Tier:**
 - Queues and topics with subscriptions
-- 1 GB queue/topic size
-- 12.5 million messages per day
+- Up to 5 GB per queue/topic (80 GB with partitioning); 256 KB max message size
 - Message sessions, scheduled delivery, dead-lettering, duplicate detection
 - Transactional operations
 - Use for: Most production workloads, moderate messaging volumes
 
 **Premium Tier:**
 - Queues and topics with subscriptions
-- 80 GB queue/topic size (up to 1,000 GB with reserved capacity)
-- Unlimited message throughput
+- 80 GB per queue/topic; namespace up to 1 TB per messaging unit
+- Message size up to 100 MB (AMQP); throughput scales with the number of messaging units rather than a fixed per-second cap
 - Dedicated message broker capacity (no noisy neighbors)
 - Multi-zone redundancy (automatic failover across zones)
 - Advanced security (managed identities, private endpoints, customer-managed encryption keys)
 - Use for: Mission-critical applications, high-throughput workloads, strict isolation requirements
 
-The pricing model differs by tier: Basic and Standard charge per operation (millions of operations), while Premium charges a flat hourly rate for reserved capacity.
+The pricing model differs by tier. Basic and Standard charge per operation (per million operations), while Premium charges a flat hourly rate for the reserved messaging units.
+
+```
+Need topics/subscriptions, sessions, or duplicate detection?
+├─ No — simple queues, dev or light workload ──────────────────▶ Basic
+└─ Yes
+   ├─ Mission-critical, high/predictable throughput, VNet or
+   │  private-endpoint isolation, or messages larger than 256 KB? ─▶ Premium
+   └─ Standard production messaging, moderate volume ─────────────▶ Standard
+```
 
 ### Queues
 
@@ -90,10 +97,10 @@ A queue is a FIFO message buffer. Messages are added at the back and removed fro
 
 **Queue Characteristics:**
 - Messages stored durably until consumed or expired
-- Single active receiver per queue at any time (competing consumers lock messages)
-- Messages locked during processing (lock timeout typically 30 seconds)
-- If a message is not acknowledged within the lock timeout, it returns to the queue for redelivery
-- Maximum of 5 attempts per message (configurable) before moving to the dead-letter queue
+- Multiple competing consumers can receive concurrently; each message is exclusively locked to one consumer while it processes, so no two consumers see the same message at once
+- Messages locked during processing (lock duration defaults to 1 minute, maximum 5 minutes, and the owner can renew it for longer work)
+- If a message is not completed within the lock duration, it returns to the queue for redelivery
+- After the max delivery count is exceeded (default 10 attempts, configurable), the message moves to the dead-letter queue
 
 ### Topics and Subscriptions
 
@@ -113,6 +120,18 @@ A topic enables publish-subscribe messaging. Publishers send messages to a topic
 
 A SQL filter like `Priority = 'high' AND Department = 'Finance'` on a subscription ensures that subscription receives only messages matching those properties.
 
+The topic evaluates every message against each subscription's filter independently and delivers a separate copy to each match:
+
+```
+                          ┌─ Sub: Finance   (SQL: Dept='Finance')  ─▶ Consumer A
+Publisher ─▶ [ Topic ] ───┼─ Sub: HighPri   (SQL: Priority='high') ─▶ Consumer B
+                          └─ Sub: AllEvents  (True filter)          ─▶ Consumer C
+
+   one publish → one independent copy per matching subscription, each with its own DLQ
+```
+
+A single message can land in several subscriptions at once (Finance and HighPri both match a high-priority Finance message), or none. This is why fan-out belongs in the broker rather than in publisher code.
+
 ---
 
 ## Message Sessions
@@ -129,7 +148,18 @@ Without sessions, a queue or subscription receives messages in FIFO order for th
 4. Consumer processes and acknowledges each message
 5. When consumer completes or abandons the session, the broker releases it for another consumer
 
-Multiple consumers can process different sessions in parallel. Only messages within the same session are ordered relative to each other.
+Multiple consumers can process different sessions in parallel. Only messages within the same session are ordered relative to each other:
+
+```
+Queue (session-enabled)                     Consumers
+  SessionId=order-123:  m1 ▸ m2 ▸ m3   ──▶  Consumer 1  (locks 123, delivers in order)
+  SessionId=order-456:  m1 ▸ m2        ──▶  Consumer 2  (locks 456, delivers in order)
+  SessionId=order-789:  m1 ▸ m2 ▸ m3   ──▶  Consumer 3  (locks 789, delivers in order)
+
+   FIFO within each session; sessions run concurrently across consumers
+```
+
+A slow consumer holding `order-123` delays only that session, not `order-456` or `order-789`. This is the difference from a plain FIFO queue, where one slow message stalls everything behind it.
 
 **Session Use Cases:**
 - Per-customer order processing (ensure all messages for customer 123 are processed in sequence)
@@ -138,19 +168,19 @@ Multiple consumers can process different sessions in parallel. Only messages wit
 
 **Session Characteristics:**
 - Available in Standard and Premium tiers only (not Basic)
-- Browser-based session lock (default 5 minutes, configurable)
-- Idle timeout releases unprocessed sessions for reacquisition
-- Sessions are logical groupings; the broker does not enforce session count limits
+- The broker holds an exclusive lock on a session while one consumer processes it, renewable and bounded by the entity's lock duration (1-minute default, 5-minute maximum)
+- A session idle timeout releases an inactive session so another consumer can reacquire it
+- Sessions are logical groupings. The broker does not cap how many exist
 
 ---
 
 ## Dead-Letter Queues and Poison Message Handling
 
-A dead-letter queue (DLQ) collects messages that cannot be processed. Messages move to the DLQ after exceeding the maximum delivery count (typically 5 attempts).
+A dead-letter queue (DLQ) collects messages that cannot be processed. Messages move to the DLQ after exceeding the maximum delivery count (default 10 attempts).
 
 ### Why Messages Move to DLQ
 
-- Maximum delivery count exceeded (message fails and is redelivered 5 times by default)
+- Maximum delivery count exceeded (message fails and is redelivered up to 10 times by default)
 - Message size exceeds queue limit
 - Message cannot be deserialized (malformed payload)
 - Application explicitly abandons the message
@@ -351,7 +381,7 @@ Example pattern: When a message is deadlettered, Event Grid triggers a Logic App
 
 **Result:** Messages reprocessed while first processing is still underway. High redelivery count and DLQ traffic.
 
-**Solution:** Set lock timeout to account for maximum expected processing time plus network latency (e.g., 30 seconds for quick operations, 5 minutes for background jobs). If processing regularly exceeds the timeout, reconsider the architecture (may indicate a bottleneck).
+**Solution:** Set the lock duration to cover the maximum expected processing time plus network latency, up to the 5-minute maximum. For work that runs longer, keep the lock short and renew it (or use automatic lock renewal) rather than pinning it high, since an over-long lock delays redelivery when a consumer crashes. If processing regularly approaches the ceiling, reconsider the architecture (it may indicate a bottleneck).
 
 ---
 

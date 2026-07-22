@@ -4,7 +4,7 @@ layout: guide
 category: Azure
 subcategory: Database Services
 description: "Architecture patterns, consistency models, partitioning strategies, and multi-model API selection for Azure Cosmos DB, including global distribution and cost optimization."
-tags: [azure, databases, distributed-systems, scalability, performance, cloud-computing, fundamentals]
+tags: [cosmos-db, consistency-levels, partition-keys, request-units, change-feed, global-distribution, fundamentals]
 ---
 
 ## What Is Azure Cosmos DB
@@ -37,9 +37,9 @@ Architects familiar with AWS should note several important differences:
 
 | Aspect | AWS DynamoDB | Azure Cosmos DB |
 |--------|--------------|-----------------|
-| **Consistency models** | Eventually consistent by default; strong consistency requires application logic | Five configurable levels (Strong, Bounded Staleness, Session, Consistent Prefix, Eventual) |
+| **Consistency models** | Eventually consistent by default; strongly consistent reads available per request (single-Region only) | Five configurable levels (Strong, Bounded Staleness, Session, Consistent Prefix, Eventual) |
 | **Multi-region** | Global Tables (separate management) | Native multi-region built into the database |
-| **Global writes** | Not supported; must write to primary region | Supported; any region can accept writes |
+| **Global writes** | Supported via global tables; last-writer-wins only | Supported natively; last-writer-wins or custom conflict resolution |
 | **APIs supported** | Only key-value and DynamoDB API | NoSQL/Core SQL, MongoDB, Cassandra, Gremlin, Table |
 | **Throughput pricing** | Per-table; separate for global tables | Single provisioned throughput across all regions |
 | **Query language** | DynamoDB Query/Scan limited | SQL (Core API) with rich relational-like queries |
@@ -79,7 +79,7 @@ You provision throughput in RUs per second (RU/s). If you provision 1,000 RU/s, 
 | **Autoscale** | Per max RU/s provisioned; scales from 10% automatically | Workloads with variable throughput; production workloads with spiky traffic |
 | **Serverless** | Per RU consumed (no hourly charge) | Sporadic usage; development; workloads that rarely exceed a few RU/s |
 
-Provisioned throughput is shared across all containers in an account (if provisioned at the account level) or scoped to a single container (if provisioned at the container level). Autoscale automatically scales between 10% and 100% of the max RU/s you specify.
+Provisioned throughput is set at one of two scopes (there is no account-level throughput). **Database-level** throughput is shared across every container in that database, which is economical for many small, low-traffic containers. **Container-level** throughput is dedicated to a single container, guaranteeing it its own RU/s. Autoscale automatically scales between 10% and 100% of the max RU/s you specify.
 
 ---
 
@@ -128,7 +128,7 @@ A read will return data that is at most the specified amount behind the latest c
 
 **Guarantee:** Within a session (single client), reads see writes executed by the same client. Across different clients, reads are eventually consistent.
 
-A client sees its own writes immediately. However, another client reading the same data might see stale data until the updates replicate. This matches how traditional web applications often work (client sees updates immediately, other users see them eventually).
+A client sees its own writes immediately. However, another client reading the same data might see stale data until the updates replicate. This matches how traditional web applications often work (client sees updates immediately, other users see them eventually). Session is the **default** consistency level for a new account, and the most widely used, delivering read-your-writes within a client while keeping latency and throughput close to eventual consistency.
 
 **Trade-offs:**
 - Lower latency than bounded staleness
@@ -183,11 +183,27 @@ This is the cheapest consistency model in terms of latency and throughput, and t
 
 ## Partitioning and Partition Keys
 
-Cosmos DB scales by distributing data across physical partitions. A partition key is the document property that determines which partition a document belongs to.
+Cosmos DB scales by distributing data across **physical partitions**, the internal storage-and-compute units it manages for you. A **partition key** is the document property whose value determines which *logical* partition a document belongs to. Cosmos DB hashes that value and maps each logical partition onto a physical partition.
+
+- **Logical partition:** every document sharing a partition key value. A single logical partition caps at **20 GB** of storage and **10,000 RU/s**, a hard ceiling you can't provision past, so a key value that attracts unbounded data or traffic eventually wedges.
+- **Physical partition:** the internal unit that storage and throughput are actually spread across. Each holds up to **50 GB** and serves up to **10,000 RU/s**, and one physical partition backs one or more logical partitions. Cosmos DB splits physical partitions automatically as data or throughput grows.
+
+```
+        partition key value ──hash──▶ logical partition ──map──▶ physical partition
+
+  Even distribution (high-cardinality key)      Hot partition (low-cardinality key)
+  30,000 RU/s over 3 physical partitions        30,000 RU/s over 3 physical partitions
+  ┌──────────┐┌──────────┐┌──────────┐          ┌──────────┐┌──────────┐┌──────────┐
+  │ Phys P0  ││ Phys P1  ││ Phys P2  │          │ Phys P0  ││ Phys P1  ││ Phys P2  │
+  │ 10k used ││ 10k used ││ 10k used │          │ 10k CAP  ││   idle   ││   idle   │
+  └──────────┘└──────────┘└──────────┘          │ 429s ◀── │└──────────┘└──────────┘
+  full 30k RU/s usable                          └──────────┘
+                                                only 10k usable; 20k stranded
+```
 
 ### Choosing a Partition Key
 
-The partition key is the single most important architectural decision. Cosmos DB uses the partition key value to distribute documents across multiple physical partitions, each of which can serve up to 10 GB of data and 10,000 RU/s.
+The partition key is the single most important architectural decision, because provisioned throughput divides evenly across physical partitions. A key that funnels most traffic to one partition starves the rest even when the account has spare capacity.
 
 **Good partition keys distribute writes evenly:**
 
@@ -310,6 +326,22 @@ Table API provides a key-value store compatible with Azure Table Storage and AWS
 
 ---
 
+### Choosing an API
+
+The API choice is driven mostly by migration source. Pick the NoSQL (Core) API for anything greenfield, since it receives new Cosmos DB features first and best. The compatibility APIs exist primarily to preserve existing drivers and skills during a migration, not to enable new development.
+
+```
+Migrating from an existing datastore?
+├─ From MongoDB ──────────────────▶ MongoDB API
+├─ From Apache Cassandra ─────────▶ Cassandra API
+├─ From Azure Table Storage ─────▶ Table API
+└─ No / greenfield
+   ├─ Graph traversals (relationships, shortest path)? ─▶ Gremlin API
+   └─ Everything else (rich queries, new app) ─────────▶ NoSQL (Core) API  ◀ default
+```
+
+---
+
 ## Global Distribution
 
 Cosmos DB automatically replicates data to multiple regions you specify. You configure which regions hold replicas, and Cosmos DB manages replication automatically.
@@ -339,7 +371,7 @@ Cosmos DB automatically replicates data to multiple regions you specify. You con
 
 ## Change Feed
 
-The [Change Feed](https://learn.microsoft.com/en-us/azure/cosmos-db/change-feed){:target="_blank" rel="noopener noreferrer"} is a stream of changes (inserts, updates, deletes) applied to documents in a container. Applications can subscribe to the change feed to react to changes.
+The [Change Feed](https://learn.microsoft.com/en-us/azure/cosmos-db/change-feed){:target="_blank" rel="noopener noreferrer"} is a persistent, ordered record of changes applied to documents in a container. Applications subscribe to it to react to changes. In its default **latest-version** mode the feed surfaces inserts and updates only. A deleted item simply disappears from the feed, with no delete event. Capturing deletes (along with intermediate versions and TTL expirations) requires **all-versions-and-deletes** mode, which depends on continuous backup being enabled on the account.
 
 **Use cases:**
 - Event-driven architectures: Subscribe to changes and trigger downstream processes
@@ -357,15 +389,33 @@ The [Change Feed](https://learn.microsoft.com/en-us/azure/cosmos-db/change-feed)
 
 ## Integrated Cache
 
-Cosmos DB includes a built-in cache (called the [Integrated Cache](https://learn.microsoft.com/en-us/azure/cosmos-db/integrated-cache){:target="_blank" rel="noopener noreferrer"}) that caches frequently accessed items in memory, reducing RU consumption.
-
-The cache is transparent to applications. When a read would hit the cache, no RU cost is incurred. This is particularly valuable for workloads with hot reads (a small set of documents read frequently).
+The [Integrated Cache](https://learn.microsoft.com/en-us/azure/cosmos-db/integrated-cache){:target="_blank" rel="noopener noreferrer"} is an in-memory, **server-side** cache that drives the RU cost of repeated reads to zero. It is not a client-side or automatic feature. It lives on a **dedicated gateway** (a separately provisioned, separately billed set of gateway nodes), and only requests that connect through the dedicated gateway connection string in **gateway mode** use it.
 
 **How the cache works:**
-- Data accessed by queries is cached in the client connection
-- Repeated reads of the same item from the same client consume no RUs
-- Cache is per-client connection (not shared across clients)
-- Cache is automatically invalidated when the item is updated
+- It has two parts: an *item cache* for point reads and a *query cache* keyed on query text.
+- The cache is hosted on the dedicated gateway nodes and is **shared across all clients** routed through a given node, not per client. Each node keeps an independent cache, so a hit on one node isn't necessarily a hit on another.
+- A cache hit costs **0 RUs**; the first read of an item (or a cache miss) pays normal RUs and populates the cache.
+- Only **session** and **eventual** consistency reads can be served from the cache. Strong, bounded-staleness, and consistent-prefix reads bypass it and always hit the backend.
+- Freshness is governed by `MaxIntegratedCacheStaleness` (default **5 minutes**). A cached entry older than this bound is re-read from the backend. The item cache also refreshes on updates routed through the same node, but query-cache results don't reflect underlying writes until the staleness window elapses.
+
+Because the dedicated gateway is billed per node-hour regardless of hit rate, the integrated cache pays off only for genuinely read-heavy, repeat-read workloads. It's a cost-reduction lever, not a latency trick (Cosmos DB is already low-latency without it).
+
+---
+
+## Backup and Restore
+
+Every Cosmos DB account is backed up automatically. There is no "backups disabled" state. Two modes exist, and the choice determines how fast and how independently you can recover.
+
+| | Periodic (default) | Continuous (point-in-time restore) |
+|---|---|---|
+| **Restore granularity** | Latest snapshots only | Any second within the retention window |
+| **Retention** | Configurable, up to 30 days | 7-day tier or 30-day tier |
+| **How to restore** | Open a support request | Self-service (portal / CLI / PowerShell) |
+| **Cost** | Two copies free; extra copies billed | 7-day tier free; 30-day tier billed |
+
+Periodic mode takes a full backup every 4 hours and keeps the latest two by default; a restore always lands in a **new** account and goes through support, so periodic mode is a safety net rather than an operational recovery tool.
+
+Continuous backup enables self-service point-in-time restore and is also the prerequisite for the change feed's all-versions-and-deletes mode. You can migrate an account from periodic to continuous, but not back. A restore can't target an account with fewer partitions or lower throughput than the source, and TTL-expired documents, stored procedures, RBAC assignments, and analytical-store data aren't restored.
 
 ---
 
@@ -533,7 +583,7 @@ Downstream Systems (Elasticsearch, Cache, Email Service, etc.)
 
 **Problem:** Enabling multi-region writes assuming similar costs to single-region setup.
 
-**Result:** Throughput is provisioned per region. Cost multiplies by the number of write regions. A 10,000 RU/s container becomes 10,000 RU/s per region, tripling or quadrupling costs.
+**Result:** Provisioned throughput is reserved in *every* region you add. A 10,000 RU/s container across three regions bills 30,000 RU/s, whether those regions are read replicas or write regions. Multi-region writes stack a second cost on top, because writable regions bill at a higher per-RU rate than a single-write-region account. So switching "one write region plus two read replicas" to "three write regions" raises the bill even though the region count is unchanged.
 
 **Solution:** Multi-region writes are expensive. Use only if write-region latency is truly critical. For most applications, single write region + read replicas provides better cost/benefit.
 
