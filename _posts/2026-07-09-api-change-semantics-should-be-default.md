@@ -11,6 +11,8 @@ Any API endpoint that accepts a partial update has to guess whether an omitted f
 
 I've watched architects senior to me hit this exact question and not answer it, and when it landed on me, I didn't answer it either. Every fix I shipped was a single-property patch explained in a wiki page instead of in the contract itself, rediscovered by whoever hit it next. There was rarely time to go further. The gap got treated as an edge case, not a design question, so a hack closed the one case that was biting and the team moved on. This is an old problem, old enough to predate REST and JSON, and it still gets buried under a fix for one field and quietly assumed to have resolved itself.
 
+The scope of this post remains bounded within the most common and most interoperable representation of the: partial updates sent as JSON over REST. Other stacks have their own answers, and protobuf over gRPC even hands you part of one for scalar fields. The goal here is to discuss the fix that travels furthest with the least tooling, not a tour of every technology.
+
 ## The Three Things Any Change Has to Express
 
 Every partial update is trying to express one of three intents for each part of a resource:
@@ -104,7 +106,7 @@ if (request.PhoneNumber.IsSpecified)
     customer.PhoneNumber = request.PhoneNumber.Value;
 ```
 
-Nothing about the wire format changes; the JSON payload and the OpenAPI schema stay identical to the naive version. This is a deserialization-time fix, not a contract change, so it ships as an ordinary backend deploy with no client coordination and no version bump.
+Nothing about the wire format changes. The JSON payload and the OpenAPI schema stay identical to the naive version. This is a deserialization-time fix, not a contract change, so it ships as an ordinary backend deploy with no client coordination and no version bump.
 
 ### 2. Resource Hoisting: Give Identity-Bearing Collections Their Own Endpoint
 
@@ -134,7 +136,7 @@ For example, JSON Patch (RFC 6902) could replace both defaults at once. Its oper
 - A client has to compute an array of operations instead of building the object it would build anyway
 - The body itself, a list of instructions rather than a resource, is a shape most HTTP clients, OpenAPI generators, and API explorers don't render or produce as cleanly as a plain object
 
-Splitting the two problems costs a little more in mechanism count but buys back nearly all of that interoperability. A PATCH body stays a plain object whether it's clearing a scalar or not, and a POST or DELETE to a sub-resource is a shape every HTTP client, OpenAPI spec, and API explorer already knows how to build without custom tooling. Neither mechanism asks a caller to learn a new grammar, content type, or client library. That's the real reason these two are the defaults instead of JSON Patch, not because it's technically weaker (it solves more in a single mechanism), but because interoperability is the property a typical business API can't trade away, and JSON Patch spends it first.
+Splitting the two problems costs a little more in mechanism count but buys back nearly all of that interoperability. A PATCH body stays a plain object whether it's clearing a scalar or not, and a POST or DELETE to a sub-resource is a shape every HTTP client, OpenAPI spec, and API explorer already knows how to build without custom tooling. Neither mechanism asks a caller to learn a new grammar, content type, or client library. That's why these two are the defaults instead of JSON Patch. It isn't that JSON Patch is technically weaker, since it solves more in a single mechanism. It's that interoperability is the property a typical business API can't trade away, and JSON Patch spends it first.
 
 ## The Presence Wrapper Only Helps a Client That Uses One
 
@@ -154,26 +156,16 @@ JsonSerializer.Serialize(request, options); // "{}"
 
 For a client starting today, two moves cover most of it:
 
-- A field with its own identity or workflow, tags, an email that needs re-verification, belongs on a hoisted endpoint, where the request shape itself is the intent and there's nothing to compute
-- Everything else that still makes sense to bundle into one PATCH needs its presence computed correctly, either by diffing against whatever state the client already fetched (comparing edited values to the originals and sending only what changed), or, for a blind write with no read step, the same `Specified<T>`/`WhenWritingDefault` pairing shown on the server, mirrored on the way out
-
-## When the Defaults Aren't Enough
-
-Both defaults above assume one client making one intentional change at a time. Some constraints break that assumption, and each already has a purpose-built answer.
-
-| Pressure | Reach For | Why |
-|---|---|---|
-| Multiple independent writers reconciling the same object over time, like an autoscaler and a human both touching a Kubernetes Deployment | Server-side apply | Tracks per-field ownership on the server and flags a conflict when two writers touch the same field, instead of the most recent write silently overwriting the other |
-| Every byte costs battery or CPU, like a sensor fleet on a cellular connection or a service mesh handling thousands of calls a second | Protobuf FieldMask | Carries the presence signal as a separate list of field paths alongside the message instead of a wrapper per field, at effectively no cost to the payload itself |
-| Resuming a bulk sync that broke partway through, like a CRM feeding a data warehouse or a directory reconciling with HR | Change-data-capture streams | Reads an ordered, checkpointable log of changes instead of a snapshot query, so a crash resumes from the last processed record instead of redoing or losing work |
+- A field with its own identity or workflow belongs on its own endpoint, not folded into a PATCH.
+- Everything else that stays in the PATCH needs its presence computed correctly. Diff against the fetched object, or use presence types for a blind write.
 
 ## Where to Start
 
 The fix doesn't need a new protocol, a new wire format, or a bigger PATCH grammar. It needs treating presence and identity as first-class questions.
 
-- This isn't a REST problem or an RPC problem. The same consolidation pressure erodes both, so the fix has to be a protocol-independent habit
+- This isn't only a REST problem. Batched RPC calls hit the same ambiguity when they consolidate, so a protocol change isn't a fix on its own
 - Audit PATCH endpoints and batched RPC methods for fields where leaving a value alone and clearing it collapse into the same signal, the exact gap both lineages reintroduced on consolidation
 - Give any collection with identity-bearing elements its own POST/DELETE endpoint or RPC method before it grows large enough to hurt, and make sure the storage layer mutates one element atomically instead of rewriting the whole document
 - Hoist a scalar the same way when it has its own workflow, like email re-verification, or when most callers only ever touch that one field
 - Wrap every optional scalar field in a presence type from the first endpoint you write, not just the ones you've been burned by. On the server this changes nothing about the wire format and costs close to nothing to add
-- Check the client's own serialization defaults for the same gap. A diff against already-fetched state is usually cheaper than threading a wrapper type through the UI; the wrapper is the fallback for a blind write with no fetch to diff against
+- Check the client's own serialization defaults for the same gap. A diff against already-fetched state is usually cheaper than threading a wrapper type through the UI. The wrapper is the fallback for a blind write with no fetch to diff against
