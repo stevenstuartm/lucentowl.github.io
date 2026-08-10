@@ -7,11 +7,11 @@ tags: [architecture, api-design, rest, grpc, design-patterns]
 author: steven-stuart
 ---
 
-Any API endpoint that accepts a partial update has to guess whether an omitted field was left alone on purpose, whether it was meant to be cleared, or whether a missing collection item fell out of scope or was meant to be removed.
+Any API endpoint that accepts a partial update holds the responsibility of determining whether an omitted field was left alone on purpose, whether it was meant to be cleared, or whether a missing collection item fell out of scope or was meant to be removed.
 
 I've watched architects senior to me hit this exact question and not answer it, and when it landed on me, I didn't answer it either. Every fix I shipped was a single-property patch explained in a wiki page instead of in the contract itself, rediscovered by whoever hit it next. There was rarely time to go further. The gap got treated as an edge case, not a design question, so a hack closed the one case that was biting and the team moved on. This is an old problem, old enough to predate REST and JSON, and it still gets buried under a fix for one field and quietly assumed to have resolved itself.
 
-The scope of this post remains bounded within the most common and most interoperable representation of the: partial updates sent as JSON over REST. Other stacks have their own answers, and protobuf over gRPC even hands you part of one for scalar fields. The goal here is to discuss the fix that travels furthest with the least tooling, not a tour of every technology.
+The scope of this post remains bounded within the most common and most interoperable representation of partial updates sent as JSON over REST. Other stacks have their own answers, and protobuf over gRPC largely solves this for scalar fields. The goal here is to discuss the fix that travels furthest with the least tooling, not a tour of every technology.
 
 ## The Three Things Any Change Has to Express
 
@@ -45,6 +45,21 @@ if (request.Tags is not null)
 The ambiguity can run the opposite direction too, and less benignly. An omitted `isAdmin` key deserializes to `false`, the same value sent to revoke it on purpose. A handler that writes `customer.IsAdmin = request.IsAdmin` unconditionally, the only option with no null to guard on, revokes admin access on any PATCH that never mentions permissions, because the type's default and the wire format's silence are the same bit. A client updating nothing but a phone number can walk away having quietly demoted an admin.
 
 `request.Tags` fails differently in the same request. It deserializes to all three tags, and the handler overwrites `customer.Tags` wholesale, correct only if nothing else touched the tags between read and write. The request can only say "these three tags are the complete set now," not "add vip" as its own operation. So a second client that added a fourth tag in the meantime loses it silently the moment this write lands.
+
+## Why Not Just Require the Whole Object?
+
+The quickest way out is to refuse partial updates at all and always demand a full representation as a PUT, right? Yes and no.
+
+With a PUT, every field is always present, `null` can only mean clear, and the omitted-versus-cleared question never comes up. It's a fix for that one question, and it's also the most expensive one available. To send the whole object, a client first has to fetch it, change the one field it cares about, and send everything back, which is where the cost lands:
+
+- **Every write carries the whole object.** Fields the caller never meant to touch ride along carrying the value it happened to read, so a change another actor made in between is silently reverted, the same lost-update race the tags example runs into, now generalized to every scalar.
+- **The client often can't produce a full representation.** A caller editing a display name may never have fetched, or been authorized to read, the `isAdmin` flag or the PII on the same entity, and it can't round-trip a field it can't see.
+- **Server-authored fields have no honest place in the body.** The client echoes `updatedAt` or a version counter and races the server, or the server quietly ignores part of the request and has reinvented presence semantics without admitting it.
+- **It never touches the collection half.** A full-customer PUT still carries `tags` as a whole array, so the resend-the-whole-set race survives intact.
+
+None of that makes full-representation PUT wrong, and it's a common default in some large systems. Most of these costs only bite when a resource has more than one writer, and a great deal of data doesn't. A customer's contact, a feature configuration, and a user's own settings are often owned and modified by the single actor they belong to. With one writer there's nothing to clobber and no stale copy to lose, and PUT is a legitimate default there. What makes it fragile is that this safety rests entirely on a scope assumption the endpoint almost never states. It's correct only as long as "one owner, one writer" holds, and it starts quietly losing writes the day a support tool, an integration, or a background job becomes the second writer. That's this whole post's problem relocated. The behavior is fine until an unstated assumption stops being true, and nothing in the contract marks where.
+
+So full-object PUT isn't a way to avoid change semantics. It's a bet that one actor owns the write path. The discipline the rest of this post describes doesn't ride on that bet. It's what lets a request mean *only this, and nothing about the rest*, which is what most writes actually mean and most callers actually need.
 
 ## RPC Had This by Accident
 
@@ -131,7 +146,7 @@ The same lever works on scalars too, and not only for the ambiguity problem. A f
 
 Both defaults chosen here solve their piece of the problem using nothing but ordinary JSON over ordinary REST: a plain object body, a plain POST/DELETE pair. Of course, that's not the only way to solve either problem.
 
-For example, JSON Patch (RFC 6902) could replace both defaults at once. Its operation array (add, remove, replace, move, copy, test), solves omission clarity the way the presence wrapper does and collection targeting the way resource hoisting does, in one mechanism instead of two. What that costs is interoperability:
+For example, JSON Patch (RFC 6902) could replace both defaults at once. Its operation array (add, remove, replace, move, copy, test) solves omission clarity the way the presence wrapper does and collection targeting the way resource hoisting does, in one mechanism instead of two. What that costs is interoperability:
 
 - A client has to compute an array of operations instead of building the object it would build anyway
 - The body itself, a list of instructions rather than a resource, is a shape most HTTP clients, OpenAPI generators, and API explorers don't render or produce as cleanly as a plain object
@@ -161,9 +176,10 @@ For a client starting today, two moves cover most of it:
 
 ## Where to Start
 
-The fix doesn't need a new protocol, a new wire format, or a bigger PATCH grammar. It needs treating presence and identity as first-class questions.
+The fix doesn't need a new protocol, a new wire format, or a bigger PATCH grammar. It needs treating presence, identity, and ownership as first-class questions.
 
 - This isn't only a REST problem. Batched RPC calls hit the same ambiguity when they consolidate, so a protocol change isn't a fix on its own
+- Write down who owns the write path before defaulting to a full-object PUT. That shortcut is only safe while a single actor owns the resource, and it starts losing integrity the day a support tool, an integration, or a background job becomes a second writer
 - Audit PATCH endpoints and batched RPC methods for fields where leaving a value alone and clearing it collapse into the same signal, the exact gap both lineages reintroduced on consolidation
 - Give any collection with identity-bearing elements its own POST/DELETE endpoint or RPC method before it grows large enough to hurt, and make sure the storage layer mutates one element atomically instead of rewriting the whole document
 - Hoist a scalar the same way when it has its own workflow, like email re-verification, or when most callers only ever touch that one field
