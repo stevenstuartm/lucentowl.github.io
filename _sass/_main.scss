@@ -4475,7 +4475,7 @@ body.home-layout .site-title a:hover .site-name {
 
 /* Single resource page */
 .resource {
-    max-width: 960px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 0 var(--spacing-md) var(--spacing-xl);
 }
@@ -4549,32 +4549,143 @@ body.home-layout .site-title a:hover .site-name {
     text-decoration-color: var(--color-hover);
 }
 
-.resource-related {
-    border-bottom: 1px solid var(--color-border);
-    margin-bottom: var(--spacing-sm);
-    padding-bottom: 0.25rem;
+/* ===== Header Badge Row (reading time, meta, related-content pills) ===== */
+.header-badges {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: var(--spacing-sm);
 }
 
-.resource-related-group {
-    margin-bottom: var(--spacing-md);
+.header-badges .reading-time,
+.header-badges .resource-meta {
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
-.resource-related-group h3 {
+/* ===== Related Content Pill =====
+   Fixed-height summary with an absolutely positioned panel, so opening a
+   pill never reflows the page content below the header. */
+.related-pill {
+    position: relative;
+    display: inline-block;
+}
+
+.related-pill-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem 0.35rem 0.75rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
     font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-weight: 500;
     color: var(--color-text-light);
-    margin-bottom: var(--spacing-xs);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    transition: border-color 0.2s ease, color 0.2s ease;
 }
 
-.resource-related-group ul {
+/* Suppress the native disclosure marker */
+.related-pill-summary::-webkit-details-marker {
+    display: none;
+}
+
+.related-pill-summary:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.related-pill-summary:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.related-pill-icon {
+    font-size: 0.9rem;
+}
+
+.related-pill-caret {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+}
+
+.related-pill[open] .related-pill-summary {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.related-pill[open] .related-pill-caret {
+    transform: rotate(180deg);
+}
+
+.related-pill-panel {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    z-index: 60;
+    min-width: 18rem;
+    max-width: min(24rem, calc(100vw - 2.5rem));
+    padding: var(--spacing-sm);
+    background-color: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.related-pill-panel ul {
     list-style: none;
     padding: 0;
     margin: 0;
 }
 
-.resource-related-group li {
-    margin-bottom: 0.35rem;
+.related-pill-panel li {
+    margin: 0;
+    padding: 0.3rem 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.related-pill-panel li + li {
+    border-top: 1px solid var(--color-border);
+}
+
+.related-pill-panel a {
+    font-weight: 500;
+}
+
+.related-pill-type {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.35rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-light);
+    vertical-align: 1px;
+}
+
+/* On narrow screens the panel anchors to the row rather than the pill,
+   so a pill near the right edge cannot push the panel off-screen. */
+@media (max-width: 480px) {
+    .related-pill {
+        position: static;
+    }
+
+    .related-pill-panel {
+        left: 0;
+        right: 0;
+        min-width: 0;
+        max-width: none;
+    }
 }
 
 .resource-footer {
@@ -4654,6 +4765,10 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 @media (max-width: 768px) {
+    .resource {
+        padding: 0 var(--spacing-sm) var(--spacing-xl);
+    }
+
     .resource-content {
         padding: var(--spacing-sm);
     }

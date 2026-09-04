@@ -60,9 +60,12 @@ layout: default
             {% assign words = content | strip_html | number_of_words %}
             {% assign minutes = words | divided_by: 200 %}
             {% if minutes < 1 %}{% assign minutes = 1 %}{% endif %}
-            <div class="reading-time">
-                <span class="reading-time-icon">📖</span>
-                <span class="reading-time-text">{{ minutes }} min read</span>
+            <div class="header-badges">
+                <div class="reading-time">
+                    <span class="reading-time-icon">📖</span>
+                    <span class="reading-time-text">{{ minutes }} min read</span>
+                </div>
+                {% include related-links.html %}
             </div>
         </div>
     </header>

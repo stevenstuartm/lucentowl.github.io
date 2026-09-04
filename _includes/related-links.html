@@ -1,0 +1,67 @@
+{%- comment -%}
+Renders the related-content pills for any linkable page.
+
+Two directions, both resolved at build time — nothing here loads asynchronously:
+
+  Reverse — a guide, post, or case study lists every resource whose front
+            matter names it in related_guides / related_posts /
+            related_case_studies.
+  Forward — a resource lists the guides, case studies, and posts it declares.
+
+Adding a new linkable collection means adding it to `linkable_collections`,
+adding its clause to the reverse lookup, and adding a forward pill below.
+{%- endcomment -%}
+
+{%- assign linkable_collections = "guides,posts,case_studies" | split: "," -%}
+
+{%- if linkable_collections contains page.collection -%}
+    {%- comment -%} where_exp takes no `or`, so each field is matched separately. {%- endcomment -%}
+    {%- assign via_guides = site.resources | where_exp: "r", "r.related_guides contains page.url" -%}
+    {%- assign via_case_studies = site.resources | where_exp: "r", "r.related_case_studies contains page.url" -%}
+    {%- assign via_posts = site.resources | where_exp: "r", "r.related_posts contains page.url" -%}
+    {%- assign linked_resources = via_guides | concat: via_case_studies | concat: via_posts -%}
+    {%- include related-pill.html icon="🔖" noun="resource" docs=linked_resources show_type=true -%}
+{%- endif -%}
+
+{%- if page.collection == "resources" -%}
+    {%- include related-pill.html icon="📘" noun="guide" urls=page.related_guides source=site.guides -%}
+    {%- include related-pill.html icon="🧭" noun="case study" urls=page.related_case_studies source=site.case_studies -%}
+    {%- include related-pill.html icon="✍️" noun="post" urls=page.related_posts source=site.posts -%}
+{%- endif -%}
+
+{%- if linked_resources.size > 0 or page.related_guides or page.related_case_studies or page.related_posts -%}
+<script>
+(function() {
+    var pills = document.querySelectorAll('.related-pill');
+    if (!pills.length) return;
+
+    document.addEventListener('click', function(event) {
+        pills.forEach(function(pill) {
+            if (pill.open && !pill.contains(event.target)) {
+                pill.open = false;
+            }
+        });
+    });
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key !== 'Escape') return;
+        pills.forEach(function(pill) {
+            if (pill.open) {
+                pill.open = false;
+                pill.querySelector('summary').focus();
+            }
+        });
+    });
+
+    // Only one panel open at a time
+    pills.forEach(function(pill) {
+        pill.addEventListener('toggle', function() {
+            if (!pill.open) return;
+            pills.forEach(function(other) {
+                if (other !== pill) other.open = false;
+            });
+        });
+    });
+})();
+</script>
+{%- endif -%}

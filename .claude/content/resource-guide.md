@@ -56,13 +56,15 @@ last_updated: 2025-01-01
 tags: [tag1, tag2, tag3]
 related_guides:
   - /study-guides/some-guide.html
+related_case_studies:
+  - /case-studies/some-case-study.html
 related_posts:
   - /blog/2025/01/01/some-post.html
 ---
 ```
 
 **Required fields**: `title`, `layout`, `type`, `category`, `description`, `last_updated`, `tags`
-**Optional fields**: `related_guides`, `related_posts` — arrays of site-relative URLs
+**Optional fields**: `related_guides`, `related_case_studies`, `related_posts` — arrays of site-relative URLs
 
 - **type**: Must be one of the three valid types above. Drives the type badge and the listing page's type filter.
 - **category**: The listing page's category filter pills are generated dynamically from whatever `category` values already appear across `_resources/*.md` (`_layouts/resources.html`) — there is no fixed enum, and it is not validated against `assets/data/study_guides_config.json`. Before picking one, check existing categories with `grep -h "^category:" _resources/*.md` and reuse a match if the resource's topic fits one already in use (existing values include `Architecture`, `AI`, `DSA`, `Infrastructure`, `Programming Patterns`, `Networking`, `SDLC`, `Security` — note some are short forms, not the full study-guide category names). Only introduce a new category value if none of the existing ones fit; a new value becomes its own filter pill immediately.
@@ -96,11 +98,24 @@ Always modify both the resource file and the config file together.
 
 ## Relationship Ownership
 
-`related_guides` and `related_posts` are declared on the resource — never on the guide or post being linked to. This means adding a resource never requires editing existing content files.
+`related_guides`, `related_case_studies`, and `related_posts` are declared on the resource — never on the guide, case study, or post being linked to. This means adding a resource never requires editing existing content files.
 
-- If a resource was extracted from a guide or post, link back to that source via `related_guides` or `related_posts`
+- If a resource was extracted from a guide, case study, or post, link back to that source via the matching field
 - Only link to content that actually exists — verify the URL resolves before adding it
-- A resource doesn't need either field; leave them out if there's no natural source to point back to
+- A resource doesn't need any of these fields; leave them out if there's no natural source to point back to
+
+### How the Link Renders
+
+One declaration produces both directions, so you never edit the target page:
+
+| Page | Pill |
+| --- | --- |
+| The resource | One pill per populated `related_*` field, listing what it points to |
+| The guide, case study, or post | A "related resources" pill listing every resource that names it |
+
+Both are collapsed pills in the header card, next to the reading-time badge. The panel opens over the content rather than pushing it down, so a resource with eight related guides costs the same header space as one with a single link — link generously, it never crowds the page.
+
+Adding a linkable collection is a change to `_includes/related-links.html`; the header comment there says what to edit.
 
 ---
 
@@ -110,7 +125,7 @@ Always modify both the resource file and the config file together.
 
 **No narrative framing**: Skip introductions that build context or motivate the reader. A one-line description in the front matter and a short lead-in sentence (if needed to orient the table/diagram) is enough. The artifact should be usable within seconds of landing on the page.
 
-**Self-contained**: A reader should get full value from the resource without needing to open the related guide or post. `related_guides`/`related_posts` are for readers who want to go deeper — not a requirement to understand the resource itself.
+**Self-contained**: A reader should get full value from the resource without needing to open the related guide, case study, or post. The `related_*` fields are for readers who want to go deeper — not a requirement to understand the resource itself.
 
 **Code resources**: Follow the same code language defaults as guides and posts — default to C# for programming examples unless the subject is language-specific (e.g., a Claude Code skill, a shell script, a Terraform snippet).
 

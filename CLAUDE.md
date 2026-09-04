@@ -51,7 +51,7 @@ bundle exec jekyll build
   - `blog-listing.html`: Blog listing page template
   - `author.html`: Author page template (avatar, bio, social links, post list)
   - `case-study.html`: Case study template with author byline
-- **_includes/**: Reusable HTML partials (header.html, footer.html)
+- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html)
 - **_posts/**: Blog posts in Markdown with YAML front matter (format: YYYY-MM-DD-title.md)
 - **_guides/**: Study guides in Markdown organized by topic
 - **_site/**: Generated static site (excluded from git)
@@ -153,6 +153,8 @@ last_updated: 2025-01-01
 tags: [tag1, tag2, tag3]
 related_guides:
   - /study-guides/some-guide.html
+related_case_studies:
+  - /case-studies/some-case-study.html
 related_posts:
   - /blog/2025/01/01/some-post.html
 ---
@@ -168,7 +170,7 @@ related_posts:
 
 **`last_updated`**: date the resource content was last substantively edited (`YYYY-MM-DD`, unquoted). Update this whenever you revise an existing resource's content. It renders on the resource page and on its listing card.
 
-**Optional fields:** `related_guides` and `related_posts` — arrays of site-relative URLs. Titles are resolved automatically from Jekyll's `site.guides` and `site.posts` collections at build time.
+**Optional fields:** `related_guides`, `related_case_studies`, and `related_posts` — arrays of site-relative URLs. Titles are resolved automatically from Jekyll's `site.guides`, `site.case_studies`, and `site.posts` collections at build time.
 
 **CRITICAL: Always update `assets/data/resources_config.json`** when adding or removing resources. Resources that exist in `_resources/` but aren't listed in this config file will not appear on the Resources listing page. The config controls display order.
 
@@ -184,7 +186,7 @@ related_posts:
 
 **NEVER rename resource files** — same rule as posts and guides.
 
-`related_guides`/`related_posts` are declared on the resource, never on the guide or post being linked to — adding a resource never requires editing existing content files.
+The `related_*` fields are declared on the resource, never on the guide, case study, or post being linked to — adding a resource never requires editing existing content files. Both directions render from that one declaration — see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
 
 For the Lookup Test (deciding whether content qualifies as a resource), quality standards, and organization guidance, see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
 

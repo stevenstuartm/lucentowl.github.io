@@ -1,0 +1,44 @@
+{%- comment -%}
+Compact, fixed-height pill that reveals a link panel on click.
+
+Params (one of two link sources):
+  docs        — array of documents (used by the reverse lookup)
+  urls        — array of site-relative URLs, rendered in declared order
+  source      — collection to resolve `urls` against (e.g. site.guides)
+
+  icon        — emoji shown before the label
+  noun        — singular noun; pluralised by count
+  show_type   — when truthy, render each doc's `type` as a chip
+
+The open panel is absolutely positioned, so toggling it never reflows
+the surrounding page content.
+{%- endcomment -%}
+
+{%- if include.docs -%}{%- assign pill_count = include.docs.size -%}
+{%- else -%}{%- assign pill_count = include.urls.size -%}{%- endif -%}
+
+{%- if pill_count > 0 -%}
+<details class="related-pill">
+    <summary class="related-pill-summary">
+        <span class="related-pill-icon" aria-hidden="true">{{ include.icon }}</span>
+        <span class="related-pill-label">{{ pill_count }} related {{ include.noun }}{% if pill_count != 1 %}s{% endif %}</span>
+        <svg class="related-pill-caret" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    </summary>
+    <div class="related-pill-panel">
+        <ul>
+            {%- if include.docs -%}
+            {%- for doc in include.docs -%}
+            <li><a href="{{ doc.url | relative_url }}">{{ doc.title }}</a>{% if include.show_type and doc.type %}<span class="related-pill-type">{{ doc.type }}</span>{% endif %}</li>
+            {%- endfor -%}
+            {%- else -%}
+            {%- for link_url in include.urls -%}
+            {%- assign found = include.source | where: "url", link_url | first -%}
+            <li><a href="{{ link_url | relative_url }}">{% if found %}{{ found.title }}{% else %}{{ link_url }}{% endif %}</a></li>
+            {%- endfor -%}
+            {%- endif -%}
+        </ul>
+    </div>
+</details>
+{%- endif -%}

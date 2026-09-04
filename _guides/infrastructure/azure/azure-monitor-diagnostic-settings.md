@@ -3,8 +3,8 @@ title: "Azure Activity Log and Diagnostic Settings"
 layout: guide
 category: Azure
 subcategory: Security and Compliance
-description: "A system architect's guide to Azure Activity Log and Diagnostic Settings covering audit logging, resource-level diagnostics, log routing, and compliance monitoring architecture."
-tags: [azure, security, observability, cloud-computing, infrastructure, governance, automation, practical]
+description: "A system architect's guide to Azure Activity Log, diagnostic settings, and data collection rules covering the three telemetry paths, log routing destinations, Log Analytics table plans and retention, and compliance archival."
+tags: [activity-log, diagnostic-settings, data-collection-rules, log-analytics, azure-monitor, log-retention, practical]
 ---
 
 ## What Is Azure Activity Log and Diagnostic Settings
@@ -12,6 +12,34 @@ tags: [azure, security, observability, cloud-computing, infrastructure, governan
 Azure provides two complementary logging systems for different purposes. [Azure Activity Log](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/activity-log){:target="_blank" rel="noopener noreferrer"} records administrative changes across your subscription (who deployed a resource, when it was modified, and who deleted it). [Diagnostic Settings](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/diagnostic-settings){:target="_blank" rel="noopener noreferrer"} enable individual resources to emit their own logs and metrics, which are then routed to destinations like Log Analytics, Storage accounts, or Event Hubs.
 
 These systems are foundational to observability, compliance auditing, and incident investigation on Azure. Together they answer two distinct questions: "What administrative changes happened in my subscription?" and "What is happening inside this specific resource?"
+
+### Three Collection Paths, Three Mechanisms
+
+Azure telemetry splits by *where the activity happens*, and each layer is collected by a different mechanism with different defaults. Activity Log and diagnostic settings cover two of the three layers, and guest OS telemetry needs a third mechanism that neither of them provides. Confusing the three is the most common reason a team believes it is logging something it is not.
+
+```
+Control plane (ARM operations: create, update, delete)
+  └─► Activity log ────────────────► collected automatically, kept 90 days
+                                     diagnostic setting (subscription scope)
+                                     routes it onward
+
+Data plane (operations inside a resource: read a secret, run a query)
+  └─► Resource logs ───────────────► NOT collected by default
+                                     diagnostic setting (resource scope)
+                                     turns them on and routes them
+
+Guest OS (Windows events, Syslog, perf counters, text and IIS logs)
+  └─► Azure Monitor Agent ─────────► NOT collected by default
+        + data collection rule       DCR defines what to collect and where
+                                     it goes; diagnostic settings do not
+                                     reach inside a VM
+
+                    all three converge on ─► Log Analytics workspace
+                                             Storage account
+                                             Event Hubs
+```
+
+The scope each mechanism attaches to differs too. A diagnostic setting for **resource logs** is created on the resource itself. A diagnostic setting for the **activity log** is created at subscription scope, and a separate one can be created at **management group** scope. A **data collection rule** is a standalone resource in a subscription, associated with one or many machines, and one machine can carry several.
 
 ### What Problems Activity Log and Diagnostic Settings Solve
 
@@ -27,7 +55,7 @@ These systems are foundational to observability, compliance auditing, and incide
 - Complete audit trail of administrative actions across the subscription
 - Resource-level logs and metrics for real-time monitoring and forensic analysis
 - Centralized log storage enabling compliance audits and search across resources
-- Integration with security monitoring tools like Azure Defender for Cloud and Sentinel
+- Integration with security monitoring tools like Microsoft Defender for Cloud and Microsoft Sentinel
 - Evidence of configuration changes and access patterns for incident investigation
 - Automated alerts when suspicious activity occurs (via Azure Monitor)
 
@@ -38,13 +66,13 @@ Architects familiar with AWS should understand how Azure's logging maps to AWS s
 | Concept | AWS | Azure |
 |---------|-----|-------|
 | **Subscription-level audit trail** | CloudTrail (tracks all API calls) | Activity Log (tracks administrative actions + service health) |
-| **Resource-level logs** | CloudWatch Logs (application/service logs) | Diagnostic Settings (logs and metrics per resource type) |
+| **Resource-level logs** | CloudWatch Logs (application/service logs) | Diagnostic Settings for resource logs; Azure Monitor Agent and data collection rules for guest OS logs |
 | **Log storage and analysis** | CloudWatch Logs + S3 archival | Log Analytics workspace + Storage account archival |
 | **Central logging configuration** | CloudTrail + CloudWatch Log Groups | Activity Log + Diagnostic Settings (per resource) |
 | **Security monitoring** | GuardDuty + CloudTrail analysis | Defender for Cloud + Sentinel |
 | **Configuration change tracking** | AWS Config | Azure Policy + Activity Log |
 | **Event stream ingestion** | Kinesis Data Streams | Event Hubs |
-| **Log retention** | Indefinite (charged for storage) | Activity Log: 90 days free; beyond requires export |
+| **Log retention** | CloudTrail event history: 90 days free; longer needs a trail to S3 | Activity Log: 90 days free; beyond requires a diagnostic setting |
 | **Cost model** | Per log ingested + storage | Per GB ingested + per GB stored |
 
 ---
@@ -83,12 +111,14 @@ Activity Log captures administrative actions and service health events at the su
 - Older events are automatically deleted
 - Search and filtering are available in the Azure Portal
 
-**Extended retention:** Export to other destinations
-- Export to Log Analytics workspace: Retain for 1-2 years (configurable)
-- Export to Storage account: Retain indefinitely at minimal cost (pennies per TB/month)
-- Export to Event Hubs: Stream real-time events to external systems
+**Extended retention:** create a diagnostic setting at subscription scope
+- Send to a Log Analytics workspace: lands in the `AzureActivity` table and can be kept up to 12 years
+- Send to a Storage account: retain indefinitely at minimal cost, with blobs written hourly as `PT1H.json`
+- Send to Event Hubs: stream events to a third-party SIEM or other external system
 
-**Practical implication:** For compliance audits requiring 2+ years of historical data, you must configure exports. The 90-day free retention is insufficient for most regulatory frameworks.
+**Activity log ingestion into Log Analytics is free.** `AzureActivity` is one of a handful of tables Microsoft exempts from ingestion charges, and it keeps 90 days at no cost even inside a workspace. Retention charges start only past that 90-day mark. That makes exporting the activity log to a workspace close to free at the volumes most subscriptions generate, which is a different economic picture from resource logs.
+
+**Practical implication:** For compliance audits requiring 2+ years of historical data, you must configure a diagnostic setting. The 90-day free retention is insufficient for most regulatory frameworks. The activity log is also the only place Azure records who *created* a resource, so if that matters to you, export it before the 90 days elapse.
 
 ### Accessing Activity Log
 
@@ -119,7 +149,7 @@ Diagnostic Settings enable individual Azure resources to emit logs and metrics t
 
 | Resource Type | Example Logs |
 |--------------|--------------|
-| **Virtual Machines** | Guest diagnostics, boot diagnostics, event logs from Windows or Linux |
+| **Virtual Machines** | Host platform metrics only. Guest OS event logs, Syslog, and performance counters come from Azure Monitor Agent and a data collection rule, not from a diagnostic setting |
 | **App Service** | HTTP requests, failed requests, detailed error logs, performance metrics |
 | **Azure SQL Database** | Query execution, deadlocks, long-running queries, audit logs |
 | **Azure Firewall** | Network traffic rules, denied connections, rule execution logs |
@@ -131,7 +161,7 @@ Diagnostic Settings enable individual Azure resources to emit logs and metrics t
 
 **Metrics emitted by resources:**
 
-All resources emit metrics like CPU usage, memory consumption, disk I/O, network throughput, and request latency. These are available in Azure Monitor and queryable via the metrics API.
+Azure resources emit platform metrics automatically, with no diagnostic setting required, and Azure Monitor Metrics keeps them for 93 days. What is available depends on the resource type: a VM's host metrics cover CPU, disk, and network, but *not* memory, because memory is a guest OS counter that requires the Azure Monitor Agent. Use a diagnostic setting for metrics only when you need them in a workspace for KQL analysis alongside logs. Not every metric is exportable that way, and multidimensional metrics arrive flattened and aggregated across their dimensions.
 
 ### Diagnostic Settings Configuration
 
@@ -147,17 +177,32 @@ To enable Diagnostic Settings for a resource:
    - Log Analytics workspace
    - Storage account
    - Event Hub
-   - Partner solutions (Datadog, Splunk, etc.)
+   - Azure Monitor partner solutions (Datadog, Elastic, Dynatrace, and others)
+
+Rather than pick categories one by one, most resources also offer **category groups**: `allLogs` for every category the resource emits, and `audit` for the categories recording customer interaction with data or settings. Category groups track the service, so a category added later is collected automatically. The trade-off is that you can't mix a category group with individually selected categories in the same setting.
+
+**Constraints that shape the design:**
+
+| Constraint | Consequence |
+|------------|-------------|
+| Five diagnostic settings per resource | A hard ceiling. Exceeding it fails, so plan settings per destination rather than per team |
+| One destination of each type per setting | Sending to two workspaces takes two settings, not one setting with two workspaces |
+| Storage and Event Hubs must be in the resource's region | Rules out a single global archive account for a multi-region estate |
+| Firewalled Storage or Event Hubs | Requires "Allow trusted Microsoft services" or the setting silently delivers nothing |
+| Premium and DNS-zone-endpoint Storage accounts are unsupported | Archive to a Standard account |
+| Settings outlive the resource | Delete the setting when you delete, rename, or move a resource, or a later resource with the same ID can inherit it |
+
+Data starts flowing within about 90 minutes of creating a setting, and the destination table in Log Analytics is created only when the first record lands. An empty table is not necessarily a broken setting.
 
 **Common destination patterns:**
 
 | Destination | Use Case | Cost | Retention |
 |------------|----------|------|-----------|
-| **Log Analytics** | Real-time analysis, KQL queries, alerts | Pay-as-you-go (per GB ingested) | Configurable (default 30 days) |
+| **Log Analytics** | Real-time analysis, KQL queries, alerts | Pay-as-you-go per GB ingested, or a commitment tier | Configurable per table, 30 days by default, up to 12 years |
 | **Storage account** | Long-term archival, compliance, cost-effectiveness | Minimal (per GB/month) | Indefinite (configure lifecycle) |
-| **Event Hub** | Stream real-time events to on-premises, third-party tools | Pay per throughput unit | Not persistent (temp buffer only) |
+| **Event Hub** | Stream real-time events to on-premises, third-party tools | Pay per throughput unit | A transit buffer, not a store. Events expire after the namespace's configured retention, typically 1-7 days |
 
-**Architectural decision:** Send logs to Log Analytics for operational analysis, and configure Log Analytics to export older data to Storage for archival. This balances query performance with compliance cost.
+**Architectural decision:** Send logs to Log Analytics for operational analysis and keep them there for the long haul as well. In-workspace long-term retention now reaches 12 years, which removes most of the old reason to copy logs out to a Storage account. Keep the Storage path for the cases it still wins: immutable blobs for regulators who require write-once storage, and estates already built around blob lifecycle policies.
 
 ### Log Analytics Workspace
 
@@ -167,8 +212,8 @@ A [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monito
 - **Regional resource** - A workspace exists in a single Azure region
 - **Shared by multiple resources** - Multiple resources send logs to the same workspace
 - **Queryable with KQL** - Use Kusto Query Language to search logs and create alerts
-- **Retention configurable** - From 1 day to 2 years
-- **Priced per GB ingested** - Data ingestion is the primary cost driver
+- **Retention configured per table** - The workspace sets a default, and any table can override it
+- **Priced per GB ingested** - Ingestion is the primary cost driver, with retention beyond the included period billed separately
 
 **Multi-workspace patterns:**
 
@@ -181,22 +226,57 @@ A [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monito
 
 **Common mistake:** Creating too many workspaces. Each workspace has overhead (separate retention, separate costs, separate RBAC). Start with a single workspace; only split when you have a specific requirement (data residency, compliance boundary, cost allocation).
 
+### Table Plans
+
+Cost control in a workspace starts one level above retention, at the **table plan**. Every table carries one, and it decides what the data costs to ingest and what you are allowed to do with it.
+
+| | Analytics | Basic | Auxiliary (Lake) |
+|---|---|---|---|
+| **Best for** | High-value data driving monitoring, detection, and alerts | Troubleshooting and incident response | Verbose, low-touch logs kept for audit and compliance |
+| **Ingestion cost** | Standard | Reduced | Minimal |
+| **Query cost** | Included | Per query | Per query |
+| **Query capability** | Full KQL, cross-table and resource-scoped | Full KQL on one table, extendable via `lookup` | Full KQL on one table, and slow |
+| **Alerts** | Yes | Simple log alerts only | No |
+| **Analytics retention** | 30 days by default, extendable to 2 years | Not applicable | Not applicable |
+| **Total retention** | Up to 12 years | Up to 12 years | Up to 12 years |
+
+Basic and Auxiliary are unavailable on workspaces still in legacy pricing tiers. Firewall, proxy, and NetFlow logs are the canonical Auxiliary candidates: enormous, rarely queried, and required by an auditor rather than an on-call engineer.
+
 ### Log Retention and Archival
 
-**Log Analytics retention tiers:**
+Retention inside a workspace has two states, and the old "archive tier" vocabulary has been retired in favor of them:
 
-| Tier | Duration | Cost | Use Case |
-|------|----------|------|----------|
-| **Interactive retention** | 1-30 days (configurable) | Full ingestion cost | Active troubleshooting, real-time analysis |
-| **Archive retention** | 31 days to 2 years | Significantly reduced (~10% of ingestion cost) | Compliance records, cold data for occasional queries |
+| State | Duration | What you can do with the data |
+|-------|----------|-------------------------------|
+| **Analytics retention** | 30 days by default (90 for `AzureActivity`, `Usage`, Application Insights, and Sentinel workspaces), configurable from 4 to 730 days | Interactive KQL queries, alerts, workbooks, insights |
+| **Long-term retention** | The remainder of a total retention period set up to 12 years (4,383 days) | Not queryable directly. Run a **search job** to pull the records you need into a searchable results table |
 
-**Archival strategy:** Retain hot logs in Log Analytics for 30 days (active troubleshooting), then archive older logs to Storage account. Archive queries are slower but dramatically cheaper than keeping everything hot.
+The two are configured as one pair. You set analytics retention and a **total** retention, and the gap between them is the long-term period. Lowering analytics retention while leaving total retention alone converts the difference to low-cost long-term storage rather than deleting anything.
 
-**Storage account archival:**
-- Configure Diagnostic Settings to export logs to a Storage account blob container
-- Use Storage lifecycle policies to move old blobs to cool/archive tiers
-- Retention cost drops significantly as data ages (from hot tier to archive tier)
-- Practical for 2-7 year retention required by many compliance frameworks
+Two numbers change the intuition here. The first 31 days of analytics retention are included in the ingestion price, so dropping a table below 31 days saves nothing. And shortening total retention doesn't delete immediately. Azure Monitor waits 30 days before removing the data, so a misconfiguration is recoverable.
+
+**Choosing where data should live:**
+
+```
+Is the data needed for alerts, dashboards, or interactive investigation?
+├── Yes ──► Analytics plan
+│           └── How far back do you investigate interactively?
+│               ├── Weeks      ──► 30-90 days analytics retention
+│               └── Months     ──► extend analytics retention (max 730 days)
+│
+└── No ───► Is it queried occasionally during incidents?
+            ├── Yes ──► Basic plan (single-table KQL, reduced ingestion)
+            └── No ───► Auxiliary plan (audit and compliance only)
+
+Then, for anything an auditor may ask for later:
+  set TOTAL retention out to the required horizon (up to 12 years)
+  └── retrieve with a search job, not an interactive query
+```
+
+**When a Storage account still earns its place:**
+- Regulators requiring immutable, write-once storage (set an immutability policy on the container)
+- Estates with existing blob lifecycle tooling for cool and archive tiers
+- Feeding an external system that reads blobs rather than querying a workspace
 
 ---
 
@@ -204,26 +284,31 @@ A [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monito
 
 ### How Azure Policy Relates to Logging
 
-[Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} evaluates resources against compliance rules and can trigger remediation actions. All policy evaluations are recorded in Activity Log, creating an audit trail of compliance assessment.
+[Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} evaluates resources against compliance rules and can trigger remediation actions. The audit trail is split across two places, which trips people up: the **Activity Log** records policy *actions* (a denied deployment, a remediation task that ran, an assignment that changed), while ongoing **compliance state** lives in Azure Policy and is queryable through Azure Resource Graph's `PolicyResources`. A resource that has been quietly non-compliant for six months generates compliance state continuously but produces no fresh Activity Log entries, so an alert built only on the Activity Log will never fire for it.
 
-**Policy effect types:**
+**Policy effects relevant to logging:**
 
-| Effect | Behavior | Audit Trail |
-|--------|----------|-------------|
-| **Audit** | Resource is allowed; non-compliance recorded | Activity Log shows evaluation + non-compliance |
-| **Deny** | Non-compliant resource creation/modification blocked | Activity Log shows denied action + reason |
-| **Append** | Non-compliant resource is automatically modified | Activity Log shows append operation |
-| **Modify** | Non-compliant resource fields automatically changed | Activity Log shows modification + new values |
-| **DeployIfNotExists** | Compliance resource deployed automatically | Activity Log shows deployment |
+| Effect | Behavior | Where the trail appears |
+|--------|----------|-------------------------|
+| **Audit** | Resource is allowed; non-compliance is recorded | Compliance state; a warning event on the create or update |
+| **AuditIfNotExists** | Flags a resource whose related child or extension resource is missing, which is how "diagnostic settings not enabled" is detected | Compliance state |
+| **Deny** | Non-compliant creation or modification is blocked | Activity Log shows the denied action and reason |
+| **DenyAction** | Blocks a specific operation, most usefully `delete`, so logging config can't be removed | Activity Log shows the blocked operation |
+| **Append / Modify** | Adds or changes properties and tags on the request | Activity Log shows the resulting write |
+| **DeployIfNotExists** | Deploys the missing related resource, which is how diagnostic settings get applied at scale | Activity Log shows the remediation deployment |
+
+Effects are evaluated in a fixed order rather than all at once: `disabled` first, then `append` and `modify`, then `deny`, then `audit`, `manual`, and `auditIfNotExists`, with `denyAction` last. `deployIfNotExists` and `auditIfNotExists` run only after the resource provider returns success, because they inspect something that has to exist first.
 
 **Example policy evaluation:**
 
 ```
 Policy: "All VMs must have backup enabled"
-├─ Evaluation: Check if VM has backup configured
-├─ Result: Non-compliant (no backup)
-├─ Effect: Deny (or Modify to add backup)
-└─ Activity Log records: Who created the VM, what was blocked/modified, timestamp
+├─ Effect: AuditIfNotExists  (backup is a related resource, not a VM property)
+├─ Evaluation: does a recovery services protected item exist for this VM?
+├─ Result: none found, so the VM is marked non-compliant
+├─ Compliance state: queryable in Azure Policy and Resource Graph
+└─ Pair with DeployIfNotExists to remediate; Modify cannot do this,
+   because it edits properties on the resource, not adjacent resources
 ```
 
 ### Remediation Tasks
@@ -318,13 +403,13 @@ Europe West Region
 └── Europe West resources ──→ Europe Log Analytics
                               └── Archive to Europe Storage
 
-Activity Log (subscription-wide) ──→ Always available in each region workspace
+Activity Log (subscription-wide) ──→ one diagnostic setting per destination workspace
 ```
 
 **Configuration:**
 - Separate workspace per region where resources are deployed
 - Resources send Diagnostic Settings only to workspace in their region
-- Understand that Activity Log automatically replicates across all workspace regions
+- The activity log does **not** replicate itself to every workspace. It goes only where a diagnostic setting sends it, and because one setting can name only a single workspace, landing it in two regional workspaces takes two separate subscription-scope settings
 
 **Trade-offs:**
 - **Data residency:** Logs never leave the region
@@ -361,6 +446,7 @@ Production Subscription 2
 - All subscriptions send Diagnostic Settings to the central workspace
 - All subscriptions export Activity Log to central Storage + Log Analytics
 - Requires appropriate RBAC in each subscription (Monitoring Contributor on central workspace)
+- A diagnostic setting on a management group captures the activity log for that group and everything beneath it, so one setting on the top management group replaces per-subscription settings. Keeping both produces duplicate events, and Microsoft's guidance is to accept duplicates rather than risk gaps, then deduplicate at query time with `summarize arg_max(TimeGenerated, *) by hash(dynamic_to_json(pack_all()))`
 
 **Trade-offs:**
 - **Centralized visibility:** Single workspace for all subscriptions
@@ -385,15 +471,15 @@ Production Subscription 2
 - **Application Insights** - Deep monitoring for web apps and APIs
 
 **How Activity Log feeds Azure Monitor:**
-- Activity Log events are available as metric alerts (e.g., alert when X resource type is deleted)
-- Activity Log events are queryable in Log Analytics
-- Activity Log can trigger automated remediation via Azure Logic Apps or Automation Accounts
+- **Activity log alerts** fire directly off the log with no workspace involved. They match on category, operation, resource type, and status, which covers "alert when any VM is deleted" but not much more
+- **Log search alerts** run KQL against the `AzureActivity` table and handle the logic activity log alerts can't, like thresholds, joins, and time-window correlation. They require the diagnostic setting to a workspace to exist first
+- Either kind can trigger automated remediation through an action group calling a Logic App, Automation runbook, or webhook
 
 ---
 
-### Azure Sentinel
+### Microsoft Sentinel
 
-[Azure Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/overview){:target="_blank" rel="noopener noreferrer"} is Azure's cloud-native SIEM, designed to ingest and analyze logs from all sources.
+[Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/overview){:target="_blank" rel="noopener noreferrer"} is Azure's cloud-native SIEM, designed to ingest and analyze logs from all sources. It runs on a Log Analytics workspace, so everything about table plans and retention above applies to it directly, with one difference: enabling Sentinel raises the workspace's included retention from 30 days to 90. Note also that Sentinel's own experience is moving out of the Azure portal into the Microsoft Defender portal, and **after March 31, 2027** the Azure portal version is gone.
 
 **Sentinel + Activity Log:**
 - Ingest Activity Log into Sentinel for security analysis
@@ -414,9 +500,9 @@ Production Subscription 2
 
 ---
 
-### Defender for Cloud
+### Microsoft Defender for Cloud
 
-[Defender for Cloud](https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-cloud-introduction){:target="_blank" rel="noopener noreferrer"} monitors your Azure resources for security vulnerabilities and compliance violations.
+[Microsoft Defender for Cloud](https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-cloud-introduction){:target="_blank" rel="noopener noreferrer"} monitors your Azure resources for security vulnerabilities and compliance violations.
 
 **Defender for Cloud + Activity Log:**
 - Activity Log is used to detect suspicious administrative actions
@@ -449,54 +535,52 @@ Defender scans all resources in subscriptions
 - No setup required
 
 **Recommended (1-2 years):**
-- Export Activity Log to Log Analytics workspace (hot storage for 1-2 years)
-- Export Activity Log to Storage account for archival beyond 2 years
+- Send the Activity Log to a Log Analytics workspace and extend `AzureActivity`'s analytics retention to cover the window you actually investigate
+- Ingestion is free and the first 90 days of retention are free, so the marginal cost is only the period past 90 days
 - Supports most regulatory compliance requirements
 
-**Compliance archival (3-7 years):**
-- Export to Storage account, transition to cool/archive tiers after 1-2 years
-- Minimal cost at archive tier (significantly cheaper than hot storage)
-- Meets HIPAA, PCI-DSS, SOX, GDPR retention requirements
+**Compliance archival (3-12 years):**
+- Set `AzureActivity`'s **total** retention out to the required horizon, up to 12 years, and leave analytics retention short
+- Retrieve older records with a search job when an auditor asks
+- Meets HIPAA, PCI-DSS, SOX, GDPR retention requirements without a second copy in Storage
 
 **Configuration for extended retention:**
 
-1. Enable export from Activity Log to Log Analytics workspace (configurable retention)
-2. Configure Log Analytics to export logs to Storage account (via diagnostic settings on the workspace)
-3. Set Storage lifecycle policy to move to archive tier after 1-2 years
-4. Document retention duration in compliance playbook
+1. Create a subscription-scope diagnostic setting sending the Activity Log to a Log Analytics workspace
+2. On the `AzureActivity` table, set analytics retention to your investigation window and total retention to your compliance horizon
+3. Add a Storage destination only if a regulator requires immutable, write-once copies
+4. Document retention duration in your compliance playbook
 
 ---
 
 ### Diagnostic Settings Retention Strategy
 
-**Hot retention (30-90 days):**
-- Keep recent logs in Log Analytics for active troubleshooting
-- Query performance is fast
-- Cost is higher compared to archive tiers
+Resource logs are where volume and cost actually accumulate, so tier them by table rather than treating the workspace as one bucket.
 
-**Warm retention (31 days to 2 years):**
-- Archive to Log Analytics archive tier (queries slower, cost ~10% of hot)
-- Balance between query performance and cost
-- Suitable for most operational analysis
+**Analytics retention (30-730 days):**
+- Recent logs stay interactively queryable for troubleshooting, alerting, and dashboards
+- The first 31 days are already paid for in the ingestion price, so shortening below that saves nothing
+- Extend past 90 days only for tables you genuinely query that far back
 
-**Cold retention (1-7 years):**
-- Archive to Storage account blob (minimal cost)
-- Queries require exporting from Storage first (manual process)
-- For compliance records, not operational use
+**Long-term retention (out to 12 years total):**
+- The same table holds the data at a fraction of the price once analytics retention lapses
+- Retrieval is a search job, which materializes matching records into a results table you can then query normally
+- This is the replacement for the old archive tier, and it removes the need to copy logs into Storage for most compliance cases
+
+**Cutting volume before it lands:**
+- Enable only the log categories you need per resource. Diagnostic settings can't filter within a category
+- For anything arriving through a data collection rule, add a **transformation** to drop rows or columns at ingestion
+- Skip `AllMetrics` unless you specifically need metrics in KQL. Platform metrics are already collected for free and available in metrics explorer
+- Move high-volume, rarely-queried tables to the Basic or Auxiliary plan rather than paying Analytics ingestion for them
 
 **Example tiered retention strategy:**
 
 ```
-Day 1-30:    Store in Log Analytics hot (for active troubleshooting)
-Day 31-90:   Archive to Log Analytics archive tier (warm queries)
-Day 91-730:  Move to Storage cool tier (compliance records)
-Day 731+:    Move to Storage archive tier (long-term archival)
+Security and audit tables   Analytics 90 days  → total 7 years
+Application resource logs   Analytics 30 days  → total 1 year
+Firewall / proxy / NetFlow  Auxiliary plan     → total 7 years
+Platform metrics            no workspace copy; metrics explorer keeps 93 days
 ```
-
-**Implementation:**
-- Diagnostic Settings → Send to Log Analytics + Storage account
-- Log Analytics retention policy → 30 days (or 90 days if budget allows)
-- Storage lifecycle policy → Move to cool after 90 days, archive after 2 years
 
 ---
 
@@ -508,7 +592,7 @@ Day 731+:    Move to Storage archive tier (long-term archival)
 
 **Result:** Compliance audit requires logs from 6+ months ago. Only 90 days exist. Audit fails or shows incomplete evidence.
 
-**Solution:** Configure Activity Log export to Log Analytics workspace (1-2 year retention) and Storage account (archival). Document the export configuration as part of your compliance control.
+**Solution:** Create a subscription-scope diagnostic setting sending the Activity Log to a Log Analytics workspace, then set the `AzureActivity` table's total retention to your compliance horizon, up to 12 years. Ingestion is free and the first 90 days of retention are free, so this is one of the cheapest compliance controls available. Document the setting as part of that control.
 
 ---
 
@@ -518,7 +602,7 @@ Day 731+:    Move to Storage archive tier (long-term archival)
 
 **Result:** Troubleshooting failures is incomplete. You cannot see what happened inside App Service. You cannot audit who accessed secrets in Key Vault.
 
-**Solution:** Use Azure Policy to audit whether Diagnostic Settings are enabled on all resources. Create a policy with `audit` effect to identify non-compliant resources, then enforce with `deny` or auto-remediate with `deployIfNotExists`.
+**Solution:** Use Azure Policy to find the gaps and close them. Because a diagnostic setting is a child resource rather than a property, the effect that detects a missing one is `auditIfNotExists`, and the one that creates it is `deployIfNotExists`. Azure ships built-in initiatives that deploy diagnostic settings to a named workspace across whole resource types. Remember the five-settings-per-resource ceiling when a policy-deployed setting lands on resources that already have their own.
 
 ---
 
@@ -538,12 +622,14 @@ Day 731+:    Move to Storage archive tier (long-term archival)
 
 **Result:** Compromise or misconfiguration goes undetected for days/weeks. Compliance team finds evidence during audit that could have been caught in real-time.
 
-**Solution:** Create metric alerts for suspicious Activity Log events:
+**Solution:** Use activity log alerts for the simple category-and-operation matches, and log search alerts on `AzureActivity` where the logic needs a threshold or a correlation. Cover at least:
 - Deletion of resources (VMs, databases, storage accounts)
 - Policy modifications or deletions
 - Role assignment or removal (especially to external principals)
 - Diagnostic Settings or Activity Log exports disabled
 - Storage account access key regeneration
+
+For the logging configuration itself, an alert is the second line of defense. The first is a `denyAction` policy on `delete` for diagnostic settings, which blocks the removal rather than telling you about it afterward.
 
 ---
 
@@ -554,10 +640,10 @@ Day 731+:    Move to Storage archive tier (long-term archival)
 **Result:** During compliance audit or incident investigation, discover that archival is corrupt, permissions are wrong, or the process was never fully configured.
 
 **Solution:** Annually test:
-- Export Activity Log from Storage archive and verify content is readable
-- Query Log Analytics to ensure retention policy is working
-- Simulate compliance audit by retrieving logs from 1 year ago
-- Document the retrieval procedure in your incident response playbook
+- Run a search job against a table in long-term retention and confirm records come back for the period you claim to cover
+- Verify the analytics and total retention actually set on each table, rather than assuming the workspace default applied. A table with its own override ignores changes to the workspace default
+- Export from Storage archive and verify the blobs are readable, if you keep a Storage copy
+- Document the retrieval procedure, including search job latency, in your incident response playbook
 
 ---
 
@@ -575,17 +661,17 @@ Day 731+:    Move to Storage archive tier (long-term archival)
 
 1. **Activity Log is subscription-level audit, not resource-level logging.** It records who made administrative changes and when, but not what happened inside resources. Both are needed for complete observability.
 
-2. **Activity Log retention is only 90 days by default.** For compliance requirements (HIPAA, PCI-DSS, SOX), configure exports to Log Analytics and Storage account. The free retention is insufficient for most regulatory frameworks.
+2. **Activity Log retention is only 90 days by default.** For compliance requirements (HIPAA, PCI-DSS, SOX), create a subscription-scope diagnostic setting to a Log Analytics workspace and extend the `AzureActivity` table's total retention, up to 12 years. Ingestion is free and the first 90 days of retention are free, so the cost is small. The activity log is also the only record of who created a resource.
 
-3. **Diagnostic Settings are per-resource, not automatic.** Each resource must be individually configured to send logs and metrics. Use Azure Policy to enforce Diagnostic Settings deployment at scale.
+3. **Diagnostic Settings are per-resource, not automatic, and they don't reach inside a VM.** Each resource needs its own setting, capped at five, to emit resource logs. Guest OS events, Syslog, and performance counters are a separate path entirely: Azure Monitor Agent driven by a data collection rule. Use Azure Policy (`auditIfNotExists` to detect, `deployIfNotExists` to fix) to enforce diagnostic settings at scale.
 
 4. **Log Analytics workspace is where logs become queryable.** Once logs are in a workspace, use Kusto Query Language (KQL) to analyze, create alerts, and build dashboards. Start with a single workspace; only split for data residency or RBAC isolation.
 
-5. **Tiered retention balances cost and compliance.** Keep recent logs hot in Log Analytics (expensive but fast queries), archive older logs to Storage cool/archive tiers (cheap, slow queries). This pattern supports both operational analysis and long-term compliance.
+5. **Table plan first, then retention.** The plan (Analytics, Basic, or Auxiliary) sets what ingestion costs and what you can do with the data. Retention then splits into analytics retention up to 730 days and a total retention up to 12 years, with long-term data retrieved by search job. In-workspace long-term retention has largely replaced copying logs to a Storage account, which is now for immutability requirements rather than for cost.
 
 6. **Sentinel and Defender for Cloud require logs to be present.** These security tools analyze Activity Log, Diagnostic Logs, and network logs to detect threats. Logging is foundational to modern security operations.
 
-7. **Activity Log can trigger automated remediation.** Combined with Azure Policy, Activity Log events can drive automatic response (disable non-compliant resources, create tickets, notify teams).
+7. **Activity Log records actions; Azure Policy records compliance state.** Activity log alerts and log search alerts on `AzureActivity` catch the moment something is denied, deployed, or deleted, and can drive automated response through action groups. Ongoing non-compliance produces no new Activity Log entries, so query policy compliance through Azure Resource Graph instead of expecting an alert to fire.
 
 8. **Central monitoring across subscriptions requires hub-and-spoke architecture.** Send logs from all subscriptions to a central Log Analytics workspace in a management subscription. This simplifies security analysis and compliance reporting.
 
