@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`blog-post-guide.md`](.claude/content/blog-post-guide.md) | Writing or editing blog posts, creating social media summaries |
 | [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, quality standards |
 | [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
+| [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
 
 After drafting content, run `/refine-prose` on it — it lints to a clean state and does a narrative self-review the linter can't do. The skill and its bundled linter script live in `.claude/skills/refine-prose/`.
 

@@ -12,6 +12,10 @@
     "prompt-engineering-technique-selection.md",
     "http-version-comparison.md",
     "sdlc-methodology-selection-guide.md",
-    "ai-batch-generation-pipeline-template.md"
+    "ai-batch-generation-pipeline-template.md",
+    "azure-networking-component-map.md",
+    "azure-observability-component-map.md",
+    "azure-governance-component-map.md",
+    "azure-messaging-component-map.md"
   ]
 }
