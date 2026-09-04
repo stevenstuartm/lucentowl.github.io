@@ -3,670 +3,586 @@ title: "Azure Firewall and DDoS Protection"
 layout: guide
 category: Azure
 subcategory: Security and Compliance
-description: "A system architect's guide to Azure Firewall and DDoS Protection covering network security, traffic filtering, threat intelligence, distributed denial-of-service mitigation, and Firewall Manager for centralized policy management."
-tags: [azure, security, networking, infrastructure, cloud-computing, reliability, scalability, practical]
+description: "How Azure Firewall's three SKUs filter traffic, the order its rules are processed in, when IDPS and TLS inspection earn their cost, and how the DDoS Protection tiers cover the network layer that a WAF does not."
+tags: [security, networking, azure-firewall, ddos-protection, idps, waf, practical]
 ---
 
 ## What Is Azure Firewall
 
-[Azure Firewall](https://learn.microsoft.com/en-us/azure/firewall/overview){:target="_blank" rel="noopener noreferrer"} is Microsoft's first-party firewall service built into Azure networking. Unlike Network Security Groups (NSGs) which provide basic stateful filtering at layers 3-4, Azure Firewall offers application-level inspection, threat intelligence integration, and centralized policy management across your entire Azure estate.
+[Azure Firewall](https://learn.microsoft.com/en-us/azure/firewall/overview){:target="_blank" rel="noopener noreferrer"} is Microsoft's managed, stateful network firewall. Network Security Groups (NSGs) filter by IP, port, and protocol at the subnet and NIC boundary. Azure Firewall adds application-layer filtering, Microsoft's threat intelligence feed, and one policy object that many firewall instances can share across regions and subscriptions.
 
 ### What Problems Azure Firewall Solves
 
 **Without Azure Firewall:**
-- NSGs provide only layer 3-4 filtering (IP, port, protocol)
-- No visibility into application-layer protocols (HTTP headers, DNS queries, TLS certificates)
-- No centralized firewall policy across multiple VNets or hybrid environments
-- Threat intelligence integration requires manual configuration
-- No advanced threat protection for DDoS, malware, or intrusion patterns
-- Each team manages NSGs independently, leading to inconsistent security policies
-- No logging or alerting on blocked traffic crossing the network perimeter
+- NSGs filter only at layers 3-4 (IP, port, protocol)
+- No filtering by FQDN, URL, or web category
+- No shared firewall policy across multiple VNets or hybrid environments
+- No managed threat intelligence feed
+- Each team manages NSGs independently, so security posture drifts between teams
+- No central log of what was blocked at the network perimeter
 
 **With Azure Firewall:**
-- Application-layer inspection of HTTP, HTTPS, DNS, and other protocols
-- Centralized policy management across hub VNets, spokes, and on-premises networks
-- Threat intelligence automatically blocks known malicious IP addresses and domains
-- Intrusion Detection and Prevention System (IDPS) signatures for advanced threats
-- Application rules that reference FQDNs or tags, not just IPs and ports
-- Consistent security posture across all network traffic
-- Detailed logging and alerting for compliance and troubleshooting
+- Outbound filtering by FQDN and, on Premium, by full URL and web category
+- One Firewall Policy resource shared by firewalls in any region or subscription
+- Microsoft's threat intelligence feed blocking known malicious IPs and domains, updated automatically
+- Signature-based IDPS on Premium for known exploit patterns
+- Inbound DNAT for non-HTTP protocols such as RDP, SSH, and FTP
+- Central logging to Log Analytics, Storage, or Event Hubs
 
 ### How Azure Firewall Differs from AWS Equivalents
 
-Architects familiar with AWS should note the architectural and feature differences:
+Architects familiar with AWS should note these differences:
 
 | Aspect | AWS | Azure |
 |--------|-----|-------|
 | **Primary firewall** | AWS Network Firewall or third-party NVAs | Azure Firewall (managed service) |
-| **Centralized management** | AWS Firewall Manager (for Security Groups + Network Firewall) | Azure Firewall Manager (for firewalls + NSGs + WAF) |
-| **Threat intelligence** | GuardDuty (findings service) or third-party integrations | Built into Azure Firewall; auto-updates threat feeds |
+| **Centralized management** | AWS Firewall Manager (Security Groups, Network Firewall, WAF) | Azure Firewall Manager (Firewall Policy, DDoS plans, WAF policies; not NSGs) |
+| **Threat intelligence** | GuardDuty (findings service) or third-party integrations | Built into Azure Firewall; Microsoft updates the feed |
 | **Application inspection** | Network Firewall supports domain list filtering | Azure Firewall Premium with IDPS and TLS inspection |
-| **DDoS protection** | AWS Shield (Basic free, Standard paid) | Azure DDoS Protection (Basic free, Standard paid) |
+| **DDoS protection** | Shield Standard (free) and Shield Advanced (paid) | Infrastructure protection (free) plus DDoS IP Protection and DDoS Network Protection (both paid) |
 | **Hub-and-spoke firewall** | Network Firewall in VPC with NLB, routing via TGW | Azure Firewall in hub VNet with UDRs |
 | **Hybrid inspection** | Network Firewall in VPC, manual on-premises routing | Single firewall inspects cloud and on-premises traffic |
 | **Deployment model** | Per-region in VPCs | Per-hub VNet or per-region in Virtual WAN hubs |
 
 ---
 
-## Azure Firewall SKUs: Standard vs Premium
+## Azure Firewall SKUs: Basic, Standard, Premium
 
-Azure Firewall comes in two tiers with increasing capabilities and cost. The choice depends on your threat model and inspection requirements.
+Azure Firewall ships in [three SKUs](https://learn.microsoft.com/en-us/azure/firewall/features-by-sku){:target="_blank" rel="noopener noreferrer"}. They are not a simple ladder of throughput. Basic drops capabilities that most enterprise designs assume are present, and Premium adds inspection that costs CPU as well as money.
 
-### Standard SKU
+| Capability | Basic | Standard | Premium |
+|---|---|---|---|
+| **Maximum throughput** | 250 Mbps | 30 Gbps | 100 Gbps |
+| **Application FQDN filtering (SNI based)** | Yes | Yes | Yes |
+| **FQDNs in network rules (any port/protocol)** | No | Yes | Yes |
+| **Threat intelligence** | Alert only | Alert and deny | Alert and deny |
+| **DNS proxy and custom DNS** | No | Yes | Yes |
+| **Web categories** | No | Yes (FQDN based) | Yes (full URL) |
+| **URL filtering (full path)** | No | No | Yes |
+| **TLS inspection** | No | No | Yes |
+| **IDPS** | No | No | Yes |
+| **Public IPs** | Multiple | Up to 250 | Up to 250 |
 
-The Standard SKU provides foundational firewall capabilities sufficient for most organizations:
+Two of those rows decide most SKU choices. Basic can only *alert* on threat intelligence, never block it, which removes the single highest-value feature of the service. Basic also has no DNS proxy, which means it cannot resolve FQDNs used in network rules.
 
-**Capabilities:**
-- Network rules (layers 3-4: IP, port, protocol filtering)
-- Application rules (FQDNs, HTTP/HTTPS headers, tags)
-- NAT rules for inbound translation (DNAT)
-- Threat intelligence for known malicious IPs and domains (auto-updated by Microsoft)
-- Stateful inspection and session tracking
-- Built-in DDoS protection (layer 3-4 only)
-- Centralized logging to Log Analytics or Storage
-- Zone-redundant deployment (no need to configure per-zone)
-- Scales to 30 Gbps throughput
+### Cost Shape
 
-**When Standard is sufficient:**
-- Most enterprise networks without advanced threat modeling
-- Organizations focused on lateral movement prevention and perimeter filtering
-- Workloads without compliance requirements for deep packet inspection
-- Teams without dedicated security operations for signature tuning
+US East list prices, from the [Azure retail rate card](https://prices.azure.com/api/retail/prices){:target="_blank" rel="noopener noreferrer"}:
 
-### Premium SKU
+| SKU | Fixed deployment | Capacity unit | Data processed |
+|---|---|---|---|
+| Basic | $0.395/hour | n/a | $0.065/GB |
+| Standard | $1.25/hour | $0.07/hour | $0.016/GB |
+| Premium | $1.75/hour | $0.11/hour | $0.016/GB |
 
-The Premium SKU adds advanced threat inspection and is necessary for security-critical or highly regulated environments:
+Three things fall out of that table. Premium's fixed charge is 40% above Standard, not the multiple that "Premium tier" suggests, so the SKU decision is usually about inspection overhead rather than list price. Standard and Premium also bill hourly *capacity units* on top of the deployment charge as the firewall scales out, so a busy firewall costs more than the fixed rate implies. And Basic's data processing rate is four times higher, so its $0.855/hour saving on the fixed charge disappears at roughly 17 GB of processed traffic per hour, before counting capacity units.
 
-**Additional capabilities over Standard:**
-- **Intrusion Detection and Prevention System (IDPS):** Signature-based detection of known attacks and malicious patterns
-- **TLS inspection:** Decrypts and inspects encrypted HTTPS traffic (requires certificate provisioning)
-- **URL filtering:** Block or allow traffic based on URL categories (e.g., social media, adult content, gambling)
-- **Web categories:** Pre-defined categories for bulk policy simplification
-- **Private certificate support:** Bring your own root CA for TLS decryption in hybrid environments
-- **Advanced threat intelligence:** Malware and botnet signatures in addition to IP blocklists
+### When Each SKU Fits
 
-**When Premium is necessary:**
-- Compliance mandates (PCI-DSS, HIPAA, SOC 2) requiring encrypted traffic inspection
-- Environments with strict data exfiltration prevention requirements
-- Organizations implementing Zero Trust architecture with encrypted baseline assumption
-- Advanced threat hunting or forensic investigation needs
+**Basic** suits small environments under 250 Mbps that need FQDN filtering and central logging, and can accept threat intelligence in alert-only mode.
 
-**Trade-offs of Premium:**
-- 3-5x cost increase over Standard
-- TLS decryption adds latency and CPU overhead
-- Certificate management complexity (private root CA provisioning and rotation)
-- Not all traffic is inspectable (authenticated TLS with certificate pinning cannot be decrypted)
+**Standard** is the default for enterprise hub-and-spoke. It is the lowest SKU that can deny traffic on threat intelligence, resolve FQDNs in network rules, and act as a DNS proxy.
+
+**Premium** is warranted when a requirement names the feature: TLS inspection for a compliance mandate, IDPS for signature-based detection, or URL filtering below the FQDN level. Premium also raises the throughput ceiling to 100 Gbps.
+
+**Trade-offs of Premium beyond price:**
+- TLS decryption and IDPS both consume CPU, which lowers effective throughput
+- You become a certificate authority for the traffic you decrypt, with renewal, rotation, and recovery to run
+- Certificate pinning and mutual TLS cannot be decrypted, so those flows need bypass rules
+- IDPS signatures find known patterns; novel attacks pass
 
 ---
 
-## Azure Firewall Rule Types
+## Rule Types and Processing Order
 
-Azure Firewall evaluates rules in a specific priority order. Understanding this order is critical to policy design.
+Azure Firewall denies everything until a rule allows it. Rules are terminating, so processing stops at the first match. What trips people up is that the order is fixed by rule *type*, not by the priority numbers you assign. A high-priority application rule still runs after every network rule.
 
-### Rule Evaluation Order
+```
+Packet arrives at the firewall
+          |
+          v
+  Threat intelligence  --- match ---> alert, or deny (Standard/Premium)
+          | no match
+          v
+  DNAT rule collections --- match ---> translate and allow, stop
+          | no match
+          v
+  Network rule collections --- match ---> allow or deny, stop
+          | no match, and protocol is HTTP/HTTPS/MSSQL
+          v
+  Application rule collections --- match ---> allow or deny, stop
+          | no match
+          v
+  Built-in infrastructure rule collection --- match ---> allow
+          | no match
+          v
+       Default deny
 
-Azure Firewall evaluates rules in this order, and stops at the first match:
+  IDPS (Premium) runs beside this pipeline: in Alert mode it inspects
+  in parallel, in Alert and Deny mode it inspects inline after the
+  rules engine has already decided, and can drop the flow silently.
+```
 
-1. **NAT rules** (inbound, destination translation)
-2. **Network rules** (layers 3-4)
-3. **Application rules** (layer 7)
-4. **Threat intelligence** (if enabled, blocks known malicious IPs/domains after other rules allow)
+Within each of those three passes, the firewall walks rule collection *groups* by priority, then rule collections by priority inside each group. Rule collection groups inherited from a parent policy always run before the child policy's own, whatever priority numbers they carry.
 
-If no rules match, traffic is denied by default.
+### Threat Intelligence Runs First
+
+[Threat intelligence-based filtering](https://learn.microsoft.com/en-us/azure/firewall/threat-intel){:target="_blank" rel="noopener noreferrer"} has the highest priority and can block a flow before any configured rule is evaluated. An allow rule you wrote does not override it. If a legitimate destination is caught by the feed, the fix is the threat intelligence allowlist, not a higher-priority rule.
+
+**Modes:**
+- **Off:** disabled
+- **Alert:** logs traffic to known malicious IPs and domains but lets it pass, which is the only mode Basic supports
+- **Alert and deny:** blocks it, and is the mode to run in production
 
 ### NAT Rules
 
-NAT rules perform Destination Network Address Translation (DNAT) on inbound traffic, converting the destination address from the firewall's public IP to a private IP in your network.
+DNAT rules translate inbound traffic from a firewall public IP to a private address.
 
-**Use case:** Exposing a private web server to the internet.
+**Use case:** exposing an internal RDP or SSH host to a controlled set of source addresses.
 
-**Example:**
-- External traffic arrives at firewall's public IP (1.2.3.4) on port 443
-- NAT rule translates destination to private web server (10.0.1.10:443)
-- Return traffic automatically translates back to 1.2.3.4
+**Example:** traffic arrives at the firewall's public IP on port 443, the rule translates the destination to `10.0.1.10:443`, and return traffic is translated back automatically.
 
-**Important characteristics:**
-- Only for inbound (from the internet or on-premises)
-- Processed before network and application rules
-- One public IP:port combination per NAT rule (cannot have overlapping destinations)
-- Symmetric: return traffic is automatically translated
+**Characteristics:**
+- Inbound only, from the internet or an intranet source
+- A DNAT match allows the traffic outright, so network rules never see it
+- Application rules are never applied to inbound connections, so inbound HTTP/S filtering needs a WAF instead
+- Always scope the source. A wildcard source on a DNAT rule publishes the backend to the internet
 
 ### Network Rules
 
-Network rules operate at layers 3-4 and filter based on source IP, destination IP, port, and protocol (TCP, UDP, ICMP).
+Network rules filter on source, destination, port, and protocol (TCP, UDP, ICMP, or any IP protocol).
 
-**Use case:** Allowing outbound internet access for VMs in a spoke VNet through the hub firewall.
-
-**Example rule:**
-- Source: `10.1.0.0/16` (spoke VNet)
-- Destination: `Internet` service tag
-- Protocol: TCP, UDP
-- Port: 443 (HTTPS)
-- Action: Allow
+**Example rule:** source `10.1.0.0/16`, destination the `Internet` service tag, TCP 443, action Allow.
 
 **Characteristics:**
-- Evaluated before application rules
-- Use service tags for broad groupings (VirtualNetwork, Internet, Storage, Sql, AzureMonitor)
-- Use IP address prefixes or CIDR ranges for specific filtering
-- Support all protocols including non-standard ones
-- Lower CPU overhead than application rules
+- Evaluated before application rules, and a match stops processing
+- Service tags (VirtualNetwork, Internet, Storage, Sql, AzureMonitor) cover broad groupings
+- Cheaper per packet than application rules
+- FQDNs are allowed in network rules on Standard and Premium, but only work reliably with DNS proxy enabled on the firewall, because the firewall and the client must resolve the name to the same address
+
+Because network rules win, a broad `Allow TCP 443 to Internet` network rule silently disables every application rule you wrote for HTTPS destinations. That combination is the most common reason FQDN filtering appears not to work.
 
 ### Application Rules
 
-Application rules filter based on application-layer data: FQDNs, HTTP headers, protocols. They only apply to HTTP, HTTPS, and DNS traffic.
+Application rules filter on application-layer data and apply to HTTP, HTTPS, and MSSQL traffic only.
 
-**Use case:** Allowing outbound access to specific websites (e.g., `microsoft.com`).
-
-**Example rule:**
-- Source: `10.1.0.0/16` (spoke VNet)
-- Protocol: HTTPS
-- FQDN: `*.microsoft.com`
-- Action: Allow
+**Example rule:** source `10.1.0.0/16`, protocol HTTPS, target FQDN `*.microsoft.com`, action Allow.
 
 **Characteristics:**
-- Support wildcard domains (e.g., `*.microsoft.com`, `api-*.prod.contoso.com`)
-- Can reference Azure tags (e.g., resources tagged `Environment:Production`)
-- Have higher CPU cost than network rules (require protocol parsing)
-- Require network rules to allow the underlying transport (network rules for TCP 443 if application rule targets HTTPS)
-- DNS application rules can block DNS queries to specific domains
+- Matching is by Host header for HTTP and by SNI for HTTPS, so the firewall does not need to decrypt to match an FQDN
+- The packet's destination IP is ignored in favor of the address resolved from the Host header
+- Traffic matched by an application rule is always SNAT'd, so the original client IP does not reach the destination. Use network rules with destination FQDNs when the backend needs to see it
+- No network rule is required underneath, and adding one usually breaks the application rule
+- Full URL matching and web categories below the FQDN require Premium with TLS inspection
 
-**FQDN Filtering:**
-Azure Firewall resolves FQDNs to IP addresses at rule evaluation time. This adds latency but enables dynamic filtering even if a domain changes IPs. For high-volume filtering or performance-critical paths, use network rules with IP blocks instead.
+**Wildcards behave asymmetrically.** For target FQDNs, an asterisk works only on the left. `*.contoso.com` matches `any.contoso.com` but *not* `contoso.com`, which has to be listed separately. `*contoso.com` matches `example.anycontoso.com` and also `th3re4lcontoso.com`, so a leading asterisk without the dot is a supply-chain-shaped hole.
+
+### The Infrastructure Rule Collection
+
+Azure Firewall carries a built-in allow list of platform FQDNs (the compute platform image repository, managed disk status storage, and Azure diagnostics) that is processed after your application rules and before the final deny. It is invisible in the portal and cannot be edited. If your compliance posture requires that nothing is allowed implicitly, override it with a deny-all application rule collection processed last, which runs before the infrastructure collection.
 
 ---
 
-## Threat Intelligence and Intrusion Detection
+## Intrusion Detection and Prevention (Premium)
 
-### Threat Intelligence Modes
+Premium adds a signature-based [intrusion detection and prevention system](https://learn.microsoft.com/en-us/azure/firewall/premium-features){:target="_blank" rel="noopener noreferrer"}: over 67,000 rules across more than 50 categories, with 20 to 40 new signatures released daily, and up to 10,000 of them individually customizable to Disabled, Alert, or Alert and Deny.
 
-Azure Firewall integrates Microsoft's threat intelligence feeds, automatically blocking traffic to known malicious destinations.
+**Modes and where they sit in the pipeline:**
+- **Off:** no inspection
+- **Alert:** the IDPS engine runs in parallel with rule processing, so a flow the rules already allowed or denied can produce a second log entry
+- **Alert and Deny:** the engine runs inline *after* the rules engine has decided, and can drop a flow the rules allowed
 
-**Off:** Threat intelligence is disabled.
+A silent drop is the behavior to plan for. IDPS session drops send no TCP RST, so the client sees a hang rather than a refusal. Combined with the extra Drop entry that appears in the logs after an Allow entry, this is what an IDPS false positive looks like during an incident.
 
-**Alert mode:** Firewall logs and alerts on traffic to known malicious IPs/domains but allows it to pass. Useful for monitoring before enabling block mode.
+You also configure private IP ranges so IDPS can tell inbound, outbound, and east-west traffic apart. Leaving that at the default in a network using non-RFC1918 private space means signatures are applied in the wrong direction.
 
-**Alert and Deny mode:** Firewall blocks traffic to known malicious destinations. This is the recommended configuration for production networks.
+**When to enable IDPS:** a compliance requirement names intrusion detection, the workload is a high-value target, or a SOC exists to triage the alerts.
 
-**Characteristics:**
-- Microsoft updates threat feeds automatically (no manual signature updates needed)
-- Includes IP blocklists, malware signatures, and botnet C2 domains
-- Applies to both inbound and outbound traffic
-- Incurs minimal performance penalty
-
-### IDPS (Intrusion Detection and Prevention System) - Premium Only
-
-The Premium SKU includes IDPS, which inspects traffic for attack patterns and known exploits. IDPS uses Snort-like rule signatures and detects layer 7 attacks (SQL injection, buffer overflows, etc.).
-
-**IDPS modes:**
-- **Off:** No intrusion detection
-- **Alert:** Log and alert on detected attacks
-- **Alert and Deny:** Block traffic matching attack signatures
-
-**Characteristics:**
-- CPU-intensive; enabling IDPS reduces firewall throughput
-- Signature-based detection (cannot detect zero-day attacks unknown to Snort signatures)
-- Focuses on web application exploits, not infrastructure attacks
-- Combined with TLS inspection (Premium) for visibility into encrypted attacks
-
-**When to enable IDPS:**
-- Compliance requirement mandates intrusion detection
-- High-value targets with sophisticated threat actors
-- Organizations with dedicated SOC teams to review IDPS alerts
-
-**When to skip IDPS:**
-- Performance is critical (IDPS adds significant CPU overhead)
-- Workloads without application-layer exposure (internal services only)
-- Teams without resources to investigate false positives
+**When to skip it:** throughput is the binding constraint, the workload has no application-layer exposure, or nobody is resourced to investigate false positives.
 
 ---
 
-## TLS Inspection - Premium SKU
+## TLS Inspection (Premium)
 
-TLS inspection (also called SSL/TLS decryption) decrypts outbound HTTPS traffic for inspection, then re-encrypts it before sending to the destination. This is a Premium SKU feature and requires significant operational overhead.
+TLS inspection terminates the client's TLS session, inspects the plaintext, and opens a second TLS session to the destination. Azure Firewall holds two connections, one to the client and one to the server.
 
-### How TLS Inspection Works
+### How It Works
 
-1. **Certificate provisioning:** You deploy a root CA certificate to Azure Firewall (Standard root key provisioning or bring-your-own root CA)
-2. **Interception:** When a client connects to `api.example.com`, the firewall intercepts the TLS handshake
-3. **Certificate generation:** Firewall dynamically generates a leaf certificate for `api.example.com` signed by the provisioned root CA
-4. **Client handshake:** Client receives the firewall-generated certificate
-5. **Server connection:** Firewall connects to the real `api.example.com` server
-6. **Inspection:** Firewall inspects unencrypted traffic (HTTP headers, body content)
-7. **Re-encryption:** Firewall re-encrypts data and sends to client
+1. **Certificate provisioning:** you give the firewall an intermediate CA certificate that your clients already trust
+2. **Interception:** the firewall terminates the client's TLS handshake for `api.example.com`
+3. **Certificate generation:** it mints a leaf certificate for that name, signed by your CA
+4. **Server connection:** it opens its own TLS connection to the real server
+5. **Inspection:** the plaintext is matched against URL filtering, web categories, and IDPS signatures
+6. **Re-encryption:** the response is re-encrypted to the client
 
-### When to Enable TLS Inspection
+Outbound inspection covers Azure-to-internet traffic. East-west inspection covers traffic between Azure workloads and to and from on-premises.
 
-**Enable TLS inspection when:**
-- Compliance mandates encrypted traffic inspection (HIPAA, PCI-DSS, SOC 2)
-- Data exfiltration prevention requires content inspection of HTTPS traffic
-- Malware detection needs to inspect encrypted payloads
-- Organization operates as a regulated intermediary
+### When to Enable It
 
-**Do NOT enable TLS inspection when:**
-- Client certificate pinning is used (clients validate the server certificate; intercepted certificates fail pinning validation)
-- APIs use certificate-based mutual TLS authentication
-- Performance is critical (TLS inspection adds 20-50% latency increase)
-- Clients are external parties that do not trust your root CA
+**Enable when:**
+- A compliance mandate requires inspection of encrypted traffic
+- Data exfiltration controls need content inspection, not just destination filtering
+- URL filtering below the FQDN, or web categories on HTTPS, are required
 
-### TLS Inspection Trade-offs
+**Do not enable when:**
+- Clients pin certificates, which will fail validation against your minted leaf
+- The flow uses mutual TLS with client certificates
+- The clients are external parties who have no reason to trust your CA
 
-- **Certificate management:** You become a de facto certificate authority. Certificate renewal, key rotation, and disaster recovery all become your responsibility
-- **Client behavior:** Clients without your root CA installed will see certificate warnings or connection failures
-- **Performance impact:** TLS decryption/re-encryption is computationally expensive; throughput decreases significantly
-- **False positives:** Legitimate encrypted protocols (not HTTPS) may be incorrectly inspected, causing application failures
-- **Pinning incompatibility:** Applications using certificate pinning will not work through TLS inspection
+### Trade-offs
+
+- **Certificate management:** you operate a CA, including renewal, rotation, and recovery
+- **Client trust:** any client missing your root sees certificate errors, not a graceful fallback
+- **Throughput:** decryption and re-encryption consume CPU, which reduces the effective ceiling. Size against the published [Azure Firewall performance](https://learn.microsoft.com/en-us/azure/firewall/firewall-performance){:target="_blank" rel="noopener noreferrer"} figures rather than the SKU maximum
+- **Bypass lists:** pinned and mutual-TLS applications need explicit bypass rules, and each one is a hole in the inspection you are paying for
 
 ---
 
-## Azure Firewall Manager: Centralized Policy
+## Firewall Policy and Firewall Manager
 
-Azure Firewall Manager enables centralized management of firewall policies, NSGs, and WAF rules across multiple Azure Firewall instances and subscriptions.
+Firewall Policy is a standalone resource holding rule collections, DNS settings, threat intelligence configuration, and the Premium features. It is the recommended way to configure Azure Firewall. Classic rules remain supported but do not carry the Premium settings.
 
-### Secured Virtual Hubs vs Traditional Hub-and-Spoke
+### Policies Are Shared, Not Per-Firewall
 
-Azure Firewall can be deployed in two topologies: traditional hub-and-spoke VNets or Secured Virtual Hubs within Virtual WAN.
+A single policy can be associated with many firewalls, in Virtual WAN secured hubs and hub VNets alike, across regions and subscriptions in the same tenant. That association is also the billing boundary: a policy with zero or one firewall attached is free, and a policy attached to multiple firewalls is billed at a fixed rate.
 
-**Traditional Hub-and-Spoke (with Firewall Manager):**
-- Azure Firewall deployed in a central hub VNet
-- Spoke VNets peered with the hub
-- UDRs in spokes force traffic through the hub firewall
-- Firewall Manager provides centralized policy, but routing must be manually configured
-- Suitable for simpler topologies with <20 spokes
+Policy SKUs must match the firewall. Basic policies work only on Basic firewalls, Standard policies on Standard or Premium, and Premium policies only on Premium.
 
-**Secured Virtual Hubs (Virtual WAN):**
-- Azure Firewall deployed in a Virtual WAN hub
-- Spokes connect via Virtual Network Connections (not peering)
-- Routing is automatic; traffic flows through firewall by default
-- Firewall Manager integrates natively with Virtual WAN
-- Suitable for large-scale environments with many spokes or multi-region deployments
-- See the [Virtual WAN & Private Link](/study-guides/infrastructure/azure/azure-private-link-virtual-wan.html) guide for detailed patterns
-
-### Firewall Policies
-
-A Firewall Policy is a collection of rule collections that can be applied to one or more Azure Firewall instances. Policies support inheritance and hierarchical organization.
+### Inheritance
 
 **Policy structure:**
-- Base policy (shared rules for all firewalls)
-- Rule collection groups (organization unit for rules)
-- Rule collections (NAT, Network, or Application rules)
-- Rules (individual allow/deny statements)
-
-**Advantages of Firewall Policies:**
-- **Reusability:** One policy applied to multiple firewalls across regions or subscriptions
-- **Inheritance:** Child policies inherit rules from parent policies, allowing variable policy stacking (base + team-specific + compliance rules)
-- **Versioning:** Policies can be versioned for audit trails
-- **Centralized management:** One team (security) defines policies; other teams apply them to their firewalls
-- **Separation of concerns:** Policy and firewall instances are decoupled resources
+- Rule collection groups (the first unit processed, by priority)
+- Rule collections (NAT, network, or application; one action and one priority each)
+- Rules (evaluated top-down within the collection)
 
 **Example hierarchy:**
 ```
-Base Policy (Enterprise-wide rules)
-├── Deny known ransomware IPs
-├── Deny high-risk countries
+Base Policy (enterprise-wide)
+├── Deny known ransomware destinations
 ├── Allow common enterprise SaaS (Microsoft 365, GitHub)
-├── Parent Policy - Finance
-│   └── Child Policy - Finance-Production
-│       └── Finance-specific rules (banking APIs, compliance logging)
-├── Parent Policy - Engineering
-    └── Child Policy - Engineering-Development
-        └── Engineering-specific rules (Docker Hub, GitHub, npm registry)
+│
+├── Finance policy
+│   └── Finance-Production policy
+│         └── banking APIs, compliance logging
+│
+└── Engineering policy
+     └── Engineering-Development policy
+           └── Docker Hub, GitHub, npm registry
 ```
 
-### Deploying Firewall Policies
+**What inheritance guarantees, and what it does not:**
+- Parent rule collection groups always process before the child's, whatever priorities are set, so a parent deny cannot be undone by a child allow
+- Network rule collections inherited from the parent outrank the child's network collections, and the same holds for application collections
+- NAT rules are **not** inherited, because they are specific to one firewall's public IPs, so a child policy must define its own
+- Threat intelligence mode is inherited and can only be overridden to a *stricter* mode, never disabled
+- The threat intelligence allowlist is inherited, and a child can append to it
+- Parent and child must live in the same region, though the firewalls they are attached to can be anywhere
+- Changes to the parent propagate automatically to every child
 
-A single Firewall Policy instance cannot be applied to multiple firewalls. Instead, you create a policy and assign it to a firewall during creation or update. For multi-firewall environments, use:
+### What Firewall Manager Adds
 
-1. **Firewall Manager template:** Deploy and configure policies across multiple firewalls simultaneously
-2. **Policy inheritance:** Define a base policy; other policies inherit and extend it
-3. **Infrastructure-as-Code (Bicep/Terraform):** Parameterize policies and deploy consistently across regions
+[Azure Firewall Manager](https://learn.microsoft.com/en-us/azure/firewall-manager/overview){:target="_blank" rel="noopener noreferrer"} is the management plane over policies for two architectures: **secured virtual hubs** (a Virtual WAN hub with security and routing policy attached) and **hub virtual networks** (a VNet you build and peer yourself). It also associates VNets with DDoS protection plans and manages WAF policies for Front Door and Application Gateway. It does not manage NSGs.
+
+Centralized route management, which removes the need to hand-write UDRs in every spoke, is available only for secured virtual hubs. In a hub VNet you still write and maintain the UDRs yourself.
+
+One operational warning from Microsoft's own known-issues list: if a Virtual WAN deployment uses static or custom routes, manage it from the Virtual WAN pages rather than Firewall Manager, because Firewall Manager updates can overwrite those routes and drop traffic.
 
 ---
 
-## NSG vs Azure Firewall vs WAF: Layered Security
+## NSG vs Azure Firewall vs WAF
 
-Web applications and network infrastructure on Azure require multiple layers of protection. Each tool addresses different threats and network layers.
+Each control sits at a different point in the path and answers a different question. They are not substitutes.
 
-### Comparison: NSG vs Azure Firewall vs WAF
-
-| Aspect | NSG | Azure Firewall | WAF (Web Application Firewall) |
+| Aspect | NSG | Azure Firewall | WAF |
 |--------|-----|---|---|
-| **Network layer** | Layer 3-4 (IP, port, protocol) | Layer 3-7 (can inspect application protocols) | Layer 7 (HTTP/HTTPS only) |
-| **Traffic direction** | Subnet/NIC boundary filtering | Perimeter (hub firewall) | Application endpoint (Application Gateway/Front Door) |
-| **Rule type** | IP/port/protocol | IP/port/protocol + FQDN + threat intel | URI paths, HTTP headers, request body (SQL injection, XSS) |
-| **Throughput** | High (minimal overhead) | Medium (depends on SKU and inspection depth) | Medium (depends on WAF rules) |
-| **Cost model** | Minimal per-rule cost | Per-firewall per-hour + per-GB data | Per-endpoint + per-rule |
-| **Primary use** | Subnet isolation, lateral movement prevention | Perimeter inspection, threat intelligence blocking | Application attack prevention |
-| **Scope** | Resources in a subnet/NIC | Hub-and-spoke networks, hybrid environments | Traffic to a specific application |
-| **Scalability** | Unlimited rules per NSG | ~30 Gbps per firewall (Standard), higher with Premium | Depends on WAF provider (Application Gateway, Front Door) |
+| **Layers** | 3-4 (IP, port, protocol) | 3-4, plus 7 for HTTP/HTTPS/MSSQL | 7 (HTTP/HTTPS only) |
+| **Position** | Subnet and NIC boundary | Hub perimeter and east-west chokepoint | In front of a specific application (Front Door or Application Gateway) |
+| **Rule vocabulary** | IP, port, protocol | The above plus FQDN, URL, web category, threat feed | URI paths, headers, request body (SQL injection, XSS), rate limits |
+| **Direction** | Both, per subnet or NIC | Outbound and east-west by rules, inbound by DNAT | Inbound only |
+| **Cost model** | No charge | Hourly deployment + capacity units + per GB | Per endpoint + per rule |
+| **Throughput** | No measurable overhead | 250 Mbps to 100 Gbps by SKU | Depends on the gateway tier |
+| **Primary use** | Segmentation, lateral movement | Egress control, threat intelligence, central logging | Application attack prevention |
 
-### When to Use Each Layer
+Note that Azure Firewall never filters inbound HTTP/S at layer 7. Application rules do not run on inbound connections, so a firewall in front of a web app inspects nothing that a WAF would catch.
 
-**NSG (Layer 3-4):**
-- Segment your network by trust zones (frontend, app, data subnets)
-- Prevent lateral movement between tiers
-- Default deny policy: deny all, allow only necessary traffic
-- Example: Allow port 3306 from app subnet only to database subnet
+### Choosing the Layer and the SKU
 
-**Azure Firewall (Perimeter):**
-- Hub-and-spoke topology requires centralized inspection
-- Threat intelligence blocking of malicious IPs/domains
-- Application-layer filtering by FQDN or tags
-- Hybrid environments (Azure + on-premises) need single inspection point
-- Example: Block outbound access to known ransomware C2 domains
-
-**WAF (Application Layer):**
-- Protect internet-facing web applications
-- Block injection attacks (SQL injection, command injection)
-- Enforce request patterns (valid HTTP methods, header validation)
-- Rate limiting for brute-force protection
-- Example: Block HTTP requests with SQL keywords in query strings
-
-**Three-layer example architecture:**
 ```
-Internet
-   ↓
-WAF (Application Gateway) - blocks SQL injection, XSS, bot attacks
-   ↓
-Azure Firewall (Hub) - blocks known malicious IPs, enforces application rules
-   ↓
-NSG (Subnet) - lateral movement prevention between frontend and app tiers
-   ↓
-Application
+What traffic are you controlling?
+│
+├─ Inbound HTTP/S from the internet to a web app
+│   └─ WAF: Front Door (global, edge) or Application Gateway (regional)
+│      Azure Firewall adds nothing at layer 7 here
+│
+├─ Inbound RDP / SSH / FTP from the internet
+│   └─ Azure Firewall DNAT with an explicit source range
+│      (Azure Bastion is the better answer for admin access)
+│
+├─ East-west between subnets or tiers
+│   └─ NSG. Free, no throughput cost, no UDR maintenance
+│      Firewall only if the flows need FQDN rules or central logs
+│
+├─ Outbound to the internet, filtered by name or reputation
+│   ├─ Under 250 Mbps and alert-only threat intel is acceptable
+│   │    └─ Azure Firewall Basic
+│   ├─ Need to deny on threat intel, DNS proxy, web categories
+│   │    └─ Azure Firewall Standard
+│   └─ Need TLS inspection, IDPS, or URL-level filtering
+│        └─ Azure Firewall Premium
+│
+└─ Absorbing a volumetric flood against a public IP
+    ├─ Fewer than ~15 protected public IPs
+    │    └─ DDoS IP Protection
+    └─ More, or you need rapid response, cost protection, WAF discount
+         └─ DDoS Network Protection
 ```
 
 ---
 
 ## Azure DDoS Protection
 
-Distributed Denial of Service (DDoS) attacks overwhelm your application by flooding it with traffic from many sources simultaneously. Azure DDoS Protection mitigates these attacks automatically.
+A DDoS attack exhausts a service's capacity rather than exploiting a flaw in it. [Azure DDoS Protection](https://learn.microsoft.com/en-us/azure/ddos-protection/ddos-protection-overview){:target="_blank" rel="noopener noreferrer"} mitigates that at **layers 3 and 4 only**. Application-layer floods are a WAF's job, and no DDoS tier changes that.
 
-### DDoS Protection Plans: Basic vs Standard
+### Three Levels, Not Two
 
-**Basic Plan (Free):**
-- Automatically enabled on all Azure public IPs
-- Protects against layer 3-4 DDoS attacks (volumetric attacks like UDP floods)
-- No additional cost
-- No customization or alerting
+**Infrastructure protection** is always on, free, and applies to every Azure public IPv4 and IPv6 address, including multi-tenant PaaS services. It defends the platform, so its thresholds are set for Azure's capacity rather than yours. Traffic that Azure shrugs off can still saturate a single application, and this level gives you no telemetry, alerting, or per-application tuning.
 
-**Standard Plan (Paid):**
-- Enhanced protection against layer 3-4 and layer 7 attacks
-- DDoS Response Team (DRT) available 24/7 during active attacks
-- Per-attack incident cost mitigation (credit if proven attack occurred)
-- Adaptive tuning: protection baseline learned from your typical traffic pattern
-- Advanced metrics and alerting
-- Cost: fixed monthly + per protected public IP
+The two paid tiers add per-resource monitoring with thresholds profiled against your own traffic:
 
-### Volumetric vs Protocol vs Application Attacks
+| Feature | DDoS IP Protection | DDoS Network Protection |
+|---|---|---|
+| Always-on monitoring and automatic L3/L4 mitigation | Yes | Yes |
+| Mitigation policies tuned to the application | Yes | Yes |
+| Metrics, alerts, mitigation reports, flow logs | Yes | Yes |
+| Microsoft Sentinel connector and workbook | Yes | Yes |
+| Protection across subscriptions in a tenant | Yes | Yes |
+| Basic-tier public IP protection | No | Yes |
+| DDoS Rapid Response (DRR) support | No | Yes |
+| Cost protection | No | Yes |
+| WAF discount | No | Yes |
+| Billing | Per protected IP ($199/IP/month, US list) | Fixed monthly plan covering 100 IPs, then per additional IP |
 
-**Volumetric attacks (layer 3-4):**
-- UDP floods, DNS amplification, ICMP floods
-- Goal: consume all available bandwidth
-- Protected by both Basic and Standard DDoS Protection
+Microsoft's own [break-even guidance](https://learn.microsoft.com/en-us/azure/ddos-protection/ddos-faq){:target="_blank" rel="noopener noreferrer"} puts the crossover at about 15 protected public IPs. Below that, IP Protection is cheaper. Above it, the Network Protection plan is, and one plan covers every subscription in the tenant.
 
-**Protocol attacks (layer 4):**
-- SYN floods, fragmented packets, invalid packets
-- Goal: exploit protocol weaknesses to crash services
-- Protected by both Basic and Standard DDoS Protection
+The WAF discount is easy to miss when comparing the two. With Network Protection enabled on a VNet, an Application Gateway with WAF in that VNet is billed at the non-WAF rate, which claws back a meaningful share of the plan fee for anyone already running WAF v2.
 
-**Application-layer attacks (layer 7):**
-- HTTP floods, slowloris attacks, bot-driven request floods
-- Goal: exhaust application resources without bulk data transfer
-- Protected by Standard DDoS Protection with advanced rules
-- Often require WAF rules in addition to DDoS Protection
+### Attack Types and What Covers Them
+
+**Volumetric (layer 3-4):** UDP floods, DNS amplification, ICMP floods, aiming to consume bandwidth. Covered by all three levels, with per-application thresholds only on the paid tiers.
+
+**Protocol (layer 4):** SYN floods, malformed and fragmented packets, aiming to exhaust connection state. Same coverage.
+
+**Application layer (layer 7):** HTTP floods, slowloris, bot-driven request storms that never approach a bandwidth limit. **Not covered by any DDoS tier.** These need a WAF with rate limiting and bot rules, in front of the application.
 
 ### Adaptive Tuning
 
-Azure DDoS Protection Standard learns your normal traffic baseline over time, then dynamically adjusts detection thresholds. This reduces false positives and adapts to legitimate traffic growth.
+Azure DDoS Protection profiles a protected IP's traffic over time and machine-learns three mitigation policies per public IP (TCP SYN, TCP, and UDP). Mitigation engages for an IP only once its policy threshold is exceeded, which is why the profiling matters: too low and legitimate bursts trigger mitigation, too high and an attack passes.
 
-**How adaptive tuning works:**
-1. Firewall monitors your application's baseline traffic (packet rate, protocol distribution, geographic sources)
-2. Over 7-10 days, a statistical model of "normal" traffic is established
-3. Detection thresholds are set above the learned baseline
-4. Anomalies exceeding the threshold are flagged as potential attacks
-5. Baseline is continuously updated as legitimate traffic changes
+The thresholds are not user-configurable. There is no manual policy, no allowlist, and no blocklist, though a [custom policy feature](https://learn.microsoft.com/en-us/azure/ddos-protection/ddos-custom-policy-overview){:target="_blank" rel="noopener noreferrer"} for tuning per-protocol detection is in preview. Plan around the tuning rather than expecting to override it.
 
-**Benefits:**
-- Fewer false positives than static threshold-based detection
-- Detects attacks that might exceed static thresholds but exceed your baseline
-- Automatically accommodates business growth and traffic pattern changes
+### DDoS Rapid Response
 
-### DDoS Response Team (DRT)
+Network Protection includes access to the **DDoS Rapid Response (DRR)** team during an active attack, for investigation during the event and analysis afterward. IP Protection does not include it. Cost protection, also Network Protection only, provides service credits for data transfer and scale-out costs incurred during a documented attack.
 
-Standard DDoS Protection includes access to the Microsoft DDoS Response Team during active attacks.
+### Where Protection Does Not Reach
 
-**What DRT provides:**
-- On-call 24/7 during active, confirmed DDoS attacks
-- Attack analysis and real-time mitigation recommendations
-- Temporary firewall rule deployment for attack-specific mitigation
-- Post-attack forensics and analysis
-- Not available during false positives or low-severity incidents
+The paid tiers protect public IPs on resources in ARM virtual networks. Several gaps matter at design time:
 
-**Activation:**
-- Only triggered if the attack is severe enough to cause service degradation
-- Requires DDoS Protection Standard enabled
-- Requires explicit opt-in to contact DRT during incidents
+- **Virtual WAN is not supported.** A secured virtual hub cannot be covered by a DDoS protection plan in the normal way, though customer-provided public IPs on secured hubs can be configured with DDoS Protection (preview).
+- **Multi-tenant PaaS is not supported.** Storage, Event Hubs, App Service, and API Management outside VNet integration fall back to infrastructure protection.
+- **NAT Gateway public IPs are not supported**, nor are Classic/RDFE virtual machines.
+- **VPN and virtual network gateways** are covered by a policy, but without adaptive tuning.
+
+The service is zone-resilient by default with no configuration required.
 
 ---
 
-## Architecture Patterns: Azure Firewall Deployment
+## Architecture Patterns
 
 ### Pattern 1: Hub-and-Spoke with Forced Tunneling
 
-The most common enterprise pattern. All internet-bound traffic from spoke VNets is forced through a central Azure Firewall in the hub VNet.
+The standard enterprise pattern, and the foundation of Azure Landing Zones. All internet-bound traffic from spokes is routed through a firewall in the hub.
 
 ```
 Hub VNet (10.0.0.0/16)
 ├── AzureFirewallSubnet (10.0.1.0/26) → Azure Firewall
-├── GatewaySubnet (10.0.2.0/27) → VPN/ExpressRoute
+├── GatewaySubnet (10.0.2.0/27) → VPN / ExpressRoute
 ├── AzureBastionSubnet (10.0.3.0/26)
 └── Management Subnet (10.0.4.0/24)
 
 Spoke VNet 1 (10.1.0.0/16) ←peered→ Hub
-├── Web Subnet (10.1.1.0/24) → UDR: 0.0.0.0/0 → Firewall (10.0.1.4)
-├── App Subnet (10.1.2.0/24) → UDR: 0.0.0.0/0 → Firewall (10.0.1.4)
+├── Web Subnet (10.1.1.0/24) → UDR: 0.0.0.0/0 → 10.0.1.4
+├── App Subnet (10.1.2.0/24) → UDR: 0.0.0.0/0 → 10.0.1.4
 └── Data Subnet (10.1.3.0/24)
 
 Spoke VNet 2 (10.2.0.0/16) ←peered→ Hub
-└── (similar structure)
+└── (same structure)
 ```
 
 **How traffic flows:**
-1. VM in `10.1.2.0/24` initiates outbound connection to Internet (e.g., HTTPS to Microsoft.com)
-2. UDR matches `0.0.0.0/0` and redirects to firewall at `10.0.1.4`
-3. Azure Firewall evaluates application and network rules
-4. If allowed, firewall establishes outbound connection and proxies traffic
-5. Response traffic returns through firewall
+1. A VM in `10.1.2.0/24` opens an outbound HTTPS connection
+2. The subnet's UDR matches `0.0.0.0/0` and sends it to the firewall's private IP
+3. Threat intelligence runs, then network rules, then application rules
+4. If allowed, the firewall SNATs and establishes the outbound connection
+5. Return traffic comes back through the firewall
 
-**Firewall rules needed:**
-- Application rule: allow HTTPS to `*.microsoft.com`
-- Network rule: allow TCP 443 to Internet (fallback if FQDN matching fails)
+**Requirements that are easy to miss:**
+- `AzureFirewallSubnet` must be at least a /26, and that size is sufficient at any scale
+- Subnet-level NSGs on `AzureFirewallSubnet` are not supported and are disabled by the platform
+- The firewall must keep direct internet connectivity. If the subnet learns a default route from on-premises over BGP, override it with a `0.0.0.0/0` UDR whose next hop is Internet
+- The firewall and its VNet must be in the same resource group and subscription
 
 **Trade-offs:**
-- All traffic funnels through single firewall (throughput bottleneck)
-- Firewall becomes critical component (must be zone-redundant or duplicated)
-- Adds latency to all outbound traffic
-- Requires careful UDR management to avoid routing loops
-- **Benefit:** Centralized policy, no shadow IT, visibility into all outbound traffic
+- Every outbound flow funnels through one resource, which is both the control point and the bottleneck
+- Scale-out takes five to seven minutes and starts at 60% of throughput or CPU, so a step change in load is not absorbed instantly
+- Latency is added to all outbound traffic
+- UDR mistakes cause routing loops and asymmetry
+- In exchange: one policy, no shadow egress, and one log of everything that left
 
-### Pattern 2: Multi-Region Hub-and-Spoke with Virtual WAN
+### Pattern 2: Virtual WAN Secured Hubs
 
-For organizations with multiple regions and many spokes, Virtual WAN provides automated hub-and-spoke connectivity and integrated Azure Firewall.
+For many spokes or multiple regions, Virtual WAN replaces peering and per-spoke UDRs with a managed hub.
 
-```
-Virtual WAN
+| | Hub VNet | Secured virtual hub |
+|---|---|---|
+| Spoke attachment | VNet peering you create | Virtual network connections |
+| Route management | UDRs you write per subnet | Centralized in Firewall Manager |
+| Inter-hub connectivity | Peering and UDRs | Managed by Virtual WAN |
+| Firewall placement | A subnet you size | Integrated into the hub |
+| DDoS protection plan | Supported | Not integrated with Virtual WAN |
 
-Hub (East US)
-├── Virtual Hub (automatic routing)
-├── Azure Firewall (integrated)
-├── Spoke connections (automatic)
-└── ExpressRoute/VPN gateway (integrated)
+**Spoke-to-spoke and inter-hub traffic is not inspected by default.** The firewall sits in the hub, but sending private traffic through it requires enabling **routing intent** on the hub. Without it, spoke-to-spoke and branch-to-branch flows bypass the firewall, and inter-hub traffic cannot be filtered at all. This is the assumption most often carried over incorrectly from hub-VNet designs.
 
-Hub (West US)
-├── Virtual Hub (automatic routing)
-├── Azure Firewall (integrated)
-└── Spoke connections (automatic)
+Published Virtual WAN scale figures: the hub router carries up to 50 Gbps of VNet-to-VNet traffic, sized against an assumed 2,000 VM workload across all connected VNets, and up to 1,000 branch connections per hub. Multiple hubs per region are supported when those ceilings bind.
 
-Inter-hub routing: Automatic (hubs route to each other)
-```
+### Pattern 3: Hybrid Inspection
 
-**How routing differs from traditional hub-and-spoke:**
-- Virtual WAN provides automatic hub-to-hub routing (no peering or UDRs needed)
-- Firewall is integrated into the hub (no separate firewall subnet or NAT translation)
-- Spoke-to-spoke traffic automatically routes through the hub firewall
-- Multi-region connectivity is native (hubs are automatically meshed)
-
-**Benefits over traditional hub-and-spoke:**
-- No peering to configure or maintain
-- No UDRs to manage in every spoke
-- Automatic failover if one hub becomes unavailable
-- Scales to 1000+ spokes per hub
-- Multi-region deployment is trivial
-
-**For detailed Virtual WAN architecture, see the [Virtual WAN & Private Link](/study-guides/infrastructure/azure/azure-private-link-virtual-wan.html) guide.**
-
-### Pattern 3: Hybrid (Cloud + On-Premises) with Centralized Firewall
-
-Large organizations often need to inspect traffic between Azure and on-premises data centers. A single Azure Firewall in a hub VNet can serve as the inspection point for both cloud-to-cloud and cloud-to-on-premises traffic.
+One firewall in the hub can inspect both cloud-to-internet and on-premises-to-cloud traffic.
 
 ```
-On-Premises Data Center
-   ↓ (VPN or ExpressRoute)
-Hub VNet GatewaySubnet
-   ↓
-Azure Firewall
-   ↓ (UDRs)
-Spoke VNets + Local Internet
+On-premises data center
+   │  VPN or ExpressRoute
+   v
+Hub VNet GatewaySubnet ──UDR: spoke CIDRs → firewall──┐
+                                                      v
+                                              Azure Firewall
+                                                      │
+                              ┌───────────────────────┼──────────────┐
+                              v                       v              v
+                       Spoke VNet 1            Spoke VNet 2      Internet
+                    (UDR: on-prem CIDR         (UDR: 0.0.0.0/0
+                       → firewall)               → firewall)
 ```
 
-**How it works:**
-1. On-premises network establishes VPN or ExpressRoute to hub's GatewaySubnet
-2. Routes for on-premises address space point to the firewall (not directly to the gateway)
-3. Cloud resources route `0.0.0.0/0` through the firewall
-4. All traffic (cloud-to-cloud, cloud-to-internet, on-prem-to-cloud) flows through the firewall for inspection
+The route table on the GatewaySubnet sends spoke-bound traffic to the firewall, and each spoke sends on-premises-bound and internet-bound traffic back to it. Both halves are required. Configuring only one produces asymmetric routing, where a stateful firewall sees one direction of a flow and drops it.
 
-**Configuration:**
-- Create a route table for the hub's internal subnet
-- Add UDR: destination = on-premises CIDR, next hop = firewall NIC
-- Associate route table to hub internal subnet
-- Spoke VNets use UDRs: destination = on-premises CIDR, next hop = firewall (and firewall NATs the response)
+Note that the firewall does not SNAT when the destination is an RFC 1918 or RFC 6598 private range. If your organization uses public address space privately, the firewall will SNAT that traffic unless you configure its private IP ranges accordingly.
 
-**This pattern is complex and requires careful UDR ordering to avoid asymmetric routing.**
+### Pattern 4: Explicit Proxy Instead of Forced Tunneling
 
-### Pattern 4: Firewall as Internal Load Balancer (No Forced Tunneling)
+Azure Firewall runs as a transparent proxy by default, reached by UDR. [Explicit proxy mode](https://learn.microsoft.com/en-us/azure/firewall/explicit-proxy){:target="_blank" rel="noopener noreferrer"} inverts that: applications point their proxy settings at the firewall's private IP, and traffic egresses through the firewall without any route table involvement. A PAC file can be hosted on the firewall itself, served from blob storage through a user-assigned managed identity.
 
-Some organizations prefer explicit application-layer firewall rules over forced tunneling, deploying Azure Firewall as an internal application-level filter rather than a perimeter device.
+**Where it fits:** environments that already configure proxies centrally, or where UDR management across many spokes is the larger problem.
 
-**Use case:** Microservices environment where applications explicitly connect through the firewall.
+**What it gives up:**
+- HTTP and HTTPS only, so DNS, SMTP, and every other protocol are unfiltered
+- Enforcement depends on client configuration, so a misconfigured application simply bypasses it
+- It is configured on the firewall policy, so it applies to every firewall sharing that policy
 
-**How it differs:**
-- No UDRs forcing traffic through firewall
-- Applications configure the firewall's private IP as an HTTP/HTTPS proxy
-- Firewall acts like a web proxy (intercepts at application layer, not network layer)
-- Only applicable to HTTP/HTTPS traffic (cannot filter SMTP, DNS, etc.)
-
-**Benefits:**
-- Firewall becomes an opt-in component (only traffic that needs it goes through)
-- Lower latency for traffic that bypasses firewall
-- Simpler routing configuration
-
-**Drawbacks:**
-- Requires application changes (proxy configuration)
-- Does not protect non-HTTP protocols
-- Easy to bypass if applications are misconfigured
-- Does not scale to large enterprises with many teams
+Explicit proxy is a complement to forced tunneling, not a replacement for it. Most designs that adopt it still keep a default route to the firewall as the backstop.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Firewall Rules Allow Everything by Default
+### Pitfall 1: A Broad Network Rule Silently Disables FQDN Filtering
 
-**Problem:** Creating firewall policies with "allow" rules but no default deny. Teams add specific allow rules but forget that any traffic not matching a deny rule is implicitly allowed.
+**Problem:** an allow rule for TCP 443 to the Internet service tag is added as a "fallback" alongside application rules that restrict destinations by FQDN.
 
-**Result:** Unintended outbound traffic flows through the firewall and reaches the internet (malware callbacks, data exfiltration, etc.).
+**Result:** every HTTPS flow matches the network rule and terminates there. The application rules never run, and the firewall allows any HTTPS destination. The logs show network rule hits, so the configuration looks like it is working.
 
-**Solution:** Azure Firewall denies by default if no rules match. Do NOT create a catch-all "allow Internet" rule at the end of your application rules. Instead, whitelist only necessary destinations. For network rules, explicitly add a low-priority "deny Internet" rule to catch misconfigured traffic.
-
----
-
-### Pitfall 2: Forgetting NSGs When Using Azure Firewall
-
-**Problem:** Deploying Azure Firewall for perimeter protection while neglecting NSG rules at the subnet level.
-
-**Result:** Firewall blocks inbound traffic correctly, but NSGs at the subnet/NIC level block it again (redundant blocking) or allow traffic the firewall denies (gaps in coverage).
-
-**Solution:** Use both NSGs and firewall. NSGs provide subnet-level isolation (preventing lateral movement). Azure Firewall provides perimeter inspection (blocking malicious IPs, enforcing FQDN policies). Both layers together provide defense in depth.
+**Solution:** do not pair a broad network rule with application rules for the same traffic. Application rules need no network rule underneath. Reserve network rules for protocols application rules do not cover, and scope them to specific destinations.
 
 ---
 
-### Pitfall 3: TLS Inspection Breaking Client-to-Server TLS
+### Pitfall 2: Expecting the Firewall to Segment East-West Traffic
 
-**Problem:** Enabling TLS inspection on firewall traffic that includes certificate pinning, mutual TLS, or other certificate-validation mechanisms.
+**Problem:** treating Azure Firewall as the whole answer and leaving NSGs permissive, or routing intra-VNet traffic through the firewall with a VNet-wide UDR.
 
-**Result:** Clients cannot complete TLS handshakes because they don't trust the firewall-generated certificate. Legitimate traffic fails mysteriously.
+**Result:** lateral movement between tiers goes uninspected, or, in the UDR case, traffic between two VMs in the same subnet is hairpinned through the firewall, adding latency and cost for no security benefit.
 
-**Solution:** Before enabling TLS inspection, audit your applications for certificate pinning, mutual TLS, or other certificate-dependent authentication. Create allowlist rules for these applications that bypass TLS inspection.
-
----
-
-### Pitfall 4: UDRs Creating Asymmetric Routing
-
-**Problem:** Configuring UDRs for outbound traffic to force it through the firewall, but forgetting return traffic.
-
-**Result:** Outbound traffic goes through firewall, but return traffic takes a different path (possibly direct). This asymmetry can cause performance issues, application failures, or security policy violations.
-
-**Solution:** UDRs apply to both inbound and outbound traffic when configured correctly. When you add a `0.0.0.0/0` route to the firewall, both outbound and inbound traffic use that route. For on-premises traffic, ensure your on-premises routing also points to the firewall for cloud-bound traffic (via VPN/ExpressRoute).
+**Solution:** NSGs are the segmentation control, and Microsoft recommends them over UDRs for internal segmentation. If a VNet-wide UDR is unavoidable, add a more specific route for the local subnet with next hop type Virtual network. Note also that NSGs cannot be applied to `AzureFirewallSubnet`.
 
 ---
 
-### Pitfall 5: Firewall Performance Degradation with Premium SKU
+### Pitfall 3: TLS Inspection Breaking Pinned and Mutual TLS
 
-**Problem:** Enabling TLS inspection or IDPS on a Premium SKU firewall without load testing.
+**Problem:** enabling TLS inspection across all traffic without auditing which applications validate certificates themselves.
 
-**Result:** Firewall throughput drops 30-50%, introducing latency and timeouts for legitimate traffic.
+**Result:** pinned clients reject the firewall's minted certificate and mutual-TLS handshakes fail. The failures look like intermittent connectivity rather than a policy decision.
 
-**Solution:** Test Premium SKU features in a non-critical environment first. Measure throughput impact before enabling in production. Use multiple firewall instances behind an internal load balancer if throughput becomes a bottleneck.
-
----
-
-### Pitfall 6: DDoS Protection Standard Not Activated During Baseline Period
-
-**Problem:** Enabling DDoS Protection Standard but not waiting the 7-10 day baseline learning period before expecting adaptive tuning to work correctly.
-
-**Result:** Adaptive tuning is inaccurate, leading to false positives or false negatives in attack detection.
-
-**Solution:** Activate DDoS Protection Standard at least 10 days before your critical workloads go live. Let the system learn normal traffic patterns. If you enable it only days before deployment, use static threshold rules instead.
+**Solution:** inventory pinning and mutual TLS before enabling inspection, and create bypass rules for those destinations. Track the bypass list, because each entry is traffic you are paying to inspect and not inspecting.
 
 ---
 
-### Pitfall 7: Firewall Manager Policy Inheritance Not Respected
+### Pitfall 4: Asymmetric Routing from Half-Configured UDRs
 
-**Problem:** Creating child policies that override parent policies without understanding inheritance order.
+**Problem:** routing one direction of a flow through the firewall and leaving the return path direct.
 
-**Result:** Security rules intended by the parent policy are bypassed by overly permissive child policies.
+**Result:** the firewall sees one side of a connection it has no state for and drops it. Symptoms are timeouts on some flows and not others, which is hard to attribute.
 
-**Solution:** Understand Firewall Manager policy hierarchy. Parent policy rules are evaluated first; child policies cannot add more permissive rules. If a parent policy denies a destination, child policies cannot allow it. Use policy inheritance to enforce non-bypassable baseline security (parent) while allowing team-specific customization (child).
+**Solution:** UDRs apply to traffic leaving a subnet, so both ends need their own route. Add routes on the spoke subnets *and* on the GatewaySubnet, and make sure on-premises routing sends Azure-bound traffic to the same firewall.
+
+---
+
+### Pitfall 5: Sizing Premium Against the SKU Maximum
+
+**Problem:** planning capacity from the 100 Gbps Premium headline while running TLS inspection and IDPS.
+
+**Result:** both features consume CPU, the effective ceiling is well below the maximum, and scale-out takes five to seven minutes once triggered at 60% utilization.
+
+**Solution:** size against Microsoft's published performance figures for the features you have enabled, not the SKU maximum. Load test for at least 10 to 15 minutes with new connections, so the test actually exercises scaled-out nodes.
+
+---
+
+### Pitfall 6: Expecting DDoS Protection to Be Instant or Tunable
+
+**Problem:** enabling a paid DDoS tier shortly before launch and treating it as an on/off shield, or planning to hand-tune thresholds if the profile is wrong.
+
+**Result:** mitigation engages only once a policy threshold is crossed, and thresholds are machine-learned from observed traffic, so a service with no traffic history is protected by an untuned profile. There is no manual override to fall back on: policy customization, allowlists, and blocklists are all unavailable.
+
+**Solution:** enable protection well before the traffic you want profiled arrives, and design the application to absorb the window before mitigation engages. A single VM behind a public IP with no ability to scale out is the case Microsoft explicitly calls out as supported but not recommended.
+
+---
+
+### Pitfall 7: Wildcard FQDN Rules That Match More Than Intended
+
+**Problem:** writing `*contoso.com` when `*.contoso.com` was meant, or writing `*.contoso.com` and expecting it to cover the apex domain.
+
+**Result:** the first allows `th3re4lcontoso.com` and any other name ending in that string. The second silently blocks `contoso.com` itself.
+
+**Solution:** always include the dot in a wildcard FQDN, and list the apex domain separately when it is needed. Review existing rules for leading asterisks without a dot, which are an egress allow list an attacker can register into.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure Firewall provides application-layer inspection that NSGs cannot.** NSGs filter by IP, port, and protocol. Azure Firewall filters by FQDN, HTTP headers, and threat intelligence. Both layers are necessary for defense in depth.
+1. **There are three SKUs, and Basic is not a cheaper Standard.** Basic caps at 250 Mbps, cannot deny on threat intelligence, and has no DNS proxy. Standard is the floor for most enterprise designs.
 
-2. **Standard SKU is sufficient for most environments.** Premium is only necessary when compliance mandates TLS inspection or when advanced threat detection is worth the performance trade-off.
+2. **Rule order is fixed by type, not by your priorities.** Threat intelligence runs first and can block before any rule. Then DNAT, then network, then application. A network rule match stops processing, which is why a broad `Allow 443 to Internet` rule disables FQDN filtering.
 
-3. **Threat Intelligence is the highest ROI feature.** Enabling threat intelligence (Alert and Deny mode) blocks known malicious IPs and domains automatically. This catches the bulk of commodity malware without requiring deep packet inspection.
+3. **Application rules do not filter inbound traffic.** Azure Firewall handles inbound with DNAT at layers 3-4. Layer 7 inbound protection is a WAF, on Front Door or Application Gateway.
 
-4. **Forced tunneling centralizes policy but adds latency.** UDRs that force all outbound traffic through the hub firewall enforce consistent policy across your environment, but introduce latency and create a bottleneck. Carefully measure the trade-off.
+4. **Threat intelligence in Alert and Deny mode is the highest-value single setting.** It costs almost nothing in performance and blocks commodity malware destinations without deep packet inspection.
 
-5. **TLS inspection is operationally expensive.** Decrypting and re-encrypting HTTPS traffic reduces throughput by 30-50%, increases latency, and requires certificate management overhead. Enable only when compliance explicitly requires it.
+5. **Premium's cost is CPU, not list price.** The fixed hourly charge is 40% above Standard. TLS inspection and IDPS are what actually consume the budget, in throughput and in certificate and false-positive operations.
 
-6. **Hub-and-spoke is the standard topology for Azure Firewall.** Centralize your firewall in a hub VNet, peer spokes, and use UDRs to force traffic through the firewall. This is the foundation of Azure Landing Zones.
+6. **A Firewall Policy is a shared resource.** One policy attaches to many firewalls across regions and subscriptions, parent rules always beat child rules, and NAT rules are the one type that is never inherited.
 
-7. **Firewall Manager enables policy reuse across regions and subscriptions.** Instead of managing firewall rules independently on each instance, define policies once and apply them globally. Use policy inheritance for baseline + team-specific rules.
+7. **Virtual WAN does not inspect spoke-to-spoke traffic until routing intent is enabled.** The firewall sits in the hub either way, but private traffic bypasses it by default.
 
-8. **DDoS Protection Standard requires a baseline learning period.** Activate it 7-10 days before relying on adaptive tuning. During baseline, use static threshold rules if needed.
+8. **DDoS Protection is layers 3 and 4 only.** No tier stops an HTTP flood. Application-layer attacks need a WAF with rate limiting, in front of the application.
 
-9. **Layer 7 attacks require both DDoS Protection AND WAF.** DDoS Protection Standard blocks volumetric attacks and protocol exploits, but application-layer attacks (HTTP floods, bot attacks) require a Web Application Firewall on top of DDoS Protection.
+9. **The DDoS tier choice is roughly a 15-IP break-even**, with Network Protection also carrying Rapid Response, cost protection, and the Application Gateway WAF discount that offsets much of its plan fee.
 
-10. **NSGs remain the first line of defense for lateral movement.** Azure Firewall is a perimeter device; NSGs prevent lateral movement between subnets. Do not use firewall as a substitute for proper NSG configuration.
+10. **NSGs remain the segmentation control.** Azure Firewall is an egress and perimeter chokepoint. Microsoft recommends NSGs, not firewall UDRs, for internal segmentation between tiers.

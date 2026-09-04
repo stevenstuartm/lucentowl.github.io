@@ -3,560 +3,452 @@ title: "Azure Policy and Governance"
 layout: guide
 category: Azure
 subcategory: Security and Compliance
-description: "A system architect's guide to Azure Policy and governance covering policy definitions, initiatives, compliance evaluation, Azure Blueprints, Landing Zones, and enterprise-scale governance patterns."
-tags: [azure, governance, security, cloud-computing, infrastructure, automation, compliance, practical]
+description: "How Azure Policy evaluates and enforces standards across a management group hierarchy: the eleven effects and the order they run in, the assignment controls that make rollout safe, what compliance percentages actually count, and how to migrate off Azure Blueprints before it retires."
+tags: [governance, azure-policy, management-groups, compliance, landing-zones, security, practical]
 ---
 
 ## What Is Azure Policy and Governance
 
-[Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} is a service that allows you to create and enforce rules across your Azure estate. These rules (called policies) evaluate Azure resources against your organization's standards and can automatically remediate violations.
+[Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} evaluates Azure resources against rules you define, reports which ones comply, blocks non-compliant deployments, and in some cases fixes what it finds. It is the mechanism that turns a written standard into something the platform enforces.
 
-Azure governance goes beyond policy to include [Management Groups](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview){:target="_blank" rel="noopener noreferrer"} for hierarchy, [Azure Blueprints](https://learn.microsoft.com/en-us/azure/governance/blueprints/overview){:target="_blank" rel="noopener noreferrer"} for packaging policy + RBAC + templates, and [Azure Landing Zones](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/){:target="_blank" rel="noopener noreferrer"} as a complete governance and architecture reference implementation.
+Governance is broader than policy. It also covers [management groups](https://learn.microsoft.com/en-us/azure/governance/management-groups/overview){:target="_blank" rel="noopener noreferrer"} for hierarchy and inheritance, RBAC for who can do what, and [Azure Landing Zones](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/){:target="_blank" rel="noopener noreferrer"} as a reference architecture that assembles all of it. Azure Blueprints used to package these together and is being retired, which is covered below.
 
 ### What Problems Governance Solves
 
 **Without Azure Policy:**
-- Developers create resources with weak security settings (public storage, open network ports)
-- Compliance violations go undetected until audits reveal violations months later
-- Each team configures resources differently, creating operational inconsistency
-- Security team cannot enforce tagging standards or encryption requirements
-- Cost optimization opportunities are invisible; unused resources accumulate
-- Organizational standards are documented but not enforced
+- Resources are created with weak settings, and nobody finds out until an audit
+- Each team configures things differently, so operations cannot rely on any invariant
+- Tagging and encryption standards exist as documents, not as controls
+- Compliance posture is a spreadsheet assembled by hand before each review
 
 **With Azure Policy:**
-- Non-compliant resources are blocked from creation before they reach production
-- Compliance state is continuously evaluated and visible in dashboards
-- Organizations enforce consistent configuration standards across thousands of resources
-- Security policies scale without manual review
-- Remediation happens automatically when policies support it
-- Standards are mechanically enforced, not just documented
+- Non-compliant deployments fail at request time instead of becoming remediation backlog
+- Compliance state is continuously evaluated and queryable through Azure Resource Graph
+- Standards inherit down a management group hierarchy rather than being reapplied per subscription
+- Some classes of drift are corrected automatically
 
 ### How Azure Policy Differs from AWS Equivalents
 
-Architects familiar with AWS should note these important differences:
-
 | Concept | AWS | Azure |
 |---------|-----|-------|
-| **Primary enforcement tool** | AWS Config (evaluation) plus Service Control Policies (blocking) | Azure Policy (evaluation, blocking, remediation in one service) |
-| **Policy application** | Config and SCPs are separate tools | Unified policy tool for evaluation, auditing, denial, remediation |
-| **Hierarchical inheritance** | SCPs attached to Organization; nested inheritance supported | Management Groups provide nested policy inheritance |
-| **Policy parameters** | Config rules are difficult to parameterize; hard-coded values are common | Built-in parameters enable flexibility and reuse |
-| **Remediation** | AWS Config doesn't remediate; requires separate SSM automation | Built-in DeployIfNotExists and Modify effects auto-remediate |
-| **Cost governance** | AWS Budgets monitors spend; no enforcement mechanism | Budget alerts combined with policy-based enforcement (deny expensive SKUs) |
-| **Multi-cloud/tenant governance** | Requires separate tooling or custom solutions | Single pane via Management Groups and policies |
-| **Initialization framework** | Control Tower (AWS-provided enterprise setup) | Landing Zones (CAF reference; mostly manual setup) |
+| **Evaluation** | AWS Config rules | Azure Policy (audit effects) |
+| **Preventive control** | Service Control Policies | Azure Policy (deny and denyAction effects) |
+| **Tooling split** | Config and SCPs are separate services with separate models | One service covers evaluation, prevention, and remediation |
+| **Hierarchy** | SCPs attached to Organizations OUs | Management groups, six levels deep |
+| **Remediation** | Config remediation via SSM automation documents | deployIfNotExists and modify effects with a managed identity |
+| **Staged rollout** | Largely manual | Built into assignments (enforcement mode, resource selectors, overrides) |
+| **Reference implementation** | Control Tower | Azure Landing Zones (CAF reference plus deployable accelerators) |
 
 ---
 
-## Core Policy Concepts
+## Scope, Hierarchy, and Where Definitions Live
 
-### Policy Definitions
+Policy behavior follows Azure's scope hierarchy, and two separate scopes matter for every assignment: where the *definition* lives, and where the *assignment* applies.
 
-A [policy definition](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure){:target="_blank" rel="noopener noreferrer"} is a set of conditions and effects that define what is allowed or required in Azure.
+```
+Tenant root management group   <- assignments here hit every resource in the tenant
+        │
+        ├── Platform (management group)
+        │      ├── Identity          (subscription)
+        │      ├── Management        (subscription)
+        │      └── Connectivity      (subscription)
+        │
+        └── Landing Zones (management group)
+               ├── Corp              ── Prod / Staging / Dev subscriptions
+               └── Online            ── Prod / Staging / Dev subscriptions
 
-**Structure of a policy definition:**
+A custom definition must be stored at or above the scope you assign it to.
+A definition saved on "Corp" cannot be assigned to anything under "Platform".
+```
 
-A policy definition contains:
-- **Name and description:** Identifies the policy
-- **Parameters:** Variables that make the policy reusable (e.g., allowed VM SKUs, required tags)
-- **Metadata:** Tags and display names for categorization
-- **Policy rule:** JSON logic that evaluates resources
-- **Effect:** What happens to non-compliant resources (Deny, Audit, Append, DeployIfNotExists, Modify)
+**Hierarchy limits that shape designs:** a directory supports 10,000 management groups and a tree up to **six levels deep**, not counting the root level or subscriptions. Every management group and subscription has exactly one parent, and new subscriptions land in the root group by default.
 
-**Built-in vs. Custom Policies**
+**The root management group is special.** It cannot be moved or deleted, nobody has access to it by default, and a Microsoft Entra Global Administrator has to [elevate access](https://learn.microsoft.com/en-us/azure/role-based-access-control/elevate-access-global-admin){:target="_blank" rel="noopener noreferrer"} to manage it. Anything assigned there applies to every resource in the tenant, so treat root assignments as "must have" only.
 
-Microsoft provides 200+ built-in policies covering common scenarios:
-- Denying public access to storage accounts
-- Enforcing encrypted disks
-- Requiring diagnostic logging
-- Mandating specific SKUs or regions
+Two operational details catch people out. Azure Resource Manager caches the management group hierarchy for **up to 30 minutes**, so a move does not show up immediately. And a custom role definition can name only one management group in its assignable scopes, so moving a subscription to a different branch can break the path between a role assignment and its definition, and the move is blocked.
 
-For organization-specific standards, you create custom policies using JSON policy rules. Custom policies follow the same structure as built-ins.
+---
 
-**Parameters and Reusability**
+## Policy Definitions, Effects, and Initiatives
 
-Instead of creating separate policies for each VM SKU, storage account, or tag requirement, policies use parameters:
+### Definitions and Parameters
 
-| Parameter Type | Example | Benefit |
+A [policy definition](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure){:target="_blank" rel="noopener noreferrer"} pairs a rule (JSON conditions over resource properties) with a single effect. Parameters make one definition serve many cases, so you write "allowed VM SKUs" once and supply different lists per assignment.
+
+Microsoft ships a large catalog of [built-in definitions](https://learn.microsoft.com/en-us/azure/governance/policy/samples/built-in-policies){:target="_blank" rel="noopener noreferrer"} covering most common controls. Built-ins are **versioned**, and an assignment can pin a version: `1.*.*` takes minor and patch updates automatically, `1.1.*` pins to a minor version, and patch updates are always taken because they are limited to text changes and break-glass fixes. Pinning matters when a built-in's logic changes underneath a production assignment.
+
+### The Eleven Effects
+
+Azure Policy supports [eleven effects](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effect-basics){:target="_blank" rel="noopener noreferrer"}, and each definition carries exactly one.
+
+| Effect | Behavior |
+|--------|----------|
+| **audit** | Marks non-compliant resources without blocking anything |
+| **deny** | Fails the create or update request at validation time |
+| **denyAction** | Blocks a specified *action*, most usefully `delete`, protecting resources from removal |
+| **append** | Adds fields to the request during create or update |
+| **modify** | Adds, updates, or removes properties or tags, including on existing resources |
+| **mutate** | Alters resources in Resource Provider modes, such as Kubernetes admission |
+| **auditIfNotExists** | Audits when a related child or extension resource is missing |
+| **deployIfNotExists** | Deploys the missing related resource, such as a diagnostic setting |
+| **manual** | Sets compliance by human attestation rather than evaluation |
+| **disabled** | Turns off the rule without removing the assignment |
+| **addToNetworkGroup** | Populates an Azure Virtual Network Manager network group |
+
+`denyAction` is the one most estates are missing. Every other preventive effect stops a bad resource being *created*; `denyAction` stops an existing one being *deleted*, which is what protects diagnostic settings, resource locks, and audit configuration from being removed by someone cleaning up.
+
+### Order of Evaluation
+
+Effects do not run in the order you assign them. They run in a fixed sequence, and knowing it explains most surprising outcomes.
+
+```
+Create or update request arrives at Azure Resource Manager
+          │
+          v
+  disabled      does this rule run at all?
+          │
+          v
+  append / modify   may alter the request, which can prevent a later
+          │         audit or deny from ever triggering
+          v
+  deny          request fails here (evaluated before audit so a rejected
+          │     resource is not also logged as non-compliant)
+          v
+  audit
+          │
+          v
+  manual
+          │
+          v
+  auditIfNotExists
+          │
+          v
+  denyAction    evaluated last
+          │
+          v
+  Resource Provider does the work
+          │
+          v
+  auditIfNotExists and deployIfNotExists re-evaluate on success,
+  triggering compliance logging and remediation
+```
+
+Two consequences follow. A `modify` effect can silently satisfy a `deny` policy, because the request is changed before deny sees it. And `deployIfNotExists` only acts *after* the resource provider succeeds, so remediation is always after the fact, never inline.
+
+**Layering is cumulative most restrictive.** Several assignments can hit the same resource from different scopes, and each is evaluated independently. There is no priority system and no way to declare one policy the winner. Two conflicting deny policies simply block everything that fails either one, and the fix is to correct the scopes or the definitions, not to rank them.
+
+### Initiatives
+
+An [initiative](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/initiative-definition-structure){:target="_blank" rel="noopener noreferrer"} bundles definitions so you assign and parameterize once instead of many times. Regulatory frameworks ship as built-in initiatives, and grouping by domain (encryption, tagging, networking) is equally valid. Assignment-level `overrides` can change the effect of individual definitions inside an initiative without forking it, which is what makes large built-in initiatives practical to adopt gradually.
+
+---
+
+## Assignment Controls That Make Rollout Safe
+
+The [assignment](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/assignment-structure){:target="_blank" rel="noopener noreferrer"} is where most of the operational leverage sits, and it is the part guides usually skip in favor of "start with Audit, then switch to Deny." That advice is not wrong, but it is the crudest of the available tools.
+
+| Control | What it does | When to reach for it |
 |---|---|---|
-| **List** | Allowed VM SKUs: `["Standard_B2s", "Standard_D2s_v3"]` | One policy, many allowed values |
-| **String** | Required environment tag: `"prod"` | Flexible enforcement across policies |
-| **Boolean** | Enable encryption: `true` | Simple yes/no conditions |
-| **Array** | Allowed regions: `["eastus", "westus2"]` | Enforce geographic constraints |
+| **enforcementMode** | `Default` enforces the effect. `DoNotEnforce` evaluates compliance without enforcing and without writing deny entries to the Activity Log. `Enroll` enforces only for scopes that opt in via an enrollment resource | Testing a real deny policy against production traffic before it bites |
+| **resourceSelectors** | Restricts evaluation by resource location, type, or absence of a location. Up to 10 selectors per assignment, 50 values each | Rolling an assignment out region by region |
+| **overrides** | Replaces the effect (or pinned version) of specific definitions inside an initiative. Up to 10 overrides, each covering up to 50 definition references | Adopting a large built-in initiative with some definitions disabled |
+| **notScopes** | Excludes child scopes from the assignment entirely | A subscription that genuinely should not be governed by this assignment |
+| **nonComplianceMessages** | Custom text shown when a deny blocks a request | Turning a cryptic rejection into an actionable one |
+| **definitionVersion** | Pins which version of a built-in is evaluated | Preventing an upstream definition change from breaking a production assignment |
 
-When you assign a policy, you specify parameter values. This allows the same policy definition to enforce different rules in different management groups or subscriptions.
+`DoNotEnforce` is the honest answer to "test before you enforce." A `deny` assignment in `DoNotEnforce` mode reports exactly what it would block without blocking it, which an `audit` version of the same policy does not, because audit and deny can evaluate differently. Remediation tasks for `deployIfNotExists` policies can still be run manually while an assignment is in `DoNotEnforce`.
 
-### Policy Effects
-
-The **effect** determines what happens when a resource violates the policy rule:
-
-| Effect | Behavior | Use Case |
-|--------|----------|----------|
-| **Audit** | Evaluates resources and marks non-compliant ones in the dashboard (no blocking) | Testing policies before enforcement; discovering current state |
-| **Deny** | Blocks creation or update of non-compliant resources; request fails at validation time | Enforcing security standards that must not be violated |
-| **Append** | Automatically adds properties to compliant resources during creation | Appending required tags or storage account encryption settings |
-| **DeployIfNotExists** | Automatically deploys a resource if missing, like a diagnostic setting | Enforcing logging or monitoring without manual configuration |
-| **Modify** | Updates properties on existing resources; similar to Append but modifies existing properties too | Fixing non-compliant resources automatically without redeployment |
-| **AuditIfNotExists** | Audits if a related resource is missing, for example VMs without antivirus | Detecting gaps without blocking |
-
-**Effect selection strategy:**
-
-- Start with **Audit** to understand current compliance
-- Shift to **Deny** once you understand the impact
-- Use **DeployIfNotExists** and **Modify** for auto-remediation to reduce manual work
-- Combine multiple policies; one prevents bad, another fixes existing
-
-### Initiatives (Policy Sets)
-
-An [initiative](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/initiative-definition-structure){:target="_blank" rel="noopener noreferrer"} (also called policy set) is a collection of related policies assigned together. Initiatives group policies by domain (security, compliance, cost) or regulatory requirement (PCI-DSS, HIPAA).
-
-**Benefits of initiatives:**
-
-- **Single assignment:** Assign one initiative instead of 20 individual policies
-- **Grouped definitions:** Security team reviews and updates all policies related to encryption together
-- **Consistent parameters:** Set security tags once for all policies in the initiative
-- **Regulatory alignment:** Built-in initiatives map to compliance frameworks (PCI-DSS, SOC 2, HIPAA, ISO 27001)
-
-Microsoft provides initiatives like:
-- "Audit machines with insecure password security settings"
-- "Ensure HTTPS is the only access protocol to your Event Hub"
-- "PCI DSS v3.2.1 Compliance" (15 individual policies)
+`nonComplianceMessages` is the cheapest thing on this list and the most underused. A developer whose deployment fails with a generic policy rejection files a ticket. One who sees "Storage accounts must disable public network access. See wiki/storage-standards" fixes it themselves.
 
 ---
 
-## Policy Evaluation and Compliance
+## Evaluation Timing and Compliance State
+
+### When Evaluation Happens
+
+Policy has two distinct behaviors that get conflated: **enforcement**, which is synchronous at request time, and **compliance reporting**, which is not.
+
+| Trigger | Timing |
+|---|---|
+| A resource is created or updated | The effect (deny, append, modify) applies immediately at request time. Compliance state for that resource appears about **15 minutes** later |
+| A policy or initiative is newly assigned or updated | About **5 minutes** for the assignment to apply, then an evaluation cycle begins with no predictable completion time |
+| A subscription is created or moved in the hierarchy | Around **30 minutes** |
+| An exemption is created, updated, or deleted | The corresponding assignment re-evaluates |
+| Standard compliance cycle | **Every 24 hours** |
+| On-demand scan | Triggered through REST, CLI, PowerShell, the VS Code extension, or a GitHub Action |
+
+A `deny` policy is never late. The resource is rejected by Resource Manager before it is created. What lags is the dashboard, which is why a newly deployed resource can look non-compliant for a quarter of an hour and why "policy did not work" reports are usually reporting lag.
+
+Not every resource provider supports on-demand scans or the daily cycle, so verify before you build a process around scan-then-check.
 
 ### Compliance States
 
-Every resource evaluated by a policy is marked with a compliance state:
-
-| State | Meaning | Action |
-|-------|---------|--------|
-| **Compliant** | Resource matches all assigned policy rules | No action needed |
-| **Non-compliant** | Resource violates one or more policy rules | Remediate or exempt |
-| **Exempt** | Resource is intentionally excluded from policy evaluation | Documented exception (e.g., experimental VNet) |
-| **Conflicting** | Multiple policies define conflicting requirements | Resolve policy conflict |
-
-You view compliance state in [Azure Policy Compliance Dashboard](https://learn.microsoft.com/en-us/azure/governance/policy/how-to/view-compliance-data){:target="_blank" rel="noopener noreferrer"}, which shows:
-- Overall compliance percentage by management group, subscription, and resource group
-- Which policies have non-compliant resources
-- Which resources are non-compliant
-- Details about individual policy violations
-
-### Policy Exemptions
-
-Exemptions allow specific resources to bypass policy evaluation when business needs warrant it. Exemptions are explicit exceptions documented for audit purposes.
-
-**Types of exemptions:**
-
-| Exemption Type | Scope | Duration | Use Case |
-|---|---|---|---|
-| **Waiver** | Specific resource | Permanent | Legacy system that cannot comply |
-| **Mitigated** | Specific resource | Temporary | Planned remediation within 30 days |
-
-Each exemption includes:
-- **Resource being exempted**
-- **Policy being exempted**
-- **Exemption reason** (compliance justification)
-- **Expiration date** (for temporary exemptions)
-- **Created by and date** (audit trail)
-
-**Best practice:** Exemptions should be rare. If you find yourself exempting resources frequently, the policy may be too strict or you may have a training/architecture problem.
-
-### Remediation Tasks
-
-For policies with auto-remediation effects (DeployIfNotExists, Modify), Azure can fix non-compliant resources automatically. For policies without auto-remediation, remediation is manual.
-
-**Auto-remediation workflow:**
-
-1. Policy evaluation identifies non-compliant resources
-2. Azure automatically applies the remediation (creates missing resource, modifies property)
-3. Resource becomes compliant (usually within minutes)
-4. Remediation is logged and auditable
-
-**Manual remediation:**
-
-For Audit and Deny policies, you:
-1. Review the compliance dashboard to identify non-compliant resources
-2. Manually update the resource to comply with policy
-3. Policy re-evaluates; resource becomes compliant
-
-**Remediation scope:**
-
-You can target remediation at specific resources, resource groups, or subscriptions. This allows gradual rollout of fixes to avoid unexpected changes.
-
----
-
-## Azure Blueprints
-
-### What Blueprints Are
-
-[Azure Blueprints](https://learn.microsoft.com/en-us/azure/governance/blueprints/overview){:target="_blank" rel="noopener noreferrer"} package governance and infrastructure together into versioned, repeatable artifacts. A blueprint combines:
-
-- **Policy definitions and initiatives** (what's required)
-- **RBAC role assignments** (who can do what)
-- **ARM template deployments** (what infrastructure exists)
-- **Resource groups** (organized structure)
-
-Instead of manually creating subscriptions, assigning policies, setting RBAC, and deploying templates separately, you create one blueprint and deploy it. Each deployment is versioned, making governance repeatable and auditable.
-
-### Blueprint Structure
-
-A blueprint contains:
-
-| Component | Purpose |
-|-----------|---------|
-| **Policy assignments** | Which policies apply to this blueprint's resources |
-| **Role assignments** | Who can manage resources (Owner, Contributor, Reader) |
-| **Template artifacts** | Infrastructure (VNets, storage, compute) |
-| **Resource group artifacts** | Placeholder resource groups (actual storage happens in templates) |
-
-**Blueprint versioning:**
-
-When you update a blueprint, you create a new version (e.g., 1.0 → 1.1 → 2.0). Each version is immutable. You can deploy v1.0 and v2.0 side-by-side. This prevents changes to blueprints from affecting existing deployments.
-
-### Blueprint Assignments
-
-An assignment applies a blueprint to a subscription (or management group in newer versions). When you assign a blueprint:
-
-1. Azure creates the resource groups specified in the blueprint
-2. Azure applies the RBAC role assignments
-3. Azure assigns the policies
-4. Azure deploys the ARM templates into the resource groups
-
-**Assignment states:**
+There are more states than the dashboard's headline suggests.
 
 | State | Meaning |
 |-------|---------|
-| **Creating** | Blueprint deployment is in progress |
-| **Succeeded** | All blueprint artifacts deployed and policies assigned |
-| **Failed** | One or more blueprint artifacts failed to deploy |
-| **Updating** | Moving to a new blueprint version |
+| **Non-compliant** | The rule evaluated true for an audit-class effect, or an existing resource fails a deny-class effect |
+| **Compliant** | The rule evaluated false |
+| **Exempt** | An exemption covers this resource for this assignment |
+| **Conflicting** | Two or more assignments in the same scope have contradicting rules, such as two definitions appending the same tag with different values |
+| **Protected** | The resource is covered by a `denyAction` assignment |
+| **Unknown** | Default for `manual` effect definitions awaiting attestation |
+| **Error** | The assignment produced a template or evaluation error |
+| **Not started** | The evaluation cycle has not run yet |
+| **Not registered** | The `Microsoft.PolicyInsights` provider is unregistered, or the caller lacks read permission |
 
-### When to Use Blueprints
+### The Compliance Percentage Counts Exemptions as Compliant
 
-Blueprints are most useful for:
-- **Multi-subscription governance:** Ensuring consistent policy, RBAC, and infrastructure across subscriptions
-- **Regulated industries:** Packaging compliance requirements as code
-- **Enterprise onboarding:** New business units get a blueprint-deployed subscription with correct policies and baseline infrastructure
-- **Versioned governance:** Archiving "what was required in Q3 2024" for audit purposes
+This is the number executives see, and here is exactly what it measures:
 
-**Blueprints vs. Policy + ARM Templates:**
+```
+compliance % = (compliant + exempt + unknown + protected)
+               ─────────────────────────────────────────────────────────
+               (compliant + exempt + unknown + protected
+                + non-compliant + conflicting + error)
+```
 
-- **Policy + ARM + Manual RBAC:** Simpler for single subscriptions; harder to track what was deployed and when
-- **Blueprints:** More complex to set up; valuable for large enterprises with many subscriptions
+Exempt resources sit in the numerator. So does `unknown`, which is the default for manual-effect policies nobody has attested. An estate can move from 80% to 98% compliant without a single resource changing, purely by granting exemptions. Any compliance report that does not also show the exemption count is easy to game, accidentally or otherwise.
+
+When rolling up across an initiative, states rank in this order: non-compliant, compliant, error, conflicting, protected, exempted, unknown. Non-compliant wins, so a resource failing one policy in a fifty-policy initiative reads as non-compliant for the whole initiative.
+
+---
+
+## Exemptions, Exclusions, Overrides, and Enforcement Mode
+
+Four mechanisms let a resource escape a policy, and they are not interchangeable. Picking the wrong one is how governance quietly stops meaning anything.
+
+```
+A resource should not be blocked by this assignment. Which control?
+
+Should it still appear in compliance reporting?
+├─ No, it is genuinely out of scope for this policy
+│   └─ notScopes (exclusion). Not evaluated, invisible, no audit trail
+│
+└─ Yes, keep it visible and tracked
+    │
+    ├─ Just this resource, for a documented reason
+    │   ├─ The policy's intent is met another way ──> Exemption, Mitigated
+    │   └─ Non-compliance is accepted for now ──────> Exemption, Waiver
+    │      (both carry expiresOn, metadata, and an approval trail)
+    │
+    ├─ The whole assignment, while you assess impact
+    │   └─ enforcementMode: DoNotEnforce
+    │
+    └─ One definition inside an initiative, everywhere
+        └─ overrides, setting that definition's effect to disabled or audit
+```
+
+### Exemption Categories Are Not Duration Labels
+
+Both categories can be permanent or temporary. They describe *why*, not *how long*:
+
+- **Mitigated:** the policy's intent is satisfied through some other mechanism, so the finding is not a real gap
+- **Waiver:** the non-compliant state is accepted, or the resource is being excluded from some definitions in an initiative without leaving the whole initiative
+
+**An exemption is not deleted when it expires.** The `expiresOn` date stops the exemption being honored, but the object is preserved for record-keeping. Expired exemptions accumulate as clutter that still looks like an active exception in a listing, so cleaning them up is a separate task.
+
+Exemptions carry a free-form `metadata` object, and using it (requester, approver, approval date, ticket reference) is what turns an exemption from a hole into an auditable decision. Creating one needs more than write permission. The principal must also hold the `exempt/Action` verb on the target assignment.
+
+Exemptions also support resource selectors, including **identity-based** ones. Selecting on `userPrincipalId` or `groupPrincipalId` exempts a specific service principal, managed identity, or security group from an assignment's enforcement, which is a cleaner answer than exempting the resources a privileged pipeline happens to touch.
+
+Finally, an exempt resource has a **compliance substate** showing what its state would be without the exemption. Query `properties.stateDetails.complianceSubState` in Azure Resource Graph to see what you are actually carrying behind the exemptions.
+
+---
+
+## Remediation
+
+`deployIfNotExists` and `modify` are the only effects that fix things, and both need an identity to do it.
+
+**Every such assignment carries exactly one managed identity**, system-assigned or user-assigned, and that identity needs the Azure roles required by whatever it deploys or modifies. A system-assigned identity also requires a top-level `location` on the assignment, which cannot be `global` and cannot be changed afterward.
+
+**Two identities are involved, and this is where silent failures come from.** For a `deployIfNotExists` policy, the *caller's* identity evaluates the existence condition, while the *assignment's* identity performs the deployment. A policy that deploys diagnostic settings onto key vaults therefore needs the deploying user to hold `Microsoft.Insights/diagnosticSettings/read` and the assignment identity to hold `Microsoft.Insights/diagnosticSettings/write`. Grant only the second and evaluation misfires; grant only the first and the deployment fails.
+
+**Remediation is not retroactive by default.** Assigning a `deployIfNotExists` policy makes new resources compliant going forward and marks existing ones non-compliant. Fixing the existing ones requires an explicit remediation task, which you can scope to specific resources, resource groups, or subscriptions to roll the fix out gradually.
+
+**When remediation fails silently, check in this order:** the assignment identity's role assignments, whether the target property is actually writable, whether the existence condition matches what the deployment creates (a mismatch produces an infinite redeploy), and the remediation task's own error output.
+
+---
+
+## Azure Blueprints Is Retiring
+
+[Azure Blueprints](https://learn.microsoft.com/en-us/azure/governance/blueprints/blueprint-retirement){:target="_blank" rel="noopener noreferrer"} packaged policy assignments, role assignments, ARM templates, and resource groups into versioned, assignable bundles. It never left preview, and it is being retired on a phased schedule.
+
+| Date | What stops working |
+|---|---|
+| **July 31, 2026** | New blueprint definitions and versions can no longer be created |
+| **October 31, 2026** | Existing definitions can no longer be modified. New assignments can no longer be created |
+| **December 31, 2026** | Existing assignments can no longer be modified |
+| **January 31, 2027** | The service is retired. The API stops responding, CLI and PowerShell commands stop working, and Blueprints is removed from the portal |
+
+Two things about that final date deserve emphasis. **Definitions, versions, and assignments that have not been exported are permanently deleted and cannot be recovered**, so exporting is a hard deadline, not a nice-to-have. And **blueprint locks stop functioning**, which means "Do Not Delete" and "Read Only" protections applied through blueprints silently disappear. Resources deployed by blueprints are not deleted. They simply become unmanaged.
+
+### The Replacement Is Two Features, Not One
+
+Blueprints did two jobs, and they are now separate:
+
+| Blueprint capability | Replacement |
+|---|---|
+| Storing and versioning the artifact | **Template specs**, or a Git repository with pull-request review |
+| Assigning, deploying, managing lifecycle, and locking | **[Deployment stacks](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deployment-stacks){:target="_blank" rel="noopener noreferrer"}** |
+
+Deployment stacks are the recommended replacement for the assignment half, because they group resources as a unit, manage their lifecycle including deletion, and provide deny-assignment enforcement equivalent to blueprint locks. They work at resource group, subscription, and management group scope, and both they and template specs are generally available rather than preview.
+
+Policy assignments and role assignments, which were blueprint artifact types, become ordinary resources declared in ARM or Bicep. The typical migration stores the template as a template spec (or in Git) and deploys it with a deployment stack.
+
+**To find where Blueprints is still in use:** Azure Advisor surfaces a recommendation naming the affected subscriptions and management groups, and the Blueprints blade lists existing definitions and assignments directly.
 
 ---
 
 ## Azure Landing Zones
 
-### What Landing Zones Are
+An [Azure Landing Zone](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/){:target="_blank" rel="noopener noreferrer"} is an architectural pattern from the Cloud Adoption Framework, not a resource you create. It specifies the management group hierarchy, subscription strategy, policy baseline, network topology, identity model, logging destination, and cost controls as one design.
 
-[Azure Landing Zones](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/){:target="_blank" rel="noopener noreferrer"} (from the Cloud Adoption Framework) define a complete, opinionated approach to setting up your Azure environment for governance, security, and scalability. A landing zone is not a single resource; it's an architectural pattern that includes:
+### Platform vs Application Landing Zones
 
-- **Management Group hierarchy** (organization structure)
-- **Subscription strategy** (platform vs. application subscriptions)
-- **Policy and governance** (standards enforcement)
-- **Network architecture** (hub-and-spoke connectivity)
-- **Identity and access** (Entra ID, RBAC)
-- **Logging and monitoring** (central audit trail)
-- **Cost management** (budgets and quotas)
+**Platform landing zones** hold shared services: the hub network, gateways, the central Log Analytics workspace, identity infrastructure. A platform team owns them, they have a long lifecycle, and their cost is amortized.
 
-### Management Group Hierarchy
+**Application landing zones** hold workload resources. Application teams own them, their lifecycle matches the application, and they inherit governance from the management groups above rather than defining their own.
 
-Landing Zones use Management Groups to organize subscriptions hierarchically. A typical structure:
+The separation exists so that platform changes do not ship on application timelines, and so application teams get autonomy inside guardrails they cannot remove.
 
-```
-Root Management Group
-├── Platform
-│   ├── Identity (subscriptions for identity services)
-│   ├── Management (subscriptions for logging, monitoring, governance)
-│   └── Connectivity (subscriptions for networking: hub VNet, ExpressRoute, etc.)
-└── Landing Zones
-    ├── Corp (internal business applications)
-    │   ├── Production
-    │   ├── Staging
-    │   └── Dev
-    └── Online (customer-facing applications)
-        ├── Production
-        ├── Staging
-        └── Dev
-```
-
-**Hierarchy benefits:**
-
-- **Policies cascade down:** Policies assigned to "Landing Zones" automatically apply to all child management groups
-- **Delegation:** Business unit leads manage their own subscriptions while inheriting governance from parent groups
-- **Segmentation:** Platform and application concerns are separated
-
-### Platform vs. Application Landing Zones
-
-**Platform landing zones:**
-- Contain shared services: hub VNet, ExpressRoute/VPN gateway, logging storage, identity providers
-- Managed by central IT/platform team
-- Long lifecycle (foundation services)
-- Cost is amortized across all workloads
-
-**Application landing zones:**
-- Contain workload resources: application VMs, databases, load balancers
-- Managed by application teams
-- Lifecycle tied to application (created with app, destroyed when app retires)
-- Team-specific billing
-
-This separation ensures platform reliability (platform changes don't affect applications) and allows teams to own their infrastructure while inheriting platform standards.
-
-### Landing Zone Templates
-
-Microsoft provides reference implementations:
-- **Enterprise-scale architecture:** Complete governance, networking, and policy setup (most comprehensive)
-- **Terraform modules:** Infrastructure-as-code for Landing Zone deployment
-- **ARM templates:** Alternative to Terraform
-
-These templates automate much of the setup, but many organizations customize them significantly based on specific security, compliance, or cost requirements.
+Microsoft publishes deployable reference implementations, including a portal-based accelerator and Bicep and Terraform modules. Most organizations customize them, and the customization is usually in the policy baseline and the network topology rather than the hierarchy.
 
 ---
 
-## Governance Patterns and Architecture
+## Governance Patterns
 
-### Pattern 1: Startup or Small Organization
+### Pattern 1: Single Team, Few Subscriptions
 
-**Characteristics:**
-- Single subscription (or a few for test/prod)
-- Limited compliance requirements
-- Growth-focused rather than governance-focused
+- Assign a handful of built-in security policies: deny public storage access, require encryption, require diagnostic logging, deny legacy TLS
+- Run new assignments in `DoNotEnforce` briefly, then switch to `Default`
+- Skip custom definitions, because built-ins cover most of what a small estate needs
+- Management groups are optional at this size, but creating even a two-level hierarchy early avoids a painful migration later
 
-**Policy approach:**
-- Assign 5-10 built-in policies focusing on security basics:
-  - Deny public access to storage
-  - Enforce encryption on VMs
-  - Require diagnostic logging
-  - Deny old TLS versions
-- Use Audit effect initially, shift to Deny after verification
-- Few exemptions; most resources should comply
-- No custom policies (built-ins handle 80% of needs)
+### Pattern 2: Multiple Teams, Shared Standards
 
-**Governance tools:**
-- No Management Groups (single subscription doesn't need them)
-- No Blueprints (simple manual setup)
-- Resource groups by application or environment
+- Build a management group hierarchy that separates environments and business units
+- Put the non-negotiable baseline at the top: encryption, logging, allowed regions
+- Attach regulatory initiatives only to the subscriptions that need them, not to the root
+- Use `modify` for tagging and `deployIfNotExists` for diagnostic settings, with remediation tasks to catch the existing estate
+- Store custom definitions at a management group high enough to be assignable everywhere they are needed
 
----
+### Pattern 3: Enterprise Scale
 
-### Pattern 2: Mid-Size Organization with Multiple Teams
-
-**Characteristics:**
-- 5-20 subscriptions organized by team or environment
-- Compliance requirements for specific workloads (PCI-DSS for payments, HIPAA for healthcare)
-- Growth; need standardization without over-control
-
-**Policy approach:**
-- Create Management Groups: one for test, one for production
-- Assign baseline security policies to the root (apply to everything):
-  - Encryption, logging, NSG requirements
-- Assign workload-specific initiatives:
-  - PCI-DSS initiative to payment team subscriptions
-  - Audit-related policies to finance systems
-- Use Deny for security, Audit for compliance, Modify for auto-remediation of tagging
-- Create a few custom policies specific to your organization (e.g., "VMs must be on company domain")
-
-**Governance tools:**
-- Use Management Groups for organizing subscriptions
-- No Blueprints yet (most subscriptions are older and don't need template-based setup)
-- Audit and monitor with Policy Compliance Dashboard
+- Implement Landing Zones with a full platform and application management group split
+- Baseline policies at the root, team policies on team management groups
+- `denyAction` on the resources that carry your audit trail, so cleanup scripts cannot remove them
+- Pin `definitionVersion` on production assignments of built-in initiatives
+- Roll new assignments out with `resourceSelectors` by region rather than estate-wide
+- Route all compliance data to Azure Resource Graph for reporting rather than reading the portal
+- Review exemptions on a schedule, and report the exemption count alongside the compliance percentage
 
 ---
 
-### Pattern 3: Enterprise with Enterprise-Scale Architecture
+## Regulatory Compliance Reporting
 
-**Characteristics:**
-- 50+ subscriptions across business units
-- Strict compliance (SOC 2, ISO 27001, industry-specific)
-- Platform team managing shared services
-- Application teams managing workloads
+Azure Policy ships built-in initiatives that map definitions to regulatory frameworks. The current catalog includes **PCI DSS v4.0.1**, **ISO/IEC 27001:2022**, **NIST SP 800-53 R5.1.1**, **CIS Microsoft Azure Foundations Benchmark**, HIPAA, SOC 2, FedRAMP, CMMC Level 2, DORA, and many others, across Azure, AWS, and GCP. Framework versions move, so check which version an initiative targets rather than assuming the one your auditor named is the one assigned.
 
-**Policy approach:**
-- Implement Landing Zones with Management Group hierarchy (Platform, Landing Zones, workload-specific)
-- Baseline policies on root (security non-negotiables):
-  - Deny non-compliant encryption
-  - Enforce NSG on all VNets
-  - Require diagnostic logging on all resources
-  - Block non-approved regions
-- Team-specific policies on team management groups (e.g., Finance team requires budget alerts)
-- Regulatory compliance initiatives on regulated subscriptions (PCI-DSS, HIPAA, SOC 2)
-- Use DeployIfNotExists and Modify extensively for auto-remediation
-- Centralized audit log repository (all subscriptions → central Log Analytics)
+**The dashboard has a licensing requirement the initiatives do not.** [Microsoft Cloud Security Benchmark](https://learn.microsoft.com/en-us/azure/defender-for-cloud/concept-regulatory-compliance-standards){:target="_blank" rel="noopener noreferrer"} (MCSB) is enabled by default when you turn on Defender for Cloud. Every other standard has to be assigned explicitly, and reaching compliance standards in Defender for Cloud requires onboarding a Defender for Cloud plan (any plan except Defender for Servers Plan 1 or Defender for API Plan 1), plus Owner or Policy Contributor permission on the scope. Budgeting a regulatory reporting programme as free because Azure Policy is free misses this.
 
-**Governance tools:**
-- Azure Blueprints for new subscriptions (standardized setup)
-- Management Groups for hierarchical policy inheritance
-- Azure Policy Compliance Dashboard connected to Azure Advisor for cost optimization recommendations
-- Regular governance reviews (monthly) to update policies and manage exemptions
-
-**Architecture:**
-- Hub-and-spoke networking (central platform manages hub)
-- Central logging subscription (all audit logs and activity logs flow here)
-- Identity subscription (manages Entra ID, MFA enforcement)
-- Management subscription (baseline policies, monitoring)
-- Workload subscriptions (application teams manage within governance guardrails)
-
----
-
-## Policy Remediation in Practice
-
-### How to Do This Well
-
-**1. Test before enforcement:**
-- Always deploy policies in Audit mode first
-- Monitor compliance dashboard for 1-2 weeks
-- Review what would have been blocked
-- Adjust policy parameters if needed
-- Shift to Deny only after stakeholders understand impact
-
-**2. Provide exemption process:**
-- Document exemption criteria (security risk level, business justification, expiration)
-- Require approval from security/governance team
-- Track all exemptions in a log (spreadsheet or dedicated system)
-- Review exemptions quarterly to determine if they should become permanent exceptions (update the policy) or if they're truly temporary
-
-**3. Use auto-remediation for consistency:**
-- DeployIfNotExists for missing resources (e.g., diagnostic settings)
-- Modify for fixing properties (e.g., adding required tags to untagged resources)
-- Test auto-remediation on non-critical resources first
-
-**4. Monitor exemptions closely:**
-- If many resources are exempted from one policy, the policy may be too strict
-- If exemptions never expire, make them permanent and move on
-- Track who created exemptions and when; this provides audit trail
-
----
-
-### Red Flags
-
-**Too many non-compliant resources:**
-- Policy may be misaligned with actual business needs
-- Teams may lack awareness of the requirement
-- Policy rule may be catching false positives
-- **Action:** Review policy rule, communicate the requirement, provide remediation guidance
-
-**Exemptions never expire:**
-- The policy requirement is not actually being enforced; it's advisory
-- Either commit to the policy and enforce it, or remove it
-- **Action:** Make exemptions permanent (update policy to allow the exception) or archive the policy
-
-**Policies conflicting with each other:**
-- One policy requires encryption, another allows unencrypted (impossible to satisfy both)
-- **Action:** Review policies, combine conflicting ones, or explicitly mark one as higher priority
-
-**Auto-remediation failing silently:**
-- DeployIfNotExists failed to deploy missing resource (permissions, API issue)
-- Modify failed to update property (property is read-only, value invalid)
-- **Action:** Review remediation task output, check RBAC permissions for the managed identity, verify policy rule logic
-
----
-
-## Compliance Dashboards and Regulatory Assessment
-
-### Azure Policy Compliance Dashboard
-
-The [Policy Compliance Dashboard](https://learn.microsoft.com/en-us/azure/governance/policy/how-to/view-compliance-data){:target="_blank" rel="noopener noreferrer"} shows:
-
-- Overall compliance percentage (across all subscriptions, management groups, and resources)
-- Breakdown by policy (which policies have the most non-compliance)
-- Breakdown by resource type (which types of resources are non-compliant)
-- Trend over time (improving or degrading compliance)
-- Exemptions and their expiration dates
-
-**Using the dashboard:**
-- **Executive reporting:** "We are 94% compliant with security policies"
-- **Team accountability:** "Payment team has 3 non-compliant resources in PCI-DSS initiative"
-- **Prioritization:** "These 20 VMs lack encryption; remediate them first"
-
-### Regulatory Compliance Assessment
-
-Azure Policy integrates with [Regulatory Compliance](https://learn.microsoft.com/en-us/azure/governance/policy/how-to/regulatory-compliance){:target="_blank" rel="noopener noreferrer"} to map policies to regulatory requirements:
-
-| Regulatory Framework | Mapped Policies | Use Case |
-|---|---|---|
-| **PCI DSS v3.2.1** | 32 Azure policies | Payment card processing systems |
-| **HIPAA** | 41 Azure policies | Healthcare systems handling PHI |
-| **ISO 27001** | 65 Azure policies | Information security management |
-| **SOC 2 Type 2** | Policies for availability, integrity, confidentiality | Service organizations |
-| **NIST SP 800-53** | 180+ policies | US government agencies |
-
-When you assign the compliance initiative for a framework (e.g., PCI DSS), Azure maps your compliance state to the framework's requirements. During audits, you demonstrate compliance by showing the Regulatory Compliance dashboard.
+Two reporting caveats. Controls that cannot be assessed automatically show as greyed out rather than failing, so a green dashboard covers only the machine-checkable subset of a framework. And a standard with no relevant resources in scope does not appear at all, even when assigned, which can read as coverage when it is absence.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Policy Too Strict, Blocking Legitimate Work
+### Pitfall 1: Using Audit as the Test for a Deny Policy
 
-**Problem:** A policy denies all storage accounts that are not encrypted. A team needs temporary storage for testing with small non-sensitive data.
+**Problem:** a `deny` policy is tested by assigning its `audit` equivalent first, on the assumption they evaluate identically.
 
-**Result:** Team spends week getting exemptions and filing tickets instead of completing work. Teams view governance as obstacles.
+**Result:** audit and deny evaluate at different points and can produce different outcomes, particularly when an `append` or `modify` policy alters the request first. The audit run looks clean and the deny run blocks deployments.
 
-**Solution:** Provide legitimate paths. Allow unencrypted storage in Dev/Test subscriptions only (different policy for Dev). Require encryption only in Prod. Or allow encryption optional in Dev to reduce operational overhead.
-
----
-
-### Pitfall 2: Exemptions Become Permanent
-
-**Problem:** Three VMs are exempted from the "require encryption" policy in early 2024 as "temporary." In 2025, those VMs are still exempted and no one remembers why.
-
-**Result:** Security gap persists. Exemptions lose credibility as enforcement mechanism.
-
-**Solution:** Set expiration dates on ALL exemptions. Review expired exemptions quarterly. Make decisions: renew with new justification or remediate the resource. Track exemptions in a system (not spreadsheet) with change history.
+**Solution:** assign the actual `deny` policy with `enforcementMode` set to `DoNotEnforce`. It reports precisely what it would block, using the same evaluation path, without blocking anything or writing deny entries to the Activity Log.
 
 ---
 
-### Pitfall 3: Policy Evaluation Lag
+### Pitfall 2: Reading the Compliance Percentage Without the Exemption Count
 
-**Problem:** You deploy a new resource on Monday. Policy evaluation runs nightly. Compliance dashboard shows non-compliant on Tuesday. Team assumes there's a bug.
+**Problem:** compliance is reported to leadership as a single percentage.
 
-**Result:** Confusion about when policies actually take effect. Teams don't understand policy latency.
+**Result:** exempt, unknown, and protected resources all count as compliant in that calculation. An estate can improve its score substantially by granting exemptions, and manual-effect policies that nobody has attested sit in `unknown`, which also counts as compliant.
 
-**Solution:** Communicate that policy evaluation is eventual (not immediate). For resources that MUST be compliant immediately, use Deny effect instead of Audit (Deny blocks creation; Audit evaluates later).
-
----
-
-### Pitfall 4: Auto-Remediation Surprises
-
-**Problem:** A Modify policy automatically adds a "cost-center" tag to all untagged resources. It sets the value to "unassigned." In production, this causes billing system to route costs to wrong departments.
-
-**Result:** Cost confusion and angry department leads. Auto-remediation loses trust.
-
-**Solution:** Test auto-remediation on non-critical resources first. For tagging, require explicit tagging during creation rather than auto-setting. Use Audit initially; shift to Modify only after understanding impact.
+**Solution:** report the exemption count and the `unknown` count next to the percentage. Query `complianceSubState` in Resource Graph to see what the exempt resources would be if the exemptions lapsed.
 
 ---
 
-### Pitfall 5: Misaligning Policy with Actual Enforcement
+### Pitfall 3: Excluding When You Meant to Exempt
 
-**Problem:** A policy says "all VMs must be encrypted." It has Audit effect. 20 unencrypted VMs exist. No one encrypts them because there's no enforcement.
+**Problem:** a subscription that needs an exception is added to `notScopes`.
 
-**Result:** Policy becomes "advisory documentation" instead of actual control. Teams lose confidence in governance.
+**Result:** it is not evaluated at all. It does not appear as non-compliant, exempt, or anything else, there is no expiry, no justification, and no approval record. The exception is invisible to the next audit.
 
-**Solution:** Start with Audit to understand impact. Give teams 30 days to remediate. Shift to Deny. Make the deadline real.
+**Solution:** exclusions are for scopes genuinely outside the policy's remit. Exceptions for resources that should comply but currently do not are exemptions, with a category, an expiry, and metadata recording who approved them and why.
+
+---
+
+### Pitfall 4: Auto-Remediation Applied Estate-Wide on Day One
+
+**Problem:** a `modify` policy adds a `cost-center` tag with a default value of `unassigned` to every untagged resource, everywhere, immediately.
+
+**Result:** chargeback routes to the wrong departments, and the tag now looks deliberate rather than missing, so the real gap is harder to find.
+
+**Solution:** roll the assignment out with `resourceSelectors` scoped to one region or resource type, verify, then widen. For attribution data specifically, prefer denying untagged resources at creation over inventing a value, because a wrong tag is worse than an absent one.
+
+---
+
+### Pitfall 5: Remediation That Never Runs
+
+**Problem:** a `deployIfNotExists` assignment is created and existing resources stay non-compliant.
+
+**Result:** two common causes. The assignment identity lacks the roles needed to deploy what the policy deploys, or no remediation task was ever created, since assignment alone only governs new and updated resources.
+
+**Solution:** grant the assignment's managed identity the required roles at the right scope, remembering that the caller's identity evaluates the existence condition while the assignment identity performs the deployment. Then create an explicit remediation task for the existing estate, scoped narrowly at first.
+
+---
+
+### Pitfall 6: Trying to Rank Conflicting Policies
+
+**Problem:** two assignments disagree, and the response is to look for a priority setting to declare a winner.
+
+**Result:** there is no such setting. Assignments are evaluated independently and the outcome is cumulative most restrictive, so two conflicting denies block everything that fails either. A `Conflicting` compliance state means two assignments in the same scope have contradicting rules, such as appending the same tag with different values.
+
+**Solution:** fix the definitions or the scopes. Where an initiative contains a definition you do not want at a particular scope, use an assignment `override` to disable that one definition rather than adding a competing assignment.
+
+---
+
+### Pitfall 7: Blueprints Left in Place Past Its Dates
+
+**Problem:** blueprint definitions and assignments are still in use, with migration deferred because "resources deployed by blueprints keep working."
+
+**Result:** they do keep working, but the schedule bites earlier than the retirement date. Modification of definitions stops in October 2026 and modification of assignments in December 2026, so the window to change anything closes months before the service does. Unexported definitions and assignments are permanently deleted in January 2027, and blueprint locks stop protecting anything.
+
+**Solution:** inventory usage now through the Azure Advisor recommendation, export everything you need to keep, and migrate the definition half to template specs or Git and the assignment half to deployment stacks. Replace blueprint locks with deployment stack deny settings explicitly, because nothing carries them over.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure Policy is enforcement, not documentation.** Unlike written standards, policies mechanically prevent non-compliance. Start with Audit to understand impact, then shift to Deny for real enforcement.
+1. **Azure Policy enforces synchronously and reports asynchronously.** Deny blocks the request at Resource Manager. Compliance state for a new resource appears about 15 minutes later, and the full estate re-evaluates every 24 hours.
 
-2. **Effects determine impact.** Audit discovers non-compliance. Deny prevents it. DeployIfNotExists and Modify auto-remediate. Choose effects based on your tolerance for risk and operational overhead.
+2. **There are eleven effects, and they run in a fixed order.** Disabled, then append and modify, then deny, audit, manual, auditIfNotExists, and denyAction last. A modify can satisfy a deny before deny ever sees the request.
 
-3. **Parameters make policies reusable.** Instead of separate policies for each allowed SKU or region, create one parameterized policy. This reduces maintenance burden and allows consistent enforcement across the organization.
+3. **`denyAction` protects what already exists.** Every other preventive effect stops bad resources being created. This one stops good ones being deleted, which is how you protect diagnostic settings and audit configuration.
 
-4. **Initiatives group related policies.** Assigning one PCI-DSS initiative is simpler than assigning 32 individual policies. Use initiatives for regulatory frameworks and governance domains.
+4. **`enforcementMode: DoNotEnforce` is the real dry run.** Testing a deny policy by assigning its audit equivalent tests a different evaluation path.
 
-5. **Management Group hierarchy enables governance at scale.** Policies assigned to parent groups cascade to all children. This allows platform teams to enforce standards without managing each subscription individually.
+5. **Compliance percentage counts exempt, unknown, and protected resources as compliant.** Never report the number without the exemption count beside it.
 
-6. **Azure Blueprints package governance and infrastructure.** For organizations deploying many subscriptions, Blueprints ensure each subscription gets the same policies, RBAC, and baseline infrastructure.
+6. **Exemption categories describe reason, not duration.** Mitigated means the intent is met another way; Waiver means non-compliance is accepted. Both can carry an expiry, and neither is deleted when it expires.
 
-7. **Landing Zones provide complete architecture guidance.** Beyond policy, Landing Zones define subscription strategy, networking, identity, logging, and cost management as an integrated whole.
+7. **Exclusion is not exemption.** `notScopes` removes a scope from evaluation entirely, leaving no record. Exemptions keep the resource visible, tracked, and attributable.
 
-8. **Exemptions should be rare and temporary.** If you find yourself exempting many resources, the policy is too strict. If exemptions never expire, make them permanent or remove the policy.
+8. **Remediation needs an identity and a task.** deployIfNotExists and modify each require one managed identity with the right roles, and existing resources are only fixed by an explicit remediation task.
 
-9. **Test policies in Audit mode before enforcement.** Understand impact on existing resources. Adjust policy logic. Only shift to Deny after stakeholders acknowledge what will be blocked.
+9. **Conflicts are cumulative most restrictive, with no priority order.** Two conflicting denies block everything. Fix the scopes or use assignment overrides.
 
-10. **Auto-remediation requires careful validation.** Policies with DeployIfNotExists or Modify effects can fix non-compliance automatically, but test them first to ensure they don't create unexpected side effects.
+10. **Custom definitions must live at or above the scope they are assigned to**, and management group hierarchies are capped at six levels with a 30-minute Resource Manager cache on moves.
+
+11. **Azure Blueprints retires January 31, 2027**, with creation frozen from July 2026 and modification frozen from October and December 2026. Unexported content is permanently deleted and blueprint locks stop functioning. Migrate to template specs plus deployment stacks.
+
+12. **Regulatory dashboards are not free.** MCSB is on by default with Defender for Cloud, but every other standard requires a paid Defender for Cloud plan, and controls that cannot be assessed automatically are excluded from the score rather than failed.
