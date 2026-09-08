@@ -3,709 +3,507 @@ title: "Power BI for System Architects"
 layout: guide
 category: Azure
 subcategory: Analytics & Data Processing
-description: "Power BI architecture for system architects including deployment models, dataset design, dataflows, capacity planning, embedded analytics, and integration patterns with Azure data services."
-tags: [infrastructure, azure, analytics, governance, scalability, performance, practical]
+description: "Power BI architecture for system architects covering storage modes including Direct Lake, the Fabric capacity model that replaced Premium P SKUs, gateways, semantic model design, embedded analytics, and governance."
+tags: [power-bi, microsoft-fabric, semantic-models, direct-lake, embedded-analytics, data-governance, practical]
 ---
 
 ## What Is Power BI
 
-[Power BI](https://learn.microsoft.com/en-us/power-bi/fundamentals/power-bi-overview){:target="_blank" rel="noopener noreferrer"} is Microsoft's enterprise analytics platform built for rapid insight generation and visual storytelling. It consists of three authoring and consumption tools: Power BI Desktop (for local authoring), Power BI Service (cloud-hosted analytics platform), and Power BI Mobile (consumption on tablets and phones).
+[Power BI](https://learn.microsoft.com/en-us/power-bi/fundamentals/power-bi-overview){:target="_blank" rel="noopener noreferrer"} is Microsoft's analytics platform for building semantic models and delivering interactive reports. It consists of three tools. Power BI Desktop is the Windows authoring client, Power BI Service is the cloud platform where content is published and consumed, and Power BI Mobile provides consumption on iOS and Android.
 
-Unlike traditional BI platforms that require data warehouse teams to construct reports, Power BI enables self-service analytics where business analysts and domain experts can build dashboards directly from data sources. The platform combines data connectivity (connecting to 300+ data sources), data transformation (Power Query with graphical and M-language scripting), data modeling (star schema design with DAX calculations), and interactive visualizations.
+Unlike traditional BI platforms where a data warehouse team constructs every report, Power BI supports self-service analytics in which analysts and domain experts build reports directly from curated models. The platform combines data connectivity through hundreds of connectors, data transformation through Power Query, data modeling with star schemas and DAX calculations, and interactive visualization.
+
+### Power BI Is a Microsoft Fabric Workload
+
+Power BI is no longer a standalone product line. It is one workload inside [Microsoft Fabric](https://learn.microsoft.com/en-us/fabric/fundamentals/microsoft-fabric-overview){:target="_blank" rel="noopener noreferrer"}, sharing a capacity model, a storage layer called OneLake, and an admin portal with Data Factory, Data Engineering, Data Science, and Real-Time Intelligence. Much of the Power BI enterprise documentation now lives under the Fabric documentation set, and the capacity SKUs you buy are Fabric SKUs.
+
+This matters architecturally for three reasons. Capacity is shared across all Fabric workloads, so a Spark job and a semantic model refresh compete for the same compute units. Storage modes now include Direct Lake, which reads Fabric's Delta tables directly. And several Power BI-only constructs, including Premium P SKUs and real-time streaming semantic models, are being retired in favor of their Fabric equivalents.
 
 ### What Problems Power BI Solves
 
-**Without Power BI:**
-- Business questions require IT intervention; analytics backlog builds across the organization
-- Each analysis requires separate tool setup or manual report generation
-- Data lives in silos; no unified view across operational systems, data warehouse, and cloud data lakes
-- Reports are static; decision-makers cannot explore data interactively
-- Data governance is unclear; duplicate datasets and inconsistent definitions multiply
-- Insights take weeks to produce; decision-making relies on outdated information
-- Scaling analytics requires hiring specialized dashboard developers and BI engineers
+Without a platform like Power BI, business questions route through IT and an analytics backlog builds, data stays siloed across operational systems and warehouses, reports are static, and metric definitions multiply until nobody agrees what "revenue" means.
 
-**With Power BI:**
-- Business users author their own dashboards within minutes to hours
-- Connectors to 300+ data sources (databases, data lakes, SaaS applications, web services)
-- Unified semantic models define metrics and relationships once; reuse across the organization
-- Interactive dashboards enable exploration and drill-down investigation
-- Role-based security and endorsement systems build trust in analytics
-- Real-time and scheduled refresh options keep data current
-- Embedded analytics embed dashboards into applications for customer-facing insights
-- Shared capacity or Premium capacity options scale from small teams to enterprise deployments
-
-### How Power BI Differs from AWS QuickSight
-
-Architects evaluating AWS and Azure analytics platforms should understand these key differences:
-
-| Concept | AWS QuickSight | Power BI |
-|---------|---|---|
-| **Authoring tool** | Cloud-based web authoring. Desktop tool available (beta) | Power BI Desktop (rich authoring) plus cloud service |
-| **Data modeling** | Dataset definitions in QuickSight. Limited semantic model depth | Full semantic model with DAX calculations. Star schema design |
-| **Data transformation** | Limited transformation. Requires external tools like Glue | Power Query with M language and graphical UI |
-| **Self-service capability** | Limited (analysts typically need IT help) | Native self-service. Business users can build dashboards |
-| **Capacity models** | Per-user pricing (Standard, Enterprise) | Pro licensing plus Premium capacity or Premium Per User |
-| **Real-time dashboards** | Streaming ingestion available | Streaming datasets and push datasets. Dataflows |
-| **Embedding** | QuickSight Embedded | Power BI Embedded (modern) or Premium capacity |
-| **Governance** | Basic workspace controls | Workspaces, endorsement, lineage, impact analysis |
-| **Mobile experience** | Limited interactivity on mobile | Full interactivity. Optimized mobile layouts |
-| **Cost model** | Transparent per-user or per-session | Capacity-based or per-user. Can be higher at scale |
-| **Typical use case** | Lighter analytics for AWS-native environments | Enterprise BI. Widely used with SQL Server organizations |
+With Power BI, analysts author their own reports against shared semantic models that define metrics once. Row-level security and endorsement build trust in what gets published. Scheduled and near real-time refresh options keep data current, and embedded analytics push reports into customer-facing applications without giving external users Power BI accounts.
 
 ---
 
 ## Core Power BI Components
 
-### Power BI Service, Desktop, and Mobile
+### Power BI Desktop, Service, and Mobile
 
-Power BI consists of three primary components that together create the authoring-to-consumption pipeline.
+**Power BI Desktop** is the authoring tool used to build semantic models, define relationships, write DAX calculations, and design report layouts. Desktop files (`.pbix`) contain the model, the queries, and the report definitions. Analysts use Desktop to shape data and validate metrics before publishing.
 
-**Power BI Desktop** is the rich client authoring tool used by analysts and developers to build semantic models, create relationships, define calculations with DAX, and design report layouts. Desktop files (.pbix) contain data models, queries, and report definitions. Analysts use Desktop to transform data, design schemas, and validate metrics before publishing to Power BI Service.
+**Power BI Service** is the cloud platform where content is published, refreshed, secured, and consumed. It handles scheduled refresh, interactive querying, access control, and collaboration.
 
-**Power BI Service** is the cloud-hosted analytics platform where reports and dashboards are published, shared, and consumed. It handles scheduled refresh (pulling fresh data), interactive querying, access control, and collaborative features like commenting and sharing. Power BI Service is accessed through a web browser and provides the primary experience for business users consuming dashboards.
+**Power BI Mobile** provides consumption on tablets and phones with layouts optimized for small screens. Mobile experiences are simplified views suited to monitoring rather than deep analysis.
 
-**Power BI Mobile** provides consumption on iOS and Android devices with optimized layouts for tablets and phones. Mobile experiences are typically simplified views of dashboards designed for on-the-go decision-making rather than deep analysis.
+### Workspaces Are the Capacity Boundary
 
-### Workspaces: Organizing Content by Domain
+A workspace is a container for reports, semantic models, dashboards, and Fabric items, organized by domain, business unit, or project. Workspaces are also the unit at which capacity is assigned. You do not put a semantic model on a capacity, you put its *workspace* on a capacity, and every item in that workspace inherits the compute, the memory ceiling, and the licensing rules of whatever capacity it sits on.
 
-Workspaces are containers for organizing Power BI content (reports, dashboards, datasets) by domain, business unit, or project. Each workspace has its own settings, access controls, and content discovery.
+That single fact drives most Power BI capacity design. Moving one oversized model onto a larger SKU means moving its whole workspace. Mixing a heavy nightly refresh and a latency-sensitive executive report in one workspace means they share a throttling budget. The scope chain is tenant → capacity → workspace → item, and only the middle two links are things you buy.
 
-**Standard workspaces** are cloud-hosted containers where teams collaborate on analytics. Only the workspace administrator has direct write access; other team members can view, edit, or create content depending on assigned roles.
+Workspaces not assigned to a capacity run on **shared capacity**, a multi-tenant pool where performance varies with other tenants' load and per-model limits are tight. Workspaces on a **Fabric capacity** get reserved compute measured in capacity units.
 
-**Workspace role hierarchy:**
-- **Admin:** Can add/remove members, assign roles, delete workspace, modify settings
-- **Member:** Can create and edit reports, datasets, and other content
-- **Contributor:** Can create and edit content but cannot manage permissions
-- **Viewer:** Can view published reports and dashboards only
+### Workspace Roles
 
-**Shared capacity workspaces** run on shared computational resources; when many organizations use shared capacity simultaneously, performance can degrade if one tenant consumes significant resources.
+Access is granted by assigning individuals or security groups to one of four roles. The boundaries between them are narrower than the names suggest.
 
-**Premium capacity workspaces** run on dedicated resources allocated to the organization. All content in Premium capacity workspaces has guaranteed performance regardless of usage across other workspaces.
+| Capability | Admin | Member | Contributor | Viewer |
+|---|---|---|---|---|
+| Update and delete the workspace | Yes | No | No | No |
+| Add or remove any user in any role | Yes | No | No | No |
+| Add members or others with lower permissions | Yes | Yes | No | No |
+| Publish, unpublish, or change permissions for an app | Yes | Yes | No | No |
+| Update an existing app | Yes | Yes | If delegated | No |
+| Create, edit, and delete content in the workspace | Yes | Yes | Yes | No |
+| Schedule refresh and modify gateway connections | Yes | Yes | Yes | No |
+| View and interact with items | Yes | Yes | Yes | Yes |
 
-### Datasets, Reports, and Dashboards
+Three details commonly trip up permission designs. Contributor and Member differ mainly over app publishing and adding people, not over content editing, so Contributor is the right default for report authors. Members can add users at lower roles but cannot change an existing user's role, which requires an admin to remove the user first. And Viewer is the role that enforces row-level security for people browsing a workspace directly, so anyone who should see filtered data must not also hold a higher role through some other group membership.
 
-Power BI uses a hierarchical content model: semantic models define data structure and metrics, reports visualize data with interactive exploration, and dashboards pin key visuals for quick insights.
+### Semantic Models, Reports, and Dashboards
 
-**Semantic models** (formerly called datasets) contain the data connections, transformations, relationships, and calculated measures. A semantic model is the authoritative definition of metrics like "Total Revenue," "Customer Churn Rate," or "Average Order Value." Multiple reports can connect to a single semantic model, ensuring consistency across the organization.
+Power BI content follows a dependency chain. Semantic models define structure and metrics, reports visualize them, and dashboards pin selected visuals for monitoring.
 
-**Reports** are interactive explorations of data. A report contains pages, each with multiple visualizations (charts, tables, maps). Users interact with reports to filter, drill-down, and investigate questions. Reports can reference one or multiple semantic models.
+**Semantic models** (renamed from "datasets") contain the connections, transformations, relationships, and measures. A semantic model is the authoritative definition of metrics like total revenue or churn rate, and multiple reports can connect to one model so those definitions stay consistent.
 
-**Dashboards** are curated collections of key metrics and visuals pinned from reports. Dashboards provide at-a-glance insights for executives and managers, whereas reports enable detailed investigation for analysts.
+**Reports** are interactive explorations built from pages of visuals. Users filter, cross-highlight, and drill down. A report connects to one semantic model, though a composite model can compose several.
 
-The relationship: Semantic Model → Report(s) → Dashboard(s).
+**Dashboards** are curated collections of tiles pinned from reports. They give an at-a-glance view rather than an investigation surface. Dashboards are also the one content type that cannot be endorsed, and they are being displaced by organizational apps for most distribution scenarios.
 
 ### Dataflows: Self-Service Data Preparation
 
-[Dataflows](https://learn.microsoft.com/en-us/power-bi/transform-model/dataflows/dataflows-introduction){:target="_blank" rel="noopener noreferrer"} are cloud-based data preparation pipelines that extract, transform, and load data using Power Query Online. They enable self-service transformation without requiring analysts to build ETL pipelines.
+[Dataflows](https://learn.microsoft.com/en-us/power-bi/transform-model/dataflows/dataflows-introduction-self-service){:target="_blank" rel="noopener noreferrer"} are cloud-hosted Power Query pipelines that extract, transform, and stage data so multiple semantic models can consume the same prepared tables. Running a transformation once on a schedule beats repeating it in every model that needs it.
 
-**Dataflow capabilities:**
-- **Extract:** Connect to any data source (databases, APIs, files, SaaS)
-- **Transform:** Apply Power Query transformations (merge tables, add calculated columns, aggregate data)
-- **Load:** Store results as cloud entities (CSV, Parquet, or Power BI managed datasets)
-- **Reuse:** Multiple reports and datasets can reference the same dataflow
+There are two generations, and the distinction is now a planning decision rather than a detail. **Dataflow Gen1** is the original Power BI dataflow. Microsoft describes it as being in a legacy state that will not receive new feature investment. Its output lands in Power BI-managed storage in Common Data Model format, or in your own Azure Data Lake Storage Gen2 account if you configure bring-your-own-storage. **Dataflow Gen2** is the Fabric Data Factory version and is the recommended path for customers with Fabric capacity, writing to Fabric destinations including lakehouses and warehouses as Delta tables. Pro and PPU customers without Fabric capacity can continue on Gen1.
 
-**Dataflow advantages over embedding transforms in reports:**
-- Transformations run once on a schedule; reports consume pre-transformed data (faster reports)
-- Consistent transformation logic shared across multiple reports
-- Dataflow can be tested and validated independently from reports
-- Data can be exported to Azure Data Lake Storage for external analysis
+A dataflow earns its place when transformation logic is shared across several models, when you want to keep analysts away from source credentials, or when the transformed output needs to be readable by tools outside Power BI.
 
-### Gateways: On-Premises Data Connectivity
+### Gateways: Reaching Data Behind a Firewall
 
-[Gateways](https://learn.microsoft.com/en-us/power-bi/connect-data/service-gateway-onprem){:target="_blank" rel="noopener noreferrer"} are bridge services that enable Power BI Service to connect to on-premises data sources (SQL Server databases, Analysis Services, SharePoint sites). Without a gateway, Power BI cannot access data behind corporate firewalls.
+A [gateway](https://learn.microsoft.com/en-us/data-integration/gateway/service-gateway-onprem){:target="_blank" rel="noopener noreferrer"} is what lets the Power BI Service query data it cannot reach directly. It opens outbound connections to Azure and receives work as responses to its own polling, so no inbound firewall ports are required.
 
-**Gateway types:**
+There are three variants, and their names have changed from the older "personal" and "enterprise" labels.
 
-**Personal Gateway:** Single-user gateway for individual analysts. Installation requires administrative access but uses the logged-in user's credentials to access data.
+```
+                    Power BI / Fabric cloud service
+                                 │
+                                 │  outbound-initiated only;
+                                 │  the gateway polls for work
+             ┌───────────────────┴────────────────────┐
+             ▼                                        ▼
+  On-premises data gateway                Virtual network data gateway
+  (Windows host you install               (Microsoft-managed, nothing
+   and patch; clustered for HA)            to install)
+             │                                        │
+             ▼                                        ▼
+  SQL Server, Analysis Services,          Azure SQL, Storage, Synapse
+  SAP, file shares inside the             and other services reachable
+  corporate network                       only from inside the VNet
+```
 
-**Enterprise Gateway:** Multi-user gateway for organizations. Manages credentials securely, supports multiple simultaneous connections, and allows for scheduled refreshes without manual credential renewal.
+**On-premises data gateway** in standard mode serves multiple users and multiple data sources, and works with Power BI, Fabric, Azure Analysis Services, Azure Data Factory, Logic Apps, Power Apps, and Power Automate. This is the enterprise option, and clusters of gateway members provide load balancing and failover.
 
-**Virtual Network Gateway:** Direct network integration for on-premises data sources in hybrid cloud scenarios.
+**On-premises data gateway (personal mode)** serves one user, cannot be shared, and works only with Power BI. It suits an individual analyst who publishes reports nobody else refreshes.
 
-**Considerations:**
-- A gateway requires a dedicated machine with network access to data sources
-- Gateways are a potential bottleneck if many reports refresh simultaneously
-- Credentials are encrypted and stored securely but introduce key management complexity
-- Load-balance multiple gateways for high-availability refresh scenarios
+**Virtual network data gateway** is a Microsoft-managed service that requires no installation and connects to data sources secured by an Azure virtual network. It is not an on-premises connector. Reaching resources inside a private VNet is what it exists for.
 
-### Semantic Models and DirectQuery vs Import vs Composite
+Four operational constraints shape gateway design. A gateway cluster supports at most 1,000 data sources. DirectQuery responses through a gateway cap at 16 MB uncompressed. Gateway-side credential caching can take roughly five hours to reflect a credential change, so a rotated password produces refresh failures that look inexplicable. And Microsoft supports only the last six monthly releases, which makes gateway patching a standing operational task rather than a one-time install.
 
-Power BI supports three patterns for connecting reports to data: Import, DirectQuery, and Composite models. Each has distinct architectural implications.
+---
 
-**Import mode** copies data from the source into Power BI memory. Reports query local data in-memory, providing fast interactive performance. Import requires periodic refresh (scheduled or manual) to update data. Import works well for smaller datasets (under 10 GB) and analytics that can tolerate data latency.
+## Storage Modes: How a Query Actually Gets Answered
 
-**DirectQuery mode** keeps data in the source system (database, data warehouse) and sends queries directly to the source each time a user filters or interacts with the report. Reports query the source in real-time; data is always current. DirectQuery works for large datasets but requires the underlying system to handle query performance. Dashboards using DirectQuery can become slow if underlying queries are inefficient.
+Power BI supports three semantic model modes in the service, [Import, DirectQuery, and Composite](https://learn.microsoft.com/en-us/power-bi/connect-data/service-dataset-modes-understand){:target="_blank" rel="noopener noreferrer"}, plus Direct Lake for models on Fabric capacity. Storage mode is a property of each *table*, which is what makes composite models possible.
 
-**Composite models** combine Import and DirectQuery: some tables are imported for fast performance, other tables use DirectQuery to stay current. A composite model can join imported and direct-query tables. This is the most flexible but also the most complex to design and maintain.
+```
+                    DAX query from a report visual
+                                 │
+                                 ▼
+                      table's storage mode
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                        ▼
+     Import                 Direct Lake              DirectQuery
+        │                        │                        │
+        ▼                        ▼                        ▼
+ VertiPaq scans a        VertiPaq scans Delta      DAX is translated to
+ cached copy loaded      columns paged in from     native SQL and run on
+ fully into memory       OneLake on demand         the source database
+        │                        │                        │
+        ▼                        ▼                        ▼
+ Refresh reloads the     Framing updates file      No refresh; the source
+ data on a schedule      pointers in seconds,      carries the query load
+ (8/day shared,          no data is copied         on every interaction
+  48/day capacity)
+        └────────────────────────┴────────────────────────┘
+                                 │
+                    A model mixing modes across tables is
+                    a composite model. Dual-mode tables
+                    answer from either side per query.
+```
 
-**Decision criteria:**
-- Use Import for datasets under 10 GB, or when data can tolerate 1-24 hour latency
-- Use DirectQuery for large datasets or real-time requirements, when the underlying source can handle query load
-- Use Composite for mixed scenarios combining fresh and reference data
-- Consider storage capacity (Import uses memory; DirectQuery uses source system resources)
+**Import mode** copies data into the model, where the VertiPaq engine compresses it and answers queries from memory. Compression of roughly ten to one is typical, so about 10 GB of source data lands near 1 GB in the model. The entire model must be loaded into memory to be queried. There is no partial load. That makes Import fast and flexible, since the full Power Query and DAX surface is available, but it caps model size at whatever memory the capacity allows and makes data only as fresh as the last refresh.
+
+**DirectQuery mode** stores only metadata and issues native queries to the source on every interaction. Model size limits stop applying and no refresh is needed, but the source database absorbs the query load, and both M and DAX are restricted to expressions that can be translated into a native query. Calculated tables are unavailable. Dashboard tiles over DirectQuery can update as often as every 15 minutes, and automatic page refresh is available only on DirectQuery sources.
+
+**Composite mode** mixes storage modes per table. Dimension tables typically sit in Import or Dual mode while a large fact table stays in DirectQuery. A Dual table behaves as either, and Power BI picks per query, which is what lets a slicer render from memory while the fact join still folds into a single native SQL statement.
+
+**Direct Lake** is a Fabric-only mode that reads [Delta tables in OneLake](https://learn.microsoft.com/en-us/fabric/fundamentals/direct-lake-overview){:target="_blank" rel="noopener noreferrer"} directly, paging columns into memory as queries need them. Queries run on VertiPaq, so performance resembles Import, but "refresh" is a metadata operation called framing that repoints the model at the newest Delta files and completes in seconds. Direct Lake comes in two variants. Direct Lake on OneLake can span multiple Fabric sources and never falls back. Direct Lake on SQL uses a single source's SQL analytics endpoint for discovery and permission checks, and falls back to DirectQuery when it cannot read a Delta table directly, such as for a non-materialized SQL view. Direct Lake requires a Fabric capacity and cannot use any gateway, so it only reaches cloud data already landed in OneLake.
+
+### Model Size Is a Licensing Boundary, Not a Technical One
+
+The most common architectural mistake here is treating Import mode as having some universal size ceiling. It does not. The ceiling is whatever license the workspace sits under.
+
+| Where the workspace runs | Max semantic model size |
+|---|---|
+| Shared capacity (Pro) | 1 GB, with a 10 GB cap on uncompressed data processed during refresh |
+| Premium Per User | 100 GB |
+| Fabric F2 to F8 | 3 GB |
+| Fabric F16 / F32 | 5 GB / 10 GB |
+| Fabric F64 / F128 / F256 | 25 GB / 50 GB / 100 GB |
+| Fabric F512 / F1024 and above | 200 GB / 400 GB |
+
+Memory must also be reserved for refresh and query execution, so the practical maximum sits below these numbers. A refresh roughly doubles a model's footprint, because the previous copy stays queryable while the new one is built.
+
+### Matching a Mode to the Workload
+
+Use Import when the model fits the capacity's memory budget and stakeholders accept data as fresh as the last scheduled refresh. Use DirectQuery when the data is too large to load or genuinely needs to be current on every interaction, and only when the source has been tested under report query load. Use Composite when a small set of tables needs freshness and the rest does not. Use Direct Lake when data already lands in OneLake as Delta tables and you have Fabric capacity, since it removes the refresh cycle entirely.
+
+Hybrid tables are the fourth option that gets overlooked. A hybrid table holds historical data in Import partitions and the most recent window in a DirectQuery partition, which you get by enabling the real-time option on an incremental refresh policy. Hybrid tables require a capacity workspace.
 
 ---
 
 ## Capacity and Licensing
 
-### Power BI Pro, Premium Per User, and Premium Capacity
+### Power BI Pro and Premium Per User
 
-Power BI has three licensing tiers that determine user consumption limits, performance capacity, and administrative features.
+**Power BI Pro** is a per-user license covering authoring, publishing, and sharing. Pro content runs on shared capacity, which means the 1 GB model ceiling, eight scheduled refreshes per day, and no reserved compute. Every person who views Pro content also needs a Pro license.
 
-**Power BI Pro** is per-user licensing. Each user with Pro pays a monthly seat fee and can author reports, create dashboards, and share content with other Pro users within a workspace. Pro users consume shared capacity compute resources.
+**Premium Per User (PPU)** is a per-user license that includes everything Pro has plus most capacity-only features, including 100 GB models, 48 refreshes per day, XMLA endpoint connectivity, incremental refresh, deployment pipelines, enhanced automatic page refresh, and the AI capabilities. What PPU does not include is multi-geo support, unlimited distribution, and Power BI Report Server.
 
-**Premium Per User (PPU)** is also per-user licensing but includes dedicated Premium compute for that user's content. PPU provides better isolation than shared capacity but costs more per user than Pro.
+PPU is often misread as buying dedicated compute for one user. It does not. It licenses Premium *features* per person, and every viewer of PPU content needs their own PPU license. If your goal is to let a large audience read reports without paying per seat, PPU is the wrong instrument.
 
-**Premium Capacity** is organization-wide licensing where the company reserves dedicated computational resources (compute nodes). All content in Premium capacity workspaces runs on dedicated resources. Premium capacity is cost-effective when you have many users consuming dashboards (viewers don't need Pro licenses).
+### Fabric Capacity and the P SKU Retirement
 
-**Licensing comparison:**
+Microsoft is [retiring Power BI Premium per-capacity P SKUs](https://learn.microsoft.com/en-us/power-bi/support/premium-migration-overview){:target="_blank" rel="noopener noreferrer"}. New P SKUs are no longer sold, and each existing subscription ends at the end of its current agreement term. Enterprise Agreement customers with an active agreement can keep renewing existing P capacity annually until the EA term ends, but customers with expiring agreements cannot add or purchase new P capacity. Sovereign clouds are excluded for now, since Fabric is not available there. Per-user Pro and PPU licenses are unaffected, and so are the EM and A embedding SKUs.
 
-| Aspect | Power BI Pro | Premium Per User | Premium Capacity |
-|--------|---|---|---|
-| **Cost model** | Per-user monthly seat | Per-user monthly seat | Monthly reservation of compute |
-| **Viewer licenses** | Need Pro license | Need Pro license | Can be free (view-only) |
-| **Capacity** | Shared resources | Dedicated to user | Dedicated to organization |
-| **Recommended use** | Small teams, light sharing | Individual analysts needing isolation | Enterprise with many viewers |
-| **Cost threshold** | 20+ users sharing | 50+ premium users | 100+ total users |
+If a P SKU lapses without an F SKU in place, the capacity enters a 30-day grace period. From day 31 interactive operations are throttled, and from day 91 all operations are rejected. Data is retained but unreachable until the workspaces are reassigned or the capacity is deleted.
 
-### Fabric Capacity and Relationship to Power BI Premium
+Migration is manual. You buy the Fabric F SKU first, reassign workspaces, validate, and only then cancel the P subscription. The mapping is by capacity units: P1 to F64, P2 to F128, P3 to F256, P4 to F512, and P5 to F1024. Two operational differences survive the move. Autoscale does not exist on F SKUs, replaced by on-demand resizing through the Azure portal, and billing moves from Microsoft 365 commitment billing to Azure, which brings pay-as-you-go rates, pause and resume, reservations, Azure tags for chargeback, and Microsoft Azure Consumption Commitment eligibility.
 
-Microsoft Fabric is a unified analytics platform that consolidates Power BI, Data Factory, Data Engineering, Data Science, and Real-Time Analytics under a single capacity model. Power BI content running in Fabric capacity uses the same compute resources as other Fabric workloads (data pipelines, notebooks, real-time events).
+### The F64 Threshold Governs Viewer Licensing
 
-Fabric capacity pricing is per compute unit (CU), with each CU providing a fixed amount of monthly compute. Unlike separate Power BI Premium, Fabric allows you to allocate compute flexibly across different analytics workloads.
+On F64 and larger, users with a free license and the Viewer role can consume content, exactly as they could on P SKUs. On F2 through F32, every viewer still needs a Pro or PPU license. That single boundary, not a headcount rule of thumb, is what determines whether capacity or per-user licensing is cheaper for a given audience.
 
-For existing Power BI Premium customers, migration to Fabric capacity is typically transparent; Power BI workspaces and content migrate without changes, but you gain shared compute with other Fabric services.
+```
+Do viewers need to read content without a paid per-user license?
+│
+├─ No ──▶ Do authors need Premium features (XMLA, incremental refresh,
+│         100 GB models, deployment pipelines)?
+│         ├─ No  ──▶ Power BI Pro for every author and viewer
+│         └─ Yes ──▶ Premium Per User for every author and viewer
+│
+└─ Yes ─▶ Are the viewers inside your tenant?
+          ├─ Yes ──▶ Fabric capacity, F64 or larger
+          │          (below F64 every viewer still needs Pro or PPU)
+          └─ No  ──▶ App-owns-data embedding on a Fabric F SKU,
+                     or a Power BI Embedded A SKU
+```
 
-### Shared Capacity vs Dedicated Capacity Implications
+### Capacity Limits by SKU
 
-**Shared capacity:**
-- Resources are shared across all organizations on the platform
-- Performance can vary depending on other users' workloads
-- Suitable for development, testing, and light production use
-- No SLA guarantees
-- Cost-effective for small organizations or individual users
+Beyond model size, each SKU caps concurrent DirectQuery connections, live connection rate, memory per query, and model refresh parallelism. F64 allows 50 concurrent DirectQuery connections per model and 40 parallel model refreshes, while F2 allows 5 and 1. Under sustained overload a capacity throttles interactive operations, delaying report rendering before it rejects anything, so the first symptom of an undersized capacity is usually slow reports rather than errors.
 
-**Dedicated Premium capacity:**
-- Reserved compute resources exclusively for your organization
-- Consistent, predictable performance
-- SLA guarantees (99.9% availability)
-- Can scale independently from user licenses
-- Higher baseline cost but better economics at scale
+One limit applies regardless of SKU. Visuals that take longer than 225 seconds to render time out and do not display.
 
-**Rule of thumb:** If you have more than 100 total Power BI users, dedicated capacity is typically more cost-effective than Pro licensing for all users.
+### Embedded Analytics for ISVs
 
-### When Premium Capacity Is Justified
+Power BI [embedded analytics](https://learn.microsoft.com/en-us/power-bi/developer/embedded/embedded-analytics-power-bi){:target="_blank" rel="noopener noreferrer"} comes in two shapes, and the naming matters because the authentication model differs completely.
 
-Premium capacity is justified when:
-- You have more than 100 business users needing regular dashboard access
-- You have expensive dashboards with sub-second refresh requirements
-- You use real-time or streaming datasets requiring constant compute
-- You embed analytics in customer-facing applications and want isolated performance
-- You have large semantic models (> 10 GB) that would exceed shared capacity limits
+**Embed for your customers**, also called app-owns-data, is the ISV scenario. Your application authenticates to Power BI non-interactively using a service principal or master user, and end users never sign in to Power BI or hold a license. This is how a SaaS product ships analytics to its own customers.
 
-For organizations with fewer users or light usage patterns, Pro licensing per user is more cost-effective.
+**Embed for your organization**, also called user-owns-data, is the internal scenario. Users authenticate against Microsoft Entra ID and each needs a Power BI license, seeing only content they already have access to.
 
-### Embedded Capacity for ISV Scenarios
+There is also **secure embed**, a no-code URL or iframe embed inside a portal, where the viewer still needs their own license.
 
-**Power BI Embedded** is a capacity designed for independent software vendors (ISVs) building analytics into customer-facing applications. Unlike Premium capacity, Embedded is capacity-only; there are no per-user Pro or PPU licenses. Customers see your analytics embedded in your application without separate Power BI accounts.
-
-Embedded capacity scales horizontally with application demand. You purchase A-series SKUs (A1, A2, etc.) based on expected load, and scale up or down based on usage.
-
-Embedded is the standard approach for SaaS companies embedding analytics into their products.
+For capacity, embedding is covered by every Fabric F SKU, which removes the need for a separate SKU family. Power BI Embedded A SKUs remain available as an Azure offer and are not part of the P SKU retirement, and they retain the operational advantage of hourly billing with pause and resume. For a new build, an F SKU is the simpler choice because it covers embedding and every other Fabric workload on one capacity.
 
 ---
 
 ## Architecture Patterns
 
-### Enterprise BI Architecture: Centralized Datasets
+### Enterprise BI: A Central Certified Semantic Model
 
-The enterprise BI pattern establishes a shared semantic model (dataset) that represents authoritative metrics. Business teams author reports against this shared model, ensuring consistency.
+The enterprise pattern establishes one semantic model per subject area, owned by a central analytics team and marked Certified. Business teams author reports against it rather than building their own models. Data flows from source systems through an orchestration layer like Azure Data Factory, Fabric pipelines, or Synapse pipelines into a dimensional store, and the semantic model sits on top.
 
-**Architecture:**
-```
-Data Sources (databases, data lakes, SaaS)
-    ↓
-ETL/ELT Pipeline (Azure Data Factory, Synapse, or Dataflows)
-    ↓
-Semantic Model (centralized, owned by Analytics team)
-    ↓
-Reports (authored by business analysts against shared model)
-    ↓
-Dashboards (curated from reports for executives)
-```
+The pattern buys metric consistency and a single maintenance point, and it is the only structure in which impact analysis is meaningful, because dependencies actually run through the shared model. The cost is that the central team becomes the queue for every new metric, which is a poor fit for organizations whose business units genuinely need different definitions.
 
-**Advantages:**
-- Consistent metrics across the organization
-- Centralized ownership and maintenance of data definitions
-- Reduces duplication and confusion about "the single source of truth"
+### Self-Service BI on Managed Semantic Models
 
-**Challenges:**
-- Central analytics team becomes a bottleneck for report creation
-- Difficult to iterate quickly on new metrics; requires central team approval
-- Not suitable for organizations with siloed business units
+The middle path has IT publish curated core models that business teams can read but not modify, using Build permission to allow report authoring against them. Teams get autonomy over reports while metric definitions stay governed, and endorsement identifies which of the resulting reports deserve wider circulation.
 
-### Self-Service BI with Managed Datasets
+It works when the core models are designed well enough to cover most questions. When they are not, teams quietly build their own models anyway and the governance benefit evaporates.
 
-Self-service BI balances governance with agility. IT provides curated core datasets covering common use cases (sales, finance, operations). Business teams author their own reports and dashboards from these core datasets but cannot modify them. This allows team autonomy while maintaining governance.
+### Embedded Analytics Inside a Product UI
 
-**Architecture:**
-```
-Core Datasets (created by IT, read-only for business teams)
-    ↓
-Business Team Reports (created by domain experts)
-    ↓
-Business Team Dashboards
-    ↓
-Endorsement + Lineage (IT reviews and certifies valuable reports)
-```
+Embedding puts reports inside your application's interface so users never see Power BI as a separate product. The architectural work is in three places. The application handles its own authentication and calls Power BI with a service principal to generate embed tokens. Row-level security must be enforced through the embed token's effective identity, since every customer's data typically lives in one model. And report performance becomes your product's performance, which puts real pressure on model design.
 
-**Advantages:**
-- Business teams can build reports without waiting for central IT
-- Core datasets ensure consistency and proper governance
-- Clear separation between curated data (IT) and analysis (business)
-- Endorsement process identifies valuable reports for broader use
+### Real-Time Reporting After the Streaming Retirement
 
-**Challenges:**
-- Requires well-designed core datasets upfront
-- Business teams may still create duplicate datasets if core datasets don't cover their needs
-- Endorsement process adds overhead
+Power BI's original real-time streaming feature is being retired. Creation of new push semantic models, streaming semantic models, PubNub streaming semantic models, and streaming data tiles [remains enabled until 31 October 2027](https://learn.microsoft.com/en-us/power-bi/connect-data/service-real-time-streaming){:target="_blank" rel="noopener noreferrer"}, after which new ones cannot be created. Existing models are unaffected. Microsoft directs new real-time work to Real-Time Intelligence in Microsoft Fabric.
 
-### Embedded Analytics
+The three legacy types behave differently, which matters if you are maintaining one. A **push semantic model** writes to a real database in the service, so you can build full reports on it, subject to a limit of one request per second at 16 MB per request and one million rows per hour. A **streaming semantic model** holds data in a temporary cache for about an hour with no underlying database, so it supports only custom streaming dashboard tiles and no report visuals, filtering, or modeling. A **PubNub streaming semantic model** stores nothing in Power BI and reads a PubNub stream from the browser client. When Azure Stream Analytics creates the output model it uses both push and streaming behavior with a 200,000-row first-in-first-out retention policy.
 
-Power BI Embedded allows applications to embed dashboards and reports directly into your application user interface. End users see analytics as part of your product without separate Power BI access.
+For anything new, the current options are Direct Lake over data landed by a Fabric eventstream, DirectQuery with automatic page refresh, or Real-Time Intelligence dashboards.
 
-**Common scenarios:**
-- SaaS applications embedding customer dashboards
-- Enterprise applications showing operational insights
-- Customer portals showing personalized analytics
+### Paginated Reports for Operational and Regulatory Output
 
-**Architecture:**
-```
-Power BI Semantic Model
-    ↓
-Power BI Report
-    ↓
-Embedded in Application UI (using Power BI Embedded API)
-    ↓
-End User (no Power BI license required; application provides access)
-```
+Paginated reports produce fixed-layout, print-oriented output where every row appears across as many pages as needed. That covers financial statements, regulatory submissions, invoice runs, and any document where layout is the requirement rather than interactivity.
 
-**Advantages:**
-- Seamless analytics experience within applications
-- No separate Power BI adoption burden
-- Scalable to thousands of external users without licensing overhead
-
-**Considerations:**
-- Requires application development effort (API integration, authentication)
-- Data security must be enforced (row-level security, object-level security)
-- Performance depends on efficient semantic models
-
-### Real-Time Analytics with Streaming and Push Datasets
-
-Power BI supports real-time metrics through streaming and push datasets. Streaming datasets receive continuous data streams (sensor readings, application events, stock prices) and update dashboards with near-real-time metrics.
-
-**Streaming datasets architecture:**
-```
-Data Source (device, application, API)
-    ↓
-Streaming Dataset (receives push events)
-    ↓
-Real-Time Report
-    ↓
-Dashboard (updates as new data arrives)
-```
-
-**Characteristics:**
-- Data arrives in real-time (latency of seconds)
-- 10 GB retention window (old data is automatically purged)
-- Lower latency than scheduled refresh but data is not persisted long-term
-- Suitable for live metrics (network traffic, application events, monitoring)
-
-**Considerations:**
-- Cannot be used for complex analysis (no aggregations or grouping)
-- Best for simple metrics that feed live dashboards
-- Data retention is limited; combine with Import or DirectQuery for historical analysis
-
-### Paginated Reports for Operational and Regulatory Reporting
-
-Paginated reports are designed for printing, regulatory compliance, and operational reporting. Unlike interactive Power BI reports, paginated reports have fixed layouts with precise formatting for regulatory submissions and formal documents.
-
-**Use cases:**
-- Financial statements (balance sheets, income statements)
-- Regulatory compliance reports (SOX, HIPAA-required formats)
-- Operational reports (invoice lists, transaction exports)
-- Formatted documents for distribution (PDF exports)
-
-Paginated reports are designed differently than Power BI reports (layout is paramount vs interactivity) and require separate authoring tools.
+They are authored in [Power BI Report Builder](https://learn.microsoft.com/en-us/power-bi/paginated-reports/paginated-reports-report-builder-power-bi){:target="_blank" rel="noopener noreferrer"}, a separate free download, and they have no underlying data model. Data sources and datasets are embedded in the report definition itself, though a Power BI semantic model can serve as a source. Licensing now matches regular Power BI reports rather than requiring Premium. A free license publishes to My Workspace, and Pro or PPU publishes elsewhere with at least the Contributor role. Export formats include Excel, Word, PowerPoint, PDF, accessible PDF, CSV, XML, and MHTML. Paginated report visuals cannot be pinned to dashboards.
 
 ---
 
 ## Integration with Azure Data Services
 
-### Synapse Analytics as a Data Source
+### Synapse Analytics as a Source
 
-[Synapse Analytics](https://learn.microsoft.com/en-us/azure/synapse-analytics/overview-what-is){:target="_blank" rel="noopener noreferrer"} is Azure's unified analytics platform combining data warehousing, big data, and real-time analytics. Power BI integrates with Synapse as a source for semantic models.
+[Synapse Analytics](https://learn.microsoft.com/en-us/azure/synapse-analytics/overview-what-is){:target="_blank" rel="noopener noreferrer"} remains a supported Power BI source, with dedicated SQL pools serving dimensional models over Import or DirectQuery and Spark output typically materialized to a SQL table before Power BI reads it. Every current Synapse SQL documentation page now carries a successor notice naming Microsoft Fabric Data Warehouse as the destination for new warehousing work, with an upgrade path and a migration assistant for dedicated pools. Synapse is not retired and has no announced end date, but a greenfield warehouse feeding Power BI should evaluate Fabric first, particularly because Fabric unlocks Direct Lake.
 
-**Synapse as Power BI source:**
+### Fabric Lakehouse and OneLake
 
-**Synapse SQL Dedicated Pools (data warehouse):** Use DirectQuery for real-time reporting from structured warehouse tables, or Import for faster report performance when data latency is acceptable.
+Where the data already lands in Fabric, Power BI reads it without a copy. A lakehouse or warehouse writes Delta tables to OneLake, and a Direct Lake semantic model points at them. This removes the refresh window from the architecture entirely, which is the main reason to prefer it over an Import model on the same data.
 
-**Synapse Spark Pools:** Less commonly used directly from Power BI; typically data is processed in Spark and materialized to a SQL table for Power BI consumption.
-
-**Integration pattern:**
-```
-Data Sources
-    ↓
-Synapse Pipelines (orchestration and ELT)
-    ↓
-Synapse SQL Pool (dimensional model, facts and dimensions)
-    ↓
-Power BI Semantic Model (Import or DirectQuery)
-    ↓
-Power BI Reports and Dashboards
-```
-
-This pattern establishes Synapse as the authoritative data warehouse, with Power BI providing visualization and interactive analysis on top.
+Import models get a partial version of this through OneLake integration, which writes an Import model's tables out to Delta in OneLake automatically. Other Fabric workloads can then read them through shortcuts, SQL, and notebooks without a migration.
 
 ### Azure Data Lake Storage via Dataflows
 
-[Azure Data Lake Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-introduction){:target="_blank" rel="noopener noreferrer"} (ADLS) is a scalable repository for structured and unstructured data. Power BI dataflows can read from and write to ADLS, creating a bridge between Power BI transformations and downstream processing.
+Dataflow Gen1 can persist its output to your own Azure Data Lake Storage Gen2 account in Common Data Model format, making transformed data readable by tools outside Power BI. Dataflow Gen2 writes to Fabric destinations as Delta instead, which is the better target when Fabric is in the picture, since Delta output is directly consumable by Direct Lake, Spark, and the SQL analytics endpoint.
 
-**Dataflow-to-ADLS pattern:**
-```
-Raw Data Sources
-    ↓
-Power BI Dataflows (transformations using Power Query)
-    ↓
-Azure Data Lake Storage (transformed data available for other tools)
-    ↓
-Synapse, Azure Machine Learning, or other tools can consume
-```
+### Azure SQL Database and Cosmos DB
 
-This pattern enables self-service data preparation in Power BI while making transformed data available to other analytics workloads.
+Azure SQL Database works well as a Power BI source in either Import or DirectQuery mode, and Import is the usual choice unless freshness requirements force otherwise.
 
-### Azure SQL Database and Cosmos DB Connections
+Cosmos DB does not require an intermediate export. The Azure Cosmos DB v2 connector supports Import and DirectQuery, with DirectQuery pushing query execution down to the container. For analytical workloads that would otherwise consume request units, the better pattern is Fabric mirroring, which continuously replicates Cosmos DB data into OneLake in near real-time without consuming RUs or affecting the transactional workload, and Power BI then reads it in Direct Lake mode.
 
-Power BI connects directly to Azure SQL Database and Cosmos DB for semantic models.
+### Azure Analysis Services vs Power BI Semantic Models
 
-**Azure SQL Database:** High-performance relational database commonly used as the source for Power BI semantic models. Can use Import or DirectQuery. Most organizations use Import for better performance unless real-time requirements mandate DirectQuery.
+[Azure Analysis Services](https://learn.microsoft.com/en-us/azure/analysis-services/analysis-services-overview){:target="_blank" rel="noopener noreferrer"} is a separate PaaS tabular modeling service with Developer, Basic, and Standard tiers, sized by query processing units and memory. It has no announced retirement, and Microsoft supplies an automated migration path from AAS to Power BI semantic models on Fabric capacity, PPU, or Power BI Embedded.
 
-**Cosmos DB:** NoSQL database with multiple APIs (SQL, MongoDB, Cassandra, Gremlin). Power BI can connect to Cosmos DB but typically requires exporting data to a more structured format (CSV, Parquet) first, as Power BI expects tabular schemas.
+The historical argument for AAS, that non-Power BI clients need to connect, has weakened considerably because Power BI semantic models on capacity or PPU expose an XMLA endpoint that Excel, SSMS, and third-party tools connect to the same way. What AAS still offers is query replica scale-out, up to seven additional replicas in a query pool for read concurrency, and independent pause and resize of a server that serves clients other than Power BI. For new work on a Microsoft-centric analytics stack, Power BI semantic models are generally the better default because governance, endorsement, lineage, and capacity management are unified.
 
-### Azure Analysis Services vs Power BI Premium Semantic Models
+### Deployment Pipelines for Content Promotion
 
-[Azure Analysis Services](https://learn.microsoft.com/en-us/azure/analysis-services/analysis-services-overview){:target="_blank" rel="noopener noreferrer"} is a dedicated semantic model service separate from Power BI. It runs on dedicated compute and can serve reports and applications independent of Power BI.
+[Deployment pipelines](https://learn.microsoft.com/en-us/fabric/cicd/deployment-pipelines/intro-to-deployment-pipelines){:target="_blank" rel="noopener noreferrer"} promote content between workspaces. A pipeline can have between two and ten stages, defaulting to three named Development, Test, and Production, and each stage is backed by a workspace.
 
-**When to use Analysis Services:**
-- Legacy environments with existing AS infrastructure
-- Non-Power BI clients need to connect (Excel, third-party tools)
-- Semantic model requires extremely high concurrency
+Promotion works through item pairing. An item deployed from one stage is paired with its counterpart in the next, and only paired items overwrite each other. Two items that look identical but were never paired produce a duplicate rather than an update, which is the most common surprise when a pipeline is retrofitted onto existing workspaces. Deployment rules let you swap data source connections and parameter values per stage so a Test model points at Test data.
 
-**When to use Power BI Premium semantic models:**
-- Modern analytics stacks built primarily on Power BI
-- Integrated governance and endorsement needed
-- Simplified capacity management (same capacity for models and reports)
-
-For new implementations, Power BI Premium semantic models are generally preferred over standalone Analysis Services.
-
-### Deployment Pipelines for Dev/Test/Prod Content Promotion
-
-[Deployment pipelines](https://learn.microsoft.com/en-us/power-bi/create-reports/deployment-pipelines-overview){:target="_blank" rel="noopener noreferrer"} enable safe promotion of Power BI content (reports, dashboards, datasets) from development to production workspaces with validation at each stage.
-
-**Deployment pipeline stages:**
-```
-Development Workspace → Validation Stage → Production Workspace
-```
-
-During promotion, you can configure parameter replacement (change connection strings, data source paths) and validation rules (check that datasets are not deprecated, reports are endorsed).
-
-**Advantages:**
-- Developers validate changes before production deployment
-- Parameters enable environment-specific configurations
-- Audit trail of what was deployed and when
-- Rollback capability to previous versions
+Deployment pipelines are not version control and offer no rollback to a prior version. Git integration is the versioning mechanism, and the two are designed to be used together. Note also that from 12 February 2026, pipelines stopped supporting semantic models not upgraded to Enhanced Metadata.
 
 ---
 
 ## Governance and Security
 
-### Row-Level Security and Object-Level Security
+### Row-Level and Object-Level Security
 
-Row-level security (RLS) restricts which data each user can see in Power BI. Define rules linking user identities to data rows; queries automatically filter results.
+Row-level security restricts which rows a user sees. You define roles in the semantic model, write a DAX filter expression for each, and assign users or groups to roles. Because the filter lives in the model, it applies to every report built on that model, which is exactly why a shared semantic model is the right place to enforce it.
 
-**RLS architecture:**
-```
-User logs in to Power BI
-    ↓
-Identity checked (email, Azure AD group)
-    ↓
-RLS rules evaluate (if user belongs to "Sales-NA", show only North America rows)
-    ↓
-Query results filtered automatically
+A typical dynamic filter looks up the signed-in user in a mapping table:
+
+```dax
+[Region] = LOOKUPVALUE(
+    UserRegion[Region],
+    UserRegion[Email], USERPRINCIPALNAME()
+)
 ```
 
-**RLS implementation:**
-- Define roles in the semantic model (e.g., "Sales-NA", "Finance")
-- Create DAX filters that restrict rows (e.g., [Region] = LOOKUPVALUE(UserRegion, UserEmail, USERNAME()))
-- Assign users to roles
-- RLS is enforced consistently across all reports using that semantic model
+Prefer `USERPRINCIPALNAME()` over `USERNAME()`, since the former reliably returns the UPN in both Desktop and the service. RLS applies to users in the Viewer role; anyone with Contributor or higher bypasses it, which is why role assignment and RLS design have to be reviewed together.
 
-[Object-level security (OLS)](https://learn.microsoft.com/en-us/power-bi/enterprise/object-level-security-overview){:target="_blank" rel="noopener noreferrer"} restricts which columns and measures users can see. Hide sensitive columns (salary, social security number) from certain roles.
+[Object-level security](https://learn.microsoft.com/en-us/power-bi/enterprise/object-level-security-overview){:target="_blank" rel="noopener noreferrer"} restricts columns and measures rather than rows, hiding salary or margin columns from roles that should not see them. One report can then serve several audiences without duplicating the logic.
 
-**OLS use case:**
-- Finance role sees all columns; Operations role cannot see salary columns
-- Sensitive measures (profit margin) visible only to executives
-- Simplifies report design; same report serves multiple roles without duplicating logic
+### Sensitivity Labels and What They Actually Enforce
 
-### Sensitivity Labels and Data Loss Prevention
+Power BI integrates with Microsoft Purview Information Protection, and the mechanics are easy to overstate. A [sensitivity label](https://learn.microsoft.com/en-us/fabric/governance/information-protection){:target="_blank" rel="noopener noreferrer"} by itself is a classification. It does not block anything. Access control comes from the Purview protection or publishing policy attached to the label, and blocking export to Excel is a Power BI tenant setting, not a property of a label named "Confidential".
 
-Power BI integrates with Microsoft's sensitivity labeling system. Mark datasets and reports with labels (Confidential, Restricted, Public), and enforce restrictions based on labels.
+What labels genuinely provide is persistence and propagation. Labels flow downstream to dependent items automatically, semantic models can inherit a label from a labeled data source, and the label plus its encryption travels with data through supported export paths including Excel, PDF, PowerPoint, Analyze in Excel, and `.pbix` download. Export to CSV or text files is not a supported path, and neither are cross-tenant scenarios, so those exits remain unprotected. Applying labels to Power BI items requires a Pro or PPU license on top of the Purview licensing.
 
-**Sensitivity label enforcement:**
-- **Confidential datasets** cannot be exported to Excel
-- **Restricted datasets** cannot be downloaded or embedded externally
-- **Public datasets** have no restrictions
-- Labels flow from the dataset to reports; reports inherit data sensitivity
+### Endorsement: Promoted, Certified, and Master Data
 
-### Endorsement: Certified and Promoted Content
+Endorsement marks trustworthy content and gives it precedence in search and discovery. There are three badges, not two.
 
-Endorsement identifies trustworthy, high-quality content in Power BI.
+**Promoted** means the creators consider the item ready for reuse. Any user with write permission on the item can promote it.
 
-**Promoted content:** Workspace member marks content as promoted (recommended). Typically indicates "this is the main report for this topic" or "this dataset is well-designed and should be reused."
+**Certified** means an organization-authorized reviewer has confirmed the item meets quality standards. Any user can *request* certification, but only users a Fabric administrator has specified can grant it, and that authority can be delegated per domain so different domains have different reviewers.
 
-**Certified content:** Administrator certifies content (typically requires validation by a governance team). Indicates "this report has been validated for accuracy and should be trusted organization-wide."
+**Master data** marks an item as the authoritative source for a category of organizational data such as product codes or customer lists. It applies only to items that hold data, like semantic models and lakehouses, and only administrator-specified users can apply it.
 
-Endorsed content appears at the top of search results and is prioritized in workspace discovery.
+Certification and master data endorsement must be enabled by a Fabric administrator before either appears. Every Fabric and Power BI item except Power BI dashboards can be promoted or certified.
 
 ### Lineage and Impact Analysis
 
-Lineage shows the dependency chain: which reports use which semantic models, which semantic models connect to which data sources.
+Lineage view shows the dependency chain from data sources through dataflows and semantic models to reports and dashboards. Impact analysis reverses the question and reports how many downstream items a change would touch, and which workspaces they live in.
 
-Impact analysis estimates the effect of changes. Before modifying a semantic model, impact analysis shows "X reports will be affected by this change."
+The practical use is a pre-change gate. Before altering or removing a column in a shared semantic model, impact analysis identifies the reports that would break, and it can notify their owners. Its accuracy depends on dependencies actually flowing through Power BI items, so a report that reaches around the model to query the source directly will not appear.
 
-**Use case:** Before modifying a column in a semantic model, use impact analysis to identify all downstream reports, then validate that changes won't break them.
+### Tenant Settings as Guard Rails
 
-### Tenant-Level Admin Settings and Governance Policies
-
-Power BI administrators configure tenant-wide policies controlling user behavior and security.
-
-**Common governance settings:**
-- Can users create new semantic models or only in specific workspaces?
-- Can users export to Excel or PDF?
-- Can external users be invited to workspaces?
-- Can semantic models be published to shared capacity or only Premium?
-- Are certain data connectors disabled for security?
-
-These tenant-level controls establish guard rails without requiring individual workspace administrators to enforce policies.
+Fabric administrators configure tenant-wide policies that set the outer boundary of what workspace admins can permit. Common levers include who can create workspaces and semantic models, whether export to Excel, PDF, or `.pbix` is allowed, whether external guest users can be invited, whether publish to web is permitted, and which connectors are available. Most settings can be scoped to security groups, which is what makes them usable in a large tenant rather than a blunt on-off switch.
 
 ---
 
 ## Performance and Optimization
 
-### Data Model Design: Star Schema and Wide Table Pitfalls
+### Star Schema Design Is a Compression Decision
 
-Semantic model design affects report performance directly. Power BI uses column-store storage and works best with normalized star schemas.
+VertiPaq is a columnar engine, and it compresses a column better the fewer distinct values that column holds. That single property is why star schemas outperform wide tables in Power BI.
 
-**Star schema design:**
-```
-Fact Table (transactions, events, measurements)
-    ↓
-├─ Relationships to Dimension Tables (products, customers, dates)
-└─ Dimension Tables contain attributes for filtering and grouping
-```
+A star schema keeps measurements in a narrow fact table and descriptive attributes in dimension tables:
 
-Example:
-- **FactSales** (order_id, product_id, customer_id, date_id, amount)
-- **DimProduct** (product_id, name, category, subcategory)
-- **DimCustomer** (customer_id, name, segment, region)
-- **DimDate** (date_id, year, month, day, quarter)
+- **FactSales** with order id, product key, customer key, date key, and amount
+- **DimProduct** with product key, name, category, subcategory
+- **DimCustomer** with customer key, name, segment, region
+- **DimDate** with date key, year, month, day, quarter
 
-Reports filter by attributes (select products in "Electronics" category) and aggregate fact measurements (sum of amount by category).
+Reports filter on dimension attributes and aggregate fact measures, and relationships propagate the filter. The alternative, a denormalized table with hundreds of columns, repeats every product name and category on every fact row. Those high-cardinality repeated strings compress poorly, the model balloons in memory, and refresh reloads the whole structure because there is nothing smaller to reload.
 
-**Star schema advantages:**
-- Fact tables are normalized (each fact row is independent)
-- Relationships enable natural filtering (select product → filter facts to that product)
-- Column-store compression is efficient
-- Query performance is predictable
+Design measures in DAX rather than materializing them as columns. A calculated column is stored and consumes memory in every row; a measure is computed at query time and costs nothing at rest.
 
-**Wide table pitfall:**
-- Denormalized tables with hundreds of columns
-- Redundant attributes repeated across rows (product name, category denormalized into every fact row)
-- Poor compression; large in-memory size
-- Difficult to maintain; updates require reloading the entire table
-- Slow queries due to large data structures
+### Aggregations for Large DirectQuery Models
 
-**Best practice:** Use normalized star schemas. Let Power BI handle the joins; compression will be efficient.
+[User-defined aggregations](https://learn.microsoft.com/en-us/power-bi/transform-model/aggregations-advanced){:target="_blank" rel="noopener noreferrer"} cache a summarized version of a large table in memory so summary queries never reach the source. The critical constraint is one many designs miss: **the detail table must use DirectQuery storage mode, not Import.** Aggregations exist to make DirectQuery models interactive, so a fully imported model gains nothing from them.
 
-### Aggregations for Large-Scale Datasets
+The aggregation table is normally set to Import mode, related dimension tables move to Dual, and the aggregation table is hidden. Consumers query the detail table and never reference the aggregation, and the engine redirects the query when the requested grain is covered. Queries at a finer grain fall through to DirectQuery automatically. A precedence value lets several aggregation tables at different grains be considered in order.
 
-For very large datasets (100+ million rows), even optimized queries can be slow. Aggregations pre-calculate common summaries.
+Row-level security has a specific requirement here. An RLS expression must filter both the aggregation table and the detail table, since answering from an aggregation the filter cannot reach would leak data. Filtering only the aggregation table is rejected outright.
 
-**Aggregation strategy:**
-```
-Detailed Fact Table (100 million rows; slow to query)
-    ↓
-Aggregation Table (pre-calculated summaries by day, product, customer)
-    ↓
-Query optimizer chooses aggregation or detail table based on query
-```
+Automatic aggregations are a separate capacity feature that creates and maintains these tables from observed query patterns rather than by hand.
 
-Power BI can automatically choose to query the aggregation table for summary queries (faster) and detail table for granular queries (more complete).
+### Query Folding
 
-### Query Folding in Dataflows and Power Query
+Query folding is Power Query pushing transformation steps down into the source as native query syntax. Filter rows where amount exceeds 100 against a SQL source and the filter becomes a `WHERE` clause executed by the database, so only matching rows cross the wire. Break folding and Power Query loads the full table and filters in memory afterwards.
 
-Query folding is optimization where dataflow transformations are pushed down to the data source (executed there) rather than loading raw data and transforming in Power BI.
+Steps fold when they have a native equivalent. Custom M functions, some merges, and anything referencing a non-foldable prior step will break the chain, and every step after the break also runs locally. Check folding with the View Native Query option in Power Query and with Power Query diagnostics, and treat the first non-folding step as the point to fix, since nothing after it can recover.
 
-**Folded query example:**
-```
-Dataflow transformation: Filter orders where amount > $100
-    ↓
-If the source is SQL, this translates to: WHERE Amount > 100 (executed in SQL)
-    ↓
-Only filtered rows are transferred to Power BI (efficient)
-```
+### Incremental Refresh and Hybrid Tables
 
-**Non-folded transformation:**
-```
-Load all orders → Filter in Power BI → Remove 99% of data (inefficient)
-```
+Incremental refresh partitions a table by date so each refresh reloads only a recent window instead of the whole history. A policy that keeps five years of history and refreshes ten days turns a multi-hour reload into minutes, and it is the difference between a large Import model being viable and not.
 
-**Query folding recommendations:**
-- Use native SQL, database functions when possible
-- Avoid complex custom functions that cannot be translated to SQL
-- Test with Power Query diagnostics to verify folding is occurring
+Enabling the real-time option on that policy adds a DirectQuery partition on top of the imported ones, producing a hybrid table where historical data is served from memory and the newest rows come straight from the source. A hybrid table can hold many Import partitions but only one DirectQuery partition, and hybrid tables require a capacity workspace.
 
-### Incremental Refresh for Large Datasets
+### Monitoring with the Fabric Capacity Metrics App
 
-Incremental refresh loads only new or changed data rather than reloading the entire dataset on each refresh. Instead of processing 10 million historical rows every night, load only the 1,000 new rows created today.
+The [Microsoft Fabric Capacity Metrics app](https://learn.microsoft.com/en-us/fabric/enterprise/metrics-app){:target="_blank" rel="noopener noreferrer"} is the tool for capacity health, and it supersedes the older Premium metrics app. A capacity admin installs it and can share the report with others.
 
-**Incremental refresh configuration:**
-```
-Historical data partition (loaded once, rarely updated)
-    ↓
-Recent data partition (reloaded daily)
-    ↓
-User queries see both partitions combined
-```
+Its pages answer distinct questions. The Health page ranks capacities by consumption and flags throttling or rejected queries. The Compute page gives a 14-day view of capacity unit consumption broken down by item and operation. The Storage page covers 30 days including soft-deleted data. The Timepoint pages drill into a specific 30-second interval to identify which interactive or background operations caused an overload.
 
-Refresh time drops from hours to minutes. This is essential for large datasets.
-
-### Monitoring with Premium Metrics App
-
-Power BI Premium includes a [capacity metrics app](https://learn.microsoft.com/en-us/power-bi/enterprise/service-premium-metrics-app){:target="_blank" rel="noopener noreferrer"} providing visibility into compute utilization, query performance, and refresh reliability.
-
-**Metrics provided:**
-- CPU time consumed by queries and refreshes
-- Query duration percentiles (how long reports take to load)
-- Refresh duration and failure rates
-- Timeouts and out-of-memory events
-- Number of concurrent users
-
-Monitor these metrics to identify performance bottlenecks and rightsize capacity.
+Two limitations shape how you use it. Data lands 10 to 15 minutes behind the activity, and the app has no alerting, so alerts on capacity health need Fabric capacity events in Real-Time hub instead. The app does not support PPU, which has no capacity to monitor.
 
 ---
 
-## AWS QuickSight Comparison
+## Comparison with Amazon Quick Suite
 
-| Concept | AWS QuickSight | Power BI |
-|---------|---|---|
-| **Authoring experience** | Cloud web-based (desktop tool beta) | Power BI Desktop (rich, feature-complete) |
-| **Data modeling** | Dataset definitions in cloud. Limited semantic depth | Full semantic model with DAX. Star schema design |
-| **Data transformation** | Minimal (use Glue, Athena for preprocessing) | Power Query with M language and UI |
-| **Self-service capability** | Limited. Typically IT-driven | Native self-service for business users |
-| **Per-user licensing** | Standard or Enterprise seat | Pro, PPU, or Premium capacity |
-| **Capacity pricing** | SPICE in-memory compute billed separately | Premium capacity monthly reservation |
-| **Real-time** | Streaming ingestion available | Streaming and push datasets |
-| **Mobile experience** | Basic | Full interactivity with optimized layouts |
-| **Row-level security** | Basic field-based RLS | Advanced RLS with complex DAX rules |
-| **Embedding** | QuickSight Embedded (capacity-based) | Power BI Embedded (capacity) or Premium |
-| **Refresh cadence** | Scheduled or manual | Scheduled, manual, or continuous (dataflows) |
-| **Integration with data warehouse** | AWS Redshift, Athena native | SQL Server, Synapse Analytics, databases |
-| **Governance** | Basic workspace controls | Workspaces, endorsement, lineage, impact analysis |
-| **Typical organization fit** | AWS-centric environments | Microsoft-centric or mixed environments |
+AWS's BI service has been rebranded, and QuickSight now sits inside [Amazon Quick Suite](https://aws.amazon.com/quick/quicksight/faqs/){:target="_blank" rel="noopener noreferrer"} alongside AWS's broader AI workplace tooling. The comparison below reflects that product.
+
+| Concept | Amazon Quick Sight | Power BI |
+|---|---|---|
+| **Authoring** | Browser-based only; no desktop client | Power BI Desktop (Windows) plus web authoring |
+| **Modeling depth** | Datasets with calculated fields and joins | Full tabular semantic model with DAX, relationships, RLS/OLS, calculation groups |
+| **Data preparation** | Native joins, filters, type changes, calculated fields | Power Query with the M language and a graphical editor |
+| **In-memory engine** | SPICE, with 10 GB included per provisioned Author | VertiPaq, sized by the workspace's license or capacity SKU |
+| **Licensing** | Per-user roles (Reader, Author, Reader Pro, Author Pro), plus capacity-based reader sessions | Per-user (Pro, PPU) or capacity (Fabric F SKUs) |
+| **Free viewers** | Readers are per-user or session-billed | Free licenses can view on F64 and larger |
+| **Real-time** | Streaming ingestion into SPICE | Legacy streaming models retiring 31 Oct 2027; Fabric Real-Time Intelligence going forward |
+| **Row-level security** | RLS on datasets, including tag-based RLS for embedded users | RLS and OLS in the semantic model, enforced across every report on it |
+| **Embedding** | Embedded dashboards and consoles | App-owns-data or user-owns-data on any Fabric F SKU |
+| **Warehouse affinity** | Redshift and Athena | Synapse, Fabric Warehouse, SQL Server, Azure SQL |
+| **Governance** | Folders, sharing controls, dataset permissions | Workspaces, three endorsement badges, lineage, impact analysis, Purview labels |
+
+The structural difference is where the model lives. Power BI centralizes metric definitions in a semantic model that many reports consume, which is what makes certification, impact analysis, and one-place RLS possible. Quick Sight's dataset layer is lighter, which lowers the barrier to a first dashboard and raises the cost of keeping fifty of them consistent.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Uncontrolled Dataset Proliferation
+### Pitfall 1: Uncontrolled Semantic Model Proliferation
 
-**Problem:** Each business team creates their own semantic models without coordination. The organization ends up with 50 datasets, many with duplicated data and conflicting definitions of "Revenue."
+**Problem:** Each team builds its own semantic model without coordination, and the tenant accumulates dozens with overlapping data and conflicting definitions of revenue.
 
-**Result:** Users cannot find the right dataset. Multiple definitions of metrics create confusion. Governance and consistency collapse.
+**Result:** Users cannot tell which model to trust. Metric disagreements surface in meetings rather than in review. Refresh load multiplies across models reading the same source.
 
-**Solution:** Establish a central curated dataset catalog. Require new datasets to be registered and documented. Use endorsement to identify certified datasets. Periodically audit and decommission duplicate datasets.
-
----
-
-### Pitfall 2: DirectQuery without Performance Testing
-
-**Problem:** A team creates a DirectQuery report against a SQL database without validating that underlying queries are efficient.
-
-**Result:** Reports load slowly. Queries are killing the source database. Users abandon the dashboards.
-
-**Solution:** Test DirectQuery performance before production deployment. Monitor query execution time in the source system. Consider Import or Composite models if DirectQuery queries are slow.
+**Solution:** Publish curated core models and grant Build permission rather than letting teams import the same sources repeatedly. Use Certified endorsement so the authoritative model is visibly different from the rest, and audit for duplicates using lineage.
 
 ---
 
-### Pitfall 3: Semantic Models Without Star Schema Design
+### Pitfall 2: DirectQuery Without Source Load Testing
 
-**Problem:** Load wide, denormalized tables directly from CSV files into Power BI without designing a proper semantic model.
+**Problem:** A DirectQuery report ships against a production SQL database without anyone measuring what report interaction does to that database.
 
-**Result:** Models are large in memory. Refresh takes hours. Query performance is slow. Adding new calculated fields requires reprocessing entire tables.
+**Result:** Reports load slowly, the source database carries a query pattern it was never tuned for, and users abandon the dashboards.
 
-**Solution:** Invest upfront in semantic model design. Use fact and dimension tables. Normalize data before loading. Calculate metrics as measures in DAX, not in the raw data.
+**Solution:** Test with realistic concurrency before release. Watch query duration and source-side resource use, not just report render time. Where queries are slow, move to Composite with a Dual-mode dimension layer, or add user-defined aggregations over the DirectQuery fact table.
 
 ---
 
-### Pitfall 4: No Refresh Strategy
+### Pitfall 3: Wide Denormalized Tables Instead of a Star Schema
 
-**Problem:** Semantic models are configured for daily refresh but nobody monitors whether refreshes complete or fail.
+**Problem:** CSV extracts or a single denormalized view are loaded directly into a model with no dimensional design.
 
-**Result:** Users see stale data for days before anyone notices. Dashboards lose credibility.
+**Result:** High-cardinality strings repeat across every row, compression collapses, the model consumes far more memory than the source size suggests, and refresh reloads everything.
 
-**Solution:** Configure alerts for failed refreshes. Monitor refresh duration and set expectations with stakeholders about data freshness. For critical datasets, implement redundant refresh schedules.
+**Solution:** Split facts from dimensions before loading. Push the transformation upstream into a dataflow, warehouse, or lakehouse so it is done once. Define metrics as measures rather than calculated columns.
+
+---
+
+### Pitfall 4: No Refresh Monitoring
+
+**Problem:** Models are scheduled for daily refresh and nobody watches whether the refreshes succeed.
+
+**Result:** Reports show stale data for days before someone notices, and the dashboards lose credibility permanently.
+
+**Solution:** Configure refresh failure notifications to a distribution group rather than one person. Track refresh duration as a leading indicator, since a refresh creeping toward its window is the warning before it fails. Publish an explicit freshness expectation on the report itself.
 
 ---
 
 ### Pitfall 5: Embedding Without Row-Level Security
 
-**Problem:** Embed a Power BI dashboard in a customer-facing application without implementing RLS. All customers see all data.
+**Problem:** A dashboard is embedded in a customer-facing application with no RLS, so the model contains every customer's data with nothing filtering it per tenant.
 
-**Result:** Data breach. Privacy violation. Regulatory fines.
+**Result:** One customer sees another's data. This is a data breach, not a bug.
 
-**Solution:** Implement RLS before embedding any customer data. Validate that RLS rules correctly filter data per user. Test with sample users before deploying to production.
+**Solution:** Implement RLS in the semantic model and pass the effective identity in the embed token. Test with sample identities for several tenants before release, and treat that test as a release gate rather than a one-time check.
 
 ---
 
-### Pitfall 6: Ignoring Capacity Limits
+### Pitfall 6: Designing Against the Wrong Capacity Limits
 
-**Problem:** Load 50 GB semantic models into shared capacity. Run concurrent refreshes without monitoring capacity saturation.
+**Problem:** A model is designed assuming a size or refresh budget the workspace's license does not provide, such as planning a 20 GB Import model for a Pro workspace capped at 1 GB, or scheduling hourly refreshes on shared capacity limited to eight per day.
 
-**Result:** Refresh takes 12 hours. Queries timeout. Other users' dashboards become slow.
+**Result:** Refreshes fail outright or the workspace has to be moved onto capacity as an emergency purchase rather than a planned one.
 
-**Solution:** Monitor capacity utilization metrics. Right-size capacity based on workload. Distribute large refreshes across different time windows to avoid concurrent saturation.
+**Solution:** Establish the target license and SKU before model design, not after. Size against the SKU's maximum memory with headroom for the refresh, which roughly doubles the footprint. Where a model genuinely exceeds what the budget allows, redesign toward DirectQuery, aggregations, or Direct Lake rather than buying the next SKU up.
 
 ---
 
 ## Key Takeaways
 
-1. **Power BI is a self-service analytics platform, not a traditional BI tool.** Business users should author dashboards, not just consume reports from central IT teams. This requires well-designed semantic models and governance guardrails.
+1. **Capacity is assigned to workspaces, not to individual models or reports.** Every item in a workspace inherits that capacity's memory ceiling, throttling budget, and viewer licensing rules, so workspace layout is a capacity design decision.
 
-2. **Semantic model design determines report performance.** Invest in normalized star schema design before publishing datasets. Wide, denormalized tables cause poor compression and slow queries.
+2. **Power BI Premium P SKUs are retiring and Fabric F SKUs are the replacement.** New P SKUs are no longer sold and each subscription ends with its agreement term, with a 30-day grace period followed by throttling and then rejection. Migration is manual, so plan it before the term ends.
 
-3. **Choose Import, DirectQuery, or Composite based on data size and freshness requirements.** Import is fastest but requires data to fit in memory. DirectQuery queries the source in real-time but depends on source performance. Composite combines both.
+3. **F64 is the threshold where free licenses can view content.** Below it, every viewer needs Pro or PPU regardless of capacity size. That boundary, not a user-count heuristic, decides between capacity and per-user licensing.
 
-4. **Capacity planning is essential.** Understand whether shared capacity, Premium Per User, or Premium capacity is right for your organization based on user count and workload size.
+4. **Semantic model size limits come from the license, not from the engine.** Shared capacity caps a model at 1 GB, PPU at 100 GB, and Fabric SKUs range from 3 GB to 400 GB. Reserve headroom, since a refresh roughly doubles the footprint.
 
-5. **Governance is about structure, not restriction.** Use endorsed datasets, role-based access, and deployment pipelines to guide users toward good analytics practices, not to prevent innovation.
+5. **Storage mode is a per-table property, which is what makes composite models work.** Import for speed, DirectQuery for size and freshness, Direct Lake for Delta data already in OneLake, and Dual for tables that should answer from whichever side is cheaper per query.
 
-6. **Row-level security is mandatory for multi-tenant scenarios.** Always implement RLS before embedding dashboards in customer applications or sharing sensitive data across organizational boundaries.
+6. **Direct Lake replaces the refresh cycle with framing.** Where data lands in OneLake as Delta tables and a Fabric capacity is available, it delivers Import-like query performance without copying data or scheduling reloads.
 
-7. **Dataflows are the bridge between Power BI and the broader Azure analytics ecosystem.** Use dataflows for self-service data preparation and to make transformed data available to Synapse, Data Lake Storage, and other tools.
+7. **Real-time streaming in Power BI is being retired.** New push, streaming, and PubNub semantic models cannot be created after 31 October 2027. Design new real-time work on Fabric Real-Time Intelligence.
 
-8. **Monitor capacity and refresh reliability.** Premium metrics provide visibility into compute utilization and query performance. Set up alerts for failed refreshes and out-of-memory events.
+8. **A sensitivity label classifies; a Purview policy enforces.** Labels propagate downstream and survive supported export paths like Excel and PDF, but export to CSV is not one of them, and blocking Excel export is a tenant setting rather than a label property.
 
-9. **Integrate Power BI with Synapse Analytics for enterprise BI.** Synapse is the data warehouse; Power BI provides visualization and interactive analysis on top.
+9. **Aggregations only help DirectQuery models.** The detail table must be in DirectQuery storage mode, and RLS expressions must filter both the aggregation and the detail table or the aggregation will be refused.
 
-10. **Test performance before production deployment.** Validate that DirectQuery queries are efficient, that semantic models are appropriately designed, and that capacity is adequate for peak load. Performance issues discovered in production are difficult to fix without affecting users.
+10. **Endorsement has three badges and administrator-gated authority.** Anyone with write access can promote, but only users a Fabric administrator designates can certify or mark master data, and both must be enabled at the tenant before they appear.

@@ -3,643 +3,457 @@ title: "Azure Automation & Azure Arc for System Architects"
 layout: guide
 category: Azure
 subcategory: Management & Governance
-description: "A comprehensive guide to Azure Automation and Azure Arc covering runbook automation, Update Management, hybrid worker groups, and extending Azure management to on-premises and multi-cloud resources."
-tags: [azure, automation, infrastructure, cloud-computing, devops, reliability, practical]
+description: "How Azure Automation runs runbooks in the cloud and on hybrid workers, how Azure Arc projects on-premises and multi-cloud machines into Azure as resources, and where patching, configuration, and governance moved after the Update Management and DSC retirements."
+tags: [automation, azure-arc, runbooks, hybrid-runbook-worker, update-manager, machine-configuration, practical]
 ---
 
-## What Are Azure Automation and Azure Arc
+## What Azure Automation and Azure Arc Do
 
-[Azure Automation](https://learn.microsoft.com/en-us/azure/automation/overview){:target="_blank" rel="noopener noreferrer"} is Azure's native automation platform for infrastructure automation, configuration management, and process automation. It runs runbooks (scripts), enforces desired state configuration, patches Windows and Linux machines, and triggers automation workflows based on schedules, events, or webhooks.
+[Azure Automation](https://learn.microsoft.com/en-us/azure/automation/overview){:target="_blank" rel="noopener noreferrer"} runs scripts. It stores PowerShell and Python runbooks, holds the credentials and variables those runbooks need, and executes them on a schedule, on demand, or in response to an HTTP call. The execution can happen in a Microsoft-hosted sandbox in Azure or on a machine you own.
 
-[Azure Arc](https://learn.microsoft.com/en-us/azure/azure-arc/overview){:target="_blank" rel="noopener noreferrer"} extends Azure's management, governance, and compliance capabilities to any infrastructure. Arc provides capabilities like Arc-enabled servers (which appear in Azure as native resources), Arc-enabled Kubernetes clusters (which receive Azure-based policy enforcement and security controls), Arc-enabled data services (which run SQL and PostgreSQL anywhere with Azure billing), and unified monitoring, security, and governance across hybrid and multi-cloud environments.
+[Azure Arc](https://learn.microsoft.com/en-us/azure/azure-arc/overview){:target="_blank" rel="noopener noreferrer"} does something different. It projects infrastructure that is not in Azure into the Azure Resource Manager control plane, so a server in your datacenter or a Kubernetes cluster on another cloud gets an Azure resource ID and behaves, for governance purposes, like a native Azure resource. Policy, RBAC, Azure Monitor, and Defender for Cloud then reach it through the same APIs they use for Azure VMs.
 
-### What Problems They Solve
+The two services get taught together because Arc is what makes Automation's hybrid story work at scale, and because several capabilities that once lived inside Automation now live in separate services that Arc feeds.
 
-**Without Azure Automation and Arc:**
-- Each environment requires separate tools for automation, patching, and inventory management
-- On-premises and multi-cloud resources operate outside Azure's governance model
-- Patch management must be done separately for each platform and cloud
-- Configuration drift across environments has no unified detection or remediation
-- No single control plane for managing resources across cloud, on-premises, and edge
-- Compliance and security posture varies by environment
-- Operational teams maintain multiple dashboards and interfaces for different environments
+### Where These Resources Live in the Azure Hierarchy
 
-**With Azure Automation and Arc:**
-- Single automation platform that executes on Azure, on-premises, or multi-cloud resources
-- All servers (regardless of location) appear in Azure as managed resources
-- Unified patch management across Windows and Linux across all locations
-- Azure Policy governs all environments through a single compliance engine
-- Centralized identity, access control, and role-based governance
-- Unified monitoring, alerting, and security controls via Azure Monitor and Defender
-- Infrastructure as code and automation across heterogeneous environments
-- Compliance reporting and audit trails across all resources
+Scope drives more of the behavior here than the feature lists suggest.
 
-### How Azure Automation and Arc Differ from AWS Systems Manager and Outposts
+An **Automation account** is a resource inside a resource group inside a subscription. Everything it owns (runbooks, schedules, variables, credentials, certificates, connections, modules, and Hybrid Worker groups) is scoped to that one account. A machine hosting a Hybrid Runbook Worker can report to exactly one Automation account, and a worker belongs to exactly one Hybrid Worker group. If two teams in the same subscription need independent automation, they need separate accounts, not separate runbooks in a shared one.
+
+An **Arc-enabled server** is a `Microsoft.HybridCompute/machines` resource in a resource group, which means it inherits every policy assignment above it in the management group, subscription, and resource group chain. Choosing the resource group is therefore a governance decision, not a filing decision. There is no cap on the number of Arc-enabled servers or their extensions in a resource group or subscription, so the constraint is policy blast radius rather than quota.
+
+An **Arc-enabled Kubernetes cluster** is likewise a resource in a resource group, and cluster extensions are child resources of it. Data services deployed on that cluster are children again, which is why a data controller has to be deployed before any database can be.
+
+### How They Compare to AWS Systems Manager and Outposts
 
 | Concept | AWS Systems Manager | Azure Automation + Arc |
 |---------|-------------------|----------------------|
-| **Agent requirement** | Requires EC2 agent (SSM agent) on all managed resources | Hybrid Runbook Worker for on-premises; Azure Arc agent for Arc-enabled servers |
-| **Scope** | Primarily for AWS infrastructure and hybrid machines registered with Systems Manager | Arc extends Azure management to any OS, cloud, or edge location |
-| **Patch management** | Patch Manager orchestrates patches across EC2, on-premises, and other clouds | Update Management in Automation; Arc-enabled servers apply patches through Azure |
-| **Configuration management** | State Manager (desired state) + Systems Manager Documents | Hybrid Runbook Workers + Azure Automation DSC (or third-party tools via Arc) |
-| **Data services** | AWS databases remain AWS-managed; no unified management across regions | Arc-enabled data services (SQL, PostgreSQL) run anywhere with Azure management and billing |
-| **Runbook/automation** | Systems Manager Documents + Automation | Azure Automation runbooks (PowerShell, Python, graphical) executed locally or in Azure |
-| **Governance across environments** | AWS-centric; requires additional setup for non-AWS resources | Arc integrates any resource into Azure Policy, RBAC, and Defender governance |
-| **Outposts equivalent** | AWS Outposts provide AWS infrastructure on-premises | Azure Stack Hub and Azure Stack Edge provide Azure services on-premises; Arc manages any on-premises resource |
-| **Kubernetes integration** | EKS limited to AWS; other clusters outside management | Arc-enabled Kubernetes extends Azure management and policies to any Kubernetes cluster |
+| **Agent requirement** | SSM Agent on every managed instance | Hybrid Runbook Worker VM extension for runbook execution; Azure Connected Machine agent for Arc-enabled servers |
+| **Scope** | AWS infrastructure plus hybrid machines registered with Systems Manager | Arc extends the Azure control plane to servers and Kubernetes clusters on any OS, cloud, or edge location |
+| **Patch management** | Patch Manager orchestrates patches across EC2, on-premises, and other clouds | Azure Update Manager, a separate service from Automation, patches Azure VMs and Arc-enabled servers |
+| **Configuration management** | State Manager plus Systems Manager Documents | Azure machine configuration, delivered through Azure Policy |
+| **Data services** | AWS databases stay AWS-managed | SQL Managed Instance enabled by Azure Arc runs on your Kubernetes cluster with Azure management and billing |
+| **Runbook/automation** | Systems Manager Documents plus Automation | Azure Automation runbooks in PowerShell, Python, or the graphical editor, executed in Azure or on a hybrid worker |
+| **Governance across environments** | AWS-centric; non-AWS resources need extra setup | Arc puts any registered resource under Azure Policy, Azure RBAC, and Defender for Cloud |
+| **On-premises hardware** | AWS Outposts ships AWS infrastructure to your datacenter | Azure Local and Azure Stack Edge run Azure services on-premises; Arc manages any on-premises machine regardless of hardware |
+| **Kubernetes integration** | EKS is AWS-only; other clusters sit outside management | Arc-enabled Kubernetes attaches any CNCF-certified cluster |
 
 ---
 
 ## Azure Automation
 
-### What Azure Automation Provides
+### Runbook Types and Runtime Versions
 
-Azure Automation is a service that automates infrastructure management and application lifecycle tasks across Azure, on-premises, and multi-cloud environments.
+Runbook type is a permanent choice. You cannot convert a graphical runbook to a text runbook or the reverse, so decide deliberately rather than discovering the constraint later.
 
-**Core capabilities:**
-- **Runbooks** – PowerShell, Python, and graphical workflows that execute automatically or on-demand
-- **Hybrid Runbook Workers** – Software that runs on your machines to execute runbooks in your environment
-- **Update Management** – Patch management for Windows and Linux machines across locations
-- **Desired State Configuration (DSC)** – Infrastructure configuration management and drift detection
-- **Shared resources** – Variables, credentials, certificates, and connections shared across runbooks
-- **Schedules and webhooks** – Time-based automation and event-driven triggers
-- **Process automation** – Automated responses to incidents, deployments, and operational events
+**PowerShell runbooks** are the recommended default. The currently supported runtime versions are PowerShell 7.6, 7.4, and 5.1. PowerShell 7.1 and 7.2 have reached end of support in the parent product and Azure Automation follows the parent product's lifecycle, so new work should target 7.6 or 7.4. The runtime version you select also determines which imported modules are used, so a module imported against 5.1 is not visible to a 7.4 job. PowerShell 7.x does not support signed runbooks, and source control integration creates 7.x runbooks in the account as 5.1.
 
-### Runbook Types and Execution Environments
+**Python runbooks** compile under Python 3.10. Python 2.7 and 3.8 are no longer supported by the parent product. Python 3.10 modules need wheel files targeting cp310 Linux, and custom packages are validated at job runtime rather than at import, so a missing dependency surfaces as a job failure rather than an import error.
 
-#### Runbook Types
+**Graphical runbooks** are built in the portal editor and generate PowerShell underneath. They can only be created and edited in the portal, cannot be digitally signed, and cannot run on a Linux Hybrid Runbook Worker. **Graphical PowerShell Workflow runbooks** and text **PowerShell Workflow runbooks** add checkpoints and parallel execution, but PowerShell 7.x dropped Workflow entirely, so those runbooks cannot be moved to a modern runtime. Treat them as a maintenance category rather than a starting point.
 
-**PowerShell Runbooks**
-- Execute PowerShell scripts (PowerShell 5.1 or PowerShell 7.2+)
-- Access to Azure PowerShell modules and custom modules
-- Used for Azure resource management, system administration, and cross-platform scripting
-- Synchronous execution with output returned to caller
+### Where a Runbook Runs
 
-**Python Runbooks**
-- Execute Python 2.7 or Python 3.8+ scripts
-- Access to standard Python libraries and custom modules
-- Used for application logic, data processing, and cross-platform scripting
-- Common for integration with third-party tools and APIs
+A runbook job executes either in an Azure sandbox or on a Hybrid Runbook Worker, and the choice determines both the resource limits and the network path.
 
-**Graphical Runbooks**
-- Visual workflow builder with activities dragged onto a canvas
-- Activities represent Azure cmdlets, PowerShell code, or nested runbooks
-- No coding required; suitable for non-scripting teams
-- Useful for straightforward orchestration workflows
-- Limited to PowerShell activities; not as flexible as code-based runbooks
+The **Azure sandbox** is a shared container hosted by Microsoft. Jobs from different Automation accounts are isolated from each other, but jobs from the same account can share a sandbox, up to ten at a time, and a `Disconnect-AzAccount` in one job disconnects every other job in that sandbox. Sandbox jobs are bound by [documented limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#azure-automation-limits){:target="_blank" rel="noopener noreferrer"}: a three-hour fair-share ceiling on runtime, 400 MB of memory, 1,000 network sockets, and 1 GB of temporary disk. Sandboxes also cannot call executables or subprocesses, cannot query device or application characteristics through WMI, cannot run elevated, and support only .NET Framework 4.7.2.
 
-**Graphical PowerShell Workflow Runbooks**
-- Graphical editor for PowerShell Workflow syntax
-- Supports checkpoints and parallel execution
-- Rarely used in new projects (prefer standard graphical or code-based runbooks)
+The fair-share ceiling is the limit that surprises people. After three hours, Azure unloads the job. PowerShell and Python runbooks are stopped and not restarted, and the job status becomes `Stopped`.
 
-#### Execution Environments
+A **Hybrid Runbook Worker** runs the job on a machine you own. It is not subject to fair share and has no runtime ceiling, and its memory, disk, and socket limits are whatever the host machine has. It can reach local file systems, databases, and services that never cross the internet.
 
-**Sandbox environment** – Microsoft-hosted execution environment in Azure
-- Runbooks execute in an isolated Azure container
-- Limited to 180 seconds per execution
-- 400 MB memory per execution
-- Cannot connect to on-premises resources directly
-- Suitable for Azure management tasks and stateless automation
+```
+                         Automation account
+                  (runbooks, schedules, shared assets)
+                                 |
+        job targets sandbox      |      job targets a worker group
+              +------------------+------------------+
+              |                                     |
+              v                                     v
+   +----------------------+        +------------------------------+
+   |    Azure sandbox     |        | Hybrid Runbook Worker group  |
+   |  shared container    |        |   worker A       worker B    |
+   |  3 h fair share      |        |      |               |       |
+   |  400 MB / 1 GB temp  |        |      +-------+-------+       |
+   |  no .exe, no elevate |        |              |               |
+   +----------+-----------+        +--------------|---------------+
+              |                                   |
+              | outbound to public                | outbound HTTPS 443,
+              | Azure endpoints                   | polled every 30 s
+              v                                   v
+     Azure resources reachable        Automation service endpoint
+     from the public cloud            (no inbound port is opened;
+                                       local resources stay local)
+```
 
-**Hybrid Runbook Workers** – User-hosted agent on your infrastructure
-- Agent runs on Windows or Linux machines you own
-- Executes runbooks with full runtime capabilities
-- Can run indefinitely (not subject to 180-second timeout)
-- Can access local resources, on-premises systems, and APIs
-- Can run PowerShell or Python
-- Requires connectivity to Automation account (outbound HTTPS)
-
-**Azure Container instances** – Containerized runbook execution
-- Runbooks execute in managed containers via Azure
-- Useful for isolated workloads and custom environments
-- Less common than sandbox or Hybrid Runbook Workers
+The direction of the arrows is the point. A hybrid worker polls outward and pulls its jobs, so a machine in a network with no inbound path from the internet can still be automated from Azure. That same property is why enabling the Azure Firewall on Storage, Key Vault, or Azure SQL blocks sandbox jobs. Automation is not on the trusted-Microsoft-services list, so a firewalled data service can only be reached from a hybrid worker sitting inside a virtual network with a service endpoint.
 
 ### Hybrid Runbook Workers
 
-Hybrid Runbook Workers enable Azure Automation to execute runbooks on machines in your environment. They are essential for on-premises automation, network-isolated environments, and long-running tasks.
+#### The Agent-Based Worker Is Retired
 
-#### How Hybrid Runbook Workers Work
+Azure Automation had two Hybrid Runbook Worker platforms, and only one still exists. The **agent-based (V1)** worker, which depended on the Log Analytics agent reporting to a workspace, retired on **31 August 2024**, and jobs running on agent-based workers stopped on **1 April 2025**. Any documentation or script that installs a hybrid worker by first installing the Log Analytics agent describes the retired path.
 
-1. Install the Hybrid Runbook Worker agent on a Windows or Linux machine
-2. Configure the agent to connect to your Automation account
-3. Group workers into a Hybrid Runbook Worker Group (for load distribution)
-4. Select the group when creating a runbook job
-5. Runbook executes on the worker (or a randomly selected worker in the group)
-6. Output and status flow back to the Automation account
+The **extension-based (V2)** worker is the supported platform. It installs as a VM extension, managed by the Azure VM agent on Azure VMs and by the Azure Connected Machine agent on Arc-enabled servers and Arc-enabled VMware vSphere VMs. It has no Log Analytics dependency, authenticates with a system-assigned managed identity, upgrades minor versions automatically by default, and can be deployed through the portal, PowerShell, Bicep, ARM templates, REST, or the CLI.
 
-#### Worker Architecture
+#### How Job Dispatch Actually Works
 
-- **Hybrid Runbook Worker agent** – Software installed on user machines that polls for jobs and executes runbooks
-- **Hybrid Runbook Worker Group** – Logical grouping of workers for load distribution
-- **Worker-to-Automation connectivity** – Outbound HTTPS to Automation account (port 443)
-- **User Runtime Environment** – PowerShell or Python runtime on the machine where the worker is installed
+Workers pull; the service does not push, and it does not round-robin.
 
-#### Hybrid Runbook Worker Groups
+Every active worker in a group polls the Automation service every 30 seconds. Whichever worker pings first after a job is queued picks it up, on a first-come-first-served basis. You specify the group when you start a runbook and cannot specify a particular worker within it. A single worker generally picks up about four jobs per ping, so a sustained submission rate above four jobs per 30 seconds needs more workers in the group or the jobs may be suspended with an error.
 
-Groups provide redundancy and load distribution.
+Health is measured the same way. If no worker in a group has pinged the service in the last 30 minutes, the group is treated as having no active workers, and jobs queued against it are suspended after three retry attempts. If a worker's host machine reboots mid-job, the job restarts from the beginning, or from the last checkpoint for PowerShell Workflow runbooks, and is suspended after more than three restarts.
 
-- Workers in the same group share responsibility for executing jobs
-- When a job is assigned to a group, the Automation service selects a worker (round-robin by default)
-- If a worker is offline, the job goes to another worker in the group
-- All workers in a group must have connectivity to the same Automation account
+#### Worker Groups and Their Constraints
 
-#### Common Scenarios for Hybrid Runbook Workers
+A group can hold a single worker or many, and multiple workers give both availability and throughput. The binding constraints are ownership rather than capacity. Each machine hosts one worker reporting to one Automation account, and a worker listens for jobs from that account only. An Automation account supports up to 4,000 system workers and 4,000 user workers, and Microsoft recommends a second Automation account beyond roughly 4,000 managed machines. Hybrid Runbook Worker is not supported on Virtual Machine Scale Sets.
 
-- **On-premises system automation** – Execute scripts against local databases, file systems, or APIs
-- **Network-isolated environments** – Machines that cannot reach Azure directly; workers sit inside the network and execute on-premises
-- **Long-running tasks** – Remediation workflows, data processing, or deployments that exceed the 180-second sandbox timeout
-- **Local resource access** – Tasks requiring access to shared volumes, local services, or protocols that do not cross the internet
+Registering the same machine against different groups is how you shape distribution. Target a job at a group whose membership matches the blast radius you want.
 
-### Update Management
+#### When a Hybrid Worker Is the Right Answer
 
-#### How Update Management Works
+- **Long-running work.** Anything beyond the three-hour sandbox ceiling has to run on a worker.
+- **Local resource access.** Scripts against on-premises databases, file shares, or services that do not have public endpoints.
+- **Network-isolated environments.** Machines with no inbound path from Azure, and Azure data services behind a firewall that blocks sandbox traffic.
+- **Third-party executables and elevation.** Sandboxes cannot call `.exe` files or run elevated; a worker can, because you own the operating system.
+- **Non-4.7.2 .NET dependencies.** Sandboxes are pinned to .NET Framework 4.7.2 and cannot be upgraded.
 
-Update Management provides unified patch orchestration for Windows and Linux machines running on Azure, on-premises, or in other clouds.
+Hybrid worker jobs run under the local `System` account on Windows and the `nxautomation` account on Linux, which is a detail that matters when a runbook needs domain credentials rather than machine ones.
 
-**Capabilities:**
-- Scans machines for missing updates
-- Schedules patch deployments across groups of machines
-- Reports on patch status and compliance
-- Supports automatic reboot policies
-- Integrates with Azure Monitor for alerting
+### Automation Account Shared Resources
 
-#### Supported Machines
+An Automation account is the container for everything a runbook needs at execution time.
 
-- **Azure VMs** – Using the MicrosoftMonitoringAgent (Log Analytics agent) or Azure Monitor agent
-- **On-premises servers** – Using Hybrid Runbook Worker or direct agent installation
-- **AWS instances** – Using the agent if properly connected
-- **GCP instances** – Using the agent if properly connected
+**Variables** hold string, integer, boolean, or datetime values shared across runbooks. Encrypted variables cannot be read back in plain text once set. A PowerShell runbook cannot retrieve an unencrypted variable with a null value, and cannot retrieve any variable with `~` in its name.
 
-#### Update Deployment Process
+**Credentials** hold username and password pairs. A runbook retrieves one with the internal `Get-AutomationPSCredential` cmdlet from the `Orchestrator.AssetManagement.Cmdlets` module. The `Get-AzAutomationCredential` cmdlet returns metadata only, not a usable `PSCredential`, which is a common source of confusion. Azure Automation does not support user accounts that require multifactor authentication.
 
-1. **Assessment phase** – Agents scan machines for available updates
-2. **Deployment schedule creation** – Define maintenance window, recurrence, and update type (critical, security, all)
-3. **Pre-task execution** (optional) – Run a runbook before patching begins
-4. **Update installation** – Agents download and install patches on the schedule
-5. **Post-task execution** (optional) – Run a runbook after patching completes
-6. **Reboot policy** – Automatic reboot, reboot if needed, no reboot (manual)
-7. **Compliance reporting** – Dashboard shows patch status and machines out of compliance
+**Certificates** store X.509 certificates, including self-signed ones, for authentication to Azure or third-party endpoints.
 
-#### Patching Strategies
+**Connections** are named objects holding predefined connection parameters, with built-in types for Azure and custom types for other systems.
 
-**Immediate patching** – Deploy all available updates immediately
-- Reduces vulnerability window
-- Higher risk of breaking changes
-- Suitable for development/test environments
+**Modules** are the PowerShell or Python libraries runbooks depend on. `AzureRM.Automation` is installed by default when an account is created, but `Az.Automation` (the recommended module) has to be imported manually. Modules are imported per runtime version, so a module available to a 5.1 job is not available to a 7.4 job unless it was imported against 7.4 as well. A module can be at most 100 MB, and at most five modules can be imported per 30 seconds per account.
 
-**Scheduled patching** – Patches deployed on a fixed schedule (weekly, monthly)
-- Allows testing before production deployment
-- Reduces surprise downtimes
-- Aligns with change management windows
-- Most common approach in production
+Credentials, certificates, connections, and encrypted variables are collectively the account's secure assets. Azure Automation generates a unique key per Automation account, stores that key in a system-managed Key Vault, and loads it to encrypt each asset before storage. You do not see or manage that vault. For secrets your own applications also consume, a Key Vault you control plus a managed identity on the runbook is the better arrangement, because it keeps one copy of the secret rather than two.
 
-**Phase-based patching** – Deploy to non-production first, then production in waves
-- Use multiple machines groups and Update Management deployments
-- First deployment targets dev/staging; second targets production
-- Reduces risk of widespread outage from bad patches
+### Schedules, Webhooks, and Event-Driven Triggers
 
-### Automation Account and Shared Resources
+**Schedules** fire runbooks on a one-time or recurring basis, in UTC or a named timezone, and a single runbook can be linked to several schedules with different parameter values.
 
-An Automation account is the container for all runbooks, configurations, variables, credentials, and schedules in Azure Automation.
+**Webhooks** give a runbook an HTTPS endpoint that any external system can POST to. Read the security model before you use one, because it is thinner than it looks. The URL contains a security token and Azure Automation performs no other authentication on the request, so the URL is effectively a password. It is shown only once at creation and cannot be retrieved afterward, including from an ARM template deployment where only the first deployment returns it. A webhook is valid for up to ten years, with the portal defaulting to one year, and can be extended before it expires but never reactivated after. A successful POST returns `202 Accepted` with the job ID in the body as `{"JobIds":["<JobId>"]}`, and the payload cap is 512 KB.
 
-#### Account-Level Resources
+Two behaviors catch people out. Azure Automation logs every input parameter with the job, so anything sensitive in a webhook body is visible to anyone who can read job history. And a webhook cannot start a Python runbook at all, while a PowerShell 7 runbook started by webhook auto-converts the input parameter to invalid JSON, which is why PowerShell 5.1 remains the recommended runtime for webhook-triggered work.
 
-**Variables**
-- String, integer, boolean, or datetime values shared across runbooks
-- Encrypted storage (values not returned in plain text once set)
-- Useful for configuration, flags, and shared state
-- Example: `$maxRetries = Get-AutomationVariable -Name "MaxRetries"`
+Because there is no authentication step, validate the request inside the runbook. Check the `WebhookName` property of the `WebhookData` parameter, inspect `RequestHeader` and `RequestBody` for an expected marker, or call back to the originating system to confirm the event really happened before acting on it. For network-level control, Azure Automation supports the `GuestAndHybridManagement` service tag on network security groups and Azure Firewall, which lets you trigger webhooks from inside a virtual network without allowlisting IP ranges.
 
-**Credentials**
-- Username and password pairs for accessing external systems
-- Stored encrypted in Azure Key Vault (Azure-managed)
-- Example: `$cred = Get-AutomationPSCredential -Name "SQLDatabaseCredential"`
+**Event-driven triggers** build on the same mechanism. Azure Event Grid supports Azure Automation runbooks as an event handler through webhooks, so a resource event can start a runbook. Logic Apps can call a runbook as a workflow step through the Azure Automation connector, and an Azure Monitor alert can start one through an action group.
 
-**Certificates**
-- X.509 certificates for authentication or encryption
-- Imported and stored encrypted
-- Example: Client certificates for API authentication
+### Configuration Management After State Configuration
 
-**Connections**
-- Named connection objects with predefined connection parameters
-- Built-in connection types for Azure, ServiceNow, GitHub
-- Custom connection types for proprietary systems
-- Example: `$conn = Get-AutomationConnection -Name "AzureConnection"`
+Azure Automation State Configuration, the PowerShell DSC pull server built into Automation, **retires on 30 September 2027**. Its Linux half retired earlier, on 30 September 2023. The replacement is [Azure machine configuration](https://learn.microsoft.com/en-us/azure/governance/machine-configuration/overview){:target="_blank" rel="noopener noreferrer"}, which merges the DSC extension, Automation State Configuration, and guest configuration into one feature delivered through Azure Policy.
 
-**Modules**
-- PowerShell or Python modules imported into the Automation account
-- Runbooks use these modules without requiring manual imports
-- Azure-provided modules (Azure.Accounts, Azure.Compute, etc.) pre-installed
-- Custom modules uploaded via the portal or PowerShell
-- Module versions must be compatible with the runtime (PowerShell 5.1 vs 7.2+)
+The practical difference is where the assignment lives. State Configuration assigned configurations from an Automation account to registered nodes. Machine configuration assigns them as policy definitions at a management group, subscription, or resource group scope, which means a new machine that lands in scope picks up its configuration without a separate registration step. Machine configuration also covers Arc-enabled servers natively, so the same assignment reaches on-premises and multi-cloud machines. One current gap is Arm64, which machine configuration does not yet support.
 
-#### Shared Resource Best Practices
+---
 
-- **Prefer Key Vault integration** over storing credentials directly in Automation (reduces scattered secrets)
-- **Use managed identity** when accessing Azure resources (reduces credential management)
-- **Organize variables by purpose** – Use naming conventions like `Env-VarName` or `App-ConfigKey`
-- **Version custom modules** – Track versions to ensure compatibility and reproducibility
-- **Document credential requirements** – Runbooks should document which credentials they use
+## Patching with Azure Update Manager
 
-### Schedules and Event-Driven Automation
+### Update Management Moved Out of Automation
 
-#### Schedules
+Azure Automation's Update Management feature **retired on 31 August 2024**, along with the Log Analytics agent it depended on. The replacement is [Azure Update Manager](https://learn.microsoft.com/en-us/azure/update-manager/overview){:target="_blank" rel="noopener noreferrer"}, a separate service. Any guidance that tells you to enable Update Management in an Automation account, or to link a Log Analytics workspace for patching, describes the retired product.
 
-Schedules trigger runbooks on a fixed time basis.
+Update Manager has no dependency on Azure Automation, Log Analytics, or the Azure Monitor Agent. It works natively against the Azure VM agent on Azure VMs and the Azure Connected Machine agent on Arc-enabled servers, pushing a patch extension the first time you trigger an operation. Access control is per-resource Azure RBAC rather than permission on a shared Automation account and workspace, which is the change that matters most for large estates.
 
-- **One-time schedule** – Runs once at a specified date and time
-- **Recurring schedule** – Runs on a repeating interval (daily, weekly, monthly)
-- **Custom timezone** – Schedules can be set to UTC or any timezone
-- **Multiple schedules per runbook** – A runbook can be linked to multiple schedules for different triggers
+### How Update Manager Works
 
-#### Webhooks
+Update Manager does not publish updates. It honors whatever update source the machine is already configured for, so a Windows machine pointed at WSUS gets WSUS content and a Linux machine pointed at a private repository gets that repository's packages. It then uses the Windows Update Agent APIs or the Linux package manager to assess and install.
 
-Webhooks provide HTTP-based triggers for runbooks. External systems can POST to a webhook URL to start a runbook.
+Update data lands in Azure Resource Graph rather than a Log Analytics workspace. Pending updates in the `patchassessmentresources` table are retained for 7 days, and installation results in `patchinstallationresources` for 30 days. Custom reporting is built with Azure Workbooks over that data.
 
-**How webhooks work:**
-1. Create a webhook for a runbook (generates a unique URL)
-2. External system POSTs to the webhook URL with optional JSON parameters
-3. Automation service receives the POST and starts the runbook
-4. Runbook receives parameters from the webhook payload
-5. Example trigger: Monitoring alert sends webhook to runbook, which remediates the issue
+The core capabilities:
 
-**Webhook security:**
-- Single-use tokens (regenerate after each call) or durable URLs depending on configuration
-- HTTPS only (no HTTP)
-- IP allowlist optional
-- Webhook URL must be kept secret (no authentication required once generated)
+- **Periodic assessment** checks each machine for pending updates every 24 hours and can be enforced at scale through Azure Policy.
+- **Scheduled patching** defines recurring maintenance windows, with **dynamic scoping** selecting machines by subscription, location, resource group, or tag rather than by an explicit list.
+- **Pre and post events** run your own automation before and after a maintenance window.
+- **Automatic VM guest patching** rolls updates out to Azure VMs in off-peak hours without a schedule you manage.
+- **Hotpatching** applies critical Windows updates without a restart.
+- **On-demand operations** install updates immediately outside any schedule.
 
-#### Event-Driven Automation
+Maintenance windows are enforced with a reserve. Update Manager holds back 10 minutes on Windows and 15 minutes on Linux for a reboot, and before each additional update it checks whether the expected reboot time plus the average install time still fits. An install already in progress is never forcibly stopped, so a window can overrun slightly, but remaining updates are skipped with a "Maintenance window exceeded" error. An installation is marked successful only if every selected update installed and the reboot and final assessment both succeeded. A required reboot suppressed by a "Never reboot" setting yields "Completed with warnings" rather than success.
 
-Azure Automation integrates with Azure Event Grid and Azure Functions for event-driven workflows.
+One scope limitation carries over from the retired product. Update Manager does not patch Windows 10 or Windows 11, and Microsoft points those devices at Intune instead.
 
-**Patterns:**
-- **Event Grid to Automation** – Resource events (VM created, storage account modified) trigger runbooks via Event Grid
-- **Logic Apps to Automation** – Logic Apps workflow triggers Automation runbooks as workflow steps
-- **Webhook integration** – Monitoring alerts, CI/CD pipelines, or external services trigger runbooks
+### What Update Manager Costs
+
+Update Manager is free for Azure VMs and for Arc-enabled Azure Local VMs created through an Azure Arc resource bridge. For all other Arc-enabled servers it is charged per server per month, prorated daily, and a machine counts as managed on a given day only if its Arc status was Connected at some point and an update operation ran or a schedule is associated with it.
+
+Three exemptions remove the charge on an Arc-enabled server:
+
+- The machine is enabled for Extended Security Updates through Azure Arc.
+- Microsoft Defender for Servers Plan 2 is enabled on the subscription hosting the machine, unless Defender is applied through a security connector.
+- The Windows Server licenses have active Software Assurance, a Windows Server subscription, or pay-as-you-go enabled by Azure Arc.
+
+Arc-enabled servers that were using Automation Update Management for free as of 1 September 2023 stay free; newly onboarded machines in the same subscription are charged.
+
+### Patching Strategies
+
+**Immediate patching** deploys everything as soon as it is available. The vulnerability window is shortest and the risk of a breaking change is highest, which suits development and test environments.
+
+**Scheduled patching** puts updates in a fixed weekly or monthly maintenance window, which allows testing before production and aligns with change management. Syncing the schedule to the second Tuesday of the month lines it up with Microsoft's security release cadence. This is the common production pattern.
+
+**Phased patching** uses several maintenance configurations with different dynamic scopes, so a non-production tag is patched days before the production tag. Because scoping is tag-driven rather than list-driven, a new machine joins the right wave by inheriting the tag, without an operator adding it anywhere.
 
 ---
 
 ## Azure Arc
 
-### What Azure Arc Provides
-
-Azure Arc is a bridge technology that extends Azure's management and governance capabilities to any infrastructure, eliminating the distinction between "cloud resources" and "everything else."
-
-**Core capabilities:**
-- **Arc-enabled servers** – On-premises or multi-cloud VMs appear in Azure as native resources
-- **Arc-enabled Kubernetes** – Any Kubernetes cluster receives Azure management and policy enforcement
-- **Arc-enabled data services** – SQL Managed Instance and PostgreSQL run anywhere with Azure management
-- **Azure Policy** – Governance and compliance policies apply to all Arc resources
-- **Azure RBAC** – Access control extends to on-premises and multi-cloud resources
-- **Azure Monitor** – Unified monitoring across all infrastructure via Log Analytics
-- **Microsoft Defender** – Security scanning and threat protection for all environments
-- **Billing and licensing** – Pay-as-you-go for Arc-enabled data services, compliance fees for other Arc resources
-
 ### Arc-Enabled Servers
 
-Arc-enabled servers extend Azure management to physical machines and VMs running on-premises or in other clouds.
+Arc-enabled servers extend Azure management to physical machines and VMs hosted outside Azure. Do not install the agent on machines already running in Azure, Azure Stack Hub, or Azure Stack Edge, which already have equivalent capabilities.
 
-#### How Arc-Enabled Servers Work
+#### Onboarding and Identity
 
-1. **Install the Azure Connected Machine agent** on a Windows or Linux machine
-2. Authenticate using managed identity (preferred) or service principal
-3. Machine registers with Azure and appears as an Azure resource
-4. Azure extensions (Defender, Monitor, Policy, SQL Server IaaS Agent) install on the machine
-5. Machine receives Azure policies, updates, and monitoring from Azure
+Installing the [Azure Connected Machine agent](https://learn.microsoft.com/en-us/azure/azure-arc/servers/agent-overview){:target="_blank" rel="noopener noreferrer"} registers the machine and creates the Azure resource. Onboarding itself authenticates interactively or with a service principal, and the managed identity is a product of onboarding rather than a prerequisite for it. Once registered, the machine has a system-assigned managed identity it uses to authenticate to Azure services, which is what lets a script on that server read a Key Vault secret without a stored credential.
 
-#### Agent Architecture
+The subscription needs several resource providers registered first: `Microsoft.HybridCompute`, `Microsoft.GuestConfiguration`, `Microsoft.HybridConnectivity`, `Microsoft.AzureArcData` for Arc-enabled SQL Server, and `Microsoft.Compute` for Update Manager and automatic extension upgrades.
 
-- **Azure Connected Machine agent** – Lightweight software installed via installer, Ansible, Terraform, or System Center Configuration Manager
-- **Agent communication** – Outbound HTTPS to Azure (only requirement; no agent pull needed)
-- **Agent-managed extensions** – Virtual Machine extensions deployed from Azure to add capabilities
-- **Automatic updates** – Agent updates itself when newer versions are available
+Onboarding roles are narrower than Contributor. `Azure Connected Machine Onboarding` is enough to register a machine, and `Azure Connected Machine Resource Administrator` is needed to read, modify, or delete one.
+
+#### Connectivity and Agent Status
+
+The agent needs outbound HTTPS only. There is no inbound requirement and no pull from Azure into your network.
+
+It sends a heartbeat every five minutes. If those stop, the resource moves to **Disconnected** within 15 to 30 minutes. After 45 days disconnected, the resource can move to **Expired** and cannot be managed until an administrator disconnects and reconnects it, because the managed identity credential is valid for up to 90 days and renews every 45.
+
+That lifecycle is why Arc is a poor fit for ephemeral servers and VDI. Arc cannot distinguish a machine that is down for maintenance from one that was deleted, so it does not clean up resources whose heartbeats stopped, and recreating a VM with the same name can collide with the stale resource. Cloned machines and golden images cause a related problem, because two agents sharing a source ID both try to act as the same Azure resource. Onboard after cloning, not before.
 
 #### Supported Operating Systems
 
-- **Windows Server 2012 R2** and later
-- **Linux distributions** – Red Hat Enterprise Linux, CentOS, SUSE Linux, Debian, Ubuntu, Amazon Linux
+Support is a specific list rather than a version floor, and an OS not on the list is not supported. On the Windows side, Windows Server 2016, 2019, 2022, and 2025 are supported, with Windows Server 2012 and 2012 R2 approaching end of Arc support in November 2026. Windows 10 and 11 clients and Windows IoT Enterprise are supported only in a server-like role, meaning always connected, powered, and on mains power.
 
-#### Capabilities on Arc-Enabled Servers
+On the Linux side, current support covers RHEL 8 through 10, Ubuntu 22.04 through 26.04, SLES 15 SP7, AlmaLinux 8 and 9, Rocky Linux 8 and 9, Oracle Linux 8 through 10, Debian 13, and Amazon Linux 2023. Several older versions including RHEL 7, Ubuntu 18.04 and 20.04, Debian 11 and 12, SLES 12 SP5, Oracle Linux 7, and Amazon Linux 2 are approaching end of Arc support in November 2026. CentOS is not on the list.
 
-**Extensions** – Installed on the machine to add capabilities:
-- **Microsoft Monitoring Agent (MMA) / Azure Monitor agent** – Logs and performance data
-- **Dependency Agent** – Dependency mapping and application insights
-- **Custom Script Extension** – Run PowerShell or shell scripts
-- **DSC Extension** – Desired state configuration management
-- **Defender for Cloud agent** – Security threat detection and compliance
+x86-64 is fully supported. Arm64 support is partial, currently covering RunCommand, Custom Script Extension, and the Azure Monitor Agent, and excluding machine configuration. The agent does not run on 32-bit architectures at all.
 
-**Azure Policy** – Policies evaluate and enforce compliance on Arc-enabled servers
-- Guest policies run inside the machine (detect drift in configuration, file content, permissions)
-- Remediation actions auto-correct drift or alert teams
-- Compliance reporting shows policy state across all Arc resources
+#### Capabilities Delivered Through Extensions
 
-**Update Management** – Patching via Azure Automation Update Management
-- Arc-enabled servers integrate seamlessly with Update Management
-- Same patch orchestration as Azure VMs
+Extensions are what turn a registered machine into a managed one:
 
-**Billing** – No direct charge for Arc-enabled servers; charges apply per extension or data processed (Monitor agent data, Defender scans)
+- **Azure Monitor Agent** collects logs and performance data into a Log Analytics workspace, with a data collection rule defining what is gathered. The Log Analytics agent that previous guidance named is retired.
+- **Dependency Agent** feeds VM insights with process and dependency mapping.
+- **Custom Script Extension** and **RunCommand** execute PowerShell or shell scripts from Azure.
+- **Machine configuration** audits and remediates settings inside the guest OS, replacing the DSC extension.
+- **Microsoft Defender for Endpoint**, delivered through Defender for Cloud, provides threat detection and vulnerability management.
+- **Hybrid Runbook Worker extension** makes the machine an Automation execution target.
+- **Update Manager patch extensions** handle assessment and installation.
+
+The Arc resource itself carries no charge. Cost comes from what you enable on it, including Update Manager for Arc servers, Defender for Servers, Azure Monitor ingestion and retention, and Extended Security Updates.
 
 ### Arc-Enabled Kubernetes
 
-Arc-enabled Kubernetes clusters (AKS, on-premises, other clouds) appear in Azure and receive Azure management capabilities without code changes.
+Arc-enabled Kubernetes attaches a cluster running anywhere to Azure Resource Manager. Deploying the Arc agents by Helm creates a secure outbound connection, and the cluster appears as its own Azure resource that can be placed in a resource group and tagged like anything else.
 
-#### How Arc-Enabled Kubernetes Works
+Support is defined by conformance rather than by a vendor list. Any CNCF-certified Kubernetes cluster works, including clusters on GCP and AWS, on VMware vSphere, and on Azure Local, and Microsoft runs a [validation program](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/validation-program){:target="_blank" rel="noopener noreferrer"} with partner distributions.
 
-1. **Install the Azure Arc agent (Helm chart)** on the Kubernetes cluster
-2. Cluster registers with Azure and appears as an Azure resource
-3. Extensions install cluster agents for governance, monitoring, and security
-4. Azure Policy, RBAC, and Defender control the cluster from Azure
+AKS is a common point of confusion. AKS clusters are already Azure resources with an Azure control plane, so they are not Arc-enabled and do not need to be. What Arc gives you is a single inventory view where connected clusters appear alongside your AKS clusters, and a common set of extensions across both.
 
-#### Supported Cluster Types
+#### What You Get Once a Cluster Is Connected
 
-- **Azure Kubernetes Service (AKS)** – Automatically Arc-enabled
-- **On-premises Kubernetes** – Any distribution (kubeadm, OpenShift, Tanzu, Rancher)
-- **Other cloud Kubernetes** – EKS, GKE, or vendor-specific distributions
-- **Lightweight edge clusters** – K3s and other minimal distributions
+- **GitOps configuration management** through either [Flux v2](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/tutorial-use-gitops-flux2){:target="_blank" rel="noopener noreferrer"} or [Argo CD](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/tutorial-use-gitops-argocd){:target="_blank" rel="noopener noreferrer"}, both available as cluster extensions.
+- **Azure Policy for Kubernetes**, which installs a Gatekeeper admission webhook and evaluates policy at admission time.
+- **Azure Monitor** container insights for logs and Managed Prometheus for metrics.
+- **Microsoft Defender for Containers** for image scanning and runtime threat detection.
+- **Cluster connect**, which reaches the cluster's API server from anywhere without inbound access, with authorization through Azure RBAC.
+- **Azure Machine Learning**, **Event Grid on Kubernetes**, Marketplace applications, and **Azure Kubernetes Fleet Manager**, each delivered as extensions.
 
-#### Capabilities on Arc-Enabled Kubernetes
-
-**Azure Policy for Kubernetes** – Policies enforce security and compliance at the cluster level:
-- Pod security policies (prevent privileged containers)
-- Enforce image registries and signing
-- Require resource limits and requests
-- Control ingress and egress rules
-- Remediation runs admission controllers to prevent violations
-
-**RBAC integration** – Azure RBAC extends to Kubernetes
-- Azure users/groups get Kubernetes access based on Azure role assignments
-- OIDC integration for federated identity
-- No separate Kubernetes RBAC configuration needed
-
-**Extensions** – Cluster extensions add capabilities:
-- **Azure Monitor** – Prometheus metrics and Kubernetes logs
-- **Microsoft Defender for Kubernetes** – Threat detection and vulnerability scanning
-- **Azure Policy** – Governance and compliance policies
-- **GitOps** – Deploy applications from Git repositories using Flux or ArgoCD
-
-#### Benefits of Arc-Enabled Kubernetes
-
-- **Unified governance** – Single control plane (Azure) manages Kubernetes across all environments
-- **No cluster lock-in** – Same management features whether cluster is on-premises, AKS, or EKS
-- **Simplified operations** – Use existing Azure monitoring, security, and policy knowledge
-- **GitOps workflows** – Deploy applications via infrastructure-as-code from Git
-- **Cost visibility** – Arc provides cost analysis and optimization for on-premises clusters
+Azure RBAC for Kubernetes maps Microsoft Entra identities and Azure role assignments onto cluster authorization, which removes the need to maintain a parallel set of Kubernetes role bindings for those identities. It layers on top of Kubernetes RBAC rather than replacing it, so in-cluster service accounts and any bindings you keep for them continue to work as before.
 
 ### Arc-Enabled Data Services
 
-Arc-enabled data services allow SQL Managed Instance and PostgreSQL Hyperscale to run on your infrastructure with Azure billing, licensing, and management.
+Arc-enabled data services run an Azure data engine on your own Kubernetes cluster with Azure management and Azure billing. The currently available service is **SQL Managed Instance enabled by Azure Arc**. The PostgreSQL offering that earlier guidance describes is no longer part of the product.
 
-#### What Arc-Enabled Data Services Provide
+SQL Managed Instance on Arc gives you SQL Server engine compatibility on infrastructure you control, updates delivered from the Microsoft Container Registry on a cadence you set, and a subscription billing model that removes end-of-support cliffs for the database engine. Because it is deployed through Kubernetes, scaling up and down is an orchestration operation rather than a migration.
 
-**SQL Managed Instance on Arc**
-- Full SQL Server compatibility (T-SQL, SQL Server Integration Services)
-- Runs on your Kubernetes cluster with Azure management
-- Azure billing and licensing (pay-per-vCore per month)
-- Automatic backups to Azure storage
-- Point-in-time restore from Azure
+Deploying it requires a Kubernetes cluster that supports persistent volumes, the Azure Arc agents on that cluster, a **data controller** deployed into it to manage the data services, storage classes backing the persistent volumes, and outbound connectivity to `*.<region>.arcdataservices.com` for management and billing.
 
-**PostgreSQL Hyperscale on Arc**
-- Distributed PostgreSQL (Citus extension) with sharding and replication
-- Runs on Kubernetes with Azure management
-- Azure billing and licensing
-- Read replicas and backup/restore
-- High availability and disaster recovery
-
-#### Deployment Requirements
-
-- **Kubernetes cluster** on-premises or in other clouds (must support persistent volumes)
-- **Azure Arc agent** installed on the cluster
-- **Data Controller** deployed in the cluster (manages data services)
-- **Storage classes** for persistent volumes (NFS, iSCSI, or cloud-native storage)
-- **Networking** – Cluster must allow outbound connectivity to Azure for management and billing
-
-#### When to Use Arc-Enabled Data Services
-
-**Use when:**
-- You need SQL Server or PostgreSQL but cannot migrate to cloud
-- Compliance or data residency requires data to stay on-premises
-- You want Azure management and billing for on-premises databases
-- You need hybrid scenarios with data services across cloud and on-premises
-
-**Don't use when:**
-- Azure SQL Database or Azure Database for PostgreSQL already meets your needs
-- You do not need Azure management features
-- Cost is the primary driver (licenses are the same whether cloud or on-premises)
+Reach for it when data residency, latency, or a regulatory constraint keeps the database on your infrastructure but you still want Azure's management surface and billing model. Skip it when Azure SQL Database or Azure SQL Managed Instance in Azure would serve, when you do not need Azure-side management, or when cost reduction is the goal, since the licensing is not cheaper for running the engine on your own hardware.
 
 ---
 
-## Azure Policy and RBAC Through Arc
+## Governance and Security Across Arc Resources
 
-### Azure Policy Governance
+### Azure Policy Enforces at Two Different Times
 
-Azure Policy enforces organizational standards and compliance across all resources, including Arc-enabled servers and Kubernetes clusters.
+Policy reaches Arc servers and Arc Kubernetes clusters through the same assignment, but the enforcement points behave differently enough that designing for one and assuming the other leads to surprises.
 
-#### Policy Evaluation on Arc Resources
+```
+  Policy assignment at management group / subscription / resource group
+                                |
+        +-----------------------+------------------------+
+        |                                                |
+        v                                                v
+   Arc-enabled server                        Arc-enabled Kubernetes
+        |                                                |
+   machine configuration                       Azure Policy extension
+   inspects the guest OS                       (Gatekeeper admission
+   on a later evaluation                        webhook) evaluates the
+   cycle, after the fact                        request before admission
+        |                                                |
+        v                                                v
+   Reports drift; a                           Rejects the non-compliant
+   remediation task                           pod at creation; nothing
+   corrects it on the                         is ever scheduled
+   next cycle
+        |                                                |
+        +-----------------------+------------------------+
+                                v
+                  One compliance view in Azure Policy
+```
 
-**Server policies:**
-- Run directly on the guest OS to detect and remediate drift
-- Examples: Ensure Windows Defender is enabled, ensure firewall rules are configured
-- Remediation can auto-correct drift (e.g., install missing software, restart service)
-- Compliance status reported to Azure Policy dashboard
+On a server, machine configuration detects drift after it has already happened, and correcting it requires a remediation task. On a cluster, the admission webhook rejects the request before the workload exists. The same policy intent therefore produces detect-and-correct on one and prevent on the other, which is why a server-side control needs an explicit remediation plan while a cluster-side control does not.
 
-**Kubernetes policies:**
-- Run in the cluster as admission controllers
-- Enforce pod security, resource limits, and image registries
-- Block non-compliant pod creation before resources are consumed
+Azure Policy has [11 effects](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effect-basics){:target="_blank" rel="noopener noreferrer"} and they are not interchangeable here. `deployIfNotExists` and `modify` both run through the assignment's managed identity rather than the caller's, so the assignment needs its own role grant before remediation can work. `denyAction` is the only effect that blocks deletion, which is the one to reach for when the risk is an operator removing an agent or extension rather than misconfiguring it.
 
-#### Common Policy Scenarios
+Common assignments on Arc estates include requiring the Azure Monitor Agent and a data collection rule association, enforcing periodic update assessment, enforcing tagging so dynamic scoping works, and auditing guest OS settings like TLS versions and firewall state.
 
-- **Compliance enforcement** – Ensure all servers have antivirus, firewall, and patch management enabled
-- **Security standards** – Enforce TLS 1.2+, disable insecure protocols, require encryption
-- **Naming and tagging** – All resources must follow naming conventions and have required tags
-- **Cost governance** – Enforce resource limits and prevent expensive configurations
+### RBAC Across Arc Resources
 
-### Role-Based Access Control (RBAC)
+Azure roles apply to Arc servers and Kubernetes clusters the same way they apply to Azure-native resources, so `Reader`, `Contributor`, and custom roles all behave as expected against a `Microsoft.HybridCompute/machines` resource. The Arc-specific roles narrow onboarding and administration further, as described above.
 
-Azure RBAC extends to Arc resources the same way it does for Azure-native resources.
+The managed identity on each Arc server is the piece that changes application design. A script on that server can authenticate to Key Vault, Storage, or any other Azure service through the identity, with permission granted by an Azure role assignment rather than a credential stored on the machine.
 
-- **Azure roles** apply to Arc servers and Kubernetes clusters
-- **Managed identity** on Arc servers authenticates to Azure services (Key Vault, Storage, etc.)
-- **Kubernetes RBAC** can integrate with Azure AD for federated identity
-- Standard Azure roles (Contributor, Reader, Custom Roles) control Arc resource management
+### Monitoring and Defender
 
----
+**Azure Monitor** collects from Arc servers through the Azure Monitor Agent and a data collection rule, which defines what is gathered before it is billed. VM insights adds process and dependency mapping. Because the data lands in the same Log Analytics workspace as your Azure resources and carries the machine's Azure resource ID, a single KQL query can span on-premises and cloud workloads and resource-context access control applies uniformly.
 
-## Azure Monitor and Defender Integration Through Arc
+On Arc Kubernetes, container insights collects logs and Managed Prometheus collects metrics into an Azure Monitor workspace, which is a distinct resource type from the Log Analytics workspace.
 
-### Azure Monitor Integration
-
-Arc-enabled resources integrate with Azure Monitor for centralized observability.
-
-**Monitoring on Arc servers:**
-- Install the Azure Monitor agent (or legacy MMA) to send logs and metrics to Log Analytics
-- Create custom queries to analyze on-premises and cloud workloads side-by-side
-- Set up alerts and action groups for incident response
-- Use Application Insights to monitor applications running on Arc servers
-
-**Monitoring on Arc Kubernetes:**
-- Deploy the Azure Monitor extension to collect Prometheus metrics
-- Stream container logs to Log Analytics
-- Monitor cluster health, workload performance, and application metrics
-- Use Log Analytics queries to analyze logs from all clusters
-
-### Defender for Cloud Integration
-
-[Microsoft Defender for Cloud](https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-cloud-introduction){:target="_blank" rel="noopener noreferrer"} extends threat protection and compliance monitoring to Arc resources.
-
-**On Arc servers:**
-- Vulnerability scanning detects missing patches, weak configurations
-- Threat detection identifies suspicious activity and network anomalies
-- Compliance assessment verifies server state against security benchmarks
-- Recommendations provide remediation steps for detected issues
-
-**On Arc Kubernetes:**
-- Container image scanning detects vulnerabilities before deployment
-- Runtime threat detection identifies suspicious container behavior
-- Policy enforcement prevents risky configurations
-- Compliance checks verify cluster state against Kubernetes security standards
+**Defender for Cloud** extends to Arc resources through Defender for Endpoint on servers and Defender for Containers on clusters, producing vulnerability findings, threat detections, and compliance assessments against security benchmarks in the same views used for Azure resources. Microsoft Sentinel can then collect the security events for correlation with other sources.
 
 ---
 
-## Automation vs Logic Apps vs Functions
+## Choosing Between Automation, Logic Apps, and Functions
 
-Azure provides multiple services for automation and orchestration. Choosing the right one depends on requirements.
-
-### When to Use Each Service
+### What Each One Is For
 
 | Aspect | Azure Automation | Logic Apps | Azure Functions |
 |--------|------------------|-----------|-----------------|
-| **Primary use** | Infrastructure automation, runbooks, scheduled tasks, patching | Low-code workflow orchestration, business process automation | Event-driven code execution, lightweight computations |
-| **Execution model** | Runbook-based (PowerShell, Python, graphical) | Visual workflow with conditions, loops, actions | Serverless function triggered by events |
-| **Language** | PowerShell, Python, or no-code | No-code (visual designer) | C#, Python, Node.js, Java, PowerShell |
-| **Execution time** | Sandbox: 180s; Hybrid Worker: unlimited | Unlimited | Default: 10 min (extensible to 1 hour) |
-| **Startup latency** | Seconds (scheduled or webhook) | Seconds to minutes (depends on trigger) | Milliseconds (always running / consumption) |
-| **Connectors** | Limited (Azure, basic APIs) | 600+ connectors (ServiceNow, Slack, Teams, etc.) | Custom code integrations |
-| **Cost model** | Account cost + execution; no action cost | Per action execution | Consumption-based (invocations + duration) |
-| **Debugging** | PowerShell testing; logs in Automation account | Visual designer makes troubleshooting easier | Application Insights or code-level debugging |
-| **Hybrid capability** | Hybrid Runbook Workers execute on-premises | Requires on-premises gateway or connector | Requires Event Grid relay or webhook tunnel |
-| **Orchestration complexity** | Simple to moderate (sequential or parallel) | Complex workflows with branches, conditions, loops | Simple; complex orchestration delegates to Logic Apps |
+| **Primary use** | Infrastructure scripts, scheduled operational tasks, hybrid administration | Low-code workflow orchestration and system integration | Event-driven code execution |
+| **Execution model** | Runbooks in PowerShell, Python, or the graphical editor | Visual workflow with conditions, loops, and actions | Functions bound to triggers |
+| **Language** | PowerShell 7.6/7.4/5.1, Python 3.10, or no code | No code, with inline code actions available | C#, Python, Node.js, Java, PowerShell |
+| **Execution time** | Azure sandbox 3 hours (fair share); hybrid worker unbounded | Unbounded | Flex Consumption, Premium, and Dedicated default 30 min and are unbounded; legacy Consumption defaults to 5 min with a 10 min maximum |
+| **Startup latency** | Seconds to minutes, depending on runbook type and queue depth | Seconds | Milliseconds when warm; cold start applies when scaled to zero |
+| **Integration model** | PowerShell and Python modules imported into the account | Hundreds of managed connectors plus built-in operations | Trigger and binding extensions, plus your own SDK calls |
+| **Cost model** | Job run time above a monthly free allowance, plus watcher time | Per action executed, and separately per managed-connector call | Executions plus resource consumption, by plan |
+| **Debugging** | Job streams and history in the Automation account | Run history in the designer, with per-action inputs and outputs | Application Insights and local debugging |
+| **Hybrid reach** | Hybrid Runbook Workers run jobs inside your network | On-premises data gateway or a Standard plan in a virtual network | Virtual network integration on Flex Consumption, Premium, and Dedicated |
+| **Orchestration** | Sequential and parallel, with child runbooks | Branches, loops, and error handling as first-class designer constructs | Durable Functions for stateful orchestration |
 
-### Recommended Patterns
+The billing line is where the three diverge most in practice. A Consumption logic app charges per action *and* per managed-connector call, so a workflow that touches ServiceNow or Office 365 twenty times per run costs considerably more than the action count alone suggests.
 
-**Use Azure Automation when:**
-- Running infrastructure scripts and system administration tasks
-- Executing on-premises via Hybrid Runbook Workers
-- Patching and configuration management across hybrid infrastructure
-- Long-running operations that exceed 10 minutes
+### Picking One
 
-**Use Logic Apps when:**
-- Building enterprise workflows with business logic
-- Integrating many systems (ServiceNow, Slack, Teams, custom APIs)
-- Process automation where no-code visibility is valuable
-- Complex branching, loops, and error handling
+**Azure Automation** fits infrastructure and system administration scripts, especially when the target is on-premises. It is the only one of the three with a first-class model for running the same script inside your own network under an account you already manage.
 
-**Use Azure Functions when:**
-- Event-driven processing (triggered by HTTP, Storage, Queue, Event Grid)
-- Need fast execution and fine-grained cost control
-- Writing application code in languages like C# or Node.js
-- Lightweight computations or API handlers
+**Logic Apps** fits workflows that span systems and need to be readable by people who did not write them. Its connector catalog is the reason to choose it, and its per-action run history makes production debugging a matter of reading rather than reproducing.
 
-**Hybrid approach:**
-- Logic Apps orchestrates the workflow
-- Azure Functions handle custom code
-- Azure Automation manages infrastructure tasks
-- Example: Logic Apps trigger on-premises deployment → Azure Functions run build steps → Azure Automation Hybrid Runbook Workers patch servers
+**Azure Functions** fits code triggered by an event, where you want fine-grained cost control and a real programming language. Stateful, long-running orchestration goes to Durable Functions rather than out to another service.
+
+They compose. A Logic App can orchestrate a workflow, call a Function for custom logic, and start an Automation runbook on a Hybrid Runbook Worker to touch an on-premises server, with each service doing the part it is best at.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Exceeding Sandbox Runtime Limits with Automation
+### Pitfall 1: Designing for a Timeout That Does Not Exist, and Missing the One That Does
 
-**Problem:** Creating long-running runbooks (data processing, bulk operations) that exceed the 180-second sandbox timeout.
+**Problem:** Runbooks are split into artificial chunks to fit an imagined short sandbox timeout, or a genuinely long job is left in the sandbox because three hours sounds like plenty.
 
-**Result:** Runbooks fail with timeout errors. Code must be split across multiple runbooks or moved off the sandbox.
+**Result:** The first produces child-runbook sprawl with no benefit. The second produces a job that runs for three hours, gets unloaded by fair share, and stops without restarting, usually partway through a change.
 
-**Solution:** For tasks exceeding 180 seconds, use Hybrid Runbook Workers (no timeout) or deploy to Azure Functions. Hybrid Runbook Workers can run indefinitely as long as the worker machine is responsive.
-
----
-
-### Pitfall 2: Missing Managed Identity Setup for Arc-Enabled Servers
-
-**Problem:** Arc-enabled servers not configured with managed identity. Manual credential management becomes necessary for server-to-Azure authentication.
-
-**Result:** Operational overhead managing credentials on many servers. Security risk if credentials are not rotated. Scripts must explicitly handle credential retrieval.
-
-**Solution:** Configure managed identity at the Arc server level. Assign roles to the identity so the server can access Key Vault, Storage, and other Azure services without explicit credentials. Runbooks and scripts use managed identity automatically.
+**Solution:** The Azure sandbox limit is a three-hour fair-share ceiling, with 400 MB of memory, 1 GB of temporary disk, and 1,000 sockets alongside it. Anything comfortably inside that can stay in the sandbox as one runbook. Anything that might approach three hours belongs on a Hybrid Runbook Worker, which fair share does not apply to. Splitting into child runbooks is a parallelism technique for shortening total elapsed time, not a workaround for the ceiling.
 
 ---
 
-### Pitfall 3: Not Enabling Update Management Before Arc Onboarding
+### Pitfall 2: Assuming Arc's Managed Identity Grants Access
 
-**Problem:** Arc-enabled servers registered in Azure but not configured for Update Management. Patching continues through existing on-premises tools.
+**Problem:** An Arc-enabled server has a system-assigned managed identity, so scripts are written to authenticate with it, but no Azure role is assigned to that identity.
 
-**Result:** Fragmented patching strategy (Azure for some, legacy tools for others). No unified compliance reporting.
+**Result:** Authentication succeeds and authorization fails. The error surfaces as a permission problem at the target service, which sends people looking at the wrong end of the chain.
 
-**Solution:** Enable Update Management in the Automation account before onboarding servers. When servers are Arc-enabled, they are immediately available for centralized patching.
-
----
-
-### Pitfall 4: Policy Non-Compliance Without Remediation
-
-**Problem:** Azure Policy assigned to Arc resources but no remediation actions defined. Policy detects violations but does not fix them.
-
-**Result:** Compliance reports show drift but no automatic correction. Manual fixes required.
-
-**Solution:** When assigning policies to Arc servers, create remediation tasks. Remediation automatically corrects drift (e.g., enable Windows Defender, install antivirus) without manual intervention.
+**Solution:** Onboarding creates the identity. It does not grant anything. Assign the identity the specific roles it needs at the narrowest workable scope, such as `Key Vault Secrets User` on one vault rather than a subscription-wide grant. Because every Arc server gets its own identity, role assignment is per-machine work, so drive it through policy or a deployment template rather than by hand.
 
 ---
 
-### Pitfall 5: Hybrid Runbook Worker Connectivity Issues
+### Pitfall 3: Following Retired Patching Guidance
 
-**Problem:** Hybrid Runbook Worker loses connectivity to Automation account due to firewall, proxy, or network changes.
+**Problem:** A runbook or documented process enables Update Management in an Automation account and links a Log Analytics workspace for patch compliance.
 
-**Result:** Jobs queued but never execute. Worker shows offline in the portal.
+**Result:** The path no longer exists. Automation Update Management retired on 31 August 2024 along with the Log Analytics agent, so machines silently fall out of any patch schedule and compliance reporting goes blank while the machines themselves look healthy.
 
-**Solution:** Ensure worker machines have outbound HTTPS (port 443) to Azure Automation endpoints. Test connectivity regularly. Configure worker to use corporate proxy if needed. Monitor worker heartbeat to detect connectivity issues early.
-
----
-
-### Pitfall 6: Arc-Enabled Kubernetes Without GitOps
-
-**Problem:** Deploying applications to Arc-enabled Kubernetes manually instead of using GitOps.
-
-**Result:** Configuration drift between Git and running state. No audit trail of who deployed what. Inconsistent deployments across clusters.
-
-**Solution:** Install GitOps extensions (Flux or ArgoCD) on Arc-enabled Kubernetes clusters. Define desired state in Git. GitOps automatically syncs cluster state to match Git. Changes appear in Git history for audit and rollback.
+**Solution:** Move patching to Azure Update Manager, which needs no Automation account, no workspace, and no monitoring agent. For non-Azure machines, Arc is the prerequisite. Once a machine is Arc-enabled, Update Manager reaches it natively. Check the cost side at the same time, since Update Manager is free for Azure VMs but charged per Arc server unless one of the ESU, Defender for Servers Plan 2, or Windows Server Management exemptions applies.
 
 ---
 
-### Pitfall 7: Over-Reliance on Schedules for Event-Driven Tasks
+### Pitfall 4: Policy That Detects Drift But Never Corrects It
 
-**Problem:** Creating scheduled runbooks to handle tasks that are actually event-driven (e.g., running daily at midnight to check for new files).
+**Problem:** Policies are assigned to Arc resources with `audit` or `auditIfNotExists`, or with `deployIfNotExists` but no remediation task and no role grant on the assignment's identity.
 
-**Result:** Unnecessary overhead; fixed schedules do not align with actual events. If an event happens at 12:01 AM, the script must wait until the next day.
+**Result:** The compliance dashboard fills with non-compliant resources and nothing changes. Existing machines in particular stay non-compliant indefinitely, because `deployIfNotExists` acts on resource writes and existing resources need an explicit remediation task.
 
-**Solution:** Use webhooks, Event Grid, or Logic Apps to trigger runbooks based on actual events. Schedule runbooks only for true time-based tasks (maintenance windows, routine reporting).
+**Solution:** Decide per control whether you want detection or correction. For correction, use `deployIfNotExists` or `modify`, grant the assignment's managed identity the roles the deployment needs, and create a remediation task to sweep existing resources. Where the risk is deletion rather than misconfiguration, such as an operator removing the Connected Machine agent's extensions, `denyAction` is the effect that blocks it.
+
+---
+
+### Pitfall 5: Hybrid Worker Groups That Go Quiet
+
+**Problem:** A firewall change, proxy update, or certificate rotation breaks a worker's outbound path, and nobody notices until a scheduled job does not run.
+
+**Result:** Jobs queue and then suspend. If no worker in the group has polled within 30 minutes, the group counts as having no active workers and queued jobs are suspended after three retries.
+
+**Solution:** Allow outbound HTTPS on port 443 from every worker, using the `GuestAndHybridManagement` service tag rather than IP ranges where the network path goes through an NSG or Azure Firewall. Put more than one worker in any group that runs production work, so a single machine's outage does not idle the group. Alert on the worker heartbeat rather than on job failures, because a job that never dispatches produces no failure to alert on.
+
+---
+
+### Pitfall 6: Deploying to Arc-Enabled Kubernetes by Hand
+
+**Problem:** Applications reach Arc-connected clusters through `kubectl apply` from an operator's machine rather than through the GitOps extension.
+
+**Result:** Cluster state drifts from any repository, there is no record of who deployed what, and clusters that were meant to be identical diverge. Rollback becomes an archaeology exercise.
+
+**Solution:** Install the GitOps extension, with Flux v2 or Argo CD, and let it reconcile the cluster against a Git repository. Desired state becomes a reviewable commit, drift is corrected by the reconciler, and the audit trail is the repository history. Because the extension is configured as an Azure resource, the same GitOps configuration can be applied across many clusters as a policy assignment rather than a per-cluster setup.
+
+---
+
+### Pitfall 7: Scheduling Work That Is Actually Event-Driven
+
+**Problem:** A runbook runs nightly to check whether something happened, rather than being triggered when it happens.
+
+**Result:** Latency equal to the schedule interval, plus runs that do nothing most nights. An event at 12:01 AM waits almost 24 hours for a response.
+
+**Solution:** Trigger from the event. Event Grid delivers resource events to a runbook webhook, an Azure Monitor alert can start a runbook through an action group, and a Logic App can call one as a workflow step. Keep schedules for work that really is time-based, like maintenance windows and periodic reporting. If the trigger has to be a webhook, remember that webhooks cannot start Python runbooks and misencode input parameters for PowerShell 7, so a PowerShell 5.1 runbook is the reliable target.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure Automation extends Azure management to hybrid infrastructure.** Runbooks execute in Azure sandboxes or on Hybrid Runbook Workers located on-premises. Automation runs scheduled tasks, patches servers, and enforces configuration management across locations.
+1. **Azure Automation is a script execution service, and where the script runs is the design decision.** The Azure sandbox is cheap and simple but capped at a three-hour fair-share ceiling with 400 MB of memory and no ability to call executables. A Hybrid Runbook Worker removes those limits and reaches your network, at the cost of a machine you maintain.
 
-2. **Hybrid Runbook Workers bridge the gap between cloud and on-premises automation.** They enable long-running tasks, access to local resources, and execution in network-isolated environments where direct Azure connectivity does not exist.
+2. **Hybrid Runbook Workers pull work; they do not receive it.** Every active worker polls the service every 30 seconds and takes jobs first-come-first-served, which is why the whole model needs only outbound HTTPS and why a group with no worker polling in 30 minutes silently suspends its queue.
 
-3. **Update Management provides unified patching for heterogeneous infrastructure.** Patch Windows and Linux machines whether they run on Azure, on-premises, or in other clouds through a single control plane.
+3. **The agent-based Hybrid Runbook Worker is gone.** It retired on 31 August 2024 and its jobs stopped on 1 April 2025. The extension-based worker, installed through the VM extension framework with a managed identity, is the only supported platform.
 
-4. **Azure Arc transforms hybrid infrastructure management into Azure-native management.** Arc-enabled servers and Kubernetes clusters appear in Azure as native resources, receiving Azure policies, RBAC, monitoring, and security through Azure's management APIs.
+4. **Patching left Azure Automation.** Update Management retired on 31 August 2024 with the Log Analytics agent, and Azure Update Manager replaced it as a native capability on Azure VMs and Arc-enabled servers, with per-resource RBAC and no workspace dependency.
 
-5. **Arc is a bridge, not a lock-in.** The Arc agent is lightweight and can be uninstalled. Arc enables consistent management without forcing migration to Azure.
+5. **Configuration management is leaving too.** Azure Automation State Configuration retires on 30 September 2027, and Azure machine configuration replaces it by delivering configuration as Azure Policy assignments that reach Arc-enabled servers without a separate node registration.
 
-6. **Azure Policy and RBAC extend to Arc resources the same as Azure-native resources.** Governance and compliance policies apply across all infrastructure. Access control is unified.
+6. **Azure Arc turns non-Azure infrastructure into Azure Resource Manager resources.** An Arc-enabled server or cluster gets a resource ID in a resource group, which is what lets policy, RBAC, Monitor, and Defender reach it through their normal APIs rather than through a parallel toolchain.
 
-7. **Arc-enabled Kubernetes eliminates management platform lock-in.** Use any Kubernetes distribution (on-premises, EKS, GKE) and receive the same Azure governance, monitoring, and security.
+7. **Policy enforces at different moments on servers and clusters.** Machine configuration detects guest OS drift after the fact and needs a remediation task to correct it, while the Kubernetes admission webhook rejects a non-compliant workload before it is scheduled.
 
-8. **Choose the right automation service for the task.** Azure Automation handles infrastructure runbooks. Logic Apps orchestrate business workflows. Azure Functions handle event-driven code. Combine them for complex scenarios.
+8. **Arc-enabled data services means SQL Managed Instance.** That is the current offering, it runs on a Kubernetes cluster with a data controller, and the PostgreSQL option described in older material is no longer part of the product.
 
-9. **Managed identity on Arc servers eliminates credential management burden.** Configure managed identity once; runbooks and applications access Azure services without managing passwords.
+9. **Arc is a projection, not a migration.** The agent needs only outbound HTTPS, can be uninstalled, and does not move the workload. What it changes is which control plane governs the machine.
 
-10. **Automation without monitoring is operational blind-spot.** Integrate automated tasks with Azure Monitor and Defender so you see what automation is doing. Automated fixes can mask underlying problems if not monitored.
+10. **The Arc resource is free; what you enable on it is not.** Update Manager for Arc servers, Defender for Servers, Azure Monitor ingestion and retention, and Extended Security Updates each carry their own charge, so the cost model follows the capabilities you turn on rather than the machine count.

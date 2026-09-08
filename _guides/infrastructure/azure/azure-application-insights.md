@@ -3,762 +3,711 @@ title: "Azure Application Insights for System Architects"
 layout: guide
 category: Azure
 subcategory: Management & Governance
-description: "A comprehensive guide to Azure Application Insights covering APM, distributed tracing, availability tests, smart detection, and architectural patterns for application-level observability."
-tags: [azure, observability, monitoring, performance, cloud-computing, reliability, practical]
+description: "How OpenTelemetry-based instrumentation reaches Application Insights, where the telemetry physically lands and what it costs to keep, how the sampler decides what survives, and which classic APM features have already been retired out from under existing guidance."
+tags: [application-insights, opentelemetry, distributed-tracing, observability, apm, practical]
 ---
 
 ## What Is Application Insights
 
-[Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview){:target="_blank" rel="noopener noreferrer"} provides end-to-end visibility into application behavior, performance, and failures. It automatically collects telemetry from your applications, performs distributed tracing across microservices, detects performance anomalies, and integrates with Azure DevOps for work item creation when issues are found.
+[Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview){:target="_blank" rel="noopener noreferrer"} is the application performance monitoring feature of Azure Monitor. It collects request, dependency, exception, and log telemetry from your applications, correlates it into end-to-end traces, detects performance anomalies, and surfaces it through views like the application map, the failures view, and live metrics.
 
-Application Insights is a specialized component within the broader [Azure Monitor](https://learn.microsoft.com/en-us/azure/azure-monitor/overview){:target="_blank" rel="noopener noreferrer"} platform. Azure Monitor handles infrastructure metrics and logs at the OS and service level, while Application Insights focuses on application-level telemetry and behavior analysis.
+The product changed shape between 2024 and 2026, and most older material describes a version that no longer exists. Three changes matter before anything else:
+
+- **The recommended instrumentation is OpenTelemetry.** The [Azure Monitor OpenTelemetry Distro](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable){:target="_blank" rel="noopener noreferrer"} is the supported code-based path for new applications. The classic `TelemetryClient` SDKs still work, but their 3.x versions are themselves OpenTelemetry implementations behind a compatibility layer.
+- **Classic Application Insights resources retired on 29 February 2024.** Every resource is workspace-based now, which means the telemetry physically lives in a Log Analytics workspace.
+- **Several signature features are gone.** Continuous export retired with classic resources, multi-step web tests retired on 31 August 2024, and URL ping tests retire on 30 September 2026.
 
 ### What Problems Application Insights Solves
 
-**Without Application Insights:**
-- You see that a service is "down" but have no visibility into which requests failed and why
-- Errors are discovered through user reports or log grep sessions instead of automated detection
-- Debugging production issues requires manual correlation of scattered logs across services
-- Performance problems are diagnosed through guesswork instead of data
-- You have no understanding of how users experience your application (real transaction timings)
+**Without application-level telemetry:**
+- You see that a service is unhealthy but not which requests failed or why
+- Errors surface through user reports or log searches rather than automated detection
+- Debugging a production issue means manually correlating logs across services
+- Performance problems get diagnosed by guesswork
+- You have no measurement of how the application actually behaves for users
 
 **With Application Insights:**
-- Automatic collection of request failures, exceptions, and performance metrics across all services
-- Distributed tracing shows the complete path a request takes through your system
-- Smart detection alerts you to anomalies and failing operations before users report them
-- Dependency mapping reveals which services call which, and where bottlenecks occur
-- You understand real-world application performance, not just infrastructure health
+- Requests, dependencies, and exceptions are collected across every instrumented service
+- Distributed tracing reconstructs the path a single request took through the system
+- Smart detection flags anomalies against a learned baseline rather than a static threshold
+- The application map builds a dependency graph from the telemetry itself
+- Standard availability tests measure the application from outside, independent of internal metrics
 
 ### How Application Insights Differs from AWS X-Ray
 
-Architects familiar with AWS should note several important differences:
+Architects familiar with AWS should note several differences:
 
 | Concept | AWS X-Ray | Application Insights |
-|---------|-----------|---------------------|
-| **Service type** | Distributed tracing focused | Full APM (tracing + monitoring + analytics) |
-| **Trace sampling** | Fixed percentage or rules-based | Adaptive sampling built-in, controlled automatically |
-| **Exception tracking** | Requires custom annotation | Automatic exception collection |
-| **Availability monitoring** | Not included (use CloudWatch synthetic) | Built-in availability tests (ping, multi-step, custom) |
-| **Anomaly detection** | Manual threshold alerts | Smart detection with machine learning |
-| **Application Map** | Service map requires configuration | Automatic dependency visualization |
-| **Integration** | CloudWatch, Lambda, ALB native | Azure DevOps native, work item creation |
-| **Pricing model** | Per-trace ingestion + storage | Per-GB ingestion + retention tiers |
-| **SDK support** | Languages vary in maturity | Comprehensive SDK and auto-instrumentation support |
+|---|---|---|
+| **Service type** | Distributed tracing focused | Full APM (tracing, monitoring, and analytics) |
+| **Instrumentation standard** | X-Ray SDK or ADOT (OpenTelemetry) | OpenTelemetry, through the Azure Monitor Distro |
+| **Trace sampling** | Fixed percentage or rules-based | One rate across all telemetry types, applied at the end of span generation |
+| **Exception tracking** | Requires custom annotation | Collected automatically by the instrumentation libraries |
+| **Availability monitoring** | Not included (use CloudWatch Synthetics) | Built-in standard tests |
+| **Anomaly detection** | Manual threshold alarms | Smart detection with machine learning |
+| **Dependency visualization** | Service map requires configuration | Application map, built from telemetry with no configuration |
+| **Storage** | X-Ray's own trace store | A Log Analytics workspace, queryable in KQL alongside other Azure telemetry |
+| **Pricing model** | Per-trace ingestion plus storage | Per-GB ingestion plus retention beyond 90 days |
 
 ---
 
-## Application Insights Resources and Workspaces
+## Where the Data Actually Lives
 
-### Workspace-Based vs Classic Resources
+An Application Insights resource is a set of portal experiences over tables that physically sit in a [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-workspace-overview){:target="_blank" rel="noopener noreferrer"}. That one fact explains its retention model, its cost model, and why its data joins cleanly against infrastructure logs.
 
-Application Insights resources come in two deployment models: workspace-based and classic. Microsoft recommends workspace-based resources for all new deployments.
+```
+   your app
+      |  connection string
+      v
+   ingestion endpoint ---> Application Insights resource
+                                    |  (workspace-based: no storage of its own)
+                                    v
+                          Log Analytics workspace
+                          |- requests, dependencies, exceptions,
+                          |  traces, customEvents, customMetrics,
+                          |  availabilityResults, pageViews
+                          |- AzureDiagnostics, Perf, Heartbeat, ...
+                                    |
+                                    |--> KQL queries, workbooks, log alerts
+                                    |--> diagnostic settings --> Storage / Event Hubs
+```
 
-**Workspace-based Application Insights:**
-- Linked to a [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-workspace-overview){:target="_blank" rel="noopener noreferrer"} that aggregates logs and metrics from multiple sources
-- Single pane of glass for application telemetry, infrastructure logs, and other Azure Monitor data
-- Unified pricing and retention across all data types
-- Required for Azure Managed Grafana dashboards and some advanced features
-- Can be created simultaneously with the workspace or linked to an existing workspace
+The consequences to plan around:
 
-**Classic Application Insights:**
-- Standalone resource with its own storage and retention
-- Isolated from other Azure Monitor data
-- Will be deprecated; Microsoft recommends migration to workspace-based resources
-- No longer the recommended choice for new deployments
+- **The workspace owns retention and billing.** Ingestion and retention charges land on the workspace bill, not on a separate Application Insights meter.
+- **A workspace can hold many applications.** One workspace per environment with several Application Insights resources pointed at it is a normal shape, and it lets a single KQL query span services.
+- **Application Insights tables sit alongside everything else.** A query can join `requests` against `Perf` or `AzureDiagnostics` in one statement.
 
-**Recommendation:** Always create workspace-based Application Insights resources. Create a single Log Analytics workspace per application or per environment (development, staging, production) and link all Application Insights and other monitoring resources to it.
+### What the Classic Retirement Changed
+
+Classic (non-workspace) resources retired on 29 February 2024, and Microsoft began automatically migrating the remainder from May 2024. Existing classic components kept ingesting telemetry, but no new ones can be created and the model receives no further work.
+
+Two things break rather than migrate:
+
+- **Continuous export is not compatible with workspace-based resources.** It had to be disabled or converted to diagnostic settings before migration.
+- **API keys survive migration but the integrations that used them do not.** Release annotations and the live metrics secure control channel need new keys and reconfiguration.
+
+### Retention
+
+| Setting | Value |
+|---|---|
+| Raw telemetry retention | Configurable: 30, 60, 90, 120, 180, 270, 365, 550, or 730 days |
+| Included at no extra charge | 90 days |
+| Aggregated metrics | 1-minute granularity, 90 days |
+| Debug snapshots | 15 days |
+| .NET Profiler traces | 15 days, no storage charge |
+
+Retention past 730 days is a workspace-level concern rather than an Application Insights one. The workspace's total retention setting reaches 12 years, and data past the analytics retention window comes back through a search job rather than an interactive query.
 
 ---
 
-## Instrumentation: Auto vs SDK
+## Instrumentation
 
-### Auto-Instrumentation
+Telemetry reaches Application Insights three ways, and they differ sharply in how much control they give you.
 
-[Auto-instrumentation](https://learn.microsoft.com/en-us/azure/azure-monitor/app/codeless-overview){:target="_blank" rel="noopener noreferrer"} collects telemetry without code changes. Application Insights automatically instruments your application when it starts.
+### Autoinstrumentation
 
-**How auto-instrumentation works:**
-1. Deploy the Application Insights agent to your runtime environment (Java agent for Java apps, .NET runtime module for .NET apps, JavaScript SDK for web apps)
-2. The agent intercepts method calls, HTTP requests, and exceptions at runtime
-3. Telemetry is collected and sent to Application Insights automatically
+[Autoinstrumentation](https://learn.microsoft.com/en-us/azure/azure-monitor/app/codeless-overview){:target="_blank" rel="noopener noreferrer"} attaches an agent at the hosting platform, with no code change and often no configuration beyond a portal toggle. Support depends on both host and language:
 
-**Supported runtimes:**
-- .NET and .NET Framework (via Status Monitor or Application Insights agent)
-- Java (via Application Insights Java agent)
-- JavaScript/Node.js (via SDK only)
-- Python (SDK, auto-instrumentation in preview)
-- Go (SDK only)
+| Environment | .NET Framework | .NET | Java | Node.js | Python |
+|---|---|---|---|---|---|
+| App Service on Windows (code) | Yes | Yes | Yes | Yes | No |
+| App Service on Linux (code) | No | Yes | Yes | Yes | Yes |
+| App Service (container) | Preview | Preview | Preview | Preview | No |
+| Azure Functions | Yes | Yes | Yes | Yes | Yes |
+| Azure Spring Apps | No | No | Yes | No | No |
+| Azure Kubernetes Service | No | Preview | Yes | Yes | Preview |
 
-**Benefits of auto-instrumentation:**
-- Zero code changes
-- Instant visibility into production applications
-- Captures exceptions and failed requests automatically
-- Works with legacy applications
+Container support covers single-container applications only. Multi-container and sidecar deployments need code-based instrumentation.
 
-**Limitations:**
-- Less granular control over what is collected
-- Some custom business events and metrics require code
-- May not capture all framework-specific interactions
+**Where autoinstrumentation stops:** it collects the standard signals well and gives you almost no control. Custom business events, custom metrics, redaction of sensitive fields, and per-dependency filtering all require code.
 
-### SDK-Based Instrumentation
+### The Azure Monitor OpenTelemetry Distro
 
-The [Application Insights SDK](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview#get-started){:target="_blank" rel="noopener noreferrer"} provides programmatic control over telemetry collection.
+The [Distro](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable){:target="_blank" rel="noopener noreferrer"} wraps the OpenTelemetry SDK plus the Azure Monitor exporter, and it is the recommended path for ASP.NET Core, Java, Node.js, and Python. Over plain OpenTelemetry with a community exporter, it adds sampling compatible with the classic SDKs, Microsoft Entra authentication, offline storage with automatic retries, standard metrics, cloud role name detection, and live metrics support.
 
-**How SDK-based instrumentation works:**
-1. Add the Application Insights NuGet package (or equivalent) to your project
-2. Initialize the SDK in your application startup
-3. Use the SDK API to track custom events, metrics, and dependencies
-4. Auto-instrumentation still happens, and you add custom tracking on top
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddOpenTelemetry().UseAzureMonitor();
+var app = builder.Build();
+```
 
-**Benefits of SDK-based instrumentation:**
-- Full control over what is collected
-- Track custom business events (user signups, feature usage, revenue)
-- Track custom metrics (queue depth, cache hit rate, business KPIs)
-- Enrich telemetry with contextual information
-- Sample-aware: custom tracking respects sampling settings
+The connection string comes from the `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable. Instrumentation keys on their own are no longer a supported ingestion path, and technical support for instrumentation-key-based ingestion ended on 31 March 2025.
 
-**When to use SDK-based instrumentation:**
-- Need to track business events or custom metrics
-- Want to correlate application behavior with business outcomes
-- Need to filter sensitive data before sending
-- Building libraries that other applications depend on
+For classic ASP.NET, console applications, and Windows Forms, use the standalone `Azure.Monitor.OpenTelemetry.Exporter` package rather than the Distro.
 
-**Best practice:** Use auto-instrumentation as the baseline for all applications, then add SDK instrumentation for business-critical events and metrics.
+**Browser telemetry is the exception.** The Application Insights JavaScript SDK does not use OpenTelemetry, and Microsoft neither recommends nor supports OpenTelemetry JavaScript in a browser. Page views, user flows, and funnels come from the JavaScript SDK.
+
+### Classic SDKs and the 3.x Upgrade
+
+Applications on the 2.x `TelemetryClient` SDKs have an intermediate step. The [.NET SDK 3.x](https://learn.microsoft.com/en-us/azure/azure-monitor/app/migrate-to-opentelemetry){:target="_blank" rel="noopener noreferrer"} keeps most of the `TelemetryClient` and `TelemetryConfiguration` surface but routes every `Track*` call through a mapping layer that emits OpenTelemetry signals. Node.js has the same arrangement.
+
+That path preserves ingestion compatibility while deferring the code rewrite, but it is not a drop-in upgrade:
+
+- The collector and channel packages (`DependencyCollector`, `PerfCounterCollector`, `WindowsServer.TelemetryChannel`, the logging appenders) have no 3.x versions and must be removed
+- `TrackPageView` is gone from the .NET 3.x SDK
+- The `IDictionary<string, double> metrics` overloads of `TrackEvent`, `TrackException`, and `TrackAvailability` are gone, so metrics have to be tracked separately
+- `TelemetryProcessor`, `TelemetryInitializer`, and `ITelemetryChannel` are replaced by OpenTelemetry processors and exporters
+- A connection string is required, and startup can fail without one
+- `EnableAdaptiveSampling` is replaced by `SamplingRatio` or `TracesPerSecond`
+
+Never mix 2.x and 3.x packages, and never run the 3.x SDK and the Distro in the same application.
+
+### Choosing an Instrumentation Path
+
+```
+Where does the code run?
+
+Browser / client-side JavaScript -----------> Application Insights JavaScript SDK
+                                              (OpenTelemetry is not an option here)
+
+Server-side, new application ---------------> Azure Monitor OpenTelemetry Distro
+                                              |- classic ASP.NET, console, WinForms
+                                              |  --> Azure.Monitor.OpenTelemetry.Exporter
+                                              |- everything else --> UseAzureMonitor()
+
+Server-side, existing app on 2.x SDKs
+|- Can absorb a code rewrite now -----------> Distro (clean install)
+|- Needs a compatible interim step ---------> Application Insights SDK 3.x
+
+Supported PaaS host, no custom telemetry
+needed, no code change wanted --------------> autoinstrumentation
+```
+
+Autoinstrumentation and the Distro are not mutually exclusive in principle, but running both against one application produces duplicate telemetry. Pick one per application and disable the other.
 
 ---
 
 ## Telemetry Types
 
-Application Insights collects multiple types of telemetry that form a complete picture of application behavior.
+Application Insights predates OpenTelemetry, and its table names and portal labels still use the older vocabulary. Reading either set of documentation requires the mapping:
+
+| Application Insights | OpenTelemetry |
+|---|---|
+| Requests | Server spans |
+| Dependencies | Client, internal, and other span types |
+| Traces | Logs |
+| Custom events | Log records carrying a custom event name |
+| Operation ID | Trace ID |
+| Operation parent ID | Span ID |
+| Autocollectors | Instrumentation libraries |
+| Telemetry channel | Exporter |
+| Codeless / agent-based | Autoinstrumentation |
+
+"Traces" is the trap. In Application Insights a trace is a single log line; in OpenTelemetry a trace is the whole distributed operation. A Grafana trace visualizer pointed at the `traces` table returns nothing useful, because the waterfall is built from `requests` and `dependencies`.
 
 ### Requests
 
-A request is an HTTP call to your application. Application Insights tracks:
-- Request URL and method
-- Response status code
-- Request duration
-- Success or failure
-- Client country (from IP)
-- Custom dimensions (user ID, tenant ID, etc.)
-
-Requests are automatically collected for web applications and web services. Failed requests (5xx status, exceptions) appear in the Failures view for quick investigation.
+An HTTP call into your application, recorded with URL and method, status code, duration, success or failure, client geography derived from IP, and any custom dimensions you attach. Failed requests surface in the failures view grouped by operation.
 
 ### Dependencies
 
-A dependency is a call your application makes to an external service: databases, APIs, queues, caches, or other microservices. Application Insights automatically tracks:
-- Dependency type (SQL, HTTP, Azure Service Bus, etc.)
-- Target resource name
-- Call duration
-- Success or failure
-- Exception details (if the call failed)
-
-Dependency tracking helps identify which external services are slow or failing. The Application Map visualizes the dependency graph automatically.
+A call your application makes outward: SQL, HTTP, Service Bus, Cosmos DB, cache. Recorded with dependency type, target, duration, success, and exception detail on failure. The application map is built from these.
 
 ### Exceptions
 
-Exceptions are unhandled errors in your application code. Application Insights automatically collects:
-- Exception type and message
-- Stack trace with file and line numbers
-- Request context (which request caused the exception)
-- Browser information (for client-side exceptions)
-- Custom dimensions
+Unhandled errors, collected with type, message, stack trace, the request context that produced them, and custom dimensions. Client-side exceptions from the JavaScript SDK also carry browser detail.
 
-The Failures view groups exceptions by type and shows which operations are most affected.
+### Traces (Logs)
 
-### Traces
-
-Traces are log messages from your application. Application Insights collects traces written to:
-- `ILogger` (ASP.NET Core)
-- `System.Diagnostics.Trace` (.NET Framework)
-- `Console.WriteLine()` (captured from stdout)
-- Application Insights SDK `TelemetryClient.TrackTrace()`
-
-Traces have severity levels (Trace, Debug, Information, Warning, Error, Critical) and can include custom properties. They are useful for understanding application flow during debugging.
+Log messages from the application. With the Distro, anything written through `ILogger` is exported. The classic SDK also picked up `System.Diagnostics.Trace` and stdout. Severity levels run from Trace to Critical.
 
 ### Custom Events
 
-Custom events are application-specific occurrences you define: user sign-ups, feature usage, business transactions, or any domain-specific event. Track custom events using the SDK:
+Application-specific occurrences you define: sign-ups, feature usage, business transactions. Under OpenTelemetry there is no `TrackEvent`. A custom event is a log record carrying the `microsoft.custom_event.name` attribute:
 
 ```csharp
-telemetryClient.TrackEvent("UserSignup",
-  properties: new Dictionary<string, string> { { "Plan", "Premium" } },
-  metrics: new Dictionary<string, double> { { "SignupTime", 2.5 } });
+logger.LogInformation(
+    "{microsoft.custom_event.name} {plan}",
+    "UserSignup",
+    "Premium");
 ```
 
-Custom events enable analysis of user behavior and correlation with application performance.
+The value bound to `microsoft.custom_event.name` becomes the event name in the `customEvents` table, and the other structured properties become custom dimensions.
 
 ### Metrics
 
-Metrics are numeric measurements: response times, error rates, custom business KPIs, or system measurements. Application Insights provides:
-- **Pre-aggregated metrics:** Request duration, dependency duration, exception rate (collected automatically)
-- **Custom metrics:** Business metrics you define and track with the SDK
+Numeric measurements, either the pre-aggregated standard metrics the Distro emits automatically (request duration, dependency duration, exception rate) or custom metrics you define. Metrics are aggregated to 1-minute granularity and retained for 90 days.
 
-Metrics are aggregated into 1-minute intervals and retained long-term, making them efficient for historical trend analysis.
+Metrics are never sampled. That is the reason to prefer them for alerting, and the reason a metric-based dashboard stays accurate while a log-based one drifts as the sampling rate rises.
 
 ---
 
 ## Distributed Tracing and End-to-End Diagnostics
 
-Distributed tracing shows the complete journey of a request through your system, even as it crosses service boundaries.
+### How Trace Context Propagates
 
-### How Distributed Tracing Works
+Correlation depends on one identifier surviving every hop, carried in the W3C `traceparent` header:
 
-1. A request arrives at your frontend service
-2. Application Insights generates a unique trace ID for the entire request journey
-3. As the request flows to downstream services (API, database, queue, cache), the trace ID travels with it
-4. Each service adds its own telemetry (requests, dependencies, exceptions) under the same trace ID
-5. Application Insights correlates all telemetry with the same trace ID into a single end-to-end transaction
+```
+  Frontend                  Orders API                Payments API
+  --------                  ----------                ------------
+  request span              request span              request span
+  trace=abc                 trace=abc                 trace=abc
+  span=01                   span=03                   span=05
+  parent=-                  parent=02                 parent=04
+     |                         |                         |
+     |- dependency span        |- dependency span        |- dependency span
+     |  trace=abc              |  trace=abc              |  trace=abc
+     |  span=02                |  span=04                |  span=06
+     |  parent=01              |  parent=03              |  parent=05
+     |                         |                         |
+     |  traceparent:           |  traceparent:           v
+     +--00-abc-02-01---------->+--00-abc-04-01--------> Cosmos DB
+                                                        (not instrumented:
+                                                         appears only as the
+                                                         caller's dependency)
 
-**Trace propagation mechanism:**
-- For HTTP calls: trace ID is sent in the `traceparent` HTTP header (W3C Trace Context standard)
-- For asynchronous messaging: trace context is embedded in message properties
-- For custom async operations: use the SDK's operation context API
+  Async messaging: the same header travels in the message's
+  application properties, not in an HTTP header.
+
+  Every span sharing trace=abc reconstructs as one transaction.
+```
+
+Two properties of this shape drive most correlation bugs. A service that generates a fresh trace ID instead of continuing the incoming one splits the transaction in two. An uninstrumented service appears only as the caller's dependency, so the map shows the edge into it but nothing beyond.
 
 ### Operation Context
 
-Application Insights groups related telemetry under an operation context. Each operation has:
-- **Operation ID:** The unique trace ID for the entire transaction
-- **Operation Name:** The top-level request (e.g., "POST /api/orders")
-- **Parent ID:** For nested operations (dependencies within dependencies)
+Each span carries the trace ID (`operation_Id` in the tables), an operation name, and a parent span ID. The parent relationship is what lets the transaction view render a hierarchy rather than a flat list.
 
-This hierarchical structure allows you to follow a request from entry point through all downstream calls.
+### End-to-End Transaction Details
 
-### End-to-End Transaction Diagnostics
+The transaction details view assembles every span sharing a trace ID into a timeline: each call in order, its duration, which one failed, stack traces for exceptions, and request detail for HTTP calls. It is reachable from the failures view, the performance view, the availability view, and the application map.
 
-The Transaction Details view shows:
-- Timeline of all calls (requests, dependencies, exceptions) in order
-- Duration of each call
-- Which call failed (if any)
-- Stack traces for exceptions
-- Request/response details for HTTP calls
+### Distributed Tracing Practices
 
-This makes debugging production issues significantly faster. Instead of correlating logs across five different services, you see the complete story in one view.
-
-### Distributed Tracing Best Practices
-
-- **Use libraries with built-in instrumentation:** Most major frameworks automatically propagate trace context. Verify your web framework and database driver support trace propagation.
-- **For custom async operations:** Use `Activity` API (ASP.NET Core) or Application Insights SDK context to propagate operation context
-- **For message queues:** Ensure trace context is embedded in message headers or body
-- **Avoid generating new trace IDs at each hop:** Let Application Insights propagate the trace ID automatically
-- **Set meaningful operation names:** Use the request path or operation type, not just "HTTP request"
+- **Prefer instrumented libraries.** The instrumentation libraries bundled in the Distro propagate context for you. Verify coverage for your web framework, HTTP client, and database driver before writing manual propagation.
+- **Use the `Activity` API for custom async work.** In .NET, `Activity` is the OpenTelemetry span, and creating one from the ambient context preserves the parent relationship across an await boundary.
+- **Carry context through queues explicitly.** Message brokers do not propagate headers by default. Embed `traceparent` in the message's application properties and extract it on the consumer side.
+- **Never mint a new trace ID mid-transaction.** Continue the incoming one.
+- **Set operation names that aggregate.** `POST /api/orders/{id}` groups, and `POST /api/orders/8f21c` does not.
 
 ---
 
 ## Application Map
 
-The Application Map is an automatic dependency visualization built from your telemetry. It shows:
-- Which services call which
-- Call frequency and latency between services
-- Where failures occur
-- Relative load on each service
+The application map is a dependency graph built from `requests` and `dependencies` with no configuration. Node size reflects relative load, arrow direction reflects call direction, arrow color flags failures, and the labels carry average duration and call rate.
 
-The map is built automatically with no configuration required. As your application makes HTTP calls and uses managed services (Azure Storage, SQL Database, Service Bus), the dependencies appear on the map.
-
-### How to Interpret the Application Map
-
-- **Circle nodes:** Services and external dependencies
-- **Circle size:** Relative load (requests per second)
-- **Arrow direction:** Direction of calls (source to target)
-- **Arrow color:** Red indicates failures, blue indicates healthy calls
-- **Numbers on arrows:** Average duration and requests per second
-
-Right-click on a dependency to drill into details, see related alerts, or investigate performance characteristics.
-
-### Limitations of Application Map
-
-- Shows direct dependencies only (not transitive: if A calls B calls C, you see A→B and B→C, but not A→C)
-- Requires instrumentation on both the calling and called service to appear as an edge (calls to un-instrumented services appear as external dependencies)
-- May take a few minutes to populate after telemetry arrives
-- Cannot be used to troubleshoot network connectivity issues; it reflects application-level calls only
+**Limitations:**
+- Direct edges only. If A calls B and B calls C, the map shows A to B and B to C, never A to C.
+- Both ends need instrumentation to appear as a service. Calls to uninstrumented targets show as external dependencies.
+- It reflects application-level calls, so it diagnoses nothing about network connectivity.
+- It takes a few minutes to populate after telemetry starts arriving.
 
 ---
 
 ## Live Metrics Stream
 
-[Live Metrics](https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream){:target="_blank" rel="noopener noreferrer"} provides real-time telemetry from your running application with near-zero latency.
+[Live metrics](https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream){:target="_blank" rel="noopener noreferrer"} streams telemetry from running instances at near-real-time latency: request and dependency rates, failures and exceptions as they happen, response times, and process-level CPU, memory, and GC counters.
 
-**What Live Metrics shows:**
-- Incoming requests per second
-- Failed requests and exceptions in real-time
-- Response times (min, max, average)
-- Dependency calls and durations
-- Server metrics (CPU, memory, GC)
-
-Live Metrics is useful for:
-- Monitoring application behavior during deployment
-- Validating that a fix resolves an issue
-- Observing real-time behavior during load testing
-- Quick incident investigation
+It earns its place during a deployment, while validating a fix, under a load test, and in the first minutes of an incident.
 
 **Characteristics:**
-- Data is sampled; not every telemetry item appears
-- Data is not persisted (only real-time viewing)
-- Minimal performance overhead on the application
-- Available via Azure Portal or from within Visual Studio
+- Nothing is persisted. Closing the pane discards the data.
+- The stream is a live sample of activity, not the complete telemetry stream.
+- Live metrics compatibility is one reason the Azure Monitor sampler makes its decision at the end of span generation rather than before.
+- The control channel, which drives filtering and sample capture from the pane, can be secured, and that path is one of the integrations that depends on API keys.
+- EventCounters do not appear in live metrics. Use metrics explorer or KQL for those.
 
 ---
 
 ## Availability Tests
 
-Availability tests monitor your application's health from external locations, similar to synthetic monitoring or uptime checks.
+Availability tests call your endpoints from Azure locations around the world on a schedule. They need no change to the application, they work against any public HTTP or HTTPS endpoint including third-party APIs your service depends on, and you can create up to 100 per Application Insights resource.
 
-### URL Ping Tests
+This area has changed more than any other in the product, and older guidance describes three test types where only one remains.
 
-[URL ping tests](https://learn.microsoft.com/en-us/azure/azure-monitor/app/monitor-web-app-availability){:target="_blank" rel="noopener noreferrer"} send HTTP requests to a URL from multiple global locations and measure response time and status code.
+| Test type | Status |
+|---|---|
+| Standard test | The current and only supported type |
+| URL ping test | Deprecated. Retires 30 September 2026, and existing tests are removed from resources |
+| Multi-step web test | Retired 31 August 2024 |
+| `TrackAvailability()` custom tests | Archived classic API guidance. Still functional, no longer the recommended path |
 
-**Configuration:**
-- Test URL
-- Test frequency (every 1, 5, 10, or 15 minutes)
-- Locations (choose from 50+ global locations)
-- Alert on failure (if the test fails from multiple locations)
-- Parse dependent requests (follow redirects, load CSS/JS and validate all complete)
+Multi-step tests died with the Visual Studio `.webtest` format that defined them. A multi-request user journey today means either a sequence of standard tests against individual endpoints, or a custom test that runs your own code on your own compute and reports the result.
 
-**Use cases:**
-- Monitor publicly accessible endpoints (homepages, health check endpoints)
-- Track global latency from different regions
-- Basic synthetic monitoring
+### Standard Tests
 
-**Limitations:**
-- Cannot authenticate (no way to send credentials)
-- No request body (GET only)
-- Cannot interact with dynamic content
-- Limited to HTTP status and response time checks
+A standard test sends a single configurable request and validates the response. Beyond what a ping test could do, it covers HTTP verb selection, a request body, custom headers, TLS certificate validity, and proactive certificate lifetime checks.
 
-### Multi-Step Web Tests
+| Setting | Behavior |
+|---|---|
+| **URL** | Any publicly resolvable endpoint. Redirects are followed up to 10 hops |
+| **Test frequency** | Default 5 minutes, per location |
+| **Test locations** | Up to 16, with a recommended minimum of 5 |
+| **Parse dependent requests** | Loads images, scripts, and stylesheets, up to 15 dependent requests, and fails if any cannot be retrieved within the timeout |
+| **Enable retries** | Retries after a short interval, reporting failure only after three consecutive failures at that location. Roughly 80% of failures clear on retry |
+| **SSL certificate validity** | Validates the certificate on the final redirected URL |
+| **Proactive lifetime check** | Fails the test a configurable period before the certificate expires |
+| **Content match** | Case-sensitive plain-string match against the response body. No wildcards, English characters only |
+| **Test timeout** | Includes dependent requests when parsing is enabled |
 
-Multi-step web tests record a sequence of HTTP requests and validate the entire flow.
+Standard tests are billed. URL ping tests were not, which makes the September 2026 retirement a cost change as well as a configuration change.
 
-**How to create:**
-1. Record a user journey in Visual Studio or the web test recorder
-2. Upload the recording to Application Insights
-3. Test runs automatically from multiple locations
-
-**Examples:**
-- Login → Search → Add to Cart → Checkout
-- View product page → click through to details → add review
-- API authentication → list resources → update resource
-
-**Advantages over URL ping:**
-- Test end-to-end workflows, not just individual pages
-- Can include form submissions and POST requests
-- More realistic user interactions
-- Captures performance across multiple requests
-
-### Custom TrackAvailability
-
-For complex scenarios, use the SDK to define custom availability tests:
-
-```csharp
-var availability = new AvailabilityTelemetry
-{
-    Name = "Payment Processing",
-    RunLocation = "West US",
-    Success = result.IsSuccess,
-    Duration = stopwatch.Elapsed,
-    Timestamp = DateTimeOffset.UtcNow
-};
-
-telemetryClient.TrackAvailability(availability);
-```
-
-Custom tests allow you to:
-- Test non-HTTP scenarios (database connections, message queue health)
-- Embed business logic in the availability check
-- Avoid external dependencies for testing (test internal services)
+**Testing endpoints behind a firewall:** the test agents come from shared IP addresses, so IP allow-listing alone does not authenticate them. Add a custom header such as `X-Customer-InstanceId` with a value your service checks, and use the `ApplicationInsightsAvailability` service tag rather than a hand-maintained IP list. Endpoints with no public route cannot be reached by a standard test at all, so monitor an internal signal and alert on that instead.
 
 ### Availability Alerts
 
-Configure alert rules to notify you when availability tests fail from multiple locations. Alert on:
-- Failed tests from X or more locations
-- Test failure rate exceeds Y%
-- Average response time exceeds Z milliseconds
+Alerts are created with the test and enabled by default, but a new test only produces in-portal notifications until you attach an action group.
+
+- **Alert on X of Y locations failing.** Microsoft's rule of thumb is a threshold of (number of locations minus 2), with at least 5 locations. Three of five is the common configuration.
+- **Alerts are state-based.** One notification when the endpoint goes down and one when it recovers, rather than a repeat at every evaluation.
+- **Custom metric alerts raise the ceilings.** The default rule caps the aggregation period at 6 hours and frequency at 15 minutes, while a custom rule reaches 24 hours and 1 hour.
+- **Disable tests during maintenance,** or the alerts will fire against planned downtime.
+
+The Downtime and Outages workbook, reachable from the availability pane, calculates an SLA figure across tests and subscriptions with a configurable maintenance window excluded.
 
 ---
 
-## Smart Detection and Anomaly Alerts
+## Smart Detection
 
-[Smart Detection](https://learn.microsoft.com/en-us/azure/azure-monitor/app/proactive-diagnostics){:target="_blank" rel="noopener noreferrer"} uses machine learning to identify abnormal behavior in your application automatically.
+[Smart detection](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/proactive-diagnostics){:target="_blank" rel="noopener noreferrer"} analyzes incoming telemetry against a learned baseline and notifies you when the application deviates from it. It needs no configuration and starts working once the application sends enough telemetry.
 
-### Smart Detection Rules
+**What it detects:**
 
-Application Insights applies multiple ML rules continuously:
+| Rule | Signal |
+|---|---|
+| Failure anomalies | Failed request rate outside the expected envelope, correlated against load |
+| Performance anomalies | Operation response time or dependency duration slowing against the historical baseline, plus anomalous response-time patterns |
+| Trace degradation | A rise in warning and error-level log volume |
+| Memory leak | A pattern of growing memory consumption |
+| Abnormal rise in exception volume | Exception rate climbing above normal |
+| Security anti-patterns | Suspicious patterns such as rapid growth in 403 responses |
 
-**Degradation in exception volume:** Detects when the exception rate suddenly increases above normal levels.
+**Migrate smart detection to alert rules.** The original implementation emailed subscription owners and lived outside the alerting system. Migrating it creates real Azure Monitor alert rules, one per detection module, which you then manage, configure, and route to action groups like any other rule. Without the migration, notifications arrive by email only and cannot trigger an action group.
 
-**Degradation in dependency duration:** Identifies when calls to external services become slower than baseline.
-
-**Degradation in request duration:** Detects when requests take longer than normal, indicating performance regression.
-
-**Degradation in trace severity:** Identifies sudden increases in warning or error-level log messages.
-
-**Memory leak detection:** Detects patterns of increasing memory usage that suggest a leak.
-
-**Potential security issue:** Alerts on suspicious patterns like rapid growth in 403 (Forbidden) responses.
-
-### How Smart Detection Works
-
-1. Application Insights collects baseline metrics over 7-14 days
-2. System continuously monitors for anomalies
-3. When anomaly is detected, an alert is created
-4. Alert includes context: what changed, when, and potential root cause analysis
-
-### Smart Detection Configuration
-
-- Smart Detection is enabled by default
-- Configure alert recipients (email, action groups, webhooks)
-- Customize sensitivity (high, medium, low)
-- Disable specific rules if they generate false positives in your environment
-- Integrate with Azure DevOps to create work items automatically
-
-**Best practice:** Start with default sensitivity and adjust based on signal-to-noise ratio. High sensitivity catches issues earlier but increases false positives.
+Rules that are not in preview send email notifications by default. Configure them per rule from the smart detection settings pane, or through ARM templates for consistency across environments.
 
 ---
 
-## Sampling Strategies
+## Sampling
 
-Sampling reduces telemetry volume and costs while maintaining statistical accuracy. Different sampling strategies suit different needs.
+Sampling reduces telemetry volume and cost while keeping related items together, so a sampled-in request still has its dependencies, exceptions, and logs attached. The portal renormalizes counts by the sampling rate, which is why request rate in metrics explorer stays approximately correct even when most items were dropped.
 
-### Adaptive Sampling
+### Where Sampling Happens
 
-[Adaptive sampling](https://learn.microsoft.com/en-us/azure/azure-monitor/app/sampling){:target="_blank" rel="noopener noreferrer"} automatically adjusts the sampling rate based on application load.
+```
+  application process                         Azure
+  -------------------                         -----
 
-**How it works:**
-1. Application Insights monitors your telemetry volume
-2. Sampling rate increases during peak load (send fewer telemetry items)
-3. Sampling rate decreases during quiet periods (send more telemetry items)
-4. Target: maintain consistent throughput at a configurable ceiling (default 5 items per second per role instance)
+  spans / logs generated
+        |
+        |- metrics, performance counters ---------------------+
+        |  (never sampled at any stage)                       |
+        |                                                     |
+        v                                                     |
+  SDK sampler                                                 |
+  |- Distro: Azure Monitor custom sampler                     |
+  |  (decides at end of span, hashes trace ID)                |
+  |- .NET SDK 3.x: SamplingRatio or TracesPerSecond           |
+  |- .NET SDK 2.x: adaptive sampling, 5 items/sec/host        |
+  |- Java agent 3.4+: rate-limited by default                 |
+        |                                                     |
+        v                                                     |
+  ingestion endpoint                                          |
+        |                                                     |
+        v                                                     |
+  ingestion sampling (portal setting)                         |
+  |- classic SDK: skipped entirely if the SDK already sampled |
+  |- Distro: applied on top, so the rates multiply            |
+        |                                                     |
+        v                                                     v
+  Log Analytics workspace  <-------------------------  metrics store
+```
 
-**Benefits:**
-- Automatically controls costs
-- Maintains detail during normal traffic
-- Reduces volume during spikes
-- Statistically unbiased (sampled metrics remain accurate)
+That last branch is the part most likely to surprise you. Under the classic SDKs, ingestion sampling switched itself off when it saw SDK-sampled telemetry arrive. With the OpenTelemetry sampler the two stages compound, so a 20% SDK rate and a 50% ingestion rate retain roughly 10% of the data.
 
-**Limitations:**
-- Latency in adjusting sampling rate during sudden spikes
-- Less detailed trace data during high traffic
-- Sampling decision applies to entire operation (if request is sampled, all its dependencies are too)
+### The Azure Monitor Custom Sampler
 
-### Fixed-Rate Sampling
+The sampler the Distro installs is neither head-based nor tail-based. It decides after a span completes but before export, and it uses a hash of the trace ID rather than buffering the trace, which keeps traces whole without paying for tail-based buffering.
 
-Fixed-rate sampling keeps a consistent percentage of telemetry (e.g., 10% of all requests).
+Its behavior has consequences you cannot configure away:
 
-**Use cases:**
-- Predictable telemetry volume for cost control
-- Same level of detail at all times
-- Easier to understand and predict costs
+- **One rate applies to every telemetry type in a trace.** Requests and dependencies cannot be sampled at different rates. Per-type rates need OpenTelemetry span processors or ingestion-time transformations.
+- **Upstream sampling decisions are ignored.** Each service decides independently. Because the decision is made after the downstream call has already been issued, the sampled flag it propagates is incomplete and downstream services cannot rely on it. Trace completeness comes from every service hashing the same trace ID, so configure the same sampler and the same rate everywhere.
+- **Mixed sampling approaches produce broken traces.** One service on head-based sampling and another on the Azure Monitor sampler will disagree, and spans go missing from the middle of transactions.
+- **Full tail-based sampling is not supported.** Deciding based on whether any span in a trace failed requires a downstream collector, which Azure Monitor does not offer.
 
-**Trade-off:** Less data during normal traffic, same data volume during peaks (not cost-optimized).
+### Classic SDK Sampling
 
-### Ingestion Sampling
+Adaptive sampling belongs to the 2.x SDKs and Azure Functions, not to OpenTelemetry. It adjusts the rate to hold throughput at a target, defaulting to 5 telemetry items per second **per host**, which is why a scaled-out application sends considerably more than 5 per second in total. In ASP.NET and ASP.NET Core it is on by default, with events sampled separately from everything else.
 
-Ingestion sampling occurs at the Application Insights backend, after telemetry is received. You configure a sampling rate, and Application Insights keeps only a percentage of incoming telemetry.
+The .NET 3.x SDK drops adaptive sampling. `SamplingRatio` sets a percentage, `TracesPerSecond` sets a rate limit defaulting to 5, and both apply equally to requests and dependencies. Logs inherit their parent trace's decision unless `EnableTraceBasedLogsSampler` is set to false.
 
-**Use cases:**
-- Post-facto cost control (reduce costs without code changes)
-- Sampling at the service level (reduce costs for specific services)
+Java has never supported adaptive sampling. The 3.4 agent and later apply rate-limited sampling by default, and sampling overrides let you set different rates for specific requests and dependencies, which is the finest-grained control available in any of these SDKs.
 
-**Trade-off:** Ingestion sampling is less efficient than SDK-side sampling because the full telemetry is sent to Azure then filtered.
+### Sampling Practices
 
-### Sampling Best Practices
-
-- **Use adaptive sampling by default:** It provides the best balance of cost control and detail
-- **Disable sampling for critical paths:** For payment processing or security-sensitive operations, set `SamplingPercentage = 100` to ensure all telemetry is captured
-- **Be aware of sampling in alerting:** If an alert rule depends on specific telemetry, sampling may cause the rule to miss events. Use alert rules that account for sampling (metrics are unaffected by sampling; traces may be)
-- **Plan for sampling when designing dashboards:** Ensure analytics queries account for sampling bias
+- **Sample at the source.** Ingestion sampling reduces the bill but not the network traffic, and under OpenTelemetry it compounds with SDK sampling rather than deferring to it. Treat it as the option for when you cannot redeploy.
+- **Alert on metrics, not on log counts.** Standard metrics are pre-aggregated before the sampler runs, so their thresholds hold while log-based ones drift with the rate.
+- **Account for sampling in queries.** Use `summarize sum(itemCount)` rather than `count()`, or the numbers will understate reality by the sampling factor.
+- **Expect query accuracy to degrade at high rates.** Past roughly 60% dropped, log-based query results become noticeably inflated and unstable.
+- **Keep rates uniform across services.** Divergent rates within one distributed system break traces more often than any single rate does.
 
 ---
 
 ## Custom Metrics and Custom Events
 
-Custom metrics and events enable correlation between application behavior and business outcomes.
+Custom telemetry is where the correlation between application behavior and business outcome gets made. Under OpenTelemetry both come from standard APIs rather than Application Insights ones.
 
-### Tracking Custom Metrics
+### Custom Metrics
 
-Custom metrics are numeric values you track:
-
-```csharp
-// Track a business metric
-telemetryClient.GetMetric("OrderValue").TrackValue(order.Total);
-
-// Track with multiple dimensions
-telemetryClient.GetMetric("OrderValue", "Currency", "Country")
-  .TrackValue(order.Total, order.Currency, order.Country);
-```
-
-**Examples of custom metrics:**
-- Revenue per transaction
-- Checkout completion time
-- Search result count
-- API quota usage
-- Queue depth
-- Cache hit rate
-
-**Benefits of custom metrics:**
-- Aggregated automatically (min, max, average, count)
-- Retained long-term for trend analysis
-- Efficient storage (pre-aggregated)
-- Can include dimensions for slicing
-
-### Tracking Custom Events
-
-Custom events represent application-specific occurrences:
+Metrics come from a `Meter`, registered once at startup and used anywhere:
 
 ```csharp
-// Track a business event
-telemetryClient.TrackEvent("UserSignup",
-  properties: new Dictionary<string, string>
-  {
-    { "Plan", "Premium" },
-    { "Source", "Facebook" }
-  },
-  metrics: new Dictionary<string, double>
-  {
-    { "ConversionTime", conversionSeconds }
-  });
+// Startup: register the meter name with the provider
+builder.Services.ConfigureOpenTelemetryMeterProvider((sp, b) =>
+    b.AddMeter("Contoso.Orders"));
+builder.Services.AddOpenTelemetry().UseAzureMonitor();
+
+// Anywhere in the application
+var meter = new Meter("Contoso.Orders");
+var orderValue = meter.CreateHistogram<double>("order.value");
+var ordersPlaced = meter.CreateCounter<long>("orders.placed");
+
+orderValue.Record(order.Total,
+    new("currency", order.Currency),
+    new("country", order.Country));
+ordersPlaced.Add(1, new("plan", customer.Plan));
 ```
 
-**Examples of custom events:**
-- User sign-up, login, logout
-- Feature usage (report generation, export)
-- Business transactions (order placed, payment processed)
-- System events (backup completed, migration started)
+The instrument type determines the aggregation:
 
-**Structure:**
-- Event name (e.g., "OrderPlaced")
-- Properties: strings for categorical data
-- Metrics: numbers for measurements
+| Instrument | Aggregation in Application Insights |
+|---|---|
+| `Counter` | Sum |
+| `UpDownCounter` | Sum |
+| `Histogram` | Min, max, average, sum, count |
+| `ObservableGauge` | Average |
 
-**Analysis:**
-- View event counts and trends
-- Segment by properties
-- Correlate custom events with failures or performance issues
-- Use in custom analytics queries
+Metric names and namespaces must start with a letter and contain only letters, digits, `_`, `.`, `-`, or `/`. Spaces are rejected, which breaks names carried over from the classic SDK.
+
+### Custom Events
+
+Events carry categorical and numeric properties for behavioral analysis: sign-ups, feature usage, business transactions.
+
+```csharp
+logger.LogInformation(
+    "{microsoft.custom_event.name} {plan} {source} {conversionSeconds}",
+    "OrderPlaced", "Premium", "Referral", conversionSeconds);
+```
+
+Structured properties become custom dimensions, and numeric ones can be aggregated in KQL. Custom events feed the users, sessions, funnels, flows, and cohorts experiences.
+
+### Enriching and Filtering Telemetry
+
+The classic `ITelemetryInitializer` and `ITelemetryProcessor` have no equivalent in the Distro. Their replacement is an OpenTelemetry processor registered before the Azure Monitor exporter:
+
+```csharp
+public class RedactingProcessor : BaseProcessor<Activity>
+{
+    public override void OnEnd(Activity activity)
+    {
+        if (activity.GetTagItem("url.full") is string url)
+        {
+            activity.SetTag("url.full", StripQueryString(url));
+        }
+        activity.SetTag("deployment.ring", "canary");
+    }
+}
+
+builder.Services.ConfigureOpenTelemetryTracerProvider((sp, b) =>
+    b.AddProcessor(new RedactingProcessor()));
+builder.Services.AddOpenTelemetry().UseAzureMonitor();
+```
+
+Attributes set on a span land in `customDimensions`. Values that describe the process rather than the operation (role name, environment, version) belong on the OpenTelemetry resource instead, where they are attached once rather than copied onto every item.
 
 ---
 
-## Continuous Export and Data Access
+## Exporting and Querying Data
 
-Application Insights data can be exported continuously for long-term archival, advanced analysis, or integration with other systems.
+### Exporting Telemetry
 
-### Continuous Export
+Continuous export was the classic mechanism, and it retired with classic resources on 29 February 2024. It is incompatible with workspace-based resources.
 
-[Continuous Export](https://learn.microsoft.com/en-us/azure/azure-monitor/app/export-telemetry){:target="_blank" rel="noopener noreferrer"} automatically sends all ingested telemetry to Azure Storage or Event Hubs.
+The replacement is [diagnostic settings](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/diagnostic-settings){:target="_blank" rel="noopener noreferrer"} on the Application Insights resource, which stream to a storage account, an Event Hubs namespace, or a partner destination. Use them to archive for compliance beyond the workspace retention window, feed a data lake, stream to a real-time pipeline, or forward to a SIEM.
 
-**How it works:**
-1. Configure export destinations (storage account, Event Hubs, Service Bus)
-2. All new telemetry is sent to the destination automatically
-3. Data is exported in near-real-time (within minutes)
+Data export from the Log Analytics workspace itself is the other option, and it operates per table across everything the workspace holds rather than per Application Insights resource.
 
-**Use cases:**
-- Archive raw telemetry for compliance (keep 10 years of data while Application Insights retains 90 days)
-- Feed telemetry to a data lake for data science analysis
-- Stream telemetry to Event Hubs for real-time processing
-- Integrate with third-party analytics or SIEM platforms
+### Querying Data
 
-**Cost consideration:** Continuous export adds charges for the destination (storage or Event Hubs), but avoids the cost of long-term Application Insights retention.
-
-### Analytics API
-
-The [Application Insights REST API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/overview){:target="_blank" rel="noopener noreferrer"} allows programmatic queries of your telemetry.
-
-**Examples:**
-- Query request count by status code
-- Retrieve exception details for a specific time range
-- Aggregate custom metrics
-- Integrate telemetry with external dashboards or reporting systems
-
-**Query language:** Use Kusto Query Language (KQL) to retrieve telemetry:
+Application Insights telemetry is queried in KQL, either in the portal or through the [Logs query API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/overview){:target="_blank" rel="noopener noreferrer"} at `api.loganalytics.azure.com`, which requires Microsoft Entra authentication. Client libraries exist for .NET, Java, JavaScript, Python, and Go, and `az monitor log-analytics query` covers the command line.
 
 ```kusto
 requests
 | where timestamp > ago(24h)
 | where success == false
-| summarize count() by resultCode
+| summarize failed = sum(itemCount) by resultCode, operation_Name
+| order by failed desc
 ```
 
----
+The `sum(itemCount)` rather than `count()` is the sampling correction. Every log-based query over sampled telemetry needs it.
 
-## Integration with Azure DevOps
-
-Application Insights integrates with Azure DevOps to create work items automatically when issues are detected.
-
-### Work Item Creation from Alerts
-
-When a Smart Detection alert fires, Application Insights can create an Azure DevOps work item automatically:
-- Bug type (or configurable type)
-- Title based on the detected issue
-- Description with context and recommendations
-- Link back to the Application Insights alert
-
-**Configuration:**
-1. Connect your Application Insights resource to an Azure DevOps project
-2. Configure alert rules to create work items
-3. Specify which team and area path receives items
-4. Customize work item fields
-
-### Creating Work Items from Failures
-
-You can also create work items directly from the Failures view:
-- Select a failed request or exception
-- Click "Create work item"
-- Populate the bug details
-- Automatically links to the failure data
-
-This keeps your incident response workflow within Azure DevOps.
+The legacy Application Insights data-plane endpoint (`api.applicationinsights.io`) accepted API keys. That authentication path was retired on 31 March 2026, so integrations still pointed at it need a managed identity or a service principal.
 
 ---
 
-## Performance Profiler and Snapshot Debugger
+## Work Item Integration
 
-### Performance Profiler
+Work item integration creates issues, bugs, or tasks in Azure DevOps or GitHub from Application Insights, prepopulated with the telemetry that prompted them.
 
-The [Performance Profiler](https://learn.microsoft.com/en-us/azure/azure-monitor/app/profiler){:target="_blank" rel="noopener noreferrer"} periodically collects CPU and memory call stacks from your running application.
+**How it actually works, which is not automatically:**
 
-**How it works:**
-1. Profiler runs for 2 minutes every hour on each role instance
-2. Captures call stacks and CPU usage
-3. Uploads the data to Application Insights
+1. A work item template is an Azure Monitor workbook (resource type `Microsoft.Insights/workbooks`) holding KQL queries and layout. Creating one requires `Microsoft.Insights/workbooks/write`, such as the Workbook Contributor role.
+2. From the end-to-end transaction details view, reachable from the performance, failures, and availability tabs, you select an event and choose **Create work item**.
+3. Application Insights fills in the exception detail, operation name, and a link back to the transaction.
+4. A browser tab opens in the target system where the item is actually created, so you need permission there too.
 
-**Use cases:**
-- Identify which functions consume the most CPU
-- Find unexpected performance bottlenecks
-- Discover inefficient algorithms or libraries
+Because templates are workbooks, they deploy through ARM templates like any other resource, and one Application Insights resource can carry several templates targeting different repositories.
 
-**Available for:**
-- ASP.NET and ASP.NET Core on Windows
-- Java applications
-- Python (preview)
+Smart detection alerts do not create work items on their own. Routing a detection into a tracking system means migrating smart detection to alert rules and wiring an action group to whatever automation you use.
+
+---
+
+## Profiler, Code Optimizations, and Snapshot Debugger
+
+### .NET Profiler
+
+The [.NET Profiler](https://learn.microsoft.com/en-us/azure/azure-monitor/profiler/profiler-overview){:target="_blank" rel="noopener noreferrer"} captures call stacks from a running application and identifies the hot code path for a given request, alongside median, fastest, and slowest response times per operation.
+
+Three triggers start it, and each is separately configurable:
+
+| Trigger | Fires when |
+|---|---|
+| Sampling | Randomly, roughly once per hour |
+| CPU | CPU usage exceeds 80% |
+| Memory | Memory usage exceeds 80% |
+
+**Cost and overhead:** while actively collecting, the profiler adds roughly 5% to 15% CPU and memory overhead. Traces are retained 15 days at no storage charge. Web apps need at least the Basic App Service tier, and only one profiler can attach to a web app.
+
+Enablement is a portal toggle on App Service and on Functions running an App Service plan, an ARM template setting on VMs and Service Fabric, and a package for containers and other hosts. The Azure Monitor OpenTelemetry Profiler for .NET is the Distro-compatible package and is in preview, as is the Java profiler.
+
+### Code Optimizations
+
+[Code Optimizations](https://learn.microsoft.com/en-us/azure/azure-monitor/optimization-insights/code-optimizations-profiler-overview){:target="_blank" rel="noopener noreferrer"} analyzes profiler traces and snapshot debugger snapshots and produces code-level recommendations hourly, tied to specific methods. The default view is a rolling 24-hour window with 30 days of history. It works only with default profiler storage, not with bring-your-own-storage.
 
 ### Snapshot Debugger
 
-The [Snapshot Debugger](https://learn.microsoft.com/en-us/azure/azure-monitor/app/snapshot-debugger){:target="_blank" rel="noopener noreferrer"} captures memory snapshots when exceptions occur.
-
-**How it works:**
-1. Exception is thrown in production
-2. Application Insights captures a memory snapshot automatically
-3. You download the snapshot and open it in Visual Studio
-4. Inspect local variables, objects, and state at the time of the exception
-
-**Benefits:**
-- Reproduce the exact state that caused the exception without using debugger break points
-- Understand what data led to the error
-- No need to redeploy with debugging symbols
+The [Snapshot Debugger](https://learn.microsoft.com/en-us/azure/azure-monitor/snapshot-debugger/snapshot-debugger){:target="_blank" rel="noopener noreferrer"} captures a memory snapshot when an exception is thrown in a .NET application, which you then open in Visual Studio to inspect locals and object state at the moment of failure.
 
 **Trade-offs:**
-- Small performance overhead when exceptions occur
-- Snapshots are large (upload time and storage)
-- Only captures on exceptions (not on performance issues)
+- Snapshots are retained 15 days
+- Collection adds overhead at exception time, and snapshots are large to upload
+- It triggers on exceptions only, so it diagnoses nothing about a slow but successful request
 
 ---
 
 ## Cost Management
 
-Application Insights pricing is based on data ingestion (per GB of data sent to Azure), with separate charges for long-term retention.
+Application Insights bills for data ingested and for retention beyond the included window, on the workspace that holds it.
 
-### Controlling Ingestion Costs
+### Controlling Ingestion
 
-**Sampling:** The most effective cost control. Adaptive sampling reduces telemetry during high traffic.
+**Sampling** is the largest lever, and the only one that reduces volume before the data leaves the process.
 
-**Selective collection:** Track only what you need. Disable collection of specific telemetry types (e.g., all traces if you don't use them).
+**Filtering** through span processors drops what you never query: health-check endpoints, static asset requests, chatty internal dependencies. A processor that filters before export costs less than an ingestion-time transformation, which costs less than storing and querying the data.
 
-**Filtering:** Use SDK configuration to exclude low-value telemetry (e.g., requests to static assets, health check endpoints).
+**Selective collection** turns off telemetry types the team does not use. Disabling log collection entirely is a common early win in applications that never query the `traces` table.
 
-**Data retention tiers:**
-- Default: 90 days at no additional charge
-- Long-term storage: Archive data to your Log Analytics workspace with configurable retention (pay per GB stored)
+**A daily cap** stops ingestion when the workspace hits a threshold. Treat it as a safety net against a runaway logging bug rather than a cost strategy, because it drops everything once tripped, including the telemetry you need to diagnose the runaway.
 
-### Cost Optimization Patterns
+### Retention Choices
 
-**Production-only collection:** Use sampling to collect less data from production (e.g., 10%) while collecting more from staging (100%). Adjust based on traffic patterns.
+Retention past the included 90 days is billed per GB per month, so a 730-day setting on a high-volume application becomes a large recurring line item. Aggregated metrics hold their 90 days at 1-minute granularity no matter what raw telemetry is set to, which makes them the cheap place to keep a long-term trend. Where the requirement is compliance rather than analysis, workspace total retention plus a search job costs considerably less than keeping everything interactively queryable.
 
-**Workload-specific sampling:** Sample high-volume workloads more aggressively, lower-volume workloads less aggressively.
+### Patterns That Work
 
-**Metric retention:** Keep raw traces for 7 days but aggregate metrics for 90+ days. Metrics are more efficient for historical analysis.
+**Sample by environment, not uniformly.** Production at a low rate with staging at 100% gives you full detail where you are actively debugging and volume control where the traffic is.
 
-**Right-size your workspace:** If you have multiple applications, consolidate into a single workspace rather than creating separate workspaces for each. Workspace storage is shared.
+**Sample by workload.** A high-volume health-check path and a low-volume payment path do not need the same rate, though under the Azure Monitor sampler this takes span processors rather than a configuration setting.
+
+**Consolidate workspaces.** Several applications in one workspace share the ingestion tier's volume discounts and let one query span services. Separate workspaces per application forfeit both.
+
+**Keep metrics, drop logs.** Raw traces for a short window plus metrics for the long trend cost a fraction of full-fidelity retention and answer most historical questions.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: No Instrumentation Plan
+### Pitfall 1: Following Guidance Written for the Classic Product
 
-**Problem:** Deploying an application without deciding whether to use auto-instrumentation, SDK instrumentation, or both.
+**Problem:** Building against `TelemetryClient`, adaptive sampling, telemetry processors, continuous export, and multi-step web tests because most published material still describes them.
 
-**Result:** Minimal observability in production. When issues occur, you lack the telemetry needed to diagnose them.
+**Result:** Code that has to be migrated before it ships, or a design that depends on a feature already removed from the product.
 
-**Solution:** Plan instrumentation during architecture design. Use auto-instrumentation as the baseline for all applications, and add SDK instrumentation for custom business events and metrics. Document what each team is tracking and why.
-
----
-
-### Pitfall 2: Forgetting to Propagate Trace Context in Async Code
-
-**Problem:** Using `async/await` without propagating operation context, causing traces to lose connection to the original request.
-
-**Result:** Related operations appear in Application Insights but are not correlated under the same trace ID. End-to-end diagnostics become impossible.
-
-**Solution:** Use the `Activity` API (ASP.NET Core) or Application Insights SDK context methods to maintain operation context across async boundaries. Verify your async libraries (Entity Framework, HTTP client) propagate context automatically.
+**Solution:** Check the date and the API surface on anything you read. Classic resources retired February 2024, continuous export went with them, multi-step tests retired August 2024, and URL ping tests retire September 2026. New applications start with the OpenTelemetry Distro.
 
 ---
 
-### Pitfall 3: Sampling Losses in Alerting
+### Pitfall 2: Losing Trace Context Across Async and Messaging Boundaries
 
-**Problem:** Configuring alerts based on exact telemetry counts when sampling is enabled.
+**Problem:** Custom async work or a queue hop that does not carry the trace context forward.
 
-**Result:** Alerts fire inconsistently because the alert rule expects full telemetry volume but receives only sampled data.
+**Result:** Telemetry arrives but under a new trace ID, so the transaction view shows two unrelated halves and end-to-end diagnostics stops working at the boundary.
 
-**Solution:** Use metric-based alerts instead of trace-based alerts. Metrics like request rate and error rate are automatically corrected for sampling and remain accurate. If trace-based alerts are necessary, account for sampling in the threshold calculation.
+**Solution:** Use the `Activity` API for custom async operations, embed `traceparent` in message properties for queue hops, and verify that your instrumentation libraries cover the client you actually use.
+
+---
+
+### Pitfall 3: Alerting on Sampled Telemetry
+
+**Problem:** An alert rule that counts log records or exception rows while sampling is active.
+
+**Result:** The rule fires inconsistently, because the count it sees is the sampled count and the sampling rate moves with load.
+
+**Solution:** Alert on metrics, which are never sampled and are pre-aggregated before the sampler runs. Where a log-based rule is unavoidable, use `sum(itemCount)` and set the threshold with the sampling factor in mind.
 
 ---
 
 ### Pitfall 4: Sensitive Data in Telemetry
 
-**Problem:** Accidentally collecting passwords, API keys, credit card numbers, or personal information in traces, events, or exceptions.
+**Problem:** Query strings, request bodies, exception messages, or custom dimensions carrying credentials, tokens, or personal data.
 
-**Result:** Sensitive data appears in Application Insights logs and violates data protection regulations.
+**Result:** Regulated data sitting in a Log Analytics workspace, readable by anyone with workspace read access, and immutable after ingestion. Telemetry cannot be edited, so removing it means a purge operation.
 
-**Solution:** Implement telemetry processors to filter or redact sensitive data before sending. Review your exception handling to avoid logging sensitive data in stack traces. Use custom dimensions only for business context, not secrets.
-
----
-
-### Pitfall 5: Application Map Complexity
-
-**Problem:** Applications with many services and dependencies result in an Application Map that is too complex to interpret.
-
-**Result:** The map becomes a tangled web of lines that doesn't provide actionable insight.
-
-**Solution:** Limit the application map to critical dependencies. Filter out external services (CDNs, logging endpoints) that clutter the view. Create separate maps for different functional areas (checkout flow, reporting pipeline). Use the Dependency Failures view to focus on broken dependencies.
+**Solution:** Redact in a span processor before export. Review exception handling for anything that formats user input into a message. Application Insights does not log POST bodies by default, so keep it that way unless you have a specific need and a redaction path.
 
 ---
 
-### Pitfall 6: Not Setting Operation Names
+### Pitfall 5: Running Two Instrumentation Paths at Once
 
-**Problem:** All requests appear as generic "HTTP request" or "Default" in the Operation Name filter.
+**Problem:** Autoinstrumentation left enabled on App Service while the application also initializes the Distro, or 2.x and 3.x SDK packages mixed in one project.
 
-**Result:** Difficult to segment failures by endpoint or feature. Reports become ambiguous (which "HTTP request" failed?).
+**Result:** Duplicated telemetry, doubled ingestion cost, and startup failures from conflicting package versions.
 
-**Solution:** Set meaningful operation names in your request telemetry. Use the HTTP method and path (e.g., "POST /api/orders", "GET /api/users/:id"). Application Insights should do this automatically for web frameworks, but verify in your custom instrumentation.
+**Solution:** One path per application. If you add the Distro, turn off the portal toggle. If you upgrade to the 3.x SDK, upgrade every Application Insights package together and remove the collector packages that have no 3.x version.
+
+---
+
+### Pitfall 6: Unbounded Operation Names
+
+**Problem:** Operation names that embed identifiers, so `GET /api/users/8f21c` and `GET /api/users/3b04e` count as different operations.
+
+**Result:** The performance view fragments into thousands of one-request operations, aggregation stops meaning anything, and the application map turns into noise.
+
+**Solution:** Parameterize the route in the operation name. The Java 3.x agent does this by default, and most instrumentation libraries do the same. Verify it holds for custom instrumentation, and use a span processor to rewrite names the libraries get wrong.
 
 ---
 
 ## Key Takeaways
 
-1. **Application Insights provides end-to-end observability for production applications.** It automatically collects telemetry, detects anomalies, and enables fast diagnosis of issues through distributed tracing.
+1. **OpenTelemetry is the instrumentation path.** The Azure Monitor OpenTelemetry Distro is the recommended setup for new server-side applications, the classic 3.x SDKs are themselves OpenTelemetry behind a compatibility layer, and browsers remain the one place where the JavaScript SDK is still the answer.
 
-2. **Always use workspace-based Application Insights.** Classic resources are being deprecated, and workspace-based resources provide better integration with other Azure Monitor data sources.
+2. **Every Application Insights resource is workspace-based.** Classic resources retired in February 2024. The telemetry lives in a Log Analytics workspace, which is what determines retention, cost, and the other data you can join against.
 
-3. **Start with auto-instrumentation, add SDK instrumentation for custom business metrics.** Auto-instrumentation gives you visibility immediately; custom instrumentation correlates application behavior with business outcomes.
+3. **Check the retirement dates before designing around a feature.** Continuous export, multi-step web tests, and URL ping tests have all been retired or dated. Diagnostic settings, standard tests, and custom tests on your own compute are the replacements.
 
-4. **Distributed tracing is essential for microservices architectures.** End-to-end transaction diagnostics across service boundaries dramatically reduce MTTR when issues occur.
+4. **Sampling behaves differently than the classic documentation says.** One rate covers all telemetry types, upstream decisions are ignored, and ingestion sampling now multiplies with SDK sampling instead of standing down.
 
-5. **Smart Detection alerts you to problems automatically.** Machine learning-based anomaly detection catches degradations you might miss with static threshold alerts.
+5. **Metrics survive sampling and logs do not.** That asymmetry should drive which signals your alerts and long-lived dashboards are built on.
 
-6. **Use adaptive sampling to control costs.** Automatic sampling adjusts to your traffic patterns and keeps telemetry volume predictable without sacrificing visibility during normal operations.
+6. **Distributed tracing is what makes the rest of it useful.** A trace ID that survives every hop, including queues and custom async work, separates one transaction view from five disconnected log searches.
 
-7. **Custom metrics and events bridge observability and business impact.** Track metrics that matter to your business (revenue, conversion rate, engagement) alongside technical metrics (latency, error rate) to correlate them.
+7. **Custom events and metrics connect the application to the business.** Revenue, conversion, and engagement tracked next to latency and error rate let you tell a performance regression from a demand shift.
 
-8. **Availability tests provide synthetic monitoring.** URL ping tests and multi-step tests validate that your application works from the user perspective, independent of internal metrics.
+8. **Availability testing measures what users experience.** Standard tests from at least five locations, alerting at three, with certificate lifetime checks, catch failures that internal metrics never see.
 
-9. **Integrate Application Insights with Azure DevOps for incident response.** Create work items directly from failures and alerts to keep incident tracking within your development workflow.
+9. **Work item integration is manual and template-driven.** Templates are workbooks, items are created from the transaction view, and smart detection does not file them for you.
 
-10. **Implement telemetry processors to protect sensitive data.** Application Insights can capture any data your application generates, including secrets. Filter and redact before sending.
+10. **Redact before export.** Telemetry is immutable once ingested, so a span processor that strips sensitive fields is the only place the problem is cheap to fix.

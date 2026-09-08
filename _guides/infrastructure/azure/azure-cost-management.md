@@ -3,720 +3,513 @@ title: "Azure Cost Management & Optimization for System Architects"
 layout: guide
 category: Azure
 subcategory: Management & Governance
-description: "A comprehensive guide to Azure Cost Management covering budgets, cost analysis, reservations, savings plans, Azure Advisor cost recommendations, and architectural patterns for cost optimization."
-tags: [azure, cost-analysis, infrastructure, cloud-computing, governance, practical]
+description: "How Microsoft Cost Management reports and forecasts spend, how reservations and savings plans stack against each other hour by hour, and which commitment and licensing decisions can be reversed after you make them."
+tags: [cost-optimization, finops, reservations, savings-plans, budgets, azure-hybrid-benefit, practical]
 ---
 
-## Azure Cost Management Overview
+## What Microsoft Cost Management Does
 
-[Azure Cost Management + Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/cost-management-billing-overview){:target="_blank" rel="noopener noreferrer"} provides cost analysis, budgeting, and optimization tools for Azure subscriptions. Every organization pays more than they should without it. Cost analysis shows historical spending patterns, budgets alert on overages, reservations and savings plans lock in discounts, and Azure Advisor surfaces quick-win optimization opportunities.
+[Microsoft Cost Management](https://learn.microsoft.com/en-us/azure/cost-management-billing/cost-management-billing-overview){:target="_blank" rel="noopener noreferrer"} reports what you spent, forecasts what you will spend, alerts when either crosses a line you drew, and exports the underlying records for analysis elsewhere. It does not stop spending. Nothing in Cost Management throttles a resource or blocks a deployment, so every control it offers is a notification that something else has to act on.
 
-Cost management is not just for finance teams. Architects must understand how architectural choices drive spending: compute sizing, data transfer patterns, storage redundancy, and reservation strategies all flow from architecture decisions. Treating cost optimization as an afterthought means discovering overspending months later when the damage is done.
+Architecture drives most of the bill. Compute sizing, redundancy tier, data locality, and commitment strategy are design decisions that show up as line items months later, which is why treating cost as a finance concern rather than an architectural one produces surprises that are expensive to unwind.
 
-### What Problems Cost Management Solves
+### Which Scopes Each Feature Supports
 
-**Without Cost Management:**
-- No visibility into cloud spending by service, resource, or team
-- Surprises on invoices with no way to trace the expense
-- No budgets or alerts; spending discovered reactively
-- No guidance on which commitments (reservations/savings plans) reduce costs
-- VM sizing becomes guesswork, wasting capacity
-- Developers and teams unaware of cost implications of their choices
+Cost Management features do not all work at the same scopes, and assuming they do is a common source of half-built governance.
 
-**With Cost Management:**
-- Detailed cost analysis by resource, service, tag, resource group, subscription
-- Budgets and alerts prevent cost surprises
-- Recommendations from Azure Advisor for immediate savings
-- Commitment discounts calculated and prioritized by ROI
-- Right-sizing analysis detects idle and oversized resources
-- FinOps practices align teams around cost without sacrificing innovation
+| Feature | Supported scopes |
+|---|---|
+| **Cost Analysis** | Management group, subscription, resource group, and billing scopes (EA enrollment/department/account, MCA billing account/profile/invoice section) |
+| **Budgets** | Management group, subscription, resource group, plus EA and MCA billing scopes |
+| **Budget action groups** | Subscription and resource group only |
+| **Anomaly detection** | Subscription only |
+| **Exports** | Subscription, resource group, management group, department, and enrollment, with significant management group limitations |
+| **Reservations** | Single resource group, single subscription, shared across a billing context, or management group |
 
-### How Azure Cost Management Differs from AWS
+Two consequences follow. Anomaly detection cannot be configured once at the management group and inherited downward, so a tenant with 200 subscriptions needs 200 onboarded subscriptions rather than one assignment. And a budget at management group scope can email but cannot trigger automation, so any budget meant to drive a runbook has to live at subscription or resource group scope.
 
-Architects migrating from AWS should understand key differences:
+Budget evaluation also requires a **single currency** across the scope. A management group spanning subscriptions billed in different currencies does not evaluate, and the alerts silently never fire.
+
+### How Azure Compares to AWS
 
 | Concept | AWS | Azure |
-|---------|-----|----
-| **Cost visibility tool** | AWS Cost Explorer + Budgets + Cost Anomaly Detection | Cost Management + Billing unified portal |
-| **Reserved instance commitment** | 1-year or 3-year terms, separate purchase per service | Reservations + Savings Plans; Savings Plans more flexible, lower commitment risk |
-| **Spot/preemptible compute** | Spot Instances (VMs), Spot Fleet for bulk | Spot VMs (VMs), Low-Priority Batch nodes; pricing models differ |
-| **Cost tagging** | Cost allocation tags + user-defined tags | Azure tags + cost allocation rules with multi-tag logic |
-| **Finops organization** | Custom allocations require manual setup | Built-in cost allocation rules for shared services, tenant-based splits |
-| **Shared resource costs** | Cost allocation requires custom automation | Native cost allocation to charge back shared resources |
-| **Recommendation service** | AWS Compute Optimizer (EC2, Lambda) + Trusted Advisor (limited free) | Azure Advisor cost recommendations (free, built-in) |
-| **Cost allocation method** | Cost allocation tags, cost categories | Azure tags, cost allocation rules, subscription-level splits |
+|---------|-----|-------|
+| **Cost visibility** | Cost Explorer, Budgets, and Cost Anomaly Detection as separate features | Cost Management as one surface covering analysis, budgets, alerts, and anomaly detection |
+| **Anomaly detection** | Cost Anomaly Detection, configurable monitors by service, account, or tag | Built into Cost Analysis smart views at subscription scope, free, with a five-alert-rule limit per subscription |
+| **Commitment discounts** | Reserved Instances and Savings Plans | Reservations (up to 72% off) and savings plans for compute or for databases (up to 65% off) |
+| **Spot compute** | Spot Instances with a two-minute interruption notice | Spot VMs with a 30-second best-effort notice through Scheduled Events |
+| **Cost allocation** | Cost allocation tags and cost categories | Azure tags plus native cost allocation rules for shared resources |
+| **Recommendations** | Compute Optimizer for EC2 and Lambda, Trusted Advisor for the rest | Azure Advisor, free and built in, though reservation recommendations cover VMs only |
+| **Data export** | Cost and Usage Report to S3 | Exports to Azure Storage in CSV or Parquet, including the FOCUS open format |
 
 ---
 
-## Cost Analysis and Visibility
+## Cost Analysis and Data Latency
 
-### How Cost Analysis Works
+### Actual Cost Versus Amortized Cost
 
-[Cost Analysis](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/quick-acm-cost-analysis){:target="_blank" rel="noopener noreferrer"} is your primary tool for understanding cloud spending. It displays historical costs broken down by dimensions like service, resource group, location, and custom tags.
+[Cost Analysis](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/quick-acm-cost-analysis){:target="_blank" rel="noopener noreferrer"} reports the same spend two ways, and picking the wrong one distorts every conclusion drawn from it.
 
-**Key concepts:**
+**Actual cost** is what appears on the invoice. A three-year reservation bought up front shows its entire cost in the month of purchase and then shows near-zero compute cost for 36 months.
 
-- **Actual cost:** The cost you are billed (after discounts like reservations and savings plans are applied)
-- **Amortized cost:** The actual cost with reservation/savings plan charges spread evenly across their term, better for understanding true recurring spend
-- **Cost breakdown by dimension:** View costs grouped by service (Compute, Storage, Networking), resource group, meter, location, resource name, or custom tags
+**Amortized cost** spreads commitment purchases evenly across their term, so that same reservation shows a steady monthly charge. Amortized is the view for understanding recurring run rate and for charging teams back fairly, because it does not hand one team a six-figure spike and every other team a discount they did not pay for.
 
-### Cost Analysis Views
+Budgets evaluate against **actual cost only**. They do not amortize. A large reservation purchase can therefore blow through a budget threshold in a single day even though nothing about ongoing consumption changed.
 
-Cost Analysis supports multiple grouping and filtering options to answer different questions:
+### Data Latency Differs by Feature
 
-**By service (answering "what's driving our bill?"):**
-- Group by "Service Name" to see costs across compute, storage, database, networking
-- Identify if your spend is concentrated in a few services or distributed
-- Common pattern: Compute (VMs, App Service) consumes 40-60%, Storage 10-20%, Networking 5-15%
+Every feature reads the same underlying data, but each waits a different amount of time before acting on it.
 
-**By resource group (answering "which team/project costs the most?"):**
-- Group by "Resource Group" to allocate costs to teams
-- Verify that cost allocation aligns with organizational structure
-- Identify resource groups with unexpected costs
+- Cost and usage data is typically available within **8 to 24 hours**.
+- Budgets are evaluated **every 24 hours**, and threshold emails arrive within about an hour of the evaluation.
+- Anomaly detection runs **36 hours** after the end of a UTC day, so it has a complete dataset to compare against.
+- Export data is available within about **4 hours** of an export run beginning.
+- A brand new subscription can take up to **48 hours** before Cost Management features work at all.
 
-**By resource (answering "which individual resources cost the most?"):**
-- Group by "Resource" to find specific VMs, databases, or storage accounts driving costs
-- Find and eliminate unused resources
-- Right-size resources consuming excess capacity
+None of this is real-time. A runaway resource created at 9 AM is not going to trigger a budget alert that morning, which is the practical reason budget-driven automation limits damage rather than preventing it.
 
-**By tag (answering "what are we spending per business unit/customer/environment?"):**
-- Group by custom tags (e.g., "CostCenter", "Environment", "Customer") to charge back costs to teams
-- Requires discipline in tagging strategy from day one
+### Grouping Dimensions and What Each Answers
 
-**By meter (answering "which specific charge type costs the most?"):**
-- Meter represents a billable unit (e.g., "Standard IP Address - 1 IP, 1 Year Commitment")
-- Useful for understanding per-hour vs per-GB vs per-request pricing
+Group by **Service name** to see which services drive the bill. Group by **Resource group** to allocate to teams when resource groups map to teams. Group by **Resource** to find individual expensive items. Group by **Tag** to allocate along a dimension your organization actually uses, which requires the tagging discipline described later. Group by **Meter** to see the specific billable unit, which is how you separate a VM's compute charge from its disk, bandwidth, and license charges.
 
-### Actionable Cost Analysis Patterns
-
-**Weekly cost trend review:**
-- View costs over the past 7 days grouped by service
-- Monitor whether spending is growing, stable, or declining
-- Set this as a recurring habit (Friday afternoon cost check)
-
-**Monthly resource inventory:**
-- At month-end, group by resource and filter for costs over a threshold (e.g., resources with monthly cost > $100)
-- Spot unplanned resources (development VMs left running, test databases, old backups)
-- Delete or right-size them before they accumulate
-
-**Service concentration analysis:**
-- Group by service and check if more than 70% of costs come from one service
-- Indicates potential architectural risk (single-service dependency) or opportunity (optimize that service and reduce costs significantly)
-
-**Tag-based chargeback setup:**
-- Group by tag dimension (e.g., "Environment") to validate that your tagging strategy captures cost allocation needs
-- Missing tags indicate gaps in your governance model
+Service mix varies enormously between organizations, so treat any published "typical" split as noise. What matters is the trend in your own numbers and whether concentration in a single service represents a dependency risk or an optimization opportunity.
 
 ---
 
-## Budgets and Alerts
+## Budgets and Cost Alerts
 
-### Creating and Managing Budgets
+### What a Budget Does and Does Not Do
 
-[Budgets](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets){:target="_blank" rel="noopener noreferrer"} define spending limits and trigger alerts when actual or forecasted costs exceed thresholds. Budgets work at the subscription, resource group, or management group level.
+[Budgets](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets){:target="_blank" rel="noopener noreferrer"} compare accrued or forecasted cost against an amount you set and send notifications when a threshold is crossed. Microsoft states the limitation plainly: resources aren't affected, and consumption isn't stopped.
 
-**Budget configuration:**
+Budgets reset at the end of each period and are automatically deleted when they expire. Quarterly and annual budgets divide their amount evenly across the months in the period rather than tracking a single running total, so a quarterly budget behaves like three monthly budgets of a third the size.
 
-- **Budget name and scope:** Define what the budget covers (entire subscription or a specific resource group)
-- **Budget amount:** Set the spending limit for a period (monthly, quarterly, or custom)
-- **Period:** Budgets reset monthly, quarterly, or annually
-- **Alert thresholds:** Configure multiple alerts at different percentages (e.g., 50%, 80%, 100%, 110% of budget)
-- **Alert recipients:** Email alerts go to subscription owners or specific recipients
+One behavior catches teams out after the fact. Budget evaluations now include reservation and other purchase charges, so a commitment purchase can trip a threshold that was sized for consumption alone. Filtering the budget to `Publisher Type: Azure` and `Charge Type: Usage` restricts it to first-party consumption if that is what you meant to track.
 
-**Budget types:**
+### Alert Configuration Limits
 
-- **Subscription-level budgets:** Control overall cloud spending for a subscription
-- **Resource group budgets:** Allocate budgets per team or project
-- **Service-level budgets:** Cap spending on compute, storage, or database services
-- **Custom (tag-based) budgets:** Limit spending for specific cost centers or customers (using cost allocation rules)
+A budget requires at least one threshold and one email address, and supports up to **five thresholds and five email addresses**. Thresholds accept anything from **0.01% to 1000%** of the budget amount.
 
-### Alert Threshold Strategy
+Two alert types exist. **Actual** alerts fire on cost already accrued. **Forecasted** alerts fire when the projection for the period crosses the threshold, which buys lead time that actual alerts cannot.
 
-Setting thresholds requires balancing responsiveness with alert fatigue:
+A workable pattern uses both. A forecasted alert at 100% warns that the trajectory is wrong while there is still time to change it, and actual alerts at 80% and 100% confirm what happened. For development and test scopes, fewer and higher thresholds reduce noise that nobody will act on.
 
-**Recommended thresholds:**
+### Triggering Automation with Action Groups
 
-| Threshold | Purpose |
-|-----------|---------|
-| **50%** | Early warning; spend is halfway through month |
-| **80%** | Escalation; time to investigate and potentially adjust |
-| **100%** | Budget hit; need immediate action |
-| **110%** | Overrun; investigate causes and prevent recurrence |
+A budget at subscription or resource group scope can call an [action group](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/action-groups){:target="_blank" rel="noopener noreferrer"}, which is the native path from a threshold to an action. The action group can invoke a webhook, an Azure Function, a Logic App, an Automation runbook, an ITSM connector, or a mobile push notification.
 
-For development/test subscriptions, consider higher thresholds (80%, 100%) to avoid constant alerts. For production, lower thresholds (50%, 80%) give more lead time to act.
+Typical actions are stopping non-production VMs, scaling an App Service plan down, or opening a ticket against the owning team. Because of the 24-hour evaluation cycle, treat this as containment rather than prevention. If the requirement is genuinely to prevent spend, the control is Azure Policy denying the expensive SKU at deployment time, not a budget reacting a day later.
 
-### Automation Beyond Alerts
+Budgets created with the PowerShell `New-AzConsumptionBudget` cmdlet do not send notifications, so portal, REST API, ARM, or Terraform are the paths that work for alerting.
 
-Budgets send alerts but don't enforce controls. True cost governance requires automation:
+### Cost Anomaly Detection
 
-**Pattern: Budget threshold + automation action**
+Azure detects cost anomalies without you configuring a threshold at all, which covers the spend you did not think to budget for.
 
-- Budget alert at 80% triggers a runbook (via Azure Automation or Logic Apps)
-- Runbook stops non-production VMs, scales down app services, or notifies the team
-- Prevents budget overrun by taking action automatically
+Anomaly detection is available on every subscription monitored through Cost Analysis smart views and carries no charge. It compares each day's total normalized usage against a forecast built from the previous **60 days**, so recurring patterns like a Monday spike are learned rather than flagged. The model is a univariate time-series forecast using the WaveNet deep learning algorithm, and it is a different model from the Cost Management forecast shown in Cost Analysis.
 
-This requires integration with Azure Automation or Azure DevOps, making budgets a starting point rather than a complete solution.
+To get notified rather than having to look, create an **anomaly alert** under Cost alerts. Creating one requires Cost Management Contributor or higher, and there is a limit of **five anomaly alert rules per subscription**. The alert email summarizes the change in resource group count and cost and lists the top resource group changes against the previous 60 days. An anomaly email is sent once at detection and is not repeated.
+
+Two constraints shape how you use it. Anomaly alerts are not available in Azure Government or other sovereign clouds. And Azure checks the rule creator's permissions at send time, so an alert stops delivering if the creator loses access, which argues for creating production anomaly rules with a service principal through the Scheduled Actions API rather than under a named individual.
+
+Automation is email-driven rather than action-group-driven. A Logic App monitoring the receiving mailbox is Microsoft's documented pattern for turning an anomaly alert into a Teams post, a ticket, or a Cost Management API query.
 
 ---
 
-## Cost Allocation Rules and Shared Cost Distribution
+## Commitment Discounts
 
-### The Challenge of Shared Resources
+### Azure Reservations
 
-Many resources are shared across multiple teams or projects, like NAT Gateways, Express Routes, Azure Firewall, load balancers, and DNS services. The cost of these shared resources must be distributed fairly to teams consuming them.
+[Azure Reservations](https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/save-compute-costs-reservations){:target="_blank" rel="noopener noreferrer"} are one-year or three-year commitments to a specific product, and Microsoft states savings of up to 72% against pay-as-you-go. Up-front and monthly payment cost the same total, with no financing premium for choosing monthly.
 
-AWS approach: Custom allocation using cost categories or manual spreadsheet calculations. Azure provides native support for this.
+The discount matches on **SKU, region where applicable, and scope**. There is no cross-region flexibility option for VM reservations the way AWS offers regional Reserved Instances. You pick a region, and the discount applies there.
 
-### Cost Allocation Rules
+Scope is chosen at purchase and can be changed afterward. The options are a single resource group, a single subscription, shared across the billing context, or a management group. Shared scope wastes the least, because unused reservation hours find any matching resource in the billing account rather than sitting idle in one subscription.
 
-[Cost allocation rules](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/allocate-costs){:target="_blank" rel="noopener noreferrer"} let you split shared resource costs across multiple cost centers or teams. You define rules that allocate a resource's cost based on custom tags, subscription, or resource group.
+**Instance size flexibility** lets a reservation float across sizes within the same family and series, so a reservation bought for `D2s_v5` can apply to a `D4s_v5` at proportional coverage. Size flexibility is what Azure offers here, and region flexibility is not part of it.
 
-**How cost allocation rules work:**
+What a reservation covers is narrower than people expect. A Reserved VM Instance covers **only the virtual machine compute cost**. Windows and SQL Server licensing, networking, and storage are billed separately and are unaffected, which is why Azure Hybrid Benefit is a separate lever rather than a redundant one. The same pattern holds elsewhere: SQL Database and SQL Managed Instance reservations cover compute but not licensing, storage, or networking; Cosmos DB reservations cover provisioned throughput but not storage; Azure Disk reservations cover Premium SSDs of **P30 or larger** and nothing smaller.
 
-1. Identify shared resources (e.g., a central Azure Firewall used by all teams)
-2. Create an allocation rule specifying how costs are split (equally, by usage, or by custom dimension)
-3. Costs are redistributed when viewed by the allocation dimension (e.g., when grouped by "Team" tag)
+All reservations except Azure Databricks apply on an hourly basis.
 
-**Types of allocation:**
+### Azure Savings Plans
 
-- **Equal split:** Divide cost equally among all destinations (useful when consumption is similar)
-- **Custom allocation:** Specify a percentage or fixed amount per destination (useful when you know the split)
-- **Usage-based:** Allocate based on metrics like bandwidth, requests, or connections (requires custom metric collection)
+[Savings plans](https://learn.microsoft.com/en-us/azure/cost-management-billing/savings-plan/savings-plan-overview){:target="_blank" rel="noopener noreferrer"} commit you to a fixed dollar amount per hour rather than to a product, and Microsoft states savings of up to 65% against pay-as-you-go. Discount rates vary by product and by term length, not by how large a commitment you make, so committing more does not buy a better rate.
 
-**Example: Allocating shared Azure Firewall cost**
+There are two savings plans, and guidance written before the second one exists will only mention the first.
 
-A central Azure Firewall costs $1,200/month and is used by three teams (Web, API, Database). Without allocation, the entire cost appears under the shared infrastructure resource group. With an allocation rule:
+**Savings plan for compute** is available as a one-year or three-year commitment and covers Azure Virtual Machines, App Service, Azure Functions premium plan, Container Instances, Dedicated Host, Container Apps, and Azure Spring Apps for Enterprise. It covers infrastructure cost only, not software, networking, or storage.
 
-- Web team: 40% ($480) based on firewall throughput analysis
-- API team: 35% ($420) based on firewall throughput analysis
-- Database team: 25% ($300) based on firewall throughput analysis
+**Savings plan for databases** is a one-year commitment and covers SQL Database including Hyperscale and serverless, SQL Managed Instance, Database for PostgreSQL, Database for MySQL, Cosmos DB, DocumentDB, Database Migration Service, and the hourly SQL Server licenses on Azure VMs and on SQL Server enabled by Azure Arc. Unlike the compute plan, it covers software IP cost as well as infrastructure.
 
-Each team now sees the firewall cost in their departmental cost analysis.
+Each hour's benefit is use-it-or-lose-it. Unused commitment in an hour does not roll forward.
 
----
+Savings plans require an Enterprise Agreement, Microsoft Customer Agreement, or Microsoft Partner Agreement. Resources in subscriptions under other offer types get no discount at all, which makes the agreement type a prerequisite rather than a detail.
 
-## Azure Reservations
+### How the Discounts Stack in a Given Hour
 
-### What Reservations Are
+Reservations, savings plans, and licensing benefits are not alternatives that you choose between at billing time. They apply in a fixed order to the same hour of usage.
 
-[Azure Reservations](https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/save-compute-costs-reservations){:target="_blank" rel="noopener noreferrer"} are prepaid commitments for compute, storage, and database services that provide 25-72% discounts compared to pay-as-you-go pricing. You commit to a 1-year or 3-year term for a specific resource size, region, and service.
+```
+              One hour of eligible usage
+                          |
+                          v
+        +----------------------------------------+
+        | 1. Reservation                         |
+        |    Matched on SKU + region + scope.    |
+        |    Applied FIRST because it is the     |
+        |    more restrictive benefit and        |
+        |    usually the deeper discount.        |
+        |    (up to 72% off)                     |
+        +--------------------+-------------------+
+                             | usage the reservation
+                             | did not cover
+                             v
+        +----------------------------------------+
+        | 2. Savings plan                        |
+        |    Applied to the product with the     |
+        |    LARGEST discount first, deducting   |
+        |    from the hourly commitment until    |
+        |    the commitment is exhausted.        |
+        |    (up to 65% off, use-it-or-lose-it)  |
+        +--------------------+-------------------+
+                             | usage beyond the
+                             | hourly commitment
+                             v
+        +----------------------------------------+
+        | 3. Pay-as-you-go, or your negotiated   |
+        |    Azure consumption discount rate,    |
+        |    whichever of the two is lower       |
+        +--------------------+-------------------+
+                             |
+                             v
+        Billed separately, never covered by any
+        commitment above:  Windows / SQL Server
+        license cost, storage, networking.
+        Azure Hybrid Benefit is what removes the
+        license component.
+```
 
-**Reservation cost structure:**
+Reservations going first is deliberate. Because a reservation is the more constrained benefit, spending it before the flexible one reduces the chance that either goes unused. A VM that a reservation can cover never draws down the savings plan commitment, leaving that commitment available for workloads nothing else covers.
 
-- Upfront payment (one-time during purchase) or monthly payments
-- Discounted hourly rate for reserved hours
-- Any hours beyond your reservation default to pay-as-you-go rates
+Two ordering rules apply when you hold several plans. Among multiple savings plans, Azure applies the three-year plan before the one-year plan so the better rate is consumed first, and applies a more narrowly scoped plan before a broader one to reduce waste.
 
-### Reservation Scope and Flexibility
+Utilization figures need reading with care. The billing system uses a **best-fit model over a sliding 48-hour window**, incorporating usage that arrives up to 48 hours after the hour being evaluated. Charges can shift during that window, and savings plan utilization can briefly show above 100%. Judge utilization on data older than two days.
 
-Reservations have scope and flexibility options that determine how they apply:
+### Choosing Between Them
 
-**Scope:**
-
-- **Single subscription:** Reservation discount applies only to resources in that subscription
-- **Single resource group:** Applies only to resources in a specific resource group
-- **Shared (management group):** Applies to resources across the entire management group and all subscriptions within it
-
-**Flexibility options (determine what changes are allowed):**
-
-- **VM size flexibility (compute):** Reservation applies to other VM sizes in the same family (e.g., D2s to D4s)
-- **Instance size flexibility (compute):** Reservation applies to other instance sizes in the same series (e.g., D2s to D2as)
-- **Region flexibility (compute):** Reservation applies to any region (discount is lower than single-region reservations)
-
-### Reservation Types and Use Cases
-
-**Compute (Virtual Machines):**
-- Reserve VM instances with specific sizes (e.g., Standard_D2s_v5 in East US)
-- 1-year: 25-40% discount; 3-year: 40-72% discount depending on VM family
-- Use for: Production workloads with predictable baseline compute capacity
-
-**SQL Database:**
-- Reserve database capacity (vCores for Single DB or Elastic Pool)
-- 1-year: 25-40% discount; 3-year: 40-72% discount
-- Use for: Production databases with steady-state capacity requirements
-
-**Cosmos DB:**
-- Reserve database throughput (RU/s)
-- 1-year: 25-30% discount; 3-year: 40-50% discount
-- Use for: Applications with predictable throughput requirements
-
-**Azure App Service:**
-- Reserve instances for App Service plans
-- 1-year: 25-30% discount; 3-year: 40-55% discount
-- Use for: Production app service instances with constant load
-
-**Storage (Azure Blob):**
-- Reserve storage capacity (per GB, per month)
-- 1-year: 25% discount; 3-year: 35% discount
-- Use for: Archive storage with known, stable capacity needs (not recommended for hot/cool tier due to changing requirements)
-
-### Reservation Strategy
-
-**Effective reservation strategy:**
-
-1. **Understand baseline consumption:** Use cost analysis to identify the lowest compute level your production environment sustains year-round
-2. **Reserve the baseline:** A company with peak load of 20 VMs but baseline of 8 VMs reserves 8 and runs 12 pay-as-you-go for spikes
-3. **Match reservation term to confidence:** New workloads use 1-year; stable workloads use 3-year for better discount
-4. **Consider flexibility trade-offs:** Single-region reservations offer better discounts but lock you to a region. Use shared scope for production unless region flexibility is critical
-5. **Use Azure Advisor recommendations:** Advisor identifies underutilized reservations and suggests new ones based on historical usage
-
-**Common mistake:** Reserving at peak capacity instead of baseline. A 3-year VM reservation at peak load commits you to paying for capacity you don't use during off-peak periods. Reserve conservatively, handle spikes with pay-as-you-go.
-
----
-
-## Azure Savings Plans for Compute
-
-### What Savings Plans Are
-
-[Azure Savings Plans](https://learn.microsoft.com/en-us/azure/cost-management-billing/savings-plans/savings-plans-overview){:target="_blank" rel="noopener noreferrer"} are an alternative to reservations that provide discounts for compute consumption without requiring you to specify the instance type, size, or region upfront. You commit to a dollar amount of compute spending for 1 or 3 years.
-
-**Key characteristics:**
-
-- Discount applies to compute services: VMs, App Service, Azure Container Instances, Azure Databricks
-- No instance type or size restrictions (flexibility)
-- Applies across regions (true flexibility)
-- 22-31% discount for 1-year; 28-48% discount for 3-year
-- Works in all subscriptions under a billing account
-
-### Reservations vs Savings Plans
-
-| Aspect | Reservations | Savings Plans |
+| Aspect | Reservations | Savings plans |
 |--------|-------------|---------------|
-| **Scope** | Specific instance type, size, region (or shared) | All compute services, any size, any region |
-| **Flexibility** | Limited (size/region options available) | Maximum flexibility |
-| **Discount** | Higher (40-72% for 3-year) | Lower (28-48% for 3-year) |
-| **Decision point** | Requires upfront knowledge of exact needs | Requires only commitment to total spend |
-| **Best for** | Stable, predictable workloads with known configuration | Dynamic workloads, new environments, frequent scaling |
-| **Migration risk** | Changing architecture requires buying new reservations | Savings plan applies to new instance types as you adopt them |
+| **Commitment** | A specific product, size, and region | A dollar amount per hour |
+| **Maximum discount** | Up to 72% | Up to 65% |
+| **Flexibility** | Instance size flexibility within a family and series; region is fixed | Applies across eligible services, sizes, and regions automatically |
+| **Coverage** | Compute, database, storage, and other services individually | Compute plan or database plan, each covering a defined service list |
+| **Eligible agreements** | Broad, including pay-as-you-go | EA, MCA, or MPA only |
+| **Application order** | Applied first | Applied to what reservations did not cover |
+| **Reversible?** | Exchangeable for the same type; refundable up to $50,000 in a rolling 12 months | Not cancellable, not refundable |
+| **Best for** | Stable workloads whose SKU and region you expect to keep | Changing workloads, migrations, and estates adopting new services |
 
-**When to use which:**
+Most organizations run both. Reservations cover the portion of the estate whose shape is settled, and a savings plan covers the remainder without requiring anyone to predict instance families.
 
-- **Use Reservations for:** Large, stable production workloads where you know you will always run the same instance types (large batch processing, steady-state databases, application servers)
-- **Use Savings Plans for:** Growing environments, teams adopting new services, companies migrating workloads (you don't know the final sizing yet), or organizations that want flexibility without researching instance families
+### The Decisions You Cannot Undo
 
-**Hybrid approach:** Many organizations use both, applying Reservations for the core production baseline when that baseline is clear and Savings Plans for the remainder of compute spending. This provides good discounts without over-committing.
+The reversibility row above deserves emphasis, because the two products differ sharply and the asymmetry is easy to miss until it matters.
 
----
+A **reservation** can be exchanged for another reservation of the same type, and can be refunded up to **$50,000 USD in a rolling 12-month window**, with that limit applying across every reservation in your agreement. Buying the wrong reservation is recoverable.
 
-## Azure Advisor Cost Recommendations
+A **savings plan cannot be cancelled or refunded**. Once purchased, you are committed to that hourly amount for the full one or three years. You can trade eligible reservations in for a savings plan, but not the reverse.
 
-### How Azure Advisor Works
+That asymmetry should change how you size the first purchase. Commit a savings plan to the floor of your compute spend, the amount you are confident about, and buy more later rather than committing optimistically and living with it for three years. Savings plans also do not renew automatically unless you enable renewal, so a plan silently expiring returns you to pay-as-you-go rates.
 
-[Azure Advisor](https://learn.microsoft.com/en-us/azure/advisor/advisor-overview){:target="_blank" rel="noopener noreferrer"} provides personalized recommendations across five categories: Cost, Security, Reliability, Operational Excellence, and Performance. For cost optimization, Advisor continuously analyzes your Azure resources and identifies opportunities to reduce spending.
+### Sizing the Commitment
 
-**Advisor cost recommendations include:**
+Use Cost Analysis to find the level of consumption your estate sustains year-round rather than its peak. A workload peaking at 20 VMs but never dropping below 8 should commit at 8 and absorb the rest at pay-as-you-go or Spot rates. Committing at peak means paying for capacity that is idle most hours.
 
-- **Idle virtual machines:** VMs that have no CPU utilization for weeks
-- **Unattached disks:** Managed disks not connected to any VM
-- **Underutilized reservations:** Reservations purchased but not fully used
-- **SQL resources with low utilization:** Databases and servers using minimal capacity
-- **Expiring reservations:** Reservations about to expire (opportunity to renew or adjust)
-- **Application Gateway recommendations:** Gateways that are underutilized or misconfigured
-- **Hybrid Benefit opportunities:** Windows Server and SQL Server licenses eligible for Azure Hybrid Benefit
+Recommendations are available in Azure Advisor, in the purchase experience in the portal, in the Cost Management Power BI app, and through the benefit recommendation APIs. Advisor's reservation recommendations cover **VMs only**, so other services need the portal purchase experience or the API. Reservation recommendations reflect the current snapshot and cannot be backfilled historically.
 
-### Acting on Advisor Recommendations
-
-**Recommended workflow:**
-
-1. **Review recommendations weekly:** Navigate to Azure Advisor and filter by "Cost"
-2. **Prioritize by impact:** Identify high-impact recommendations (idle VMs, unattached disks, unused reservations)
-3. **Verify before acting:** Confirm that an idle VM is truly unused (check backup history, monitoring data, team ownership)
-4. **Implement the recommendation:** Delete idle resources, rightsize underutilized resources, purchase recommended reservations
-5. **Track impact:** Note the projected savings and verify actual savings in cost analysis
-
-**Example: Idle VM recommendation**
-
-Advisor flags a VM running in a development resource group with CPU < 5% for 30 days. Projected savings: $200/month if deleted or stopped.
-
-- Verify: Check if the VM is actually idle (confirm with the team, check when it was last used)
-- Act: Either delete it, stop it (to avoid compute charges), or right-size it
-- Track: Cost analysis should show the $200/month reduction in the next billing cycle
+Match the term to your confidence rather than to the discount. Three years buys the deeper rate, but a one-year term on a workload mid-migration usually costs less than a three-year commitment to an architecture you replace in month eight.
 
 ---
 
 ## Azure Hybrid Benefit
 
-### What Hybrid Benefit Provides
+[Azure Hybrid Benefit](https://learn.microsoft.com/en-us/azure/cost-management-billing/scope-level/overview-azure-hybrid-benefit-scope){:target="_blank" rel="noopener noreferrer"} applies on-premises Windows Server and SQL Server licenses to Azure resources, removing the license component of the hourly rate. Microsoft states savings of up to 80% for Windows Server and up to 85% for SQL Server against pay-as-you-go, with the SQL figure reflecting the benefit stacked with a reservation.
 
-[Azure Hybrid Benefit](https://learn.microsoft.com/en-us/azure/cost-management-billing/hybrid-benefits){:target="_blank" rel="noopener noreferrer"} allows you to use existing Microsoft licenses (Windows Server, SQL Server, Linux with Software Assurance) on Azure at a discounted rate. If you already own licenses through Software Assurance, you can bring them to Azure and reduce compute costs.
+Eligibility requires core licenses with **active Software Assurance or qualifying subscription licenses**, covering Windows Server Datacenter and Standard and SQL Server Enterprise and Standard. Subscription licenses qualify on their own, so an organization without Software Assurance is not automatically excluded.
 
-**Licenses eligible for Hybrid Benefit:**
+Because commitment discounts never cover licensing, Hybrid Benefit is additive rather than alternative. A reserved Windows VM still pays full license cost until Hybrid Benefit is applied to it.
 
-- **Windows Server:** With Software Assurance; replaces OS license cost
-- **SQL Server:** With Software Assurance; applies to SQL Database, SQL Managed Instance, SQL Server on VMs
-- **SUSE and Red Hat Linux:** Through BYOL (Bring Your Own License) programs
+### Resource-Level Versus Centrally Managed
 
-**Cost impact of Hybrid Benefit:**
+The original model has a resource owner select the benefit on each VM or database. It remains the only option for Windows Server.
 
-Without Hybrid Benefit, running Windows Server or SQL Server on Azure includes the software license cost in the hourly rate. With Hybrid Benefit, you use your existing license, eliminating that cost.
+For SQL Server, **centrally managed Hybrid Benefit** lets a billing administrator assign a number of licenses to a subscription or billing account scope, and Azure applies them hourly to whichever resources are running. It is available to Enterprise Agreement customers and to Microsoft Customer Agreement customers buying directly, and is not available through a CSP partner. Once you manage the benefit at a scope, you can no longer set it per resource within that scope.
 
-Example: A Standard_D4s_v5 VM with Windows Server costs $600/month. With Hybrid Benefit for Windows Server, cost drops to ~$480/month (20-30% savings).
+Central management solves a specific governance problem. Under the resource-level model, a developer can enable the benefit when no license is available, creating a compliance exposure, or leave it off when one is available, wasting money. Neither is visible to the people who know the license position.
 
-### Implementation Considerations
+### License Math
 
-- Hybrid Benefit requires tracking and proof of Software Assurance coverage
-- Some SQL Server editions (Express, Developer) are not eligible
-- SAL (SQL Server Assignment License) does not convey the right to use Hybrid Benefit (core-based licenses do)
-- Requires proper license documentation if audited
+SQL Server licenses convert to Azure coverage at documented ratios, expressed in normalized cores. **One SQL Server Enterprise license covers as much as four Standard licenses.** General Purpose and Hyperscale tiers need 1 normalized core per vCore, and Business Critical needs 4. SQL Server on Azure VMs is subject to a minimum of four vCores per VM.
+
+Two constraints matter when planning. Hybrid Benefit is **not available in the serverless compute tier of Azure SQL Database**. And licenses supporting a migrating workload can be counted against both on-premises and Azure use for up to **180 days**, which is what makes a migration window affordable.
 
 ---
 
-## Spot VMs and Low-Priority Compute
+## Spot VMs
 
-### Spot VMs
+[Spot Virtual Machines](https://learn.microsoft.com/en-us/azure/virtual-machines/spot-vms){:target="_blank" rel="noopener noreferrer"} run on Azure's unused capacity at variable prices well below pay-as-you-go. In exchange there is no SLA and no availability guarantee, and Azure evicts them whenever it needs the capacity back, giving **30 seconds of best-effort notice** through Azure Scheduled Events.
 
-[Spot Virtual Machines](https://learn.microsoft.com/en-us/azure/virtual-machines/spot-vms){:target="_blank" rel="noopener noreferrer"} use excess Azure capacity at heavily discounted rates (up to 90% off on-demand pricing). In exchange, Azure can reclaim the capacity with short notice (a few minutes).
+Pricing varies by size, region, and time, so quoting a fixed discount is misleading. Check the actual numbers instead. The portal shows pricing history and eviction rates per size and region during VM creation, and Azure Resource Graph exposes the `SpotResources` table for programmatic queries covering 90 days of pricing and 28 days of eviction rates. Eviction rates are quoted per hour, so a 10% rate means roughly a one-in-ten chance of eviction within the next hour.
 
-**Characteristics:**
+### Eviction Policy Is a Cost Decision
 
-- Deep discounts (60-90% cheaper than on-demand)
-- Can be interrupted with 30-second notice
-- No SLA for availability
-- Idle capacity pricing; actual savings depend on current capacity
+At creation you choose **Deallocate** (the default) or **Delete** as the eviction policy, and the choice has a billing consequence people miss.
 
-**Use cases:**
+Deallocated VMs move to the stopped-deallocated state so they can be redeployed later, but they continue to **count against your quota and continue to incur storage charges for their underlying disks**. A fleet of evicted Spot VMs left on the deallocate policy accumulates disk cost indefinitely while producing nothing. The Delete policy removes the VM and its disks together, which is the right choice for genuinely stateless work.
 
-- Batch processing jobs that can tolerate interruption (ML training, data analysis)
-- Non-critical development/test workloads
-- Fault-tolerant workloads with built-in restart logic
-- Horizontal scaling where losing an instance is non-catastrophic
+You can also set a **maximum price** in USD to five decimal places, which adds price-based eviction on top of capacity-based eviction. Setting it to `-1` means the VM is never evicted for price and is charged at the lower of the current Spot price or the standard price. Changing the maximum price requires deallocating the VM first.
 
-**Use cases to avoid:**
+### Where Spot Fits and Where It Does Not
 
-- Production workloads requiring high availability
-- Long-running processes that cannot checkpoint state
-- Stateful services without auto-recovery
+Spot suits batch processing, ML training, dev and test environments, large-scale load and regression testing, and horizontally scaled work where losing an instance is survivable. It does not suit production services needing availability, long-running processes that cannot checkpoint, or stateful services without automatic recovery. Long-running MPI jobs spanning multiple VMs are a poor fit specifically because one eviction can force the entire job to restart.
 
-### Low-Priority Batch Nodes
+Several limits apply. B-series and promotional SKU sizes are not supported. Spot is unavailable in Azure operated by 21Vianet. Supported offer types are Enterprise Agreement, pay-as-you-go offer code 003P, Sponsored, and CSP. Spot has a separate quota pool from dedicated VMs. An existing VM cannot be converted to Spot, and a Spot VM cannot be converted back.
 
-Azure Batch supports low-priority nodes that operate similarly to Spot VMs but within the Batch service. Useful for large batch jobs where partial interruption is acceptable.
+### Spot in Azure Batch
 
-**Difference from Spot VMs:**
+Azure Batch pools use Spot VMs, and Batch adds handling that raw Spot VMs lack. Interrupted tasks are automatically requeued onto another node, pools continually seek their target Spot node count after evictions, and Spot gets a higher vCPU quota than dedicated nodes. A preempted VM may be restored by the platform, but only within the first 48 hours and without guarantee.
 
-- Managed by Batch service (automatic retry, requeuing)
-- Better suited for batch workloads than general compute
-- Lower overhead than managing individual Spot VM interruptions
+Batch's older "low-priority" name survives in the API surface, in properties like `targetLowPriorityNodes` and metrics like Low-Priority Node Count, so scripts referring to low-priority nodes are addressing Spot capacity under an earlier name.
 
-### Cost Optimization Pattern: Hybrid Approach
+Batch differs from standalone Spot VMs in one way that affects design. **Batch Spot VMs do not support setting a maximum price and are never evicted for price**, only for capacity. Ephemeral OS disks are also unsupported on Batch Spot nodes because of the service-managed Stop-Deallocate eviction policy.
 
-Combine on-demand, reserved, and spot compute for maximum cost efficiency:
-
-- **Baseline (reserved):** Reserve the minimum capacity you always need
-- **Steady state (on-demand):** Run expected-but-variable load on standard instances
-- **Overflow/burst (spot):** Use Spot VMs for batch jobs, testing, or auto-scaling spikes
-
-This balances cost, availability, and flexibility.
+A pool can mix dedicated and Spot nodes, which is the pattern that keeps a job progressing. A fixed dedicated baseline guarantees forward motion, and Spot nodes accelerate the job whenever capacity is available.
 
 ---
 
-## Right-Sizing Recommendations and Idle Resource Detection
+## Right-Sizing and Idle Resources
 
-### Right-Sizing Strategy
+### Azure Advisor as the Starting Point
 
-Right-sizing means matching resource size to actual consumption patterns. Over-sized resources waste money; under-sized resources cause performance issues.
+[Azure Advisor](https://learn.microsoft.com/en-us/azure/advisor/advisor-overview){:target="_blank" rel="noopener noreferrer"} produces free recommendations across Cost, Security, Reliability, Operational Excellence, and Performance. Its cost recommendations surface idle virtual machines, unattached managed disks, underutilized and expiring reservations, underused SQL resources, and Azure Hybrid Benefit opportunities.
 
-**Right-sizing dimensions:**
+Verify before acting on any of them. An idle VM might be a disaster recovery standby, a quarterly batch host, or a license-bound appliance that costs more to rebuild than to leave running. Check ownership, backup history, and monitoring data before deleting anything Advisor flags, then confirm the projected saving actually appears in the next billing cycle.
 
-- **VM instance type and size:** An underutilized D8s VM (8 vCores) might run on a D4s (4 vCores) at the same cost with better pricing efficiency
-- **Database tier:** A SQL Database running in Premium tier (expensive) with low CPU/DTU might fit in Standard tier
-- **Storage redundancy:** Geo-redundant storage (GZRS, RA-GZRS) costs 1.5-2x more than zone-redundant (ZRS) or locally redundant (LRS)
-- **App Service instance count:** Over-provisioned app service instances that run at 10% capacity are candidates for down-scaling
+### What to Measure Before Resizing
 
-### Detecting Underutilized Resources
+| Signal | Threshold that warrants investigation | Likely action |
+|--------|------------------------------|---------------|
+| **VM CPU** | Sustained under 10% across a full week | Smaller size, or deallocate if genuinely unused |
+| **VM network in/out** | Near zero sustained alongside low CPU | Idle; candidate for deletion |
+| **SQL Database CPU or DTU** | Consistently under 10% of the tier | Lower tier or serverless |
+| **App Service instance count** | Instances persistently above observed demand | Autoscale with a lower minimum |
+| **Storage account access** | No read or write for 30 days | Cool or archive tier, or delete |
+| **Unattached managed disks** | Any, immediately | Snapshot then delete |
 
-**Metrics to monitor:**
+Analyze a representative week or month rather than a window. A VM at 5% CPU overnight may sit at 80% during business hours, and resizing on the overnight sample creates a performance incident that costs more than the savings.
 
-| Metric | Threshold | Action |
-|--------|-----------|--------|
-| **VM CPU utilization** | Sustained < 10% for 7 days | Consider smaller instance or stop if not needed |
-| **VM Network In/Out** | < 1 Mbps sustained | Idle VM, candidate for stopping or deletion |
-| **SQL Database CPU** | < 10% DTU or vCore utilization consistently | Downsize to lower tier |
-| **Storage account access** | No read/write operations for 30 days | Migrate to archive tier if possible, or delete if truly unused |
-| **App Service memory** | < 30% of allocated memory sustained | Reduce instance count or choose smaller plan |
+Redundancy tier is the right-sizing dimension architects most often skip. Geo-redundant storage costs meaningfully more per GB than zone-redundant or locally redundant storage, and read-access geo-redundant more again. Paying for cross-region durability on data that is reproducible from a source system, or on a dev environment, is a recurring charge for a guarantee nobody needs.
 
-### Rightsizing Workflow
-
-1. **Collect metrics:** Enable Azure Monitor or Application Insights to collect CPU, memory, disk, and network metrics
-2. **Analyze patterns:** Look for sustained underutilization, not brief spikes
-3. **Verify before acting:** Confirm with resource owner that the low utilization is normal
-4. **Schedule the resize:** Plan resize during a maintenance window if needed
-5. **Monitor after resize:** Ensure the new size performs adequately
-
-**Common mistake:** Resizing too aggressively based on a brief window of low utilization. A VM at 5% CPU during off-hours might spike to 80% during business hours. Analyze a representative full week or month.
+Regional pricing varies by service and region. Rather than assuming a figure, query the [Azure Retail Prices API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices){:target="_blank" rel="noopener noreferrer"}, which is public, unauthenticated, and returns the same rates the pricing pages show. Balance any regional saving against latency and data residency before moving anything.
 
 ---
 
-## Tagging Strategies for Cost Attribution
+## Tagging and Cost Allocation
 
-### Tag Design for Cost Allocation
+### Tags That Earn Their Place
 
-Tags are metadata labels on resources that enable cost grouping and allocation. Without consistent tagging, cost allocation becomes guesswork.
+Cost allocation is only as good as the tags underneath it, and tags applied inconsistently produce reports that teams dispute rather than act on.
 
-**Essential tags for cost management:**
+| Tag | Examples | What it enables |
+|-----|----------|-----------------|
+| **Environment** | `production`, `staging`, `development` | Different cost controls and patch windows per environment |
+| **CostCenter** | `engineering`, `marketing`, `operations` | Chargeback and showback to departments |
+| **Owner** | `team-web@company.com` | Someone to ask when a resource looks idle |
+| **Application** | `crm`, `data-pipeline` | Cost per workload rather than per resource group |
+| **Project** | `project-alpha` | Cost per initiative or customer |
 
-| Tag | Examples | Purpose |
-|-----|----------|---------|
-| **Environment** | `production`, `staging`, `development` | Separate environments and apply different cost controls to each |
-| **CostCenter** | `engineering`, `marketing`, `operations` | Allocate costs to departments for chargeback |
-| **Owner** | `alice@company.com`, `team-web@company.com` | Identify who is responsible for the resource |
-| **Application** | `crm`, `data-pipeline`, `api-gateway` | Track costs per application or workload |
-| **Project** | `project-alpha`, `project-beta` | Track costs per initiative or customer project |
-| **Team** | `backend`, `infrastructure`, `data-science` | Group costs by team |
+Prefer a team or distribution list over an individual for `Owner`. Individual owners leave, and the tag becomes an unanswerable question.
 
-### Tag Governance
+Enforce with Azure Policy rather than convention. Start in `audit` mode to size the existing gap, use `modify` with a remediation task to backfill tags that can be inferred from the resource group, and move to `deny` once new deployments are consistently compliant. Remember that a `modify` policy acts through the assignment's own managed identity, so the assignment needs a role grant before remediation works.
 
-**Enforce tagging with Azure Policy:**
+Tags do not inherit automatically from a subscription or resource group to the resources inside them for cost reporting purposes. Inheritance is something you implement with policy, not something that happens by default.
 
-Create a policy that requires specific tags on resource creation. This prevents untagged resources from being deployed and ensures consistent cost allocation from day one.
+### Cost Allocation Rules for Shared Resources
 
-**Policy approach:**
+Shared infrastructure like a central Azure Firewall, an ExpressRoute circuit, a NAT Gateway, or a hub DNS zone belongs to every team and to none, and it sits in a shared resource group where it distorts that group's numbers while flattering everyone else's.
 
-- Require tags like `Environment`, `CostCenter`, and `Owner` on all resources
-- Use `audit` mode initially to identify non-compliant resources
-- Transition to `deny` mode to enforce the policy
+[Cost allocation rules](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/allocate-costs){:target="_blank" rel="noopener noreferrer"} redistribute those costs to destination subscriptions, resource groups, or tags. You define a source holding the shared cost and destinations receiving it, splitting evenly, by a fixed percentage, or in proportion to the destinations' own cost.
 
-**Tag inheritance patterns:**
+A central firewall costing $1,200 a month can be split 40/35/25 across three teams based on throughput analysis, so each team's cost view includes $480, $420, or $300 of firewall. The redistribution appears in cost analysis; it does not change the invoice.
 
-Some tags are inherited from higher levels (subscription, resource group) while others apply to individual resources. A common pattern:
-
-- **Subscription-level tags:** Environment, department, cost center (apply to all resources)
-- **Resource group tags:** Application, team, project (specific to a workload)
-- **Resource-level tags:** Environment (if it differs from subscription), owner, data-sensitivity
+Agree the split with the teams before deploying the rule and test it against historical data. A rule that surprises people at chargeback time produces arguments about the model instead of action on the costs.
 
 ---
 
-## Cost Export and Integration with Power BI
+## Exporting Cost Data
 
-### Exporting Cost Data
+### What Exports Can Produce
 
-[Cost exports](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-export-acm-data){:target="_blank" rel="noopener noreferrer"} automatically write cost data to Azure Storage on a daily, weekly, or monthly schedule. This data can then be imported into Power BI, Excel, or other analytics tools for custom reporting.
+[Exports](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports){:target="_blank" rel="noopener noreferrer"} write Cost Management datasets to Azure Storage on a schedule, and they cover considerably more than a cost CSV.
 
-**Export setup:**
+Available datasets are cost and usage details in **actual**, **amortized**, or **FOCUS** form, plus **price sheet**, **reservation details**, **reservation recommendations**, and **reservation transactions**. The reservation transactions dataset records purchases, exchanges, and refunds, which is what you need to audit commitment decisions after the fact.
 
-1. Create an Azure Storage account in your subscription
-2. Configure an export schedule (daily or monthly; monthly recommended to reduce data volume)
-3. Choose export scope (subscription or management group)
-4. Choose whether to include or exclude estimated costs
-5. Export runs automatically and places CSV files in storage
+**FOCUS** is the [FinOps Open Cost and Usage Specification](https://focus.finops.org/){:target="_blank" rel="noopener noreferrer"}, an open format that combines actual and amortized cost in one dataset and reduces processing time and storage cost. For an organization reporting across more than one cloud, it is the format that makes the datasets comparable. Management group scope is not supported for FOCUS exports, and MOSP billing scopes cannot use FOCUS at all.
 
-**Data structure in exports:**
+Schedules include one-time exports, daily exports of month-to-date cost, monthly exports of the previous month, and monthly exports of the previous billing month. Cost and usage exports run **twice daily during the first five days of each month**, with the second run rewriting the prior month's file, because invoice-affecting usage can arrive up to 72 hours after the month closes.
 
-- One row per meter per day (or month, depending on frequency)
-- Columns include: Resource ID, resource name, meter name, consumption unit, cost, date, tags
+### Format and Delivery Mechanics
 
-### Power BI Integration
+Cost, usage, FOCUS, and price sheet datasets support **CSV** with optional Gzip or **Parquet** with optional Snappy. Reservation details, recommendations, and transactions are CSV only, uncompressed.
 
-[Azure Cost Management connector for Power BI](https://learn.microsoft.com/en-us/power-bi/connect-data/desktop-connect-azure-cost-management){:target="_blank" rel="noopener noreferrer"} provides templates and data connections for custom cost dashboards.
+**File partitioning is always on and cannot be disabled**, even for small exports. Each run writes multiple partition files plus a `manifest.json` listing every partition and its metadata. Read the manifest rather than guessing file names, and use a tool that ingests multiple files such as Power BI, Spark, or Fabric. Files are split by size, keeping each uncompressed partition under 1 GB.
 
-**Typical Power BI cost dashboard includes:**
+**Overwrite** is on by default for daily exports, replacing the previous day's file so the month folder holds one run rather than thirty.
 
-- **Total cost by service:** Pie chart showing spend distribution across compute, storage, networking
-- **Cost trend:** Line chart showing daily or weekly cost trend over time (spot anomalies)
-- **Cost by resource group:** Bar chart for departmental allocation
-- **Cost by tag:** Tables grouped by cost center, application, or team
-- **Cost forecast:** Linear regression to predict end-of-month or end-of-year spend
-- **Reservation utilization:** Percentage of reserved capacity actually consumed
-- **Top resources by cost:** Table of resources exceeding a cost threshold
+Exports to a firewalled storage account are supported. Creating one requires Owner or a custom role with `Microsoft.Authorization/roleAssignments/write` and `permissions/read`, because Cost Management creates a system-assigned managed identity for the export and grants it Storage Blob Data Contributor scoped to the container. After creation, routine runs do not need those elevated permissions. Trusted Azure service access must be enabled on the storage account, and firewalled storage is not supported for cross-tenant exports.
 
-This enables non-technical stakeholders (finance teams, leadership) to understand cloud spending without accessing Azure Portal directly.
+Historical backfill through the portal reaches **13 months**, one month at a time, using Export selected dates on an existing export. The REST API reaches **7 years** for cost, usage, and reservation transaction data.
 
----
+Management group scope is the weak spot. Only the usage dataset is available there, in uncompressed CSV, for Enterprise Agreement only, with no purchases, no amortized data, no multiple currencies, and a ceiling of 3,000 subscriptions per management group.
 
-## FinOps Practices and Organizational Patterns
+### Reporting on the Data
 
-### What is FinOps
+The Cost Management connector for Power BI still works, but it is in maintenance mode and is no longer being updated. Microsoft has moved its Power BI guidance to exports, which support every agreement type and scale to datasets the connector cannot handle. Build new reporting on exported data in storage rather than on the connector, and treat the connector as something to migrate off rather than to adopt.
 
-FinOps (Financial Operations) is a discipline that combines engineering, finance, and business practices to manage cloud costs. It emphasizes shared accountability: engineers own architectural efficiency, finance owns budgets and reporting, and business owns cloud value.
+A useful dashboard usually carries total cost by service, a daily trend line for spotting anomalies visually, cost by resource group and by tag, a forecast, reservation and savings plan utilization, and a table of resources above a cost threshold. The value is that finance and leadership can answer their own questions without portal access.
 
-**Core FinOps principles:**
-
-- **Visibility:** Everyone sees cloud costs (engineers, teams, leadership)
-- **Accountability:** Teams own the cost of their resources
-- **Optimization:** Continuous improvement driven by data, not guilt
-- **Collaboration:** Engineering, finance, and business aligned on cost goals
-
-### FinOps Organizational Patterns
-
-**Pattern 1: Chargeback Model**
-
-Departments or teams are charged for the cloud resources they use (as separate internal bill items).
-
-**How it works:**
-
-1. Finance allocates a cloud budget to each department
-2. Cloud Cost Management exports costs tagged by cost center
-3. Finance generates internal invoices to departments based on actual usage
-4. Departments can then decide to optimize, consolidate, or request more budget
-
-**Advantages:**
-- Creates accountability (teams care about their costs)
-- Encourages right-sizing and elimination of waste
-- Easy for finance to track (matches organizational structure)
-
-**Disadvantages:**
-- Can create perverse incentives (teams under-utilize shared services to avoid charges)
-- Requires careful tag governance (miscoded tags misallocate charges)
-- Shared infrastructure costs must be fairly divided
-
-**Pattern 2: Showback Model**
-
-Similar to chargeback but informational only; teams see their costs but are not actually charged.
-
-**How it works:**
-
-1. Cost analysis reports costs grouped by team/department
-2. Teams are informed of their spending (showback report)
-3. Finance sets expectations but does not charge teams
-4. Used when organizational structure doesn't support true chargeback
-
-**Advantages:**
-- Raises awareness without creating internal friction
-- Easier to implement than chargeback
-- Works with matrix organizations where cost ownership is unclear
-
-**Disadvantages:**
-- Less effective accountability (teams may ignore costs without charges)
-- Requires regular communication to maintain awareness
-
-**Pattern 3: FinOps Center of Excellence**
-
-A dedicated team (usually 2-3 engineers + 1 finance person) owns cloud cost optimization across the entire organization.
-
-**Responsibilities:**
-
-- Monitor cloud spending trends and alert on anomalies
-- Recommend and manage reservations/savings plans
-- Identify and remediate idle resources
-- Drive adoption of cost optimization best practices
-- Report to leadership on cost trends and opportunities
-
-**When to use this pattern:**
-
-- Organizations with 50+ engineers and $5M+ annual cloud spend
-- Large, distributed teams where coordination is difficult
-- Organizations where cost optimization requires specialized knowledge
-
-### FinOps Metrics and KPIs
-
-**Key metrics to track:**
-
-| Metric | Calculation | Target |
-|--------|-------------|--------|
-| **Cost per business unit** | Total monthly cost / business unit headcount | Decreasing trend |
-| **Reserved instance utilization** | Hours reserved used / hours reserved purchased | 80%+ |
-| **Waste ratio** | Cost of idle/underutilized resources / total spend | < 5% |
-| **Cost per transaction** | Monthly cost / business transactions processed | Decreasing trend |
-| **Commitment discount savings** | (On-demand cost minus committed cost) / on-demand cost | 25-40% |
+Two data quality traps affect exported files. Power BI and Excel can silently truncate cost values to integers, so set cost columns to Decimal Number explicitly and choose Convert when Excel offers it. And CSV files use UTF-8, so importing with the wrong file origin garbles non-Latin characters.
 
 ---
 
-## Comparison with AWS Cost Management
+## FinOps Practices
 
-For architects evaluating Azure vs AWS, here's how cost management tools compare:
+### What FinOps Changes
 
-| Aspect | AWS | Azure |
-|--------|-----|-------|
-| **Cost visibility** | Cost Explorer (good), Budgets, Cost Anomaly Detection (separate tools) | Cost Management unified (all in one) |
-| **Cost allocation** | Cost categories, allocation tags, or manual setup | Native cost allocation rules with multi-tag logic |
-| **Commitment options** | Reserved Instances (1/3-year, instance-specific), Savings Plans (flexibility, compute-focused) | Reservations (instance-specific) + Savings Plans (more flexible) |
-| **Recommendation engine** | Compute Optimizer (EC2, Lambda), Trusted Advisor (limited free version) | Azure Advisor (free, built-in, all services) |
-| **Spot/preemptible pricing** | Spot Instances (unpredictable but very cheap) | Spot VMs (similar) |
-| **Shared resource allocation** | Custom using cost categories or manual | Native allocation rules |
-| **Data export** | CUR (Cost & Usage Report) to S3 | Export to Storage or direct Power BI connection |
-| **FinOps tooling** | Third-party tools (CloudHealth, CloudCheckr, Spot) common | Azure Advisor + Power BI sufficient for most orgs |
+FinOps distributes cost accountability across engineering, finance, and the business instead of concentrating it in whoever receives the invoice. Engineers own architectural efficiency, finance owns budgets and reporting, and the business owns whether the spend produces value. It works when everyone can see the numbers and someone is answerable for each one.
+
+### Chargeback, Showback, and a Central Team
+
+**Chargeback** bills departments internally for what they consume. It creates genuine accountability because the cost lands in a budget somebody defends, and it drives cleanup faster than any dashboard. It also requires tag governance strict enough that the numbers survive scrutiny, and it can push teams away from shared platform services to avoid the charge, which costs more in aggregate than it saves.
+
+**Showback** reports the same numbers without moving money. It raises awareness with far less friction and suits matrix organizations where cost ownership genuinely is unclear, but teams can ignore a report in a way they cannot ignore a charge. Showback often works best as the stage before chargeback, while tagging quality is still improving.
+
+**A FinOps center of excellence** puts a small dedicated group, commonly a few engineers and someone from finance, in charge of commitment strategy, anomaly response, idle resource cleanup, and reporting to leadership. It earns its cost at the scale where commitment decisions are large enough that getting them wrong is expensive and specialized enough that no individual team will get them right.
+
+### Metrics That Drive Behavior
+
+| Metric | Calculation | What good looks like |
+|--------|-------------|---------------------|
+| **Commitment utilization** | Benefit consumed / benefit purchased | Above 90%, measured on data older than 48 hours |
+| **Commitment coverage** | Spend covered by a commitment / total eligible spend | Rising toward your stable baseline, not toward 100% |
+| **Waste ratio** | Cost of idle and unattached resources / total spend | Low single digits, trending down |
+| **Untagged spend** | Cost of resources missing required tags / total spend | Approaching zero, or allocation is guesswork |
+| **Unit cost** | Monthly cost / business transactions | Falling as the platform scales |
+
+Utilization and coverage answer different questions and both are needed. High utilization on a tiny commitment means you bought too little, and broad coverage with poor utilization means you bought the wrong things.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Ignoring Small Resources
+### Pitfall 1: Treating a Budget as a Spending Limit
 
-**Problem:** Focusing cost optimization efforts only on large resources (VMs, databases) while ignoring small ones (storage accounts, IP addresses, managed disks).
+**Problem:** A budget is created and treated as a control, on the assumption that hitting it stops or throttles something.
 
-**Result:** Small resources multiply and become significant costs. A single unattached managed disk costs little, but 50 unattached disks across a large organization become expensive. Azure Firewall Premium sounds like an edge case until you realize you have five of them.
+**Result:** Spending continues past the threshold, because Microsoft's documented behavior is that resources aren't affected and consumption isn't stopped. The 24-hour evaluation cycle means even the notification arrives well after the spend.
 
-**Solution:** Use Cost Analysis to group by resource name and identify the long tail of small, cheap resources. Set up automated cleanup for unattached disks (via Azure Automation). Regularly audit shared infrastructure for duplication.
-
----
-
-### Pitfall 2: Overcommitting with Reservations
-
-**Problem:** Purchasing 3-year reservations for peak capacity instead of baseline capacity, or committing to instance types before stabilizing the architecture.
-
-**Result:** You pay for capacity you don't use. A team reserves 20 VMs at peak load but the baseline is 8 VMs. They waste money on 12 VMs worth of committed spend.
-
-**Solution:** Reserve conservatively. Identify the 12-month minimum capacity you always need, reserve that, and handle spikes with on-demand or Spot VMs. Understand your architecture before committing to 3-year terms; use 1-year terms during transition or architecture evolution.
+**Solution:** Treat budgets as detection. For actual prevention, deny expensive SKUs, regions, or resource types with Azure Policy at deployment time. For containment, attach an action group at subscription or resource group scope to stop non-production compute. Set forecasted alerts alongside actual ones so you hear about the trajectory rather than the arrival.
 
 ---
 
-### Pitfall 3: Misaligned Tags and Cost Allocation Rules
+### Pitfall 2: Buying a Savings Plan You Cannot Return
 
-**Problem:** Tags are inconsistently applied, or cost allocation rules don't match the actual organizational structure.
+**Problem:** A savings plan is sized against expected or peak spend, on the assumption that a wrong commitment can be exchanged or refunded the way a reservation can.
 
-**Result:** Cost reports show inaccurate allocations. A team's spending is miscoded to the wrong cost center. Finance's chargeback numbers don't match reality. Teams dispute their charges.
+**Result:** Savings plans cannot be cancelled or refunded. An over-sized three-year commitment is paid in full for three years, and the unused portion of each hour expires rather than rolling forward.
 
-**Solution:** Establish tag governance upfront. Use Azure Policy to enforce required tags. Test cost allocation rules against historical data before deploying. Regularly audit tags for consistency (run a report of resources missing expected tags).
-
----
-
-### Pitfall 4: Forgetting Egress Data Transfer Costs
-
-**Problem:** Data egress (data leaving Azure to the internet or across regions) has per-GB charges, often overlooked during architecture design.
-
-**Result:** A data pipeline that moves 10 TB/day across regions or to the internet costs thousands per month in egress charges.
-
-**Solution:** Design for data locality. Keep data in the same region and same service (e.g., data in storage accounts accessed by VMs in the same region). Use ExpressRoute for large hybrid data transfers (cheaper than internet egress). Compress data to reduce transfer volume.
+**Solution:** Size the savings plan to the floor of your compute spend and add more later. Where the SKU and region are genuinely settled, prefer a reservation, which is exchangeable and refundable up to $50,000 in a rolling 12 months. Reservations can be traded in for a savings plan later, so starting with reservations preserves optionality that starting with a savings plan does not.
 
 ---
 
-### Pitfall 5: Over-Provisioning App Service Plans
+### Pitfall 3: Assuming a Commitment Covers the Whole Bill
 
-**Problem:** Running an App Service plan with 10 instances when load never exceeds 3 instances.
+**Problem:** A Reserved VM Instance is purchased for a fleet of Windows Server VMs and the expected saving does not materialize.
 
-**Result:** Paying for capacity that sits idle. A 10-instance plan costs 3-4x a 3-instance plan.
+**Result:** The reservation covered only the compute component. Windows licensing, managed disks, and bandwidth continued at full price, so the discount applied to a smaller share of the line item than expected.
 
-**Solution:** Use auto-scaling (App Service auto-scale) to scale instances with demand. Start with minimal instances and auto-scale up as needed. Monitor actual instance usage (via Application Insights or Azure Monitor) and reduce the maximum instance count if usage is low.
-
----
-
-### Pitfall 6: Indefinite Storage of Snapshots and Backups
-
-**Problem:** Creating VM snapshots and backups without retention policies. Snapshots and backups accumulate indefinitely.
-
-**Result:** Years of snapshots cost more than the original VMs. A company might have 5 years of daily snapshots for a 50-VM environment, costing tens of thousands in storage.
-
-**Solution:** Define retention policies (e.g., keep daily snapshots for 7 days, weekly snapshots for 4 weeks, monthly snapshots for 1 year). Implement automated cleanup. Use Azure Backup for centralized policy enforcement rather than manual snapshots.
+**Solution:** Read the coverage boundary for each reservation type before modeling the saving. Apply Azure Hybrid Benefit separately to remove the license component, since no commitment discount ever covers licensing. Group by Meter in Cost Analysis to see how a resource's cost actually splits between compute, license, storage, and network before committing against it.
 
 ---
 
-### Pitfall 7: Ignoring Service Tiers and Regional Pricing Variations
+### Pitfall 4: Leaving Evicted Spot VMs on the Deallocate Policy
 
-**Problem:** Running resources in premium service tiers or expensive regions without considering if a lower tier or different region fits the need.
+**Problem:** Spot VMs are deployed with the default Deallocate eviction policy for a stateless batch workload, and evicted instances are never cleaned up.
 
-**Result:** Paying premium pricing for resources that could run on standard tiers. A database in East US costs 20-30% more than in West US.
+**Result:** Deallocated VMs keep counting against quota and keep incurring storage charges for their disks. A fleet that has cycled through many evictions accumulates disks that produce nothing, quietly eroding the Spot discount that motivated the design.
 
-**Solution:** Evaluate service tiers during architecture design. Use Azure Advisor's performance recommendations to understand if a lower tier is viable. Consider regional pricing variations when choosing deployment regions (balance cost, latency, and compliance).
+**Solution:** Set the eviction policy to Delete for genuinely stateless work so the VM and its disks go together. Where Deallocate is needed for redeployment, automate cleanup of long-deallocated instances. Consider Azure Batch instead of raw Spot VMs, since Batch requeues interrupted tasks and manages node lifecycle for you.
+
+---
+
+### Pitfall 5: Cost Allocation Built on Inconsistent Tags
+
+**Problem:** Chargeback or showback reporting is built on tags applied by convention rather than enforced by policy.
+
+**Result:** Costs land in the wrong cost center, teams dispute their numbers, and the reporting loses credibility faster than it can be corrected. Untagged resources accumulate in an unallocated bucket nobody owns.
+
+**Solution:** Enforce required tags with Azure Policy before building reporting on them, backfilling with `modify` and a remediation task. Track untagged spend as its own metric so the gap is visible. Validate allocation rules against historical data before deploying them, and agree shared-cost splits with the receiving teams in advance.
+
+---
+
+### Pitfall 6: Ignoring Egress and Cross-Region Data Movement
+
+**Problem:** A data pipeline is designed without accounting for per-GB charges on data leaving Azure or crossing regions.
+
+**Result:** Transfer charges scale with volume rather than with compute, so a pipeline that looks cheap in the design review becomes one of the larger line items once it runs at production volume.
+
+**Solution:** Design for data locality, keeping compute in the same region as the data it reads. Compress before transfer. Use ExpressRoute for sustained hybrid transfer rather than internet egress. Group by Meter in Cost Analysis to separate bandwidth meters from compute, since bandwidth is easy to miss when looking at resource-level totals.
+
+---
+
+### Pitfall 7: Snapshots and Backups Without Retention Policies
+
+**Problem:** VM snapshots and backups are created manually or by scripts with no retention rules.
+
+**Result:** Storage accumulates indefinitely. Years of daily snapshots across a sizeable fleet can exceed the cost of the VMs they protect, and nobody notices because each individual snapshot is cheap.
+
+**Solution:** Define retention explicitly, keeping daily copies for days, weekly for weeks, and monthly for months as your recovery objectives require. Use Azure Backup policies rather than manual snapshots so retention is enforced centrally. Include storage growth in the monthly cost review, since it grows steadily rather than spiking and never triggers an anomaly alert.
+
+---
+
+### Pitfall 8: Optimizing Only the Large Line Items
+
+**Problem:** Cost work focuses on the biggest resources and ignores the long tail of small ones.
+
+**Result:** Unattached disks, orphaned public IP addresses, empty App Service plans, idle NAT Gateways, and duplicated shared infrastructure add up. Individually none justifies attention, and collectively they can be a material share of the bill.
+
+**Solution:** Group by resource in Cost Analysis and read past the top rows. Automate cleanup of the categories that are unambiguous, particularly unattached disks and unassociated public IPs. Audit shared infrastructure for duplication, since finding several firewalls or gateways where one would do is common in estates that grew by team rather than by design.
 
 ---
 
 ## Key Takeaways
 
-1. **Cost management is an architectural responsibility.** Architects drive spending through infrastructure choices. Understanding cost implications of design decisions is essential to your role.
+1. **Cost Management reports and alerts; it never stops spending.** Microsoft documents this plainly. Prevention is Azure Policy denying expensive resources at deployment, and a budget with an action group is containment that arrives up to a day late.
 
-2. **Start with visibility: Cost Analysis is your foundation.** Before optimizing, understand where money flows. Use Cost Analysis to group by service, resource, and tag to answer questions about spending.
+2. **Actual and amortized cost answer different questions.** Amortized spreads commitment purchases across their term and is the right view for run rate and chargeback. Budgets evaluate on actual cost only, so a reservation purchase can trip a threshold that consumption never would.
 
-3. **Budgets + alerts prevent surprises, but don't stop costs.** Budgets trigger notifications; automation (runbooks, logic apps) stops runaway spending. Pair budgets with automation for true cost control.
+3. **Anomaly detection catches what budgets do not.** It is free, needs no threshold, compares each day against a 60-day forecast, and is limited to subscription scope with five alert rules per subscription.
 
-4. **Reservations and Savings Plans require different mindsets.** Reservations are for stable, known workloads with long-term commitment. Savings Plans are for flexibility and uncertainty. Use both strategically.
+4. **Reservations apply before savings plans, and neither covers licensing.** The more restrictive benefit is consumed first to reduce waste. Windows and SQL Server licensing, storage, and networking fall outside both, which is why Azure Hybrid Benefit stacks rather than competes.
 
-5. **Cost allocation via tags is non-negotiable for FinOps.** Without consistent tagging, cost reporting is unreliable. Enforce tag governance via Azure Policy from day one.
+5. **A savings plan cannot be cancelled or refunded; a reservation can.** Reservations are exchangeable and refundable up to $50,000 in a rolling 12 months. Size savings plans to the floor of your spend, because the commitment runs its full term regardless.
 
-6. **Azure Advisor is free and continuously valuable.** Recommendations for idle resources, underutilized reservations, and Hybrid Benefit opportunities compound into significant savings over time.
+6. **There are two savings plans now.** The compute plan covers VMs, App Service, Functions Premium, Container Instances, Container Apps, Dedicated Host, and Spring Apps. A separate database plan, one-year only, covers SQL, PostgreSQL, MySQL, and Cosmos DB and includes software IP cost.
 
-7. **Right-sizing is ongoing, not one-time.** Monitor utilization regularly (monthly) and resize resources as needs change. What fits today may not fit in six months.
+7. **Spot eviction policy is a billing decision.** Deallocated Spot VMs keep consuming quota and paying for their disks. Delete is the right policy for stateless work, and Batch manages requeuing and node replacement for workloads that need it.
 
-8. **Shared infrastructure requires allocation rules.** A shared Azure Firewall or ExpressRoute belongs to everyone and no one until you allocate its cost. Use allocation rules to fairly distribute shared costs.
+8. **Azure Hybrid Benefit can be managed centrally for SQL Server.** A billing administrator assigns licenses at a subscription or billing account scope instead of relying on resource owners to tick a box, which closes both the compliance gap and the wasted-license gap. Windows Server remains resource-level only.
 
-9. **Spot VMs and low-priority compute are powerful but risky.** Use them for fault-tolerant, batch workloads, not production services. They save 60-90% but can be interrupted.
+9. **Exports carry more than cost, and the Power BI connector is in maintenance mode.** FOCUS, price sheet, and reservation transaction datasets are all exportable in CSV or Parquet. Build new reporting on exports rather than on the connector Microsoft has stopped updating.
 
-10. **FinOps alignment drives sustainable optimization.** Cost optimization requires engineering, finance, and business working together. Chargeback or showback models align incentives and drive continuous improvement.
+10. **Allocation is only as trustworthy as the tags beneath it.** Enforce required tags with policy before building chargeback on them, and track untagged spend as a metric, because disputed numbers produce arguments rather than savings.
