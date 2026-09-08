@@ -4,7 +4,7 @@ layout: resource
 type: reference
 category: "Azure"
 description: "Diagrams of how Azure networking components wire together: what can front what, what fails silently without its dependency, and which paths bypass the protection you think you have."
-last_updated: 2026-09-03
+last_updated: 2026-09-08
 tags: [networking, azure, vnet, private-link, load-balancing, dns, hybrid-connectivity]
 related_guides:
   - /study-guides/infrastructure/azure/azure-vnet-architecture.html
@@ -20,9 +20,9 @@ related_guides:
 ## The Data Path
 
 <div style="overflow-x:auto; margin: 1.5rem 0;">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 880" role="img" aria-labelledby="anm-title anm-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 940" role="img" aria-labelledby="anm-title anm-desc" style="width:100%; min-width:680px; height:auto; display:block;">
 <title id="anm-title">Azure networking data path component map</title>
-<desc id="anm-desc">A layered diagram showing which Azure networking components can front which others, which dependencies fail silently, and which paths bypass edge protection.</desc>
+<desc id="anm-desc">A layered diagram showing which Azure networking components can front which others, how the regional entry points chain, which dependencies fail silently, and which paths bypass edge protection.</desc>
 <style>
 .anm-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
 .anm-vnet { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
@@ -68,77 +68,90 @@ related_guides:
 <text class="anm-s" x="346" y="194">HTTP/HTTPS only</text>
 <text class="anm-lbl-bad" x="330" y="245">✗ cannot nest behind another Front Door, or chain with Azure CDN</text>
 
-<rect class="anm-vnet" x="36" y="262" width="848" height="456" rx="10"/>
-<text class="anm-band-label" x="52" y="284">VNET · REGIONAL</text>
+<rect class="anm-vnet" x="36" y="292" width="848" height="486" rx="10"/>
+<text class="anm-band-label" x="52" y="308">VNET · REGIONAL</text>
 
-<rect class="anm-band" x="52" y="298" width="816" height="118" rx="8"/>
-<text class="anm-band-label" x="68" y="318">ENTRY POINTS</text>
-<rect class="anm-box" x="90" y="330" width="200" height="76" rx="6"/>
-<text class="anm-t" x="106" y="356">Load Balancer</text>
-<text class="anm-s" x="106" y="376">TCP / UDP · pass-through</text>
-<text class="anm-s" x="106" y="394">NICs in ONE VNet</text>
-<rect class="anm-box" x="350" y="330" width="200" height="76" rx="6"/>
-<text class="anm-t" x="366" y="356">App Gateway</text>
-<text class="anm-s" x="366" y="376">L7 routing · WAF</text>
-<text class="anm-s" x="366" y="394">regional · HTTP/1.1 out</text>
-<rect class="anm-box" x="610" y="330" width="200" height="76" rx="6"/>
-<text class="anm-t" x="626" y="356">API Management</text>
-<text class="anm-s" x="626" y="376">policies · versioning</text>
-<text class="anm-s" x="626" y="394">internal needs fronting</text>
+<rect class="anm-band" x="52" y="328" width="816" height="148" rx="8"/>
+<text class="anm-band-label" x="68" y="348">ENTRY POINTS</text>
+<rect class="anm-box" x="90" y="360" width="200" height="94" rx="6"/>
+<text class="anm-t" x="106" y="386">App Gateway</text>
+<text class="anm-s" x="106" y="406">L7 routing · WAF</text>
+<text class="anm-s" x="106" y="424">public or private frontend</text>
+<text class="anm-s" x="106" y="442">regional · HTTP/1.1 out</text>
+<rect class="anm-box" x="350" y="360" width="200" height="94" rx="6"/>
+<text class="anm-t" x="366" y="386">API Management</text>
+<text class="anm-s" x="366" y="406">policies · versioning</text>
+<text class="anm-s" x="366" y="424">external or internal mode</text>
+<text class="anm-s" x="366" y="442">internal needs fronting</text>
+<rect class="anm-box" x="610" y="360" width="200" height="94" rx="6"/>
+<text class="anm-t" x="626" y="386">Load Balancer</text>
+<text class="anm-s" x="626" y="406">TCP / UDP · pass-through</text>
+<text class="anm-s" x="626" y="424">public or internal frontend</text>
+<text class="anm-s" x="626" y="442">NICs in ONE VNet</text>
 
-<rect class="anm-box" x="150" y="452" width="600" height="44" rx="6"/>
-<text class="anm-t" x="450" y="479" text-anchor="middle">WORKLOADS · VMs · VMSS · App Service · AKS</text>
+<rect class="anm-box" x="150" y="512" width="600" height="44" rx="6"/>
+<text class="anm-t" x="450" y="539" text-anchor="middle">WORKLOADS · VMs · VMSS · App Service · AKS</text>
 
-<rect class="anm-band" x="52" y="534" width="816" height="132" rx="8"/>
-<text class="anm-band-label" x="68" y="554">WHAT THEY REACH</text>
-<rect class="anm-box" x="90" y="566" width="210" height="76" rx="6"/>
-<text class="anm-t" x="106" y="592">Private Endpoint</text>
-<text class="anm-s" x="106" y="612">NIC in your subnet</text>
-<text class="anm-s" x="106" y="630">1:1 to ONE resource</text>
-<rect class="anm-box" x="350" y="566" width="200" height="76" rx="6"/>
-<text class="anm-t" x="366" y="592">NAT Gateway</text>
-<text class="anm-s" x="366" y="612">64,512 SNAT ports</text>
-<text class="anm-s" x="366" y="630">per public IP</text>
-<rect class="anm-box" x="610" y="566" width="210" height="76" rx="6"/>
-<text class="anm-t" x="626" y="592">VPN / ExpressRoute</text>
-<text class="anm-s" x="626" y="612">to on-premises</text>
-<text class="anm-s" x="626" y="630">ER and VPN sites ✗ transit</text>
+<rect class="anm-band" x="52" y="594" width="816" height="132" rx="8"/>
+<text class="anm-band-label" x="68" y="614">WHAT THEY REACH</text>
+<rect class="anm-box" x="90" y="626" width="210" height="76" rx="6"/>
+<text class="anm-t" x="106" y="652">Private Endpoint</text>
+<text class="anm-s" x="106" y="672">NIC in your subnet</text>
+<text class="anm-s" x="106" y="690">1:1 to ONE resource</text>
+<rect class="anm-box" x="350" y="626" width="200" height="76" rx="6"/>
+<text class="anm-t" x="366" y="652">NAT Gateway</text>
+<text class="anm-s" x="366" y="672">64,512 SNAT ports per IP</text>
+<text class="anm-s" x="366" y="690">outbound only · not inbound</text>
+<rect class="anm-box" x="610" y="626" width="210" height="76" rx="6"/>
+<text class="anm-t" x="626" y="652">VPN / ExpressRoute</text>
+<text class="anm-s" x="626" y="672">to on-premises, and back</text>
+<text class="anm-s" x="626" y="690">ER and VPN sites ✗ transit</text>
 
-<rect class="anm-box-alt" x="90" y="742" width="240" height="60" rx="6"/>
-<text class="anm-t-alt" x="106" y="766">Private DNS Zone</text>
-<text class="anm-s" x="106" y="786">exact name · linked to every VNet</text>
-<rect class="anm-box-alt" x="610" y="742" width="240" height="60" rx="6"/>
-<text class="anm-t-alt" x="626" y="766">GatewaySubnet</text>
-<text class="anm-s" x="626" y="786">/27+ · no NSG · no 0.0.0.0/0 UDR</text>
+<rect class="anm-box-alt" x="90" y="802" width="240" height="60" rx="6"/>
+<text class="anm-t-alt" x="106" y="826">Private DNS Zone</text>
+<text class="anm-s" x="106" y="846">exact name · linked to every VNet</text>
+<rect class="anm-box-alt" x="610" y="802" width="240" height="60" rx="6"/>
+<text class="anm-t-alt" x="626" y="826">GatewaySubnet</text>
+<text class="anm-s" x="626" y="846">/27+ · no NSG · no 0.0.0.0/0 UDR</text>
 
 <path class="anm-flow" d="M 450,52 V 124" marker-end="url(#anm-a)"/>
 <text class="anm-lbl" x="462" y="80">connection</text>
 <path class="anm-dns" d="M 396,50 L 268,126" marker-end="url(#anm-a-dns)"/>
 <text class="anm-lbl" x="368" y="78" text-anchor="end">DNS query</text>
-<path class="anm-dns" d="M 180,206 V 324" marker-end="url(#anm-a-dns)"/>
-<text class="anm-lbl" x="190" y="290">names an endpoint</text>
-<path class="anm-flow" d="M 390,32 H 18 V 368 H 84" marker-end="url(#anm-a)"/>
+<path class="anm-dns" d="M 292,186 H 324" marker-end="url(#anm-a-dns)"/>
+<text class="anm-lbl" x="309" y="219" text-anchor="middle">can also name Front Door</text>
+<path class="anm-dns" d="M 180,206 V 310" marker-end="url(#anm-a-dns)"/>
+<text class="anm-lbl" x="192" y="272">names any public endpoint</text>
+<path class="anm-flow" d="M 390,32 H 18 V 318 H 190"/>
 <text class="anm-lbl" x="204" y="24" text-anchor="middle">traffic connects direct, Traffic Manager never sees a packet</text>
-<path class="anm-flow" d="M 450,206 V 324" marker-end="url(#anm-a)"/>
-<text class="anm-lbl" x="462" y="290">origin</text>
-<path class="anm-flow" d="M 550,368 H 604" marker-end="url(#anm-a)"/>
-<path class="anm-flow" d="M 450,406 V 446" marker-end="url(#anm-a)"/>
-<text class="anm-lbl" x="462" y="432">no end-to-end gRPC</text>
-<path class="anm-flow" d="M 190,406 V 446" marker-end="url(#anm-a)"/>
-<path class="anm-flow" d="M 710,406 V 446" marker-end="url(#anm-a)"/>
-<path class="anm-flow" d="M 250,496 V 520 H 195 V 560" marker-end="url(#anm-a)"/>
-<path class="anm-flow" d="M 450,496 V 560" marker-end="url(#anm-a)"/>
-<path class="anm-flow" d="M 650,496 V 520 H 715 V 560" marker-end="url(#anm-a)"/>
-<path class="anm-req" d="M 195,642 V 736" marker-end="url(#anm-a-req)"/>
-<text class="anm-lbl-req" x="205" y="700">REQUIRES</text>
-<path class="anm-req" d="M 715,642 V 736" marker-end="url(#anm-a-req)"/>
-<text class="anm-lbl-req" x="725" y="700">REQUIRES</text>
-<path class="anm-bad" d="M 510,32 H 782 V 236 L 562,314" marker-end="url(#anm-a-bad)"/>
-<text class="anm-lbl-bad" x="772" y="140" text-anchor="end">a direct hit on App Gateway</text>
-<text class="anm-lbl-bad" x="772" y="157" text-anchor="end">skips the edge WAF entirely</text>
-<text class="anm-lbl-bad" x="772" y="174" text-anchor="end">lock it with X-Azure-FDID</text>
+<path class="anm-flow" d="M 450,206 V 318"/>
+<text class="anm-lbl" x="462" y="265">origin · any of these, or the workload itself</text>
+<text class="anm-lbl" x="462" y="282">must be publicly reachable · Private Link origins on Premium</text>
+<path class="anm-flow" d="M 190,318 H 710"/>
+<path class="anm-flow" d="M 190,318 V 354" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 450,318 V 354" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 710,318 V 354" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 290,406 H 344" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 550,406 H 604" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 190,454 V 506" marker-end="url(#anm-a)"/>
+<text class="anm-lbl" x="202" y="492">no end-to-end gRPC</text>
+<path class="anm-flow" d="M 450,454 V 506" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 710,454 V 506" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 770,626 V 460" marker-end="url(#anm-a)"/>
+<text class="anm-lbl" transform="translate(800,580) rotate(-90)">on-prem inbound</text>
+<path class="anm-flow" d="M 250,556 V 580 H 195 V 620" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 450,556 V 620" marker-end="url(#anm-a)"/>
+<path class="anm-flow" d="M 650,556 V 580 H 715 V 620" marker-end="url(#anm-a)"/>
+<path class="anm-req" d="M 195,702 V 796" marker-end="url(#anm-a-req)"/>
+<text class="anm-lbl-req" x="205" y="760">REQUIRES</text>
+<path class="anm-req" d="M 715,702 V 796" marker-end="url(#anm-a-req)"/>
+<text class="anm-lbl-req" x="725" y="760">REQUIRES</text>
+<path class="anm-bad" d="M 510,32 H 890 V 318 H 722" marker-end="url(#anm-a-bad)"/>
+<text class="anm-lbl-bad" x="876" y="140" text-anchor="end">a direct hit on any origin</text>
+<text class="anm-lbl-bad" x="876" y="157" text-anchor="end">skips the edge WAF entirely</text>
+<text class="anm-lbl-bad" x="876" y="174" text-anchor="end">lock origins with X-Azure-FDID</text>
 
-<g transform="translate(52, 828)">
+<g transform="translate(52, 888)">
 <line class="anm-flow" x1="0" y1="0" x2="40" y2="0" marker-end="url(#anm-a)"/>
 <text class="anm-s" x="48" y="4">data path</text>
 <line class="anm-dns" x1="150" y1="0" x2="190" y2="0" marker-end="url(#anm-a-dns)"/>
