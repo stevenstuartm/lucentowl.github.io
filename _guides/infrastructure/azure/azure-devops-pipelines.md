@@ -3,15 +3,15 @@ title: "Azure DevOps Pipelines for System Architects"
 layout: guide
 category: Azure
 subcategory: Developer Tools & CI/CD
-description: "YAML pipeline architecture including stages, environments, approvals, variable groups, self-hosted agents, and deployment patterns for building reliable CI/CD workflows on Azure DevOps."
-tags: [infrastructure, azure, cicd, devops, automation, deployment, practical]
+description: "YAML pipeline architecture including stages, deployment jobs and strategies, environments, approvals and checks, service connections with workload identity federation, agents, and parallel job licensing."
+tags: [cicd, yaml-pipelines, deployment-jobs, service-connections, workload-identity, pipeline-templates, practical]
 ---
 
 ## What Is Azure DevOps Pipelines
 
-[Azure DevOps Pipelines](https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/what-is-azure-pipelines){:target="_blank" rel="noopener noreferrer"} is Microsoft's native CI/CD platform integrated with Azure DevOps. It automates the process of building artifacts from source code, running tests, and deploying to target environments. Modern pipelines are defined in YAML, stored in version control alongside your code, and support both continuous integration (commit to build) and continuous deployment (automated releases to environments).
+[Azure DevOps Pipelines](https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/what-is-azure-pipelines){:target="_blank" rel="noopener noreferrer"} is Microsoft's CI/CD platform inside Azure DevOps. It builds artifacts from source, runs tests, and deploys to target environments. Modern pipelines are defined in YAML, stored in version control alongside code, and cover both continuous integration (commit to build) and continuous deployment (automated releases to environments).
 
-Unlike older web-based pipeline builders, YAML pipelines give you infrastructure-as-code for CI/CD workflows. This means pipeline configuration is reviewable in pull requests, versioned with code, and portable across teams.
+YAML pipelines give you infrastructure-as-code for CI/CD workflows. Pipeline configuration becomes reviewable in a pull request, versioned with the code it builds, and portable across teams.
 
 ---
 
@@ -26,11 +26,11 @@ Unlike older web-based pipeline builders, YAML pipelines give you infrastructure
 
 **With Pipelines:**
 - Every build is automatically tested before becoming a candidate for deployment
-- Deployments follow a consistent, repeatable process independent of who initiates them
-- Approval gates and manual checks can pause deployment when needed
+- Deployments follow a repeatable process independent of who initiates them
+- Approvals and automated checks can pause a deployment before it touches an environment
 - Environment configuration is captured in code, reducing drift
-- Audit trails show exactly what was deployed, when, and by whom
-- Multiple deployment strategies (rolling, canary, blue-green) are available without manual orchestration
+- Audit trails show what was deployed, when, and by whom
+- Rolling and canary rollouts are built into deployment jobs rather than hand-orchestrated
 - Infrastructure and applications are deployed together, keeping them synchronized
 
 ---
@@ -41,29 +41,49 @@ Architects familiar with AWS need to understand the conceptual differences:
 
 | Concept | AWS CodePipeline/CodeBuild | Azure DevOps Pipelines |
 |---------|---------------------------|----------------------|
-| **Pipeline definition** | Separate stage definitions with complex JSON or YAML CloudFormation templates | Single YAML file defining triggers, stages, jobs, and steps in sequence |
-| **Pipeline file storage** | CodeBuild projects defined in AWS console or infrastructure-as-code, not stored with code | YAML files stored in git alongside application code with full version history |
-| **Compute model** | CodeBuild spins up containers per build and you pay per minute | Microsoft-hosted agents (Linux, Windows, macOS) included with self-hosted agents available for unlimited builds |
-| **Deployment orchestration** | CodeDeploy handles instance or container deployment as a separate service | Deployment jobs built into the pipeline itself without a separate service |
-| **Approval gates** | Manual approval stages in CodePipeline separate from deployment logic | Approval checks embedded in pipeline environments with conditional deployment |
-| **Multi-environment** | Multiple CodePipeline instances or complex cross-account setup required | Single pipeline with environments; deploy to dev, staging, and production in one workflow |
-| **Artifact storage** | S3 buckets for artifacts passed between stages | Azure Artifacts or external storage with built-in publish tasks |
-| **Secret management** | Parameter Store or Secrets Manager integrated via IAM roles | Key Vault integration through variable groups with linked secrets |
-| **Pipeline templates** | Partial automation with no first-class template reuse | Step templates, job templates, stage templates with multi-level reuse |
-| **Agent model** | CodeBuild is fully managed; you specify instance size | Microsoft-hosted for standard needs, self-hosted agents for custom requirements |
-| **Cost model** | Pay per CodeBuild minute plus data transfer charges | Microsoft-hosted included in Azure DevOps; self-hosted only pay for infrastructure |
+| **Pipeline definition** | Separate stage definitions with JSON or YAML CloudFormation templates | Single YAML file defining triggers, stages, jobs, and steps in sequence |
+| **Pipeline file storage** | CodeBuild projects defined in the AWS console or infrastructure-as-code, not stored with code | YAML files stored in git alongside application code with full version history |
+| **Compute billing** | CodeBuild spins up containers per build and you pay per minute | Billed by *parallel job* (how many jobs run at once), not per minute of execution |
+| **Deployment orchestration** | CodeDeploy handles instance or container deployment as a separate service | Deployment jobs built into the pipeline, with runOnce, rolling, and canary strategies |
+| **Approval gates** | Manual approval stages in CodePipeline, separate from deployment logic | Approvals and checks attached to resources, configured outside the YAML |
+| **Multi-environment** | Multiple CodePipeline instances or cross-account setup required | Single pipeline with environments; deploy to dev, staging, and production in one workflow |
+| **Artifact storage** | S3 buckets for artifacts passed between stages | Pipeline artifacts stored by Azure Pipelines, exempt from storage billing |
+| **Secret management** | Parameter Store or Secrets Manager integrated via IAM roles | Key Vault secrets mapped into variable groups through a service connection |
+| **Cloud authentication** | IAM roles assumed by the build service | Service connections, with workload identity federation as the recommended credential |
+| **Pipeline templates** | Partial automation with no first-class template reuse | Step, job, and stage templates plus `extends` inheritance |
+| **Parallelization** | Parallel actions within a CodePipeline stage | Parallel jobs within a stage, bounded by purchased parallel jobs |
+| **Trigger types** | CodeCommit webhooks, EventBridge events, and manual triggers | Git push, pull request, scheduled, and resource triggers (pipelines, containers, packages, webhooks) |
+| **Agent model** | CodeBuild is fully managed; you specify compute size | Microsoft-hosted for standard needs, self-hosted or scale set agents for custom requirements |
+| **On-premises integration** | CodeBuild cannot reach on-premises systems directly; requires proxies or VPC plumbing | Self-hosted agents run inside your network and reach on-premises systems directly |
 
 ---
 
 ## Core Pipeline Concepts
 
+### Where Pipeline Objects Live
+
+Azure DevOps nests objects as organization → project → pipeline, and the scope of a given object determines who can share it and how it is billed. Getting this wrong produces surprises during capacity planning.
+
+| Object | Scope | Consequence |
+|---|---|---|
+| **Parallel jobs** | Organization | Shared across every project. You cannot dedicate capacity to a specific project or pool. |
+| **Agent pools** | Organization or project | Organization-scoped pools are available to all projects. Every organization starts with two: `Azure Pipelines` (Microsoft-hosted) and `Default`. |
+| **Service connections** | Project, optionally shared across projects | A cross-project connection cannot be converted to workload identity federation with the automated tool. |
+| **Variable groups and secure files** | Project (the Library) | Roles set at the Library level flow down to individual assets. |
+| **Environments** | Project | Approvals and checks are configured on the environment, not in the YAML. |
+| **Retention settings** | Project | Per-pipeline retention rules no longer exist; the project setting is the only control. |
+
+The parallel job scope is the one that most often surprises teams. Buying two parallel jobs and then starting two runs in one project leaves nothing for a second project until one finishes.
+
+---
+
 ### YAML Pipelines vs Classic Pipelines
 
-Azure DevOps originally provided a web-based graphical pipeline editor called "Classic Pipelines." These are now legacy. Microsoft recommends YAML pipelines as the modern standard because they are versionable, reviewable, and repeatable.
+Azure DevOps originally provided a web-based graphical pipeline editor, now called Classic Pipelines, split into classic build pipelines and classic release pipelines. Microsoft recommends YAML for new work and directs new feature investment there. Classic pipelines remain documented and supported, and Microsoft has not published a retirement date, so an existing classic release pipeline is not under an immediate deadline.
 
-**YAML Pipelines** are defined in a `azure-pipelines.yml` file stored in version control. This file contains all pipeline logic: stages, jobs, steps, variables, triggers, and environment configuration. The entire pipeline is reviewable in a pull request before it runs, making it auditable and maintainable.
+**YAML Pipelines** live in an `azure-pipelines.yml` file in version control. That file holds stages, jobs, steps, variables, triggers, and environment references. The whole pipeline is reviewable in a pull request before it runs.
 
-**Classic Pipelines** are built in the Azure DevOps web UI with no version history or code review process. They are harder to maintain, duplicate, and port across projects. New projects should always use YAML pipelines.
+**Classic Pipelines** are built in the Azure DevOps web UI. They keep a revision history in the UI but sit outside pull request review, and they are harder to duplicate and port across projects. Some newer capabilities never reached them: pipeline caching, for example, is unsupported in classic release pipelines, and publishing pipeline artifacts is unsupported in release pipelines. New projects should use YAML.
 
 ---
 
@@ -71,76 +91,267 @@ Azure DevOps originally provided a web-based graphical pipeline editor called "C
 
 A YAML pipeline has a hierarchical structure:
 
-**Stages** are the top-level organizational unit. Each stage represents a logical phase: build, test, deploy-to-dev, deploy-to-prod. Stages execute sequentially by default, though you can configure dependencies so later stages wait for earlier ones or run in parallel when specified.
+**Stages** are the top-level organizational unit. Each stage represents a logical phase: build, test, deploy-to-dev, deploy-to-prod. Stages run sequentially by default, and `dependsOn` lets you fan them out or serialize them explicitly.
 
-**Jobs** run within stages. A job is a unit of work that executes on an agent (a machine that runs pipeline tasks). Multiple jobs within a stage can run in parallel or sequentially. A common pattern is one job per environment: a build job produces artifacts, and separate deployment jobs deploy to dev, staging, and production.
+**Jobs** run within stages. A job is a unit of work that executes on an agent. Jobs within a stage can run in parallel or sequentially, bounded by how many parallel jobs the organization has. A **deployment job** is a special job type that targets an environment, records deployment history against it, and applies a deployment strategy.
 
-**Steps** run within jobs. A step is a single action: execute a script, run a test, publish an artifact, deploy a container. Steps in a job execute sequentially unless explicitly configured otherwise. Built-in steps are provided for common tasks like building .NET/Node/Java projects, publishing artifacts, and pushing containers.
+**Steps** run within jobs. A step is a single action: run a script, run tests, publish an artifact, deploy a container. Steps run sequentially within a job.
 
-**Task** is Azure DevOps terminology for a built-in step like "dotnet build" or "PublishBuildArtifacts". Custom scripts written in bash, PowerShell, or Python are wrapped in script tasks.
+**Tasks** are the packaged steps Azure DevOps ships, referenced as `- task: DotNetCoreCLI@2` or similar. Scripts written in bash, PowerShell, or Python go through `script`, `bash`, `pwsh`, or `powershell` shortcuts.
 
-This hierarchy allows flexible orchestration. A typical pattern: a single build stage with one job that creates artifacts, followed by separate deployment stages with jobs for each environment.
+Artifacts move between stages through the pipeline artifact shortcuts:
+
+```yaml
+steps:
+- publish: $(Build.ArtifactStagingDirectory)/app
+  artifact: drop
+```
+
+```yaml
+steps:
+- download: current
+  artifact: drop
+```
+
+`publish` and `download` are shortcuts for the `PublishPipelineArtifact@1` and `DownloadPipelineArtifact@2` tasks. Pipeline artifacts superseded build artifacts. `PublishBuildArtifacts@1` still works, but Microsoft recommends the pipeline artifact tasks for new pipelines. Downloads happen automatically only in deployment jobs, and only within the `deploy` lifecycle hook. A regular build job has to ask for its artifacts explicitly.
 
 ---
 
-### Triggers: CI, PR, Scheduled, and Pipeline Triggers
+### Triggers: CI, PR, Scheduled, and Resource Triggers
 
-**CI Triggers** (Continuous Integration) automatically run the pipeline when code is committed to specific branches. By default, a YAML pipeline triggers on all branches. You can restrict triggers to specific branches like `main` and `develop`.
+**CI Triggers** run the pipeline when code lands on specified branches. A YAML pipeline triggers on all branches by default, so most pipelines restrict this to `main` and release branches.
 
-**PR Triggers** run the pipeline when a pull request is created or updated. This allows validation before merging. PR pipelines typically run build and test stages but skip deployment stages (you don't want a PR to deploy to production).
+**PR Triggers** run the pipeline when a pull request is opened or updated. PR runs typically execute build and test stages and skip deployment stages.
 
-**Scheduled Triggers** run pipelines on a schedule like daily at midnight or weekly on Monday morning. Common uses include nightly smoke tests, periodic data refreshes, or daily infrastructure validation.
+**Scheduled Triggers** run pipelines on a cron schedule. Common uses include nightly smoke tests, periodic data refreshes, and daily infrastructure drift checks.
 
-**Pipeline Triggers** (also called multi-stage pipelines or chaining) allow one pipeline to trigger another when it completes. This is useful for separating concerns: a build pipeline creates artifacts, and a separate deployment pipeline consumes them. Pipeline triggers enable loosely coupled, reusable workflows.
+**Resource Triggers** fire when something outside the pipeline changes. Azure Pipelines supports six resource types: `pipelines`, `builds`, `containers`, `packages`, `repositories`, and `webhooks`. A `pipelines` resource lets a CD pipeline consume artifacts from a CI pipeline and start when that pipeline finishes:
+
+```yaml
+resources:
+  pipelines:
+  - pipeline: smartHotel          # alias used in this pipeline
+    project: otherDevOpsProject
+    source: SmartHotel-CI         # name of the producing pipeline
+    trigger:
+      branches:
+        include:
+        - main
+        - releases/*
+      stages:
+      - Production
+```
+
+Two behaviors catch people out. Without a `trigger` property the resource is consume-only and never starts a run, and when the resource pipeline lives in a different repository the trigger fires against that repository's *default branch* rather than the branch that raised the event. Trigger evaluation for container resources also happens only on the default branch, so a trigger added on a feature branch does nothing until it merges.
 
 ---
 
-### Variable Groups and Secrets Management
+### Variables and Variable Groups
 
-Variables in pipelines store configuration values like API endpoints, database connection strings, and feature flags. Azure DevOps provides two mechanisms:
+Variables hold configuration values like endpoints, connection strings, and feature flags. Three syntaxes exist and they resolve at different times:
 
-**Pipeline Variables** are defined in the YAML file and scoped to that pipeline. They are simple to use but not shared across pipelines. Variable syntax uses `$(variableName)`.
+| Syntax | Name | Resolved | Use for |
+|---|---|---|---|
+| `$(name)` | Macro | Runtime, just before a task runs | Task inputs and script arguments |
+| `$[ ... ]` | Runtime expression | Start of a run, or start of a job for dependency output | Conditions and variables that depend on earlier jobs |
+| `${{ ... }}` | Template expression | Compile time, before the run starts | Template parameters and structural branching in YAML |
 
-**Variable Groups** are reusable collections of variables managed in Azure DevOps. You create a variable group once (like "prod-config" containing production endpoint URLs and secrets) and reference it in multiple pipelines. This ensures all pipelines use consistent configuration values.
+A template expression cannot read anything produced during the run, which is why `${{ }}` around an output variable silently yields nothing.
 
-**Key Vault Integration** allows variable groups to link secrets stored in Azure Key Vault. Instead of storing secrets in Azure DevOps, you store them in Key Vault and configure a variable group to fetch them at pipeline runtime. The secret values are never stored in Azure DevOps itself, improving security.
+**Pipeline Variables** are declared in the YAML and scoped to that pipeline.
 
-Secrets in variable groups are masked in pipeline logs so they don't appear in build output. However, a malicious script can still read secret values from the environment during pipeline execution, so you still need to vet code that runs in your pipelines.
+**Variable Groups** are reusable collections managed under **Pipelines > Library** and referenced by name:
+
+```yaml
+variables:
+- group: prod-config
+- name: buildConfiguration
+  value: Release
+```
+
+A YAML pipeline must be explicitly authorized to use a variable group. Without that authorization the run fails with a resource authorization error rather than silently proceeding, which prevents anyone who can push YAML from reading another team's secrets.
+
+Secret variables in a variable group are protected resources and can carry their own approvals, checks, and pipeline permissions. Non-secret variables in the same group carry none of that. Secret values also cannot be read directly inside a script. They have to be passed in as task arguments or mapped into `env`.
+
+---
+
+### Key Vault Integration
+
+A variable group can map secrets out of an Azure Key Vault rather than storing them in Azure DevOps.
+
+The link runs through an **Azure Resource Manager service connection**, not a managed identity attached to the agent. The service connection's identity needs **Get** and **List** on the vault's secrets, either through an access policy or the *Key Vault Secrets User* role on an RBAC vault.
+
+Four constraints shape how this is used:
+
+- **Only names are mapped, not values.** Values are fetched from the vault at run time, so rotating a secret in Key Vault reaches every pipeline that uses the group without any pipeline change.
+- **Adding or deleting a secret in the vault does not update the group.** New secrets have to be selected into the variable group explicitly.
+- **Secrets only.** Cryptographic keys and certificates in the vault cannot be mapped into a variable group.
+- **RBAC vaults behind a private endpoint are unsupported.** Azure DevOps is not a Key Vault trusted service. A vault reachable only through a private endpoint has to use the vault access policy permission model instead.
+
+---
+
+### Service Connections and Workload Identity Federation
+
+A **service connection** is how a pipeline authenticates to something outside Azure DevOps. The Azure Resource Manager (ARM) service connection is the one that matters for deploying to Azure, and its credential model has changed materially.
+
+**Workload identity federation is the recommended credential.** The service connection exchanges a short-lived pipeline token for an Azure access token against a federated credential on an app registration or a user-assigned managed identity. Nothing long-lived is stored in Azure DevOps, so there is no secret to rotate and no expiry to be paged about.
+
+Three creation paths exist:
+
+| Option | When to use |
+|---|---|
+| **App registration (automatic) with workload identity federation** | Default choice. Requires Owner on the subscription. Unsupported for Azure Stack and Azure US Government. |
+| **Managed identity** (federated credential on an existing user-assigned managed identity) | When your directory does not let you create app registrations. |
+| **Manual configuration** | Fallback when neither automatic path completes. |
+
+Secret-based options (automatic app registration with a secret, agent-assigned managed identity, publish profile) still exist for backwards compatibility and are not recommended for new connections.
+
+Four operational details:
+
+- **The Azure DevOps issuer retires 1 July 2027.** Federated credentials issued by `https://vstoken.dev.azure.com` are being replaced by the Microsoft Entra issuer (`https://login.microsoftonline.com/`). New connections already default to the Entra issuer. This applies to Azure public cloud connections that use single-tenant Entra applications or managed identities; non-public clouds and multitenant applications are excluded.
+- **Existing secret-based connections can be converted in place.** The conversion tool works only on connections Azure DevOps created itself and only on single-project connections. A converted connection can be reverted for seven days, after which you create a new secret manually.
+- **Unused connections get disabled.** Azure Pipelines may automatically disable a connection that has gone 100 days without use, and pipelines referencing it fail until it is re-enabled.
+- **Do not grant access to all pipelines.** The *Grant access permission to all pipelines* checkbox is convenient and defeats the point of scoping the connection. Authorize individual pipelines instead.
+
+Scale set agent pools are the exception to the workload identity recommendation. Configuring one still requires an ARM service connection based on a service principal key. Certificate and managed identity credentials fail when Azure Pipelines tries to enumerate scale sets.
 
 ---
 
 ### Environments and Deployment Strategies
 
-An **Environment** in Azure DevOps represents a target for deployment: dev, staging, production, a specific Kubernetes cluster, etc. Environments allow you to define approval gates, approvers, and checks that must pass before deployment proceeds.
+An **Environment** is a named deployment target in a project: dev, staging, production, or a specific Kubernetes namespace. Environments record deployment history, and they are where approvals and checks are configured. An environment can hold Kubernetes or virtual machine resources, or hold none at all and act purely as a history and gating surface.
 
-**Approval Gates** require human approval before a deployment job targeting an environment executes. You can configure which users can approve and require approval from multiple people. This is how you prevent accidental production deployments.
+A **deployment job** targets an environment and declares a strategy. Azure DevOps implements three:
 
-**Checks** are automated validations attached to an environment. A check can query Azure REST APIs to verify infrastructure readiness, check Azure Policy compliance, or run custom validation scripts. Checks run automatically; if any fail, deployment to that environment is blocked.
+| Strategy | Behavior | Constraint |
+|---|---|---|
+| `runOnce` | Each lifecycle hook runs once | Default; works against any environment |
+| `rolling` | Hooks run per batch of targets, batch size set by `maxParallel` (a count or a percentage) | **VM resources only** |
+| `canary` | `preDeploy` runs once, then `deploy`/`routeTraffic`/`postRouteTraffic` repeat per entry in `increments` | Increment percentage exposed as `$(strategy.increment)` |
 
-**Deployment Strategies** (rolling, canary, blue-green) control how traffic shifts from old to new versions:
+Blue-green is not a built-in strategy. You build it from two environments plus a `routeTraffic` step that repoints a load balancer or App Service slot.
 
-- **Rolling deployment**: Replace instances gradually. New instances start serving traffic immediately. If something fails mid-deployment, you have a partial rollout.
-- **Canary deployment**: Route a small percentage of traffic to the new version while most traffic goes to the old version. Monitor metrics; if issues occur, rollback is quick. If metrics are healthy, gradually shift remaining traffic.
-- **Blue-green deployment**: Keep two identical production environments. Deploy to the idle environment, validate it, then switch router to point to the newly deployed environment. Provides instant rollback but requires 2x capacity.
+Every strategy runs the same lifecycle hooks, and the hooks are where health checks and rollback live:
 
-Azure DevOps doesn't enforce any of these strategies directly. Instead, you implement them through deployment jobs with manual approvals, approval checks at environment level, and conditional steps that check metrics.
+```
+                 ┌──────────────┐
+                 │  preDeploy   │  initialize, back up, install certs
+                 └──────┬───────┘
+                        v
+                 ┌──────────────┐
+                 │    deploy    │  artifacts auto-download here
+                 └──────┬───────┘
+                        v
+                 ┌──────────────┐
+                 │ routeTraffic │  shift traffic to the new version
+                 └──────┬───────┘
+                        v
+                 ┌──────────────┐
+                 │postRouteTraf.│  watch metrics for a defined interval
+                 └──────┬───────┘
+                        │
+             ┌──────────┴──────────┐
+             v                     v
+      ┌─────────────┐       ┌─────────────┐
+      │ on: success │       │ on: failure │  restore last known good
+      └─────────────┘       └─────────────┘
+```
+
+A canary rollout against AKS looks like this:
+
+```yaml
+jobs:
+- deployment: DeployBookings
+  environment: smarthotel-prod.bookings
+  pool:
+    vmImage: ubuntu-latest
+  strategy:
+    canary:
+      increments: [10, 20]
+      deploy:
+        steps:
+        - task: KubernetesManifest@1
+          inputs:
+            action: $(strategy.action)
+            strategy: $(strategy.name)
+            percentage: $(strategy.increment)
+            manifests: manifest.yml
+      postRouteTraffic:
+        pool: server
+        steps:
+        - script: echo monitor application health
+      on:
+        failure:
+          steps:
+          - script: echo rollback
+```
+
+Three behaviors of deployment jobs differ from regular jobs. The repository is not cloned automatically, so add `checkout: self` if steps need source. Artifacts download automatically, but only inside the `deploy` hook, and `- download: none` opts out. And retrying a failed rolling deployment re-runs against every VM in the set rather than only the failed targets.
 
 ---
 
-### Self-Hosted Agents vs Microsoft-Hosted Agents
+### Approvals and Checks
 
-An **Agent** is a machine (physical or virtual) where pipeline jobs execute. Agents poll Azure DevOps for work, execute steps, and report results.
+Approvals and checks are configured by the owner of a resource, in the web UI, and deliberately not in the YAML. Someone who can edit the pipeline file cannot weaken the gates protecting an environment.
 
-**Microsoft-Hosted Agents** are provided by Microsoft. They run on Azure infrastructure, come pre-installed with common tools (git, build tools, testing frameworks), and scale automatically. You don't manage infrastructure; jobs queue and run on the next available agent. They are free for public projects and include parallel job limits for private projects (typically 1 free concurrent job, more with paid licenses).
+Checks attach to six resource types: environments, service connections, repositories, variable groups, secure files, and agent pools. A stage cannot start until every check on every resource it consumes is satisfied.
 
-**Self-Hosted Agents** run on machines you provision and manage. They can be Windows VMs, Linux VMs, or containers. Self-hosted agents are useful when you need custom tools, specific hardware (GPUs, large memory), network access to internal systems, or unlimited concurrent builds without paying per-job costs. The trade-off is operational overhead: you provision, patch, monitor, and scale them.
+Evaluation runs in five ordered categories, and within a category checks run in the order they were created:
 
-**Agent Pools** group agents by capability or purpose. A pool might contain "Linux agents running on AKS", "Windows agents on premises", or "build agents with GPU". You specify which pool a job should run on, and Azure DevOps distributes the job to an available agent in that pool.
+1. **Static checks**: Branch control, Required template, Evaluate artifact
+2. **Pre-check approvals**
+3. **Dynamic checks**: Approval, Invoke Azure Function, Invoke REST API, Business Hours, Query Azure Monitor alerts
+4. **Post-check approvals**
+5. **Exclusive lock**
 
-Agent selection strategy depends on your needs:
-- Use Microsoft-hosted agents for standard builds unless you need custom tools or unlimited parallelism
-- Use self-hosted agents when you need access to internal resources (on-premises networks, private APIs) that Microsoft-hosted agents cannot reach
-- Use self-hosted agents when unlimited concurrent jobs make more economic sense than paying per-concurrent-job with Microsoft-hosted
+What each is for:
+
+- **Approval** pauses for a named set of users or groups. If a group is the approver, one member of it is enough. The approver list freezes when checks begin, so adding someone mid-wait does not help. A timeout marks the stage skipped rather than failed, and approvers can defer an approval so it takes effect at a chosen later time.
+- **Branch control** requires that every resource in the run came from an allowed branch, optionally requiring that branch to have protection enabled. Branch names must be fully qualified as `refs/heads/<name>`.
+- **Required template** fails any pipeline that does not extend from a named YAML template. This is the check that turns a template from a convention into an enforced control.
+- **Evaluate artifact** applies a custom policy to the artifact being deployed. It currently supports container images only.
+- **Invoke Azure Function** and **Invoke REST API** call out to your own logic and parse the response. Setting a non-zero *Time between evaluations* makes the decision non-final and re-evaluates on a cycle.
+- **Query Azure Monitor alerts** passes only when no alert rule is firing, which pairs naturally with the `postRouteTraffic` hook of a canary rollout.
+- **Business hours** holds the stage until a permitted time window.
+- **Exclusive lock** allows one run at a time through a resource. `lockBehavior: runLatest` (the default) lets the newest run take the lock and discards the queue; `lockBehavior: sequential` runs them in order.
+
+**ServiceNow Change Management** is available as a marketplace extension and opens a change request automatically at the start of a stage.
+
+A pipeline waiting on an approval does not consume a parallel job, so gates cost queue time but not licensed capacity.
+
+---
+
+### Microsoft-Hosted vs Self-Hosted Agents
+
+An **Agent** is a machine where pipeline jobs execute. Agents poll Azure DevOps for work, run steps, and report results.
+
+**Microsoft-Hosted Agents** run on Azure infrastructure Microsoft manages, come preloaded with common toolchains, and are recycled after every job. You manage no infrastructure. They cannot reach private networks, and jobs are capped in duration by your parallel job tier.
+
+**Self-Hosted Agents** run on machines you provision: VMs, physical machines, or containers. They suit custom tooling, specific hardware, access to internal systems, and workloads that need state warmed between jobs. You provision, patch, monitor, and scale them.
+
+**Scale Set Agents** are self-hosted agents backed by an Azure virtual machine scale set that Azure Pipelines itself scales. You disable the scale set's own autoscaling and overprovisioning, and Azure Pipelines samples the pool every five minutes and grows or shrinks it toward a standby count you configure. Enabling tear-down after every use reimages each VM between jobs, which gives Microsoft-hosted-style isolation on your own network and image. Scale set agents support Ubuntu, Windows Server, and Windows 10 client only, no macOS, and only in Azure public cloud. **Managed DevOps Pools** is the successor Microsoft now points at for autoscaling self-hosted pools, running the VMs in a Microsoft-managed subscription instead of yours.
+
+**Agent Pools** group agents by capability. Pools are scoped to the organization or to a single project, and every organization starts with `Azure Pipelines` (the Microsoft-hosted pool) and `Default`.
+
+```
+                     Do jobs need to reach a private
+                     network or internal system?
+                              │
+                 ┌────────────┴────────────┐
+                yes                        no
+                 │                          │
+                 v                          v
+      Do you want to manage        Do you need custom tools,
+      VMs and images?              specific hardware, or jobs
+                 │                 longer than the tier limit?
+        ┌────────┴────────┐                 │
+       no                yes         ┌──────┴──────┐
+        │                 │         no            yes
+        v                 v          │             │
+   Managed DevOps    Scale set or    v             v
+   Pools             plain self-  Microsoft-   Scale set
+                     hosted       hosted       agents
+```
 
 ---
 
@@ -148,30 +359,33 @@ Agent selection strategy depends on your needs:
 
 Templates are reusable YAML fragments that reduce duplication across pipelines.
 
-**Step Templates** define a sequence of steps that multiple jobs use. For example, a step template "build-and-test" might run `dotnet build`, `dotnet test`, and publish results. Any job can reference this template instead of repeating those steps.
+**Step Templates** define a sequence of steps that multiple jobs use. A `build-and-test` template might run `dotnet build`, `dotnet test`, and publish results.
 
-**Job Templates** define a complete job with its own pool, variables, and steps. A job template might describe "run integration tests against a database" with setup and teardown steps. Multiple stages can use the same job template with different parameters.
+**Job Templates** define a complete job with its own pool, variables, and steps, parameterized for the caller.
 
-**Stage Templates** define entire stages. A stage template might describe "deploy to an environment" with approval checks, pre-deployment validation, and rollback steps. You reference the template once per target environment, passing different parameters.
+**Stage Templates** define entire stages. A `deploy-environment` template can carry the deployment job, its strategy, and its rollback steps, referenced once per target environment with different parameters.
 
-**Extends** allow a pipeline to inherit from a parent template. The parent defines the overall structure (build stage, test stage, deploy stage) and child pipelines customize specific steps. This provides guardrails: teams cannot skip security scanning or testing because those steps are enforced in the parent template.
+**Extends** makes a pipeline inherit from a parent template. The parent fixes the overall shape (build, scan, test, deploy) and child pipelines fill in the parts the parent exposes as parameters.
 
-Template reuse becomes critical at scale. When you have 50 microservices, each with its own pipeline, maintaining consistency becomes hard without templates. A central "pipeline templates" repository can define shared patterns that all services inherit.
+`extends` on its own is a convention, not a control. Anyone who can edit the pipeline file can remove the `extends` line and skip the security scanning it enforced. Pairing it with a **Required template** check on the environment or service connection is what makes it binding: a pipeline that does not extend from the named template cannot consume the resource at all.
+
+Template reuse becomes load-bearing at scale. Fifty microservices each with a hand-written pipeline drift apart within a quarter.
 
 ---
 
 ### Multi-Stage Pipelines for CI and CD
 
-A multi-stage pipeline combines CI and CD in a single YAML file. Stages execute sequentially:
+A multi-stage pipeline combines CI and CD in a single YAML file:
 
 1. **Build stage**: Check out code, compile, run unit tests, publish artifacts
 2. **Test stage** (optional): Run integration tests, smoke tests, security scans
-3. **Deploy to dev stage**: Deploy artifacts to dev environment, run smoke tests
-4. **Approval stage** (optional): Require manual approval before production
-5. **Deploy to staging stage**: Deploy to staging, run end-to-end tests
-6. **Deploy to production stage**: Deploy to production with approval gates and health checks
+3. **Deploy to dev stage**: Deploy artifacts to dev, run smoke tests
+4. **Deploy to staging stage**: Deploy to staging, run end-to-end tests
+5. **Deploy to production stage**: Deploy to production behind approvals and health checks
 
-Each stage can have multiple jobs running in parallel. Later stages can depend on earlier stages, or run independently. This unified approach simplifies understanding the entire flow from code to production.
+There is no separate "approval stage" in this list because approvals are not stages. They attach to the environment a deployment stage targets and pause that stage before its first job starts.
+
+Each stage can run multiple jobs in parallel, and `dependsOn` controls which stages wait on which.
 
 ---
 
@@ -179,241 +393,256 @@ Each stage can have multiple jobs running in parallel. Later stages can depend o
 
 ### Mono-Repo vs Multi-Repo Pipeline Strategies
 
-A **mono-repo** is a single git repository containing many services, libraries, or applications. A **multi-repo** strategy uses separate repositories for each service.
+A **mono-repo** is a single git repository containing many services, libraries, or applications. A **multi-repo** strategy uses separate repositories per service.
 
-**Mono-repo pipeline strategy**: One pipeline file at the repository root. When code changes, the pipeline determines which services were affected and only builds and tests those. This requires sophisticated change detection logic. Trigger filters in YAML can restrict pipeline execution to certain paths, but this gets complex with shared libraries.
+**Mono-repo pipeline strategy**: pipelines at the repository root use path filters on their triggers so a change to one service does not rebuild everything. Path filters handle the simple cases; shared libraries make the change detection harder, because a change to a common package should rebuild every consumer.
 
 Trade-offs of mono-repo pipelines:
-- Easier to ensure all services work together (they build and test together)
+- Easier to guarantee services work together, since they build and test together
 - Complex trigger filters and change detection
-- Single pipeline must handle multiple build configurations
-- Atomic commits can ensure consistency
+- A single pipeline handles multiple build configurations
+- Atomic commits keep cross-service changes consistent
 
-**Multi-repo pipeline strategy**: Each service repository has its own pipeline. Services are built, tested, and deployed independently. Coordination happens through artifact sharing: one service publishes an artifact that another service consumes.
+**Multi-repo pipeline strategy**: each service repository owns its pipeline. Services build, test, and deploy independently, and coordination happens through `pipelines` resources that pass artifacts between them.
 
 Trade-offs of multi-repo pipelines:
 - Simpler individual pipelines
-- Easier to scale (teams own their pipelines)
-- Risk of inconsistent configurations across services
-- Coordination between services requires orchestration
+- Easier to scale, because teams own their pipelines
+- Risk of configurations drifting apart across services
+- Cross-service coordination needs explicit orchestration
 
-Most organizations start with multi-repo pipelines for simplicity. Mono-repo becomes attractive when you have many tightly coupled services with frequent cross-service changes.
+Most organizations start multi-repo. Mono-repo becomes attractive when many tightly coupled services change together often.
 
 ---
 
 ### Shared Template Libraries
 
-A **Shared Templates Repository** is a separate git repository containing reusable pipeline templates. Each team's service repositories reference these templates.
+A **shared templates repository** holds reusable pipeline templates that every service repository references. Templates in another repository are reached through a `repositories` resource:
 
-This pattern looks like:
+```yaml
+resources:
+  repositories:
+  - repository: templates
+    type: git
+    name: platform/pipeline-templates
+    ref: refs/tags/v3
 
-```
-templates/ (repository)
-├── jobs/
-│   ├── build-dotnet.yml
-│   ├── test-dotnet.yml
-│   └── deploy-container.yml
-├── stages/
-│   ├── build-and-test.yml
-│   └── deploy-environment.yml
-└── scripts/
-    ├── health-check.sh
-    └── smoke-test.sh
-
-service-a/ (repository)
-├── azure-pipelines.yml (references ../templates)
-└── src/
-
-service-b/ (repository)
-├── azure-pipelines.yml (references ../templates)
-└── src/
+extends:
+  template: stages/build-and-deploy.yml@templates
+  parameters:
+    serviceName: bookings
+    environments: [dev, staging, prod]
 ```
 
-The shared templates repository defines standard patterns for building, testing, and deploying. Each service's pipeline references these templates with parameters specific to that service. This ensures consistency across all services while allowing customization.
+```
+  platform/pipeline-templates          service-a
+  ┌───────────────────────────┐        ┌──────────────────────────┐
+  │ jobs/                     │<───────┤ azure-pipelines.yml      │
+  │   build-dotnet.yml        │  @templates  (extends, ref v3)    │
+  │   deploy-container.yml    │        └──────────────────────────┘
+  │ stages/                   │        service-b
+  │   build-and-deploy.yml    │<───────┤ azure-pipelines.yml      │
+  │ scripts/                  │  @templates  (extends, ref v3)    │
+  │   health-check.sh         │        └──────────────────────────┘
+  └───────────────────────────┘
+```
 
-Updating a template in the shared repository automatically applies to all services that reference it on their next pipeline run. This is powerful for rolling out security improvements (like new scanning tools) across all services at once.
+The `ref` on the resource is what makes this safe. Pointing at a tag or a release branch means template changes roll out when consumers move their ref, not the instant someone merges to the template repo's main branch. Pointing at `main` gives you the opposite property: a security scanning step added centrally reaches every service on its next run, and so does a mistake.
 
 ---
 
 ### Environment Promotion Patterns
 
-A typical deployment flow moves code through environments: dev, staging, production. Each stage uses deployment jobs that reference environments defined in Azure DevOps.
+A typical deployment flow moves a build through dev, staging, and production, with each stage using a deployment job that targets the matching environment.
 
 **Promotion with approvals:**
-- Build stage runs on all commits to main
+- Build runs on every commit to main
 - Deploy to dev is automatic
-- Deploy to staging requires approval from the release manager
-- Deploy to production requires approval from the release manager and compliance officer
+- Staging carries an approval check naming the release manager
+- Production carries an approval check naming the release manager and a compliance officer
 
 **Promotion with health checks:**
-- Deploy to staging, then check for errors/performance issues
-- If health checks pass, automatically promote to production
-- If health checks fail, deployment stops and on-call team is notified
+- Deploy to staging, then let a Query Azure Monitor alerts check watch for firing alerts
+- Production proceeds if no alerts fire within the evaluation window
+- A firing alert blocks the stage and the on-call team is notified
 
 **Promotion with canary:**
-- Deploy to production, but route only 1% of traffic
-- Monitor for 30 minutes
-- If metrics are healthy, shift traffic to 100%
-- If issues detected, rollback to previous version
+- A canary deployment job with `increments: [1, 10, 50]` against production
+- `postRouteTraffic` holds at each increment while metrics are observed
+- `on: failure` runs the rollback steps
 
-These patterns are implemented through a combination of approval gates on environments, conditional steps that check metrics, and custom scripts that make promotion decisions.
+The first two are configured on the environment. The third lives in the deployment job's strategy.
 
 ---
 
 ### Infrastructure Deployment Pipelines
 
-Infrastructure pipelines deploy cloud resources using Bicep, Terraform, or Azure Resource Manager templates. They differ from application pipelines in that they must show what will change before applying changes.
+Infrastructure pipelines deploy cloud resources with Bicep, Terraform, or ARM templates. They differ from application pipelines in needing to show what will change before changing it.
 
 **Plan-and-apply pattern:**
-- Plan stage: Run infrastructure-as-code plan command, showing what resources will be created, updated, or deleted
-- Require approval: Show plan output and require approval from infrastructure team
-- Apply stage: Execute the deployment, creating or updating resources
-
-This matches Terraform's plan/apply model. Bicep similarly supports what-if operations that preview changes.
+- Plan stage runs `terraform plan` or `az deployment group what-if` and publishes the output
+- The apply stage targets an environment carrying an approval check, so the reviewer sees the plan before approving
+- Apply stage executes the deployment
 
 **Staged environment progression:**
-- Deploy to dev automatically (changes are reversible)
-- Deploy to staging with approval (closer to production)
-- Deploy to production with multiple approvers and health checks
+- Deploy to dev automatically, where changes are cheap to reverse
+- Deploy to staging behind an approval
+- Deploy to production behind multiple approvers and health checks
 
-Infrastructure pipelines often run on schedules (like nightly) to validate infrastructure code even when no changes are made. This catch drift: if infrastructure was changed manually outside the pipeline, the scheduled run will show those differences.
+Scheduling these pipelines nightly catches drift. If someone changed infrastructure by hand in the portal, the next scheduled plan shows the difference before a real deployment collides with it.
+
+Deleting orphaned resources is a separate problem from deploying declared ones. ARM complete mode used to be the answer and Microsoft has documented it as gradually deprecating in favor of **deployment stacks**, which track a resource set explicitly and can delete or detach what leaves the set.
 
 ---
 
 ## Pipeline Security
 
-### Pipeline Permissions and Security Roles
+### Protected Resources and Permissions
 
-Azure DevOps uses role-based access control for pipelines. Common roles:
+Azure Pipelines splits resources into open and protected. Artifacts, pipelines, test plans, and work items are open, and pipelines reach them freely. Six resource types are **protected**: repositories, environments, service connections, agent pools, secure files, and secret variables in variable groups.
 
-**Reader** can view pipeline definitions and execution history but cannot trigger or modify pipelines.
+Protected resources carry two independent permission surfaces:
 
-**User** can trigger pipelines and view results.
+**User permissions** use a four-role model, consistent across the Library, service connections, and environments:
 
-**Admin** can modify pipeline definitions, configure approvers, and manage agent pools.
+| Role | Can |
+|---|---|
+| **Reader** | View the resource |
+| **User** | Consume the resource in a pipeline, and manage its approvals and checks |
+| **Creator** | Create resources of that type. Project-level only. |
+| **Administrator** | Everything above, plus edit, delete, and manage roles. The creator of a resource gets this role on it. |
 
-Pipelines inherit security from the project. If a user has project-level admin permissions, they can modify any pipeline. Project-level security settings control who can view, create, and modify pipelines.
+Note what the **User** role carries. Granting someone User on an environment so their pipeline can deploy also lets them manage the approvals on it, so grant it narrowly.
+
+**Pipeline permissions** are separate and answer a different question: which pipelines may use this resource. They exist so that copying a YAML file into a new pipeline does not carry access to production along with it. *Open access* grants every pipeline in the project access and requires the Project Administrator role to enable. Leave it off for anything holding a secret.
 
 ---
 
 ### Protected Branches and Required Reviewers
 
-Git branch protection policies enforce that pull requests go through code review before merging. In Azure DevOps, you can configure:
+Branch policies in Azure Repos enforce review before merge. Useful ones:
 
-- Require pull request code reviews before merging
-- Require a pipeline to succeed before allowing merge
-- Require approval from specific reviewers (security team, architects)
-- Block automatic completion until approvals are complete
+- Require pull request review before completing
+- Require a build to succeed before allowing completion
+- Require approval from specific reviewers, such as a security team or the owners of touched paths
+- Block automatic completion until all approvals land
 
-These policies prevent someone from merging directly to main, skipping tests and reviews. When combined with CI triggers that run tests on every commit, you get strong guarantees that main always has passing tests.
-
----
-
-### Secure Files and Variable Groups with Key Vault
-
-**Secure Files** in Azure DevOps store small sensitive files like SSL certificates or deployment keys. They are encrypted at rest and not visible in plain text. Pipeline jobs can download secure files during execution, but the files are not logged.
-
-**Variable Groups** can link to Azure Key Vault. Instead of storing secrets in Azure DevOps, you create a variable group that references Key Vault. When the pipeline runs, the variable group fetches secrets from Key Vault using a managed identity. Secrets are passed to steps as environment variables, but they are masked in logs.
-
-This pattern ensures secrets are stored in a dedicated secrets store (Key Vault) with its own audit logs and access controls, rather than mixed with pipeline configuration.
+These stop someone merging straight to main past the tests. Combined with the Branch control check on the production environment, they also stop a run originating from an unprotected branch from deploying at all.
 
 ---
 
-### Agent Pool Security Considerations
+### Secure Files and Secret Masking
 
-Self-hosted agents run code from your pipelines. A malicious pipeline step could steal secrets, access internal networks, or modify artifacts. Therefore:
+**Secure Files** hold small sensitive files that do not belong in the repository: signing certificates, provisioning profiles, SSH keys. They are stored encrypted, are protected resources with the same four-role model as variable groups, and are downloaded to the agent during a job without appearing in logs. A file whose contents are a credential rather than a document belongs in Key Vault instead, mapped in through a variable group.
 
-- Keep self-hosted agents in secure network zones (separate from production systems)
-- Run self-hosted agents in containers that are destroyed after each job (ephemeral agents)
-- Use separate agent pools for sensitive workloads (security scans, production deployment)
-- Audit which teams and projects have access to self-hosted agent pools
-- Regularly patch agents to address security vulnerabilities
+Secret masking is a safety net, not a boundary. Azure DevOps masks known secret values in logs, but a script running in the job can read the value and print it in a form the masker does not recognize. Code that runs in a pipeline with production secrets deserves the same review as code that runs in production.
 
-Agent pool isolation is critical when using self-hosted agents. If a compromised pipeline runs on a shared agent pool, it could access artifacts or environments targeted by other pipelines.
+---
+
+### Agent Pool Security
+
+Self-hosted agents run whatever your pipelines tell them to. A malicious or merely careless pipeline step can read secrets from the environment, reach internal networks, or tamper with artifacts left behind by an earlier job. Practices that contain this:
+
+- Keep self-hosted agents in network zones separated from production systems
+- Run jobs on ephemeral agents, either containers destroyed after each job or scale set agents configured to reimage after every use
+- Use separate pools for sensitive workloads, and keep the production deployment pool distinct from the general build pool
+- Restrict which projects and pipelines can reach a pool using its Administrator role and pipeline permissions
+- Keep agents patched, and keep the agent software current
+
+Pool isolation matters most on shared pools. A compromised pipeline running on the same pool as production deployments can reach artifacts and credentials cached on disk from other jobs.
 
 ---
 
 ## Cost and Performance Considerations
 
-### Microsoft-Hosted Agents: Parallel Job Limits and Free Tier
+### Parallel Jobs and the Free Tier
 
-Microsoft-hosted agents are billed on parallel jobs, not per-minute of execution. You get a free tier with 1 concurrent job for private projects. Additional concurrent jobs require Azure DevOps licenses (typically bundled with Azure subscriptions).
+Azure Pipelines bills concurrency, not minutes. One parallel job means one pipeline job runs at a time, and everything else queues. Parallel jobs live at the organization level and cannot be partitioned per project or pool.
 
-**Cost optimization with Microsoft-hosted agents:**
-- Reuse Microsoft-hosted agents for standard workloads
-- Only pay for additional parallel jobs if your pipeline queue grows (multiple branches building simultaneously)
-- For projects with infrequent builds, 1 free concurrent job is often sufficient
+Microsoft-hosted and self-hosted parallel jobs are licensed separately:
 
-Public projects (open source) get 10 free concurrent jobs with Microsoft-hosted agents, incentivizing open source projects to use Azure DevOps.
+| | Free grant (private projects) | Job time limit | Monthly time limit |
+|---|---|---|---|
+| **Microsoft-hosted** | 1 parallel job, after you enable it | 60 minutes free, 360 minutes paid | 1,800 minutes free, none paid |
+| **Self-hosted** | 1 parallel job, plus 1 per active Visual Studio Enterprise subscriber in the organization | None | None |
+
+Four consequences of this model:
+
+- **The Microsoft-hosted free tier has to be enabled.** It arrives only after you link the organization to an Azure subscription and set up billing.
+- **Self-hosted agents are not unlimited concurrency.** You may register any number of agents for free, but running more than the licensed number of jobs at once still requires purchasing self-hosted parallel jobs. What self-hosted buys you is no per-job time limit and no per-minute charge, not free parallelism.
+- **The first purchased Microsoft-hosted job does not add concurrency.** It removes the time limits from the job you already had. Running two jobs at once means buying two.
+- **New organizations cap at 25 Microsoft-hosted parallel jobs** until they request an increase.
+
+Runs waiting on an approval or manual intervention release their parallel job, as do server jobs. A pipeline that spends an hour in an approval queue costs nothing in licensed capacity.
+
+Public projects are retired. New ones can no longer be created, existing ones convert to private in 2027, and after that conversion they receive the private-project allocation. Any capacity plan built on the old free grant for open source projects needs revisiting.
+
+The **Pool consumption report** on an agent pool's Analytics tab charts running and queued jobs against your concurrency limit for the previous 30 days, which is the evidence to bring to a purchasing decision. Microsoft's own rule of thumb is roughly one parallel job per four to five users.
 
 ---
 
-### Self-Hosted Agents: No Per-Minute Cost But Infrastructure Overhead
+### Self-Hosted Agents: Infrastructure Cost Instead of Per-Job Cost
 
-Self-hosted agents have no per-minute charges. You pay only for the virtual machines or container resources they run on. This is economical if:
+Self-hosted agents carry no per-minute charge. You pay for the VMs or container hosts they run on, plus the parallel job licenses above the free grant. This makes sense when:
 
-- You need unlimited concurrent builds (more jobs than Azure DevOps licenses support)
-- Builds are frequent enough that agent utilization is high (agents are expensive if idle)
-- You need custom tools not available on Microsoft-hosted agents
-- You need access to internal networks or systems
+- Jobs exceed the Microsoft-hosted time limit
+- Agent utilization is high enough that always-on machines beat queueing (an idle VM is pure cost)
+- You need tools, hardware, or images Microsoft-hosted agents do not offer
+- Jobs need access to internal networks or private endpoints
 
-The trade-off is operational overhead. You provision, patch, monitor, and auto-scale self-hosted agents. Many organizations use a hybrid approach: Microsoft-hosted for standard builds and self-hosted for specialized workloads.
+The trade-off is operational overhead. Many organizations run a hybrid: Microsoft-hosted for open-ended build work, self-hosted or scale set agents for deployments that need network reachability.
 
 ---
 
 ### Pipeline Caching for Faster Builds
 
-Pipeline caching stores build artifacts (compiled binaries, downloaded dependencies, test results) between pipeline runs. A later run on the same branch can restore the cache, avoiding re-compilation and re-downloading.
+The `Cache@2` task saves a directory at the end of a job and restores it at the start of a later one. It takes a `path` and a `key`, where the key is `|`-separated segments: literal strings, file paths whose contents get hashed, or glob patterns.
 
-Caching is effective for:
-- Downloaded NuGet packages (can be 100+ MB per build)
-- Compiled intermediate objects (saves 30-50% of build time)
-- Test results from previous runs
+```yaml
+- task: Cache@2
+  inputs:
+    key: 'nuget | "$(Agent.OS)" | **/packages.lock.json'
+    restoreKeys: |
+      nuget | "$(Agent.OS)"
+      nuget
+    path: $(NUGET_PACKAGES)
+```
 
-Caching does not work across branches if the cache key includes the branch name. It does work across commits on the same branch.
+`restoreKeys` are prefix fallbacks, tried top to bottom, each returning the most recently created matching entry. `cacheHitVar` names a variable set to `true`, `inexact`, or `false` so later steps can skip work on a hit.
 
-The trade-off is cache invalidation complexity. If you change build configuration or dependencies, you must invalidate the cache. Cache misses cost build time while cache hits save time. Most organizations implement caching for dependencies but not for compiled code (to avoid subtle cache issues).
+Caching suits downloaded dependencies: NuGet packages, npm modules, Gradle and Maven caches, ccache output. It does not suit anything a later job would fail without. Those are artifacts. The dividing line Microsoft draws is whether missing the files breaks the job (artifact) or merely slows it (cache).
 
----
+Five behaviors that shape how caching is used:
 
-### Artifact Management and Retention Policies
+- **Caches are immutable and cannot be cleared.** Once a key exists in a scope, that content is fixed. Invalidating means changing the key, usually by prefixing a version literal like `v2 | nuget | ...`.
+- **Caches are already scoped by project, pipeline, and branch**, so putting a branch name in the key is redundant and fragments the cache. The source branch reads and writes its own scope; `main` and `master` are readable by every branch but writable only by themselves. A pull request run can read the source, target, and default branch scopes but writes only to its own `refs/pull/N/merge` scope, which stops a PR from poisoning the cache its target branch will restore.
+- **Caches expire after seven days of no activity.**
+- **There is no size limit, and caching is free on every tier.** Pipeline caching and pipeline artifacts are both exempt from storage billing.
+- **Self-hosted agents need the archive tool on PATH**: GNU tar on Windows and Linux, BSD tar on macOS.
 
-Artifacts are the outputs of pipeline jobs: compiled binaries, container images, packages, test results. Azure Artifacts stores these; you can set retention policies to automatically delete old artifacts.
-
-**Retention policies** prevent artifacts from growing indefinitely. You might keep:
-- Last 30 builds' artifacts
-- All artifacts from the last 7 days
-- All production deployment artifacts forever (for audit/compliance)
-
-Container images pushed to Azure Container Registry have separate retention; you might keep:
-- Last 10 images per branch
-- All images tagged as production-release
-- Images older than 30 days are deleted
-
-These policies balance storage cost (you pay for artifact storage) against the need to retain artifacts for rollback, audits, and investigations.
+Caching only pays off when restoring and saving costs less than regenerating. Whether it helps depends entirely on the ratio between dependency restore time and cache transfer time for your project, so measure before and after rather than assuming.
 
 ---
 
-## AWS Comparison Table
+### Artifact and Run Retention
 
-A detailed reference for architects migrating from AWS:
+Retention in Azure Pipelines is configured **at the project level only** under **Project settings > Pipelines > Settings**. Per-pipeline retention rules were removed, so a pipeline cannot define its own policy. Four settings exist: days to keep artifacts, symbols, and attachments; days to keep runs; days to keep pull request runs; and the number of recent runs to keep per pipeline.
 
-| Aspect | AWS | Azure DevOps |
-|--------|-----|---------|
-| **Pipeline definition** | CloudFormation or CDK with CodePipeline stages requiring separate service integration | YAML files in git with unified pipeline containing stages, jobs, and steps |
-| **Build service** | CodeBuild as a separate service paid per minute | Pipelines included in Azure DevOps subscription |
-| **Artifact storage** | S3 buckets for artifact management | Azure Artifacts or external storage |
-| **Deployment service** | CodeDeploy for instances; CodePipeline stages for orchestration | Deployment jobs built into the pipeline itself |
-| **Environment secrets** | Parameter Store or Secrets Manager accessed via IAM roles | Key Vault integration through variable groups |
-| **Approval gates** | Manual approval actions in CodePipeline | Approval checks attached to environments in pipelines |
-| **Parallelization** | Parallel stages in CodePipeline | Parallel jobs within stages |
-| **Agent model** | CodeBuild fully managed; you specify compute size | Microsoft-hosted (managed) or self-hosted (you manage) |
-| **Trigger types** | CodeCommit webhooks, CloudWatch events, and manual triggers | Git push, PR, scheduled, and pipeline triggers |
-| **Template reuse** | SAM (Serverless Application Model) and CDK without step templates | Step, job, and stage templates with extends inheritance |
-| **Scaling cost** | Pay per CodeBuild minute with no per-job licensing | Pay for concurrent job licenses or use self-hosted agents |
-| **On-premises integration** | CodePipeline cannot directly access on-premises systems; requires proxies | Self-hosted agents access on-premises systems directly |
-| **Branch-specific configuration** | Separate pipelines per branch or CDK conditionals | Single pipeline with branch-conditional triggers and steps |
-| **Multi-environment deployment** | Multiple CodePipeline instances or complex cross-account setup | Single pipeline with multiple environments |
+For pipelines on Azure Repos, "recent runs to keep" is applied three ways at once: the latest N for the default branch, the latest N for each protected branch (any branch with a policy), and the latest N for the pipeline overall.
+
+A run is deleted only when it exceeds the day count, is not among the recent runs kept, is not marked for indefinite retention, and is not held by a release. Retention policies process once per day. Retention keeps only succeeded and partially-succeeded runs, so a failed run is not protected by the recent-runs setting.
+
+Deleting a run deletes everything attached to it: logs, pipeline and build artifacts, symbols, binaries, test results, run metadata, and git tags the Sources task created. Anything that must outlive the retention window has to be copied somewhere you own, using the Copy files task rather than published as an artifact.
+
+Two ways to keep something longer:
+
+- **Retain indefinitely**, set from the run's More actions menu, which exempts the run from every retention policy until someone turns it off.
+- **Retention leases**, set through the Lease API for a specific duration. A pipeline can call this on itself, so a stage that deployed to production can extend its own run's lifetime without pinning it forever.
+
+Storage cost is not the reason to prune pipeline runs, since pipeline artifacts and caches are exempt from storage billing. Container images in Azure Container Registry and packages in Azure Artifacts feeds are billed separately and are not governed by run retention at all, so they need their own retention rules:
+
+- Keep the last N images per repository, plus everything tagged as a production release
+- Untagged manifests deleted after a short window
 
 ---
 
@@ -421,92 +650,92 @@ A detailed reference for architects migrating from AWS:
 
 ### Pitfall 1: Long-Running Builds Blocking Deployments
 
-**Problem:** Build stage takes 45 minutes because you compile, test, scan, and package in a single job. Multiple developers commit simultaneously. The first commit starts a build, and the next commits queue behind it, waiting 45 minutes each for the build to complete.
+**Problem:** The build stage takes 45 minutes because it compiles, tests, scans, and packages in a single job. Several developers commit at once, and with one parallel job each commit waits behind the last.
 
-**Result:** Deployments are blocked behind slow builds. Developers are frustrated. Hot fixes cannot deploy quickly.
+**Result:** Deployments queue behind slow builds. Hot fixes cannot ship quickly.
 
-**Solution:** Parallelize. Create multiple jobs in the build stage: one job compiles and unit tests, another runs integration tests, another runs security scans. These jobs run in parallel, reducing total build time. If tests are independent, use job matrix to spawn multiple test jobs parameterized by test category.
+**Solution:** Split the stage into independent jobs, one compiling and unit testing, another running integration tests, another running security scans, and let them run in parallel. Use a matrix to fan out test jobs by category. This only helps if the organization has parallel jobs to spend, so check the pool consumption report before splitting: on a single free parallel job, four jobs run one after another and total build time goes up rather than down.
 
 ---
 
 ### Pitfall 2: Secrets Leaked in Logs or Artifacts
 
-**Problem:** A PowerShell script logs connection strings during troubleshooting. A test output file contains API keys. The secrets are captured in pipeline logs or published artifacts.
+**Problem:** A troubleshooting script echoes a connection string. A test output file contains an API key. Both land in pipeline logs or a published artifact.
 
-**Result:** Secrets are visible in build history. Anyone with read access to the pipeline sees the secrets. If artifacts are stored in a blob, anyone with container access sees secrets in files.
+**Result:** Secrets are visible in build history to anyone with read access to the pipeline, and remain in the artifact for as long as retention keeps the run.
 
-**Solution:** Use Azure DevOps secret masking for variables. Mask secrets in outputs. Use Key Vault variable groups so secrets are never stored in Azure DevOps. Audit what gets published as artifacts; sanitize test outputs before publishing.
-
----
-
-### Pitfall 3: No Approval Gates Between Environments
-
-**Problem:** The same pipeline deploys to dev, staging, and production. No approval gates. A developer merges a bug to main, the pipeline runs, and production is deployed automatically before anyone notices the bug.
-
-**Result:** Production incidents from untested code.
-
-**Solution:** Add approval gates to production environments. Configure the production environment to require approval from at least two people. Require a manual check that staging tests passed before approving production deployment.
+**Solution:** Treat masking as a backstop rather than a control. Map secrets in from Key Vault so they never live in Azure DevOps, pass them as task inputs rather than into scripts that can reformat them, and review what gets published as an artifact. Sanitize test output before publishing it.
 
 ---
 
-### Pitfall 4: Tightly Coupled Pipeline Configuration to Secrets
+### Pitfall 3: No Gates Between Environments
 
-**Problem:** Connection strings, API keys, and credentials are hardcoded in YAML or stored in variable groups without backing Key Vault. When rotating secrets, you update the variable group, but there is no audit trail or versioning.
+**Problem:** One pipeline deploys to dev, staging, and production with nothing between the stages. A bug merges to main and reaches production before anyone reads the build summary.
 
-**Result:** Secret rotation is manual and error-prone. Audit logs do not show secret changes. If a secret is compromised, you cannot determine when it was leaked.
+**Result:** Production incidents from code that never got looked at.
 
-**Solution:** Store all secrets in Key Vault, never in Azure DevOps. Configure variable groups to fetch from Key Vault. This adds an audit trail in Key Vault. Rotation becomes a Key Vault operation, not a pipeline operation.
+**Solution:** Put an approval check on the production environment naming at least two approvers. Add a Branch control check so only runs from `refs/heads/main` can deploy there at all. Where the signal is automatable, a Query Azure Monitor alerts check blocks the stage without waiting on a human.
+
+---
+
+### Pitfall 4: Secrets Stored in Azure DevOps Instead of Key Vault
+
+**Problem:** Connection strings and API keys are typed into a variable group as secret variables. Rotating one means editing the variable group, with no version history and no record of who read it.
+
+**Result:** Rotation is manual and error-prone. If a secret is compromised, there is no way to establish when.
+
+**Solution:** Move the values into Key Vault and link the variable group to it, so rotation happens in a store that has an audit log and version history. The same argument applies one level up, to the credential the pipeline uses to reach Azure at all: workload identity federation has no stored secret to rotate or leak.
 
 ---
 
 ### Pitfall 5: Ignoring Agent Capacity When Scaling
 
-**Problem:** You have one self-hosted agent running builds for 20 microservices. Builds queue up, and deployment times increase as the queue grows. Developers complain about slow feedback.
+**Problem:** One self-hosted agent serves builds for 20 microservices. Queue depth grows through the morning and feedback slows to hours.
 
-**Result:** Bottleneck at the agent. Developers lose productivity waiting for builds.
+**Result:** A bottleneck at the agent, and developers idle waiting on builds.
 
-**Solution:** Monitor agent queue depth. When queue depth consistently exceeds 3-5 jobs, add more agents. Use auto-scaling (VMS scale sets) to dynamically add agents when queue depth is high and remove them when idle. Alternatively, switch to Microsoft-hosted agents if the cost justifies the removal of capacity management burden.
+**Solution:** Read the pool consumption report before adding hardware, because the constraint may be licensed parallel jobs rather than machines. Registering ten more agents changes nothing if the organization owns two self-hosted parallel jobs. Once concurrency is licensed, move to scale set agents or Managed DevOps Pools so capacity follows queue depth instead of sitting idle overnight. Scale set pools converge slowly, sampling every five minutes and taking up to an hour to reach a new size, so set the standby count for your morning peak rather than expecting it to react to a spike.
 
 ---
 
 ### Pitfall 6: Not Testing the Deployment Pipeline Itself
 
-**Problem:** The deployment pipeline only runs when deploying to production. No one tests the pipeline until it runs in production.
+**Problem:** The deployment stage only runs against production. Nobody exercises it until it matters.
 
-**Result:** Pipeline bugs are discovered in production. The deployment fails, production is broken, and the on-call team scrambles.
+**Result:** Pipeline bugs surface during a production deployment, with the on-call team debugging YAML instead of the application.
 
-**Solution:** Test deployment pipelines in dev and staging environments first. Every time you update the deployment pipeline, test it in a non-production environment. Use scheduled nightly deployments to staging to catch pipeline bugs before production runs.
+**Solution:** Run the same deployment logic against dev and staging environments through a stage template, so the production stage is the same code with different parameters. Schedule a nightly deployment to staging to catch breakage introduced by task version updates or template changes.
 
 ---
 
 ### Pitfall 7: Stateful Agents Causing Flaky Pipelines
 
-**Problem:** A self-hosted agent accumulates build artifacts, temporary files, and installed packages over multiple builds. One build leaves state that affects the next build. Tests pass on one agent but fail on another.
+**Problem:** A self-hosted agent accumulates build output, temporary files, and globally installed packages across jobs. One job leaves state that changes the next one's result. Tests pass on one agent and fail on another.
 
-**result:** Flaky pipelines are hard to debug. You cannot reproduce failures consistently.
+**Result:** Flaky pipelines that cannot be reproduced on demand, and time lost to debugging the agent rather than the code.
 
-**Solution:** Use ephemeral agents in containers. Each pipeline job runs on a fresh container that is destroyed afterward. This eliminates state accumulation. Alternatively, regularly reset self-hosted agents by clearing temporary directories and reinstalling tools.
+**Solution:** Make agents ephemeral. Run jobs in container jobs, or use scale set agents with tear-down after every use so each VM is reimaged between jobs. Where agents must persist, set `workspace: clean: all` on the job and treat any globally installed tool as part of the image rather than something a pipeline installs.
 
 ---
 
 ## Key Takeaways
 
-1. **YAML pipelines are the modern standard.** They are versionable, reviewable, and repeatable. Classic pipelines are legacy; use YAML for all new projects.
+1. **YAML pipelines are the recommended standard.** They are versionable, reviewable, and repeatable. Classic pipelines still work and have no announced retirement date, but new capability lands in YAML.
 
-2. **Multi-stage pipelines unify CI and CD in one workflow.** Build once, deploy to multiple environments through stages with approval gates. This is cleaner than separate CI and CD pipelines.
+2. **Deployment jobs implement rolling and canary directly.** `runOnce`, `rolling`, and `canary` strategies with `preDeploy`, `deploy`, `routeTraffic`, `postRouteTraffic`, and `on: failure` hooks cover most rollouts without hand-orchestration. Rolling works only against VM resources, and blue-green is something you assemble rather than declare.
 
-3. **Stages provide orchestration, jobs provide parallelization, steps provide actions.** Understand this hierarchy to design efficient pipelines. Parallelize jobs that are independent to reduce total pipeline duration.
+3. **Approvals and checks live outside the YAML on purpose.** They are configured by resource owners on environments, service connections, repositories, variable groups, secure files, and agent pools, so someone who can edit the pipeline file cannot weaken them.
 
-4. **Approval gates and environment checks provide safety.** Require approval for production deployments. Use automated health checks to block bad deployments without human approval.
+4. **Workload identity federation is the credential to use for Azure.** It removes the stored secret entirely. The Azure DevOps issuer retires 1 July 2027, so existing federated connections in Azure public cloud need to move to the Microsoft Entra issuer.
 
-5. **Template libraries enforce consistency across teams.** Define shared patterns in a central repository. All services reference these templates, ensuring consistent build, test, and deploy logic.
+5. **Key Vault holds the values; the variable group holds only the names.** Rotation becomes a vault operation. RBAC vaults behind a private endpoint cannot be used this way, because Azure DevOps is not a Key Vault trusted service.
 
-6. **Self-hosted agents are economical for unlimited builds but operationally complex.** Use Microsoft-hosted for standard workloads. Self-host only when you need custom tools, internal network access, or unlimited parallelism.
+6. **Parallel jobs are licensed at the organization level, for self-hosted agents too.** Self-hosted removes per-minute cost and job time limits, not the concurrency license. The Microsoft-hosted free tier has to be enabled by linking an Azure subscription, and gives one job at 60 minutes and 1,800 minutes a month.
 
-7. **Key Vault integration is non-negotiable for secrets.** Never store secrets in Azure DevOps or pipeline YAML. Use Key Vault variable groups to fetch secrets at runtime with full audit trails.
+7. **`extends` is a convention until a Required template check makes it a control.** Pair the two when a parent template is enforcing something that matters, like a security scan.
 
-8. **Branch protection policies and required CI gates prevent bad code from reaching main.** Require pull request review and passing tests before merge. This keeps main deployable at all times.
+8. **Branch policies plus a Branch control check cover both halves of the problem.** Policies stop bad code reaching main; the check stops a run from an unexpected branch reaching production.
 
-9. **Cache dependencies to speed builds, but invalidate cache carefully.** Downloaded packages and compiled intermediate objects can save significant build time. Cache invalidation complexity can create subtle pipeline bugs.
+9. **Cache dependencies, publish artifacts.** Cache what merely slows the job when missing, publish what breaks it. Caches are immutable, already scoped per branch, and expire after seven days of inactivity, so version the key rather than trying to clear it.
 
-10. **Artifact retention policies manage storage costs.** Keep recent artifacts for rollback capability and compliance, but delete old artifacts automatically. This balances storage cost against retention requirements.
+10. **Retention is a project-level setting and protects only successful runs.** Deleting a run deletes its artifacts and logs. Pipeline artifacts and caches are exempt from storage billing, so retention is about traceability and compliance rather than cost. Container images and package feeds need their own retention rules.

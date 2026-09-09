@@ -3,360 +3,488 @@ title: "Azure Machine Learning: ML Platform Essentials"
 layout: guide
 category: Azure
 subcategory: Machine Learning & AI
-description: "A system architect's guide to Azure Machine Learning, covering workspaces, compute options, ML pipelines, MLflow integration, model endpoints, and responsible AI tooling."
-tags: [azure, cloud-computing, infrastructure, machine-learning, mlops, automation, scalability, practical]
+description: "Azure Machine Learning for architects: workspaces and their associated resources, compute targets and their constraints, pipelines and components, the model registry, managed endpoints, model monitoring signals, and Responsible AI dashboard limits."
+tags: [azure-ml, mlops, mlflow, model-endpoints, automl, responsible-ai, practical]
 ---
 
 ## What Is Azure Machine Learning
 
-[Azure Machine Learning](https://learn.microsoft.com/en-us/azure/machine-learning/overview-what-is-azure-machine-learning){:target="_blank" rel="noopener noreferrer"} supports multiple development patterns: the [Designer](https://learn.microsoft.com/en-us/azure/machine-learning/concept-designer){:target="_blank" rel="noopener noreferrer"} for no-code/low-code model building, the [SDK v2](https://learn.microsoft.com/en-us/azure/machine-learning/concept-v2){:target="_blank" rel="noopener noreferrer"} for Python-based development, and the [CLI v2](https://learn.microsoft.com/en-us/azure/machine-learning/reference-azure-machine-learning-cli){:target="_blank" rel="noopener noreferrer"} for automation and reproducible workflows. It includes [AutoML](https://learn.microsoft.com/en-us/azure/machine-learning/concept-automated-ml){:target="_blank" rel="noopener noreferrer"} capabilities that automatically select algorithms and hyperparameters, [MLflow](https://learn.microsoft.com/en-us/azure/machine-learning/concept-mlflow){:target="_blank" rel="noopener noreferrer"} integration for experiment tracking, a [Model Registry](https://learn.microsoft.com/en-us/azure/machine-learning/concept-model-registry){:target="_blank" rel="noopener noreferrer"} for versioning and governance, and [Responsible AI](https://learn.microsoft.com/en-us/azure/machine-learning/concept-responsible-ai){:target="_blank" rel="noopener noreferrer"} tools for model interpretability and fairness analysis.
+[Azure Machine Learning](https://learn.microsoft.com/en-us/azure/machine-learning/overview-what-is-azure-machine-learning){:target="_blank" rel="noopener noreferrer"} is a managed platform for training, tracking, registering, and deploying machine learning models. It supports several ways in: the [Python SDK v2](https://learn.microsoft.com/en-us/azure/machine-learning/concept-v2){:target="_blank" rel="noopener noreferrer"} (`azure-ai-ml`), the [CLI v2](https://learn.microsoft.com/en-us/azure/machine-learning/reference-azure-machine-learning-cli){:target="_blank" rel="noopener noreferrer"} for YAML-defined jobs, the studio UI, and the [Designer](https://learn.microsoft.com/en-us/azure/machine-learning/concept-designer){:target="_blank" rel="noopener noreferrer"} for visual pipeline building. It includes [AutoML](https://learn.microsoft.com/en-us/azure/machine-learning/concept-automated-ml){:target="_blank" rel="noopener noreferrer"}, native [MLflow](https://learn.microsoft.com/en-us/azure/machine-learning/concept-mlflow){:target="_blank" rel="noopener noreferrer"} tracking, a model registry, model monitoring, and the [Responsible AI dashboard](https://learn.microsoft.com/en-us/azure/machine-learning/concept-responsible-ai-dashboard){:target="_blank" rel="noopener noreferrer"}.
 
-Azure ML sits between low-level infrastructure (using Azure Container Instances or Kubernetes directly) and fully managed ML services (like Azure Cognitive Services). It gives teams control over the training process, data handling, and custom preprocessing while handling the operational complexity of provisioning compute, managing experiment metadata, and deploying models to production endpoints.
+It sits between raw infrastructure (running training on your own VMs or Kubernetes) and fully managed prediction APIs (Azure AI services, where you consume a model rather than train one). You keep control of the training code, the data, and the preprocessing, and Azure ML handles compute provisioning, experiment metadata, environment reproducibility, and endpoint hosting.
 
-### What Problems Azure ML Solves
+### What Problems It Solves
 
-**Without Azure ML (managing ML infrastructure manually):**
-- Teams provision VMs or Kubernetes clusters, configure ML frameworks, install dependencies, and manage compute lifecycle
-- Experiment tracking, hyperparameter logging, and model versioning require custom solutions or third-party tools
-- Reproducibility is difficult because there is no centralized record of which data, parameters, and code versions produced which model
-- Model deployment requires building and maintaining containerization pipelines, endpoint infrastructure, and inference servers
-- Model governance, audit trails, and compliance tracking are manual or missing
-- AutoML capabilities and model interpretability tools require custom development or external services
+**Without Azure ML:**
+- Teams provision VMs or clusters, install frameworks, and manage compute lifecycle by hand
+- Experiment tracking and model versioning need a custom solution or a third-party tool
+- Nothing centrally records which data, code, and parameters produced a given model
+- Deployment means building container images, inference servers, and scaling infrastructure yourself
+- Drift goes unnoticed until a business metric moves
 
 **With Azure ML:**
-- Managed workspaces organize all ML assets; compute is provisioned on-demand and cleaned up automatically
-- Built-in MLflow integration tracks experiments, metrics, and parameters; models are automatically versioned and registered
-- Reproducibility is enforced through snapshot capture of code, data, and environments; job runs are fully auditable
-- Managed endpoints (online for real-time inference, batch for bulk processing) handle scaling, load balancing, and monitoring
-- Model Registry provides centralized governance, approval workflows, and deployment tracking across environments
-- AutoML automatically explores algorithms and hyperparameters; Responsible AI dashboard provides model explanations and fairness metrics
-- Integration with Azure DevOps and GitHub Actions enables MLOps pipelines for continuous training and model updates
+- Workspaces group all ML assets, and managed compute provisions on demand and scales to zero
+- MLflow tracking is automatic, and models are versioned in a workspace registry
+- Job runs snapshot code, environment, and data references, so a model traces back to its inputs
+- Managed online endpoints and batch endpoints handle hosting, scaling, and traffic splitting
+- Model monitoring compares production inference data against a reference window and raises alerts
+
+---
 
 ### How Azure ML Differs from AWS SageMaker
 
-[AWS SageMaker](https://aws.amazon.com/sagemaker/){:target="_blank" rel="noopener noreferrer"} and Azure ML both offer managed ML platforms, but differ significantly in architecture, integrated tooling, and workflow philosophy.
-
 | Concept | AWS SageMaker | Azure Machine Learning |
 |---------|---------------|-----------------------|
-| **Workspace concept** | No explicit workspace; resources scattered across services | Workspace is the top-level organizational unit containing all assets |
-| **Experiment tracking** | Separate service (SageMaker Experiments), not integrated by default | Built-in MLflow tracking, experiment recording is automatic |
-| **Model registry** | SageMaker Model Registry (separate service) | Model Registry is workspace-native |
-| **No-code model building** | SageMaker Canvas (simplified, less control) | Designer provides full pipeline editing with production-grade control |
-| **AutoML** | Autopilot (separate offering), less transparent | AutoML integrated into workspace, full visibility into algorithm selection |
-| **Compute options** | Training jobs and notebook instances are separate resource types | Compute instances and compute clusters unified; seamless transition |
-| **Notebooks** | SageMaker Notebook Instances (managed Jupyter) | Compute instances running Jupyter; more flexible environment control |
-| **Batch inference** | Batch Transform (separate service) | Batch Endpoints (integrated into deployment model) |
-| **MLOps integration** | Through SageMaker Pipelines (separate service) | Native GitHub Actions and Azure DevOps integration |
-| **Responsible AI** | Minimal built-in support; relies on external tools | Responsible AI dashboard with interpretability and fairness analysis |
-| **Pricing model** | Pay per resource and job execution | Similar pay-per-use, but compute clusters can be shared across jobs |
+| **Top-level container** | No single workspace; resources spread across services | Workspace is the top-level resource holding all assets |
+| **Experiment tracking** | SageMaker Experiments | MLflow-native, and tracking is automatic for jobs |
+| **Model registry** | SageMaker Model Registry, with approval status built in | Workspace model registry with name, version, tags, and lineage, but no promotion stages |
+| **Cross-team asset sharing** | Model Registry across accounts | Azure ML registries, separate from the workspace registry |
+| **Managed training compute** | Training jobs, one instance type per job | Compute clusters (one VM size each) and serverless compute |
+| **Interactive development** | Notebook instances or Studio spaces | Compute instances, single-user VMs with Jupyter and VS Code |
+| **Real-time inference** | Endpoints with production variants | Managed online endpoints with multiple deployments and traffic splitting |
+| **Batch inference** | Batch Transform | Batch endpoints running on compute clusters |
+| **AutoML** | Autopilot | AutoML, integrated into the workspace |
+| **Responsible AI** | Clarify for bias and explainability | Responsible AI dashboard, with tight model-type constraints |
 
-SageMaker offers greater fine-grained control over infrastructure and training details, but this comes at the cost of managing more separate services. Azure ML prioritizes workspace-centric organization and tighter integration of MLOps tools, which reduces operational overhead for teams running repeated model development and deployment cycles.
+SageMaker gives finer control over training infrastructure at the cost of assembling more separate services. Azure ML puts more in one resource and standardizes on MLflow, which reduces setup for teams running repeated train-and-deploy cycles. The trade-off appears in the constraint rows: several Azure ML conveniences (the RAI dashboard, model monitoring) work only on specific model types and data shapes.
 
 ---
 
 ## Workspaces
 
-### The Workspace as Organizational Unit
+### The Workspace and Its Associated Resources
 
-An [Azure ML Workspace](https://learn.microsoft.com/en-us/azure/machine-learning/concept-workspace){:target="_blank" rel="noopener noreferrer"} is the top-level container that organizes all ML assets: compute resources, datastores, datasets, experiments, models, and endpoints. Every action in Azure ML happens within a workspace. Workspaces provide isolation of resources, access control, and billing tracking.
+A [workspace](https://learn.microsoft.com/en-us/azure/machine-learning/concept-workspace){:target="_blank" rel="noopener noreferrer"} is the top-level Azure ML resource. It holds jobs, experiments, data assets, models, components, environments, endpoints, compute, and datastore definitions, and it is the unit of access control and cost reporting.
 
-A workspace is created in a specific Azure region and is associated with a storage account (for datasets and artifacts), an Application Insights instance (for monitoring), and optionally a Key Vault (for secrets) and a container registry (for custom environments). All of these can be created automatically or you can bring your own.
+Creating a workspace also brings in other Azure resources. Azure ML creates them if you do not supply your own:
 
-### Workspace Structure and Assets
+| Resource | Role | Required |
+|---|---|---|
+| **Azure Storage account** | Stores artifacts, job logs, and compute instance notebooks. The workspace default upload target. | Yes |
+| **Azure Key Vault** | Stores secrets that compute targets and the workspace need | Yes |
+| **Application Insights** | Diagnostics and metrics from inference endpoints | Yes |
+| **Azure Container Registry** | Stores images built for custom environments | **No.** Provisioned on demand the first time an image is built. |
 
-Within a workspace, you organize your ML projects and assets:
+The storage account carries constraints that catch teams out. You **cannot** use an existing account that is of type BlobStorage, is premium (`Premium_LRS` or `Premium_GRS`), or has **hierarchical namespace enabled**. That last one is the trap: an ADLS Gen2 account cannot be the workspace's default storage. Attach it as an additional datastore instead, which is fully supported and the normal arrangement for training data.
 
-- **Compute resources**: Instances and clusters for training and inference
-- **Datastores**: Connections to Blob Storage, ADLS, or SQL databases where training data lives
-- **Data assets**: Registered datasets and data artifacts with versioning
-- **Experiments and jobs**: Training runs with full parameter, metric, and artifact logging
-- **Models**: Registered models with versions, tags, and metadata
-- **Endpoints**: Online endpoints for real-time inference or batch endpoints for bulk scoring
-- **Environments**: Conda or Docker configurations defining the Python/system dependencies for training and inference
+Two more constraints bind the layout permanently. A workspace **cannot be moved to a different subscription**, and the owning subscription cannot be moved to a new tenant.
 
-Multiple teams or projects can share a single workspace if they have overlapping datasets or compute resources, but typically each project (or each environment: dev, staging, production) has its own workspace to maintain isolation and prevent accidental cross-contamination.
+### Workspace Scope and Layout
 
-### Access Control and Networking
+| Scope | What it holds |
+|---|---|
+| **Subscription and resource group** | The workspace and its associated resources. Quota for managed compute is set at subscription level. |
+| **Hub workspace** | Shared security settings, connections, and compute across several project workspaces. Hub workspaces are the same resource type as Foundry hubs, so they can be used from both Azure ML studio and Foundry. |
+| **Workspace** | Jobs, data assets, models, components, environments, endpoints, compute, datastores |
+| **Registry** | Models, components, and environments shared **across** workspaces and regions |
 
-[Azure role-based access control (RBAC)](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-assign-roles){:target="_blank" rel="noopener noreferrer"} secures workspace resources. You can grant users roles like "ML Workspace Owner," "Data Scientist," "MLOps Engineer," and "Inference Operator," each with specific permissions for creating compute, submitting jobs, and deploying models.
+Microsoft's guidance is one workspace per project, which scopes cost reporting and datastore configuration to a single deliverable. Separate workspaces per environment (dev, staging, production) give isolation, and a **registry** is how an asset crosses that boundary: you promote a model or component to a registry and consume it from another workspace, rather than sharing one workspace between environments.
 
-For network isolation, workspaces support [private endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-configure-private-link){:target="_blank" rel="noopener noreferrer"} to restrict workspace traffic to your VNet, preventing data exfiltration and ensuring compliance with network security policies.
+### Access Control
+
+Azure ML ships three [built-in roles](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-assign-roles){:target="_blank" rel="noopener noreferrer"} beyond the generic Owner, Contributor, and Reader:
+
+| Role | Grants |
+|---|---|
+| **AzureML Data Scientist** | Everything inside a workspace **except** creating or deleting compute and modifying the workspace itself |
+| **AzureML Compute Operator** | Create, manage, delete, and access compute resources in a workspace |
+| **AzureML Registry User** | Read, write, and delete assets inside a registry. Cannot create or delete registries. |
+
+Combine them for self-service: a data scientist who also needs to spin up their own compute gets both AzureML Data Scientist and AzureML Compute Operator. Where the built-ins do not fit, the workspace resource provider actions support custom roles, and the common shape is `Actions: ["*"]` with compute writes and workspace writes in `NotActions`.
+
+One behavior changed recently and matters for anyone auditing permissions. The workspace's own system-assigned managed identity used to receive **Contributor** on the containing resource group. Workspaces created after **19 November 2024** get the narrower **Azure AI Administrator** role instead. Older workspaces keep Contributor until converted, either through the REST API or `az ml workspace update --allow-roleassignment-on-rg true`.
+
+For network isolation, workspaces support [private endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-configure-private-link){:target="_blank" rel="noopener noreferrer"} and a managed virtual network. Note that model monitoring does not work under the `AllowOnlyApprovedOutbound` managed network setting, so lock down the network with that dependency in mind.
 
 ---
 
-## Compute Options
+## Compute Targets
 
 ### Compute Instances
 
-[Compute instances](https://learn.microsoft.com/en-us/azure/machine-learning/concept-compute-instance){:target="_blank" rel="noopener noreferrer"} are managed single-user VMs provisioned for interactive development. Each instance includes Jupyter, VS Code, and the Azure ML SDK pre-installed. Instances are ideal for exploratory analysis, prototype development, and testing code before submitting large training jobs.
+A [compute instance](https://learn.microsoft.com/en-us/azure/machine-learning/concept-compute-instance){:target="_blank" rel="noopener noreferrer"} is a managed **single-user** VM for interactive development, preloaded with Jupyter, VS Code integration, and the SDK. It has a **120 GB OS disk**, which fills up faster than people expect on image or checkpoint-heavy work.
 
-Compute instances can be started and stopped on-demand to control cost. They support GPU instances for interactive deep learning work and can be configured with custom startup scripts to install additional packages.
+Cost control has one detail that surprises people: stopping a compute instance stops the compute-hour charge, but you **still pay for the disk, the public IP, and the standard load balancer**. Enable **idle shutdown** so an instance forgotten on a Friday does not run all weekend.
 
 ### Compute Clusters
 
-[Compute clusters](https://learn.microsoft.com/en-us/azure/machine-learning/concept-compute-instance#compute-clusters){:target="_blank" rel="noopener noreferrer"} are auto-scaling pools of VMs for submitting training jobs. You define minimum and maximum node counts, and the cluster scales automatically based on job submissions. Idle clusters automatically scale down to zero to minimize cost.
+A [compute cluster](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-attach-compute-cluster){:target="_blank" rel="noopener noreferrer"} is a managed, autoscaling pool of VMs for submitted jobs. You set minimum and maximum node counts, and it scales up on submission and down when idle. Setting the minimum to **zero** is what makes an idle cluster free.
 
-Clusters support heterogeneous configurations, allowing you to mix CPU and GPU nodes within the same cluster. They are ideal for distributed training, hyperparameter tuning, and batch processing.
+**A cluster has one VM size, chosen at creation.** You cannot mix CPU and GPU nodes, or two different VM sizes, in a single cluster. A pipeline with a CPU preprocessing step and a GPU training step uses two clusters and assigns compute per node, not one heterogeneous cluster.
 
 ### Serverless Compute
 
-[Serverless compute](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-use-serverless-compute){:target="_blank" rel="noopener noreferrer"} provisions on-demand infrastructure on Azure Kubernetes Service (AKS) or Azure Container Instances without requiring you to create or manage clusters. You submit a job and Azure handles provisioning, scaling, and cleanup. Serverless is ideal when you need occasional training capacity without managing cluster infrastructure.
+[Serverless compute](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-use-serverless-compute){:target="_blank" rel="noopener noreferrer"} is Azure ML managed compute that you never create. You submit a job with `compute="serverless"` and specify the instance type and count on the job itself, and Azure ML provisions, runs, and tears down. It is not AKS and not Container Instances. Alongside compute clusters and compute instances, it is one of the three managed compute types.
 
-### Attached Compute
+Microsoft's current guidance points here first: "Instead of creating a compute cluster, use serverless compute to offload compute lifecycle management to Azure Machine Learning." A cluster still earns its place when you need a fixed quota reservation, a persistent minimum node count for latency, or a specific network configuration.
 
-For teams already running Spark clusters (on Databricks or Synapse) or Kubernetes clusters, [attached compute](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-attach-compute-targets){:target="_blank" rel="noopener noreferrer"} allows you to register external compute and submit Azure ML jobs to it. This is valuable when you have existing infrastructure that should be reused rather than replicated.
+### Attached and Kubernetes Compute
 
-### Cost Considerations for Compute
+**Azure ML Kubernetes** attaches an AKS or Arc-enabled Kubernetes cluster for both training and inference, which is how you run inference on-premises or at the edge. Other unmanaged targets that can be attached include remote VMs, Azure Databricks, HDInsight, and Azure Data Lake Analytics, though support varies by workload: Databricks works for pipelines but not as a general remote training target.
 
-Compute instances represent ongoing cost (even if idle, you may be charged for the VM) and should be stopped when not in use. Compute clusters with auto-scale and aggressive scale-down policies minimize cost because idle nodes are removed. Serverless compute eliminates infrastructure overhead but may have slightly higher per-job startup latency.
+### Choosing Compute
 
-For reproducible, scheduled training, compute clusters are typically the default. For exploratory work, compute instances. For one-off jobs without ongoing cluster management, serverless.
+```
+                     Interactive development,
+                     one person, a notebook?
+                              │
+              ┌───────────────┴───────────────┐
+             yes                             no
+              │                               │
+              v                               v
+      Compute instance              Do you need a fixed node
+      (enable idle shutdown)        reservation, warm nodes,
+                                    or custom networking?
+                                              │
+                                  ┌───────────┴───────────┐
+                                 no                      yes
+                                  │                       │
+                                  v                       v
+                          Serverless compute      Compute cluster
+                          (no lifecycle to        (min nodes 0 to
+                           manage)                 avoid idle cost)
+
+      Already running Kubernetes, or need on-premises
+      or edge inference?  ──>  Azure ML Kubernetes (attached)
+```
 
 ---
 
 ## Datastores and Data Assets
 
-### Connections to Data Sources
+### Datastores
 
-[Datastores](https://learn.microsoft.com/en-us/azure/machine-learning/concept-data){:target="_blank" rel="noopener noreferrer"} are workspace-native connections to external data sources. They store credentials securely and provide a standardized interface for accessing data during training.
+[Datastores](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-datastore){:target="_blank" rel="noopener noreferrer"} are workspace-registered connections to data sources. They hold the credential (or use the workspace identity) so training code refers to data by a datastore path rather than embedding connection strings.
 
-Supported datastores include [Azure Blob Storage](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-datastore#storage-account){:target="_blank" rel="noopener noreferrer"}, [Azure Data Lake Storage (ADLS)](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-datastore#data-lake){:target="_blank" rel="noopener noreferrer"}, [Azure SQL Database](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-datastore#sql-database){:target="_blank" rel="noopener noreferrer"}, and [Azure Synapse](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-datastore#synapse){:target="_blank" rel="noopener noreferrer"}. Training jobs reference datastores by name, and Azure ML handles credential injection at runtime.
+Supported sources include Azure Blob Storage, Azure Data Lake Storage Gen1 and Gen2, Azure Files, and OneLake. ADLS Gen2 is the normal home for training data even though it cannot be the workspace default storage account.
 
-### Registered Data Assets
+Datastores can authenticate with a credential or **credential-less** using the workspace or a user-assigned managed identity, which is the better default because it puts data access under Azure RBAC instead of a stored key. Model monitoring specifically supports credential-less access by setting the workspace property `systemDatastoresAuthMode` to `identity`.
 
-[Data assets](https://learn.microsoft.com/en-us/azure/machine-learning/concept-data#data-assets){:target="_blank" rel="noopener noreferrer"} are versioned references to data stored in datastores. When you register a dataset, you capture a snapshot of its schema, location, and metadata. Data asset versions allow you to track which data was used for which model training run, ensuring reproducibility.
+### Data Assets
 
-Versioning is crucial for compliance and debugging. If a model performs poorly in production, you can trace it back to the exact data version used during training.
+[Data assets](https://learn.microsoft.com/en-us/azure/machine-learning/concept-data){:target="_blank" rel="noopener noreferrer"} are versioned, named references to data in a datastore. Registering one captures a path and metadata, not a copy, so there is no duplication cost. Types are `uri_file`, `uri_folder`, and `mltable`.
+
+Versioning is what makes a model traceable. A job records which data asset version it consumed, so a model that misbehaves in production can be tied to the exact data that trained it. Note that `mltable` is poorly supported by Spark, so avoid it in model monitoring jobs, which run on Spark.
 
 ---
 
-## ML Pipelines
+## Pipelines and Components
 
-### Pipeline Concepts
+### Pipelines
 
-[ML pipelines](https://learn.microsoft.com/en-us/azure/machine-learning/concept-ml-pipelines){:target="_blank" rel="noopener noreferrer"} compose training, data processing, and evaluation into directed acyclic graphs (DAGs) where each node is a job and edges represent data flow. Pipelines enable reproducible, multi-step workflows and are the foundation of MLOps automation.
+[ML pipelines](https://learn.microsoft.com/en-us/azure/machine-learning/concept-ml-pipelines){:target="_blank" rel="noopener noreferrer"} compose data preparation, training, and evaluation into a directed acyclic graph where each node is a job and the edges carry data. They are the unit of reproducible, schedulable ML work.
+
+### Components
+
+A [component](https://learn.microsoft.com/en-us/azure/machine-learning/concept-component){:target="_blank" rel="noopener noreferrer"} is a self-contained pipeline step with a typed interface, its own environment, and a command to run. Components are the reusable unit: register one in the workspace, or publish it to a registry for other workspaces.
+
+There are two ways to define one. From a Python function, using the `command_component` decorator from the `mldesigner` package:
+
+```python
+from pathlib import Path
+from mldesigner import command_component, Input, Output
+
+@command_component(
+    name="prep_data",
+    version="1",
+    display_name="Prep Data",
+    environment=dict(
+        conda_file=Path(__file__).parent / "conda.yaml",
+        image="mcr.microsoft.com/azureml/openmpi5.0-ubuntu24.04",
+    ),
+)
+def prepare_data_component(
+    input_data: Input(type="uri_folder"),
+    training_data: Output(type="uri_folder"),
+    test_data: Output(type="uri_folder"),
+):
+    ...
+```
+
+Or from a YAML specification loaded with `load_component()`, which suits a step whose logic already lives in a standalone script.
+
+Pipelines themselves use the `pipeline` decorator from `azure.ai.ml.dsl`:
+
+```python
+from azure.ai.ml.dsl import pipeline
+
+@pipeline(default_compute="serverless")
+def image_classification(pipeline_input_data):
+    prep_node = prepare_data_component(input_data=pipeline_input_data)
+    train_node = keras_train_component(input_data=prep_node.outputs.training_data)
+    train_node.resources = ResourceConfiguration(
+        instance_type="Standard_NC6s_v3", instance_count=2
+    )
+    score_node = keras_score_component(
+        input_data=prep_node.outputs.test_data,
+        input_model=train_node.outputs.output_model,
+    )
+```
+
+The pipeline sets a default compute, and any node needing something different overrides it. That per-node override is how a CPU preprocessing step and a GPU training step coexist in one pipeline given that a cluster holds a single VM size.
 
 ### Development Approaches
 
-**Designer**: The [Designer](https://learn.microsoft.com/en-us/azure/machine-learning/concept-designer){:target="_blank" rel="noopener noreferrer"} provides a visual interface for building pipelines by dragging modules (data import, preprocessing, model training, evaluation) onto a canvas and connecting them. Designer is ideal for teams without strong Python skills or for rapid prototyping.
+| Approach | Best for |
+|---|---|
+| **CLI v2 (YAML)** | Source-controlled, CI/CD-driven workflows where the pipeline definition is configuration |
+| **Python SDK v2** | Complex training logic, dynamic pipeline construction, notebook-driven iteration |
+| **Designer** | Visual composition and rapid prototyping without writing Python |
 
-**SDK v2**: The [Python SDK](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-train-sdk){:target="_blank" rel="noopener noreferrer"} allows programmatic pipeline definition. You define training logic as Python functions (decorated with `@dsl.command`), compose them into pipelines, and submit pipelines to the workspace. SDK pipelines are version-controlled alongside your code.
-
-**CLI v2**: The [CLI](https://learn.microsoft.com/en-us/azure/machine-learning/reference-azure-machine-learning-cli){:target="_blank" rel="noopener noreferrer"} uses YAML to define pipelines. You define jobs and steps in YAML, commit them to git, and trigger them through CI/CD. CLI pipelines are excellent for teams with strong DevOps practices because pipeline definitions are pure configuration.
-
-Each approach has different strengths. Designer is best for one-off experimentation. SDK is best for complex training logic with heavy Python development. CLI is best for reproducible, source-controlled, CI/CD-driven workflows.
-
-### Reusable Components
-
-Both SDK and CLI support [components](https://learn.microsoft.com/en-us/azure/machine-learning/concept-component){:target="_blank" rel="noopener noreferrer"}, reusable pipeline steps that can be published to a registry and used across projects. Components encapsulate preprocessing logic, model training, or evaluation steps and allow teams to standardize on common patterns.
+The CLI and SDK produce the same underlying jobs, so the choice is about which artifact you want in git.
 
 ---
 
-## MLflow Integration
+## MLflow and the Model Registry
 
-### Experiment Tracking and Metadata
+### Experiment Tracking
 
-[MLflow](https://learn.microsoft.com/en-us/azure/machine-learning/concept-mlflow){:target="_blank" rel="noopener noreferrer"} is an open-source platform for ML lifecycle management. Azure ML has native MLflow integration, meaning experiment tracking, logging, and artifact storage happen automatically within the workspace.
+Azure ML implements the MLflow tracking API natively, so `mlflow.log_metric()` and friends work against the workspace with no extra configuration inside a job. A submitted job automatically captures a snapshot of the code, the environment definition, the parameters and metrics the script logs, output artifacts, and the data asset versions consumed. That combination is what makes a run reproducible and auditable, and it is the same record the model registry links back to.
 
-When you submit a training job, Azure ML automatically:
-- Captures code version (git commit or uploaded code)
-- Logs metrics (accuracy, loss, precision) that your training script emits
-- Records hyperparameters and configuration
-- Stores artifacts (plots, model files, evaluation reports)
-- Captures environment information (Python version, installed packages)
+### The Model Registry
 
-This creates a complete audit trail of what was trained, how, and what the results were.
+Registering a model stores and versions it in the workspace. A registered model is a logical container for one or more files, identified by **name and version**, where registering under an existing name increments the version automatically.
 
-### Model Registry
+The registry captures the artifacts, metadata **tags** for search and filtering, and lineage back to the training job, where it was deployed, and whether those deployments are healthy. Models trained outside Azure ML can be registered too. Anything loadable by Python 3.10 or later is supported.
 
-The [MLflow Model Registry](https://learn.microsoft.com/en-us/azure/machine-learning/concept-model-registry){:target="_blank" rel="noopener noreferrer"} provides centralized model versioning, promotion workflows, and deployment tracking. You register a trained model from an experiment run, and the registry captures:
+Two things the Azure ML model registry does **not** provide, contrary to a common assumption carried over from open-source MLflow: there are **no promotion stages** (no built-in development, staging, production lifecycle on a model version) and **no approval workflow**. Promotion is something you build, normally with tags plus a CI/CD pipeline that reads them, or by promoting the model into a different workspace or registry. Designing around stages that do not exist is a common source of a half-built governance process.
 
-- Model artifacts (the actual model files)
-- Model metadata and description
-- Training run lineage (which data, code, and parameters produced this model)
-- Tags for categorization and discovery
-- Deployment stages (development, staging, production)
-- Approval workflows for promotion between environments
+One useful guardrail does exist: **you cannot delete a registered model that is in use by an active deployment.**
 
-Models in the registry can be deployed to endpoints or retrieved for batch inference without re-training.
+Try converting a model to [ONNX](https://learn.microsoft.com/en-us/azure/machine-learning/concept-onnx){:target="_blank" rel="noopener noreferrer"} before deployment. Microsoft reports the conversion typically doubles inference performance.
 
 ---
 
 ## Managed Endpoints
 
-### Online Endpoints for Real-Time Inference
+### Online Endpoints
 
-[Online endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints){:target="_blank" rel="noopener noreferrer"} expose models as REST APIs that respond to single requests in real-time. You deploy a registered model to an online endpoint, and Azure ML handles scaling, load balancing, monitoring, and request routing.
+[Online endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-online){:target="_blank" rel="noopener noreferrer"} expose a model as a REST API for real-time scoring. Two flavors exist:
 
-Online endpoints support:
-- Multiple deployments behind a single endpoint (for A/B testing or canary rollouts)
-- Traffic splitting (route 10% of requests to a new model, 90% to the current production model)
-- Authentication and monitoring
-- Auto-scaling based on request volume and latency
+- **Managed online endpoints**, where Azure ML runs the compute on serverless infrastructure and handles provisioning, scaling, and OS patching
+- **Kubernetes online endpoints**, which run on an attached AKS or Arc-enabled cluster, for on-premises, edge, or cluster-sharing scenarios
 
-### Batch Endpoints for Bulk Inference
+An endpoint holds one or more **deployments**, and traffic is split across them by percentage. That is the mechanism for safe rollout: create a second deployment with the new model, send it 10% of traffic, watch, then shift to 100%. The endpoint URL and authentication stay constant throughout.
 
-[Batch endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/concept-batch-endpoints){:target="_blank" rel="noopener noreferrer"} score large datasets asynchronously. You submit batch jobs pointing to input data in a datastore, and the endpoint processes the entire batch on compute clusters, writing results back to a datastore.
+Deploying a model requires the model, a **scoring script** (entry script), an **environment**, and any extra assets. **An MLflow model needs neither the scoring script nor the environment**, because both are inferred from the model's own metadata. That is the single biggest argument for logging models in MLflow format.
 
-Batch endpoints are ideal for scoring thousands or millions of records efficiently without the latency requirements of real-time inference.
+### Batch Endpoints
 
-### Environment Configuration
+[Batch endpoints](https://learn.microsoft.com/en-us/azure/machine-learning/concept-endpoints-batch){:target="_blank" rel="noopener noreferrer"} score large datasets asynchronously. You invoke one with input data in a datastore, it runs on a compute cluster, and it writes results back to a datastore. They suit scoring millions of records where latency does not matter and cost per record does.
 
-Both endpoint types require [environments](https://learn.microsoft.com/en-us/azure/machine-learning/concept-environments){:target="_blank" rel="noopener noreferrer"} that define the runtime dependencies. Azure ML provides [curated environments](https://learn.microsoft.com/en-us/azure/machine-learning/resource-curated-environments){:target="_blank" rel="noopener noreferrer"} for common frameworks (scikit-learn, TensorFlow, PyTorch), or you can define custom environments with specific package versions to ensure reproducibility.
+### Environments
 
-### Monitoring and Alerts
-
-Managed endpoints integrate with [Application Insights](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-monitor-online-endpoints){:target="_blank" rel="noopener noreferrer"} for logging, metrics (request count, latency, error rate), and alerting. You can track model performance metrics and set up alerts if prediction latency exceeds thresholds or error rates spike.
+Both endpoint types depend on [environments](https://learn.microsoft.com/en-us/azure/machine-learning/concept-environments){:target="_blank" rel="noopener noreferrer"}: a conda specification plus a base image defining the runtime. [Curated environments](https://learn.microsoft.com/en-us/azure/machine-learning/resource-curated-environments){:target="_blank" rel="noopener noreferrer"} cover common frameworks and are maintained by Microsoft; custom environments pin your own versions and get built into images stored in the workspace's container registry.
 
 ---
 
-## Responsible AI and Model Interpretability
+## Model Monitoring
 
-### Responsible AI Dashboard
+[Model monitoring](https://learn.microsoft.com/en-us/azure/machine-learning/concept-model-monitoring){:target="_blank" rel="noopener noreferrer"} computes statistics over production inference data and compares them against reference data, raising alerts through Azure ML or Event Grid when a metric crosses a threshold.
 
-The [Responsible AI dashboard](https://learn.microsoft.com/en-us/azure/machine-learning/concept-responsible-ai){:target="_blank" rel="noopener noreferrer"} provides built-in analysis of model fairness, feature importance, and prediction explanations. After training, you can generate a dashboard that shows:
+```
+   ┌──────────────────┐        ┌────────────────────────┐
+   │ Online endpoint  │        │ Reference data         │
+   │  + data          │        │  training / validation │
+   │    collector     │        │  / ground truth        │
+   └────────┬─────────┘        └───────────┬────────────┘
+            │ inputs, outputs              │
+            v                              │
+   ┌──────────────────┐                    │
+   │ Datastore        │                    │
+   │ (production      │                    │
+   │  inference data) │                    │
+   └────────┬─────────┘                    │
+            │                              │
+            │   production window          │ reference window
+            └──────────────┬───────────────┘
+                           v
+                ┌────────────────────┐
+                │ Monitoring job     │  statistical test
+                │ (Spark, scheduled) │  or distance score
+                └──────────┬─────────┘
+                           │ threshold exceeded
+                           v
+                ┌────────────────────┐
+                │ Alert + Event Grid │──> retraining pipeline
+                └────────────────────┘
+```
 
-- **Model explanations**: Which features most strongly influenced each prediction (SHAP values or permutation importance)
-- **Fairness metrics**: Whether the model's predictions are balanced across demographic groups
-- **Forecast explanations**: For time-series models, what factors drove specific predictions
-- **Error analysis**: Which data segments have the highest error rates
-- **Causal analysis**: Understanding cause-and-effect relationships between features and predictions
+**Six built-in signals**, each with configurable metrics and thresholds:
 
-This analysis helps identify bias, validate model logic, and provide transparency to stakeholders and regulators.
+| Signal | Compares | Reference data |
+|---|---|---|
+| **Data drift** | Distribution of model inputs | Training data or recent production data |
+| **Prediction drift** | Distribution of model outputs | Validation data or recent production data |
+| **Data quality** | Null value rate, data type error rate, out-of-bounds rate on inputs | Training data or recent production data |
+| **Feature attribution drift** (preview) | Feature importance in production against training | Training data (required) |
+| **Model performance** (preview) | Accuracy, precision, recall, or MAE/MSE/RMSE | Ground truth data (required) |
+| **Generative AI generation safety and quality** (preview) | Groundedness, relevance, fluency, similarity, coherence | Not applicable |
 
-### Data and Model Profiling
+The tabular signals support classification and regression on tabular data. Custom signals are supported where the built-ins do not fit.
 
-Azure ML includes [data profiling](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-manage-datasets){:target="_blank" rel="noopener noreferrer"} and [data quality monitoring](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-enable-data-profiling){:target="_blank" rel="noopener noreferrer"} to detect data drift (when new data differs from training data) and model drift (when model performance degrades over time). These tools help maintain model quality in production.
+Getting data in is the prerequisite people skip. On a **managed online endpoint**, enable **model data collection** and inputs and outputs are captured automatically. For a batch endpoint or a model deployed outside Azure ML, **you are responsible for collecting production inference data** yourself and writing it somewhere the monitor can read.
 
----
-
-## AutoML Capabilities
-
-### When to Use AutoML
-
-[AutoML](https://learn.microsoft.com/en-us/azure/machine-learning/concept-automated-ml){:target="_blank" rel="noopener noreferrer"} automatically explores algorithms, feature engineering, and hyperparameters to find the best-performing model for your data. Use AutoML when:
-
-- You want a baseline model quickly for comparison purposes
-- The problem is a standard supervised learning task (classification, regression, time-series forecasting)
-- You prefer not to manually tune hyperparameters
-- You want to compare multiple algorithms and let Azure ML select the winner
-
-Do not use AutoML if you need full control over feature engineering, custom algorithms, deep learning with specific architectures, or reinforcement learning.
-
-### How AutoML Works
-
-You specify your training data and target variable. Azure ML then:
-
-1. Analyzes the data to understand its characteristics
-2. Splits data into training and validation sets
-3. Tries different algorithms (linear regression, random forests, gradient boosting, neural networks) with different hyperparameter configurations
-4. Ranks models by performance on the validation set
-5. Returns the best model and shows the algorithms tried and their performance
-
-AutoML respects computational budgets. You can limit how long AutoML runs, and it stops when the budget is exhausted even if more algorithms remain to try.
-
-### Customizing AutoML
-
-You can configure AutoML to:
-- Focus on specific metrics (accuracy, precision, recall, AUC)
-- Specify allowed algorithms (exclude slow methods if speed matters)
-- Enable specific featurization steps (handle missing values, one-hot encoding)
-- Request explainability analysis on the winning model
+Two configuration details govern whether results mean anything. The **lookback window size** sets how much data each run examines, and the **lookback window offset** shifts the window's end relative to the run. Make sure the reference window and the production window do not overlap, which means the reference offset should be at least the production window size plus its offset. By default the reference offset is twice the production window size, which handles the common case.
 
 ---
 
-## Integration with MLOps
+## Responsible AI
 
-### GitHub Actions and Azure DevOps Integration
+### The Dashboard
 
-Azure ML integrates with [GitHub Actions](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-github-actions-machine-learning){:target="_blank" rel="noopener noreferrer"} and [Azure DevOps](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-setup-azure-devops){:target="_blank" rel="noopener noreferrer"} to enable continuous training and continuous model deployment. You can define workflows that:
+The [Responsible AI dashboard](https://learn.microsoft.com/en-us/azure/machine-learning/concept-responsible-ai-dashboard){:target="_blank" rel="noopener noreferrer"} assembles six components, each drawn from an established open-source package, and you include only the ones a given analysis needs:
 
-1. Trigger when data is updated or code changes
-2. Train a new model using a registered pipeline
-3. Run model validation and tests
-4. Automatically promote models that pass thresholds to production endpoints
-5. Monitor model performance and alert on degradation
+| Component | Answers |
+|---|---|
+| **Model overview and fairness assessment** | How does performance break down across sensitive groups? (Fairlearn) |
+| **Error analysis** | Which cohorts of data have the highest error rates? (Error Analysis) |
+| **Data analysis** | Which groups are over- or under-represented in the dataset? |
+| **Model interpretability** | Which features drove this prediction, globally and individually? (InterpretML) |
+| **Counterfactual what-if** | What is the smallest change that flips this prediction? (DiCE) |
+| **Causal analysis** | What is the causal effect of a treatment feature on a real outcome? (EconML) |
 
-This allows ML teams to shift away from manual, one-off training toward automated, repeatable processes similar to software CI/CD.
+A **PDF scorecard** exports the results for stakeholders and compliance reviewers who will not open the dashboard themselves.
 
-### Reproducibility and Audit Trails
+### Constraints That Decide Whether You Can Use It
 
-Every training job in Azure ML is fully auditable. The job captures:
-- Exact code version (commit hash if git-tracked)
-- Data version (which data asset version was used)
-- Environment snapshot (Python version, package versions)
-- Hyperparameters and configuration
-- Output metrics and artifacts
-- User and timestamp
+The dashboard is narrower than its description suggests, and checking these before planning a compliance story saves rework:
 
-This audit trail is essential for compliance, debugging production failures, and understanding why a particular model behaves the way it does.
+- **Regression and classification (binary and multi-class) on tabular structured data only.** No image, text, or forecasting models. (Image and text dashboards exist in the open-source Responsible AI Toolbox, outside Azure ML.)
+- **MLflow models registered in Azure ML with a scikit-learn implementation.** The model must implement `predict()` and `predict_proba()`, or be wrapped in a class that does, and must be pickleable.
+- **Up to 5,000 data points** are visualized. Downsample first.
+- Dataset inputs must be **pandas DataFrames in Parquet**. NumPy and SciPy sparse are unsupported.
+- **No more than 10,000 columns.**
+- **AutoML MLflow models are not supported**, and registered AutoML models cannot be used from the UI.
+
+That last item is the one that reshapes plans. A team that uses AutoML to produce the production model cannot then run that model through the RAI dashboard, so if regulatory explainability is a requirement, either train a scikit-learn model yourself or rely on AutoML's own model explanation feature instead.
 
 ---
 
-## Common Pitfalls and How to Avoid Them
+## AutoML
 
-### Problem: Unversioned Models in Production
+### When to Use It
 
-**Result**: A production model fails. You cannot determine which code, data, or hyperparameters were used. You cannot reproduce the issue or create a fixed version.
+[AutoML](https://learn.microsoft.com/en-us/azure/machine-learning/concept-automated-ml){:target="_blank" rel="noopener noreferrer"} searches algorithms, featurization, and hyperparameters for a supervised task and returns the best model it found. Reach for it when:
 
-**Solution**: Always register models to the Model Registry and deploy from the registry, not directly from a training run. Tag models with versions, dates, and purpose. Track which registered model version is deployed in each environment. Maintain a changelog of model updates.
+- You want a defensible baseline quickly, to know what a competent model scores before investing in a custom one
+- The task is standard supervised learning: classification, regression, or time-series forecasting
+- Comparing several algorithms matters more than controlling any one of them
 
-### Problem: Data Drift Causing Silent Performance Degradation
+Skip it when you need bespoke feature engineering, a specific deep learning architecture, or a custom loss function, and remember the Responsible AI constraint above before committing an AutoML model to a regulated production path.
 
-**Result**: A model's accuracy slowly declines in production because the data distribution has shifted. No one notices until business metrics drop significantly.
+### How It Works
 
-**Solution**: Enable data profiling and model monitoring. Set up alerts for drift detection. Include data quality checks in production pipelines. Schedule retraining when drift is detected. Log prediction distributions to catch shifts early.
+You supply training data and a target column. AutoML profiles the data, splits it for validation, tries algorithm and hyperparameter combinations, ranks them on the primary metric, and returns the winner along with the leaderboard of what it tried.
 
-### Problem: Overfitting During Hyperparameter Tuning
+Runs respect a compute budget. Set a time limit and AutoML stops when it expires, even with combinations left untried, which means a short budget produces a weaker answer rather than an error.
 
-**Result**: A model achieves excellent accuracy on validation data but poor accuracy in production because tuning overfitted to the specific validation set.
+Configuration options include the primary metric to optimize, an allow or block list of algorithms, featurization behavior, cross-validation settings, and a model explanation on the winning run.
 
-**Solution**: Use proper cross-validation strategies during hyperparameter search. Reserve a separate test set that is never touched during tuning. Evaluate on realistic data from production environments if possible. Use regularization to penalize model complexity.
+---
 
-### Problem: Unclear Model Lineage and Reproducibility Issues
+## MLOps Integration
 
-**Result**: A month later, someone questions whether a deployed model was trained on the correct dataset or with the correct parameters. You cannot trace the model back to its training conditions.
+### Continuous Training and Deployment
 
-**Solution**: Always use managed pipelines (CLI or SDK) and store pipeline definitions in version control. Log all hyperparameters and data asset versions. Use the Model Registry to link deployed models to their training runs. Document the business logic and assumptions behind model decisions.
+Azure ML integrates with [GitHub Actions](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-github-actions-machine-learning){:target="_blank" rel="noopener noreferrer"} and [Azure Pipelines](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-devops-machine-learning){:target="_blank" rel="noopener noreferrer"}. A typical loop triggers on a code or data change, runs a registered pipeline, evaluates the resulting model against a threshold, registers it if it passes, and updates an endpoint deployment.
 
-### Problem: Complex Dependency Management for Custom Environments
+### Event-Driven Automation
 
-**Result**: Retraining fails because a package version is no longer available or conflicts with other packages. Production inference fails because the inference environment differs from the training environment.
+Azure ML publishes lifecycle events to **Azure Event Grid**: job completion, model registration, deployment, and monitoring alerts such as drift detection. That is what closes the loop from monitoring back to training. Rather than polling for degradation, subscribe a retraining pipeline to the drift event and let the monitor start it.
 
-**Solution**: Use curated environments as baselines when possible. Pin exact package versions in conda specifications. Test custom environments locally before deploying. Create separate environments for training and inference, but ensure they are compatible. Regularly refresh environments to avoid using outdated packages with known vulnerabilities.
+---
 
-### Problem: Endpoint Scaling Surprises
+## Common Pitfalls
 
-**Result**: A real-time endpoint is provisioned with insufficient compute. During traffic spikes, requests queue and latency becomes unacceptable. Scaling was not configured, or auto-scale limits were set too low.
+### Pitfall 1: Building Governance on Registry Stages That Do Not Exist
 
-**Solution**: Load test endpoints before production deployment. Configure auto-scaling policies with appropriate minimum and maximum instance counts. Monitor request latency and error rates. Use traffic splitting to gradually shift traffic to new endpoints. Monitor cost implications of scale-out.
+**Problem:** A team designs a promotion process around moving a model version from staging to production in the registry, then discovers there are no stages and no approval workflow.
 
-### Problem: Model Registry Governance Ignored
+**Result:** A half-built process where "which version is in production" lives in someone's memory or a spreadsheet, and deployments diverge across environments.
 
-**Result**: Multiple versions of seemingly similar models exist in the registry. No one knows which is the "true" production version. Deployments are inconsistent across environments.
+**Solution:** Build promotion explicitly. Use registry **tags** to record state and a CI/CD pipeline that reads them, gated by that pipeline's own approvals, or promote across workspaces through an Azure ML **registry**, which turns each environment boundary into a resource boundary. Whichever you pick, write down the naming and tagging convention, because the registry will not enforce one.
 
-**Solution**: Establish naming conventions and tagging standards for models. Use the Model Registry's approval workflows to gate promotion between environments. Document the business purpose and acceptance criteria for each model. Retire old model versions that are no longer used.
+---
+
+### Pitfall 2: Expecting One Cluster to Serve a Mixed Pipeline
+
+**Problem:** A pipeline has CPU preprocessing and GPU training, and the plan is one cluster with mixed node types.
+
+**Result:** It cannot be configured. A compute cluster has a single VM size fixed at creation, so either preprocessing runs on expensive GPU nodes or training runs without a GPU.
+
+**Solution:** Create separate clusters and assign compute per pipeline node, or set the pipeline's `default_compute` to `serverless` and specify the instance type on the node that needs a GPU. Serverless is the lower-maintenance option here because there is no second cluster to size, patch, or leave idle.
+
+---
+
+### Pitfall 3: Monitoring Configured With No Data Behind It
+
+**Problem:** Model monitoring is enabled on a batch endpoint, or on a model deployed outside Azure ML, and no alerts ever fire.
+
+**Result:** The monitor looks healthy because it has nothing to compare. Drift proceeds undetected and the dashboard provides false assurance.
+
+**Solution:** Automatic collection of production inference data happens only on **managed online endpoints**, with model data collection enabled. Everywhere else you collect it yourself and write it to a datastore the monitor reads. Check the reference window and production window do not overlap, and confirm the workspace's managed network is not set to `AllowOnlyApprovedOutbound`, which monitoring does not support.
+
+---
+
+### Pitfall 4: Compute Instances Billing Around the Clock
+
+**Problem:** Data scientists create compute instances for exploratory work and leave them running.
+
+**Result:** A steady monthly charge for machines nobody is using, often larger than the training compute bill.
+
+**Solution:** Enable **idle shutdown** on every compute instance at creation, and set compute clusters to a minimum of zero nodes. Note that stopping an instance does not zero its cost: the OS disk, public IP, and load balancer still bill. Instances that are genuinely finished with should be deleted, not just stopped.
+
+---
+
+### Pitfall 5: Training and Inference Environments Drifting Apart
+
+**Problem:** Training uses a conda environment assembled months ago with loose version specifiers. Inference uses a different one. A retrain fails on a package that no longer resolves, or the endpoint scores differently from the validation run.
+
+**Result:** Reproducibility is gone, and the difference between training and serving behavior is invisible until predictions are wrong.
+
+**Solution:** Start from **curated environments** where one fits and pin exact versions where it does not. Log the model in **MLflow format**, which lets the deployment infer its environment from the model itself and removes the chance of a mismatched hand-written one. Register environments as versioned assets so a job records exactly which build it ran on.
+
+---
+
+### Pitfall 6: Endpoint Scaling Discovered in Production
+
+**Problem:** An online endpoint is deployed with default instance counts and no load testing. Traffic spikes, requests queue, latency climbs.
+
+**Result:** Timeouts under exactly the load the model was deployed to handle.
+
+**Solution:** Load test before production and size from the result. Microsoft's sizing guidance is to scale **up** before scaling out: start with a machine holding about 150% of the RAM the model needs, profile, find the size that performs, then increase the instance count for concurrency. Use traffic splitting to move load onto a new deployment gradually rather than switching at once.
+
+---
+
+### Pitfall 7: The Workspace Storage Account Chosen Badly
+
+**Problem:** An architect designates the team's existing ADLS Gen2 account as the workspace's storage account, on the reasonable assumption that the ML platform should point at the data lake.
+
+**Result:** Workspace creation fails. An account with hierarchical namespace enabled cannot be a workspace default storage account, and neither can a premium account or one of type BlobStorage.
+
+**Solution:** Let Azure ML create a general-purpose v2 account for artifacts and logs, then attach the data lake as a **datastore**. That is the intended arrangement, and it separates platform metadata from training data, which is better for lifecycle management anyway. Decide this before creation, since a workspace cannot be moved to a different subscription later.
 
 ---
 
 ## Key Takeaways
 
-- **Workspaces organize everything**: All compute, data, experiments, models, and endpoints belong to a workspace. Use separate workspaces for different environments or projects to maintain isolation.
+1. **A compute cluster has one VM size, fixed at creation.** Mixed CPU and GPU pipelines use separate clusters with per-node compute assignment, or serverless compute with an instance type set on the node that needs it.
 
-- **Compute is modular**: Compute instances for interactive work, compute clusters for training jobs, serverless for occasional needs, and attached compute for reusing existing infrastructure. Right-size the compute to the workload.
+2. **Serverless compute is Azure ML managed compute, and now the recommended default.** It is not AKS or Container Instances. Reach for a compute cluster when you need a reserved node count, warm nodes, or specific networking.
 
-- **MLflow is built-in**: Experiment tracking, artifact storage, and model versioning happen automatically. Use the Model Registry for centralized governance and deployment workflows.
+3. **The model registry has versions, tags, and lineage, but no stages and no approval workflow.** Promotion is something you build with tags and CI/CD, or by moving assets between workspaces through a registry.
 
-- **Pipelines enable reproducibility**: Define training workflows as code (SDK or CLI) or visually (Designer) and version control them. Pipelines capture data versions, code, and parameters for complete audit trails.
+4. **The built-in roles are AzureML Data Scientist, AzureML Compute Operator, and AzureML Registry User.** Data Scientist deliberately excludes creating compute, so self-service teams need both of the first two. Workspaces created after 19 November 2024 use the narrower Azure AI Administrator role for their managed identity.
 
-- **Managed endpoints abstract complexity**: Online endpoints handle real-time inference at scale. Batch endpoints process bulk data efficiently. Let Azure ML manage compute, scaling, and monitoring.
+5. **The workspace storage account cannot have hierarchical namespace, cannot be premium, and cannot be type BlobStorage.** Attach the data lake as a datastore instead, and remember a workspace cannot move subscriptions.
 
-- **Responsible AI is not optional**: Use the dashboard to detect bias, understand feature importance, and monitor for drift. This is essential for compliance and building user trust.
+6. **MLflow-format models deploy without a scoring script or environment.** That alone justifies logging models in MLflow format, and it removes the most common training-serving mismatch.
 
-- **AutoML is a starting point**: Use it for quick baselines and to explore algorithm space, but be prepared to move to custom training when you need full control.
+7. **Model monitoring needs production inference data, and only managed online endpoints collect it for you.** Batch endpoints and externally deployed models require you to collect it. Signals cover data drift, prediction drift, data quality, feature attribution drift, model performance, and generative AI quality.
 
-- **MLOps integration closes the loop**: Connect training pipelines to CI/CD workflows so that model updates are automated, tested, and versioned like software releases. Manual training is brittle and does not scale.
+8. **The Responsible AI dashboard supports tabular classification and regression, scikit-learn MLflow models, and 5,000 data points.** It does not support AutoML models, which forces a choice between AutoML convenience and dashboard-based explainability.
 
-- **Data versioning matters**: Track which data version was used for training. Data updates without model retraining lead to unpredictable production failures.
+9. **AutoML is a baseline generator, not an endpoint.** Use it to learn what a competent model scores, then decide whether custom training earns its cost, keeping the Responsible AI constraint in view.
 
-- **Monitor in production**: Set up Application Insights monitoring and drift detection. A deployed model is not done; it requires ongoing observation and maintenance.
+10. **Event Grid closes the loop between monitoring and training.** Subscribe a retraining pipeline to drift and model-registration events rather than scheduling retraining blindly or waiting for someone to notice.

@@ -3,15 +3,17 @@ title: "Azure DevOps Repos & Artifacts"
 layout: guide
 category: Azure
 subcategory: Developer Tools & CI/CD
-description: "Git repository management with Azure Repos including branch policies, pull request workflows, and code review patterns, plus Azure Artifacts for package feed management across NuGet, npm, Maven, and Python."
-tags: [infrastructure, azure, devops, cicd, collaboration, governance, practical]
+description: "Azure Repos branch and repository policies, cross-repo protection, and pull request workflows, plus Azure Artifacts feed roles, views, upstream source resolution order, and storage limits."
+tags: [azure-repos, azure-artifacts, branch-policies, pull-requests, package-management, upstream-sources, practical]
 ---
 
 ## What Are Azure Repos and Azure Artifacts
 
-[Azure Repos](https://learn.microsoft.com/en-us/azure/devops/repos/get-started/what-is-repos){:target="_blank" rel="noopener noreferrer"} provides Git-based source control integrated into Azure DevOps projects. Multiple repositories can exist within a single project, each with independent branch policies, pull request workflows, and permission models.
+[Azure Repos](https://learn.microsoft.com/en-us/azure/devops/repos/get-started/what-is-repos){:target="_blank" rel="noopener noreferrer"} provides Git source control inside Azure DevOps projects. A project can hold many repositories, each with its own policies, permissions, and pull request workflow.
 
-[Azure Artifacts](https://learn.microsoft.com/en-us/azure/devops/artifacts/start-using-azure-artifacts){:target="_blank" rel="noopener noreferrer"} is a package feed management service that stores and distributes packages across multiple formats. Teams publish compiled packages to feeds, which can be consumed by applications and other packages through dependency management tools like NuGet, npm, Maven, and pip.
+[Azure Artifacts](https://learn.microsoft.com/en-us/azure/devops/artifacts/start-using-azure-artifacts){:target="_blank" rel="noopener noreferrer"} is a package feed service that hosts NuGet, npm, Maven, Python, Cargo, and Universal packages. Teams publish internal libraries to feeds and consume them through the same dependency managers they already use, with public registries reachable through the same feed as upstream sources.
+
+Azure Artifacts feeds are a different thing from pipeline artifacts. A feed holds versioned packages that many builds consume over months or years, is billed by storage, and is governed by feed roles and retention policies. Pipeline artifacts are the files one pipeline run hands to another, are billed at nothing, and disappear when the run is deleted. Publishing a build output to a feed and publishing it as a pipeline artifact solve different problems.
 
 ---
 
@@ -28,142 +30,182 @@ tags: [infrastructure, azure, devops, cicd, collaboration, governance, practical
 - Centralized Git repositories with complete history and blame
 - Pull request workflows enforcing code review and quality gates
 - Branch policies requiring approvals, build success, and linked work items
-- Complete audit trail showing all changes and reviewers
+- Repository policies that reject bad pushes before a pull request exists
 - Integration with Azure Pipelines for automated build and test gates
 
 **Without Artifacts:**
-- Dependencies managed through uncontrolled NuGet.org or npmjs.com feeds
-- No ability to control package versions or versions used across teams
+- Dependencies pulled directly from nuget.org or npmjs.com with no local copy
+- Builds break when a public registry has an outage or a package is unpublished
 - No internal package reuse across teams
-- Difficult to manage open-source dependency risk
-- No way to promote packages through environments (dev, staging, production)
+- Nondeterministic restores when several registries are configured at once
+- No way to promote packages through environments
 
 **With Artifacts:**
-- Internal package feeds scoped to projects or organizations
-- Package promotion workflows through feeds (development → release → production)
+- Internal package feeds scoped to a project or the whole organization
+- Package promotion through views or separate feeds
 - Shared library distribution across teams without public publishing
-- Upstream source configuration for transparent dependency caching
-- Control over which package versions teams can consume
+- Upstream sources caching public packages into your own feed
+- A defined resolution order that closes the dependency confusion hole
 
 ---
 
-## How Azure Repos Differs from GitHub / AWS CodeCommit
+## How Azure Repos and Artifacts Differ from GitHub and AWS
 
-| Concept | GitHub | AWS CodeCommit | Azure Repos |
-|---------|--------|----------------|------------|
-| **Repository structure** | Standalone repos; organization holds repos | One repo per service; region-scoped | Multiple repos per Azure DevOps project |
-| **Branch policies** | Branch protection rules | Limited policy support | Rich policies: reviewers, build validation, merge strategies |
-| **Pull requests** | Full-featured workflow | Basic merge requests | Advanced: auto-complete, draft PRs, comment resolution |
-| **Code search** | Global search via web interface | Per-repo search limited | Cross-repo semantic code search |
-| **Access control** | Team and repository level | IAM-based (coarse) | Granular per-branch and per-repo permissions |
-| **TFVC option** | Not available | Not available | Team Foundation Version Control (legacy) |
-| **Integration with CI/CD** | GitHub Actions (separate service) | AWS CodePipeline (separate service) | Azure Pipelines (integrated, shared service) |
-| **Permissions inheritance** | From organization/team level | From IAM policies | Per-repository with inheritance options |
+| Concept | GitHub | AWS | Azure DevOps |
+|---------|--------|-----|--------------|
+| **Repository structure** | Standalone repos owned by an organization | CodeCommit: one repo per service, region-scoped | Many repos inside a project, sharing work items and pipelines |
+| **Branch protection** | Branch protection rules and rulesets | CodeCommit: approval rule templates only | Branch policies, plus repository policies that reject pushes outright |
+| **Protection across repos** | Organization-level rulesets | Approval rule templates applied per repo | Cross-repo policies protecting a branch name across every repo in a project |
+| **Pull requests** | Full-featured workflow | Basic pull requests | Draft PRs, auto-complete, comment resolution tracking, work item links |
+| **Code search** | Global search, built in | Per-repo search only | Marketplace Code Search extension, default branch plus up to five added branches |
+| **Access control** | Team and repository level | IAM policies | Project, repository, and branch level, with cross-repo defaults |
+| **CI/CD integration** | GitHub Actions | CodePipeline (separate service) | Azure Pipelines, sharing identities and permissions with Repos |
+| **Package storage** | GitHub Packages | CodeArtifact | Azure Artifacts (NuGet, npm, Maven, Python, Cargo, Universal) |
+| **Package promotion** | Package visibility settings | Repositories with different upstream configurations | Views (@Local, @Prerelease, @Release) or separate feeds |
+| **Upstream caching** | Not offered for all ecosystems | External connections on a CodeArtifact repository | Upstream sources with a defined feed-first resolution order |
+| **Advanced security** | GitHub Advanced Security | Amazon Inspector, CodeGuru | GitHub Secret Protection and GitHub Code Security, sold per active committer |
+| **Audit trail** | Organization audit log | CloudTrail | Organization-level audit log, Entra-backed organizations only, 90-day retention |
 
 ---
 
 ## Azure Repos Core Concepts
 
-### Repositories Within Projects
+### Where Repository Settings Live
 
-An Azure DevOps project can contain multiple Git repositories. Each repository has independent branch policies, permissions, and pull request workflows. This differs from GitHub (organization contains standalone repos) and allows teams to isolate codebases while sharing the same work item tracking and pipeline infrastructure.
+Azure Repos layers protection at four levels, and knowing which level a control lives at determines whether you configure it once or once per repository.
 
-**Multi-repo patterns:**
-- **Mono-repo:** Single repository containing all code (microservices, libraries, tools)
-- **Multi-repo:** Separate repositories per team, service, or domain
-- **Hybrid:** Some shared libraries in one repo, team-specific code in separate repos
+| Level | What it holds | Configured at |
+|---|---|---|
+| **Organization** | Default branch name for new repositories | Organization settings > Repositories |
+| **Project (All Repositories)** | Default settings and repository policies for every repo, including repos created later. Also cross-repo branch policies. | Project settings > Repositories > All Repositories |
+| **Repository** | Repository policies, searchable branches, fork settings, permissions | Project settings > Repositories > *repo* |
+| **Branch** | Branch policies and branch permissions | Repository > Branches, or Project settings > Repositories > *repo* > Policies |
 
-All repositories within a project share the same Azure DevOps project infrastructure, meaning they use the same work item types, Azure Pipelines templates, and audit logs.
+Settings applied at **All Repositories** become the default for repositories added later, which is the difference between a policy that covers the organization going forward and one that covers only what exists today.
+
+---
+
+### Repository Policies
+
+Repository policies reject a push at the server before any pull request exists. They are distinct from branch policies, which govern merges.
+
+| Policy | Effect |
+|--------|--------|
+| **Commit author email validation** | Blocks pushes whose commit author email does not match the given patterns. Wildcards allowed, `;` separates patterns, `!` excludes, order matters. |
+| **File path validation** | Blocks pushes introducing paths matching the given patterns. Exact paths start with `/`. |
+| **Case enforcement** | Blocks pushes that introduce files, folders, branches, or tags differing only by letter case. Turn it on if contributors work on Windows or macOS. |
+| **Reserved names** | Blocks platform-reserved names and characters that break checkout on some operating systems. |
+| **Maximum path length** | Blocks pushes introducing paths longer than the configured length. |
+| **Maximum file size** | Blocks pushes containing new or updated files above the selected limit. |
+
+All six default to Off and can be set for All Repositories or per repository. Case enforcement does not repair a repository that already contains case-conflicting objects, so rename the conflicts before enabling it.
+
+---
 
 ### Branch Policies
 
-[Branch policies](https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies){:target="_blank" rel="noopener noreferrer"} are enforced rules that prevent direct commits to protected branches (typically main/release branches). Policies act as quality gates that must pass before code can merge.
-
-**Common branch policy types:**
+[Branch policies](https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies){:target="_blank" rel="noopener noreferrer"} gate what can merge into a protected branch. Setting any policy on a branch automatically has two side effects: changes to that branch must go through a pull request, and the branch cannot be deleted.
 
 | Policy | Purpose |
 |--------|---------|
-| **Require minimum reviewers** | PR must be approved by N reviewers (e.g., 2) before merge |
-| **Require code review from specific users** | Specific people or groups must review (e.g., architecture team for critical paths) |
-| **Require successful builds** | PR must pass Azure Pipelines before merge; blocks merge on build failure |
-| **Require comment resolution** | All reviewer comments must be resolved (marked complete) |
-| **Require linked work items** | PR must reference work items (allows tracing code to requirements) |
-| **Limit merge types** | Allow only squash merge, rebase, or merge commit (enforces history style) |
-| **Require branch name conformance** | Branch names must match patterns (e.g., feature/*, hotfix/*) |
+| **Require a minimum number of reviewers** | Require approval from N reviewers. Options control whether requestors can approve their own changes and whether the most recent push resets approvals. |
+| **Check for linked work items** | Require or encourage a linked work item, making changes traceable to requirements. |
+| **Check for comment resolution** | Require every comment thread to be resolved before completion. |
+| **Limit merge types** | Allow only some of basic merge, squash, rebase and fast-forward, or rebase with merge commit. |
+| **Build validation** | Require a pipeline to succeed. Configurable as automatic or manual trigger, required or optional, with an expiry when the target branch updates. |
+| **Status checks** | Require an external service (or a built-in integration) to post a successful status on the pull request. |
+| **Automatically included reviewers** | Add specific people or groups as reviewers, optionally only when a pull request touches given files and folders. |
 
-**Policy interaction:**
-- Policies are evaluated in order; all must pass for merge to succeed
-- Reviewers can approve, request changes, or wait for changes
-- Comment resolution blocks merge until explicitly marked complete
-- Build failure blocks merge until the policy is bypassed (if allowed) or the build passes
+There is no branch naming policy. Enforcing a naming convention like `feature/*` is done with **branch permissions** on branch folders, granting or denying the create-branch permission at a path, not with a branch policy.
+
+Policies are not ordered. Every enabled policy must be satisfied before a pull request can complete, and a user with the **Bypass policies when completing pull requests** permission can override them. Grant that permission sparingly and audit it, because it is the one thing that turns a guardrail back into a suggestion.
+
+Do not put branch policies on temporary branches. A branch with policies cannot be deleted, so policies on a short-lived branch break automatic branch deletion after the pull request completes.
+
+---
+
+### Cross-Repo Branch Policies
+
+Configuring the same policy on `main` in forty repositories by hand does not scale, and it silently misses the forty-first repository someone creates next week. Project settings > Repositories > All Repositories > Policies solves both, with two options:
+
+- **Protect the default branch of each repository**, which follows whatever each repository calls its default branch
+- **Protect current and future branches matching a specified pattern**, which applies to matching branches that do not exist yet
+
+Branch name matching here is **case sensitive**. A cross-repo policy on `main` does not cover a repository whose default branch is `Main`.
+
+---
 
 ### Pull Request Workflows
 
-Pull requests create a formal code review and discussion space. Reviewers can comment on specific lines, request changes, approve, or review without voting.
-
-**PR features:**
+Pull requests create a formal review and discussion space. Reviewers can comment on specific lines, approve, approve with suggestions, wait for the author, or reject.
 
 | Feature | Purpose |
 |---------|---------|
-| **Draft PRs** | Mark a PR as draft to prevent accidental merge while still under development |
-| **Auto-complete** | Automatically merge when all policies pass (instead of manual click) |
-| **Merge strategies** | Squash (flatten history), rebase (linear), merge commit (preserve branch history) |
-| **Comment threads** | Conversations tied to specific code lines with resolution tracking |
-| **Code review voting** | Approve, request changes, or review without voting |
-| **PR descriptions** | Template-based descriptions capturing context and testing notes |
+| **Draft PRs** | Prevent accidental completion and skip triggering required reviewers while work is in progress |
+| **Auto-complete** | Complete the pull request automatically as soon as every policy passes |
+| **Merge strategies** | Squash (flatten), rebase (linear), rebase with merge commit, or basic merge commit |
+| **Comment threads** | Line-anchored conversations with a resolution state |
+| **Voting** | Approve, approve with suggestions, wait for author, reject, or reset |
+| **PR templates** | Repository-stored description templates capturing context and testing notes |
 | **Work item linking** | Link to user stories, bugs, or tasks for traceability |
 
-**Comment resolution requirement:**
-If a branch policy requires comment resolution, reviewers mark their comments complete when issues are addressed. Until all comments are marked complete, the PR cannot merge (even if approved).
+If the comment resolution policy is on, every thread has to be resolved before completion, even threads opened by the author and even when the pull request already has enough approvals.
+
+---
 
 ### Code Search
 
-Azure Repos provides [semantic code search](https://learn.microsoft.com/en-us/azure/devops/repos/git/search-code){:target="_blank" rel="noopener noreferrer"} across all repositories in a project. This differs from GitHub (web-based global search) and CodeCommit (per-repo search) by supporting cross-repo queries within the DevOps project.
+Cross-repository code search requires the [Code Search](https://learn.microsoft.com/en-us/azure/devops/project/search/functional-code-search){:target="_blank" rel="noopener noreferrer"} extension from the Visual Studio Marketplace. Without it installed, the search box does not index code at all.
 
-**Search capabilities:**
-- Search across all branches in a repo
-- Search across all repos in a project
-- Regex support for advanced patterns
-- Filter by file type, branch, or path
+Two limits shape what it can find:
 
-### Repository Permissions
+- **Only the default branch is indexed by default.** Each repository can add up to five more searchable branches, configured per repository under Settings > Searchable Branches.
+- Search is text and code-structure aware (filter by file, path, extension, and code element such as class or function), not semantic. It matches what you typed, not what you meant.
 
-Permissions in Azure Repos can be assigned at the project, repository, or branch level. This granularity allows fine-grained access control without managing separate access control systems.
+---
 
-**Common permission patterns:**
+### Repository and Branch Permissions
 
-| Permission Level | Applies To | Use Case |
+Permissions apply at project, repository, or branch level, with narrower scopes overriding broader ones.
+
+| Scope | Applies to | Use case |
 |-----------------|-----------|----------|
-| **Project** | All repos in project | Broad organizational access |
-| **Repository** | Specific repo | Team-specific access (repo for Team A is not visible to Team B) |
-| **Branch** | Specific branch (e.g., main) | Protect release branches from accidental commits |
+| **Project** | All repositories in the project | Baseline access for the whole team |
+| **Repository** | One repository | A team's repository not visible to other teams |
+| **Branch** | One branch or branch folder | Restrict who can force push, delete, or create branches under `release/*` |
 
-**Common roles:**
+Default groups supply the starting point: **Readers** can view and clone, **Contributors** can push and create branches, **Build Administrators** and **Project Administrators** can change policies and permissions. Editing branch policies specifically requires **Edit policies** on the repository or branch, or Project Administrators membership.
 
-| Role | Permissions | Typical Users |
-|------|-----------|---------------|
-| **Readers** | View and clone | Stakeholders, auditors |
-| **Contributors** | Create, modify, delete branches | Developers |
-| **Administrators** | Manage permissions, policies, settings | Team leads |
+Branch permissions and branch policies answer different questions. Permissions decide who may push at all; policies decide what has to be true before a merge lands.
+
+---
+
+### Advanced Security
+
+Secret scanning and dependency analysis are not part of the base Azure Repos offering. They ship as paid add-ons, now sold as two standalone products:
+
+| Product | Includes |
+|---|---|
+| **GitHub Secret Protection** | Secret scanning across repository history, push protection that rejects a push containing a high-confidence secret, and the security overview |
+| **GitHub Code Security** | Dependency scanning for vulnerable open-source components, code scanning with CodeQL, and the security overview |
+
+Push protection is the piece that changes behavior most, because it moves secret detection from "we found this in your history last night" to "this push is rejected". Dependency and code scanning run as pipeline tasks with results aggregated per repository.
+
+---
 
 ### TFVC (Team Foundation Version Control)
 
-Azure Repos supports [TFVC](https://learn.microsoft.com/en-us/azure/devops/repos/tfvc/overview){:target="_blank" rel="noopener noreferrer"}, a legacy centralized version control system from the pre-Git era. Most new projects use Git; TFVC appears in enterprises with historical investments.
+Azure Repos still supports [TFVC](https://learn.microsoft.com/en-us/azure/devops/repos/tfvc/what-is-tfvc){:target="_blank" rel="noopener noreferrer"}, the centralized version control system that predates Git in the product. Microsoft's position is explicit: Git is the default for new projects, TFVC is **feature complete**, compatibility will be maintained, and Git receives all future investment.
 
 **TFVC characteristics:**
-- Centralized repository (unlike Git's distributed model)
-- Check-in locks prevent concurrent edits
-- Longer history (some enterprises have 20+ years of TFVC commits)
-- Limited branching and merging compared to Git
-- Slower operations due to server round-trips
+- Centralized. History lives on the server, and most operations in a server workspace need a connection.
+- Branches are path-based and created on the server. Merging between sibling branches needs a baseless merge.
+- Permissions go down to the file level, and files can be locked. Git's finest granularity is the repository or branch.
+- Server workspaces scale to millions of files per branch and large binary files without extra tooling. Git needs Git-LFS for the same job.
 
-**When TFVC still exists:**
-- Legacy enterprises standardizing on Git see existing TFVC repositories
-- High-control environments preferring centralized version control
-- Workspaces and local copies instead of clones
+That last point, not inertia alone, is why TFVC persists: a very large binary-heavy codebase is genuinely harder to move. Concurrent editing is not the differentiator people assume. TFVC team members can change files at the same time and resolve conflicts on check-in, and locking is a workflow you opt into rather than the default.
 
-**Migration pattern:**
-Organizations moving from TFVC to Git typically migrate incrementally: new projects start with Git, existing TFVC projects remain until team capacity allows migration. Git is the recommended default for all new repositories.
+Git and TFVC repositories can coexist in the same project, so migration does not have to be all at once. The [git-tfs](https://github.com/git-tfs/git-tfs){:target="_blank" rel="noopener noreferrer"} tool converts a TFVC repository to Git with history.
 
 ---
 
@@ -175,27 +217,27 @@ Git Flow uses multiple long-lived branches (main, develop, release) with feature
 
 **Branches:**
 - `main`: Production releases; every commit is a release
-- `develop`: Integration branch; where features are merged
-- `feature/*`: Feature branches off develop; one per feature
+- `develop`: Integration branch where features are merged
+- `feature/*`: Feature branches off develop, one per feature
 - `release/*`: Release branches off develop for release preparation
 - `hotfix/*`: Hotfix branches off main for production bugs
 
 **Workflow:**
-1. Developer creates feature branch from develop
+1. Developer creates a feature branch from develop
 2. Works and commits
-3. Creates PR to develop with code review
+3. Opens a pull request to develop with code review
 4. After approval, merges to develop
-5. When ready to release, create release branch from develop
-6. Test and fix bugs in release branch
-7. Merge release to main and back to develop
-8. Tag main with version
+5. When ready to release, creates a release branch from develop
+6. Tests and fixes bugs in the release branch
+7. Merges release to main and back to develop
+8. Tags main with the version
 
 **Azure Repos implementation:**
-- Use branch policies on `main` and `develop` to enforce review
-- Use branch name patterns (`feature/*`, `release/*`) to organize
-- Use merge strategies (squash to develop, merge commit to main) for history control
+- Branch policies on `main` and `develop` to enforce review
+- Branch folder permissions on `feature/*` and `release/*` to control who creates them
+- Merge type limits set per branch: squash into develop, merge commit into main
 
-**Trade-off:** More branches to manage; complex release workflow; good for coordinated releases.
+**Trade-off:** More branches to manage and a slower release path. It suits coordinated releases and shipped software with supported older versions.
 
 ### GitHub Flow
 
@@ -203,57 +245,56 @@ GitHub Flow uses a single main branch with short-lived feature branches. Every c
 
 **Branches:**
 - `main`: Always deployable
-- `feature/*`: Feature branches off main; one per feature
-- Short-lived (merged within hours or days)
+- `feature/*`: Feature branches off main, merged within hours or days
 
 **Workflow:**
-1. Developer creates feature branch from main
+1. Developer creates a feature branch from main
 2. Works and commits
-3. Creates PR with code review
+3. Opens a pull request with code review
 4. After approval, merges to main
-5. Main is automatically deployed
+5. Main deploys automatically
 
 **Azure Repos implementation:**
-- Single branch policy on `main`
-- Auto-complete PRs when policies pass
-- Continuous deployment triggered on main commit
+- One branch policy set on `main`, ideally as a cross-repo policy so every service gets it
+- Auto-complete so pull requests land the moment policies pass
+- CI trigger on main driving deployment
 
-**Trade-off:** The workflow is simple. However, you must maintain the always-deployable constraint. This is ideal for feature-driven continuous delivery.
+**Trade-off:** Simple to run, but the always-deployable constraint has to hold. It suits continuous delivery of a single deployed version.
 
 ### Trunk-Based Development
 
-Trunk-based development uses a single branch (main) with all developers committing directly or with short-lived branches (1-day maximum).
+Trunk-based development keeps one branch with very short-lived branches off it, typically less than a day old.
 
 **Branches:**
 - `main`: Single source of truth
-- `feature/*`: Short-lived branches (maximum 1 day old)
-- Release branches created at commit time, not in development
+- `feature/*`: Short-lived, merged the same day
+- Release branches cut at release time, not used during development
 
 **Workflow:**
-1. Developer commits directly to main or creates 1-hour feature branch
-2. Feature branches merge via PR
-3. CI/CD validation runs immediately
+1. Developer creates a short-lived branch
+2. It merges via pull request within a day
+3. CI validation runs on every merge
 4. Feature flags decouple deploy from release
 
 **Azure Repos implementation:**
-- Minimal branch policies (quick validation only)
-- Feature flags in code control visibility
-- Release branches created at tag time, not in development
+- Minimal but fast branch policies, since a slow build validation policy defeats the model
+- Feature flags in code controlling visibility
+- Release branches created at tag time
 
-**Trade-off:** High discipline; requires automation and feature flags; enables fastest feedback.
+**Trade-off:** Demands strong automation and feature flag discipline. It gives the fastest feedback and the fewest merge conflicts.
 
 ### Branch Policies as Guardrails
 
-Branch policies are not just process rules; they are technical guardrails enforcing code quality and traceability regardless of the branch strategy chosen.
+Branch policies are technical controls, not process documentation, and they hold regardless of which strategy above you pick.
 
 **Guardrail functions:**
-- **Build validation:** Code cannot merge until tests pass
-- **Code review:** Human judgment prevents mistakes automation misses
-- **Linked work items:** Changes are traceable to requirements
-- **Comment resolution:** Feedback is acted upon, not ignored
-- **Merge strategy:** History remains clean and readable
+- **Build validation:** code cannot merge until tests pass
+- **Code review:** human judgment catches what automation misses
+- **Linked work items:** changes stay traceable to requirements
+- **Comment resolution:** feedback gets acted on rather than scrolled past
+- **Merge type limits:** history stays in a shape the team can read
 
-Using strong policies means developers cannot bypass quality gates through carelessness or pressure, regardless of release schedule.
+The strategy determines branch structure. The policies determine what quality means. The two are independent choices, and teams that pick a strategy without setting policies have chosen a diagram rather than a control.
 
 ---
 
@@ -261,381 +302,399 @@ Using strong policies means developers cannot bypass quality gates through carel
 
 ### Feed Types and Formats
 
-[Azure Artifacts feeds](https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/feeds){:target="_blank" rel="noopener noreferrer"} store packages in multiple formats. A single feed can contain packages of different types.
+An [Azure Artifacts feed](https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/feeds){:target="_blank" rel="noopener noreferrer"} holds packages of several formats at once.
 
-**Supported package formats:**
+| Format | Ecosystem | Size limit per file |
+|--------|-----------|---------------------|
+| **NuGet** | .NET | 500 MiB |
+| **npm** | JavaScript, TypeScript | 500 MiB |
+| **Maven** | Java | 500 MiB |
+| **Python** | Python | 500 MiB |
+| **Cargo** | Rust | 500 MiB |
+| **Universal** | Any file type | 4 TiB |
 
-| Format | Ecosystem | File Type | Use Case |
-|--------|-----------|-----------|----------|
-| **NuGet** | .NET | .nupkg | C#, VB.NET, F# packages |
-| **npm** | JavaScript/Node | .tgz | JavaScript, TypeScript packages |
-| **Maven** | Java | .jar, .pom | Java packages and dependencies |
-| **Python** | Python | .whl, .tar.gz | Python packages |
-| **Universal** | Any | Any file | Generic package format for unsupported types |
+Every format caps at **5,000 versions per package ID**, with no limit on the number of package IDs in a feed. npm has one extra hard limit: a *package.json* above **375 KB** is rejected.
 
-A team can publish internal libraries in multiple formats (a C# library as NuGet, a TypeScript wrapper as npm) to a single feed.
+Package versions are immutable. Once `1.0.0` is published you cannot overwrite it, and deleting it does not free the version number for reuse.
+
+---
 
 ### Feed Scoping: Project vs Organization
 
-Feeds can be scoped to a project or the entire Azure DevOps organization, controlling visibility and access.
+**Project-scoped feeds** are visible to members of one project. They are the default and the smaller blast radius.
 
-**Project-scoped feeds:**
-- Visible only to members of the project
-- Smaller blast radius if credentials are compromised
-- Default for most scenarios
+**Organization-scoped feeds** are reachable from every project in the organization, which suits genuinely shared platform libraries but widens who can consume them.
 
-**Organization-scoped feeds:**
-- Visible to all projects in the organization
-- Shared infrastructure for organization-wide shared libraries
-- More complex permission management
+The usual arrangement is project-scoped feeds for team-specific packages and one organization-scoped feed for the handful of libraries everyone depends on.
 
-**Typical pattern:**
-- Project-scoped feeds for team-specific internal packages
-- Organization-scoped feeds for organization-wide shared libraries (common utilities, shared frameworks)
+---
 
-### Upstream Sources
+### Feed Roles
 
-[Upstream sources](https://learn.microsoft.com/en-us/azure/devops/artifacts/how-to/set-up-upstream-sources){:target="_blank" rel="noopener noreferrer"} connect Azure Artifacts to external package registries. When a package is not found locally, the feed queries upstream sources, downloads the package, and caches it.
+Feed access uses four roles, and the distinction between the middle two is the one people miss.
 
-**Common upstream sources:**
-- **nuget.org** (NuGet)
-- **npmjs.com** (npm)
-- **Maven Central** (Maven)
-- **PyPI** (Python)
+| Role | Can |
+|------|-----|
+| **Feed Reader** | List and download packages |
+| **Feed and Upstream Reader (Collaborator)** | Everything above, plus **save packages from upstream sources** |
+| **Feed Publisher (Contributor)** | Everything above, plus publish, promote to a view, and deprecate or unlist |
+| **Feed Owner** | Everything above, plus delete packages, add or remove upstream sources, allow external package versions, edit feed settings, and delete the feed |
 
-**How upstream sources work:**
-1. Application requests package `lodash@4.17.21` from the feed
-2. Feed checks local cache; not found
-3. Feed queries upstream sources (npmjs.com)
-4. Feed downloads the package and caches it
-5. Application receives the package from the feed
+Collaborator exists because pulling a package through an upstream source writes a copy into your feed. A Feed Reader can consume what is already cached but cannot cause a new package to be saved.
 
-**Benefits:**
-- Transparent caching of public packages
-- Ability to limit which package versions teams can use
-- Central point for setting retention policies
-- Enables organizations to block specific packages or versions
+Build identities get Collaborator by default: `[Project] Build Service ([Organization])` for project-scoped, and `Project Collection Build Service ([Organization])` for organization-scoped. A pipeline that only restores packages needs nothing more. A pipeline that **publishes** needs Feed Publisher (Contributor) granted to those identities explicitly.
 
-**Trust model:**
-- Your feed trusts upstream sources
-- Upstream sources are your external dependencies
-- Compromised upstream = all your applications using that upstream are at risk
+Project Collection Administrators and Azure Artifacts Administrators hold Feed Owner on every feed in the project automatically.
 
-### Package Versioning
+---
 
-Packages follow semantic versioning (major.minor.patch) or release channels (stable, prerelease, beta).
+### Views and Promotion
 
-**Version numbering:**
-- `1.0.0`: Stable release
-- `1.0.1`: Patch release (bug fix)
-- `1.1.0`: Minor release (new feature, backward compatible)
-- `2.0.0`: Major release (breaking changes)
-- `1.0.0-beta.1`: Prerelease (not stable)
+[Views](https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/views){:target="_blank" rel="noopener noreferrer"} are filtered slices of a feed. Every feed starts with three.
 
-**Immutability:**
-In many package managers, a released version is immutable; you cannot overwrite `1.0.0` once published. Prerelease versions may allow re-publishing for testing.
+| View | Contains |
+|------|----------|
+| **@Local** | The default view. Packages published directly to the feed **and** packages saved from upstream sources. |
+| **@Prerelease** | A suggested view, empty until you promote to it. Renameable and deletable. |
+| **@Release** | A suggested view, empty until you promote to it. Renameable and deletable. |
 
-### Retention Policies and Storage
+@Local is not the "internal packages" view. It is everything the feed holds, which is why it is the view you point consumers at when you want a resolvable package graph. @Prerelease and @Release are conventions, not built-in behavior, and nothing lands in them until a Contributor promotes a version.
 
-Azure Artifacts charges per gigabyte of storage. Retention policies automatically delete old package versions to manage storage costs.
+Two consequences to design around:
 
-**Retention strategies:**
-- **Time-based:** Keep packages published in the last 90 days
-- **Count-based:** Keep the 10 most recent versions per package
-- **Version-based:** Keep Release versions indefinitely, delete Prerelease versions after 30 days
+- **A view grants access to the feed through that view.** Someone with permission on @Release can download the packages in it even without direct access to the feed. Hiding packages means restricting the feed *and* its views.
+- **Promoted packages are exempt from retention policies.** Promotion is the mechanism for saying "never clean this up", which is useful when deliberate and a slow storage leak when it happens by default.
 
-**Deleting packages:**
-When you delete a package version, dependent applications cannot download it. This is rarely done in production; instead, versions are soft-deleted or marked deprecated.
+---
 
-### Views: Release, Prerelease, Local
+### Upstream Sources and Resolution Order
 
-[Views](https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/views){:target="_blank" rel="noopener noreferrer"} are filtered subsets of a feed that show different package versions. Organizations use views for package promotion workflows.
+[Upstream sources](https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-sources){:target="_blank" rel="noopener noreferrer"} connect a feed to public registries (nuget.org, npmjs.com, Maven Central, PyPI, crates.io) and to other Azure Artifacts feeds. A package installed through an upstream is automatically saved into your feed, so a later outage at the public registry does not stop your builds.
 
-**Standard views:**
+The reason this matters for security is the **resolution order**, which Azure Artifacts fixes rather than leaving to the client:
 
-| View | Contains | Use Case |
-|------|----------|----------|
-| **Release** | Stable versions only | Production consumption |
-| **Prerelease** | Beta and RC versions | Testing and staging |
-| **Local** | Packages published to this feed | Internal packages |
+```
+  restore request for "internal.logging 2.1.0"
+              │
+              v
+  ┌───────────────────────────────────┐
+  │ 1. Published directly to the feed │──found──> serve it, stop
+  └───────────────┬───────────────────┘
+                  │ not found
+                  v
+  ┌───────────────────────────────────┐
+  │ 2. Already saved from an upstream │──found──> serve it, stop
+  └───────────────┬───────────────────┘
+                  │ not found
+                  v
+  ┌───────────────────────────────────┐
+  │ 3. Upstream sources, in the order │──found──> save into feed,
+  │    listed in feed settings        │           then serve it
+  └───────────────┬───────────────────┘
+                  │ not found
+                  v
+              restore fails
+```
 
-**Promotion workflow:**
-1. Developers publish package `mylib@1.0.0-beta.1` to Prerelease view
-2. QA tests in staging environment using Prerelease view
-3. Package is promoted to Release view
-4. Production applications consume from Release view
+A package you published wins over anything on a public registry with the same name and version. That closes the dependency confusion hole, but only if the client asks the feed the question. Clients like NuGet query several configured sources in parallel and take the first response, so the protection depends on your configuration file naming **one feed and nothing else**:
 
-Without views, promoting packages requires version numbering discipline (1.0.0-beta → 1.0.0-release). Views provide a mechanical way to gate access to versions.
+```xml
+<packageSources>
+  <clear />
+  <add key="FabrikamFiber" value="https://pkgs.dev.azure.com/fabrikam/_packaging/FabrikamFiber/nuget/v3/index.json" />
+</packageSources>
+```
+
+The `<clear />` matters. NuGet merges configuration files up the directory tree and from the machine-level config, so without it a developer's global nuget.org entry sits alongside your feed and the ordering guarantee is gone.
+
+Three operational behaviors that surprise people:
+
+- **You cannot publish a version that already exists upstream.** With the nuget.org upstream enabled, publishing your own `Newtonsoft.Json 10.0.3` is rejected. Overriding it means disabling the upstream, publishing, and re-enabling.
+- **Packages saved from upstream stay after the upstream is removed.** Disabling an upstream does not evict what it already cached.
+- **New public packages take time to appear.** Expect a 3 to 6 hour delay between a push to a public registry and availability through an upstream. Feed-to-feed upstreams within Azure Artifacts propagate in minutes.
+
+Custom upstream sources, pointing at a registry Microsoft does not list, are supported for npm only.
+
+---
+
+### Storage, Retention, and Deletion
+
+Azure Artifacts bills by storage, with **2 GiB free per organization**. Hitting the cap is not a soft limit: publishing new artifacts stops until you either delete packages or set up billing and switch the usage limit to pay-as-you-go.
+
+What counts toward billed storage:
+
+| Counts | Does not count |
+|---|---|
+| All package types in all feeds | Pipeline artifacts |
+| Packages saved from upstream sources | Pipeline caching |
+| Packages sitting in the recycle bin | |
+
+Deleted packages go to a **recycle bin for 30 days** and keep consuming storage the whole time. Emptying it manually is the fast route back under the cap. Storage metrics refresh within 24 hours and sometimes 48, so a deletion does not immediately restore your ability to publish.
+
+**Retention policies** delete old versions automatically, configured per feed by maximum versions per package and by days since last download. Two constraints shape how well they work:
+
+- Packages **promoted to a view are exempt**, so a promotion-heavy workflow can leave retention with nothing to delete.
+- Recently downloaded packages are protected by the days-since-download setting, which is what stops retention from breaking a build that still depends on an old version.
 
 ---
 
 ## Architecture Patterns
 
+### Choosing a Feed Layout
+
+```
+        Do other projects in the org need these packages?
+                          │
+              ┌───────────┴───────────┐
+             no                      yes
+              │                       │
+              v                       v
+      Project-scoped feed     Organization-scoped feed
+              │                       │
+              └───────────┬───────────┘
+                          v
+        Do dev and production consumers need
+        different permissions, not just different versions?
+                          │
+              ┌───────────┴───────────┐
+             no                      yes
+              │                       │
+              v                       v
+        One feed with            Separate feeds per
+        @Prerelease and          stage, promoted by
+        @Release views           a release pipeline
+```
+
+Views are simpler and keep one URL in every configuration file. Separate feeds are the answer only when production consumers must not be able to see prerelease packages at all, since a view restricted to specific people gets close but still lives inside the same feed.
+
+---
+
 ### Inner-Source with Azure Repos
 
-Inner-source applies open-source principles to internal projects: clear documentation, welcoming contribution processes, and transparent decision-making.
+Inner-source applies open-source practice to internal projects: readable documentation, a welcoming contribution path, and transparent ownership.
 
 **Pattern:**
-- Shared library repositories are public within the organization
-- Clear README with usage and contribution guidelines
-- Pull requests from other teams are encouraged
-- Ownership is clear (team or guild owns the library)
-- Release cadence is documented
-
-**Benefits:**
-- Teams reuse libraries instead of reimplementing
-- Knowledge spreads across organizational silos
-- Reduces duplication and maintenance burden
-- Encourages code quality (open code is more scrutinized)
+- Shared library repositories are readable across the organization
+- A README covers usage and how to contribute
+- Pull requests from other teams are expected, not tolerated
+- One team or guild owns the library and decides what merges
+- Release cadence is written down
 
 **Requirements:**
-- Repository visibility: projects must grant read access to other teams
-- Documentation: clear enough for external teams to understand and contribute
-- Code review discipline: maintained for all PRs including internal contributions
-- Ownership: clear who accepts/rejects external contributions
+- Repository permissions that grant read access beyond the owning team
+- Documentation good enough for someone with no context
+- Automatically included reviewers with path filters, so the owning team is pulled into every external contribution without anyone remembering to add them
+- A stated policy on what gets accepted
 
-### Shared Library Distribution Through Artifacts
+The reviewer automation is what makes this survive contact with a busy team. Inner-source fails when external pull requests sit unreviewed, and a path-filtered reviewer policy is the mechanism that stops that.
 
-Shared libraries are published to Azure Artifacts feeds, making them available to all teams as package dependencies.
+---
+
+### Shared Library Distribution
 
 **Pattern:**
-1. Team A maintains shared library `shared.logging` in Git
-2. CI/CD publishes package `SharedLogging` to organization-scoped feed
-3. Team B adds `SharedLogging` package to their project
-4. Team B receives updates as new versions are published
-5. Deprecated versions are automatically updated via retention policies
+1. Team A maintains `shared.logging` in Git
+2. A pipeline packs and publishes `SharedLogging` to an organization-scoped feed, using a build identity with the Feed Publisher role
+3. Team B references the package with a version constraint
+4. New versions flow to Team B on their next restore, within the constraint they set
+5. Retention deletes old versions that nothing has downloaded recently
 
 **Versioning discipline:**
-- Major version bump: breaking API changes (Team B must update code)
-- Minor version bump: new features (backward compatible)
-- Patch version bump: bug fixes (automatic if using semantic versioning)
+- Major bump for breaking API changes, which Team B has to act on
+- Minor bump for backward-compatible features
+- Patch bump for fixes
 
 **Dependency management:**
-- Git stores version constraints (`SharedLogging >= 1.0.0, < 2.0.0`)
-- Package manager resolves to available versions
-- Explicit version pinning prevents surprises in production
+- Version constraints live in the consuming project (`SharedLogging >= 1.0.0, < 2.0.0`)
+- Lock files pin the resolved version so builds are reproducible
+- Because published versions are immutable, a lock file pointing at `1.4.2` will always get the same bytes
+
+---
 
 ### Package Promotion Workflows
 
-Packages move through feeds or views as they progress from development to production.
+Packages move toward production either by changing view or by moving between feeds.
 
-**Pattern with multiple feeds:**
+**Views-based promotion (single feed):**
+1. A pipeline publishes `mylib 1.0.0-beta.1`, which lands in @Local
+2. QA consumes @Local and tests
+3. A release pipeline promotes `1.0.0` to @Release
+4. Production consumers point at the @Release view URL
 
-| Feed | Environment | Policy |
-|------|-------------|--------|
-| **dev-feed** | Development | All versions allowed; auto-delete old versions |
-| **staging-feed** | Staging | Stable and RC versions only; no auto-delete |
-| **prod-feed** | Production | Stable versions only; immutable; full audit |
+**Feed-based promotion (multiple feeds):**
 
-**Promotion process:**
-1. Developer publishes `mylib@1.0.0-beta.1` to dev-feed
-2. QA tests using dev-feed
-3. Release engineering promotes `1.0.0` to staging-feed
-4. Final testing in staging environment
-5. Release engineering promotes `1.0.0` to prod-feed
-6. Production applications pull from prod-feed
+| Feed | Consumers | Policy |
+|------|-----------|--------|
+| **dev-feed** | Development | Everything published; aggressive retention |
+| **staging-feed** | Staging | Release candidates promoted from dev |
+| **prod-feed** | Production | Stable versions only; Feed Publisher restricted to the release pipeline identity |
 
-**Alternative: Views-based promotion:**
-- Single feed with Release, Prerelease, Local views
-- Promotion changes which view the package appears in
-- Simpler than managing multiple feeds; less permission flexibility
+Feeds give you a separate permission boundary per stage. Views give you one URL and less to administer, and promoted packages are exempt from retention automatically. Most teams should start with views and move to feeds only when a permission requirement forces it.
+
+---
 
 ### Integration with Azure Pipelines
 
-Azure Pipelines can both publish and consume packages from Artifacts feeds.
+**Publishing:** a build task compiles, a pack task produces the `.nupkg` or `.tgz`, and a push task uploads to the feed.
 
-**Publishing from Pipelines:**
-1. Build task compiles code
-2. Pack task creates .nupkg or .tgz
-3. Publish task uploads to feed
-4. Package is available for download
+**Consuming:** a restore task pulls dependencies from the feed, resolving through the upstream order above.
 
-**Consuming from Pipelines:**
-1. CI task restores dependencies from feed
-2. Feed resolves versions based on constraints
-3. Build compiles with resolved dependencies
+Authentication for a feed in the same organization does not need stored credentials at all. The pipeline's build identity authenticates automatically once it holds the right feed role: Collaborator to restore, Feed Publisher to push. For NuGet specifically, the **NuGet Authenticate** task wires up the credential provider, because Azure Artifacts does not accept a personal access token passed as a NuGet API key.
 
-**Secret management:**
-- Credentials to access feeds are stored in Azure Key Vault
-- Pipelines retrieve credentials at runtime
-- No credentials in source code or configuration
+Cross-organization feeds are the case that needs an explicit credential, and that is where a service connection or a token from Key Vault belongs.
 
 ---
 
 ## Security and Governance
 
-### Repository-Level vs Branch-Level Permissions
+### Feed and Repository Access
 
-Permissions determine who can read, modify, and delete repository content.
+Repository access and feed access use different models, and conflating them causes over-granting.
 
-**Repository-level:**
-- Controls access to the entire repository
-- Assigned to groups (teams, departments)
-- Simple: entire repo is visible or not
+Repositories use Azure DevOps permissions inherited down the project, repository, branch chain, with Readers, Contributors, and administrator groups as the starting point. Feeds use the four feed roles, assigned per feed, and do not inherit from project membership beyond the administrator groups.
 
-**Branch-level:**
-- Controls access to specific branches
-- Allows release branches to require elevated approval
-- Example: `main` branch requires additional review; `develop` branch is open
-
-**Permission hierarchy:**
-1. Project-level permissions (baseline)
-2. Repository-level permissions (override project)
-3. Branch-level permissions (override repository)
-
-### Feed Permissions and Upstream Source Trust
-
-Feed permissions control who can publish and consume packages.
-
-**Permission types:**
-- **Readers:** Can download packages
-- **Contributors:** Can publish packages
-- **Administrators:** Can manage feed settings and permissions
-
-**Upstream source trust model:**
-- If you add nuget.org as an upstream, your feed trusts all packages on nuget.org
-- A compromised package on nuget.org becomes available to applications using your feed
-- Organizations often block specific upstream versions or enable package verification
-
-### Audit Logging
-
-Both Repos and Artifacts maintain audit logs showing all actions.
-
-**Repository audit:**
-- Who made commits and when
-- Who reviewed and approved PRs
-- Branch policy violations
-- Permission changes
-
-**Artifacts audit:**
-- Who published packages and when
-- Package promotion actions
-- Upstream source changes
-- Permission changes
-
-**Access pattern:**
-Azure DevOps logs are centralized in the Activity page and can be streamed to Log Analytics for long-term retention and alerting.
-
-### Credential Management for Feeds
-
-Applications and CI/CD pipelines need credentials to access feeds (especially private ones).
-
-**Credential types:**
-
-| Type | Use Case | Management |
-|------|----------|------------|
-| **Personal Access Tokens (PATs)** | Manual development; CI/CD; scripts | User-managed; should be rotated regularly |
-| **Service Connections** | Azure Pipelines | Managed through Azure DevOps; encrypted storage |
-| **Managed Identity** | AKS, App Service, Azure Automation | No credential storage; identity-based access |
-
-**Best practice:**
-- Use managed identity whenever possible (AKS, App Service)
-- Use service connections for Azure Pipelines
-- Use PATs only for local development (short-lived, limited scope)
-- Never commit credentials to source code
+Pipeline build identities are the one place the two models overlap. Such an identity appears in both, so granting a pipeline broad feed access grants that access to everyone who can edit the pipeline's YAML.
 
 ---
 
-## AWS Comparison Table
+### Upstream Source Trust
 
-Architects familiar with AWS will find these equivalents useful.
+Adding nuget.org as an upstream means your feed will serve packages from nuget.org, and a compromised package there reaches applications restoring from your feed. What the upstream model gives you in exchange:
 
-| Concept | AWS | Azure DevOps |
-|---------|-----|--------------|
-| **Source control** | CodeCommit (Git) | Azure Repos (Git) |
-| **Branch policies** | Minimal; limited protection rules | Rich policies: reviewers, build validation, comment resolution |
-| **Code review** | Pull requests basic | Advanced: draft PRs, auto-complete, voting |
-| **Repository organization** | One repo per service; regional | Multiple repos per project; organization-wide |
-| **Package storage** | CodeArtifact (Maven, npm, PyPI) | Azure Artifacts (NuGet, npm, Maven, Python, Universal) |
-| **Package promotion** | Repositories with different retention | Feeds with views (Release, Prerelease, Local) |
-| **Upstream caching** | External repository connections | Upstream sources (nuget.org, npmjs.com, etc.) |
-| **CI/CD integration** | CodePipeline (separate service) | Azure Pipelines (integrated; shared infrastructure) |
-| **Audit trail** | CloudTrail (infrastructure events only) | Activity log (detailed repo and package events) |
-| **Permissions model** | IAM roles and resource policies | Azure RBAC + repository/branch-level permissions |
-| **Access control granularity** | Coarse (IAM is account-wide) | Fine-grained (per-repo, per-branch, per-feed) |
+- Every package pulled through an upstream is **saved into your feed with its original metadata**, so you can verify what you actually consumed rather than what the registry currently serves
+- The resolution order means an internally published name always wins
+- Only Collaborators and above can cause a new package to be saved, so a Feed Reader consuming your feed cannot introduce a new external dependency into it
+- Removing an upstream stops new packages arriving without breaking builds that depend on already-cached ones
+
+None of that vets package contents. Dependency scanning through GitHub Code Security is the control that examines what is in the package rather than where it came from.
+
+---
+
+### Audit Logging
+
+Azure DevOps auditing is narrower than most guides suggest, and four constraints decide whether it can answer your compliance question at all:
+
+- It is **in public preview** and **off by default**. Turn it on at Organization settings > Policies > Log Audit Events.
+- It requires an organization **backed by Microsoft Entra ID**. It is unavailable for organizations that are not, and unavailable on Azure DevOps Server.
+- It is **organization-level**, covering state changes such as permission changes, policy changes, resource deletions, and PAT lifecycle events. It does not record commits, pull request approvals, or package downloads. Those live in Git history, the pull request itself, and feed telemetry.
+- Events are retained for **90 days** and then deleted.
+
+Two documented blind spots: Azure DevOps does not log sign-in events, and it does not log membership changes made inside a Microsoft Entra group. Both are visible only in the Entra audit logs.
+
+For retention beyond 90 days, either export the log as CSV or JSON, or configure **audit streaming** to a SIEM. Streaming is the right answer for anything a compliance program depends on, because the export is a manual action nobody will remember to take on day 91.
+
+---
+
+### Credentials for Feeds and Repos
+
+| Type | Use for | Notes |
+|------|---------|-------|
+| **Microsoft Entra tokens** | Scripts and unplanned requests | Microsoft's recommended default. Obtainable through the Azure CLI. Short-lived and auditable in Entra. |
+| **Managed identities and service principals** | Azure-hosted services and non-interactive automation | No stored credential. Add the identity to the organization and grant it the feed role or repository permission. |
+| **Build identities** | Azure Pipelines reaching feeds in the same organization | Automatic. Grant the feed role, store nothing. |
+| **Credential providers** | Local development | Git Credential Manager for repos, Azure Artifacts Credential Provider for feeds. Both broker interactive sign-in instead of holding a token. |
+| **Personal access tokens** | Last resort, where nothing above is supported | Tied to the creating user, so they die when that person leaves. |
+
+Microsoft's own guidance is to avoid PATs where an alternative exists, and the operational details back that up:
+
+- A PAT is **always tied to the user identity that created it**. Service principals and managed identities cannot create or manage PATs, so a PAT used by automation is a person's credential wearing a service's name.
+- Organization administrators can restrict **full-scoped PATs**, restrict **global PATs** spanning organizations, and enforce a **maximum lifetime**. A 30 to 90 day ceiling is the usual setting.
+- On an Entra-backed organization, a PAT goes inactive if the owner does not complete a full sign-in within 90 days, which produces authentication failures nobody expects.
+- PATs leaked into public GitHub repositories are detected and **automatically revoked** unless that policy is disabled.
+- **Azure Artifacts does not accept a PAT as a NuGet API key.** Use the Azure Artifacts Credential Provider locally and the NuGet Authenticate task in pipelines.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Weak Branch Policies
+### Pitfall 1: Policies Set Per Repository, So New Repositories Have None
 
-**Problem:** Release branches have no code review requirement. Anyone can merge directly to main.
+**Problem:** Someone configured branch policies on `main` in each existing repository by hand. Six months later the project has fifteen more repositories, and nobody remembers the checklist.
 
-**Result:** Untested or unreviewed code reaches production. No traceability. Compliance audits fail.
+**Result:** Unreviewed code reaches production through whichever repository was created most recently, and a compliance audit finds inconsistent controls across repositories that look identical.
 
-**Solution:** Enforce minimum two-reviewer approval on main, require successful builds, and require linked work items. Use branch policies as guardrails, not suggestions.
+**Solution:** Set the policy once as a cross-repo policy on **Protect the default branch of each repository**, which covers repositories created later. Set repository policies at the **All Repositories** level for the same reason. Watch the case sensitivity of branch-name patterns, and audit who holds **Bypass policies when completing pull requests**.
 
 ---
 
 ### Pitfall 2: Publishing Secrets to Feeds
 
-**Problem:** A developer accidentally publishes a package containing API keys or database credentials.
+**Problem:** A build packages a config file containing an API key, and the package is published to a feed other teams consume.
 
-**Result:** Credentials are exposed to anyone with read access to the feed. Attackers can compromise systems.
+**Result:** The credential is readable by everyone with feed access, and by everyone with access to any view on that feed. Because package versions are immutable, you cannot patch `1.0.0` in place. You delete it, rotate the secret, and publish a new version.
 
-**Solution:** Scan packages before publishing (use secret scanning tools). Educate developers on secrets management. Use Azure Key Vault for runtime secrets, never package them.
-
----
-
-### Pitfall 3: Unconstrained Upstream Sources
-
-**Problem:** Feed has nuget.org as upstream with no version constraints. Applications pull any available version.
-
-**Result:** Vulnerable packages are automatically pulled. Dependency confusion attacks succeed (attacker publishes `internal.library@1.0.0` to nuget.org, applications pull attacker's package instead of internal version).
-
-**Solution:** Use upstream package verification. Pin major versions in dependency specifications. Regularly audit upstream packages for vulnerabilities.
+**Solution:** Enable secret scanning and push protection through GitHub Secret Protection so the secret never reaches the repository. Audit what the pack step includes rather than trusting the default glob. Treat any exposed credential as compromised and rotate it, because a consumer may already have cached the package locally.
 
 ---
 
-### Pitfall 4: Storing Packages in Version Control
+### Pitfall 3: Configuration That Defeats the Upstream Resolution Order
 
-**Problem:** Compiled .jar files and .nupkg files are committed to Git.
+**Problem:** A `nuget.config` lists both the internal feed and nuget.org as sources. An attacker publishes a package to nuget.org with the same name as an internal library and a higher version number.
 
-**Result:** Repository becomes bloated. Clones are slow. Build artifacts create merge conflicts.
+**Result:** NuGet queries both sources in parallel and takes the first response. The attacker's package can win, and the internal-packages-win guarantee never applies because the client was never asked to resolve through the feed alone.
 
-**Solution:** Use .gitignore to exclude build artifacts. Publish compiled packages to Azure Artifacts feeds only. Retrieve packages from feeds at build time.
-
----
-
-### Pitfall 5: Not Rotating Feed Credentials
-
-**Problem:** PAT used for feed access was created years ago. Same PAT is used across multiple projects.
-
-**Result:** If the PAT is compromised, all projects are affected. No way to revoke access to specific projects.
-
-**Solution:** Use short-lived PATs (limited to 90 days). Use different credentials per project. Prefer managed identities and service connections over PATs.
+**Solution:** Name exactly one feed in the configuration file and precede it with `<clear />` so higher-level configuration files cannot reintroduce a second source. Reach public registries through that feed's upstream sources, not alongside it. Order upstreams deliberately, putting public registries first unless your organization rebuilds specific open-source packages internally, in which case that source goes first.
 
 ---
 
-### Pitfall 6: No Deprecation Policy for Shared Libraries
+### Pitfall 4: Build Outputs Committed to Git
 
-**Problem:** Shared library version 1.0 is 5 years old. Nobody maintains it. Teams still depend on it.
+**Problem:** Compiled `.jar` and `.nupkg` files get committed. The repository grows to several gigabytes and clone times climb.
 
-**Result:** Bugs in old version are never fixed. Teams cannot upgrade to new versions without rewriting code. Maintaining the library becomes a maintenance burden.
+**Result:** Slow clones and CI checkouts, binary merge conflicts nobody can resolve, and history that cannot be shrunk without a rewrite that invalidates everyone's local clone.
 
-**Solution:** Establish a deprecation policy: announce EOL date, provide migration path, set retention policy to auto-delete old versions. Encourage teams to upgrade to new major versions with backward-incompatible but better-designed APIs.
+**Solution:** `.gitignore` is a convention that a determined `git add -f` walks past. Back it with the **Maximum file size** repository policy, set at the All Repositories level, so the push is rejected at the server. Publish compiled output to a feed and restore it at build time. Where large binaries genuinely belong in the repository, use Git-LFS rather than raising the file size limit.
+
+---
+
+### Pitfall 5: Automation Running on a Person's PAT
+
+**Problem:** A release pipeline authenticates to a feed with a PAT created years ago by an engineer who has since changed teams. The same PAT is reused across several projects.
+
+**Result:** The pipeline stops the day the account is disabled or the token hits its expiry, usually during a release. Because the token is broadly scoped and shared, revoking it breaks everything at once, and the audit trail attributes every action to a person who did not perform it.
+
+**Solution:** Move the pipeline onto its build identity, which needs no stored credential for same-organization feeds, or onto a service principal or managed identity for anything outside. Where a PAT is genuinely the only option, scope it to a single use, enforce a maximum lifetime through organization policy, and record where it is used so rotation is a known list rather than an archaeology exercise.
+
+---
+
+### Pitfall 6: Retention Policies That Never Delete Anything
+
+**Problem:** A feed has a retention policy keeping the ten most recent versions per package, and storage keeps growing anyway. The organization eventually hits the 2 GiB limit and publishing stops mid-release.
+
+**Result:** A hard stop on publishing at the worst moment, and the obvious fix (delete old packages) does not free space for up to 30 days because deleted packages sit in the recycle bin.
+
+**Solution:** Check what is exempt before trusting the policy. Packages promoted to a view are never deleted by retention, so a workflow that promotes every build makes retention a no-op. Packages saved from upstream sources count toward storage, so a feed proxying a large public registry grows without anyone publishing anything. Empty the recycle bin explicitly, monitor usage at Organization settings > Storage rather than waiting for the failure, and set up billing before the cap rather than during an incident.
+
+---
+
+### Pitfall 7: No Deprecation Path for a Shared Library
+
+**Problem:** A shared library's 1.x line is years old and unmaintained. Teams still depend on it because upgrading to 2.x means code changes nobody has scheduled.
+
+**Result:** Bugs in the old version go unfixed, and the owning team maintains two versions indefinitely.
+
+**Solution:** Deprecate rather than delete. A Feed Publisher can mark a version deprecated, which surfaces a warning to consumers without breaking their builds, unlike deletion. Pair that with a stated end-of-support date, a written migration path, and a retention policy that eventually removes versions nothing downloads. Deleting a version that consumers still reference breaks their builds immediately and cannot be undone after 30 days.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure Repos enforces code quality through branch policies, not process.** Branch policies act as technical guardrails, preventing code from merging until review, tests, and linked work items are satisfied. Policies work regardless of developer skill or deadline pressure.
+1. **Repository policies and branch policies solve different problems.** Repository policies (file size, path validation, case enforcement, author email) reject a push at the server. Branch policies gate a merge. A guardrail that only exists at merge time does not stop a 400 MB binary landing in history.
 
-2. **Multiple repositories per project enable team autonomy while sharing DevOps infrastructure.** Teams can manage their own repositories with independent branch policies while all projects share the same work item tracking, Azure Pipelines templates, and audit logs.
+2. **Set protection cross-repo, not per repository.** A cross-repo policy protecting each repository's default branch covers repositories that do not exist yet, which is the only version of this control that survives a growing project. Branch-name patterns are case sensitive.
 
-3. **Pull request workflows are more than approval boxes.** Comment resolution, draft status, merge strategy, and work item linking create a complete code review and traceability system. Use these features to enforce discipline.
+3. **Setting any branch policy has two side effects.** The branch requires pull requests and can no longer be deleted. That second one is why policies on temporary branches break automatic branch deletion.
 
-4. **Branch strategies (Git Flow, GitHub Flow, trunk-based) are frameworks for branch organization, not replacements for branch policies.** The strategy you choose determines branch structure. Branch policies enforce code quality regardless of which strategy you adopt.
+4. **There is no branch naming policy.** Naming conventions are enforced with branch folder permissions, not branch policies. Path-filtered automatically included reviewers, not a named-users policy, is how you get the right team onto pull requests that touch sensitive code.
 
-5. **Azure Artifacts feeds provide more than storage.** Feeds enable package promotion (dev → staging → prod), upstream caching for transparent dependency management, and version control independent from Git history.
+5. **Code search is an extension and indexes only the default branch.** Install the Marketplace Code Search extension, and add up to five more searchable branches per repository if you need them.
 
-6. **Upstream sources create a trust relationship with external registries.** When you add nuget.org as an upstream, you trust all packages on nuget.org. Compromised upstream packages compromise your applications. Use upstream verification and regular audits.
+6. **TFVC is feature complete, not deprecated.** Git is the default for new projects and gets all future investment, but Microsoft maintains TFVC compatibility with no announced end date. The real reason it persists is server workspaces scaling to millions of files without Git-LFS.
 
-7. **Views enable package promotion without multiple feeds.** Release, Prerelease, and Local views allow packages to be promoted from development to production within a single feed, simplifying promotion workflows compared to managing separate feeds.
+7. **The feed role that matters is Collaborator.** Feed and Upstream Reader is what allows saving a package from an upstream source. Build identities get it by default; publishing needs Feed Publisher granted explicitly.
 
-8. **Inner-source principles drive shared library adoption.** Clear documentation, welcoming pull requests from other teams, and transparent ownership encourage reuse and reduce reimplementation across the organization.
+8. **The upstream resolution order is the dependency confusion defense, and configuration can defeat it.** Packages published to the feed win, then packages already saved from upstream, then upstream sources in order. That guarantee only holds if the client's configuration names one feed, with `<clear />` ahead of it.
 
-9. **Credentials to feeds should never be stored in repositories or configuration files.** Use managed identity when possible, service connections for Pipelines, and PATs only for local development with short expiration windows. Rotate credentials regularly.
+9. **@Local is the default view and contains everything, including upstream-saved packages.** Promotion to @Release is a convention you implement, and a promoted package becomes exempt from retention policies.
 
-10. **Repository and feed permissions should reflect organizational structure and risk.** Release branches and production feeds require elevated access. Development branches and dev feeds are more permissive. Align permissions with deployment risk, not arbitrary rules.
+10. **Azure Artifacts storage is capped at 2 GiB free and stops publishing when full.** Upstream-saved packages and the 30-day recycle bin both count; pipeline artifacts and caching do not. Audit logging is separate, in preview, off by default, Entra-only, and retains 90 days, so stream it to a SIEM if compliance depends on it.

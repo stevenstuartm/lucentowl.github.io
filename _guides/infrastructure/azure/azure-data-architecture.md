@@ -3,8 +3,8 @@ title: "Modern Data Architecture on Azure"
 layout: guide
 category: Azure
 subcategory: Analytics & Data Processing
-description: "Data architecture patterns on Azure including lakehouse, medallion architecture, data mesh, and modern analytics platforms using Data Lake Storage, Synapse, Databricks, and Microsoft Fabric."
-tags: [infrastructure, azure, analytics, architecture, scalability, governance, practical]
+description: "Data architecture patterns on Azure: the lakehouse, medallion layering, and data mesh, built on Data Lake Storage, Synapse, Databricks, Microsoft Fabric, and Purview."
+tags: [lakehouse, medallion-architecture, data-mesh, microsoft-fabric, delta-lake, governance, practical]
 ---
 
 ## What Is Modern Data Architecture
@@ -42,9 +42,9 @@ Azure's data platform provides a complete ecosystem: storage layers like Data La
 | **SQL analytics** | Redshift, Athena | Synapse Analytics (dedicated and serverless) |
 | **Spark processing** | EMR, Glue | Databricks (first-party partnership), Synapse Spark |
 | **Unified platform** | Separate services | Microsoft Fabric (integrates OneLake, Spark, SQL, Power BI) |
-| **Data governance** | AWS Glue Data Catalog, Lake Formation | Microsoft Purview (data discovery, classification, lineage) |
-| **Stream processing** | Kinesis, Lambda | Event Hubs, Stream Analytics, Kafka for Confluent |
-| **BI and visualization** | QuickSight | Power BI (deeply integrated with data platform) |
+| **Data governance** | AWS Glue Data Catalog, Lake Formation | Microsoft Purview (Data Map scanning and classification, Unified Catalog for discovery and lineage) |
+| **Stream processing** | Kinesis, Lambda | Event Hubs, Stream Analytics, Apache Kafka and Apache Flink on Confluent Cloud |
+| **BI and visualization** | Amazon Quick Sight (part of Amazon Quick Suite) | Power BI (deeply integrated with the data platform) |
 
 ---
 
@@ -181,7 +181,35 @@ The gold layer serves aggregated, business-ready data optimized for specific use
 | **Silver** | Data Lake Storage Gen2 | Synapse Spark, Databricks | Parquet files with quality gates |
 | **Gold** | Data Lake Storage Gen2 + Synapse SQL | Synapse SQL, Spark aggregations | Star schema, optimized for BI |
 
-The medallion architecture works because each layer is independent. You can rebuild silver without reprocessing bronze. You can create new gold tables without changing silver. Data flows left-to-right through quality gates, but consumers query gold directly.
+Batch and streaming sources converge on the same three layers, and each layer serves a different set of consumers:
+
+```
+  Batch sources                Stream sources
+  (databases, SaaS,            (Event Hubs, IoT Hub,
+   flat files, APIs)            CDC feeds)
+        │                             │
+        │  Data Factory copy          │  Stream Analytics,
+        │  activities, scheduled      │  Structured Streaming,
+        │  or event-triggered         │  Eventstream
+        └──────────────┬──────────────┘
+                       ▼
+                    BRONZE ──────────────▶ replay, audit, compliance
+                 raw, append-only,         (re-run silver logic against
+                 source structure           the original bytes)
+                 preserved
+                       │  dedupe, conform, quality rules
+                       ▼
+                    SILVER ──────────────▶ data science, exploratory
+                 cleansed, conformed,      Spark and SQL
+                 one row per entity
+                       │  aggregate, dimensional model
+                       ▼
+                     GOLD ──────────────▶ Power BI semantic models,
+                 star schemas,             reports, downstream apps
+                 pre-computed marts
+```
+
+The medallion architecture works because each layer is independent. You can rebuild silver without reprocessing bronze. You can create new gold tables without changing silver. Data flows top-to-bottom through quality gates, but consumers query the layer that matches their tolerance for raw data.
 
 ---
 
@@ -189,143 +217,179 @@ The medallion architecture works because each layer is independent. You can rebu
 
 ### Azure Data Lake Storage Gen2 (Foundation)
 
-Data Lake Storage Gen2 is the storage foundation for modern data architectures on Azure. It provides hierarchical namespaces (directories instead of flat object paths like S3), fine-grained access control through ACLs and RBAC, and massive scale at low cost.
+Data Lake Storage Gen2 is not a separate service or account type. It is a set of capabilities you unlock on a normal Azure Storage account by enabling the **hierarchical namespace** setting, so everything Blob Storage offers (access tiers, lifecycle management, immutability policies, the full redundancy matrix) still applies.
 
 **Key capabilities:**
-- Hierarchical namespace enables Hadoop-compatible paths and improves performance for operations on large directories
-- RBAC and POSIX ACLs provide granular access control (data governance at the file level)
-- Data Lake Storage Firewall restricts access by IP, virtual network, or service principals
-- Zone-redundant storage (ZRS) option for higher availability
-- Immutable storage option for compliance and data retention
+- The hierarchical namespace gives you real directories instead of flat object paths, so renaming or deleting a directory is a single atomic metadata operation rather than an enumeration of every blob sharing a prefix
+- The ABFS driver exposes the account over the `dfs.core.windows.net` endpoint, which makes it Hadoop-compatible and directly readable by Spark, Presto, and similar engines
+- Azure RBAC covers coarse-grained access at the account and container level; POSIX ACLs cover individual directories and files
+- The storage firewall restricts the public endpoint through four rule types: virtual network rules on subnets with a storage service endpoint, IP ranges, resource instance rules for Azure resources that cannot be isolated by network, and trusted-service exceptions
+- Data at rest is always encrypted, with Microsoft-managed or customer-managed keys
+
+**The ACL limit that shapes your design:** each file and directory holds a maximum of **32 ACL entries** (four are reserved, leaving roughly 28 usable), and access ACLs and default ACLs each get their own 32-entry budget. Assigning individual users or service principals burns through that budget quickly and forces a recursive re-apply every time someone joins or leaves. Always put a Microsoft Entra security group in the ACL entry and manage membership in Entra instead.
+
+ACL inheritance is also not what most readers expect. A *default* ACL on a directory is a template applied to children created **after** it is set. Existing children keep whatever they had, so changing permissions on a populated tree means a recursive update, not a single write at the top.
 
 **When to use:**
-- Foundation for any medallion architecture (all three layers can live here)
+- Foundation for any medallion architecture (all three layers can live in one account, separated by container or directory)
 - Cost-effective storage for historical data at any volume
-- Primary storage for data lakes and lakehouses
+- Primary storage for data lakes and lakehouses, including as the physical store behind Fabric OneLake
 
 ### Azure Data Factory (Orchestration)
 
 Data Factory is Azure's managed ETL service, providing visual workflow design, scheduling, and error handling for data movement and transformation.
 
+Every current Data Factory documentation page carries a successor notice naming **Data Factory in Microsoft Fabric** as "the next generation of Azure Data Factory" and directing new work there, while offering existing estates an upgrade path. Azure Data Factory is not retired and has no announced end date, so read this as a signal about where new build should start rather than as a migration deadline.
+
 **Capabilities:**
-- 90+ pre-built connectors to source systems and cloud services
+- A broad connector library spanning on-premises databases, SaaS applications, other clouds, and Azure services (Microsoft publishes no stable count, so verify the specific connector you need against the connector overview)
 - Visual pipeline designer for non-developers
-- Scheduled triggers and event-based triggers (files arriving in storage)
+- Exactly three trigger types: schedule, tumbling window, and event-based (storage events plus Event Grid custom events). Running a pipeline by hand is not a trigger type
 - Copy activity for bulk data movement with automatic partitioning
 - Lookup, filter, and conditional branching for dynamic pipelines
 - Monitoring and alerting on pipeline execution
 
+**Tumbling window is the trigger a data platform usually needs.** It is the only one that supports backfill, retry policies, concurrency limits, and window start/end variables, and the only one that waits for the pipeline run to finish rather than reporting success the moment it starts. A schedule trigger firing hourly gives you neither historical replay nor a guarantee that yesterday's run completed before today's began.
+
 **When to use:**
-- Bronze layer: Scheduled data ingestion from source systems
-- Silver layer: Orchestrating Spark transformations in Synapse or Databricks
+- Bronze layer: scheduled or event-driven ingestion from source systems
+- Silver layer: orchestrating Spark transformations in Synapse or Databricks
 - Data movement between cloud services or hybrid environments
 
 **Trade-offs:**
 - Lower code overhead than writing Spark transformations
-- But less flexible for complex transformation logic (push this to Spark)
-- Pricing is activity-based (price per run + DIU hours)
+- Less flexible for complex transformation logic, which belongs in Spark
+- Billing is per **activity** run, not per pipeline run, plus DIU-hours for copy activities on an Azure integration runtime and vCore-hours for data flows. Data flow **debugging** bills at the same vCore rate as execution, which is the line item that tends to surprise teams during development
 
 ### Azure Synapse Analytics (SQL + Spark)
 
-Synapse Analytics combines dedicated SQL pools (similar to Redshift), serverless SQL pools (similar to Athena), and Spark pools all in one service with shared storage.
+Synapse Analytics combines dedicated SQL pools (comparable to Redshift), serverless SQL pools (comparable to Athena), and Spark pools in one service over shared storage.
 
-**Dedicated SQL Pools:**
-- Provisioned compute for predictable performance (good for production gold layer)
-- Built-in data warehouse features (materialized views, PolyBase for querying external data)
-- Designed for large scans across historical data
-- Cost: per-DW-hour (scale up/down as needed)
+Every Synapse SQL documentation page carries a successor notice naming **Microsoft Fabric Data Warehouse** as the destination for new warehousing work, with a documented upgrade path and a migration assistant for dedicated pools. Synapse is not retired and has no announced end date, but a greenfield warehouse started on a dedicated pool today is being started on the older of two supported products.
 
-**Serverless SQL Pools:**
-- Query data directly in Data Lake Storage without loading into a warehouse
-- Pay per TB of data scanned
-- Faster time-to-value; no capacity planning
-- Good for exploratory queries and ad-hoc analysis
-- Less expensive than dedicated pools for intermittent use
+**Dedicated SQL pools:**
+- Provisioned compute for predictable performance, which suits a production gold layer
+- Materialized views are maintained automatically and synchronously, and the optimizer uses them without the query referencing them
+- Every table is spread across exactly **60 distributions** (hash, round-robin, or replicated), fixed at creation. Scaling changes the number of compute nodes, roughly DWU divided by 500, never the distribution count
+- Concurrent query execution caps at **128** and stops rising above DW6000c, so adding DWUs to a concurrency problem eventually does nothing
+- Result set caching is dedicated-pool only, **off by default**, capped at 1 TB per database, and cache hits consume no concurrency slot
+- Cost: per DWU-hour, and the pool can be paused
 
-**Spark Pools:**
+**Serverless SQL pools:**
+- Query files in Data Lake Storage without loading them into a warehouse
+- Read-only apart from CETAS. No DML, no tables, no materialized views, no triggers, and DDL limited to views and security objects
+- Reads Delta but cannot write it or time travel, and has a **30-minute query timeout that cannot be raised**
+- Billing is *data processed*, meaning storage reads plus **uncompressed** intermediate transfer plus CETAS writes, rounded up per megabyte with a 10 MB minimum per query. A `SELECT *` against a 1 TB Parquet table compressed 5:1 can process around 6 TB
+- There is no result set caching, so a repeated query is billed again every time
+- Cost budgets, set in TB per day, week, or month, reject the **next** query. They never terminate a query already running
+
+**Spark pools:**
 - Distributed Spark clusters for transformation and ML
-- Integrated with Jupyter notebooks for interactive development
-- Supports Python, Scala, SQL via Spark
-- Pay per Spark node per hour (scales to zero)
+- Notebook-based interactive development in Python, Scala, SQL, and .NET
+- Billed per node-hour, with auto-pause after a configurable idle period
 
 **When to use Synapse:**
-- SQL analytics: Dedicated pools for consistent gold-layer serving, serverless for ad-hoc queries
-- Transformation: Spark pools for medallion silver layer processing
-- Unified workspace: Query Spark and SQL data in the same environment
+- SQL analytics: dedicated pools for consistent gold-layer serving, serverless for ad-hoc exploration of lake files
+- Transformation: Spark pools for silver-layer processing
+- Unified workspace: query Spark and SQL data in the same environment
 
 **Trade-offs:**
 - More Azure-integrated than open-source alternatives
-- Dedicated pools require capacity planning; serverless is more elastic
-- Requires SQL knowledge for SQL pools (unlike open-source Spark-only alternatives)
+- Dedicated pools require capacity planning. Serverless is elastic but harder to budget, because cost tracks bytes processed rather than time
+- The Fabric successor notice means new product investment is going elsewhere
 
 ### Azure Databricks (Spark + ML)
 
-Databricks is a managed Spark platform built on top of Delta Lake, providing distributed computing for transformations, ML, and analytics. Databricks and Azure have a deep partnership; Databricks is the recommended Spark engine on Azure.
+Azure Databricks is a first-party managed Spark platform, sold and supported through Azure rather than through the Marketplace, providing distributed computing for transformations, ML, and analytics.
 
 **Key capabilities:**
-- Managed Spark clusters that scale automatically
-- Delta Lake for ACID transactions and schema enforcement on data lake files
-- Unity Catalog for centralized data governance and lineage across workspaces
+- Managed Spark clusters that scale automatically, plus serverless SQL warehouses
+- Delta Lake for ACID transactions and schema enforcement over files in the lake
+- Unity Catalog as the governance layer for data and AI assets across workspaces
 - Notebooks for interactive development and documentation
 - Jobs for scheduled transformations and ML training
-- AutoML for rapid model development
+- MLflow-backed experiment tracking, model registry, and model serving
+
+**Unity Catalog is no longer an add-on decision.** It is enabled automatically for every Azure Databricks workspace created after **9 November 2023**, and older workspaces have a documented upgrade path. Objects follow a three-level `catalog.schema.object` namespace, tables and volumes are either *managed* (Unity Catalog owns governance and the file lifecycle) or *external* (governance only), and managed tables use Delta or Iceberg. Access control, lineage, audit logging, data classification, and quality monitoring all hang off that one layer, so a design that treats governance as a later phase is designing against the product.
+
+**The pricing tier decision has an expiry date.** Azure Databricks announced end of life for **Standard tier** workspaces. Existing workspaces have until **1 October 2026** to move to Premium, and anything left is upgraded automatically on that date. Any guidance that still weighs Standard against Premium is planning around a tier that is going away.
 
 **When to use Databricks:**
-- Silver layer: Complex transformations and quality checks
-- ML workloads: Feature engineering, model training, batch inference
-- Multi-workspace governance: Unity Catalog provides cross-workspace data access
-- Data science and AI: Integrated ML tools and environments
+- Silver layer: complex transformations and quality checks
+- ML workloads: feature engineering, model training, batch inference
+- Multi-workspace governance: Unity Catalog spans workspaces and regions in a way per-workspace metastores cannot
+- Data science and AI: integrated ML tooling and environments
 
 **Trade-offs:**
-- More expensive than Synapse Spark for simple SQL queries
-- But more powerful for ML and Python-heavy workloads
-- Unity Catalog requires higher SKU; standard Databricks has workspace-level governance
+- More expensive than Synapse Spark for straightforward SQL work
+- More capable for ML and Python-heavy workloads
+- A second platform to staff, secure, and network alongside whatever else you run
 
 ### Microsoft Fabric (Unified Platform)
 
-Microsoft Fabric is the newest addition to Azure's data platform, integrating Data Lake Storage (OneLake), Spark, SQL, and Power BI into a single unified platform with shared governance through Purview.
+Microsoft Fabric is a SaaS analytics platform that puts storage, Spark, SQL, real-time processing, and Power BI on one shared compute and storage model. It is billed through Azure capacity (F SKUs) rather than as a set of separately provisioned services.
 
-**Components:**
-- **OneLake**: Cloud-native storage that works like OneDrive for data (shared across Fabric items)
-- **Data Engineering**: Spark notebooks and jobs
-- **Data Warehouse**: SQL analytics with traditional dimensional modeling
-- **Real-Time Analytics**: For high-frequency event processing
-- **Data Factory**: Pipelines for orchestration
-- **Power BI**: Visualization fully integrated with data
-- **Data Activator**: Automation based on data insights
+**Workloads:**
+- **Data Factory**: pipelines and dataflows for ingestion and orchestration
+- **Data Engineering**: Spark notebooks, jobs, and lakehouses
+- **Data Warehouse**: SQL analytics with dimensional modeling, storing natively in Delta
+- **Data Science**: model development with built-in experiment tracking and model registry
+- **Real-Time Intelligence**: eventstreams, eventhouses, and KQL for data in motion. **Activator** (formerly Data Activator) is the event-detection and rules engine inside this workload, not a separate one
+- **Databases**: operational SQL and mirrored databases, replicating sources such as Azure SQL, Cosmos DB, Databricks, and Snowflake into OneLake
+- **Power BI**: reporting and semantic models over the same data
+- **Industry Solutions** and **Fabric IQ** (preview) round out the current list
+
+**OneLake** is the storage layer beneath all of them, built on ADLS Gen2 and provisioned automatically with the tenant. Two features do most of the architectural work:
+
+- **Shortcuts** give zero-copy access to data that stays where it is, including ADLS Gen2, Amazon S3, Google Cloud Storage, and other OneLake locations. A lakehouse can present external data as its own tables without an ingestion pipeline
+- **Metadata virtualization** converts between Delta Lake and Apache Iceberg automatically, so an Iceberg table written by another engine reads as Delta inside Fabric, and Fabric's Delta tables read as Iceberg from outside. The feature currently targets Iceberg V2, requires source tables under 5,000 commits, and takes seconds to a couple of minutes to reflect a change
+
+Governance is not a separate purchase. Permissions, sensitivity labels, and auditing are powered by Microsoft Purview, and the **OneLake Catalog** is the tenant-wide surface for discovering and governing Fabric items.
 
 **When to use Fabric:**
-- Greenfield data platforms: Start here if choosing a new platform today
-- Organizations invested in Microsoft (Office 365, SQL Server, Power BI)
-- Simpler governance needs (single unified platform vs. multiple tools)
-- Organizations that want BI tightly integrated with data engineering
+- Greenfield data platforms, particularly where the Synapse and ADF successor notices point
+- Organizations already invested in Microsoft 365, SQL Server, and Power BI
+- Teams that want BI tightly coupled to data engineering rather than integrated after the fact
+- Workloads that benefit from Direct Lake, where Power BI reads Delta files in OneLake directly instead of importing or querying through DirectQuery
 
 **Trade-offs:**
-- Newer than Synapse and Databricks; ecosystem still maturing
-- Commitment to Microsoft stack (less option-picking than Synapse + Databricks)
-- Potentially higher cost than best-of-breed combinations for specialized use cases
+- Capacity sizing constrains the design, not just the invoice. Semantic model size limits scale with the F SKU, and F64 is the threshold below which every viewer still needs a Pro or PPU license
+- A commitment to the Microsoft stack, with less component-level choice than Synapse plus Databricks
+- Newer than Synapse and Databricks, and still moving quickly enough that feature availability should be verified against the docs rather than assumed
 
 ### Microsoft Purview (Governance)
 
-Purview provides centralized data discovery, classification, and lineage tracking across your data estate. It integrates with Data Lake Storage, SQL databases, Synapse, Databricks, and third-party systems.
+Purview provides data discovery, classification, and lineage across the estate, covering Data Lake Storage, SQL databases, Synapse, Databricks, Power BI, and third-party systems.
 
-**Capabilities:**
-- Automated data scanning and classification (PII, financial data, confidential)
-- Data catalog showing what data exists and where it came from
-- Lineage tracking from source systems through medallion layers to BI tools
-- Data glossary for business term definitions
-- Access management and data sharing through Purview
-- Sensitivity labeling for row-level and column-level security
+**Purview has two generations, and the older one is closed to new customers.** Microsoft Purview **Data Catalog (classic)**, **Data Health Insights (classic)**, and **Purview Workflow (classic)**, the products previously branded Azure Purview, are no longer taking on new customers and sit in customer support mode. Their documentation now lives under a `/purview/legacy/` path, which is the reliable tell. The current experience is **Unified Catalog** in the Microsoft Purview portal. Any design that names the classic governance portal at `web.purview.azure.com` is naming the previous product.
+
+**Data Map is the layer that survived.** It is still the PaaS scanning and classification engine that keeps an inventory of assets, their metadata, and their lineage, and it is what Unified Catalog runs on top of. Scanning, classification rules, and automated lineage capture are Data Map concerns.
+
+**Unified Catalog** adds the governance model on top:
+
+| Concept | What it does |
+|---------|--------------|
+| **Governance domains** | A boundary that aligns the catalog to the business (Finance, Marketing), effectively a mini-catalog per domain |
+| **Data products** | A named bundle of related assets (tables, files, reports) so consumers request one thing instead of fifteen tables |
+| **Critical data elements** | A logical grouping of the same concept across systems, mapping `CustID` and `CID` to one "Customer ID", with quality rules and access policies attached |
+| **Glossary terms** | Business vocabulary that carries policy, so terms applied to a data product propagate to its assets |
+| **Access policies** | Self-service access requests against data products, rather than hand-provisioned permissions at each source |
+| **Health controls and actions** | A governance score plus the concrete steps that improve it |
+| **Data quality** | Rules and scores at asset, data product, and governance domain level |
+
+Governance domains and data products map onto a data mesh almost one-to-one, which is why Unified Catalog is the piece that makes federated ownership tractable rather than just distributed.
+
+**Two things Purview does not do.** It does not enforce row-level or column-level security. Those are engine features in SQL and Spark, and a sensitivity label classifies rather than blocks. Purview's own in-place **data sharing** for Blob and ADLS Gen2 was retired, with support ending September 2025 and Fabric external data sharing as the replacement.
 
 **When to use Purview:**
 - Enterprises with regulatory requirements (GDPR, HIPAA, SOX)
-- Organizations where many teams produce and consume data (data mesh)
-- Need for centralized visibility into what data exists and how it's being used
+- Organizations where many teams produce and consume data, particularly a data mesh
+- Any estate where "what data do we have, and where did it come from" is not answerable from memory
 
 **Trade-offs:**
-- Adds complexity and cost
-- Requires discipline to maintain accurate lineage
-- Classification policies can be overly aggressive (flag too much data as sensitive)
+- Adds cost and an ongoing curation obligation
+- Lineage stays accurate only if the pipelines that produce it keep publishing it
+- Classification rules tend to over-flag before they are tuned, which trains people to ignore the labels
 
 ---
 
@@ -357,9 +421,10 @@ Implementing data mesh on Azure requires several layers:
 - Each domain team gets their own Synapse workspace or Databricks workspace
 
 **Governance layer:**
-- Purview provides centralized cataloging and lineage across domains
+- Purview Data Map scans across domains, and Unified Catalog governance domains give each team its own slice of the catalog without fragmenting it
+- Data products are the unit domains publish, and self-service access policies replace per-source permission requests
 - Unity Catalog (Databricks) enables cross-workspace data sharing with governance
-- Entra ID (Azure AD) controls access to data products
+- Microsoft Entra ID controls the identities behind every access decision
 
 **Platform layer:**
 - Self-serve tools (notebooks, SQL editors) let domains produce and transform data
@@ -384,7 +449,7 @@ Product Domain (Databricks workspace)
 └── Gold: Feature adoption, user cohorts
 ```
 
-Domains share gold-layer data products through Purview discovery and Unity Catalog or Synapse's shared database features.
+Domains publish gold-layer tables as Purview data products, which is what makes them discoverable and requestable outside the owning team. Unity Catalog and Fabric OneLake shortcuts handle the physical sharing so consumers read the data in place rather than receiving a copy.
 
 ### Challenges of Data Mesh
 
@@ -394,10 +459,10 @@ Domains share gold-layer data products through Purview discovery and Unity Catal
 - **Organizational readiness**: Requires domain teams to own data quality and understand governance responsibilities
 
 **Mitigation:**
-- Use Purview to enforce minimum governance standards
-- Define shared patterns (medallion architecture, naming conventions, quality rules)
-- Use platform teams to provide templates and automation
-- Start small with 2-3 domains before scaling
+- Use Unified Catalog health controls and data quality rules to set a floor every domain has to clear
+- Define shared patterns (medallion layering, naming conventions, quality rules)
+- Have a platform team supply templates and automation rather than review requests
+- Start with two or three domains before scaling
 
 ---
 
@@ -409,10 +474,10 @@ Modern data architectures must support both historical batch analytics and real-
 
 **Azure Event Hubs:**
 - Managed Kafka-compatible service for high-throughput event ingestion
-- Partitioned for parallelism (scale by adding partitions)
-- Automatic retention (1-7 days default, up to 90 days with Kafka API)
-- Real-time capture to Azure Blob Storage for archive
-- Cheaper alternative to Kafka but fewer features
+- Partitioned for parallelism, but the partition count is fixed at creation on Basic and Standard (32 maximum). **Dynamic partition scale-out is a Premium and Dedicated feature**, so a Standard namespace that outgrows its partitioning needs a new event hub and a consumer cutover
+- Retention is tier-bound, not configuration-bound: **Basic 1 day, Standard 7 days, Premium and Dedicated 90 days.** A design that assumes 90-day replay has assumed a Premium namespace
+- Capture writes the stream to Blob Storage or ADLS Gen2 for archive, priced separately on Standard and included on Premium and Dedicated
+- Log compaction is available from Standard upward, capped at 1 GB per partition on Standard and 250 GB on Premium and Dedicated
 
 **Azure IoT Hub:**
 - Purpose-built for IoT device connections
@@ -420,19 +485,20 @@ Modern data architectures must support both historical batch analytics and real-
 - Two-way communication with devices
 - Routes data to Event Hubs or Service Bus for processing
 
-**Apache Kafka on Confluent (for Azure):**
-- Fully managed Kafka through Azure Marketplace
-- Full Apache Kafka feature set (exactly-once semantics, transactions, schema registry)
-- Higher cost but no operational overhead
+**Apache Kafka and Apache Flink on Confluent Cloud:**
+- An Azure Native Integration, provisioned through the `Microsoft.Confluent` resource provider and managed from the Azure portal, CLI, or SDKs rather than only from the Marketplace
+- Full Apache Kafka feature set (exactly-once semantics, transactions, schema registry) plus managed Flink for stream processing
+- Higher cost, no cluster operations, and a billing and support relationship that runs through Azure
 
 ### Real-Time Processing
 
 **Azure Stream Analytics:**
-- Managed streaming query engine (SQL-like syntax)
-- Process events as they arrive with millisecond latency
-- Output to databases, storage, or applications
-- Good for: time-window aggregations, anomaly detection, threshold alerting
-- Limited to simple streaming queries; complex logic is difficult
+- Managed streaming query engine using SQL augmented with temporal operators, running on the Trill in-memory engine
+- Submillisecond latencies, with exactly-once processing and at-least-once delivery
+- Inputs from Event Hubs and IoT Hub, plus reference data from Blob Storage or SQL Database for lookups. Outputs to storage, SQL, Cosmos DB, Event Hubs, Synapse, and Power BI
+- The query language covers complex event processing: pattern matching, geospatial functions, anomaly detection, and windowed aggregation
+- Extensible with JavaScript or C# user-defined functions and aggregates, and with Azure Machine Learning function calls, so "SQL-only" understates what it can express
+- Runs on IoT Edge and Azure Stack with the same query language, which is the usual reason to pick it over Spark streaming
 
 **Synapse Spark Structured Streaming:**
 - Use Spark's streaming API for complex transformations
@@ -441,20 +507,48 @@ Modern data architectures must support both historical batch analytics and real-
 - Good for: complex logic, ML model scoring, updates to silver/gold layers
 
 **Databricks Structured Streaming:**
-- Similar to Synapse but with better integration
-- Auto-scaling clusters, Unity Catalog for governance
-- Good for: gold-layer updating, ML feature creation
+- The same Spark streaming API, with auto-scaling clusters and Unity Catalog governing the streaming sources and sinks alongside everything else
+- Good for: gold-layer updates, ML feature creation, streaming writes that need lineage and access control applied automatically
+
+**Fabric Real-Time Intelligence:**
+- Eventstreams ingest from Event Hubs, IoT Hub, Kafka, CDC feeds, and REST sources with no-code routing into an eventhouse or a lakehouse
+- KQL over an eventhouse for exploratory analysis of data in motion, and Activator for rules that fire when a condition is met
+- Good for: teams already on Fabric capacity, where routing a stream into the same OneLake the batch layers use avoids a second platform
 
 ### Lambda or Kappa Architecture
 
-**Lambda:** Batch path (historical data) + streaming path (real-time data) separately, then merge results. Complex to maintain two pipelines but can optimize each independently.
+The two patterns differ in the shape of the data path, not in the tooling they use:
 
-**Kappa:** Single streaming pipeline that processes both historical (replay) and real-time data. Simpler architecture if streams support replay and you use append-only storage (Delta Lake, Kafka).
+```
+  LAMBDA                                 KAPPA
 
-**On Azure, use kappa if possible:**
-- Delta Lake provides reliable streaming writes and replay capability
-- Single medallion architecture handles both real-time and batch
-- Reduces code duplication and operational burden
+  source                                 source
+    │                                      │
+    ├──────────────┐                       ▼
+    ▼              ▼                     append-only log
+  batch path    speed path               (Event Hubs, Delta)
+  (hours)       (seconds)                  │
+    │              │                       ▼
+    ▼              ▼                     one streaming job
+  batch view    real-time view             │
+    │              │                       ▼
+    └──────┬───────┘                     serving table
+           ▼                             (replay the log to
+     serving layer merges                 recompute history)
+     the two, and the two
+     code paths must agree
+```
+
+**Lambda** runs a batch path over historical data and a streaming path over recent data, then merges the results at serving time. Each path can be tuned independently, and the price is two implementations of the same business logic that have to produce identical answers.
+
+**Kappa** keeps one streaming pipeline. History is not a separate path, it is a replay of the same log through the same code.
+
+**On Azure, kappa is usually the better default:**
+- Delta Lake gives reliable streaming writes plus the versioned history that makes replay possible
+- One set of medallion layers serves both real-time and batch consumers
+- One implementation of the business logic, so real-time and historical answers cannot drift apart
+
+Lambda still earns its place when the batch path needs an algorithm the streaming path cannot run, such as a full-history model retrain or a join against a dataset too large to hold in streaming state.
 
 ---
 
@@ -462,33 +556,37 @@ Modern data architectures must support both historical batch analytics and real-
 
 ### Data Discovery and Classification
 
-Microsoft Purview scans Data Lake Storage, SQL databases, and Synapse to identify and classify sensitive data automatically. It applies sensitivity labels (confidential, restricted, public) and tracks lineage showing where data flows.
+Purview Data Map scans Data Lake Storage, SQL databases, Synapse, and Databricks to identify and classify sensitive data automatically. It applies sensitivity labels (confidential, restricted, public) and captures lineage showing where data flows.
+
+A label classifies. It does not by itself block an export or a query, and enforcement comes from a protection policy or from the engine's own access controls. Treating a label as a control is one of the more common governance mistakes.
 
 **Best practices:**
-- Run scans periodically to catch new sensitive data
-- Adjust classification rules to reduce false positives
-- Create a data glossary so teams use consistent business term definitions
-- Use lineage to audit how sensitive data is accessed and transformed
+- Run scans on a schedule so newly landed data gets classified without anyone remembering to ask
+- Tune classification rules early, because over-flagging trains people to ignore the labels
+- Define glossary terms once and attach them to data products, so the business vocabulary propagates to assets instead of being re-entered
+- Use lineage to answer impact questions before a change, not just forensic questions after one
 
 ### Access Control
 
 Azure provides multiple layers of access control:
 
-**Storage level (RBAC):**
-- Assign roles like Storage Blob Data Owner, Reader, Contributor
-- Applies to all blobs within a storage account
+**Storage level (Azure RBAC):**
+- Roles such as Storage Blob Data Owner, Contributor, and Reader
+- Assigned at the subscription, resource group, storage account, or container scope, and inherited downward
+- Evaluated **before** ACLs. If a role assignment already grants the requested permission, ACLs are never consulted, which is why a broad Storage Blob Data Contributor assignment silently defeats a carefully built ACL tree
 
-**File level (ACLs):**
-- POSIX-style ACLs on Data Lake Storage Gen2 enable fine-grained permissions
-- Grant specific users or groups read/write on specific directories or files
-- More flexible than RBAC but also more complex to manage
+**File level (POSIX ACLs):**
+- Read, write, and execute on individual directories and files, where execute means traverse
+- Granting read on a nested file with ACLs alone requires execute on the container root and every directory along the path
+- More precise than RBAC, and bounded by the 32-entry limit, which is why the entries should hold Entra groups rather than people
 
-**Synapse SQL level:**
-- Column-level security: Encrypt sensitive columns, decrypt only for authorized users
-- Row-level security: Hide rows based on user properties
-- Dynamic data masking: Show masked values to non-authorized users
+**Synapse and SQL level:**
+- **Column-level security**: `GRANT SELECT ON table(col1, col2) TO principal`. It restricts which columns a principal may read and returns an error on the rest. It does not encrypt anything, and it removes the need for view-per-audience workarounds
+- **Row-level security**: an inline table-valued predicate function bound to the table by a security policy, so the filter applies to every query from every tier
+- **Dynamic data masking**: obscures values in the result set for unprivileged users while leaving the underlying data unchanged
+- **Always Encrypted** is the feature that actually encrypts column values, with keys the database engine never holds. Reach for it when the threat model includes the database administrator
 
-**Example:** A sales analyst can see customer names and regions but not revenue; a manager can see all columns but only for their region.
+**Example:** a sales analyst reads customer names and regions but is denied the revenue column, while a regional manager reads every column and sees only their own region's rows.
 
 ### Row-Level Security (RLS)
 
@@ -498,7 +596,7 @@ Row-level security prevents users from seeing data outside their scope. Common p
 - **By customer:** Users see only their customer accounts
 - **By department:** Employees see only their department's projects
 
-Implement RLS by adding a predicate to SQL queries that filters rows based on `USER_NAME()` or custom claims in Entra ID.
+Implement RLS with an inline table-valued function that evaluates the caller (through `USER_NAME()`, `SESSION_CONTEXT()`, or Entra group membership) and a security policy that binds that function to the table as a filter predicate. Because the binding lives on the table, the filter applies to every query path, including ad-hoc SQL and BI tools, rather than depending on each query remembering to add a `WHERE` clause.
 
 ### Encryption
 
@@ -519,49 +617,44 @@ Implement RLS by adding a predicate to SQL queries that filters rows based on `U
 
 ## Architecture Decision Framework
 
-### When to Use Synapse vs Databricks vs Fabric
+### Choosing an Engine
 
-**Use Synapse SQL (dedicated pool) when:**
-- Gold layer serving business intelligence
-- Consistent, predictable query workloads
-- Team familiar with traditional data warehousing
-- Need low query latency with pre-built structures
+Engine choice is driven by two questions in order: whether this is a greenfield platform, and what the workload actually is.
 
-**Use Synapse Spark or Databricks Spark when:**
-- Silver layer transformations and quality checks
-- Complex business logic beyond SQL
-- Python or Scala is your team's primary language
+```
+Is this a new platform, with no Synapse or Databricks estate to extend?
+│
+├─ Yes ─▶ Start with Microsoft Fabric.
+│         The Synapse and ADF successor notices both point here, and
+│         one capacity covers engineering, warehousing, real-time,
+│         and BI. Size the F SKU against semantic model limits and
+│         the F64 free-viewer threshold, not against compute alone.
+│         Add Databricks alongside it only for heavy ML.
+│
+└─ No ──▶ What is the workload?
+          │
+          ├─ Serving a gold layer to BI, predictable query shapes
+          │  ──▶ Synapse dedicated SQL pool.
+          │      Provisioned, pausable, and result set caching
+          │      is off by default, so turn it on deliberately.
+          │
+          ├─ Ad-hoc exploration of files already in the lake
+          │  ──▶ Synapse serverless SQL pool.
+          │      No capacity planning, but budget by bytes processed:
+          │      the 10 MB per-query floor and lack of result caching
+          │      make a chatty dashboard expensive.
+          │
+          ├─ Silver-layer transformation, Python or Scala logic
+          │  ──▶ Either Spark engine. Pick Synapse Spark to stay in
+          │      one workspace, Databricks for the richer runtime.
+          │
+          └─ Machine learning, model registry, model serving,
+             governance spanning many workspaces
+             ──▶ Databricks with Unity Catalog.
+                 Move off Standard tier before 1 October 2026.
+```
 
-**Use Databricks when:**
-- Heavy machine learning and model management requirements
-- Multi-workspace federation with Unity Catalog is critical
-- Team wants the most advanced Spark features
-- ML model serving and batch inference are important
-
-**Use Fabric when:**
-- New platform, greenfield deployment
-- Want single platform covering engineering through BI
-- Team is Microsoft-centric (SQL Server, Power BI, Office 365)
-- Tight BI integration is important
-- Simpler governance model preferred
-
-**Use serverless Synapse SQL when:**
-- Ad-hoc, exploratory queries on data lake files
-- Intermittent analytics without dedicated compute
-- Want to avoid capacity planning overhead
-- Data volume and query frequency are unpredictable
-
-### Serverless vs Provisioned Compute
-
-**Provisioned (dedicated Synapse SQL pool, Databricks all-purpose cluster):**
-- Pro: Predictable performance, lower latency, better cost for consistent workloads
-- Con: Capacity planning, always running (even idle), minimum cost
-
-**Serverless (Synapse serverless SQL, Synapse Spark on-demand, Databricks jobs cluster):**
-- Pro: Elastic scaling, pay per use, no idle cost, works for burst workloads
-- Con: Higher per-unit cost, less predictable, potential throttling on very large queries
-
-**Decision:** Provisioned for gold layers serving BI tools and consistent reporting. Serverless for bronze/silver transformation and exploratory analysis.
+**Provisioned or serverless** is a separate axis that applies within whichever engine you picked. Provisioned compute (dedicated SQL pool, an all-purpose Databricks cluster) gives predictable latency and a better rate for steady load, at the cost of capacity planning and a floor you pay whether or not anyone queries. Serverless compute (serverless SQL, on-demand Spark, a Databricks jobs cluster) has no idle cost and absorbs bursts, at a higher per-unit rate and with less predictable performance under very large queries. Provisioned suits gold layers serving dashboards on a schedule. Serverless suits bronze and silver transformation and exploratory work.
 
 ### Centralized vs Federated Data Platform
 
@@ -584,17 +677,21 @@ Implement RLS by adding a predicate to SQL queries that filters rows based on `U
 - Shared gold layer for common use cases (customer dimension)
 - Platform team enforces standards, not workflows
 
-### Build vs Buy
+### Assembled Platform vs Integrated Platform
 
-**Build (Synapse + Databricks + Data Factory):**
-- Pro: Maximum flexibility, use open standards (Delta Lake, Parquet), not locked into one vendor
-- Con: More operational overhead, integration work
-- Cost: Generally lower for large organizations
+Neither option is a build in the sense of writing your own engine. The choice is whether you assemble the platform from separately provisioned services or take one integrated SaaS product.
 
-**Buy (Fabric, Databricks, Competitors):**
-- Pro: Simpler to get started, integrated features, less infrastructure management
-- Con: Vendor lock-in, fewer customization options
-- Cost: Higher initial cost, potentially more expensive at scale
+**Assembled (Data Factory plus Synapse plus Databricks, over ADLS Gen2):**
+- Each component is chosen and sized on its own merits, and the storage layer stays open Delta and Parquet
+- Networking, identity, monitoring, and cost allocation are yours to wire up across every component
+- Component-level billing makes it easier to attribute cost, and easier to leave one meter running
+
+**Integrated (Microsoft Fabric):**
+- One capacity, one governance surface, one storage layer, and far less integration work to reach a first result
+- Capacity sizing becomes the main lever, and a single F SKU absorbs workloads that would otherwise be billed and tuned separately
+- Less component-level choice, and the platform's roadmap becomes your roadmap
+
+Open storage formats are the hedge that makes this reversible. Data written as Delta in ADLS Gen2 is readable by both paths, and OneLake's Delta-to-Iceberg virtualization widens that further, so the lock-in sits in the pipelines and semantic models rather than in the data.
 
 ---
 
@@ -636,7 +733,7 @@ Implement RLS by adding a predicate to SQL queries that filters rows based on `U
 
 **Result:** When upstream data changes, downstream impacts are unknown. Root cause analysis of bad data becomes impossible. Compliance audits cannot show where sensitive data flows.
 
-**Solution:** Use Purview to track lineage automatically. Ensure Data Factory and Databricks jobs publish lineage information. Use this to identify impact of changes before making them.
+**Solution:** Let Purview Data Map capture lineage automatically, and make sure Data Factory pipelines and Databricks jobs publish it. Query lineage to size the blast radius of a change before you make it, not after something breaks.
 
 ---
 
@@ -646,7 +743,7 @@ Implement RLS by adding a predicate to SQL queries that filters rows based on `U
 
 **Result:** Teams reinvent patterns, governance standards are ignored, security policies are bypassed. Platform team cannot scale support to many teams.
 
-**Solution:** Implement governance in infrastructure. Use Purview policies to enforce minimum standards. Provide templates and infrastructure-as-code for teams to follow. Make following patterns easier than deviating from them.
+**Solution:** Put governance in the infrastructure. Unified Catalog health controls and data quality rules give every domain a measurable floor, and templates plus infrastructure as code give teams a compliant starting point. Make following the pattern easier than deviating from it.
 
 ---
 
@@ -656,7 +753,7 @@ Implement RLS by adding a predicate to SQL queries that filters rows based on `U
 
 **Result:** Gold layer becomes harder to maintain than it is to query bronze/silver directly. Maintenance costs exceed value. Discoverability suffers because of too many options.
 
-**Solution:** Pre-compute only aggregations that are actually used (track BI tool queries to confirm). For ad-hoc aggregations, let users query silver layer directly or build on-demand aggregations. Use semantic layers (Power BI datasets, Looker models) to define reusable calculations rather than pre-computed tables.
+**Solution:** Pre-compute only the aggregations something actually queries, and check usage rather than guessing. Let ad-hoc aggregation happen against silver. Define reusable calculations in a semantic layer, such as Power BI semantic models (the current name for what used to be called datasets), rather than materializing a table per combination.
 
 ---
 
@@ -666,17 +763,17 @@ Implement RLS by adding a predicate to SQL queries that filters rows based on `U
 
 2. **Medallion architecture scales from startups to enterprises.** Bronze (raw), silver (cleaned), gold (aggregated) provides structure without premature optimization. You can add new data sources to bronze without affecting downstream layers.
 
-3. **Microsoft Fabric represents the future of the Azure data platform.** If starting a new platform today, evaluate Fabric first. It integrates storage, Spark, SQL, and Power BI into a single unified system with shared governance through Purview.
+3. **Microsoft is pointing new work at Fabric.** Synapse SQL and Azure Data Factory documentation both carry successor notices naming Fabric Data Warehouse and Fabric Data Factory, with upgrade paths and a migration assistant. Neither product is retired or dated, so this shapes greenfield choices rather than forcing a migration.
 
-4. **Data governance must be enforced in infrastructure, not just policy.** Purview provides automatic classification and lineage. ACLs control access at the file level. Entra ID manages authentication. Make governance decisions at deployment time, not trust time.
+4. **Governance has to be enforced by infrastructure, not by policy documents.** Purview Data Map classifies and traces lineage, Unified Catalog carries the access policies and quality rules, ACLs and RBAC gate the storage, and Entra ID backs every identity. A sensitivity label on its own classifies without blocking anything.
 
 5. **Real-time and batch use the same medallion layers.** Kappa architecture with Delta Lake eliminates maintaining separate streaming and batch pipelines. Stream events into bronze, transform to silver, aggregate to gold using the same medallion pattern.
 
 6. **Data mesh distributes ownership but requires strong platform foundations.** Domain teams own their data products, but the platform must provide standards, templates, and governance enforcement. Without platform discipline, federation leads to fragmentation.
 
-7. **Gold layer should contain only business-critical aggregations.** Not every possible calculation needs a table. Use semantic layers (Power BI, looker) for ad-hoc calculations. This keeps gold layer maintainable and fast.
+7. **The gold layer should hold only business-critical aggregations.** Not every calculation needs a table. Push ad-hoc calculation into a semantic layer such as a Power BI semantic model, which keeps gold small enough to maintain and fast enough to query.
 
-8. **Access control has multiple layers.** RBAC controls storage-level access. ACLs enable file-level granularity. SQL row-level security hides rows. Column-level security hides columns. Combine these to enforce data access policies at the right level.
+8. **Access control stacks, and the order matters.** Azure RBAC covers accounts and containers and is evaluated first, so a broad role assignment makes the ACL tree beneath it irrelevant. ACLs handle directories and files within a 32-entry budget that only holds up if the entries are Entra groups. In SQL, row-level security filters rows through a security policy and column-level security restricts columns through `GRANT`, while Always Encrypted is the only one of the four that encrypts anything.
 
 9. **Serverless SQL and Spark reduce operational overhead for intermittent workloads.** If queries are bursty or exploratory, serverless is often cheaper than provisioning compute. Dedicated pools are for consistent, predictable workloads.
 

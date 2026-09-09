@@ -3,442 +3,534 @@ title: "Azure AI Vision Services"
 layout: guide
 category: Azure
 subcategory: Machine Learning & AI
-description: "A system architect's guide to Azure AI Vision services, covering Computer Vision, Custom Vision, Face API, and Document Intelligence for image analysis, OCR, and document processing."
-tags: [azure, cloud-computing, infrastructure, machine-learning, automation, scalability, practical, integration]
+description: "A system architect's guide to Azure's vision and document services, covering which offerings are current, which are retiring, and how to choose between Image Analysis, Face, Document Intelligence, and Content Understanding."
+tags: [machine-learning, computer-vision, document-intelligence, face-api, content-understanding, ocr, practical]
 ---
 
 ## What Are Azure AI Vision Services
 
-[Azure AI Vision services](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/){:target="_blank" rel="noopener noreferrer"} provide pre-trained models for image analysis, optical character recognition (OCR), facial analysis, and document processing. These services abstract the complexity of computer vision, allowing architects to add intelligent image processing to applications with managed APIs.
+Azure's vision offerings provide managed models for image analysis, optical character recognition (OCR), facial analysis, and document processing. These services abstract away model training and inference infrastructure, so an application can add visual intelligence with a REST call.
 
-Azure offers several vision services, each solving different problems. Some are general-purpose (like analyzing any image for objects, text, and activities), others are domain-specific (like extracting fields from invoices or business cards), and others focus on biometric analysis (like face detection and identification).
+The product family has been renamed twice. It began as **Azure Cognitive Services**, became **Azure AI services**, and is now documented as **[Foundry Tools](https://learn.microsoft.com/en-us/azure/ai-services/what-are-ai-services){:target="_blank" rel="noopener noreferrer"}**. The general-purpose vision service is documented as **Azure Vision in Foundry Tools**, and older material calls the same thing Computer Vision or Azure AI Vision. The ARM resource provider stayed `Microsoft.CognitiveServices` through all of it, so infrastructure code written against the original name still deploys.
 
-### What Problems Azure AI Vision Solves
+### The Portfolio Is Mid-Migration
 
-**Without vision services:**
-- Building computer vision requires data scientists, labeled training datasets, and ML infrastructure
-- Creating accurate models for tasks like OCR, document processing, or face detection is months of work
-- Maintaining model accuracy as data distribution changes requires continuous retraining
-- Scaling vision workloads requires managing GPU infrastructure and model serving systems
+Naming churn is cosmetic. The consequential change is that Microsoft has put two of the four classic vision services on a retirement path and is steering new work toward generative alternatives. Any architecture decision made here should start from service status, not from feature lists.
 
-**With vision services:**
-- Add image analysis to applications with a REST API call or SDK
-- Use pre-built models trained on billions of images for general tasks
-- Deploy domain-specific models (invoices, business cards, receipts) without custom training
-- Rely on Azure to maintain model quality and performance across regions
-- Scale without managing GPU clusters or inference infrastructure
+| Service | Status | Retirement | Where new work should go |
+|---------|--------|------------|--------------------------|
+| **Image Analysis** (`/imageanalysis`, v3.2 and v4.0) | Deprecated | 25 September 2028 | Document Intelligence (OCR), Face (faces), Content Understanding or Foundry models (everything else) |
+| **Custom Vision** | Retirement announced | 25 September 2028 | Azure ML AutoML, Content Understanding classifiers, Foundry model catalog |
+| **Face** | Current, Limited Access | None announced | Face |
+| **Document Intelligence** | Current (v4.0 GA) | None announced for v4.0 | Document Intelligence |
+| **Content Understanding** | Current (GA) | None announced | Content Understanding |
 
-### How Azure AI Vision Differs from AWS Rekognition
+The [Image Analysis retirement](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/migration-options){:target="_blank" rel="noopener noreferrer"} covers every deployment type: cloud APIs, connected containers, and disconnected containers. An on-premises container deployment gets no reprieve.
 
-Architects familiar with AWS should understand the positioning and capability differences:
+Two features are already gone rather than merely deprecated. Spatial analysis retired on 30 March 2025, and the Image Analysis 4.0 Segment API (background removal) retired on 31 March 2025. Calls to either now fail.
 
-| Aspect | AWS Rekognition | Azure AI Vision |
-|--------|-----------------|-----------------|
-| **Image analysis** | `DetectObjects`, `DetectText`, `DetectLabels` APIs | Azure AI Vision (formerly Computer Vision) with general image understanding |
-| **Custom models** | Rekognition Custom Labels (train with your own data) | Azure Custom Vision (train classification/detection models in separate service) |
-| **Face detection** | Rekognition Face API (detection, matching, analysis) | Azure Face API (detection, verification, identification, grouping) |
-| **OCR** | Textract (document-focused) | Azure AI Document Intelligence (formerly Form Recognizer) for structured extraction; Azure AI Vision for general OCR |
-| **Document analysis** | Textract for structured data extraction | Azure AI Document Intelligence with prebuilt models (invoice, receipt, ID, W-2, business card) |
-| **Pricing model** | Pay-per-API-call | Multiple tiers: free, standard; volume discounts |
-| **Integration** | Rekognition standalone or with IAM/S3 | Integrated with Azure AI Search, Azure Cognitive Services resource pooling |
+### What These Services Solve
+
+**Without a managed vision service:**
+- Computer vision needs data scientists, labeled training data, and ML infrastructure
+- Accurate OCR, document processing, or face matching is months of work to build
+- Model accuracy decays as input distributions drift, so retraining is continuous
+- Serving vision workloads means running and scaling GPU infrastructure
+
+**With a managed vision service:**
+- Image and document analysis reduces to a REST call or SDK method
+- Prebuilt models cover common document types with no training data at all
+- Microsoft maintains model quality and regional capacity
+- Scaling is a pricing-tier decision rather than a cluster-sizing exercise
+
+### How Azure Compares to AWS
+
+| Aspect | AWS | Azure |
+|--------|-----|-------|
+| **General image analysis** | Rekognition (`DetectLabels`, `DetectText`, `DetectModerationLabels`) | Image Analysis, deprecated; Content Understanding or a Foundry vision model for new work |
+| **Custom image models** | Rekognition Custom Labels | Custom Vision, retiring; Azure ML AutoML or Content Understanding classifiers for new work |
+| **Face detection and matching** | Rekognition face operations | Face (detection open, identification and verification Limited Access) |
+| **Document extraction** | Textract | Document Intelligence, with prebuilt and custom models |
+| **Multimodal generative extraction** | Bedrock Data Automation | Content Understanding |
+| **Pricing model** | Pay per API call | Pay per transaction, with F0 free and S0 standard tiers |
+| **Search integration** | Kendra custom document enrichment | Azure AI Search skillsets with built-in vision and document skills |
+
+The sharpest structural difference is gating. AWS lets any account call Rekognition's face operations. Azure requires an approved registration for Face identification and verification, which turns a feature decision into a procurement question.
 
 ---
 
-## Azure AI Vision (General Image Analysis)
+## Choosing a Service
 
-### What Azure AI Vision Does
+The comparisons throughout this guide all resolve into one decision, and input type settles most of it.
 
-[Azure AI Vision](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview){:target="_blank" rel="noopener noreferrer"} (formerly Computer Vision) analyzes images to extract information about objects, text, faces, activities, colors, and image properties. It's a general-purpose service that works on any image.
+```
+                    What is the input?
+                            |
+        +-------------------+--------------------+
+        |                   |                    |
+    Documents            Images               Faces
+   (forms, PDFs,      (photos, scenes,     (identity,
+    scans)             products)            liveness)
+        |                   |                    |
+        v                   v                    v
+  Is there a          Do you need a         Detection only,
+  prebuilt model      fixed schema or       or matching?
+  for this type?      free-form insight?           |
+        |                   |                 +---+---+
+   +----+----+         +----+----+            |       |
+   |         |         |         |       Detection  Matching
+  Yes       No       Schema    Insight        |       |
+   |         |         |         |            |       v
+   v         v         v         v            |   Limited
+Document  Do you     Content  Foundry         |   Access
+Intel.    have 5+    Under-   vision          |   registration
+prebuilt  labeled    standing  model          |   required
+model     samples?   analyzer                 |       |
+             |                                v       v
+        +----+----+                        Face Detect / Identify,
+        |         |                        Verify, Liveness
+       Yes        No
+        |         |
+        v         v
+   Document    Content
+   Intelligence Understanding
+   custom       (schema, no
+   model        training data)
+```
+
+Three rules fall out of it:
+
+- **Text-bearing documents go to Document Intelligence**, not to a general image API. Image Analysis OCR returns text without structure, so field-level extraction becomes your post-processing problem.
+- **A fixed output schema favors Document Intelligence or a Content Understanding analyzer.** Open-ended description favors a generative model.
+- **Anything touching identity goes through Face**, and the registration timeline belongs in the project plan rather than in the integration sprint.
+
+---
+
+## Image Analysis (Deprecated)
+
+[Image Analysis](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview){:target="_blank" rel="noopener noreferrer"} extracts visual features from arbitrary images: objects, tags, captions, and text. It is the service most existing Azure vision code calls, and it is the one being retired.
+
+**Capabilities that still work until retirement:**
+- **Object detection:** bounding boxes and confidence scores for detected objects
+- **Tagging:** semantic tags describing image content
+- **Captioning:** generated natural-language descriptions of an image and of regions within it
+- **OCR:** printed and handwritten text extraction
+- **Smart crops:** suggested crop regions at a requested aspect ratio
+
+**Capabilities already retired:** spatial analysis (30 March 2025) and background removal via the Segment API (31 March 2025). A guide, sample, or blog post describing either is describing something that no longer runs.
+
+### Input Requirements
+
+| Constraint | Value |
+|------------|-------|
+| Formats | JPEG, PNG, GIF, BMP |
+| Maximum file size | 4 MB |
+| Minimum dimensions | 50 x 50 pixels |
+| Maximum dimensions (Read) | 10,000 x 10,000 pixels |
+
+### Migration Paths
+
+Microsoft splits the retirement into scenario-specific replacements rather than offering a single successor.
+
+| What you use Image Analysis for | Replacement |
+|---------------------------------|-------------|
+| OCR on documents | Document Intelligence `prebuilt-read` |
+| Face detection or attributes | Face service |
+| Image embeddings for search | Cohere Embed in Microsoft Foundry, or SigLIP |
+| Tagging, captioning, description | A Foundry vision model, or a Content Understanding analyzer |
+| Zero-shot classification | SigLIP, or a Content Understanding classifier |
+
+Microsoft's published guidance asks customers to have a transition plan by September 2026 even though calls keep working until September 2028. Treat the earlier date as the one that matters for planning.
+
+### OCR: Which Read Engine to Use
+
+OCR is confusing because three engines have carried the name **Read**.
+
+| Input type | Use | Why |
+|------------|-----|-----|
+| In-the-wild images (signs, labels, posters) | Image Analysis 4.0 OCR | Synchronous API, tuned for non-document images, but retiring with Image Analysis |
+| Documents (scans, PDFs, forms) | [Document Intelligence `prebuilt-read`](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/prebuilt/read){:target="_blank" rel="noopener noreferrer"} | Asynchronous, tuned for text-heavy documents, and not on a retirement path |
+| Anything | Legacy OCR v3.2 or RecognizeText v2.1 | Do not. Microsoft explicitly recommends against both, and no further updates are shipping |
+
+Both current Read engines share a baseline: printed and handwritten extraction, pages and lines and words with location and confidence scores, mixed-language and mixed-mode support, and a distroless Docker container for on-premises deployment.
+
+Read input limits differ from the Image Analysis limits above: up to 2,000 pages for PDF and TIFF (the first two pages only on the free tier), image files under 500 MB on the paid tier and 4 MB on free, and a minimum extractable text height of about 12 pixels on a 1024 x 768 image.
+
+---
+
+## Custom Vision (Retiring)
+
+[Custom Vision](https://learn.microsoft.com/en-us/azure/ai-services/custom-vision-service/overview){:target="_blank" rel="noopener noreferrer"} trains image classification and object detection models on your own labeled images, with no ML expertise required. Microsoft supports existing customers until **25 September 2028** and recommends against starting new projects on it.
 
 **Capabilities:**
-- **Object detection:** Identify and locate specific objects in images with bounding boxes and confidence scores
-- **Image tagging:** Assign semantic tags describing image content
-- **Optical character recognition (OCR):** Extract text from images and documents
-- **Scene understanding:** Describe the overall content and context of an image
-- **Face detection:** Detect faces and extract attributes (age, emotion, head pose)
-- **Spatial analysis:** Analyze people's positions and movements in images and video streams
-- **Background removal:** Create transparent backgrounds from images
+- **Image classification:** single-label or multi-label categorization into classes you define
+- **Object detection:** localization of your object types, returning bounding boxes
+- **Domain selection:** algorithm variants tuned for subject matter such as landmarks or retail
+- **Model export:** Docker, ONNX, or TensorFlow output for edge and on-premises inference
 
-### When to Use Azure AI Vision vs Custom Vision
+### Where Custom Vision Work Should Go Now
 
-**Use Azure AI Vision when:**
-- You need general-purpose image understanding (any image, any content)
-- You need OCR, object detection, or activity recognition on diverse images
-- Speed to market matters more than domain-specific accuracy
-- The out-of-the-box model accuracy is sufficient for your use case
+| Requirement | Replacement |
+|-------------|-------------|
+| Classification or detection with classic ML | Azure ML AutoML for images |
+| Managed classification with no training pipeline | Content Understanding custom classifier |
+| Custom visual reasoning with prompts instead of labels | A vision model from the Foundry model catalog |
 
-**Use Custom Vision when:**
-- You need to classify images into specific categories (e.g., "defective part" vs "acceptable part")
-- You need to detect specific object types in your domain (e.g., a particular product variant)
-- Pre-trained models don't capture your domain's nuances
-- You have labeled training data available
+The AutoML path is the closest functional match but a meaningfully different operational model: you own a workspace, compute, and an endpoint rather than calling a hosted prediction URL.
 
-### How Azure AI Vision Works
+### Training Data Requirements
 
-Azure AI Vision processes images asynchronously or synchronously depending on the operation:
+The commonly repeated "50 images minimum" is a recommendation, not the service limit, and the actual floor differs by project type.
 
-**Synchronous operations:**
-- Image tagging, object detection, face detection, and general analysis return results immediately
-- Suitable for real-time web applications and user-facing features
-- Request/response pattern via REST API or SDK
+| Factor | F0 (free) | S0 (standard) |
+|--------|-----------|---------------|
+| Projects | 2 | 100 |
+| Training images per project | 5,000 | 100,000 |
+| Predictions per month | 10,000 | Unlimited |
+| Tags per project | 50 | 500 |
+| Iterations retained | 20 | 20 |
+| Minimum labeled images per tag, classification | 5 | 5 |
+| Minimum labeled images per tag, object detection | 15 | 15 |
+| Maximum training image size | 6 MB | 6 MB |
+| Maximum prediction image size | 4 MB | 4 MB |
 
-**Asynchronous operations:**
-- Read (OCR) operations on documents can be started asynchronously and polled for results
-- Useful for high-volume batch processing where latency is less critical
-- Start a read operation, get a result location URL, poll until complete
+Microsoft recommends 50 or more images per tag regardless of tier, and notes that the service is tuned to separate major visual differences rather than subtle ones. Detecting hairline cracks or small dents in a quality-assurance workflow is the documented example of what it does poorly.
 
-### Pricing and Resource Organization
+### Iterations and Deployment
 
-Azure AI Vision pricing depends on the operation and volume:
+Each training run produces an **iteration**. One published iteration serves the prediction endpoint at a time, and the 20-iteration ceiling is a hard limit on both tiers, so an active project needs a deletion policy rather than an archive of every run.
 
-**Pricing tiers:**
-- **Free tier:** Limited calls per month (useful for development and proof-of-concept)
-- **Standard tier:** Pay-per-API-call with volume discounts at high scale
-
-**Service organization:**
-You can create vision services in two ways:
-
-1. **Single-service resource:** Create an `Azure AI Vision` resource that includes only vision APIs
-2. **Multi-service resource:** Create a `Cognitive Services` (or `Azure AI Services`) resource that bundles multiple AI services (vision, language, speech, decision-making) under one resource
-
-Multi-service resources make sense when you use multiple Azure AI capabilities in the same application. Single-service resources simplify cost tracking and are appropriate when you only use vision APIs.
+Custom Vision is also the one service here that needs **two resources**: a training resource billed per training hour and a prediction resource billed per prediction. Splitting them lets a production prediction endpoint scale independently of a training environment that may sit idle for weeks.
 
 ---
 
-## Custom Vision
+## Face
 
-### What Custom Vision Does
+The [Face service](https://learn.microsoft.com/en-us/azure/ai-services/face/overview-identity){:target="_blank" rel="noopener noreferrer"} detects, analyzes, and matches human faces. It is current and actively developed, and it absorbed the face scenarios that Image Analysis is losing.
 
-[Azure Custom Vision](https://learn.microsoft.com/en-us/azure/ai-services/custom-vision-service/){:target="_blank" rel="noopener noreferrer"} allows you to train custom machine learning models for image classification and object detection using your own labeled images. You upload your training dataset, and Custom Vision trains a model that understands your specific domain.
+### Limited Access Gating Comes First
 
-**Capabilities:**
-- **Image classification:** Train a model to categorize images into classes you define (e.g., "healthy plant" vs "diseased plant")
-- **Multi-label classification:** Assign multiple labels to a single image
-- **Object detection:** Train a model to locate specific objects within images and return bounding boxes
+Face is the only service in this guide where the technical evaluation can be irrelevant, because access is gated by approval rather than by subscription.
 
-### When to Use Custom Vision
+| Operation | Access |
+|-----------|--------|
+| **Detect** (rectangles, landmarks, permitted attributes) | Available to any customer, no registration |
+| **Identify** (1:N matching) | Limited Access, registration required |
+| **Verify** (1:1 matching) | Limited Access, registration required |
+| **Liveness SDKs** | Gated separately through the same intake form |
 
-**Use Custom Vision when:**
-- You have a specific classification or detection problem
-- You have 50+ labeled images for training (more is better; 500+ is ideal)
-- The pre-trained models do not understand your domain well enough
-- The objects or classifications you care about are too specialized for general models
+Registration constraints that shape a design:
 
-**Do NOT use Custom Vision when:**
-- You need general-purpose image understanding (use Azure AI Vision instead)
-- You have fewer than 30-50 labeled images (limited training data)
-- Your classification is complex and requires custom ML expertise (consider training your own PyTorch/TensorFlow model)
+- Limited Access features run only on **S0 and E0** pricing tiers. The **F0 free tier does not support them**, so there is no unapproved path to a proof of concept.
+- Access is granted "only to customers managed by Microsoft," meaning organizations working directly with a Microsoft account team. An unaffiliated team cannot assume approval.
+- You declare a use case on the form, and approval is scoped to it. Microsoft may require periodic reverification.
+- Since 11 June 2020, use by or for U.S. police departments is prohibited outright. Creating a Face resource requires acknowledging this in the portal.
 
-### How Custom Vision Works
+Build the registration lead time into the schedule. A design that assumes 1:N identification and discovers the gate during integration has no fallback inside Azure.
 
-Custom Vision training is a simple workflow:
+### Attributes: What Was Retired and What Is Restricted
 
-1. **Create a project** (classification or object detection)
-2. **Upload and label training images** (you provide the labels; Custom Vision stores the images)
-3. **Train the model** (Custom Vision handles hyperparameter tuning and model selection)
-4. **Evaluate performance** (review precision, recall, and per-class metrics)
-5. **Publish the model** to an endpoint for API consumption
-6. **Call the endpoint** from your application to classify new images
+Microsoft cut back facial attribute inference on responsible-AI grounds, and the older attribute lists that circulate are wrong in both directions.
 
-Custom Vision provides:
-- A web-based labeling interface (though you can bulk-upload pre-labeled images via APIs)
-- Automated model training with hyperparameter search
-- A publish/unpublish mechanism to control which model version serves API requests
-- Export options to download models for on-premises or edge deployment
+| Attribute | Status |
+|-----------|--------|
+| Emotion | **Retired**, no longer returned |
+| Gender | **Retired**, no longer returned |
+| Age, smile, facial hair, hair, makeup | **Limited**, require a separate approved use case |
+| Head pose, blur, exposure, noise, occlusion, glasses, landmarks | Available |
 
-### Iterations and Model Versioning
+The available set is what remains useful anyway: it is mostly image-quality signals. Checking blur, occlusion, and glasses before enrolling a face is the difference between a recognition system that works and one that degrades quietly as bad enrollments accumulate.
 
-Custom Vision manages multiple model versions through **iterations**:
+### Liveness Detection
 
-- Each training run creates a new iteration (model version)
-- You can compare performance across iterations
-- You publish one iteration to an endpoint; only the published model serves predictions
-- Unpublish an iteration before training new ones if you want to free up hosting
+Liveness detection determines whether a face in a video stream is a live person rather than a printed photo, a replayed video, a screen, or a 3D mask. It runs as a client SDK (Android, iOS, and Web) coordinated with the service, and it is the piece that makes remote identity verification defensible.
 
-### Export and Deployment Options
+Microsoft reports a 0% penetration rate in iBeta Level 1 and Level 2 Presentation Attack Detection testing, conducted by a NIST/NVLAP-accredited lab against ISO/IEC 30107-3. Any verification flow where the image comes from a user-controlled camera should include it. Verification without liveness only proves that someone submitted a matching image.
 
-Trained Custom Vision models can be deployed in different ways:
+### Recognition Data Structures
 
-**Cloud-hosted:**
-- Publish the model to a Custom Vision prediction endpoint and call via REST API or SDK
-- Azure manages the infrastructure and auto-scaling
+Face matching needs somewhere to keep enrolled faces, and the choice of container sets the ceiling on the system.
 
-**Edge deployment:**
-- Export the model as Docker container, ONNX, or TensorFlow format
-- Deploy to edge devices, IoT gateways, or on-premises inference servers
-- Useful for scenarios requiring local inference (offline operation, minimal latency, privacy)
+| Structure | Holds | Use for |
+|-----------|-------|---------|
+| **FaceList / LargeFaceList** | Individual faces | Find Similar, which answers whether two faces look alike |
+| **PersonGroup / LargePersonGroup** | Person objects, each with multiple faces | Identify, which answers who a face belongs to |
 
----
+A person group holds up to **1 million person objects**, and each person object holds up to **248 registered faces**. Multiple enrollment images per person is the point of the structure: variation in lighting, angle, and appearance is what makes 1:N matching hold up over time.
 
-## Azure Face API
+Two more operations round it out. **Find Similar** runs in `matchPerson` mode (filtered through Verify, so results are the same person) or `matchFace` mode (raw visual similarity, same person or not). **Group** partitions a set of unknown faces into likely-same-person clusters and returns unmatched faces in a `messyGroup` array.
 
-### What Face API Does
+### Detection and Recognition Input Limits
 
-[Azure Face API](https://learn.microsoft.com/en-us/azure/ai-services/face/){:target="_blank" rel="noopener noreferrer"} detects and analyzes faces in images and video. It can detect faces, extract facial attributes, compare faces for similarity, and perform identification matching against pre-built face lists.
+| Constraint | Value |
+|------------|-------|
+| Formats | JPEG, PNG, GIF (first frame), BMP |
+| Maximum file size | 6 MB |
+| Minimum detectable face | 36 x 36 pixels in an image up to 1920 x 1080 |
+| Maximum detectable face | 4096 x 4096 pixels |
+| Recommended face size for verification | 200 x 200 pixels |
 
-**Capabilities:**
-- **Face detection:** Locate faces in images and extract face rectangles and landmarks
-- **Face attribute analysis:** Extract attributes like age (estimate), emotion, head pose, blur, occlusion, accessories
-- **Face verification:** Compare two faces to determine if they're the same person ("1:1 matching")
-- **Face identification:** Compare a face against a large list of known faces to find matches ("1:N matching")
-- **Face grouping:** Group faces in an image by similarity (useful for organizing photo albums)
-- **Find similar faces:** Search a face list for faces similar to a query face
-
-### When to Use Face API
-
-**Use Face API when:**
-- You need to detect faces and extract facial landmarks or attributes
-- You need to verify that two faces belong to the same person (identity verification)
-- You need to identify who a person is by matching against a database of known faces
-- You're building photo organization, security, or identity verification features
-
-**Do NOT use Face API when:**
-- Your use case involves analyzing facial expressions for surveillance or authentication at scale (Face API is designed for specific, consented use cases, not mass surveillance)
-- You need to authenticate users (use Azure Entra ID with facial recognition instead, or integrate with dedicated authentication platforms)
-
-### Responsible AI Considerations for Facial Recognition
-
-Facial recognition technology carries significant privacy, bias, and ethical concerns. Azure imposes strict usage guidelines:
-
-**Azure's responsible AI approach:**
-- Face API is restricted for certain use cases: you cannot use it for law enforcement mass surveillance or for inferring protected characteristics (race, ethnicity, gender) from faces
-- The service is licensed only for specific use cases: identity verification, photo organization, and age/emotion analysis with explicit user consent
-- Bias: Face API has known performance variations across demographic groups; test thoroughly with your data
-- Privacy: Store face data securely; face vectors (embeddings) should be encrypted at rest and in transit
-- Consent: Always obtain explicit user consent before collecting or analyzing faces
-
-**Best practices:**
-- Document your use case and ensure it aligns with Microsoft's responsible AI guidelines
-- Be transparent with users about facial analysis
-- Implement access controls on face data and embeddings
-- Regularly audit results for fairness across demographic groups
-- Consider whether facial recognition is the best solution for your problem
-
-### How Face API Works
-
-Face API operations follow two patterns:
-
-**Synchronous operations:**
-- Detection, attribute extraction, and verification return results immediately
-- Suitable for real-time face verification in web applications
-
-**Face list operations:**
-- Create a named face list (a collection of face embeddings)
-- Add faces to the list using face vectors
-- Query the list to find matching or similar faces
-- Face lists persist for future queries
-
-Face lists are useful for scenarios like identity verification (build a list of authorized faces), photo search (find similar photos), and crowd analysis (group similar faces).
+The minimum face size scales with image size, so faces in a 4K frame need to be proportionally larger than 36 pixels to register. A camera placement that puts subjects far from the lens fails detection before recognition ever runs.
 
 ---
 
-## Azure AI Document Intelligence
+## Document Intelligence
 
-### What Document Intelligence Does
+[Document Intelligence](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/overview){:target="_blank" rel="noopener noreferrer"} (formerly Form Recognizer) extracts structured data from documents, combining OCR with layout and field understanding to return key-value pairs, tables, and typed fields. It is the service most vision workloads should be pointed at, and the recommended destination for OCR work leaving Image Analysis.
 
-[Azure AI Document Intelligence](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/){:target="_blank" rel="noopener noreferrer"} (formerly Form Recognizer) extracts structured data from documents. It uses OCR combined with layout and field understanding to extract key-value pairs, tables, and form fields from diverse document types.
+### Version Support
 
-**Capabilities:**
-- **General document analysis:** Extract text, layout information, and identified form fields from any document
-- **Prebuilt models:** Extract structured data from specific document types without custom training:
-  - **Invoice model:** Extract invoice number, date, total amount, line items
-  - **Receipt model:** Extract receipt items, quantities, prices, total amount
-  - **Business card model:** Extract name, job title, email, phone number from business cards
-  - **ID document model:** Extract information from passports, driver licenses, and national IDs
-  - **W-2 model:** Extract tax information from W-2 forms
-  - **Health insurance card model:** Extract member ID and plan information
-- **Custom models:** Train a model on your own document samples to extract domain-specific fields
-- **Batch processing:** Submit documents asynchronously and retrieve results via polling or webhooks
+Version matters here more than in most Azure services, because the model catalog changed between versions.
 
-### When to Use Document Intelligence
+| Version | Status | End of support |
+|---------|--------|----------------|
+| v4.0 (2024-11-30) | GA, current | None announced |
+| v3.1 (2023-07-31) | GA, previous | None announced |
+| v3.0 (2022-08-31) | GA, retiring | 30 March 2029 |
+| v2.1 | GA, retiring | 15 September 2027 |
 
-**Use Document Intelligence when:**
-- You need to extract structured data from documents (invoices, receipts, forms)
-- You process many documents of similar types
-- The prebuilt models match your document types
-- Accuracy and structure matter more than just extracting visible text
+A custom model inherits the lifecycle of the API version that trained it. When that version is deprecated, the model stops being available for inference, so migrating an API version means retraining custom models rather than just changing an endpoint.
 
-**Do NOT use Document Intelligence when:**
-- You only need text extraction without structure (use Azure AI Vision's OCR instead)
-- Your documents are highly custom and you have fewer than 5-10 sample documents for training
-- Your documents are primarily images without text (Document Intelligence is optimized for text-bearing documents)
+### Document Analysis Models
 
-### Prebuilt Models vs Custom Models
+| Model | Extracts |
+|-------|----------|
+| `prebuilt-read` | Printed and handwritten text |
+| `prebuilt-layout` | Text, tables, selection marks, and document structure |
 
-**Prebuilt models:**
-- Come pre-trained on thousands of documents of specific types
-- Require no training; submit a document and get structured results immediately
-- Understand field semantics (they know which field is "invoice number" vs "total amount")
-- High accuracy with minimal setup
-- Recommended as the starting point for most use cases
+The **general document** model (`prebuilt-document`, key-value pair extraction without a schema) was deprecated and **is not available in v4.0**. Code targeting it has to move to layout plus a custom or generative extraction step.
 
-**Custom models:**
-- You provide labeled training documents (minimum 5-10, ideally 50+)
-- Train a model on your specific document layout and fields
-- Use when prebuilt models don't match your document structure
-- More effort to set up but captures domain-specific nuances
+### Prebuilt Models
 
-### Document Intelligence Deployment Patterns
+Prebuilt models are trained by Microsoft on specific document types and return field-level data with no training on your part. The v4.0 catalog is considerably wider than the invoice-receipt-business-card set that older material describes.
 
-**On-demand processing:**
-- Submit a single document via REST API
-- Receive results synchronously or asynchronously
-- Suitable for applications processing documents one at a time
+| Family | Models |
+|--------|--------|
+| **Financial and legal** | Bank statement, check, contract, credit card, invoice, pay stub, receipt |
+| **US tax** | Unified US tax, W-2, 1098 variants, 1099 variants, 1040 variants |
+| **US mortgage** | 1003 (loan application), 1004 (appraisal), 1005 (employment verification), 1008 (loan transmittal), closing disclosure |
+| **Personal identification** | Health insurance card, identity documents, marriage certificate |
 
-**Batch processing:**
-- Submit multiple documents asynchronously
-- Results are stored and retrieved via polling or webhook notifications
-- Suitable for high-volume processing (bulk invoice processing, form scanning)
+The **business card** model is **not in the v4.0 catalog**. It existed through v3.1 and did not carry forward, which is a common source of surprise when migrating.
 
-### Integration with Azure AI Search
+Extracted fields come back strongly typed (`string`, `number`, `integer`, `date`, `time`, `phoneNumber`, `currency`, `address`), so an invoice date arrives as a date and a subtotal as a currency value without any parsing configuration.
 
-Document Intelligence integrates with [Azure AI Search](https://learn.microsoft.com/en-us/azure/search/){:target="_blank" rel="noopener noreferrer"} as an enrichment skill. This allows you to:
+### Custom Models
 
-1. Set up an indexing pipeline that processes documents
-2. Apply Document Intelligence to extract structured data
-3. Index the extracted data so documents are searchable
-4. Combine with other enrichment skills (like entity recognition, sentiment analysis)
+When no prebuilt model fits, you label your own documents. Five examples of the same document type is enough to start.
 
-This pattern is useful for knowledge management systems where you ingest documents and want them to be searchable and analyzable.
+| Feature | Custom template | Custom neural |
+|---------|-----------------|---------------|
+| Document structure | Fixed template or form | Structured, semi-structured, and unstructured |
+| Training time | 1 to 5 minutes | 30 minutes to 12 hours |
+| Extracts | Key-value pairs, tables, selection marks, coordinates, signatures | Key-value pairs, selection marks, tables |
+| Overlapping fields | Not supported | Supported |
+| Document variations | One model per variation | One model across variations |
+| Training data ceiling | 500 pages, 50 MB | 50,000 pages, 1 GB |
 
----
+Start with neural. Template models only hold up when every document shares an identical visual layout, and the way to test that is to blank out all user-entered data and check whether the empty forms are indistinguishable. If they are not, template accuracy will drift and you will end up training one model per variation and composing them.
 
-## Prebuilt Models vs Custom Models Decision Framework
+Neural training defaults to a 30-minute budget. Going beyond that requires enabling paid training.
 
-Choosing between prebuilt and custom models depends on your document type, accuracy requirements, and available training data:
+**Custom classifiers** are the companion piece: they identify which type a document is, and split multi-document files into page ranges, so the right extraction model gets invoked per document. v4.0 classifiers also support Office file types and incremental training.
 
-| Consideration | Prebuilt Models | Custom Models |
-|---------------|-----------------|---------------|
-| **Setup time** | Minutes | Days to weeks |
-| **Training data required** | None | 5-10 samples minimum, 50+ ideal |
-| **Initial cost** | Lower (per-document charges only) | Higher (training + inference) |
-| **Customization** | Limited (fixed fields) | Complete (define any fields) |
-| **Accuracy on common documents** | High (trained on thousands of examples) | Depends on your training data |
-| **Accuracy on specialized documents** | May miss domain-specific fields | Higher if well-trained |
-| **Maintenance effort** | None (Microsoft updates models) | Retraining required if document format changes |
+### Custom Model Input Constraints
 
-**Decision tree:**
-1. Is there a prebuilt model for your document type? Use it.
-2. Do you need to extract fields that the prebuilt model doesn't provide? Consider custom.
-3. Do you have at least 5-10 labeled samples of your custom document type? Proceed with custom training.
-4. If you have fewer samples, use a prebuilt model and map extracted fields to your schema.
+| Constraint | Value |
+|------------|-------|
+| Formats | PDF, JPEG/JPG, PNG, BMP, TIFF, HEIF (Office formats for read, layout, and classification only) |
+| Pages per document | 2,000 (first two pages on free tier) |
+| File size | 500 MB paid (S0), 4 MB free (F0) |
+| Image dimensions | 50 x 50 to 10,000 x 10,000 pixels |
+| Password-protected PDFs | Must be unlocked before submission |
 
 ---
 
-## Pricing Tiers and Resource Organization
+## Content Understanding
 
-Azure AI Vision services use consumption-based pricing. The primary cost drivers are the number of API calls and the operation type.
+[Content Understanding](https://learn.microsoft.com/en-us/azure/ai-services/content-understanding/overview){:target="_blank" rel="noopener noreferrer"} is the generative successor that most retiring vision capabilities point toward. It processes documents, images, audio, and video into a user-defined output format, and it reached GA with API version `2025-11-01`.
 
-**Free tier:**
-- Limited free calls per month (useful for development and testing)
-- Suitable for proof-of-concept work
-- Expires after 12 months of no activity
+The unit of configuration is an **analyzer**: content extraction settings, a field schema, and model deployments, applied consistently to everything sent through it. Fields can be produced three ways.
 
-**Standard tier:**
-- Pay per API call with volume discounts at scale
-- No call limits
-- Higher volume = lower per-call cost
+| Method | Behavior | Example |
+|--------|----------|---------|
+| **Extract** | Pull the value as it appears (documents only) | A date from a receipt |
+| **Classify** | Assign from a predefined set of categories | Call sentiment, or document type for routing |
+| **Generate** | Produce a value freely from the input | A summary of a call, or a scene description |
 
-**Resource organization:**
-- Create a dedicated vision resource or use a multi-service cognitive services resource
-- Different services can share a multi-service resource (vision, language, speech, decision)
-- Separate resources simplify cost allocation if you need to bill different teams
+Two properties make it usable for straight-through processing rather than just for exploration. **Confidence scores** (0 to 1, per field) let you set a threshold above which no human reviews the result. **Grounding** identifies the region of the source content each value came from, so a reviewer can verify a field without rereading the document. Both are enabled by the `estimateFieldSourceAndConfidence` setting on document analyzers.
 
-For Custom Vision, you may also need a training resource and a prediction resource:
-- **Training resource:** Used for model training (charged per training hour)
-- **Prediction resource:** Used to serve published models (charged per prediction)
+Content Understanding requires a Microsoft Foundry resource and your own deployments of supported generative and embedding models, which it uses for field extraction and figure analysis. That is a different cost and operations model from a per-transaction prebuilt API: you are paying for model inference plus contextualization tokens rather than a flat per-page rate.
+
+### Content Understanding or Document Intelligence
+
+Both extract structured data from documents, and their capabilities overlap substantially.
+
+| Choose | When |
+|--------|------|
+| **Document Intelligence** | A prebuilt model matches your document type, or you need deterministic per-page pricing and a fixed field schema on a well-defined layout |
+| **Content Understanding** | Your inputs span modalities, your schema is defined by prompt rather than by labels, you need generated or classified fields alongside extracted ones, or you want one pipeline over documents, images, audio, and video |
+
+---
+
+## Resource Organization and Pricing
+
+### Resource Types
+
+| Resource | Kind | Covers |
+|----------|------|--------|
+| **Microsoft Foundry** | `AIServices` | Multiple Foundry Tools behind one endpoint and key, plus model deployments, agents, and projects |
+| **Single-service** | `ComputerVision`, `Face`, `FormRecognizer`, and so on | One service, one key |
+| **Custom Vision** | `CustomVision.Training` and `CustomVision.Prediction` | Training and prediction, billed separately |
+
+The Foundry resource is the current default and is listed under **Foundry > Foundry** in the portal. It provides one Azure-managed boundary for identity, networking, encryption, billing, and monitoring across the services inside it, which is why it earns its place even when you only call one service today.
+
+Single-service resources are still valid, and they remain the better fit when you need per-service cost attribution across teams, or when a single service has to sit in a different region or under a different network policy than the rest.
+
+### Pricing Shape
+
+Pricing is per transaction, with the tier setting both the transactions-per-second ceiling and which features are enabled. `F0` is the free SKU on most services and `S0` the standard one. Free tiers are for development: they cap monthly volume, process only the first two pages of multi-page documents, and, on Face, exclude Limited Access operations entirely.
+
+Cost drivers differ by service in ways that matter at design time. Prebuilt Document Intelligence models bill per page. Custom Vision splits training hours from prediction transactions. Content Understanding bills model inference and contextualization tokens rather than a flat page rate, so per-document cost varies with document complexity.
 
 ---
 
 ## Integration with Azure AI Search
 
-[Azure AI Search](https://learn.microsoft.com/en-us/azure/search/cognitive-search-concept-intro){:target="_blank" rel="noopener noreferrer"} includes built-in enrichment skills that integrate Azure AI services into document indexing pipelines. This allows you to:
+[Azure AI Search](https://learn.microsoft.com/en-us/azure/search/cognitive-search-predefined-skills){:target="_blank" rel="noopener noreferrer"} skillsets call these services during indexing, so extracted content becomes searchable without a bespoke pipeline. The skill catalog is narrower than the service catalog, which is the detail most often gotten wrong: there is no skill that runs the `prebuilt-invoice` model.
 
-1. Ingest documents from Azure Blob Storage, SharePoint, or other sources
-2. Apply Document Intelligence to extract structured data
-3. Apply Azure AI Vision to extract metadata from embedded images
-4. Index the results so documents are searchable by extracted content
-5. Build applications that search across extracted fields
+```
+  Blob Storage / SharePoint / ADLS
+                |
+                v
+        +---------------+
+        |    Indexer    |  scheduling, change detection,
+        +---------------+  error handling
+                |
+                v
+        +---------------------------------------+
+        |              Skillset                 |
+        |                                       |
+        |  Document Layout ---> markdown /      |
+        |  (DI layout model)    text chunks +   |
+        |                       images +        |
+        |                       location meta   |
+        |                                       |
+        |  OCR --------------> text from images |
+        |                                       |
+        |  Image Analysis ---> tags, captions   |
+        |                                       |
+        |  Content Underst. -> semantic chunks, |
+        |                      field values     |
+        |                                       |
+        |  Vision embeddings-> image vectors    |
+        +---------------------------------------+
+                |
+                v
+        +---------------+
+        |     Index     |  text fields + vector fields
+        +---------------+
+                |
+                v
+      Full-text, vector, and hybrid queries
+```
 
-Common enrichment patterns:
-- Extract invoice line items and then make them searchable
-- Extract images from documents, analyze with Vision API, and add image metadata to the index
-- Extract text from documents with OCR and apply language understanding enrichment
+| Skill | Backed by | Produces |
+|-------|-----------|----------|
+| **Document Layout** (`DocumentIntelligenceLayoutSkill`) | Document Intelligence layout model, v4.0 | Markdown or chunked text, plus extracted images with page and bounding-polygon metadata |
+| **OCR** | Foundry Tools | Text from images |
+| **Image Analysis** | Foundry Tools | Tags and generated descriptions |
+| **Azure Content Understanding** | Your Content Understanding deployment | Advanced document analysis and semantic chunking |
+| **Azure Vision multimodal embeddings** | Foundry Tools | Vectors over images and text together |
 
-This approach eliminates the need to build custom document processing pipelines; Azure AI Search handles scheduling, error handling, and incremental indexing.
+Two billing models are in play. Most built-in skills attach a Foundry resource **for billing only**, with Azure AI Search executing them on internal resources. The Content Understanding skill connects to **your** deployment for both billing and processing, which means its throughput and quota are yours to manage.
+
+The Document Layout skill is the workhorse for retrieval-augmented generation. It emits markdown that preserves heading structure (`markdownHeaderDepth` controls the nesting depth captured) or fixed-size text chunks with configurable overlap, and its `extractionOptions` can pull images with the page number and bounding polygon showing where each one sat. That positional metadata is what lets a RAG answer cite a location rather than a document.
+
+Two constraints apply. Documents needing more than five minutes in the layout model time out, and the attached Foundry resource is still charged for the failed attempt. Beyond 20 documents per indexer per day the skill requires a billable Foundry resource attached to the skillset.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Over-Relying on General Models for Specialized Documents
+### Pitfall 1: Building New Work on a Retiring Service
 
-**Problem:** Using Azure AI Vision's general OCR to extract structured data from domain-specific documents (like invoices or receipts) and expecting field-level accuracy.
+**Problem:** Selecting Image Analysis or Custom Vision because the tutorials, samples, and blog posts are plentiful and the API is easy.
 
-**Result:** Extracted text is present but unstructured. Fields are not identified. Manual post-processing is required to separate line items from totals or invoice number from dates.
+**Result:** A system with a September 2028 expiry and no drop-in successor. Image Analysis fragments into four different replacements depending on what you used it for, and the Custom Vision replacement (AutoML) is a different operational model requiring a workspace, compute, and a managed endpoint. Neither is a configuration change.
 
-**Solution:** Use Azure AI Document Intelligence with prebuilt models (invoice, receipt, business card) for structured extraction. These models understand document semantics and return field-level data out of the box.
-
----
-
-### Pitfall 2: Training Custom Vision Models with Insufficient Data
-
-**Problem:** Training a Custom Vision model with 10 images per class, expecting high accuracy and generalization.
-
-**Result:** Model overfits to training data. It fails on new images that are slightly different (different lighting, angle, background). Accuracy appears high in testing but collapses in production.
-
-**Solution:** Collect at least 50 images per class, preferably 100+. Vary lighting, angles, backgrounds, and other conditions in training data. Use data augmentation if collection is limited. Evaluate on held-out test data that reflects real-world variation.
+**Solution:** Check service status before feature fit. For OCR, start at Document Intelligence. For custom classification, start at Content Understanding or AutoML. If an existing Image Analysis deployment has to keep running, map each feature you call to its specific replacement now, while the migration is a planning exercise rather than an outage.
 
 ---
 
-### Pitfall 3: Building Face Recognition Systems Without Considering Bias and Privacy
+### Pitfall 2: Discovering Face Limited Access During Integration
 
-**Problem:** Implementing a face identification system without testing for bias across demographic groups or obtaining explicit user consent for face data collection.
+**Problem:** Designing an identity verification or 1:N matching flow around the Face service, then finding out that Identify and Verify require an approved registration, are unavailable on the free tier, and are granted only to customers with a Microsoft account team relationship.
 
-**Result:** The model performs poorly on certain demographic groups. Users discover their faces are being collected without consent. Regulatory and reputational damage follows.
+**Result:** A blocked integration with no in-Azure fallback. Face detection alone cannot answer who someone is.
 
-**Solution:** Test Face API performance on diverse demographic groups before deployment. Obtain explicit written consent from users before collecting face data. Document your use case and ensure it aligns with Microsoft's responsible AI guidelines. Implement access controls and encryption for stored face data.
-
----
-
-### Pitfall 4: Ignoring Region-Specific Availability
-
-**Problem:** Deploying vision services in a region where certain models are not available, or assuming all regions have the same feature set.
-
-**Result:** A feature you're relying on (like a specific prebuilt Document Intelligence model) is not available in your region. You must redesign your architecture or migrate to a supported region.
-
-**Solution:** Check the current [Azure AI Services region availability documentation](https://learn.microsoft.com/en-us/azure/ai-services/where-to-use-an-ai-service){:target="_blank" rel="noopener noreferrer"} before selecting a region. Plan for future feature rollouts; newer capabilities may be available in certain regions before others.
+**Solution:** Submit the [registration](https://aka.ms/facerecognition){:target="_blank" rel="noopener noreferrer"} before the design depends on it, and state the actual use case, since approval is scoped to what you declare. Prototype the parts that work unregistered (detection, quality attributes, enrollment UX) while approval is pending. If approval is uncertain, evaluate a third-party identity verification provider in parallel rather than after.
 
 ---
 
-### Pitfall 5: Not Planning for Latency in Real-Time Applications
+### Pitfall 3: Using General OCR Where Structure Is Needed
 
-**Problem:** Using asynchronous Document Intelligence or Custom Vision in an application that requires real-time results (e.g., a web form that processes a document and displays results immediately).
+**Problem:** Running invoices or receipts through a general OCR API and expecting field-level accuracy.
 
-**Result:** Users wait 2-5 seconds (or longer) for results. The application feels slow and unresponsive. Users abandon the feature.
+**Result:** Text comes back correct but unstructured. Nothing distinguishes an invoice number from a purchase order number or a line-item total from the grand total, so accuracy now depends on regular expressions over positional text.
 
-**Solution:** Use synchronous APIs when building user-facing real-time features. For batch processing and non-interactive scenarios, asynchronous APIs are appropriate. Test end-to-end latency in your production region; latency varies by region and load.
+**Solution:** Use a Document Intelligence prebuilt model. It understands document semantics and returns typed fields. When no prebuilt model matches, a custom neural model on five labeled samples still beats parsing raw OCR output.
+
+---
+
+### Pitfall 4: Undersized or Unvaried Training Data
+
+**Problem:** Training a Custom Vision or custom Document Intelligence model on the documented minimum (5 images per tag, 5 documents) and treating that as sufficient.
+
+**Result:** The model overfits. It scores well on held-back data drawn from the same batch and collapses on production inputs that differ in lighting, angle, scanner, or layout variant.
+
+**Solution:** Treat the minimum as what the service accepts, not what it needs. Microsoft recommends 50 or more images per tag for Custom Vision, and a larger document set when scans are low quality. Vary the conditions deliberately, and evaluate against held-out data that reflects real production variation rather than a split of the original batch.
+
+---
+
+### Pitfall 5: Assuming Uniform Regional Availability
+
+**Problem:** Choosing a region for reasons unrelated to AI, then assuming every model and skill is available there.
+
+**Result:** A capability you depend on is missing. The Azure AI Search Document Layout skill is a concrete example: through the Import data wizard it requires the search service and multi-service account to be in East US, West Europe 2, or North Central US, and using a resource key for billing requires both resources in the same region. Entra ID authentication removes the same-region requirement, so the constraint depends on how you wired up billing.
+
+**Solution:** Verify [regional availability](https://learn.microsoft.com/en-us/azure/ai-services/where-to-use-an-ai-service){:target="_blank" rel="noopener noreferrer"} for every model and skill in the design, not just for the service. Where a constraint is tied to an authentication or billing choice, check whether a different choice relaxes it.
+
+---
+
+### Pitfall 6: Ignoring Latency Shape in Interactive Flows
+
+**Problem:** Putting an asynchronous document API behind a synchronous user interaction, such as a form that uploads a document and displays extracted fields immediately.
+
+**Result:** The user waits through a submit-poll-retrieve cycle. Document Intelligence analysis is a long-running operation by design, and a large or complex document takes proportionally longer.
+
+**Solution:** Match the API shape to the interaction. Synchronous OCR suits real-time image scenarios. For document extraction in a user-facing flow, accept the upload, return immediately, and notify on completion. Test end-to-end latency in the production region under realistic document sizes, since it varies with both.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure AI Vision services are managed APIs for image and document understanding.** They abstract away ML infrastructure, training, and model serving, allowing architects to add visual intelligence without building custom ML systems.
+1. **Check service status before feature fit.** Image Analysis and Custom Vision both retire on 25 September 2028, and the Image Analysis retirement covers connected and disconnected containers as well as the cloud API. Spatial analysis and background removal are already gone.
 
-2. **Use Azure AI Vision (general purpose) for diverse image analysis, Custom Vision for domain-specific classification or detection, and Face API for facial analysis.** Each service solves specific problems; matching the service to your problem determines success.
+2. **The retirement has no single successor.** Image Analysis fragments by scenario: Document Intelligence for OCR, Face for faces, Cohere Embed or SigLIP for embeddings, and Content Understanding or a Foundry model for tagging and description.
 
-3. **Document Intelligence with prebuilt models is the starting point for document processing.** Prebuilt models for invoices, receipts, business cards, and IDs provide immediate structured data extraction. Custom models are useful when your documents don't match prebuilt patterns.
+3. **Document Intelligence is the durable choice for anything text-bearing.** v4.0 is current, the prebuilt catalog now spans financial, tax, mortgage, and identification documents, and it is where Microsoft is routing OCR work leaving Image Analysis.
 
-4. **Facial recognition requires careful attention to bias, privacy, and consent.** Face API has known performance variations across demographics. Always obtain explicit consent before collecting face data and test for fairness before deployment.
+4. **Two Document Intelligence models that older material describes are gone from v4.0:** the business card model and the general document model. Both existed through v3.1 and did not carry forward.
 
-5. **Custom Vision requires sufficient training data to avoid overfitting.** Aim for 50+ images per class with diversity in lighting, angles, and backgrounds. Small datasets (10-20 images) typically fail in production.
+5. **Face access is a procurement question, not a technical one.** Detection is open, but Identify and Verify need an approved registration, run only on S0 and E0 tiers, and are granted only to Microsoft-managed customers. Registration lead time belongs in the schedule.
 
-6. **Integrate vision services with Azure AI Search to build intelligent document processing pipelines.** Document Intelligence enrichment skills extract structured data, which is then indexed for search and analysis.
+6. **Face attribute lists in circulation are wrong.** Emotion and gender are retired outright. Age, smile, facial hair, hair, and makeup need a separately approved use case. What remains is largely image-quality signal, which is the useful part for keeping enrollment clean.
 
-7. **Consumption-based pricing scales with volume.** Plan for per-API-call costs, and consider volume discounts at high scale. Use prebuilt models to avoid custom training costs when available.
+7. **Verification without liveness proves only that someone submitted a matching image.** The liveness SDKs are gated through the same intake form and tested to ISO/IEC 30107-3.
 
-8. **Region availability affects feature selection.** Some models are available in certain regions before others. Check availability before committing to a region or feature.
+8. **Documented minimums are floors, not targets.** Custom Vision accepts 5 labeled images per tag for classification and 15 for object detection, but recommends 50 or more. Document Intelligence accepts 5 documents and wants more when scan quality is poor.
 
-9. **Latency matters for user-facing features.** Synchronous APIs are appropriate for real-time applications. Asynchronous APIs work well for batch processing and non-interactive scenarios.
+9. **Content Understanding is where the generative path leads.** It is GA, spans documents, images, audio, and video, and its confidence scores plus grounding are what make straight-through processing defensible. It bills model inference rather than a flat per-page rate.
 
-10. **Vision services integrate naturally with Azure AI Search, Azure Functions, and Logic Apps.** Use these integrations to build end-to-end intelligent document and image processing applications without custom development.
+10. **Azure AI Search integrates a narrower set than the service catalog suggests.** The Document Layout skill runs the layout model only. No skill runs `prebuilt-invoice`. Most skills attach a Foundry resource for billing while Search executes them, but the Content Understanding skill runs on your own deployment.
