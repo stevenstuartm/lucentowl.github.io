@@ -7,15 +7,11 @@ tags: [architecture, api-design, distributed-systems, security, design-patterns,
 author: steven-stuart
 ---
 
-Every service request arrives with the same question: what makes this request legitimate? It is a question I return to often, because the answer almost always reveals a belief about architecture that was never made explicit.
+Every service request arrives with the same question: what makes this request legitimate? It is a question I return to often, because the answer is certain to reveal a foundational belief about a system's architecture that might not have been made explicit and could hint at a misalignment with the business domain.
 
-Most teams treat this as an authentication problem, but the answer shapes how services are structured, where trust boundaries sit, and how teams own their work.
+The school of **Positional architecture** claims that legitimacy is **granted** by placement. A request is legitimate because it arrived from the right place, to the right place. More specifically, from behind the perimeter, through the right intermediaries, from a subnet the architecture trusts, or toward a service that grants access on that same basis.
 
-**Positional architecture**: legitimacy granted by placement.
-A request is legitimate because it arrived from the right place, to the right place: from behind the perimeter, through the right intermediaries, from a subnet the architecture trusts, or toward a service that grants access on that same basis.
-
-**Identity-oriented architecture**: legitimacy earned by ownership.
-A request is legitimate because the caller has proven who it is and what it is authorized to do. Credentials name its bounded scope, not just its network address. Every service validates every caller the same way, and all services relate to each other as peers with clear, bounded authority over their own domains.
+The school of **Identity-oriented architecture** claims that legitimacy is **earned** by ownership. A request is legitimate because the caller has proven who it is and what it is authorized to do. Credentials name its bounded scope, not just its network address. Every service validates every caller the same way, and all services relate to each other as peers with clear, bounded authority over their own domains.
 
 The choice typically reflects a single belief about where legitimacy comes from, and that belief determines where authority lives in the system, how teams own their work, and whether the system can adapt as the domain evolves.
 

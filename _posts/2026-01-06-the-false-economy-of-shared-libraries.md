@@ -59,7 +59,7 @@ If two services genuinely need the same function, you have three possibilities:
 
 A shared library is almost never the right answer because the problem it solves (duplicated code) rarely justifies the problems it creates (coupling, versioning, blocked teams).
 
-The common rebuttal is "but if there's a bug, I fix it once and it propagates everywhere." Consider what code that would actually be in a well-architected distributed system. Cross-cutting concerns like logging, networking, and observability are handled by infrastructure through sidecars and service meshes. Security is already an acknowledged exception. Third-party libraries have their own maintenance cycles. What remains is business logic, and if your business logic is so coupled across services that a single bug requires simultaneous fixes everywhere, you don't have a sharing problem, you have a boundary problem, which brings you back to the diagnosis above.
+The common rebuttal is "but if there's a bug, I fix it once and it propagates everywhere." Consider what code that would actually be in a well-architected distributed system. Concerns like logging and observability aren't blindly shared implementations either. A service **authors** them out of its own domain knowledge, aligned to shared values about how behavior gets classified and what context gets captured. Security is already an acknowledged exception. Third-party libraries have their own maintenance cycles. What remains is business logic, and if your business logic is so coupled across services that a single bug requires simultaneous fixes everywhere, you don't have a sharing problem, you have a boundary problem, which brings you back to the diagnosis above.
 
 ## Don't Reinvent the Wheel vs. Don't Share Internal Types
 
@@ -128,9 +128,9 @@ The pitch sounds reasonable: "We'll publish a client library so consumers don't 
 
 **Every consumer has different needs.** Service A might need three fields from one endpoint. Service B might need ten fields from a different endpoint. Service C might need to call the same endpoint but transform the response differently. When you force everyone to use your client library, you're imposing your view of how your API should be consumed. But consumers know their own needs better than you do.
 
-**Client libraries confuse application concerns with infrastructure concerns.** Teams building client libraries inevitably add caching strategies, retry policies, circuit breakers, and connection pooling configurations. These aren't client concerns. They're infrastructure concerns that belong in service meshes, sidecars, and API gateways where they can be configured, observed, and tuned without redeploying applications.
+**Client libraries impose one team's operational policy on every consumer.** Teams building client libraries inevitably add caching strategies, retry policies, circuit breakers, and connection pooling configurations. Those decisions belong to the calling service, which is the only one that knows its own latency budget, its failure tolerance, and what a stale read costs its domain. The producer knows none of that.
 
-A client library buries these decisions in application code where they're invisible to operations and impossible to change without a coordinated release across every consumer. The library author predicts traffic patterns and failures as if every consumer will behave identically. They won't.
+A client library freezes those choices upstream, where changing them requires a coordinated release across every consumer. The library author predicts traffic patterns and failures as if every consumer will behave identically. They won't.
 
 **The absurdity becomes obvious with frontend consumers.** Few teams would publish an npm package for their React app to import API contracts, or a Swift package for iOS. Frontend teams read documentation, call endpoints, and map responses to whatever structures suit their application. Backend services have the same needs. The consumer's requirements don't change based on what language they're written in.
 
