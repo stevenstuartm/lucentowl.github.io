@@ -3,873 +3,580 @@ title: "Azure AI & ML Service Selection"
 layout: guide
 category: Azure
 subcategory: Machine Learning & AI
-description: "A decision framework for selecting the right Azure AI and ML services, comparing Azure Machine Learning, AI Services (Vision, Language, Speech, Document Intelligence), Azure OpenAI Service, and Azure AI Search."
-tags: [azure, cloud-computing, infrastructure, machine-learning, decision-making, architecture, scalability, practical]
+description: "A decision framework for choosing between the four Azure AI building blocks: prebuilt Foundry Tools, generative Foundry Models, Azure AI Search retrieval, and custom models in Azure Machine Learning."
+tags: [foundry-tools, foundry-models, ai-search, rag, build-vs-buy, decision-making, practical]
 ---
 
-## Azure AI & ML Service Landscape
+## The Azure AI & ML Landscape
 
-[Azure's AI and ML ecosystem](https://learn.microsoft.com/en-us/azure/architecture/data-guide/technology-choices/data-science-and-machine-learning){:target="_blank" rel="noopener noreferrer"} provides a spectrum of services that address different levels of abstraction and control. At one end, prebuilt AI services like Azure AI Vision and Azure AI Language offer capabilities that work immediately without training data. At the other end, Azure Machine Learning provides the full infrastructure to build, train, and deploy custom models with complete control over the training process.
+Azure's AI offerings sit at four levels of abstraction, and picking the wrong level is the most expensive mistake available at design time.
 
-Between these extremes lie services like Azure OpenAI Service, which provides access to pretrained foundation models that can be customized through prompt engineering and fine-tuning, and Azure AI Search, which combines search capabilities with AI enrichment for knowledge mining and Retrieval-Augmented Generation patterns.
+| Building block | What it is | You supply |
+|---|---|---|
+| **Foundry Tools** | Task-specific prebuilt APIs for vision, language, speech, translation, and document extraction | An API call |
+| **Foundry Models** | A catalog of generative models (OpenAI, Anthropic, Meta, Mistral, xAI, Microsoft, and others) behind a common deployment and inference surface | A prompt, and optionally fine-tuning data |
+| **Azure AI Search** | Retrieval over your own content, from classic index queries to agentic multi-source retrieval | Your documents and a chunking strategy |
+| **Azure Machine Learning** | Infrastructure and tooling to train, register, deploy, and monitor your own models | Labeled data, ML expertise, and compute |
 
-### What Problems Azure AI Services Solve
+The first three are managed services you call. The fourth is a platform you build on. Most applications combine several, and a design that reaches for Azure Machine Learning when a prebuilt API would do pays for ML talent and infrastructure to reach parity with something already available over REST.
 
-**Without Azure AI services:**
-- Building AI capabilities requires hiring specialized ML talent and provisioning infrastructure
-- Training models from scratch demands large labeled datasets and significant compute resources
-- Model deployment and scaling require container orchestration expertise
-- Maintaining model quality over time needs monitoring pipelines and retraining workflows
-- Integration with applications requires understanding ML frameworks and serving patterns
+### The naming has changed, and the old names are still in your code
 
-**With Azure AI services:**
-- Prebuilt AI capabilities available through REST APIs without ML expertise
-- Immediate access to pretrained models fine-tuned on massive datasets
-- Managed scaling and availability with SLA guarantees
-- Built-in monitoring, versioning, and model refresh managed by Microsoft
-- SDKs for common programming languages abstract away ML complexity
-- Responsible AI features like content filtering and bias detection included by default
+Microsoft renamed most of this stack, and the docs, the portal, and the ARM layer are not all on the same vocabulary. Anyone reading older material or maintaining older infrastructure code hits this immediately.
 
-### How Azure AI Differs from AWS AI/ML
+| Previous name | Current name |
+|---|---|
+| Azure Cognitive Services, then Azure AI services | **Foundry Tools** |
+| Azure AI Studio, then Azure AI Foundry | **Microsoft Foundry** |
+| Azure OpenAI Service | **Azure OpenAI in Foundry Models** |
+| Hub + Azure OpenAI resource + Azure AI Services resource | A single **Foundry resource**, with projects inside it |
+| Azure Cognitive Search | **Azure AI Search** |
+| Form Recognizer | **Azure AI Document Intelligence** |
+| Assistants API (threads, messages, runs) | **Responses API** (conversations, items, responses) |
 
-Architects familiar with AWS should note several structural differences:
+The ARM resource provider is still `Microsoft.CognitiveServices`, and the multi-service resource is `kind: AIServices`. Bicep, Terraform, and role assignments written against the older vocabulary keep working. Only the docs and portal labels moved.
+
+### What these services replace
+
+**Without managed AI services:**
+- Building AI capabilities requires hiring specialized ML talent and provisioning training infrastructure
+- Training models from scratch demands large labeled datasets and significant compute
+- Deployment and scaling require container orchestration expertise
+- Maintaining model quality needs monitoring pipelines and retraining workflows
+
+**With managed AI services:**
+- Prebuilt capabilities available over REST without ML expertise
+- Managed scaling, availability, and model refresh
+- SDKs that abstract the ML serving layer away
+- Content filtering and abuse monitoring applied by default on generative models
+
+### How Azure compares to AWS
+
+Architects arriving from AWS should note several structural differences, and two services on the AWS side whose status recently changed.
 
 | Concept | AWS | Azure |
-|---------|-----|-------|
-| **Custom ML platform** | SageMaker (unified service) | Azure Machine Learning (unified service) |
-| **Prebuilt AI APIs** | Individual services (Rekognition, Comprehend, Transcribe, Textract) | Azure AI Services (multi-service resource or individual services) |
-| **Foundation models** | Bedrock (access to Anthropic, Stability AI, Meta, Cohere) | Azure OpenAI Service (access to OpenAI models: GPT-4, GPT-3.5, DALL-E, Whisper, Embeddings) |
-| **Vision APIs** | Rekognition | Azure AI Vision |
-| **NLP APIs** | Comprehend | Azure AI Language |
-| **Speech APIs** | Transcribe, Polly | Azure AI Speech |
-| **Document intelligence** | Textract | Azure AI Document Intelligence |
-| **Knowledge mining / search** | Kendra | Azure AI Search |
-| **Resource model** | Pay-per-API-call for most services | Pay-per-transaction + optional commitment tiers with discounts |
-| **Content moderation** | Rekognition Moderation API | Azure AI Content Safety (integrated into OpenAI Service and available standalone) |
-| **Custom model training in prebuilt services** | Limited (Rekognition Custom Labels) | Supported across AI Vision, Language, Speech, Document Intelligence |
+|---|---|---|
+| **Custom ML platform** | SageMaker AI | Azure Machine Learning |
+| **Prebuilt AI APIs** | Individual services (Rekognition, Comprehend, Transcribe, Textract) | Foundry Tools (one multi-service Foundry resource, or single-service resources) |
+| **Foundation model catalog** | Amazon Bedrock | Foundry Models |
+| **Vision APIs** | Rekognition | Azure Vision, Face |
+| **NLP APIs** | Comprehend | Azure Language |
+| **Speech APIs** | Transcribe, Polly | Azure Speech |
+| **Document extraction** | Textract | Azure AI Document Intelligence |
+| **Retrieval for RAG** | Amazon Bedrock Knowledge Bases (Kendra entered maintenance mode on 30 June 2026 and closed to new customers on 30 July 2026) | Azure AI Search |
+| **Content moderation** | Rekognition and Comprehend moderation APIs, Bedrock Guardrails | Azure AI Content Safety, standalone and integrated into Foundry Models |
+| **Custom training inside prebuilt services** | Comprehend custom classification and custom entity recognition, Transcribe custom language models, Textract adapters, Rekognition Custom Labels | Custom NER and text classification, custom speech, custom voice, custom Document Intelligence models |
+
+Both platforms let you train custom models inside the prebuilt services rather than dropping to the full ML platform. Neither one is a general escape hatch, and on both sides the custom paths are narrower than the prebuilt catalogs.
 
 ---
 
-## Decision Framework: Prebuilt AI vs Custom ML vs Azure OpenAI
+## Decision Framework
 
-Choosing the right Azure AI service begins with understanding your problem and constraints. This decision tree guides the selection process:
+### Decision tree
 
-### Decision Tree
+**Does your task match a named, task-specific AI capability?**
 
-**Start here: Do you have a well-defined task that fits a known AI capability?**
+**Yes:**
+- Image analysis, OCR, or face detection → **Azure Vision** or **Face**
+- Structured extraction from forms, invoices, receipts, or IDs → **Azure AI Document Intelligence**
+- Sentiment, entity recognition, PII detection, or language detection → **Azure Language**
+- Transcription, synthesis, or spoken translation → **Azure Speech**
+- Text translation → **Azure Translator**
 
-**Yes → Continue below**
-- Do you need image analysis, OCR, face detection, or video indexing?
-  - **Use Azure AI Vision** or **Azure AI Document Intelligence**
-- Do you need text classification, sentiment analysis, entity recognition, translation, or question answering?
-  - **Use Azure AI Language**
-- Do you need speech-to-text, text-to-speech, or voice translation?
-  - **Use Azure AI Speech**
-- Do you need conversational AI or chatbot capabilities?
-  - **Use Azure OpenAI Service** (GPT models) or **Azure AI Bot Service**
-- Do you need semantic search, knowledge mining, or Retrieval-Augmented Generation?
-  - **Use Azure AI Search** (potentially combined with Azure OpenAI Service for RAG)
+**No, the task is generative, conversational, or open-ended:**
+- Content generation, summarization, reasoning, code → **Foundry Models**
+- A conversational agent with tools and memory → **Foundry Agent Service**
+- Answers grounded in your own documents → **Azure AI Search** plus a Foundry model (RAG)
 
-**No → Your task is novel or highly specialized**
-- Do you have labeled training data and ML expertise?
-  - **Use Azure Machine Learning** to build custom models
-- Do you lack training data but have ML expertise?
-  - Consider **Azure Machine Learning** with AutoML or transfer learning, or explore **Azure OpenAI Service** for few-shot learning
-- Do you lack both training data and ML expertise?
-  - Re-evaluate whether AI is the right solution, or start with **Azure OpenAI Service** for generative tasks
+**No, and the task is a specialized prediction problem:**
+- You have labeled data and ML expertise → **Azure Machine Learning**
+- You have labeled data but no ML expertise → **Azure Machine Learning AutoML**
+- You have neither → start with a Foundry model and few-shot prompting, and reassess whether the problem needs a model at all
 
-### When to Use Each Service
+### When to use each, and when not to
 
-| Service | When to Use | When NOT to Use |
-|---------|------------|-----------------|
-| **Azure AI Vision** | Image classification, object detection, OCR, face detection, image analysis with prebuilt or lightly customized models | Highly specialized computer vision tasks not covered by prebuilt models (e.g., medical imaging diagnostics requiring regulatory approval) |
-| **Azure AI Language** | Text classification, sentiment analysis, entity recognition, key phrase extraction, language detection, translation | Custom NLP requiring proprietary domain knowledge not learnable from fine-tuning (e.g., interpreting legal language in niche jurisdictions) |
-| **Azure AI Speech** | Speech-to-text, text-to-speech, speaker recognition, real-time translation | Real-time speech applications with latency requirements below 100ms or requiring on-premises deployment |
-| **Azure AI Document Intelligence** | Extracting structured data from forms, invoices, receipts, ID cards, business cards, and custom documents | Document types with highly variable layouts that prebuilt and custom models struggle to parse reliably |
-| **Azure OpenAI Service** | Conversational AI, content generation, summarization, code generation, embeddings for semantic search, few-shot learning | Tasks requiring deterministic outputs, tasks where explainability is legally required, tasks where model behavior must be audited at the training data level |
-| **Azure AI Search** | Full-text search, faceted navigation, semantic search, knowledge mining, vector search for embeddings, RAG architectures | Simple keyword search over small datasets (consider Azure Cognitive Search Free tier or even in-app search), applications requiring sub-10ms query latency at extreme scale |
-| **Azure Machine Learning** | Custom model development, training at scale, model versioning, MLOps pipelines, AutoML, responsible AI tooling | Simple API-based AI needs satisfied by prebuilt services, prototypes that don't justify infrastructure investment |
+| Service | When to use | When NOT to use |
+|---|---|---|
+| **Azure Vision / Face** | OCR on images, face detection and verification, image tagging | Specialized computer vision needing regulatory approval (medical imaging). Note that Image Analysis and Custom Vision both retire 25 September 2028 |
+| **Azure Language** | PII detection, language detection, prebuilt and custom NER, text analytics for health | Domain reasoning that no amount of labeled data teaches. Most other Language features are on a 2029 retirement path toward Foundry models |
+| **Azure Speech** | Real-time and batch transcription, synthesis, spoken translation, voice agents | Latency budgets that a cloud round trip cannot meet, which is what embedded speech exists for |
+| **Azure AI Document Intelligence** | Invoices, receipts, IDs, tax forms, layout extraction, custom document types | Documents with layouts so variable that neither prebuilt nor custom models parse them reliably |
+| **Foundry Models** | Generation, summarization, multi-step reasoning, embeddings, tasks with no labeled data | Deterministic outputs, legally required explainability, or auditing behavior at the training-data level |
+| **Azure AI Search** | Full-text, vector, hybrid, and multimodal retrieval, RAG grounding, agentic retrieval | Keyword lookup over a small dataset that a database index already serves |
+| **Azure Machine Learning** | Custom models, training at scale, MLOps pipelines, responsible AI tooling, on-premises or edge deployment | Anything a prebuilt service already covers adequately |
 
 ---
 
-## Azure AI Services: Prebuilt Capabilities
+## Foundry Tools: The Prebuilt Capabilities
 
-Azure AI Services are prebuilt APIs that provide immediate access to AI capabilities without requiring model training or ML expertise. These services are suitable for applications where the task aligns with a known AI capability and where the prebuilt models trained on broad datasets perform adequately.
+Foundry Tools are task-specific APIs that need no training data. They matter in a selection decision for what they cost and what they guarantee, not for their full feature lists.
 
-### Azure AI Vision
+### Azure Vision and Face
 
-[Azure AI Vision](https://learn.microsoft.com/en-us/azure/ai-services/computer-vision/overview){:target="_blank" rel="noopener noreferrer"} provides image analysis, OCR, face detection, spatial analysis, and video analysis capabilities. The service includes both prebuilt models and the ability to train custom models on your own image datasets.
+Azure Vision covers image analysis and OCR. Face covers detection, verification, and identification, with identification and celebrity recognition gated behind a limited-access review.
 
-**Core capabilities:**
-- **Image Analysis 4.0**: Tag images, detect objects, generate captions, extract text, analyze image properties (color scheme, dominant colors, aspect ratio)
-- **OCR**: Extract printed and handwritten text from images and PDFs in over 100 languages
-- **Face API**: Detect faces, identify facial landmarks, recognize faces across images, verify identity
-- **Spatial Analysis**: Analyze real-time video streams to understand physical space usage (people counting, social distancing, zone occupancy)
-- **Custom Vision**: Train custom image classification and object detection models with as few as 5-15 images per class
+Two things reshape any new vision design:
 
-**When to use Azure AI Vision:**
-- Content moderation: flagging inappropriate images in user-generated content
-- Document digitization: extracting text from scanned documents, receipts, or forms
-- Product catalog tagging: automatically tagging product images with attributes
-- Accessibility features: generating image captions for visually impaired users
-- Physical space analytics: monitoring retail space occupancy or factory floor safety compliance
+- **Image Analysis (both v3.2 and v4.0) and Custom Vision retire 25 September 2028**, across cloud APIs and containers. Microsoft asks for a transition plan by September 2026.
+- **Spatial analysis retired 30 March 2025**, as did the Image Analysis 4.0 background removal API. Neither has an in-service successor.
 
-**Custom Vision training workflow:**
-1. Upload labeled images to Azure AI Vision (minimum 5 images per class for classification, 15 per object type for detection)
-2. Train a custom model through the portal or API
-3. Evaluate model performance on validation set
-4. Deploy model to a prediction endpoint (hosted in Azure or exported for edge deployment)
-5. Call the custom model endpoint just like prebuilt models
+The successors fragment by scenario rather than replacing Image Analysis wholesale. Document OCR goes to Document Intelligence `prebuilt-read`. Faces stay with Face. Tagging and description go to Content Understanding or a Foundry model. Custom classification and object detection go to Azure Machine Learning AutoML or Content Understanding classifiers.
 
-### Azure AI Language
+Custom Vision itself accepts as few as 5 images per label, but Microsoft's own guidance is to start around 50 per label, and the service is documented as poorly suited to detecting subtle differences such as hairline cracks or dents.
 
-[Azure AI Language](https://learn.microsoft.com/en-us/azure/ai-services/language-service/overview){:target="_blank" rel="noopener noreferrer"} provides natural language processing capabilities including sentiment analysis, entity recognition, key phrase extraction, language detection, and question answering. Like Azure AI Vision, it supports both prebuilt models and custom model training.
+### Azure Language
 
-**Core capabilities:**
-- **Sentiment Analysis**: Determine positive, negative, neutral, or mixed sentiment at document and sentence level, with opinion mining to identify sentiment toward specific aspects
-- **Named Entity Recognition (NER)**: Extract entities like people, organizations, locations, dates, quantities, and custom entity types
-- **Key Phrase Extraction**: Identify main concepts in unstructured text
-- **Language Detection**: Detect the language of a document from over 100 languages
-- **Text Translation**: Translate text across 100+ languages (via Azure AI Translator, part of AI Services)
-- **Question Answering**: Build FAQ bots or conversational interfaces over documents and knowledge bases
-- **Text Summarization**: Generate extractive or abstractive summaries of long documents
-- **Custom Text Classification**: Train models to classify documents into your own categories
-- **Custom NER**: Train models to extract domain-specific entities
+Azure Language splits into a core tier and a legacy tier, and the legacy tier is most of the service.
 
-**When to use Azure AI Language:**
-- Customer feedback analysis: analyzing support tickets, reviews, or survey responses for sentiment and key themes
-- Compliance and risk: extracting entities from contracts, regulatory filings, or legal documents
-- Content recommendation: classifying articles or documents for recommendation engines
-- Chatbot intent recognition: determining user intent from conversational text
-- Document summarization: creating executive summaries from long reports
+| Tier | Features | Status |
+|---|---|---|
+| **Core** | PII detection, language detection, prebuilt NER, custom NER, text analytics for health | Recommended for new work, no retirement date |
+| **Legacy** | Conversational Language Understanding, custom text classification, entity linking, key phrase extraction, orchestration workflow, custom question answering, sentiment analysis and opinion mining, summarization | Supported for existing implementations only |
 
-**Custom model training workflow:**
-1. Upload labeled text data (minimum 10 examples per class for classification, 10 examples per entity for NER)
-2. Train a custom model through Language Studio or API
-3. Evaluate model performance
-4. Deploy to a hosted endpoint or export for offline use
-5. Call the custom model through the same API surface as prebuilt models
+Every legacy feature retires from Azure Language on **31 March 2029**, except entity linking on **1 September 2028**. The named migration target is Foundry models, and entity linking is the only one with an in-service successor (prebuilt NER). LUIS and QnA Maker are already retired, with Conversational Language Understanding and custom question answering as their successors, both of which are themselves in the legacy tier.
 
-### Azure AI Speech
+This changes the selection calculus. Sentiment analysis and summarization used to be the clearest examples of "use the cheap task-specific API instead of a language model." For a system being designed now, the task-specific API is the one with the end date.
 
-[Azure AI Speech](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/overview){:target="_blank" rel="noopener noreferrer"} provides speech-to-text, text-to-speech, speech translation, and speaker recognition capabilities. The service supports real-time and batch processing, and includes custom model training for specialized vocabularies and acoustic environments.
+Custom NER and custom text classification bind a storage account irreversibly, accept `.txt` files only, and cap at 200 entity types or classes. Custom text classification documentation recommends 50 tagged instances per class. Custom NER publishes no equivalent number and gives qualitative guidance instead: balanced, diverse, real-world, non-duplicate data.
 
-**Core capabilities:**
-- **Speech-to-Text**: Transcribe audio to text in real-time or batch, supporting 100+ languages and dialects
-- **Text-to-Speech**: Synthesize natural-sounding speech from text with neural voices in 100+ languages
-- **Speech Translation**: Translate spoken language in real-time across 30+ languages
-- **Speaker Recognition**: Verify speaker identity or identify speakers in audio
-- **Custom Speech**: Train models on domain-specific vocabularies, accents, or acoustic environments
-- **Custom Neural Voice**: Create a custom synthetic voice for brand-specific applications (requires application approval)
+### Azure Speech
 
-**When to use Azure AI Speech:**
-- Call center transcription: transcribing customer calls for quality assurance or sentiment analysis
-- Voice assistants: building voice-controlled applications or conversational interfaces
-- Accessibility features: providing text-to-speech for visually impaired users or speech-to-text for hearing-impaired users
-- Real-time translation: enabling multilingual conversations or live event translation
-- Voice authentication: verifying user identity through voice biometrics
+Speech to text runs three paths, and choosing between them is the main design decision:
 
-**Custom Speech workflow:**
-1. Upload audio data and transcripts that represent your domain (e.g., technical jargon, product names, regional accents)
-2. Train a custom model to adapt the baseline model to your data
-3. Evaluate model accuracy using word error rate (WER) metrics
-4. Deploy to a custom endpoint
-5. Use the custom endpoint just like the baseline model
+| Path | Shape | Limits |
+|---|---|---|
+| **Real-time** | Streaming, interim plus final results | Diarization caps at 240 minutes |
+| **Fast transcription** | Synchronous, faster than real-time, display-form output only | Under 500 MB and under 5 hours per file, 600 requests per minute |
+| **Batch** | Queued and asynchronous | 1 GB per file, 1,000 files per request. Each region processes batch jobs one at a time, so raising quota does not make batch finish sooner |
+
+Four capabilities have been retired or dated. **Speaker recognition** (voice biometric verification and identification) retired **30 September 2025** with no in-service successor, so a design calling for voice authentication needs a third-party provider. **Intent recognition** in the Speech SDK retired the same day, migrating to transcribe-then-classify. **Custom Commands** retired **30 April 2026**, and the **Long Audio API** retires **1 April 2027** in favor of batch synthesis. Speaker diarization is unaffected by all of these.
+
+For voice agents, **Voice Live** is the managed path. It bundles transcription, a generative model, synthesis, noise suppression, interruption handling, and optional avatar output behind an interface compatible with the Realtime event surface, and it needs a Foundry resource.
 
 ### Azure AI Document Intelligence
 
-[Azure AI Document Intelligence](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/overview){:target="_blank" rel="noopener noreferrer"} (formerly Form Recognizer) extracts structured data from documents including forms, invoices, receipts, business cards, ID cards, and custom document types. It combines OCR with layout understanding and domain-specific models.
+Document Intelligence extracts structured data from documents, combining OCR with layout understanding and document-type-specific models. **v4.0 (`2024-11-30`) is the current GA.** A custom model inherits the lifecycle of the API version that trained it, so the version you train on is a support commitment, not just a parameter.
 
-**Core capabilities:**
-- **Prebuilt models**: Invoice, receipt, ID card, business card, W-2 form, health insurance card models trained on diverse document sets
-- **Layout API**: Extract text, tables, and structure from documents without domain-specific understanding
-- **General Document model**: Extract key-value pairs from forms without training a custom model
-- **Custom models**: Train models on your own document types with as few as 5 labeled examples
-- **Composed models**: Combine multiple custom models into a single endpoint that routes documents to the appropriate model
+Two prebuilt models that older material recommends are **absent from v4.0**: the **business card** model and the **general document** model (`prebuilt-document`, the key-value-pair extractor). Both exist only through v3.1. A v4.0 design that needs generic key-value extraction uses layout plus a Foundry model, or Content Understanding, rather than a prebuilt.
 
-**When to use Azure AI Document Intelligence:**
-- Invoice processing: extracting line items, amounts, dates, and vendor information from invoices
-- Receipt digitization: capturing transaction details from receipts for expense reporting
-- Form automation: extracting data from application forms, insurance claims, or surveys
-- Identity verification: extracting information from driver's licenses, passports, or ID cards
-- Contract analysis: extracting key terms, dates, and parties from contracts (combined with Azure AI Language for entity extraction)
+Custom models need a minimum of five labeled documents. Template models train in one to five minutes. Neural models train in 30 minutes to 12 hours, with 30 minutes as the default budget and longer runs requiring paid training.
 
-**Custom model workflow:**
-1. Upload 5+ sample documents representing the form type
-2. Label fields in the documents using Document Intelligence Studio
-3. Train a custom model that learns the layout and field relationships
-4. Test model accuracy on unlabeled documents
-5. Deploy to a custom endpoint
-6. Call the endpoint with new documents to extract structured JSON
+### One resource or several
 
-### Multi-Service Resource vs Individual Services
+Foundry Tools can be provisioned as a single multi-service **Foundry resource** (`kind: AIServices`, listed under Foundry in the portal) or as individual single-service resources.
 
-Azure AI Services can be provisioned as a multi-service resource or as individual service resources. The choice affects management, billing, and access control.
+**Foundry resource:**
+- One endpoint and one key across the tools, plus access to Foundry Models and the Agent Service
+- Required by Content Understanding, Voice Live, and speech translation beyond two target languages
+- Combined billing and unified monitoring
+- Narrower regional availability than individual services
 
-**Multi-service resource (all-in-one):**
-- Single endpoint and key for Azure AI Vision, Language, Speech, Translator, and Decision services
-- Simplified billing: combined usage across all services under one subscription
-- Unified monitoring and diagnostics
-- Easier to manage when building applications that use multiple AI services
-- Cannot provision in all regions (multi-service resource availability is more limited than individual services)
-
-**Individual service resources:**
+**Single-service resources:**
 - Separate endpoint and key per service
-- Granular billing and cost allocation per service
+- Per-service cost allocation, which chargeback to different business units needs
 - Available in more regions
-- Better for environments requiring strict access control per service (e.g., compliance scenarios where OCR and speech services must be separated)
+- Suited to compliance boundaries that require separating, say, OCR from speech
 
-**Recommendation:**
-Start with a multi-service resource for development and small-scale production applications. Switch to individual service resources when you need region-specific deployment, granular access control, or chargeback to different business units.
-
----
-
-## Azure OpenAI Service: Foundation Models and Generative AI
-
-[Azure OpenAI Service](https://learn.microsoft.com/en-us/azure/ai-services/openai/overview){:target="_blank" rel="noopener noreferrer"} provides REST API access to OpenAI's foundation models including GPT-4, GPT-3.5, DALL-E, Whisper, and text embedding models. The service runs on Azure infrastructure with Microsoft's enterprise security, compliance, and responsible AI features.
-
-### What Azure OpenAI Service Provides
-
-Azure OpenAI Service differs from Azure AI Services in that it provides access to large language models (LLMs) trained on web-scale text corpora, capable of understanding and generating human-like text across a wide range of tasks. Unlike Azure AI Language (which provides task-specific models for sentiment, NER, or classification), OpenAI models are generalist and can perform many tasks through prompt engineering.
-
-**Core models:**
-
-| Model | Capability | Use Cases |
-|-------|-----------|-----------|
-| **GPT-4** | Advanced reasoning, instruction following, complex text generation | Conversational AI, code generation, complex summarization, multi-step reasoning, content creation |
-| **GPT-3.5-Turbo** | Fast, cost-efficient text generation and completion | Chatbots, simple content generation, summarization, classification via prompt engineering |
-| **GPT-4 Turbo** | Extended context window (128k tokens), vision capabilities | Processing long documents, analyzing images combined with text, complex multi-turn conversations |
-| **DALL-E 3** | Image generation from text prompts | Marketing asset creation, product mockups, creative content generation |
-| **Whisper** | Speech-to-text with high accuracy and multilingual support | Transcription, translation, voice interface input processing |
-| **Embeddings (text-embedding-ada-002)** | Convert text to vector embeddings for semantic search | Semantic search, recommendation systems, clustering, RAG architectures |
-
-### When to Use Azure OpenAI Service vs Azure AI Language
-
-Azure AI Language and Azure OpenAI Service overlap in capabilities like text classification, summarization, and entity extraction. Choosing between them depends on task complexity, customization needs, and cost constraints.
-
-| Factor | Azure AI Language | Azure OpenAI Service |
-|--------|------------------|----------------------|
-| **Task specificity** | Purpose-built for sentiment, NER, classification, summarization | General-purpose; handles diverse tasks through prompts |
-| **Accuracy** | High accuracy for supported tasks (trained on task-specific data) | Variable; depends on prompt quality and model size |
-| **Customization** | Custom models require labeled training data | Customization through prompt engineering or fine-tuning |
-| **Latency** | Low latency (optimized single-purpose models) | Higher latency (large model inference) |
-| **Cost** | Lower cost per transaction for supported tasks | Higher cost per token; GPT-4 significantly more expensive than GPT-3.5 |
-| **Explainability** | Limited explainability (black-box models) | Limited explainability, but can request reasoning in output |
-| **Determinism** | Deterministic outputs for repeated inputs | Non-deterministic by default (can set temperature=0 for more consistency) |
-
-**Use Azure AI Language when:**
-- The task matches a prebuilt capability (sentiment, NER, classification, key phrase extraction)
-- You need low latency and predictable costs
-- You have labeled training data for custom models
-- You need deterministic outputs
-
-**Use Azure OpenAI Service when:**
-- The task requires reasoning across multiple steps or domains
-- You need generative capabilities (content creation, summarization, conversation)
-- You lack labeled training data and want to use few-shot learning
-- You need a single model to handle multiple diverse tasks
-
-### Fine-Tuning vs Prompt Engineering
-
-Azure OpenAI Service supports two customization approaches: prompt engineering and fine-tuning.
-
-**Prompt engineering:**
-- Craft input prompts that guide the model toward desired outputs
-- Techniques include few-shot examples, chain-of-thought reasoning, and instruction following
-- No training data required beyond examples in the prompt itself
-- Immediate iteration; change prompt and re-run
-- Works across all OpenAI models without deployment
-
-**Fine-tuning:**
-- Train a custom version of GPT-3.5-Turbo or Babbage-002 on your own data
-- Requires labeled training data (minimum 10 examples, recommended 50-100)
-- Creates a deployable custom model specific to your use case
-- Improves accuracy and consistency for repetitive tasks
-- Reduces prompt length (model internalizes patterns from training data)
-
-| Approach | Use Case | Training Data | Cost | Iteration Speed |
-|----------|---------|--------------|------|----------------|
-| **Prompt engineering** | Exploration, low-volume tasks, diverse tasks | None (few-shot examples in prompt) | Pay per token in prompt + completion | Instant |
-| **Fine-tuning** | High-volume repetitive tasks, domain-specific language | 50-100+ labeled examples | Training cost + hosting cost + per-token inference | Slower (requires training job) |
-
-**Recommendation:**
-Start with prompt engineering. If you find yourself repeating the same few-shot examples across thousands of requests or if prompt length becomes costly, consider fine-tuning. Fine-tuning is especially valuable when the model must learn domain-specific terminology, writing style, or output formatting.
-
-### Responsible AI and Content Filtering
-
-Azure OpenAI Service includes built-in content filtering to detect and block harmful content. The filters operate on both input prompts and output completions.
-
-**Content filter categories:**
-- **Hate**: Content that expresses or promotes hatred based on protected characteristics
-- **Sexual**: Sexually explicit or suggestive content
-- **Violence**: Graphic violence, glorification of violence, or threats
-- **Self-harm**: Content that promotes or describes self-harm
-
-**Filter severity levels:**
-- Safe: content passes all filters
-- Low, Medium, High: graduated severity classifications
-- Configurable thresholds: define which severity levels to block per category
-
-**Content filtering modes:**
-- **Annotate**: classify content but do not block (for auditing and analysis)
-- **Block**: reject requests or responses that exceed configured thresholds
-
-**Content filtering implications:**
-- Adds latency to every request (typically <50ms)
-- Cannot be fully disabled (Microsoft enforces minimum protections)
-- False positives occur; legitimate use cases (e.g., medical content, creative writing) may trigger filters
-- Customization possible through support requests for approved use cases
-
-### Azure OpenAI Service vs OpenAI API
-
-Organizations choosing between Azure OpenAI Service and OpenAI's direct API should consider these differences:
-
-| Aspect | Azure OpenAI Service | OpenAI API |
-|--------|---------------------|------------|
-| **Model availability** | Lags behind OpenAI releases (typically weeks to months) | Newest models first |
-| **Model versions** | Specific model versions guaranteed until deprecation date | Model versions may change automatically |
-| **Data privacy** | Data not used to improve models; Microsoft privacy guarantees | Opt-out required to prevent training data usage |
-| **Compliance** | SOC 2, ISO 27001, HIPAA BAA available | Limited compliance certifications |
-| **Regional data residency** | Deploy in specific Azure regions | No regional control (data stored in US) |
-| **Rate limits** | Configurable per deployment; request quota increases | Fixed rate limits per pricing tier |
-| **Content filtering** | Built-in, configurable severity thresholds | Available but less integrated |
-| **Integration** | Native integration with Azure services (Key Vault, Managed Identity, Private Endpoints) | Requires additional configuration |
-| **Pricing** | Pay-per-token with reservation discounts available | Pay-per-token (no reservations) |
-
-**Use Azure OpenAI Service when:**
-- Data privacy, compliance, and regional data residency are critical
-- You need integration with Azure infrastructure (VNets, Private Endpoints, Managed Identity)
-- You require predictable model versions and SLA guarantees
-- You already operate on Azure and want unified billing and IAM
-
-**Use OpenAI API directly when:**
-- You need access to the latest models immediately
-- You operate outside Azure or in a multi-cloud environment
-- Simplicity and developer experience outweigh enterprise controls
+Start with a Foundry resource. Move to single-service resources when you hit a regional gap, need per-service cost attribution, or need to separate access by service.
 
 ---
 
-## Azure AI Search: Knowledge Mining and RAG
+## Foundry Models: Generative Capability
 
-[Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-what-is-azure-search){:target="_blank" rel="noopener noreferrer"} (formerly Azure Cognitive Search) is a search-as-a-service platform that combines full-text search, semantic search, and vector search capabilities with AI-powered content enrichment. It serves as the foundation for knowledge mining and Retrieval-Augmented Generation (RAG) architectures.
+Foundry Models is the catalog and deployment surface for generative models. It carries over 10,000 models, with roughly 50 added a month, and splits into two categories that differ in who supports them and how they bill.
 
-### What Azure AI Search Does
+| Category | Examples | Support and billing |
+|---|---|---|
+| **Sold by Azure** | Azure OpenAI models, Grok, DeepSeek, Llama, Cohere, Mistral, Phi | Microsoft hosts, supports, and sells under Microsoft Product Terms, with enterprise SLAs. Billed through Azure meters |
+| **From partners and community** | Anthropic Claude, Hugging Face models, Fireworks-hosted models | The provider defines license terms and sets pricing. Billed through Azure Marketplace |
 
-Azure AI Search is more than a search engine. It ingests data from various sources like blob storage, SQL databases, Cosmos DB, and third-party APIs, applies AI enrichment to extract insights, indexes the enriched content, and provides query capabilities that go beyond keyword matching.
+### Do not design against a model name
 
-**Core capabilities:**
-- **Full-text search**: Traditional keyword search with relevance scoring, filters, facets, and autocomplete
-- **Semantic search**: Understand query intent and rank results based on semantic meaning instead of keyword matching
-- **Vector search**: Perform similarity search over embeddings (e.g., from Azure OpenAI embeddings model) for semantic retrieval
-- **AI enrichment**: Apply Azure AI Services (Vision, Language, custom models) during indexing to extract entities, key phrases, sentiment, and OCR text
-- **Knowledge mining**: Build search indexes over unstructured data (PDFs, images, documents) by extracting and enriching content
-- **Integrated vectorization**: Automatically generate embeddings during indexing and queries using Azure OpenAI or custom embedding models
+Naming a specific model in an architecture document is the fastest way to make it stale. Models in this catalog move through **Preview → GA → Legacy → Deprecated → Retired**, and the whole GPT-4 and GPT-3.5 generation, DALL-E 2, `babbage-002`, and `davinci-002` are already retired. Retirement dates run roughly 12 to 24 months from a model's release.
 
-### RAG Architecture Patterns on Azure
+Design against the lifecycle mechanism instead:
 
-Retrieval-Augmented Generation (RAG) combines retrieval systems (like Azure AI Search) with generative models (like Azure OpenAI) to produce responses grounded in retrieved knowledge. RAG addresses the hallucination problem inherent in LLMs by anchoring generated text to retrieved documents.
+- The **model retirement schedule** on Microsoft Learn is the authoritative list of every model's stage, retirement date, and named replacement. Treat it as an input to your dependency review, not something you check when something breaks.
+- **Deployment-level version pinning** means a model version is stable until its published retirement date. Auto-update is opt-in per deployment.
+- **`model-router`** is a Microsoft model that routes each request to an appropriate model in the family, which decouples the application from any one model name.
+- Embedding models are the stable end of the catalog. `text-embedding-3-small`, `text-embedding-3-large`, and `text-embedding-ada-002` all run to February 2028, which matters because changing an embedding model means reindexing every vector you have stored.
 
-**RAG workflow:**
-1. **Index creation**: Documents are ingested into Azure AI Search, optionally enriched with AI Services (OCR, entity extraction), and indexed with embeddings
-2. **Query processing**: User query is converted to an embedding using Azure OpenAI embeddings model
-3. **Retrieval**: Azure AI Search performs vector search to retrieve top-k most semantically similar documents
-4. **Augmentation**: Retrieved documents are injected into the prompt sent to Azure OpenAI (e.g., GPT-4)
-5. **Generation**: Azure OpenAI generates a response grounded in the retrieved documents
-6. **Citation**: Application returns response with references to source documents
+Model capability families are the durable abstraction. Reason about which you need, then pick a current member from the catalog:
 
-**RAG architecture diagram:**
+| Family | What it does | Selection notes |
+|---|---|---|
+| **Frontier reasoning** | Multi-step reasoning, complex analysis, agentic planning | Highest cost per token and highest latency. Reserve for tasks where cheaper models measurably fail |
+| **General chat** | Conversation, summarization, extraction, classification via prompt | The default. Mini and nano variants trade capability for cost and speed |
+| **Coding** | Code generation, editing, and repository-scale reasoning | Separate family from general chat, tuned for agentic coding loops |
+| **Embeddings** | Text to vectors for retrieval and clustering | Choice is locked in by your index. Changing it forces a reindex |
+| **Audio and realtime** | Speech in and out, low-latency voice | Overlaps with Azure Speech. Speech gives you diarization, batch, and custom voice; realtime models give you one model handling audio end to end |
+| **Image and video** | Generation and editing | Distinct billing and content-safety treatment |
+
+### Deployment types decide latency, cost, and data residency
+
+Deployment type is a more consequential choice than model choice, because it is where throughput guarantees and data residency actually live.
+
+| Type | Capacity | Data processing |
+|---|---|---|
+| **Standard** | Pay per token, shared capacity | Regional, data zone, or global depending on the variant |
+| **Provisioned** | Reserved throughput, predictable latency, billed on reserved capacity rather than tokens | Regional, data zone, or global |
+| **Batch** | Asynchronous, large jobs at a discount | Global or data zone |
+| **Developer** | Low-commitment evaluation | No production SLA |
+
+Global variants route to whichever region has capacity, which gives the best availability and price and the least residency control. Data zone variants confine processing to a geographic boundary. Regional variants pin to one region. Some models sold by Azure offer fungible provisioned throughput, so reserved capacity moves between models rather than stranding on one.
+
+### Foundry Models vs Azure Language
+
+These overlap on classification, extraction, and summarization. With most of Azure Language's legacy tier retiring in 2029, the comparison now runs on cost and behavior rather than on which one has a future.
+
+| Factor | Azure Language | Foundry Models |
+|---|---|---|
+| **Task fit** | Purpose-built for a fixed set of tasks | General-purpose, shaped by the prompt |
+| **Customization** | Custom models require labeled training data | Prompting, then fine-tuning |
+| **Latency** | Lower, from smaller single-purpose models | Higher, and it scales with model size and output length |
+| **Cost** | Per transaction, and cheaper per unit for the tasks it covers | Per input and output token |
+| **Output shape** | Fixed schema | Whatever the prompt asks for, which needs validation |
+| **Determinism** | Repeatable for the same input | Non-deterministic by default. Temperature 0 reduces variance without eliminating it |
+| **Longevity** | Core tier has no end date. Legacy tier retires 2029 | Individual models retire on a 12 to 24 month cycle, but the catalog persists |
+
+Reach for Azure Language when the task is PII detection, language detection, NER, or text analytics for health, when per-transaction cost dominates at volume, and when you need a fixed output schema without validating generated JSON. Reach for a Foundry model when the task needs reasoning across steps, when output is generative, when you have no labeled data, or when one model can replace several task-specific calls.
+
+### Fine-tuning vs prompt engineering
+
+| Approach | Fits | Training data | Cost | Iteration |
+|---|---|---|---|---|
+| **Prompt engineering** | Exploration, diverse tasks, low volume | None beyond in-prompt examples | Per token, prompt plus completion | Instant |
+| **Fine-tuning** | High-volume repetitive tasks, house style, domain vocabulary | Labeled examples, typically 50 or more | Training, plus hosting, plus per-token inference | A training job per iteration |
+
+Start with prompting. Fine-tune when you find yourself repeating the same few-shot block across thousands of requests, or when prompt length has become the dominant cost. Fine-tuned models add their own lifecycle: training on a base model stops when that base model retires, and the fine-tuned deployment retires about six months after that.
+
+### Guardrails and content filtering
+
+Content filtering runs on both prompts and completions, and applies by default to models sold by Azure.
+
+**Harm categories:** hate, sexual, violence, and self-harm, each classified at safe, low, medium, or high. The default configuration blocks medium and high on prompts and completions. Low and safe pass. Safe is annotated but not configurable.
+
+**Additional filters, on by default and separately configurable:**
+- **Prompt Shields**, which detects user-input attacks against the model
+- **Protected material detection** for text and for code, which flags known content in completions
+
+**Available separately through Azure AI Content Safety:** groundedness detection (preview), task adherence for agent tool use, custom categories in standard and rapid variants, and standalone text and image moderation for content the model never touches.
+
+Each filter can annotate rather than block, which is how you audit filter behavior against production traffic before enforcing it. Filtering cannot be fully disabled on models sold by Azure without an approved exemption, and false positives on medical, legal, and creative content are common enough to test for before launch. For models deployed through managed compute, filtering is not automatic and you call Content Safety yourself.
+
+### Foundry vs calling a provider directly
+
+| Aspect | Foundry Models |
+|---|---|
+| **Model breadth** | One deployment and inference surface across OpenAI, Anthropic, Meta, Mistral, xAI, Cohere, and Microsoft models |
+| **Version stability** | Versions pinned per deployment, with a published retirement date and auto-update opt-in |
+| **Data residency** | Regional, data zone, and global processing selectable per deployment |
+| **Networking and identity** | Private endpoints, VNet integration, Microsoft Entra authentication, and managed identity |
+| **Capacity** | Provisioned throughput and reservations, alongside pay-per-token |
+| **Guardrails** | Content filters, Prompt Shields, and protected material detection configurable per deployment |
+| **Commercial** | One Azure bill, Azure compliance coverage, and Azure support |
+
+Choose Foundry when data residency, network isolation, Entra-based identity, or reserved throughput are requirements, or when you want more than one model provider behind a single integration. Choose a provider's API directly when you want the shortest path to that provider's newest release and none of the above applies. Verify current data-handling and compliance terms against each provider's own documentation rather than against a comparison table, because those terms change more often than the technical surface does.
+
+---
+
+## Azure AI Search: Retrieval and RAG
+
+Azure AI Search is the retrieval layer. It ingests from Blob Storage, Cosmos DB, SharePoint, OneLake, and other sources, enriches content during indexing, and serves full-text, vector, hybrid, and multimodal queries. It also underpins Foundry IQ, the managed knowledge layer that Foundry agents ground against.
+
+### Two engines, two shapes
+
+Every search service includes both a classic search engine and an agentic retrieval engine. They differ in shape, not just in features, and the difference drives cost and latency.
 
 ```
-User Query
-   ↓
-Azure OpenAI (embeddings) → Query Embedding
-   ↓
-Azure AI Search (vector search) → Top-K Documents
-   ↓
-Prompt Construction (Query + Retrieved Docs)
-   ↓
-Azure OpenAI (GPT-4) → Grounded Response
-   ↓
-Application (response + citations)
+CLASSIC SEARCH                      AGENTIC RETRIEVAL
+one index, one round trip           one knowledge base, many sources
+
+  query                               query
+    |                                   |
+    v                                   v
+ [ index ]                        [ query planner (LLM) ]
+    |                                 /    |    \
+    | BM25 + vector                  /     |     \
+    v                          subquery subquery subquery
+ ranked docs                        |      |      |
+    |                               v      v      v
+    v                          [index] [index] [remote source]
+ application                        \      |      /
+                                     \     |     /
+                                      v    v    v
+                                  [ semantic reranking ]
+                                            |
+                                            v
+                                  [ merge + synthesize ]
+                                            |
+                                            v
+                          answer + activity log + references
 ```
 
-**RAG benefits:**
-- Reduces hallucination by grounding responses in retrieved documents
-- Enables LLMs to answer questions about private data not in the training set
-- Provides citations that allow users to verify responses
-- Avoids fine-tuning costs; knowledge is updated by re-indexing documents
-- Works with any LLM (not specific to Azure OpenAI)
+Classic search targets one predefined index and returns ranked documents in a single request. No planning, no iteration, no LLM in the retrieval path. It is predictable, low-latency, and the right default for a traditional search experience or a simple RAG loop where your application does the prompt assembly.
 
-**RAG challenges:**
-- Retrieval quality directly impacts response quality (poor retrieval → poor generation)
-- Requires careful prompt engineering to balance retrieval context with instruction
-- Retrieved documents consume prompt tokens (limits number of documents or document length)
-- Chunking strategy affects retrieval granularity (chunk too large → irrelevant content; chunk too small → lost context)
+Agentic retrieval targets a **knowledge base**, which points at one or more **knowledge sources**. Each query is planned and decomposed into subqueries, run in parallel across those sources, semantically reranked, and merged. Sources can be indexed or remote, and remote sources are queried live rather than ingested. It returns an answer, an activity log, and references, which is a shape built for agent consumption rather than for a results page. It costs more per query, is region-restricted, and its reasoning effort is tunable.
 
-### Azure AI Search vs Traditional Search
+Use classic search when queries hit one corpus and your application controls the prompt. Use agentic retrieval when a question spans several sources, when permission-aware access across systems matters, or when an agent rather than a page consumes the results.
 
-Azure AI Search extends traditional keyword search with semantic understanding and AI enrichment.
+### The RAG loop
 
-| Feature | Traditional Search | Azure AI Search |
-|---------|-------------------|-----------------|
-| **Query matching** | Keyword matching with stemming and fuzzy matching | Keyword + semantic understanding + vector similarity |
-| **Ranking** | TF-IDF or BM25 scoring | BM25 + semantic ranking + custom scoring profiles |
-| **Enrichment** | None (relies on preindexed structured data) | AI enrichment pipeline (OCR, entity extraction, sentiment, key phrases) |
-| **Unstructured data** | Requires pre-processing to extract text | Built-in skillsets to extract and enrich content from PDFs, images, documents |
-| **Vector search** | Not supported | Native vector search over embeddings |
+Retrieval-Augmented Generation grounds a model's output in retrieved content, which keeps it current with data the model never trained on and produces citations a user can check.
 
-**When to use Azure AI Search:**
-- Building knowledge bases over unstructured documents (PDFs, Word docs, emails)
-- Implementing RAG architectures with Azure OpenAI
-- Providing semantic search over large document corpora
-- Enriching content with AI-extracted metadata during indexing
+1. **Index.** Documents are chunked, optionally enriched (OCR, entity extraction), vectorized, and indexed. Integrated vectorization generates embeddings during indexing and at query time so you do not run a separate embedding pipeline.
+2. **Retrieve.** The query runs against the index or knowledge base. Hybrid (keyword plus vector) with semantic ranking generally beats either alone.
+3. **Augment.** Retrieved chunks go into the prompt with instructions to answer only from them and to cite.
+4. **Generate and cite.** The model answers, and the application renders the citations.
 
-**When NOT to use Azure AI Search:**
-- Simple keyword search over small datasets (consider in-app search or Azure SQL full-text search)
-- Real-time search over rapidly changing data with sub-second indexing requirements
-- Elasticsearch-specific features or plugins are required (consider Azure Marketplace Elasticsearch)
+What RAG buys you: no fine-tuning cost, knowledge updated by reindexing rather than retraining, citations that make answers checkable, and answers over private data.
+
+What it costs you: retrieval quality caps answer quality, retrieved content consumes prompt tokens, and chunking strategy becomes a tuning parameter that materially changes results. Chunks too large pull in irrelevant text; chunks too small lose the context that made a passage meaningful.
+
+### Pricing model, before tier
+
+Azure AI Search bills through two models, and choosing between them precedes choosing a tier.
+
+- **Dedicated** provisions capacity at a fixed hourly rate per Search Unit, where a Search Unit is a replica times a partition. It suits steady, predictable, high-utilization workloads, and it is where you tune replicas for query throughput and partitions for index size.
+- **Serverless** (preview) bills consumption by Compute Unit hours plus indexed storage per GB per month. It suits infrequent or bursty workloads, scales without replica and partition configuration, and does not support migration to or from other tiers.
+
+Both models support classic search and agentic retrieval.
+
+### What it adds over a conventional search index
+
+| Feature | A conventional search index | Azure AI Search |
+|---|---|---|
+| **Query matching** | Keyword with stemming and fuzzy matching | Keyword, vector, hybrid, and multimodal |
+| **Ranking** | TF-IDF or BM25 | BM25 plus semantic reranking plus scoring profiles |
+| **Enrichment** | None, relies on preprocessed structured data | Skillsets that chunk, vectorize, OCR, and extract during indexing |
+| **Unstructured content** | Requires an external extraction step | Built-in extraction from PDFs, images, and documents |
+| **Multi-source retrieval** | One index per query | Knowledge bases spanning indexed and remote sources |
+
+Skip it for keyword lookup over a small dataset that a database index already serves, and for content that changes faster than an indexing pipeline can keep up with.
 
 ---
 
-## Azure Machine Learning: Custom Model Development
+## Azure Machine Learning: Custom Models
 
-[Azure Machine Learning](https://learn.microsoft.com/en-us/azure/machine-learning/overview-what-is-azure-machine-learning){:target="_blank" rel="noopener noreferrer"} is a comprehensive platform for building, training, deploying, and managing custom machine learning models. Unlike Azure AI Services (which provide prebuilt models) and Azure OpenAI Service (which provides pretrained foundation models), Azure Machine Learning gives you full control over the ML lifecycle.
+Azure Machine Learning is not an AI API. It is the platform ML engineers use to build custom models from scratch or through transfer learning, and it is where you land when the prebuilt services genuinely do not fit.
 
-### What Azure Machine Learning Provides
+**What it provides:**
+- **Compute management**: CPU and GPU clusters for training and inference, with autoscaling and spot support
+- **Data management**: versioned datasets, data pipelines, lineage tracking
+- **Experiment tracking**: metrics, hyperparameters, and artifacts per run, with native MLflow
+- **Model registry**: versioning and lineage from training data to deployed endpoint
+- **AutoML**: automated algorithm selection and hyperparameter tuning
+- **Responsible AI**: interpretability, fairness analysis, error analysis, counterfactuals
+- **MLOps**: CI/CD pipelines for training, testing, and deployment
 
-Azure Machine Learning is not an API for AI capabilities. It is an infrastructure and tooling platform that ML engineers and data scientists use to build custom models from scratch or adapt pretrained models through transfer learning.
-
-**Core capabilities:**
-- **Compute management**: Provision CPU/GPU clusters for training and inference, with autoscaling and spot instance support
-- **Data management**: Version datasets, create data pipelines, track data lineage
-- **Experiment tracking**: Log metrics, hyperparameters, and artifacts for every training run
-- **Model registry**: Version models, track lineage from training data to deployed endpoint
-- **AutoML**: Automatically train and tune models for classification, regression, time series forecasting, NLP, and computer vision
-- **Responsible AI**: Interpret model predictions, analyze model fairness, generate model cards
-- **MLOps**: Build CI/CD pipelines for model training, testing, and deployment
-- **Deployment options**: Deploy to managed online endpoints, batch endpoints, AKS, Azure Container Instances, IoT Edge
-
-### When to Use Azure Machine Learning
+**Deployment targets** are endpoints, in three shapes. **Online endpoints** serve synchronous low-latency inference on managed compute or Kubernetes. **Batch endpoints** run asynchronous inference over large volumes, scale to zero, and can deploy pipeline components rather than just models. **Standard deployments** serve supported foundation models without consuming subscription compute quota.
 
 **Use Azure Machine Learning when:**
-- You need custom models that prebuilt AI services cannot satisfy
+- Prebuilt services do not cover the task, or measurably underperform on your data
 - You have labeled training data and ML expertise
-- You need full control over model architecture, training process, and inference
-- You require MLOps pipelines for versioning, testing, and deploying models
-- You need to audit model training data and decisions for regulatory compliance
-- You need models that run on-premises or at the edge (deployed to IoT Edge or ONNX runtime)
+- You need MLOps pipelines for versioning, testing, and deployment
+- You must audit training data and model decisions for regulatory compliance
+- Models must run at the edge or on-premises
 
-**Do NOT use Azure Machine Learning when:**
-- Prebuilt Azure AI Services cover your use case adequately
-- You lack ML expertise and training data (use Azure AI Services or Azure OpenAI instead)
-- You need results immediately without investing in model development
+**Do not use it when:**
+- A prebuilt service covers the case adequately
+- You have neither ML expertise nor labeled data
+- You need a result this quarter and the model development budget does not exist
 
-### AutoML: Automated Model Training
+### AutoML
 
-Azure Machine Learning includes AutoML, which automates the process of selecting algorithms, tuning hyperparameters, and training models. AutoML is valuable when you have labeled training data but lack the expertise to manually select algorithms and tune models.
+AutoML automates algorithm selection and hyperparameter tuning, which makes it the entry point when you have labeled data but not the expertise to choose and tune models by hand. It is also the named successor for Custom Vision.
 
-**AutoML workflow:**
-1. Upload labeled training data to Azure Machine Learning
-2. Configure task type (classification, regression, time series, NLP, computer vision)
-3. Set constraints (training time, compute budget, target metric)
-4. Run AutoML experiment
-5. Review model leaderboard and select best model
-6. Deploy selected model to a managed endpoint
+| Task type | Input | Output |
+|---|---|---|
+| Classification | Tabular or image | Class label |
+| Regression | Tabular | Numeric value |
+| Time series forecasting | Time series | Future values |
+| NLP text classification | Text | Class label |
+| NLP named entity recognition | Text | Entity labels |
+| Image classification | Images | Class label |
+| Object detection | Images | Bounding boxes and labels |
 
-**AutoML supported tasks:**
+It trades training time and architectural control for not needing algorithm expertise, and it produces a leaderboard you can use as a baseline before investing in a hand-built model.
 
-| Task Type | Input Data | Output | Example Use Case |
-|-----------|-----------|--------|------------------|
-| **Classification** | Tabular or image | Class label | Predict customer churn, classify product images |
-| **Regression** | Tabular | Numeric value | Predict house prices, estimate server load |
-| **Time Series Forecasting** | Time series data | Future values | Forecast demand, predict energy consumption |
-| **NLP Text Classification** | Text | Class label | Classify support tickets, detect spam |
-| **NLP NER** | Text | Entity labels | Extract entities from documents |
-| **Computer Vision Image Classification** | Images | Class label | Classify defects in manufacturing |
-| **Computer Vision Object Detection** | Images | Bounding boxes + labels | Detect objects in retail or security scenarios |
+### The Responsible AI dashboard
 
-**AutoML trade-offs:**
-- **Pros**: Accelerates model development, no algorithm expertise required, good baseline for comparison, generates interpretable models
-- **Cons**: Longer training time than manually selecting algorithms, less control over model architecture, limited to supported task types
+This dashboard is the capability Azure Machine Learning has that no prebuilt service does, and it is often the reason a regulated workload lands here rather than on an API.
 
-### Responsible AI Tools
+- **Interpretability**: which features drive predictions, via SHAP and feature importance
+- **Fairness analysis**: performance disparities across demographic groups
+- **Error analysis**: cohorts where the model performs worst
+- **Counterfactual what-if**: how changing inputs would change a prediction
+- **Model cards**: generated documentation of purpose, performance, limitations
 
-Azure Machine Learning includes tools to ensure models are fair, interpretable, and compliant with responsible AI principles.
-
-**Responsible AI capabilities:**
-- **Model interpretability**: Understand which features contribute most to predictions (SHAP values, feature importance)
-- **Fairness analysis**: Measure and mitigate bias across demographic groups
-- **Error analysis**: Identify subgroups where the model performs poorly
-- **Model cards**: Generate documentation describing model purpose, performance, limitations, and ethical considerations
-- **Counterfactual what-if analysis**: Explore how changing input features would affect predictions
-
-**When responsible AI tools matter:**
-- Regulated industries (healthcare, finance) requiring explainable decisions
-- Models affecting individuals (credit scoring, hiring, insurance)
-- Audits or compliance reviews requiring model transparency
-- Detecting bias before deploying models in production
+This matters for regulated industries requiring explainable decisions, models affecting individuals (credit, hiring, insurance), and audits requiring transparency into how a decision was reached.
 
 ---
 
-## Cost Model Comparison
+## Cost Models
 
-Azure AI and ML services use different pricing models. Understanding the cost structure helps architects estimate expenses and select the right service.
+| Service | Billed on | Main drivers |
+|---|---|---|
+| **Foundry Tools (vision, language, document)** | Per transaction or per page | Call volume, and whether the model is prebuilt or custom |
+| **Azure Speech** | Per hour of audio | Duration, and whether processing is real-time or batch |
+| **Foundry Models** | Per input and output token, or reserved capacity | Model family, prompt and completion length, deployment type |
+| **Azure AI Search** | Search Units per hour, or Compute Unit hours plus storage | Pricing model, tier, replicas and partitions, index size |
+| **Azure Machine Learning** | Compute plus storage | VM SKU, training hours, endpoint hours, dataset and model storage |
 
-### Pricing Models by Service
+Two things reshape a cost estimate more than per-unit rates. Reasoning models emit tokens you are billed for but never display, so output token counts can far exceed the visible answer. Provisioned throughput bills on reserved capacity regardless of traffic, which is cheaper than pay-per-token above a break-even utilization and more expensive below it.
 
-| Service | Pricing Model | Key Factors |
-|---------|--------------|-------------|
-| **Azure AI Vision** | Per transaction | Number of API calls, transaction type (OCR more expensive than image tagging) |
-| **Azure AI Language** | Per transaction | Number of API calls, transaction type (custom models more expensive than prebuilt) |
-| **Azure AI Speech** | Per hour of audio processed | Audio duration, transaction type (real-time vs batch) |
-| **Azure AI Document Intelligence** | Per page analyzed | Number of pages, model type (prebuilt vs custom) |
-| **Azure OpenAI Service** | Per token (input + output) | Model type (GPT-4 >> GPT-3.5), number of tokens processed, fine-tuned model hosting |
-| **Azure AI Search** | Compute tier + storage | Search tier (Basic, Standard, Storage Optimized), number of replicas, data volume indexed |
-| **Azure Machine Learning** | Compute + storage | Compute SKU (CPU vs GPU), training time, number of deployments, storage for datasets/models |
+**Optimizing Foundry Tools:** buy commitment tiers where the volume justifies pre-purchasing transaction blocks, batch instead of calling per item, and cache stable results such as translated strings or extracted entities.
 
-### Cost Optimization Strategies
+**Optimizing Foundry Models:** pick the smallest model that passes your evaluation rather than the strongest available, keep prompts short, cache embeddings for unchanged documents, use batch deployments for anything not interactive, and move to provisioned throughput once steady traffic clears the break-even point. Streaming improves perceived latency without changing cost.
 
-**For Azure AI Services:**
-- Use commitment tiers (pre-purchase blocks of transactions at a discount)
-- Batch requests where possible instead of real-time API calls
-- Use multi-service resource to consolidate billing and simplify quota management
-- Cache common results (e.g., translated strings, extracted entities) to avoid redundant API calls
+**Optimizing Azure AI Search:** match the pricing model to your traffic shape before tuning within it, since a bursty workload on Dedicated pays for idle capacity. Scale replicas to query volume and partitions to index size.
 
-**For Azure OpenAI Service:**
-- Minimize prompt length (fewer tokens = lower cost)
-- Use GPT-3.5-Turbo instead of GPT-4 when reasoning complexity is not required
-- Cache embeddings for documents that do not change
-- Use streaming responses to improve perceived latency without increasing cost
-
-**For Azure AI Search:**
-- Right-size the search tier based on query volume and index size
-- Use Basic tier for development and testing
-- Use Storage Optimized tier for large datasets with infrequent queries
-- Reduce replica count during off-peak hours
-
-**For Azure Machine Learning:**
-- Use spot instances for training jobs (up to 80% discount)
-- Shut down compute clusters when not in use (configure autoscaling to zero nodes)
-- Use batch endpoints for high-throughput, latency-tolerant inference
-- Use online endpoints only for real-time, low-latency requirements
-
-### Relative Cost Positioning
-
-**Low cost (per transaction or per hour):**
-- Azure AI Language (sentiment analysis, NER): suitable for high-volume workloads
-- Azure AI Speech (speech-to-text batch): acceptable for transcription pipelines
-
-**Medium cost:**
-- Azure AI Vision (image analysis): acceptable for moderate-volume workloads
-- Azure AI Document Intelligence (prebuilt models): acceptable for document automation
-- Azure OpenAI Service (GPT-3.5-Turbo): acceptable for chatbots and simple content generation
-
-**High cost:**
-- Azure OpenAI Service (GPT-4): reserve for tasks requiring advanced reasoning
-- Azure Machine Learning (GPU training): use spot instances and autoscaling to control costs
+**Optimizing Azure Machine Learning:** use spot compute for interruptible training jobs, autoscale clusters to zero when idle, use batch endpoints for latency-tolerant inference, and reserve online endpoints for genuinely real-time paths. Spot discounts vary by SKU, region, and demand, so check the portal's pricing-history view or the Retail Prices API rather than budgeting against a headline percentage.
 
 ---
 
-## Build vs Buy Decision Framework
+## Build vs Buy
 
-Deciding whether to build custom models or buy prebuilt services is a strategic choice that affects development time, operational complexity, and long-term costs.
+| Factor | Buy (prebuilt services) | Build (Azure Machine Learning) |
+|---|---|---|
+| **Time to market** | Days, an API integration | Months, covering data collection, training, deployment |
+| **Upfront investment** | Low, pay per call | High, covering ML talent, compute, labeled data |
+| **Ongoing cost** | Per call or per token | Compute hosting, retraining, monitoring |
+| **Accuracy** | Good on general tasks | Higher on specialized domains, given enough data |
+| **Control** | Limited, the model is opaque | Full control of architecture and training |
+| **Data handling** | Content is processed by the service | Data stays in your workspace |
+| **Explainability** | Limited | Full, through Responsible AI tooling |
+| **Portability** | Tied to the API contract | Models exportable to ONNX and other formats |
+| **Longevity risk** | The service can be retired out from under you | You own the model, and the maintenance |
 
-### Decision Criteria
+That last row has moved. Prebuilt AI services used to be the low-risk choice for a long-lived system. With Custom Vision, Image Analysis, most of Azure Language, and several Speech capabilities all carrying end dates, "buy" now carries a migration obligation you should price in at design time. That does not reverse the recommendation, because a custom model carries a permanent maintenance obligation instead. It does mean checking the retirement status of any prebuilt service before you build a decade-long system on it.
 
-| Factor | Buy (Prebuilt AI Services) | Build (Azure Machine Learning) |
-|--------|---------------------------|-------------------------------|
-| **Time to market** | Days (API integration) | Months (data collection, training, deployment) |
-| **Upfront investment** | Low (pay-per-use API calls) | High (ML talent, compute, training data) |
-| **Ongoing operational cost** | API call costs | Compute hosting + retraining + monitoring |
-| **Accuracy** | Good for general tasks | Higher for specialized domains (with sufficient data) |
-| **Control** | Limited (model is a black box) | Full control over architecture and training |
-| **Customization** | Limited (fine-tuning in some services) | Full customization |
-| **Data privacy** | Data sent to Azure AI Services (encrypted) | Data stays in your Azure ML workspace |
-| **Explainability** | Limited | Full (using Responsible AI tools) |
-| **Vendor lock-in** | High (API-specific integration) | Medium (can export models to ONNX or other formats) |
+**Buy when** the task matches a prebuilt capability with no end date, time to market dominates, you lack ML expertise or labeled data, and prebuilt accuracy clears your bar.
 
-### Build vs Buy Heuristics
+**Build when** the task is specialized, you have the data and the expertise, prebuilt models underperform on your domain, you need explainability or auditable training data, models must run at the edge, or long-run API costs exceed the development investment.
 
-**Buy (use prebuilt AI services) when:**
-- The task matches a prebuilt capability (sentiment, OCR, speech-to-text, image classification)
-- Time to market is critical
-- You lack ML expertise or labeled training data
-- The model accuracy from prebuilt services is acceptable for your use case
-- You prefer operational simplicity (no infrastructure management)
-
-**Build (use Azure Machine Learning) when:**
-- The task is highly specialized or novel
-- You have sufficient labeled training data and ML expertise
-- Prebuilt models underperform on your domain-specific data
-- You need explainability or regulatory compliance requiring model transparency
-- You need models deployed on-premises or at the edge
-- Long-term API costs exceed the investment in custom model development
-
-**Hybrid approach:**
-- Start with prebuilt AI services to validate the use case and establish baseline performance
-- Migrate to custom models in Azure Machine Learning if prebuilt models underperform or if scale demands lower per-transaction costs
-- Use transfer learning to accelerate custom model development (start with prebuilt models and fine-tune on domain data)
+**Hybrid**, in practice, is what most systems land on. Start prebuilt to validate the use case and set a performance baseline. Move the components that underperform to custom models. Use transfer learning rather than training from scratch where you can.
 
 ---
 
-## Responsible AI Principles
+## Responsible AI
 
-Microsoft applies [responsible AI principles](https://www.microsoft.com/en-us/ai/responsible-ai){:target="_blank" rel="noopener noreferrer"} across all Azure AI services. Architects must understand how these principles are implemented and what responsibilities remain with application developers.
+Microsoft applies [responsible AI principles](https://www.microsoft.com/en-us/ai/responsible-ai){:target="_blank" rel="noopener noreferrer"} across these services, but the split of responsibility is uneven, and the parts left to you are the parts that fail in production.
 
-### Core Responsible AI Principles
+| Principle | What the platform does | What remains yours |
+|---|---|---|
+| **Fairness** | Fairness assessment tooling in Azure Machine Learning | Testing prebuilt and generative models on your own population |
+| **Reliability and safety** | Content filters, Prompt Shields, protected material detection | Validating outputs before acting on them, and human review for high-stakes decisions |
+| **Privacy and security** | Azure compliance coverage, encryption, private networking, customer-managed keys | Handling PII in what you send, and setting retention |
+| **Inclusiveness** | Broad language coverage across Speech, Language, and Translator | Confirming your specific languages and locales are supported, and testing accessibility |
+| **Transparency** | Interpretability tooling in Azure Machine Learning, model cards in the catalog | Telling users they are interacting with AI, and explaining decisions that affect them |
+| **Accountability** | Abuse monitoring and audit logging | Testing, monitoring, and auditing what you deployed |
 
-**Fairness:**
-- AI systems should treat all people fairly and avoid bias that harms individuals or groups
-- Azure AI Services include fairness assessments, but developers must test for bias in their specific use case
+Prebuilt and generative models are opaque in a way custom models need not be. If a decision must be explained to a regulator or contested by the person it affects, that requirement points at Azure Machine Learning, whatever the accuracy comparison says.
 
-**Reliability and Safety:**
-- AI systems should perform reliably and safely under expected conditions
-- Content filtering in Azure OpenAI Service mitigates harmful outputs, but applications must implement additional validation
-
-**Privacy and Security:**
-- AI systems should respect privacy and be secure
-- Azure AI Services are SOC 2 and ISO 27001 certified, but applications must handle PII appropriately and implement encryption at rest and in transit
-
-**Inclusiveness:**
-- AI systems should empower everyone and engage people
-- Azure AI Services support 100+ languages, but applications must test accessibility for users with disabilities
-
-**Transparency:**
-- AI systems should be understandable
-- Azure Machine Learning provides model interpretability tools, but prebuilt AI services have limited explainability
-
-**Accountability:**
-- People should be accountable for AI systems
-- Developers are responsible for testing, monitoring, and auditing AI systems deployed in production
-
-### How Each Service Addresses Responsible AI
-
-| Service | Fairness | Explainability | Content Safety | Privacy |
-|---------|---------|---------------|---------------|---------|
-| **Azure AI Vision** | Fairness testing tools in Azure ML (for custom models) | Limited (black-box prebuilt models) | No explicit content filtering (applications must implement) | Data not used to improve models |
-| **Azure AI Language** | Fairness analysis in sentiment and NER (detect demographic bias) | Limited | No explicit content filtering | Data not used to improve models |
-| **Azure OpenAI Service** | No built-in fairness testing (LLMs inherit biases from training data) | Can request reasoning in output (limited) | Built-in content filtering (hate, sexual, violence, self-harm) | Data not used to train base models |
-| **Azure AI Search** | No built-in fairness testing (search ranking may reflect corpus bias) | Scoring profiles show ranking factors | No content filtering | Customer data encrypted; not used to train models |
-| **Azure Machine Learning** | Fairness assessment dashboard | Model interpretability (SHAP, feature importance) | None (applications must implement) | Full control over data residency and encryption |
-
-### Implementing Responsible AI in Applications
-
-**Application-level responsibilities:**
-1. **Test for bias**: Evaluate model performance across demographic groups; measure fairness metrics
-2. **Monitor for drift**: Continuously evaluate model performance in production; retrain when accuracy degrades
-3. **Provide transparency**: Inform users when they interact with AI; provide explanations for decisions affecting individuals
-4. **Implement safeguards**: Validate outputs before acting on them; implement human-in-the-loop review for high-stakes decisions
-5. **Audit decisions**: Log inputs, outputs, and decisions for compliance audits
+**In the application:**
+1. **Test for bias.** Evaluate across demographic groups, not just on aggregate accuracy.
+2. **Monitor for drift.** Model quality degrades as input distributions shift. Retrain or re-evaluate on a schedule.
+3. **Be transparent.** Tell users when they are interacting with AI, and explain decisions affecting them.
+4. **Add safeguards.** Validate outputs before acting. Put a human in the loop for high-stakes decisions.
+5. **Audit.** Log inputs, outputs, and decisions for compliance review.
 
 ---
 
-## Integration Patterns: Combining Multiple AI Services
+## Integration Patterns
 
-Real-world applications often combine multiple Azure AI services to deliver end-to-end capabilities. These integration patterns illustrate common architectures.
+### Document processing
 
-### Pattern 1: Document Processing Pipeline
+Blob Storage receives documents. Document Intelligence extracts structured fields. Azure Language runs PII detection over free-text fields. Azure AI Search indexes the enriched result, and the application queries it.
 
-**Use case:** Extract structured data from invoices, apply sentiment analysis to customer feedback, and store results in a searchable index.
+Azure Functions or Logic Apps orchestrate the pipeline. Intermediate results land in Cosmos DB or Blob Storage. An Azure AI Search indexer with a skillset can automate the enrichment leg, though the skill catalog is narrower than the service catalog. There is no built-in skill that runs `prebuilt-invoice` or any other Document Intelligence prebuilt model. The document skill is Document Layout, which runs the layout model only, so invoice-specific extraction happens outside the indexer.
 
-```
-Blob Storage (invoices uploaded)
-   ↓
-Azure AI Document Intelligence → Structured JSON (invoice line items)
-   ↓
-Azure AI Language (sentiment analysis on notes field)
-   ↓
-Azure AI Search (index enriched documents)
-   ↓
-Application (query and visualize results)
-```
+### Conversational RAG
 
-**Services used:**
-- Azure AI Document Intelligence: extract fields from invoices
-- Azure AI Language: analyze sentiment of customer notes
-- Azure AI Search: index documents with enriched metadata
+A user question is embedded, retrieved against Azure AI Search, and injected into a Foundry model prompt with instructions to cite. This is the RAG loop above, and the design decisions that matter are which retrieval engine to use, how to chunk, and whether hybrid search plus semantic ranking is enabled.
 
-**Integration points:**
-- Use Azure Functions or Logic Apps to orchestrate the pipeline
-- Store intermediate results in Cosmos DB or Blob Storage
-- Use Azure AI Search indexer with skillsets to automate enrichment
+For an agent rather than a chat endpoint, Foundry Agent Service handles the orchestration, tool calling, and conversation state, with Azure AI Search attached as a knowledge source through Foundry IQ. The Assistants API that older material describes retired on 26 August 2026, and classic Agents retire 31 March 2027.
 
----
+### Video analysis
 
-### Pattern 2: Conversational AI with RAG
+**Azure AI Video Indexer is its own service, not part of Azure Vision.** It is built on Face, Translator, Azure Vision, and Speech, and it runs either as a cloud application or as an Azure Arc extension on Kubernetes for edge and data-residency scenarios. It produces transcription, translation, OCR, object and scene detection, and summarization in one pass, which is usually less work than assembling the same result from individual services.
 
-**Use case:** Build a chatbot that answers questions about internal company documents using Retrieval-Augmented Generation.
+Assemble from individual services instead when you need finer control over a specific model, such as a custom speech model for domain vocabulary. Note that face identification and celebrity recognition are limited-access features requiring an approved application.
+
+### Custom model plus prebuilt services
+
+Where a custom model handles the specialized part and prebuilt services handle the rest, the two calls are usually independent, so run them concurrently:
 
 ```
-User query
-   ↓
-Azure OpenAI (embeddings) → Query embedding
-   ↓
-Azure AI Search (vector search) → Top-K relevant documents
-   ↓
-Prompt construction (query + retrieved docs)
-   ↓
-Azure OpenAI (GPT-4) → Response grounded in documents
-   ↓
-Application (display response + citations)
+                    product image
+                          |
+             +------------+------------+
+             |                         |
+             v                         v
+   Azure ML online endpoint     Azure Vision OCR
+   (custom classification)      (packaging text)
+             |                         |
+             +------------+------------+
+                          v
+                application combines
+              category + extracted text
 ```
 
-**Services used:**
-- Azure OpenAI Service (embeddings + GPT-4)
-- Azure AI Search (vector search + full-text search)
-
-**Integration points:**
-- Embed documents during indexing using Azure OpenAI embeddings model
-- Perform hybrid search (vector + keyword) for best retrieval quality
-- Inject retrieved documents into GPT-4 prompt with instructions to cite sources
-
----
-
-### Pattern 3: Multimodal Content Analysis
-
-**Use case:** Analyze videos to detect objects, extract text from frames, transcribe speech, and analyze sentiment of transcripts.
-
-```
-Video uploaded to Blob Storage
-   ↓
-Azure AI Vision (Video Indexer) → Detected objects, faces, OCR text
-   ↓
-Azure AI Speech (speech-to-text) → Transcript
-   ↓
-Azure AI Language (sentiment analysis) → Sentiment scores
-   ↓
-Azure AI Search (index enriched video metadata)
-   ↓
-Application (search videos by sentiment, detected objects, or transcript keywords)
-```
-
-**Services used:**
-- Azure AI Video Indexer (part of Azure AI Vision): detect objects, faces, OCR, and transcribe audio
-- Azure AI Speech: transcribe audio separately if finer control over models is needed
-- Azure AI Language: analyze sentiment of transcripts
-- Azure AI Search: index video metadata for search
-
-**Integration points:**
-- Use Video Indexer API to submit videos and retrieve insights
-- Store results in Cosmos DB for structured querying
-- Index metadata in Azure AI Search for full-text and semantic search
-
----
-
-### Pattern 4: Custom Model + Prebuilt Services
-
-**Use case:** Classify product images using a custom model trained in Azure Machine Learning, then extract text from product packaging using Azure AI Vision OCR.
-
-```
-Product image uploaded
-   ↓
-Azure Machine Learning (custom image classification endpoint) → Product category
-   ↓
-Azure AI Vision (OCR) → Text extracted from packaging
-   ↓
-Application (combine category + extracted text for inventory database)
-```
-
-**Services used:**
-- Azure Machine Learning: custom image classification model
-- Azure AI Vision: prebuilt OCR model
-
-**Integration points:**
-- Deploy custom model from Azure Machine Learning to a managed online endpoint
-- Call custom model endpoint and Azure AI Vision API in parallel for lowest latency
-- Combine results in application logic
+Sequencing these calls doubles latency for no benefit. The application joins the results.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Using Azure OpenAI for Tasks Azure AI Services Handles Better
+### Reaching for a generative model where a task-specific API fits
 
-**Problem:** Using GPT-4 for simple sentiment analysis or entity extraction when Azure AI Language provides purpose-built models with better accuracy and lower cost.
+Using a frontier model for PII detection or language detection costs more per call, adds latency, and returns text you have to parse and validate. Check Azure Language, Vision, and Speech first, and check their retirement status while you are there. Generative models earn their cost on generation, reasoning, and tasks with no labeled data.
 
-**Result:** Higher cost per transaction, higher latency, and lower accuracy compared to task-specific models.
+### Fine-tuning before exhausting prompting
 
-**Solution:** Evaluate Azure AI Language, Vision, and Speech before defaulting to Azure OpenAI. Use Azure OpenAI for generative tasks, reasoning, and tasks not covered by prebuilt services.
+Fine-tuning costs a training job, a hosting commitment, and a lifecycle tied to a base model that will retire. Iterate on prompts first: few-shot examples, explicit output format constraints, and instructions that state what not to do. Fine-tune when prompt length has become the dominant cost or when prompting has plateaued below your accuracy bar.
 
----
+### Not measuring retrieval separately from generation
 
-### Pitfall 2: Fine-Tuning Azure OpenAI Without Exhausting Prompt Engineering
+A RAG application that returns wrong answers with confident citations has almost always failed at retrieval, not generation, and tuning the prompt will not fix it. Measure retrieval on its own with precision@k, recall@k, and MRR against a labeled query set. Then tune chunking, hybrid search, and semantic ranking. Only then tune the generation prompt.
 
-**Problem:** Jumping to fine-tuning Azure OpenAI models without exploring prompt engineering techniques like few-shot learning, chain-of-thought, or instruction tuning.
+### Ignoring context and output limits
 
-**Result:** Wasted time and cost training a custom model when a well-crafted prompt would suffice.
+Context windows are large enough now that developers stop counting, which is when a RAG pipeline starts silently truncating retrieved content, or a reasoning model's hidden tokens blow the output budget. Check the context and output limits of the specific model version you deployed, cap how many chunks you inject, and monitor token usage per request rather than assuming headroom.
 
-**Solution:** Start with prompt engineering. Iterate on prompts using different techniques (few-shot examples, instructional prompts, output format constraints). Only fine-tune when prompt engineering fails to achieve acceptable accuracy or when prompts become too long and costly.
+### Assuming prebuilt models are unbiased
 
----
+Prebuilt models are trained on broad datasets that may not represent your users. Test on data that reflects your actual population, including edge cases, before deploying. Azure Machine Learning's fairness tooling works on prebuilt model outputs, not just on models you trained.
 
-### Pitfall 3: Underestimating RAG Retrieval Quality
+### Regenerating embeddings that have not changed
 
-**Problem:** Building a RAG application with Azure OpenAI and Azure AI Search without evaluating retrieval quality. Poor retrieval results in irrelevant context passed to the LLM, leading to inaccurate responses.
+Embed documents once at indexing time and store the vectors in the index. Cache query embeddings for repeated queries. Re-embed only when a document changes, or when you deliberately change embedding models, which means reindexing everything.
 
-**Result:** Users receive incorrect answers despite citations pointing to documents, damaging trust in the system.
+### Building custom when prebuilt suffices
 
-**Solution:** Measure retrieval quality separately from generation quality. Use metrics like precision@k, recall@k, and Mean Reciprocal Rank (MRR) to evaluate whether the correct documents are retrieved. Experiment with chunking strategies, hybrid search (vector + keyword), and semantic ranking to improve retrieval accuracy before tuning the generation prompt.
-
----
-
-### Pitfall 4: Ignoring Token Limits in Azure OpenAI
-
-**Problem:** Designing a RAG application that injects large documents into prompts without accounting for token limits (e.g., GPT-3.5-Turbo supports 16k tokens, GPT-4 Turbo supports 128k tokens).
-
-**Result:** Requests fail with token limit errors, or critical context is truncated, leading to incomplete responses.
-
-**Solution:** Chunk documents into smaller segments during indexing. Retrieve only the most relevant chunks. Use GPT-4 Turbo for long-context scenarios. Monitor token usage per request and implement truncation strategies that prioritize the most relevant content.
-
----
-
-### Pitfall 5: Not Testing for Bias in Prebuilt Models
-
-**Problem:** Assuming prebuilt Azure AI Services models are unbiased and deploying them without testing performance across demographic groups or edge cases.
-
-**Result:** Models underperform or exhibit bias for specific populations, causing reputational damage or regulatory issues.
-
-**Solution:** Test prebuilt models on representative datasets that include diverse demographics and edge cases. Use Azure Machine Learning fairness tools to measure bias. Collect feedback from affected users and iterate on model selection or customization.
-
----
-
-### Pitfall 6: Overusing Azure OpenAI Embeddings Without Caching
-
-**Problem:** Generating embeddings for the same documents repeatedly during query processing without caching results.
-
-**Result:** Unnecessary API calls increase latency and cost.
-
-**Solution:** Generate embeddings once during document indexing and store them in Azure AI Search. For queries, cache frequently asked query embeddings in Redis or a similar cache. Re-generate embeddings only when documents change.
-
----
-
-### Pitfall 7: Choosing Azure Machine Learning When Prebuilt Services Suffice
-
-**Problem:** Investing in custom model development in Azure Machine Learning when Azure AI Services provide adequate accuracy for the use case.
-
-**Result:** Wasted time, higher operational complexity, and no meaningful accuracy improvement.
-
-**Solution:** Start with Azure AI Services. Establish baseline performance. Migrate to custom models only when prebuilt models demonstrably underperform or when operational scale justifies the investment.
+Establish a baseline with a prebuilt service first. Migrate to a custom model when the prebuilt one demonstrably underperforms on your data, or when volume makes per-transaction pricing worse than running your own. "The prebuilt model felt generic" is not a measurement.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure AI services span from prebuilt APIs to full ML platforms.** Prebuilt AI Services provide immediate capabilities without training data. Azure OpenAI offers foundation models customizable through prompts or fine-tuning. Azure Machine Learning provides full control for custom model development.
+1. **Four building blocks, four levels of abstraction.** Foundry Tools for task-specific prebuilt capability, Foundry Models for generative work, Azure AI Search for retrieval over your content, Azure Machine Learning for custom models. Picking a level too high costs accuracy and control; picking too low costs months.
 
-2. **Match the service to the task.** Use Azure AI Language for sentiment, NER, and classification. Use Azure AI Vision for image analysis and OCR. Use Azure AI Speech for transcription. Use Azure OpenAI for generative tasks and reasoning. Use Azure Machine Learning when prebuilt services underperform or when you need full model control.
+2. **The names changed, the ARM provider did not.** Azure AI services became Foundry Tools, Azure OpenAI Service became Azure OpenAI in Foundry Models, and hubs plus separate resources became one Foundry resource. `Microsoft.CognitiveServices` still backs all of it, so existing infrastructure code keeps working.
 
-3. **RAG architectures ground LLMs in retrieved knowledge.** Azure AI Search retrieves relevant documents, and Azure OpenAI generates responses grounded in those documents. This reduces hallucination and enables LLMs to answer questions about private data.
+3. **Check retirement status before you select.** Custom Vision and Image Analysis retire in 2028. Most of Azure Language's feature set retires in 2029. Speaker recognition and Custom Commands are already gone. A selection made against older material will pick a retiring service.
 
-4. **Fine-tuning is a last resort, not a first step.** Exhaust prompt engineering before fine-tuning Azure OpenAI models. Fine-tuning is valuable for high-volume repetitive tasks or domain-specific language but adds training and operational complexity.
+4. **Design against the model lifecycle, not a model name.** The GPT-4 and GPT-3.5 generation is retired. Models run a 12 to 24 month cycle through preview, GA, legacy, deprecation, and retirement. Pin versions per deployment, watch the retirement schedule, and consider `model-router` to decouple from any one name.
 
-5. **Cost models differ significantly across services.** Azure AI Services charge per transaction. Azure OpenAI charges per token (input + output). Azure AI Search charges for compute tier and storage. Azure Machine Learning charges for compute time and hosting. Understand the cost structure before committing to a service.
+5. **Deployment type decides more than model choice.** Standard vs provisioned sets your cost curve and latency profile. Global vs data zone vs regional sets your data residency. Both are per-deployment decisions.
 
-6. **Multi-service resources simplify management for prebuilt AI.** Use a multi-service resource for Azure AI Vision, Language, Speech, and Translator when building applications that combine multiple services. Switch to individual resources for granular access control or regional requirements.
+6. **Retrieval quality caps RAG quality.** Measure retrieval separately with precision@k, recall@k, and MRR. Classic search suits one corpus and application-controlled prompts; agentic retrieval suits multi-source, permission-aware grounding for agents.
 
-7. **Retrieval quality determines RAG accuracy.** Poor retrieval leads to irrelevant context and inaccurate responses. Measure retrieval quality separately from generation quality. Experiment with chunking, hybrid search, and semantic ranking to improve retrieval before tuning prompts.
+7. **Cost models differ by more than rate.** Foundry Tools bill per transaction, Foundry Models per token, Azure AI Search on capacity units, Azure Machine Learning on compute hours. Reasoning tokens you never display and provisioned capacity you do not saturate are the two line items that surprise people.
 
-8. **Responsible AI is a shared responsibility.** Azure AI Services provide content filtering, privacy guarantees, and some fairness tools, but applications must test for bias, monitor for drift, implement safeguards, and provide transparency to users.
+8. **Responsible AI splits unevenly.** The platform supplies content filters, Prompt Shields, protected material detection, and interpretability tooling. Bias testing, drift monitoring, output validation, and user transparency stay with the application. If a decision must be explained or contested, that requirement points at Azure Machine Learning.
 
-9. **Integration patterns combine multiple AI services.** Real-world applications often use Azure AI Document Intelligence for extraction, Azure AI Language for enrichment, Azure AI Search for indexing, and Azure OpenAI for conversational interfaces. Design orchestration workflows using Azure Functions, Logic Apps, or custom code.
+9. **Buy still beats build, with a migration clause.** Prebuilt services win on time to market and operational simplicity, but several now carry end dates. Price the eventual migration into the decision instead of treating "buy" as maintenance-free.
 
-10. **Build vs buy is a strategic decision, not a technical one.** Prebuilt AI services accelerate time to market and reduce operational complexity. Custom models in Azure Machine Learning provide higher accuracy for specialized tasks but require investment in ML talent, training data, and infrastructure. Start with prebuilt services and migrate to custom models only when demonstrably necessary.
+10. **Start prebuilt, measure, then move.** Establish a baseline with the managed service. Move to a custom model when you can point at the measurement that justifies it.

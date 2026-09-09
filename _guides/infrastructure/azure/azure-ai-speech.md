@@ -1,510 +1,455 @@
 ---
-title: "Azure AI Speech Services"
+title: "Azure Speech in Foundry Tools"
 layout: guide
 category: Azure
 subcategory: Machine Learning & AI
-description: "A system architect's guide to Azure AI Speech services, covering speech-to-text, text-to-speech, speech translation, speaker recognition, and custom voice models."
-tags: [azure, cloud-computing, infrastructure, machine-learning, automation, scalability, practical, integration]
+description: "A system architect's guide to Azure Speech in Foundry Tools, covering the three speech-to-text paths, text-to-speech and custom voice, speech translation, the Voice Live API for voice agents, and the capabilities that have been retired."
+tags: [speech-to-text, text-to-speech, foundry-tools, voice-agents, speech-translation, practical]
 ---
 
-## What Is Azure AI Speech
+## What Is Azure Speech
 
-[Azure AI Speech Services](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/overview){:target="_blank" rel="noopener noreferrer"} is a managed cognitive service that handles all aspects of speech processing. Instead of building audio pipelines and training speech models, you make API calls to process audio streams in real-time or batch, customize models for your domain, and manage speaker identity.
+[Azure Speech](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/overview){:target="_blank" rel="noopener noreferrer"} is the speech processing service in **Foundry Tools**, the family formerly called Azure AI services and, before that, Azure Cognitive Services. It converts audio to text, synthesizes text into speech, translates spoken audio, and hosts end-to-end voice agents. The ARM resource provider is still `Microsoft.CognitiveServices`, so infrastructure code and role assignments written against the older names keep working even though the docs and portal now use the new ones.
 
-The service runs on Azure's infrastructure and scales automatically, handling everything from simple transcription to complex multilingual translation with speaker identification. You don't need to deploy containers, manage GPUs, or maintain models yourself.
+Two resource shapes reach the same service. A **Microsoft Foundry resource** (`kind: AIServices`) exposes Speech alongside the rest of the Foundry Tools family behind one endpoint and one set of keys, and it is what the Foundry portal provisions. A **single-service Speech resource** exposes only Speech. Voice Live and features that call generative models need the Foundry resource; the rest work with either.
 
-### What Problems Azure AI Speech Solves
+Scope matters more than it first appears, because most of what you customize is **region-scoped, not subscription-scoped**. Custom speech models, custom voices, and their deployed endpoints belong to one resource in one region. Training with audio data requires a region with dedicated training hardware, and moving a trained model elsewhere means an explicit copy through the [`Models_CopyTo`](https://learn.microsoft.com/en-us/rest/api/speechtotext/models/copy-to){:target="_blank" rel="noopener noreferrer"} API rather than a global rollout. A multi-region deployment therefore plans a resource, a quota, and a model copy per region.
 
-**Without Azure AI Speech:**
-- No unified API for speech-to-text, text-to-speech, and translation
-- Building accurate speech recognition requires audio expertise and training data
-- Text-to-speech with natural voices requires proprietary models or research
-- Multilingual speech processing requires multiple third-party integrations
-- Speaker identification requires building biometric models
-- Custom domain vocabulary (medical terms, product names) requires training models from scratch
-- Real-time processing latency makes interactive applications impossible
+### What Azure Speech Handles
 
-**With Azure AI Speech:**
-- Single service handles speech-to-text, text-to-speech, translation, and speaker recognition
-- Pre-trained models work out of the box in 100+ languages and locales
-- Neural text-to-speech voices sound natural with emotion and prosody control
-- Real-time speech translation with under 1-second latency
-- Speaker identification and verification using voice biometrics
-- Custom speech models trained on your domain-specific data
-- Automatic scaling from light workloads to thousands of concurrent requests
-- Integration with Azure Bot Service, Cognitive Search, and other AI services
+- One service for transcription, synthesis, translation, and voice agents, reached through the Speech SDK, Speech CLI, or REST APIs
+- Pre-trained models across a broad locale set, with per-feature language support published on the [language support page](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support){:target="_blank" rel="noopener noreferrer"}
+- Custom speech models for domain vocabulary and difficult acoustics, and custom voices for a branded speaking identity
+- SSML control over pitch, rate, volume, pronunciation, speaking style, and pacing
+- Cloud, container, and on-device deployment from the same SDK surface
+- Autoscaling behind a per-resource concurrency quota, with 429 retry handling expected of the caller
 
-### How Azure AI Speech Differs from AWS Transcribe and Polly
+### Capabilities That Have Been Retired
 
-Architects migrating from AWS or comparing options should understand these key differences:
+Several features that older architecture write-ups still describe are gone. A design that depends on them will fail against the current service.
 
-| Aspect | AWS Transcribe | AWS Polly | Azure AI Speech |
-|--------|----------------|-----------|-----------------|
-| **Real-time STT** | Streaming API with 250ms latency | Not applicable | WebSocket streaming, <500ms latency |
-| **Batch transcription** | StartTranscriptionJob API | Not applicable | Batch transcription API, process files at scale |
-| **Text-to-speech voices** | 56 voices across 26 languages | 56 voices across 26 languages | 400+ neural voices across 100+ languages |
-| **Neural voices** | Yes (standard polly voices are neural) | Yes | Yes, with emotion and style control |
-| **Custom voice** | Not directly available | Not available | Custom neural voice training (limited availability) |
-| **Speech translation** | Not natively integrated | Not applicable | Native speech-to-speech and speech-to-text translation |
-| **Speaker recognition** | Not in Transcribe/Polly | Not applicable | Speaker verification, identification, speaker diarization |
-| **Custom models** | Custom vocabulary, acoustic models | Not applicable | Custom speech models, pronunciation assessment |
-| **Multilingual streaming** | Per-language STT only | Per-language TTS only | Continuous translation across 20+ languages |
-| **Pricing model** | Per-minute for transcription, per-1K characters for synthesis | Per-1K characters | Monthly subscription or pay-as-you-go by hour/request |
-| **Quota management** | Account quotas per region | Account quotas per region | Consistent quotas, throughput units for scaling |
+| Retired capability | Date | What to use instead |
+|---|---|---|
+| **Speaker recognition** (voice biometric verification and identification) | 30 September 2025 | No in-service successor. Speaker **diarization** is unaffected, but it separates who-spoke-when without identifying who they are |
+| **Intent recognition** in the Speech SDK (`IntentRecognizer`, pattern-matching intents) | 30 September 2025 | Transcribe first, then classify with Conversational Language Understanding (CLU) or an Azure OpenAI model |
+| **Custom Commands** | 30 April 2026 | Voice Live, or a Bot Framework bot driven by transcription plus CLU |
+| **Long Audio API** | 1 April 2027 | The [batch synthesis API](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-synthesis){:target="_blank" rel="noopener noreferrer"}, which supports every SSML element and output format the older API did not |
+
+Speaker recognition is the one that reshapes designs. Voice-biometric authentication is no longer something Azure Speech offers, so a call center flow that verified callers by voiceprint needs a different authentication factor, and a meeting application that identified named participants now gets anonymous `Guest-1` and `Guest-2` labels it must map to identities by other means.
+
+### How Azure Speech Compares to AWS Transcribe and Polly
+
+AWS splits the same ground across separate services: Transcribe for recognition, Polly for synthesis, Translate for language conversion, and Nova Sonic or a Bedrock-orchestrated stack for voice agents.
+
+| Aspect | AWS | Azure Speech |
+|---|---|---|
+| **Service boundary** | Transcribe (STT), Polly (TTS), Translate (text), each billed and configured separately | One service, one resource, one SDK for STT, TTS, and speech translation |
+| **Real-time STT** | Transcribe streaming API | WebSocket streaming through the Speech SDK |
+| **Pre-recorded STT** | Batch transcription jobs from S3 | Two paths: synchronous **fast transcription** (under 5 hours per file) and asynchronous **batch transcription** from Blob Storage |
+| **Speech translation** | Not in Transcribe; chain Transcribe to Translate yourself | Native speech-to-text and speech-to-speech translation in a single API call |
+| **Voice customization** | Polly Brand Voice (custom voice, engagement-based) | Custom voice, self-service but gated behind a limited-access review |
+| **Voice engines** | Generative, long-form, neural, and standard engines with different voice coverage per engine | Standard (neural) voices, HD voices, and Azure OpenAI voices, with SSML support varying by voice type |
+| **Speaker handling** | Transcribe speaker partitioning (diarization) | Diarization through `ConversationTranscriber`; voice biometrics retired |
+| **Voice agents** | Assemble streaming STT, an LLM, and TTS yourself, or use Nova Sonic | **Voice Live API** bundles STT, model inference, TTS, barge-in, and echo cancellation behind one WebSocket |
+| **Scaling control** | Per-account service quotas | Per-resource concurrency and TPS quotas, raised through a request form |
+
+Neither vendor publishes a stable count of voices or supported languages, and the counts that do appear drift between doc pages. Check the language support page for the locale you actually need.
 
 ---
 
-## Core Components
+## Speech to Text
 
-### Speech-to-Text (Transcription)
+Three paths transcribe audio, and they differ in how results arrive rather than in recognition quality. Choosing between them early matters, because switching later means reworking how the caller handles results.
 
-Speech-to-Text (STT) converts audio in real-time or batch to accurate text transcriptions. The service supports multiple input modes, custom models, and advanced features like speaker identification and punctuation.
+| | Real-time | Fast transcription | Batch transcription |
+|---|---|---|---|
+| **Input** | Streaming audio | One uploaded file | Blob Storage container or content URLs |
+| **Results** | Partial results as audio arrives, final on end of speech | Synchronous, in the same HTTP response | Asynchronous, polled, written to storage |
+| **Size limit** | Session-bound | Under 500 MB and under 5 hours per file | 1 GB per file, 1,000 files per request, 10,000 blobs per container |
+| **Output form** | Lexical and display | Display form only (punctuated, capitalized) | Lexical and display |
+| **Throughput** | 100 concurrent requests by default (S0) | 600 requests per minute (S0) | 600 requests per minute, queued and processed sequentially per region |
+| **Use for** | Live captioning, voice commands, agent assist | A file you are waiting on: a voicemail, a meeting recording, one call | Archives, nightly call-center batches, bulk media libraries |
 
-**Real-time transcription (WebSocket streaming):**
-- Client sends audio stream via WebSocket to the Speech service
-- Service returns partial recognition results as audio arrives
-- Final result includes confidence scores and alternative phrases
-- Sub-second latency enables interactive applications like live captioning
-- Handles continuous audio without reinitialization
+Batch transcription is queued, and the queue is the latency. Microsoft schedules jobs on a best-effort basis: a job can wait up to 30 minutes to start at peak, and 90th-percentile end-to-end latency is under 6 hours. Raising the quota does not speed it up, because each region processes batch jobs one at a time. Submitting 6,000 requests per minute transcribes no faster than 600. The documented approach is to send about 1,000 files per `Transcription_Create` call, spread submissions across hours, poll no more often than once a minute, and distribute across regions if the workload genuinely needs more throughput.
 
-**Batch transcription:**
-- Upload audio files to Azure Blob Storage
-- Submit batch job via API
-- Service processes files asynchronously
-- Ideal for processing call recordings, archived audio, or large volumes
+```
+                  Is the audio arriving live?
+                            |
+              +-------------+-------------+
+             yes                          no
+              |                            |
+      Real-time streaming        Do you need the result now?
+      (WebSocket, partials)               |
+                              +-----------+-----------+
+                            yes                       no
+                              |                        |
+                  Under 500 MB / 5 hours?      Batch transcription
+                              |                 (queued, up to 24h)
+                    +---------+---------+
+                  yes                   no
+                    |                    |
+            Fast transcription    Split, or use batch
+```
 
-**Key capabilities:**
-- **100+ languages and locales** for out-of-the-box recognition
-- **Custom speech models** trained on domain-specific audio and vocabulary
-- **Speaker diarization** identifies which speaker is talking at each point
-- **Punctuation and capitalization** automatically added to transcriptions
-- **Confidence scores** for each word, enabling filtering of low-confidence segments
-- **Phrase lists** boost recognition accuracy for domain keywords (medical terms, product names)
-- **Profanity filtering** and automatic redaction for sensitive applications
-- **Language identification** detects the spoken language automatically
+**Diarization** attributes each segment to a speaker. The `ConversationTranscriber` class does this in real time, labeling participants `Guest-1`, `Guest-2`, and so on as it distinguishes them. Early intermediate results carry `Unknown` until a speaker is resolved, and intermediate speaker IDs require setting `SpeechServiceResponse_DiarizeIntermediateResults`. Real-time diarization caps at 240 minutes per session, and batch transcription with diarization enabled caps at 240 minutes per file. The labels are positional, not identities, and the REST API for short audio does not support diarization at all.
 
-**Common use cases:**
-- Customer service call transcription and analysis
-- Live meeting transcription and captions
-- Voice commands for hands-free interfaces
-- Accessibility features (live captioning for deaf and hard of hearing)
-- Media content transcription and searchability
+**Language identification** detects which language is being spoken, either standalone or attached to recognition or translation. Fast transcription can auto-detect without being given a candidate locale list.
 
-### Text-to-Speech (Speech Synthesis)
+**LLM speech** (preview) runs a language-model-enhanced speech model over pre-recorded audio for `transcribe` and `translate` tasks, at fast-transcription speed and with the same 500 MB / 5 hour / 600 RPM limits. It accepts prompt tuning, which the classic recognizers do not.
 
-Text-to-Speech (TTS) converts written text to natural-sounding speech audio. The service provides pre-trained neural voices with fine-grained control over prosody, emotion, and speaking style.
+### Custom Speech
 
-**Speech synthesis modes:**
-- **Standard synthesis** - Lower latency for synchronous responses, suitable for most applications
-- **Long-form audio synthesis** - Optimized for documents and books without length restrictions
-- **Neural voices** - 400+ voices with natural pronunciation, emotion, and style control
+Custom speech adapts the base model when the audio contains domain jargon, unusual pronunciations, or difficult acoustics. Four dataset types feed it, and they are not interchangeable.
 
-**Output formats:**
-- WAV, MP3, OGG, Opus, or Flac audio codecs
-- Sample rates from 8 kHz to 48 kHz
-- Streaming output for real-time playback or buffered for full-file access
+| Dataset type | Fixes | Documented quantity |
+|---|---|---|
+| Plain text | Substitution errors on domain words shown in context | 1-200 MB of related text |
+| Structured text (preview) | Utterances that vary only by items from a list | Up to 10 classes, 4,000 items per class, 50,000 training sentences |
+| Pronunciation | Made-up words, acronyms, product names | 1 KB to 1 MB (1 KB on the free tier) |
+| Audio + human-labeled transcripts | Accents, speaking styles, background noise | 1-100 hours of audio |
+| Display format | Capitalization, ITN patterns, profanity masking | 200 lines ITN, 1,000 lines rewrite, 1,000 lines profanity |
 
-**Advanced control via SSML:**
-[Speech Synthesis Markup Language](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup-language){:target="_blank" rel="noopener noreferrer"} (SSML) gives you granular control over speech output:
-- **Prosody control** - Pitch, rate, volume relative to the base voice
-- **Emotion** - Express happiness, sadness, anger, calm in supported voices
-- **Speaking styles** - Formal, casual, newscast, customer-service modes
-- **Phonetic pronunciation** - Override default pronunciation for specific words
-- **Pauses and breaks** - Insert silence for natural pacing
-- **Voice mixing** - Layer multiple voice characteristics in a single utterance
+Start with text. Training on plain or structured text usually finishes in minutes, while training with audio can take days, and Microsoft's own guidance is that for heavily used locales such as US English the base model is already good enough that related text alone is often sufficient. Audio training earns its cost when the audio is hard for humans too.
 
-**Example SSML with emotion control:**
+Audio training data has strict format requirements: RIFF WAV, 8 kHz or 16 kHz, mono, 16-bit PCM, zipped, with the archive under 2 GB or 10,000 files. **Individual training files are capped at 40 seconds.** Longer files are not rejected outright, but only their transcript text is used, and if every file exceeds 40 seconds the training run fails. Half a second of silence before and after speech in each sample helps.
+
+Custom speech does not fix everything. It captures word context to reduce substitution errors, not insertion or deletion errors, and unrelated sentences in the training set degrade the model rather than leaving it unchanged.
+
+---
+
+## Text to Speech
+
+Text to speech synthesizes text into audio using neural voices. Standard voices are available out of the box across 100+ languages and locales, each model offered at 24 kHz and 48 kHz.
+
+**Voice types** differ in quality and in how much SSML they honor:
+
+- **Standard voices** (billed as *Neural*) are the default and support the full SSML surface
+- **HD voices**, including the Dragon HD family, offer higher quality and a different, narrower set of supported SSML elements and speaking styles
+- **Azure OpenAI voices** are available through the same synthesis surface
+- **Custom voice** covers professional voice fine-tuning and personal voice, both under limited access
+- **Embedded voices** run on device and drop a substantial part of the SSML surface
+
+Anything beyond 10 minutes of audio per request goes through the [batch synthesis API](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-synthesis){:target="_blank" rel="noopener noreferrer"} rather than real-time synthesis: submit asynchronously, poll, download. Real-time synthesis caps at 10 minutes of audio per request on every tier.
+
+Billing counts **characters, not audio seconds**, and the count includes spaces, punctuation, and all SSML markup except the `<speak>` and `<voice>` tags themselves. Each Chinese character, including kanji in Japanese and hanja in Korean, counts as two. A verbose SSML wrapper is a real line item, not free formatting.
+
+### Custom Voice
+
+Custom voice is gated: access requires approval through Microsoft's [limited access intake form](https://aka.ms/customneural){:target="_blank" rel="noopener noreferrer"}, and a professional voice cannot be trained until a recorded consent statement from the voice talent has been submitted. Training needs **at least 300 utterances** with matching scripts, recorded with consistent volume, rate, pitch, and expressive manner. Microsoft measures training in compute hours: roughly 20-40 for a single-style voice, around 90 for a multi-style voice, billed with a cap of 96. Hosting is billed separately per hour for as long as the endpoint exists, so an idle custom-voice endpoint costs money.
+
+**Personal voice** is the lighter path, creating a voice profile from a short sample rather than a studio session. It bills for profile storage per voice per day plus synthesis per character, and it supports a reduced SSML set.
+
+### SSML
+
+[Speech Synthesis Markup Language](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup){:target="_blank" rel="noopener noreferrer"} controls the output. The attribute value rules are where most SSML bugs live, because each `prosody` attribute accepts absolute, relative, and named values that mean different things:
+
+| Attribute | Absolute | Relative | Named constants | Documented range |
+|---|---|---|---|---|
+| `pitch` | A frequency, `600Hz` | `+80Hz`, `-2st` (semitones), or a percentage such as `-50%` | `x-low` through `x-high` | 0.5 to 1.5 times the original |
+| `rate` | None | A bare multiplier (`1` is unchanged, `0.5` halves, `2` doubles) or a percentage such as `+30%` | `x-slow` through `x-fast` | 0.5 to 2 times the original |
+| `volume` | A number from `0.0` to `100.0`, default `100.0` | `+10`, `-5.5`, or a percentage | `silent` through `x-loud` | 0 to 100 |
+
+A bare percentage is a **relative** change, not an absolute level, and the `+` is optional while the `-` is not. Values outside the supported range are limited or substituted rather than honored. Microsoft's own example of an unsupported value is a volume of 120.
+
+Emotion is not a `prosody` attribute. Speaking styles come from `mstts:express-as`, which takes a `style`, an optional `styledegree` from `0.01` to `2`, and an optional `role` that makes a voice imitate a different age or gender. Style support varies by voice, and an unsupported `styledegree` is silently ignored.
+
 ```xml
-<speak version="1.0" xml:lang="en-US">
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/Synthesis"
+       xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
   <voice name="en-US-AvaNeural">
-    <prosody pitch="+20%" rate="1.1" volume="120">
-      I'm excited to announce our new product!
-    </prosody>
+    <mstts:express-as style="cheerful" styledegree="1.5">
+      <prosody pitch="+20%" rate="+10%" volume="+20%">
+        I'm excited to announce our new product!
+      </prosody>
+    </mstts:express-as>
   </voice>
 </speak>
 ```
 
-**Common use cases:**
-- Chatbot and virtual assistant voice responses
-- Accessibility features (text-to-speech for screen readers)
-- Interactive voice response (IVR) systems
-- E-learning and educational content with narration
-- Podcast and audiobook generation
-- Contact center agent assist (real-time text-to-speech)
+To layer voices, use multiple `<voice>` elements inside one `<speak>` document rather than trying to blend characteristics within a single element. Other elements cover recorded audio insertion, background audio, lexicons, visemes for facial animation, a target output duration, and voice conversion from a source recording.
 
-### Speech Translation
+### Text-to-Speech Avatar
 
-Speech Translation handles translating speech across languages in real-time. The service supports speech-to-text translation (spoken words to text in another language) and speech-to-speech translation (spoken words to speech in another language).
+The avatar feature renders synthesized speech as video of a photorealistic speaker, either batch-synthesized or driven in real time. Custom avatars are limited-access like custom voices and train in roughly 20-40 compute hours, capped at 96. The real-time avatar has tight quotas that shape any interactive design: **2 new connections per minute**, 30 minutes maximum per speaking connection, and 5 minutes idle before disconnect. Long sessions need explicit auto-reconnect logic. Real-time avatar billing runs per second of connection time whether or not the avatar is speaking, so idle connections are billable.
 
-**Real-time translation:**
-- Stream audio in one language
-- Receive continuous translation in target language(s)
-- Sub-second latency for interactive translation
-- Support for multiple target languages simultaneously
+---
 
-**Supported language pairs:**
-- Translate from 10+ source languages
-- Translate to 20+ target languages
-- Asymmetric support (not all source-target combinations available)
+## Speech Translation
 
-**Translation with context:**
-- Provide custom phrase lists to improve domain-specific translation accuracy
-- Context carries through streaming, improving consistency
+Speech translation converts audio in one language to text or synthesized speech in another, in a single API call rather than a transcribe-then-translate chain you assemble.
 
-**Common use cases:**
-- Real-time conversation translation (business meetings, interviews)
-- Live meeting captions in multiple languages
-- Contact center support for multilingual customers
-- Field work (on-site investigations, international field support)
-- Travel and tourism applications
+The **standard API** takes a specified source language and returns translated text, synthesized audio, or both. **Live Interpreter** is the conversational variant: it identifies the spoken language without being told, handles speakers switching languages mid-session without a restart, preserves speaker style and tone in the output voice, and can use a personal voice for the translated audio. Its current limitation is that transcription comes back in the target language only, with no source-language transcript yet.
 
-### Speaker Recognition
+The constraint that shapes cost and architecture is target-language count. **One call translates into at most two target languages.** Beyond that you need a Foundry (multi-service) resource, and each language past the second is billed as Translator text translation on top of the speech charge. Because translation runs on intermediate streaming results, the billed character count exceeds the character count of the final transcript, and Microsoft's own worked example applies a coefficient of 3 to account for that.
 
-Speaker Recognition identifies or verifies individuals based on their voice. The service uses voice biometrics to determine who is speaking without requiring them to state their name or provide text.
+**Video translation** is the offline sibling: it extracts dialogue from an uploaded video, transcribes it, translates with LLM reformulation, generates synchronized voice-over in the target language using standard or personal voices, and produces subtitles. It runs as iterations against a stored translation, so subtitle files can be corrected by a human and fed into a second pass. Retention depends on entry point: REST API version `2026-03-01` and later keeps data 31 days from the last action, earlier versions 300 days, and portal-created projects are deleted after 360 days of inactivity starting 1 August 2026.
 
-**Speaker verification:**
-- Confirm that a voice belongs to a claimed identity
-- Use case: Voice-based authentication, secure call access
-- Requires enrollment samples (30 seconds to 5 minutes per speaker)
+---
 
-**Speaker identification:**
-- Identify which speaker from a registered group is speaking
-- Requires enrollment of 1-10 speakers, each with 60+ seconds of speech
-- Use case: Contact center agent identification, speaker diarization in meetings
+## Voice Live
 
-**Common use cases:**
-- Voice authentication for banking and financial services
-- Contact center quality monitoring and compliance
-- Speaker diarization in meeting recordings (identifying who said what)
-- Accessible authentication for users who cannot use passwords
-- Meeting summarization by speaker
+The Voice Live API is Microsoft's managed answer to building a voice agent. Assembling one yourself means running streaming recognition, a generative model, and synthesis as separate hops, then solving barge-in, echo, and end-of-turn detection across them. Voice Live collapses that into one WebSocket connection.
 
-### Custom Keyword Recognition
+```
+  DIY orchestration                      Voice Live API
+  -----------------                      --------------
 
-Custom Keyword Recognition (also called wake word detection) enables applications to trigger on specific spoken phrases without using wakewords from hardcoded lists.
+  mic audio                              mic audio
+     |                                      |
+     v                                      v
+  [ streaming STT ]  --+              +-----------------------+
+     |                 |              |  one WebSocket        |
+     v                 |              |                       |
+  [ LLM inference ] <--+  you own:    |  STT + model + TTS    |
+     |                    barge-in    |  barge-in, echo       |
+     v                    echo        |  cancellation,        |
+  [ TTS synthesis ]       turn-taking |  end-of-turn, avatar  |
+     |                    latency     +-----------------------+
+     v                                      |
+  speaker                                   v
+                                         speaker
+```
 
-**How it works:**
-- Train a model on 5+ examples of your custom keyword
-- Deploy the model to edge devices or use it with the Speech service
-- Application listens for the keyword and triggers an action
+Voice Live covers over 140 locales for recognition and offers over 600 standard voices across 150+ locales for output. The generative model is your choice, from `gpt-realtime` and its data-zone variants through the GPT-5 and GPT-4.1 families down to `gpt-5-nano` and `phi4-mm-realtime`, with none of them requiring you to deploy or provision capacity. Pricing tiers (Pro, Basic, Lite) follow from the model you pick rather than being selected directly. Function calling, phrase lists, custom speech models, custom voices, and avatars all plug in, with custom assets billed separately for training and hosting.
 
-**Common use cases:**
-- Smart speaker applications with custom wake words
-- Vehicle infotainment systems with branded wake words
-- Industrial equipment with domain-specific voice commands
-- Devices with regional language wake words
+The API is deliberately compatible with the Azure OpenAI Realtime API event surface, so the Speech-specific additions (noise suppression, echo cancellation, advanced end-of-turn detection) are additive rather than a migration. Quotas are per resource: **30 new connections per minute**, 60 minutes maximum per session, and 120,000 tokens per minute. Token limits move with the connection limit at 4,000 tokens per connection per minute, so raising one raises the other.
 
-### Pronunciation Assessment
+---
 
-Pronunciation Assessment evaluates how well someone pronounces words or sentences. The service compares recorded speech to reference pronunciation and provides accuracy scores.
+## Pronunciation Assessment
 
-**Assessment modes:**
-- **Word-level assessment** - Evaluate individual word pronunciation
-- **Sentence-level assessment** - Evaluate full sentences for fluency and accuracy
-- **Continuous assessment** - Evaluate phoneme-level accuracy for detailed feedback
+Pronunciation assessment scores recorded speech against reference text and returns accuracy, fluency, completeness, and prosody scores down to the phoneme. It drives language-learning feedback, speech therapy tools, and speaking practice applications, and it is one of the few Speech features with its own responsible-AI transparency note, because scoring someone's pronunciation carries assessment risk that plain transcription does not.
 
-**Feedback provided:**
-- Accuracy scores for words, syllables, and phonemes
-- Fluency metrics (pacing, rhythm, intonation)
-- Completeness score (was the entire utterance produced)
-- Prosody score (naturalness of speech rhythm and intonation)
+---
 
-**Common use cases:**
-- Language learning applications (ESL, foreign language study)
-- Speech therapy and accent reduction tools
-- Public speaking coaching
-- Interview preparation
-- Recruitment screening for language skills
+## Keyword Recognition
+
+Keyword recognition detects a wake word in a continuous audio stream. It functions as a privacy boundary as much as a feature: an always-listening device sends nothing to the cloud until the keyword gates it through.
+
+The design is a multi-stage chain, and each stage only sees audio the previous stage accepted.
+
+```
+  continuous mic audio
+          |
+          v
+  +----------------------+   on-device custom keyword model
+  |  stage 1: on-device  |   (Basic or Advanced)
+  |  keyword spotting    |
+  +----------------------+
+          | keyword suspected
+          +-----------------------------+
+          |                             |
+          v                             v
+  +------------------+        +--------------------+
+  | keyword          |        | speech to text     |   run in parallel,
+  | verification     |        | (keyword-prefixed) |   not in sequence
+  | (cloud)          |        |                    |
+  +------------------+        +--------------------+
+          |                             |
+      rejected ---------------------> STT processing terminated
+          |
+      accepted ---------------------> results returned to client
+```
+
+Custom keyword models are generated from the [Custom Keyword portal](https://speech.microsoft.com/customkeyword){:target="_blank" rel="noopener noreferrer"} by typing a word or phrase. **No training data upload is required.** The service generates and trains from the keyword itself. **Basic** models are ready in up to 15 minutes and suit prototyping; **Advanced** models adapt a base model with simulated training data, take up to 48 hours, and are the product-integration choice. Model generation is free, and running models on device costs nothing beyond whatever Speech features they gate.
+
+The accuracy tuning knob is pronunciation selection. The portal proposes pronunciations for the keyword, and choosing too many raises false accepts while choosing too few lowers correct accepts.
+
+Keyword verification runs in the cloud in parallel with speech to text, so it adds no latency to transcription: if verification rejects the keyword, STT processing is terminated instead of having been delayed. Verification processes at most two seconds of audio before timing out to a rejection, and rejected cases are slower than accepted ones because more audio gets examined. Because the keyword is known to be present, the service also allows a longer pause (up to five seconds) after it before declaring end of speech, which is what makes "*keyword, pause, command*" work as well as "*keyword command*".
 
 ---
 
 ## Deployment Options
 
-### Cloud-Based API
+### Cloud API
 
-The standard deployment: API calls to the managed Speech service in Azure.
-
-**Characteristics:**
-- No infrastructure to manage
-- Automatic scaling
-- Always up-to-date models and features
-- Pay per request or with subscription tiers
-- Lowest operational overhead
-
-**Use when:**
-- Cloud-native applications
-- Variable or unpredictable load
-- Users distributed globally (use regional endpoints for latency)
-- Custom models are acceptable
+The managed service in an Azure region. No infrastructure, automatic scaling within quota, always-current models, and access to every feature including the ones that need generative models. This is the default, and the only option for Voice Live, avatars, and video translation.
 
 ### Containers
 
-Deploy Speech services in containers for on-premises or edge scenarios.
+Containers move a subset of Speech to your own infrastructure for data residency or locality. The subset is genuinely a subset, and it shrinks the further you get from core transcription:
 
-**Speech containers available:**
-- Speech-to-Text
-- Text-to-Speech
-- Speech Language Identification
-- Custom Speech-to-Text
-- Speech Translation
+| Container | Status |
+|---|---|
+| Speech to text | GA |
+| Custom speech to text | GA |
+| Neural text to speech | GA |
+| Fast transcription | Public preview |
+| Speech language identification | Public preview, and **not available disconnected** |
 
-**Characteristics:**
-- Full control over infrastructure
-- Compliance with data residency requirements
-- Higher operational overhead (manage containers, updates, scaling)
-- Licensing model (monthly license or metered pricing)
-- Models are frozen (no live updates from Microsoft)
+Speech translation, pronunciation assessment, avatars, and Voice Live have no container. A design that assumes translation can run on-premises in a container is assuming a container that does not exist.
 
-**Use when:**
-- Data must stay on-premises for compliance
-- Network latency to Azure regions is unacceptable
-- Disconnected environments require local processing
-- Custom models cannot leave your infrastructure
+Containers are not free-standing. They are licensed to run only while connected to Azure for metering, billing through a Foundry resource on your account. Running genuinely disconnected requires submitting a [request form](https://aka.ms/csdisconnectedcontainers){:target="_blank" rel="noopener noreferrer"}, waiting up to 10 business days for a decision, purchasing a commitment plan, and creating the resource under the approved subscription ID. Disconnected pricing and commitment tiers differ from connected pricing.
 
-### Embedded/On-Device
+### Embedded and Hybrid
 
-Deploy lightweight Speech models directly on devices (phones, IoT devices, embedded systems).
+Embedded speech runs recognition and synthesis entirely on device, and it is **limited access**: use requires approval through the [embedded speech review](https://aka.ms/csgate-embedded-speech){:target="_blank" rel="noopener noreferrer"}, and model downloads plus per-model license keys arrive only after approval.
 
-**Characteristics:**
-- Speech commands processed locally with no cloud dependency
-- Ultra-low latency
-- Works offline
-- Limited to small models (custom keyword recognition, simple commands)
-- Requires per-device licensing
+The capability is fuller than "wake words only." Embedded speech does real transcription and neural synthesis, across a fixed list of about 21 recognition locales and most text-to-speech locales with one selected voice per gender. Constraints are the platform and the resource budget:
 
-**Use when:**
-- Wakeword detection requires zero-cloud latency
-- Devices must work offline
-- Privacy concerns prevent cloud audio transmission
-- Real-time performance is critical (IoT, robotics)
+- **SDKs**: C#, C++, Java, Python, and Go only. Not the other SDKs, not the Speech CLI, not REST
+- **Memory**: model size plus roughly 200 MB for recognition; 100-200 MB for synthesis
+- **Audio**: recognition takes mono 16-bit 8 kHz or 16 kHz PCM WAV only
+- **Platforms**: Windows 11+, macOS 10.14+, Linux, and Android 8.0+ on Arm64/Arm32, with gaps (no embedded TTS neural voices on Linux Arm32, no Android support from Python or Go)
+- **SSML**: a reduced set, with no `voice`, `lang`, `emphasis`, `silence`, or background audio elements
+
+**Hybrid speech** (`HybridSpeechConfig`) is the middle path and behaves differently per direction. For recognition, it uses the cloud and falls back to the embedded model after repeated connection failures, returning to the cloud if connectivity recovers. For synthesis, it runs both in parallel on every request and takes whichever responds first. Python and Go do not support hybrid; C#, C++, and Java do.
+
+For a secure facility rather than a roaming device, Microsoft's guidance is to reach for disconnected containers before embedded speech.
 
 ---
 
-## Real-Time Audio Streaming
+## Real-Time Streaming and Audio Formats
 
-### WebSocket Connection
+Real-time recognition streams audio over a WebSocket and returns partial results as recognition confidence builds, with a final result when the service detects end of speech. Interactive latency is dominated by the fact that the service must receive and process enough audio to produce a hypothesis, so sub-100 ms round trips are not achievable through the cloud path regardless of network quality. Designs needing that responsiveness put an on-device keyword model or embedded recognition in front of the cloud call.
 
-Real-time speech processing uses WebSocket to stream audio and receive results as data arrives.
+The **default input format is WAV: 16 kHz or 8 kHz, 16-bit, mono PCM.** Compressed formats are supported, but through [GStreamer](https://gstreamer.freedesktop.org){:target="_blank" rel="noopener noreferrer"}, which the SDK does not bundle for licensing reasons. The binaries have to be installed separately and present on the system path at runtime, matching the SDK's architecture. Once GStreamer is in place, the SDK accepts MP3, OPUS/OGG, FLAC, ALAW and MULAW in a WAV container, and `ANY` for MP4 or unknown containers.
 
-**Flow:**
-1. Client establishes WebSocket connection to Speech service
-2. Sends audio frames in 20ms chunks (for 16 kHz 16-bit audio)
-3. Service returns partial results as recognition confidence builds
-4. Final result sent when audio stream ends
-5. Connection closed
+This trips up teams in two ways. First, the same code that works on a developer's machine fails in a container image without the GStreamer plug-ins. Second, **the JavaScript, Objective-C, and Swift SDKs do not support compressed audio at all**, so those clients must decode to the default PCM format themselves before streaming. Server-side transcoding to 16 kHz mono PCM is the simpler design when clients are heterogeneous.
 
-**Latency characteristics:**
-- Initial recognition result: 200-500ms after audio begins
-- Subsequent partial results: 100-200ms intervals
-- Final result: Arrives within 100ms of audio stream ending
-- Total interactive latency: 300-600ms from spoken word to result (acceptable for most real-time applications)
-
-**Common implementation pattern:**
-- Web application: WebSocket from browser via JavaScript API
-- Mobile: Native SDK (iOS/Android)
-- Server-side: SDK or WebSocket client library
-
-### Audio Input Formats
-
-The Speech service accepts audio in multiple formats:
-
-**Supported codecs:**
-- PCM (WAV) - 16-bit, 16 kHz or 8 kHz (standard for transcription)
-- Opus - Popular for streaming, works at lower bitrates
-- MP3 - Common format for batch processing
-- AAC - Mobile-friendly codec
-- Flac - Lossless audio (lowest bitrate for high quality)
-- Mulaw - Telephony standard
-
-**Sample rates:**
-- 8 kHz (telephony quality, lower bandwidth)
-- 16 kHz (standard for clarity)
-- 48 kHz (high-fidelity audio)
-
-**Best practice:** Use PCM WAV 16-bit 16 kHz for streaming to balance quality and bandwidth.
+Fast transcription accepts a wider format list directly, including WAV, MP3, OPUS/OGG, FLAC, WMA, AAC, ALAW and MULAW in WAV containers, AMR, WebM, and SPEEX, because it takes a whole file rather than a live stream.
 
 ---
 
 ## Integration Patterns
 
-### Azure Bot Service Integration
+**Voice agents.** Voice Live is the current path for a conversational voice application, and it removes the orchestration that older Bot Framework and Custom Commands designs required. A Bot Framework bot can still be reached over the Direct Line Speech channel through the SDK's `DialogServiceConnector`, which suits an existing bot with established dialog logic. Custom Commands, which used to be the low-code option here, is retired.
 
-Azure Bot Service and Speech services work together to build voice-enabled chatbots.
+**Transcribe then classify.** With intent recognition removed from the Speech SDK, the supported pattern is two steps: `SpeechRecognizer` or `ConversationTranscriber` produces text, and CLU or an Azure OpenAI model produces intents and entities. CLU fits when you have labeled data and want stable, versioned intent schemas with evaluation metrics. An Azure OpenAI model fits when intents change quickly or the categories are not known upfront. The two combine: CLU for deterministic classification, a model for summarization or low-confidence fallback.
 
-**Architecture:**
-1. User speaks to bot through direct line speech channel
-2. Speech service transcribes audio to text
-3. Bot framework processes text through NLU/LUIS
-4. Bot responds with text
-5. Speech service converts response to audio
-6. Audio sent back to user
+**Telephony and contact center.** Azure Communication Services carries the call; Speech transcribes it and synthesizes IVR responses. Diarization and channel separation matter here, and stereo call recordings with one party per channel transcribe more reliably than a mixed mono stream.
 
-**Advantages:**
-- Single authentication flow for both text and voice
-- Bot activity logs include transcriptions
-- Consistent NLU across channels
+**Search over audio.** Transcribe with batch transcription, index the transcript in Azure AI Search alongside timestamps, and let users search text and seek to the matching audio position. Word-level timestamps come out of fast transcription and batch transcription directly.
 
-### Azure Communication Services Integration
-
-For applications requiring voice capabilities beyond simple dictation, Azure Communication Services provides calling and meeting APIs that can work with Speech services.
-
-**Common pattern:**
-- Customer calls in via Communications Services
-- Speech service transcribes the call
-- Sentiment analysis or custom processing of transcription
-- Text-to-speech provides IVR response
-
-### Azure Cognitive Search Integration
-
-Index speech content for searchability:
-
-1. Transcribe audio with Speech-to-Text
-2. Index transcription in Cognitive Search
-3. Users search for content by word, then retrieve audio at that timestamp
-4. Common for podcasts, videos, meeting recordings
-
-### Language Understanding (LUIS) Integration
-
-Combine transcription with language understanding:
-
-1. Speech service transcribes user utterance
-2. LUIS analyzes intent and extracts entities
-3. Application triggers appropriate action
+**Power Platform.** The Batch Speech to text connector exposes batch transcription to Power Automate, Power Apps, and Logic Apps without code, which covers a surprising share of "transcribe these files nightly" requirements.
 
 ---
 
-## Custom Models and Training
+## Quotas and Throttling
 
-### Custom Speech Models
+Speech quotas are per resource and per feature, and they are concurrency and rate limits, not capacity you purchase. There is no throughput-unit or reserved-capacity concept to buy.
 
-Improve transcription accuracy for domain-specific language:
+| Feature | Free (F0) | Standard (S0) | Adjustable |
+|---|---|---|---|
+| Real-time STT + speech translation, combined | 1 concurrent request | 100 concurrent requests | Yes |
+| Custom endpoint STT | 1 concurrent request | 100 concurrent requests per endpoint | Yes, separately per endpoint |
+| Fast transcription / LLM speech | Not available | 600 requests per minute | Yes (fast transcription) |
+| Batch transcription | Not available | 100 requests per 10 seconds | No |
+| Real-time TTS | 20 transactions per 60 seconds | 30 TPS | Yes, up to 1,000 TPS |
+| Voice Live | Not available | 30 new connections per minute, 120,000 TPM | Yes |
+| Real-time avatar | Not available | 2 new connections per minute | Yes |
+| Custom model deployments | 1 | 50 | No |
 
-**When to use custom speech:**
-- Specialized vocabulary (medical terms, product names, brand names)
-- Non-native speakers with distinctive accents
-- Noisy audio environments (manufacturing, vehicles)
-- Existing transcription error patterns you can provide examples for
+Free-tier limits are not adjustable at all. Switching a resource from F0 to S0 can take several hours for the new quotas to take effect, so a tier change belongs well before a launch rather than during one.
 
-**Training data required:**
-- Audio samples: 30 minutes minimum (1-20 hours for best accuracy)
-- Transcriptions: Accurate text matching the audio
-- Related text: Additional text samples of domain vocabulary
+Raising a quota goes through the [Foundry Tools quota increase form](https://aka.ms/foundry-tools-quota-increase){:target="_blank" rel="noopener noreferrer"} using a work email, naming the specific feature, the subscription and resource IDs, and a business justification. Custom endpoints need their endpoint ID. The current value of a concurrency limit is not visible in the portal, the CLI, or the API, so confirming what you have today also means opening a support request.
 
-**Improvement potential:**
-- 10-30% word error rate reduction depending on data quality and domain
+Raising a limit does not reduce cost or improve batch throughput, and it does not eliminate 429s. Speech autoscales on demand rather than holding idle capacity, so a workload that jumps from 5 TPS to 20 TPS in one second gets throttled while the service scales, even though 20 TPS is well within quota. Retry with backoff is required, and load should ramp: Microsoft's suggested pattern is starting at 20 concurrent connections, adding 20 every 90-120 seconds, and backing off on 429 with retry intervals of 1, 2, 4, and 4 minutes.
 
-**Process:**
-1. Upload training data (audio + transcriptions)
-2. Service trains custom model (hours to days depending on data size)
-3. Test custom model against test set
-4. Deploy and use model in Speech-to-Text requests
-
-### Custom Neural Voice
-
-Create a voice clone for text-to-speech based on training recordings of a person.
-
-**Requirements:**
-- Limited availability (approval required)
-- 10-15 hours of high-quality recording samples
-- Phonetically balanced text covering language sounds
-
-**Limitations:**
-- Limited to approved use cases (brand spokesperson, educational, accessibility)
-- Must comply with speaker consent and ethics policies
-- Higher cost than standard neural voices
+Two kinds of 429 are not quota problems at all. Text-to-speech 429s are usually backend capacity for a specific voice in a specific region, which more quota will not fix; using the voice in its native region or picking a more common voice will. And creating extra Speech resources in the *same* region does not add capacity, because one backend cluster serves them all. Spreading across regions does.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Overlapping Audio Input Handling
+### Pitfall 1: Designing Around Voice Biometrics
 
-**Problem:** Attempting to use Speech service with overlapping speakers in the same audio stream. The service is designed for single-speaker or diarization scenarios, not real-time separation of multiple simultaneous speakers.
+**Problem:** Architecting caller authentication or named-speaker attribution on speaker verification and identification.
 
-**Result:** Transcription becomes garbled or one speaker is lost. Speaker diarization cannot identify overlapped segments reliably.
+**Result:** The feature was retired on 30 September 2025. There is no in-service replacement.
 
-**Solution:** For multi-speaker scenarios (meetings, interviews), ensure speakers take turns speaking. If simultaneous audio is inevitable, record each speaker on separate channels and process separately, then synchronize results by timestamp.
-
----
-
-### Pitfall 2: Insufficient Custom Speech Training Data
-
-**Problem:** Training custom speech models with small datasets (< 30 minutes of audio) or transcriptions that don't match the actual audio.
-
-**Result:** Custom model performs worse than the base model. Training data appears corrupted to the service and is rejected.
-
-**Solution:** Gather at least 1-2 hours of domain-specific audio (minimum 30 minutes, but 1+ hour recommended for meaningful improvement). Ensure transcriptions are accurate word-for-word matches. Validate training data before submission.
+**Solution:** Use a different authentication factor for identity. If the requirement is only "separate the speakers," diarization through `ConversationTranscriber` still works, but it returns positional `Guest-N` labels that your application must map to identities from call metadata, channel assignment, or an explicit enrollment step you build yourself.
 
 ---
 
-### Pitfall 3: Not Planning for Real-Time Latency Requirements
+### Pitfall 2: Assuming Overlapping Speech Is Handled
 
-**Problem:** Building interactive applications expecting sub-100ms latency, then discovering WebSocket streaming has 300-600ms total latency.
+**Problem:** Feeding a mixed mono stream with people talking over each other into diarization.
 
-**Result:** Application feels unresponsive. Users find voice interaction awkward compared to text.
+**Result:** Overlapped segments are attributed unreliably or lost. Diarization is built for turn-taking conversation, not source separation.
 
-**Solution:** Understand that WebSocket speech streaming has inherent latency (must receive and process audio to generate partial results). For sub-300ms latency, use phrase lists with short expected utterances. If <100ms latency is critical, reconsider architecture (e.g., custom keyword recognition on device).
-
----
-
-### Pitfall 4: Underestimating Acoustic Environment Impact
-
-**Problem:** Training or testing models in quiet environments, then deploying to noisy real-world environments (call centers, manufacturing, vehicles).
-
-**Result:** Significant accuracy degradation. Word error rate increases 50-200% in noisy environments.
-
-**Solution:** Include noisy audio samples in training data. Test models in the actual deployment environment. Use noise suppression preprocessing if available. Consider background noise levels when setting accuracy thresholds for acceptance.
+**Solution:** Capture one speaker per channel where the medium allows it (telephony usually does), transcribe channels separately, and merge on timestamps. Where a single microphone is unavoidable, treat overlap as expected transcript loss rather than something configuration will fix.
 
 ---
 
-### Pitfall 5: SSML Mistakes with Prosody Values
+### Pitfall 3: Sending Compressed Audio Without GStreamer
 
-**Problem:** Setting SSML prosody values without understanding scale. Using pitch="100%" (absolute) instead of pitch="+100%" (relative), causing extremely unnatural speech.
+**Problem:** Streaming MP3 or OPUS from an SDK that needs GStreamer, without the binaries installed and on the path.
 
-**Result:** Synthetic speech sounds robotic or incomprehensible.
+**Result:** Recognition fails at runtime in the deployed environment while working on a developer machine that happens to have GStreamer. In JavaScript, Objective-C, and Swift it never works, because those SDKs do not support compressed input at all.
 
-**Solution:** Use relative values: pitch="+20%", rate="0.9", volume="+10%". Test SSML output before deployment. Start with small adjustments (±20%) and increase gradually.
-
----
-
-### Pitfall 6: Not Handling Quota and Throttling
-
-**Problem:** Submitting more concurrent requests than the account quota allows, or assuming unlimited TPS without checking limits.
-
-**Result:** Requests fail with 429 (Too Many Requests) errors. Real-time transcription stalls during high load.
-
-**Solution:** Check [Speech service quotas](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-services-quotas-and-limits){:target="_blank" rel="noopener noreferrer"} for your pricing tier. Use exponential backoff for retries. Purchase additional throughput units if sustained high volume is needed.
+**Solution:** Install the matching-architecture GStreamer plug-ins into the container image or host and verify they load. Where clients vary, transcode to the default 16 kHz mono 16-bit PCM before streaming and avoid the dependency entirely.
 
 ---
 
-### Pitfall 7: Audio Codec Mismatch
+### Pitfall 4: Custom Speech Training Files Over 40 Seconds
 
-**Problem:** Sending audio in format not matching the header metadata (e.g., claiming 16 kHz but actually sending 8 kHz audio).
+**Problem:** Uploading whole call recordings as audio-plus-transcript training data.
 
-**Result:** Transcriptions are garbled or completely incorrect.
+**Result:** Only the transcript text of each over-length file is used, so the acoustic training you paid for silently does not happen. If every file exceeds 40 seconds, the training run fails.
 
-**Solution:** Ensure audio format exactly matches the AudioConfig parameters. Test audio files with Azure Storage Explorer to verify format.
+**Solution:** Segment training audio to 40 seconds or less per file (30 for Whisper customization), keep the transcripts word-accurate, and start with plain text before investing in audio at all. Text training finishes in minutes rather than days and is often enough on well-supported locales.
+
+---
+
+### Pitfall 5: SSML Values Outside the Supported Range
+
+**Problem:** Treating a bare percentage as an absolute level, or setting values the voice cannot honor, such as `volume="120"` when the absolute scale ends at 100.
+
+**Result:** The value is limited or substituted rather than applied. The output sounds unchanged or distorted, with no error to debug.
+
+**Solution:** Use relative values with an explicit sign (`pitch="+20%"`, `volume="+10%"`), keep pitch within 0.5-1.5x and rate within 0.5-2x of the original, and reach for `mstts:express-as` rather than `prosody` when the goal is emotion. Confirm the voice type supports the element: HD voices, personal voices, and embedded voices each drop part of the SSML surface.
+
+---
+
+### Pitfall 6: Expecting Quota Increases to Fix Throughput
+
+**Problem:** Requesting a quota increase to make batch transcription finish sooner, or to stop 429s during a traffic spike.
+
+**Result:** No improvement. Batch jobs queue and process sequentially per region regardless of quota, and spike 429s come from autoscaling lag rather than the limit.
+
+**Solution:** For batch, submit about 1,000 files per request, spread submissions over hours, poll no more than once a minute, and distribute across regions. For spikes, ramp load gradually and implement backoff. Reserve quota requests for a genuinely higher sustained ceiling.
+
+---
+
+### Pitfall 7: Leaving Custom Endpoints and Avatar Connections Running
+
+**Problem:** Treating a deployed custom voice, custom speech, or avatar endpoint as free when idle.
+
+**Result:** Custom voice hosting bills per hour for as long as the endpoint exists, calculated daily at 00:00 UTC. Real-time avatar connections bill per second of connection time whether or not the avatar speaks.
+
+**Solution:** Suspend or delete custom endpoints that are not serving traffic and redeploy on demand. For real-time avatars, play local idle video instead of holding an active connection through silence, and handle the 30-minute connection cap with auto-reconnect rather than a permanently open session.
+
+---
+
+### Pitfall 8: Building for More Than Two Translation Targets
+
+**Problem:** Assuming one speech translation call fans out to any number of target languages.
+
+**Result:** A single call covers at most two. Additional languages require a Foundry multi-service resource and bill as Translator text translation on top of the speech charge, at a character count inflated by intermediate streaming results.
+
+**Solution:** Decide the target language count before designing the session, and budget beyond two as a separate translation line item. Where languages vary per listener rather than per session, translating the final transcript downstream may cost less than fanning out live.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure AI Speech provides a unified platform for speech processing.** Instead of integrating Speech-to-Text from one vendor, Text-to-Speech from another, and translation from a third, Azure Speech handles all these scenarios in one service with consistent APIs.
+1. **The service is now Azure Speech in Foundry Tools, and several capabilities are gone.** Speaker recognition and SDK intent recognition retired on 30 September 2025, Custom Commands on 30 April 2026, and the Long Audio API retires 1 April 2027. Voice biometrics has no replacement; the others have documented migration targets.
 
-2. **Real-time streaming has inherent latency.** WebSocket transcription typically requires 300-600ms from spoken word to final result. This is acceptable for most applications but must be accounted for in UX design. For faster response, optimize phrases or use pre-trained custom keyword detection.
+2. **Three speech-to-text paths exist, and picking wrong costs latency or throughput.** Real-time streams, fast transcription returns synchronously for files under 500 MB and 5 hours, and batch transcription queues for volume. Batch latency comes from the queue, and more quota does not shorten it.
 
-3. **Custom models dramatically improve accuracy for specialized domains.** Medical transcription, product names, and regional accents benefit significantly from custom speech models trained on domain data. Invest in gathering quality training audio if accuracy is critical.
+3. **Voice Live is the managed path for voice agents.** It bundles recognition, a generative model of your choice, synthesis, barge-in handling, and echo cancellation behind one WebSocket compatible with the Azure OpenAI Realtime event surface, replacing a hand-built three-hop pipeline.
 
-4. **Speaker recognition enables voice biometrics beyond simple transcription.** Identification and verification capabilities support authentication, compliance monitoring, and speaker tracking in meetings without relying on named entity recognition.
+4. **Customization is region-scoped and gated.** Custom speech models and custom voices live in one resource in one region and must be copied to others explicitly. Custom voice, custom avatar, and embedded speech all require approval through limited-access review before you can build on them.
 
-5. **SSML provides granular control over synthesized speech.** Emotion, prosody, speaking style, and pronunciation can all be controlled at the XML level. Start with small adjustments and test output before deploying to users.
+5. **Start custom speech with text, not audio.** Plain and structured text train in minutes and often suffice on well-supported locales, while audio training takes days and silently ignores the acoustics of any file over 40 seconds.
 
-6. **Deployment options range from fully managed cloud to on-device.** Cloud APIs offer lowest operational overhead but have latency. Containers provide data residency compliance. On-device models enable offline and ultra-low-latency scenarios.
+6. **SSML value semantics cause more defects than SSML structure.** A bare percentage is relative, absolute volume stops at 100, emotion comes from `mstts:express-as` rather than `prosody`, and HD, personal, and embedded voices each support a narrower element set than standard voices.
 
-7. **Acoustic environment dramatically impacts transcription accuracy.** Models trained in quiet environments degrade significantly in noisy settings. Include representative noise samples in training data and test in actual deployment environments.
+7. **Containers cover less than the cloud service.** Speech to text, custom speech to text, and neural TTS are GA; fast transcription and language identification are preview; translation, avatars, and Voice Live have no container. Disconnected operation needs approval, a commitment plan, and up to 10 business days.
 
-8. **Translation with context improves quality.** Provide phrase lists and allow streaming translation to maintain consistency. Asymmetric language support means not all language pairs are available; verify language combinations before building.
+8. **Quotas are concurrency and rate limits, not purchasable capacity.** Defaults are 100 concurrent real-time requests and 30 TTS transactions per second on S0, raised through a request form. Autoscaling lag causes 429s inside quota, so ramping load and retrying with backoff matter more than the ceiling.
 
-9. **Integration with other Azure services amplifies capabilities.** Combining Speech with LUIS for NLU, Cognitive Search for indexing, or Bot Service for full conversational AI creates richer applications than Speech alone.
+9. **Billing units differ per feature and reward attention.** Text to speech bills characters including SSML markup, with CJK characters counted double. Speech translation past two targets bills Translator characters inflated by intermediate results. Custom voice hosting and real-time avatars bill for time, not usage.
 
-10. **Quota and throttling must be managed proactively.** Check service quotas, implement exponential backoff for retries, and purchase additional throughput units if sustained high-volume demands require it.
+10. **The default audio format is narrower than it looks.** Real-time streaming expects 16 kHz or 8 kHz mono 16-bit PCM, and compressed input depends on separately installed GStreamer binaries that three SDKs cannot use at all.

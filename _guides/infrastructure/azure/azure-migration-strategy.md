@@ -3,602 +3,519 @@ title: "Azure Migration Strategy"
 layout: guide
 category: Azure
 subcategory: Migration & Hybrid Cloud
-description: "Cloud Adoption Framework methodology, migration phases, assessment tools, and strategic approaches for planning and executing Azure migrations"
-tags: [azure, cloud-computing, infrastructure, modernization, governance, decision-making, practical]
+description: "The Cloud Adoption Framework's seven phases, the eight migration strategies and how to pick one per workload, business case construction with Azure Migrate, wave planning, and the governance that has to exist before the first workload moves."
+tags: [caf, azure-migrate, landing-zones, workload-assessment, business-case, governance, practical]
 ---
 
-## What Is Cloud Migration on Azure
+## What Cloud Migration on Azure Involves
 
-Cloud migration to Azure involves moving applications, data, and infrastructure from on-premises, other clouds, or legacy systems to Azure. The [Microsoft Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/){:target="_blank" rel="noopener noreferrer"} (CAF) provides a methodology that goes beyond technical rehosting. CAF emphasizes aligning migration with business strategy, building organizational capability, managing cost discipline, and establishing governance before and after migration.
+Cloud migration moves applications, data, and infrastructure from on-premises, another cloud, or legacy systems into Azure. The [Microsoft Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/){:target="_blank" rel="noopener noreferrer"} (CAF) is Microsoft's methodology for it, and its central argument is that rehosting servers is the easy part. Aligning migration with business outcomes, building organizational capability, and establishing governance before workloads land is where migrations succeed or fail.
 
-### What Problems Migration Strategy Solves
+### What a deliberate strategy prevents
 
-**Without intentional migration strategy:**
-- Unplanned migration costs spiral as workloads move inefficiently to the cloud
-- Teams lack shared understanding of what success looks like
-- Security, compliance, and governance gaps emerge mid-migration
-- Skills gaps prevent teams from operationalizing cloud infrastructure
-- Individual teams make migration decisions in isolation, creating duplicate infrastructure and inconsistent governance
-- Business value from cloud remains unclear
+**Without one:**
+- Costs spiral as workloads move inefficiently, then run inefficiently
+- Teams hold different definitions of what success means
+- Security, compliance, and governance gaps surface mid-migration, when remediation is most expensive
+- Skills gaps leave teams unable to operate what they migrated
+- Individual teams make isolated decisions, producing duplicate infrastructure and inconsistent governance
+- Business value stays unclear, so the program loses sponsorship
 
-**With a deliberate migration strategy:**
-- Upfront business case development clarifies ROI and aligns stakeholders
-- Phased assessment discovers workload characteristics (dependencies, licensing, rehosting candidates)
-- Structured readiness ensures landing zones, governance policies, and operational processes are prepared
-- Cost management frameworks prevent runaway cloud spend
-- Knowledge and skill development builds lasting organizational capability
-- Governance and compliance are designed before migration, not retrofitted after
+**With one:**
+- A business case quantifies return and aligns stakeholders before spending begins
+- Assessment discovers dependencies, licensing exposure, and which workloads should not move at all
+- Landing zones, policies, and operational processes exist before the first cutover
+- Cost discipline is a control, not a quarterly surprise
+- Governance is designed in rather than retrofitted
 
-### How Azure Migration Differs from AWS Migration
-
-Both AWS and Azure provide cloud migration frameworks, but their approaches differ in structure and emphasis:
+### How Azure migration differs from AWS
 
 | Aspect | AWS | Azure |
-|--------|-----|-------|
-| **Migration framework** | AWS Migration Accelerator Program (MAP) focuses on technical execution and cost optimization | Cloud Adoption Framework emphasizes business alignment, skills development, and governance as equally important as technical migration |
-| **Landing zones** | AWS Control Tower automates account and baseline setup | Azure Landing Zones provide opinionated architecture with role-based access control and policy enforcement from day one |
-| **Cost management** | AWS Cost Explorer and Trusted Advisor for cost visibility. Cost discipline requires organizational effort | Azure provides Cost Management + Billing with governance policies that enforce spending guardrails by default |
-| **Skills development** | AWS Training and Certification marketplace. Skills development is customer's responsibility | Microsoft Learn provides free, comprehensive training. CAF emphasizes building teams with designated cloud architect and business analyst roles |
-| **Governance approach** | Distributed responsibility. Teams implement security and compliance independently | Centralized by design. Azure Policy enforces compliance standards across all subscriptions |
-| **On-premises integration** | AWS Outposts bring AWS infrastructure on-premises. Less integrated with existing data center operations | Azure Arc extends Azure management and governance to on-premises and multi-cloud resources |
+|---|---|---|
+| **Framework** | AWS Cloud Adoption Framework, with the Migration Acceleration Program (MAP) funding execution | Cloud Adoption Framework, treating business alignment, skills, and governance as first-class alongside technical migration |
+| **Landing zones** | Control Tower automates account structure and baseline guardrails | Azure landing zones ship an opinionated architecture with RBAC and Azure Policy enforcement from day one |
+| **Assessment tooling** | Application Discovery Service and Migration Hub | Azure Migrate, which is free and includes a business case generator |
+| **Cost management** | Cost Explorer and Trusted Advisor for visibility | Cost Management plus Azure Policy, which can block noncompliant spend rather than only report it |
+| **Governance approach** | Service Control Policies at the organization level | Azure Policy assigned at management group scope, with deployment and modification effects, not just deny |
+| **Managing what stays behind** | Outposts extends AWS hardware into the data center | Azure Arc projects on-premises and other-cloud resources into Azure's control plane for governance and monitoring |
+
+The governance difference is the one that changes migration sequencing. Azure Policy can deploy and remediate, not just permit and deny, so a landing zone can correct drift rather than only reporting it. That makes landing-zone-first sequencing more valuable on Azure than the equivalent effort on AWS.
 
 ---
 
-## The Cloud Adoption Framework Methodology
+## The Cloud Adoption Framework
 
-The [Microsoft Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/){:target="_blank" rel="noopener noreferrer"} organizes migration into six sequential phases, each producing specific deliverables and outcomes.
+CAF organizes adoption into seven phases. The first four run in sequence. The last three are operational and run continuously once workloads are live, not as a final step.
 
-### The Six CAF Phases
+```
+   ADOPTION PHASES (sequential)
 
-The CAF phases progress from strategic planning through ongoing operations:
+   1. Strategy  -->  2. Plan  -->  3. Ready  -->  4. Adopt
+   why Azure?        how will      build the      migrate,
+                     we prepare?   landing zone   modernize, build
+                                                       |
+                                                       v
+   OPERATIONAL PHASES (continuous, all three from here on)
 
-1. **Define Strategy** aligns business outcomes and financial justification
-2. **Plan** assesses workloads, builds skills roadmap, and creates migration inventory
-3. **Ready** prepares Azure landing zones, governance policies, and operational readiness
-4. **Migrate** executes workload migration in waves using standardized patterns
-5. **Innovate** modernizes applications to extract additional cloud value
-6. **Govern & Manage** operates cloud infrastructure with compliance, cost control, and security
+   +----------------+----------------+----------------+
+   |   5. Govern    |   6. Secure    |   7. Manage    |
+   |   control the  |   protect the  |   operate and  |
+   |   environment  |   environment  |   optimize     |
+   +----------------+----------------+----------------+
+```
 
-These phases are not strictly waterfall. Organizations often conduct multiple phases in parallel for different workload cohorts. Some teams may skip **Innovate** if business priorities focus on cost reduction through rehosting.
+| Phase | The decision it answers |
+|---|---|
+| **1. Strategy** | What should our Azure adoption look like? |
+| **2. Plan** | How will we prepare for Azure adoption? |
+| **3. Ready** | How will we build our Azure landing zone? |
+| **4. Adopt** | How will we migrate, modernize, and build workloads? |
+| **5. Govern** | How will we control our Azure environment? |
+| **6. Secure** | How will we protect our Azure environment? |
+| **7. Manage** | How will we operate and optimize Azure over time? |
+
+Older material describes CAF as six phases with Migrate and Innovate as separate stages and Govern and Manage combined. Migrate and Innovate are now both inside **Adopt**, Govern and Manage are separate phases, and **Secure** was promoted to a phase of its own. Anyone working from a six-phase plan is missing Secure entirely.
+
+The phases are not strictly waterfall in practice. Organizations commonly run different workload cohorts through different phases concurrently, and a rehost-only program may do very little in Adopt beyond migration.
 
 ---
 
-## Phase 1: Define Strategy
+## Phase 1: Strategy
 
-**Purpose:** Establish business outcomes, financial justification, and organizational alignment before any technical work begins.
+**Purpose:** Establish business outcomes, financial justification, and sponsorship before technical work begins.
 
-### Strategic Outcome Definition
+### Defining outcomes
 
-Begin with clear business outcomes that migration will deliver. These outcomes drive all downstream decisions about workload prioritization, technology choices, and post-migration optimization.
+Outcomes drive every downstream decision about prioritization, target services, and how much modernization to attempt.
 
-**Common cloud migration outcomes:**
+| Outcome | Example business goal |
+|---|---|
+| **Cost reduction** | Reduce infrastructure spend by a defined percentage by eliminating owned data center capacity |
+| **Business agility** | Cut time-to-market for new features from six months to three by provisioning on demand |
+| **Operational efficiency** | Shift management overhead to managed services, reallocating infrastructure staff to product work |
+| **Risk reduction** | Meet SOC 2, HIPAA, or PCI-DSS obligations using Azure's compliance controls rather than building equivalents |
+| **Performance and innovation** | Access analytics, AI, and geographically distributed infrastructure the data center cannot provide |
 
-| Outcome | Example Business Goal |
-|---------|----------------------|
-| **Cost reduction** | Reduce infrastructure spend by 30% through pay-as-you-go pricing and elimination of owned data center capacity |
-| **Business agility** | Reduce time-to-market for new features from 6 months to 3 months by scaling development infrastructure on-demand |
-| **Operational efficiency** | Reduce on-premises infrastructure team headcount by 50% by shifting management overhead to Azure managed services |
-| **Risk reduction** | Achieve compliance with industry regulations (SOC 2, HIPAA, PCI-DSS) through Azure built-in compliance controls |
-| **Performance & innovation** | Access advanced analytics, machine learning, and geographically distributed infrastructure for new capabilities |
+An outcome that survives contact with a steering committee has four properties: it is quantified, it names the stakeholder with P&L responsibility, it has a date, and it has a measured baseline. "Save money" fails all four.
 
-**Defining outcomes effectively:**
-- **Quantify the outcome** - "Reduce cost by 30%" is more actionable than "save money"
-- **Identify the business stakeholder** - Outcomes must connect to P&L responsibility or strategic initiative
-- **Set a timeline** - When should the outcome be realized? By what milestone?
-- **Establish the baseline** - What is the current state? How will you measure improvement?
+### Building the business case
 
-### Building a Business Case
+The business case quantifies return and justifies spending on migration execution, skills, and post-migration optimization.
 
-A business case quantifies migration ROI and justifies investment in migration execution, skills development, and post-migration optimization.
+| Component | What it captures |
+|---|---|
+| **Current state costs** | On-premises total cost of ownership: hardware, licenses, facilities, people, maintenance |
+| **Azure costs** | Projected compute, storage, networking, licensing, and managed services |
+| **Migration costs** | One-time: tooling, professional services, training, cutover downtime |
+| **Productivity gains** | Operational hours saved at loaded cost, and revenue impact from faster delivery |
+| **Risk reduction** | Cost to remediate compliance gaps against cost to comply, plus disaster recovery capability gained |
+| **Break-even** | When cumulative savings exceed migration and run costs |
 
-**Business case components:**
+Build this in **Azure Migrate's business case feature** rather than by hand. It computes on-premises against Azure total cost of ownership from discovered inventory, produces year-over-year cash flow, applies Azure Hybrid Benefit and reservation discounts, flags end-of-support Windows and SQL Server versions as migration accelerators, and identifies quick wins. A business case built from actual discovered utilization survives scrutiny that a spreadsheet of list prices does not.
 
-| Component | Purpose |
-|-----------|---------|
-| **Current state costs** | Total Cost of Ownership (TCO) for on-premises infrastructure: hardware, software licenses, facilities, people, maintenance |
-| **Cloud state costs** | Projected costs in Azure: compute, storage, networking, licenses, managed services |
-| **Migration costs** | One-time costs: migration tools, professional services, training, cutover downtime |
-| **Productivity gains** | Reduction in operational effort (hours saved x loaded cost), time-to-market acceleration (revenue impact) |
-| **Risk reduction** | Financial impact of compliance (cost to remediate vs. cost to comply), disaster recovery capability |
-| **Break-even timeline** | When cumulative savings exceed migration and cloud costs |
+The standalone **Azure TCO Calculator has been superseded** by this feature. Older runbooks still point at it.
 
-**Example business case structure:**
-- Current on-premises infrastructure costs (servers, licenses, facilities, people, maintenance)
-- Projected Azure costs after rehosting without optimization
-- One-time migration costs (tools, services, training)
-- Annual productivity gains from reduced operational overhead
-- Timeline to break-even (when cumulative savings exceed migration costs)
+Two exposures belong in the business case explicitly, because they change the answer more than compute rates do:
 
-### Organizational Alignment
+- **Azure Hybrid Benefit** applies existing Windows Server and SQL Server licenses with active Software Assurance or qualifying subscriptions against Azure compute, cutting up to 80% for Windows Server and up to 85% for SQL Server. A business case priced without it substantially overstates Azure cost.
+- **End-of-support versions.** Workloads on out-of-support Windows Server or SQL Server carry either extended security update costs on-premises or a free equivalent in Azure, which frequently makes them the strongest business case in the portfolio.
 
-Define clear executive sponsorship and team responsibilities.
+### Organizational alignment
 
 | Role | Responsibility |
-|------|-----------------|
-| **Executive sponsor** | Owns business outcomes and authorizes budget; resolves cross-functional conflicts |
-| **Cloud strategy leader** | Develops business case, defines outcomes, drives organizational change management |
-| **Cloud architect** | Owns technical vision and landing zone design; ensures architecture aligns with business outcomes |
-| **Workload owner** | Provides business requirements and success criteria for each workload; decides rehost vs. modernize |
-| **Operations leader** | Plans operational readiness and post-migration support model |
+|---|---|
+| **Executive sponsor** | Owns business outcomes, authorizes budget, resolves cross-functional conflict |
+| **Cloud strategy leader** | Develops the business case, defines outcomes, drives organizational change |
+| **Cloud architect** | Owns technical vision and landing zone design |
+| **Workload owner** | Supplies business requirements and success criteria, decides the migration strategy for their workload |
+| **Operations leader** | Plans operational readiness and the post-migration support model |
 
 ---
 
 ## Phase 2: Plan
 
-**Purpose:** Assess current workloads, identify which workloads are migration candidates, and build a detailed migration inventory.
+**Purpose:** Assess workloads, choose a migration strategy for each, and build the migration inventory.
 
-### Workload Assessment
+### Workload assessment
 
-Assessment answers the fundamental question: "What are we moving and how do we move it?" Tools like [Azure Migrate](https://learn.microsoft.com/en-us/azure/migrate/migrate-services-overview){:target="_blank" rel="noopener noreferrer"} automate discovery and dependency mapping of on-premises applications.
+Assessment answers what you have, what it depends on, and what it will cost. [Azure Migrate](https://learn.microsoft.com/en-us/azure/migrate/migrate-services-overview){:target="_blank" rel="noopener noreferrer"} automates discovery and dependency mapping.
 
-**Assessment process:**
-1. Deploy Azure Migrate discovery appliance in on-premises data center
-2. Scan for running applications, dependencies, resource utilization, and network connections
-3. Analyze each workload against cloud readiness criteria
-4. Categorize workloads by migration path and complexity
+Discovery runs three ways, and the choice depends on your network:
 
-**Azure Migrate assessment capabilities:**
-- [Dependency mapping](https://learn.microsoft.com/en-us/azure/migrate/concepts-dependency-visualization){:target="_blank" rel="noopener noreferrer"} - Visualizes which applications and databases are connected
-- Performance profiling - Collects CPU, memory, disk, and network metrics over time
-- Application inventory - Lists installed software, licenses, and version information
-- Cost estimation - Projects Azure compute and storage costs
-- Readiness assessment - Identifies compatibility issues or licensing concerns
+- **The Azure Migrate appliance** is the recommended path. A lightweight virtual appliance deployed in the data center collects configuration and performance data continuously and streams it to the service.
+- **Azure Migrate Collector** takes a point-in-time snapshot without requiring continuous Azure connectivity, which is what air-gapped and restricted networks need.
+- **Import** loads inventory data directly when you already have a CMDB or equivalent.
 
-### The 5 Rs of Migration
+Assessment then produces:
 
-Not all workloads migrate the same way. The "5 Rs" classify workloads by migration approach:
+- **Azure readiness**, flagging servers, SQL instances, and web apps that cannot migrate as-is
+- **Right-sizing**, estimating VM sizes, Azure SQL configurations, and Azure VMware Solution node counts
+- **Cost estimation** for running the discovered inventory in Azure
+- **Dependency analysis**, mapping network connections between servers so migration groups are complete
 
-| R | Pattern | Use Case | Effort | Risk |
-|---|---------|----------|--------|------|
-| **Rehost** | Move VM as-is to Azure (lift and shift) with minimal changes | Legacy apps, deadline pressure, standardized on VMs | Low | Low |
-| **Refactor** | Modernize application code while retaining core architecture | Apps needing cloud optimizations (caching, autoscaling, logging) | Medium | Medium |
-| **Rearchitect** | Redesign application for cloud-native patterns (microservices, containers) | Business-critical apps requiring scalability, resilience, or modernization | High | High |
-| **Rebuild** | Rewrite application from scratch using cloud-native services | Apps where cloud-native approach delivers significant competitive advantage | Very high | Very high |
-| **Replace** | Switch to SaaS instead of self-hosted or custom code | ERP, CRM, HR systems where SaaS meets requirements and reduces ownership burden | Medium | Low |
+Dependency analysis is the step teams skip and regret. A workload migrated without a dependency it did not know about fails at cutover, not in testing.
 
-**Matching workloads to Rs:**
-- Start with rehosting for 70-80% of workloads (quick wins, fast migration)
-- Refactor applications where rehosting creates unsustainable cloud costs (e.g., database licensing)
-- Rearchitect business-critical applications that benefit from cloud-native patterns
-- Replace legacy systems that SaaS solutions can cover without custom development
-- Rebuild only for strategic competitive advantage; rebuild is expensive and time-consuming
+### The eight migration strategies
 
-### Migration Prioritization
+CAF names eight strategies, commonly called the "Rs." Older material lists five and omits Retire, Retain, and Replatform, which are three of the most useful.
 
-Not all workloads migrate simultaneously. Prioritization determines the sequence and migration waves.
+| Strategy | Business driver | Effort | Risk |
+|---|---|---|---|
+| **Retire** | Decommission redundant or low-value workloads | None | Low |
+| **Retain** | Workload is stable and compliant with no near-term driver to move | None | Low |
+| **Rehost** | Minimal disruption, no modernization in the near future | Low | Low |
+| **Replatform** | PaaS with minimal code changes, to offload maintenance and improve reliability | Low-medium | Medium |
+| **Refactor** | Code changes to cut technical debt or optimize for cloud | Medium | Medium |
+| **Rearchitect** | Architecture changes to unlock cloud-native capabilities | High | High |
+| **Replace** | A SaaS product simplifies operations enough to drop the custom system | Medium | Low |
+| **Rebuild** | A new cloud-native solution is the only way to meet requirements | Very high | Very high |
 
-**Prioritization criteria:**
+CAF publishes a business driver and key indicators for each strategy but no effort or risk scale, so treat those two columns as relative ordering to sequence against, not as ratings you can cite.
 
-| Criterion | Example Questions |
-|-----------|-------------------|
-| **Business value** | Does migrating this workload unblock strategic initiatives? Will it reduce operational costs? |
-| **Technical dependencies** | Does this workload depend on others? Should it migrate first or last? |
-| **Licensing impact** | Will cloud pricing dramatically reduce licensing costs? (e.g., SQL Server moving to Azure SQL with Azure Hybrid Benefit) |
-| **Operational maturity** | Does the team running this workload have cloud skills, or will it require training? |
-| **Data residency** | Does the workload have data residency constraints that limit where it can migrate? |
-| **Complexity** | Are there integration points, custom code, or infrastructure that make migration challenging? |
+Two of these often get collapsed together, and CAF separates them deliberately. **Replatform** moves a workload to a modern hosting environment with minimal code changes, such as SQL Server on a VM becoming Azure SQL Database, or a VM-hosted app becoming an App Service. **Refactor** changes the code itself to reduce maintenance cost or adopt Azure SDKs and cloud design patterns, without changing the architecture. A guide that calls the first one "refactoring" is describing replatforming.
 
-**Example prioritization decision:** Migrate web-facing applications first (quick wins, visible business value), then middleware and backends (dependencies are understood), finally legacy systems (complex, low business urgency).
+**Applying the strategies:**
 
-### Skills Roadmap
+- **Start with Retire.** Every workload decommissioned before migration is one you never pay to move, run, secure, or govern. This is the cheapest win available and it happens only if someone asks the question early.
+- **Rehost when the workload will stay unchanged for at least two years.** That is CAF's explicit test. If modernization is likely sooner, replatform or rearchitect instead, because rehosting first means paying for the migration twice.
+- **Do not rehost a problematic workload.** Rehosting carries performance, reliability, and architectural problems into Azure unchanged, and it makes them harder to diagnose. Modernize during migration or leave it where it is.
+- **Use rehosting to build operational muscle.** Early rehosts give teams Azure operations, governance, and cost management experience before anything harder arrives.
+- **Some workloads should be rebuilt rather than migrated.** Infrastructure services like DHCP servers and Active Directory domain controllers are cheaper and safer to stand up new in Azure than to replicate.
+- **Retain what cannot move**, and manage it from Azure with Azure Arc rather than leaving it outside the governance perimeter.
 
-Migration success depends on teams understanding cloud operational models. Identify skills gaps and build a learning plan.
+Microsoft publishes no target percentage for how much of a portfolio should be rehosted. Set the mix from your own assessment rather than from a rule of thumb.
 
-**Common skills gaps in cloud migration:**
-- Infrastructure-as-code (IaC) and policy-as-code for governance
-- Containerization and container orchestration (Docker, Kubernetes)
+### Deciding whether to modernize during migration
+
+Modernizing while migrating captures value earlier and avoids a second project. It also adds risk to a timeline that already has one. CAF's test is three questions:
+
+1. **Does the team have the skills and the time?** Without both, modernization delays migration and produces something nobody can operate.
+2. **Does the workload require compatibility changes anyway?** Unsupported SDKs, dead frameworks, or a SaaS transition force the work regardless, so doing it during migration costs less than doing it twice.
+3. **Does migration unlock funding and attention that will not exist later?** Migration programs attract sponsorship and budget. Modernization deferred to "after migration" frequently never gets funded.
+
+### Prioritization
+
+| Criterion | The question |
+|---|---|
+| **Business value** | Does moving this unblock a strategic initiative or cut meaningful cost? |
+| **Dependencies** | What must move with it, and what must move first? |
+| **Licensing** | Does Azure Hybrid Benefit or a PaaS target change the licensing bill materially? |
+| **Operational maturity** | Does the team running it have Azure skills, or does this workload also require training? |
+| **Data residency** | Do regulatory constraints limit which regions it can land in? |
+| **Complexity** | How many integration points, custom components, and undocumented behaviors are involved? |
+
+CAF's prioritization matrix crosses business value against effort:
+
+| Priority | Value | Effort | Treatment |
+|---|---|---|---|
+| **High** | High | Low | Quick wins, migrate first |
+| **Medium-high** | High | High | Strategic investments, plan carefully with adequate resources |
+| **Medium-low** | Low | Low | Easy candidates, use to fill gaps between major migrations |
+| **Low** | Low | High | Defer or avoid, and reconsider whether Retire applies |
+
+### Skills roadmap
+
+**Common gaps:**
+- Infrastructure-as-code and policy-as-code
+- Containers and orchestration
 - Cloud cost management and optimization
-- Cloud-native security patterns (least privilege access, zero trust)
-- Monitoring and observability in cloud environments
+- Cloud-native security, least privilege, and zero trust
+- Observability in a cloud environment
 
-**Building skills:**
-- Microsoft Learn provides free, hands-on training for Azure services
-- Role-based learning paths (for administrators, architects, developers)
-- Certifications validate skills (Azure Administrator, Solutions Architect Expert)
-- Designate cloud champions in each team to share knowledge
+**Closing them:** Microsoft Learn provides free role-based paths, certifications validate the result, and designated cloud champions inside each team spread knowledge faster than centralized training does. Assess skills during Plan, not when a cutover stalls.
 
 ---
 
 ## Phase 3: Ready
 
-**Purpose:** Prepare Azure environment, governance policies, and operational readiness before migration begins.
+**Purpose:** Build the landing zone, governance, and operational readiness before any workload arrives.
 
-### Landing Zone Design
+### Landing zone design
 
-A [landing zone](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/){:target="_blank" rel="noopener noreferrer"} is a pre-configured Azure environment that provides security boundaries, governance policies, network isolation, and operational baseline. Landing zones eliminate the need for teams to build foundational infrastructure from scratch.
+A [landing zone](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/){:target="_blank" rel="noopener noreferrer"} is a preconfigured Azure environment supplying security boundaries, governance, network topology, and an operational baseline, so workload teams do not each rebuild foundations differently.
 
-**Azure Landing Zones provide:**
-- **Subscription strategy** - Organizing structure (e.g., by workload, environment, cost center)
-- **Network topology** - Hub-and-spoke VNets with centralized firewall and gateway
-- **Identity and access control** - Role-based access (RBAC) and Entra ID integration
-- **Governance policies** - Azure Policy enforcing naming standards, allowed resource types, compliance controls
-- **Cost management** - Budgets, alerts, and charge-back models
-- **Monitoring and logging** - Log Analytics, diagnostic settings, and centralized log collection
+**What it provides:**
+- **Subscription strategy**, organizing by workload, environment, or business unit under a management group hierarchy
+- **Network topology**, typically hub-and-spoke with centralized firewall and gateways
+- **Identity and access**, with RBAC role assignments and Microsoft Entra ID integration
+- **Governance**, through Azure Policy enforcing naming, allowed resources, and compliance controls
+- **Cost management**, with budgets, alerts, and a chargeback model
+- **Monitoring**, with Log Analytics, diagnostic settings, and centralized collection
 
-### Governance Policies
+Deploying this before migration is the single highest-leverage sequencing decision in the program. Retrofitting a management group hierarchy, network topology, or tagging standard onto workloads already running means touching every one of them again.
 
-Before workloads migrate, establish governance policies that enforce security, compliance, and cost discipline.
-
-**Critical governance policies:**
+### Governance policies
 
 | Policy | Purpose | Example |
-|--------|---------|---------|
-| **Resource naming** | Standardize naming for easy identification and automation | All production VMs must follow: `prod-{region}-{app-name}-{instance}` |
-| **Allowed resources** | Restrict resource types to approved services and SKUs | Only allow Standard and Premium VM SKUs; deny Basic tier |
-| **Tagging enforcement** | Require consistent tagging for cost allocation and resource management | All resources must have tags: Environment, Owner, CostCenter |
-| **Network isolation** | Enforce network segmentation and security controls | All subnets must have NSGs; public IPs only on approved resources |
-| **Encryption** | Require encryption for data at rest and in transit | All storage accounts must use Azure-managed encryption; TLS 1.2 minimum for networking |
-| **Backup and disaster recovery** | Enforce backup policies and retention | All databases must have daily backups with 30-day retention |
+|---|---|---|
+| **Resource naming** | Consistent identification and automation | Production VMs follow `prod-{region}-{app}-{instance}` |
+| **Allowed resources** | Restrict to approved services, SKUs, and regions | Deny resource types and regions outside the approved set |
+| **Tagging** | Cost allocation and ownership | Require Environment, Owner, and CostCenter on all resources |
+| **Network isolation** | Segmentation and exposure control | Subnets require NSGs, public IPs only where approved |
+| **Encryption** | Protect data at rest and in transit | Storage encryption required, minimum TLS version enforced |
+| **Backup and recovery** | Enforce protection and retention | Databases require backups meeting a defined retention |
 
-**Implementing policies:**
-- Use [Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} to enforce standards automatically
-- Create policy definitions for your organization's standards
-- Assign policies at the management group or subscription level for broad enforcement
-- Monitor non-compliance and remediate through manual intervention or automated remediation
+[Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} enforces these, and it does more than permit and deny. Its effects include `deployIfNotExists` and `modify`, which deploy missing configuration or correct resource properties automatically, and `denyAction`, which blocks deletion. That is what makes landing-zone governance self-correcting rather than merely reported.
 
-### Operational Readiness
+Assign policies at management group scope so they apply to subscriptions created later. Two mechanics matter during a migration:
 
-Define how the migrated environment will be operated after migration completes.
+- **`enforcementMode: DoNotEnforce`** is the dry run for a deny policy. It evaluates and reports what would have been blocked without blocking it, which is how you introduce a restrictive policy into a live migration without stopping it.
+- **Layering is cumulative and most-restrictive**, with no priority ranking between assignments. A permissive assignment at a lower scope does not override a deny at a higher one.
 
-**Operational readiness checklist:**
-- **Monitoring and alerting** - What metrics matter? What thresholds trigger alerts? Who responds?
-- **Incident response** - What is the escalation path? Who owns incident triage?
-- **Change management** - How are updates and configuration changes approved and deployed?
-- **Cost optimization** - Who reviews cloud spend monthly? What triggers cost reduction investigations?
-- **Security operations** - How are security alerts investigated? What is the response SLA for threats?
-- **Backup and disaster recovery** - Have RTO/RPO targets been defined? Have recovery procedures been tested?
+### Operational readiness
 
----
+Decide these before cutover, not after the first incident:
 
-## Phase 4: Migrate
-
-**Purpose:** Execute the planned workload migration in waves using standardized patterns and Azure Migrate tooling.
-
-### Migration Waves and Sequencing
-
-Organizing migration into waves reduces risk and allows lessons learned from early migrations to improve later ones.
-
-**Wave structure:**
-
-| Wave | Characteristics | Example Workloads |
-|------|-----------------|-------------------|
-| **Wave 0 (Proof of Concept)** | 1-2 non-critical workloads; test tools, processes, and team capability | Development environment, test application |
-| **Wave 1 (Early adopters)** | 5-10 workloads with quick wins. Minimal dependencies. Builds momentum | Web servers, stateless applications, simple databases |
-| **Wave 2 (Main migration)** | Largest number of workloads. Benefits from templates and knowledge from Wave 1 | Workloads with some dependencies. Moderate complexity |
-| **Wave 3 (Late migration)** | Complex, business-critical workloads; heaviest Azure Migrate automation use | Mission-critical databases, integrated systems |
-
-**Benefits of wave approach:**
-- Early waves prove tooling and processes before main migration
-- Knowledge from early waves accelerates later waves
-- Risk is distributed; failure of one workload does not delay others
-- Operational team has time to onboard and build confidence
-
-### Migration Patterns
-
-Different workload types follow distinct migration patterns.
-
-**Pattern 1: Simple virtual machines (Rehost)**
-
-Most straightforward migration: Azure Migrate replicates VMs from on-premises to Azure.
-
-- Pre-migration: Create landing zone subscriptions and network infrastructure
-- Assessment: Use Azure Migrate to profile VM resources (CPU, memory, disk, network)
-- Replication: Begin continuous replication of VM disks to Azure storage
-- Testing: Failover to test environment to validate application behavior in Azure
-- Cutover: Final failover to production; shut down on-premises VM
-
-**Pattern 2: Databases (Refactor)**
-
-Database migrations often combine rehosting with optimization for cloud.
-
-- Assessment: Evaluate licensing, compatibility, and performance requirements
-- Choose target service: Azure SQL Database (managed), SQL Managed Instance (feature parity), SQL on VM (control), or PostgreSQL/MySQL/MariaDB for open source
-- Migration approach: Database Migration Service for online migration with minimal downtime, or backup/restore for simpler migrations
-- Post-migration: Enable automatic backups, geo-replication, and monitoring
-
-**Pattern 3: Applications (Refactor/Rearchitect)**
-
-Applications often benefit from refactoring to use managed services and cloud-native patterns.
-
-- Rehost to VMs initially (fast, low risk)
-- Plan refactoring: Move from self-managed databases to managed services; replace custom caching with Azure Cache
-- Iterate: Each sprint removes more on-premises dependencies and adds cloud-native services
-- Optimize: Eventually application is distributed across Azure services rather than concentrated in VMs
-
-### Azure Migrate Tooling
-
-[Azure Migrate](https://learn.microsoft.com/en-us/azure/migrate/migrate-services-overview){:target="_blank" rel="noopener noreferrer"} provides integrated tooling for discovery, assessment, and migration.
-
-**Key Azure Migrate capabilities:**
-- **Server Assessment** - Profiles on-premises VMs and recommends Azure VM types and sizing
-- **Server Migration** - Replicates VMs from on-premises to Azure using agentless or agent-based replication
-- **Database Assessment** - Evaluates databases for cloud migration and identifies compatibility issues
-- **Database Migration Service** - Migrates databases with minimal downtime and online validation
-- **Web App Migration Assistant** - Assesses web applications and guides refactoring for App Service
-- **Data Box** - Ships physical storage to Azure for large data transfers (TBs) when network bandwidth is limited
+- **Monitoring and alerting.** Which metrics matter, what thresholds fire, who responds
+- **Incident response.** Escalation path and triage ownership
+- **Change management.** How configuration changes get approved and deployed
+- **Cost review.** Who reviews spend, on what cadence, and what triggers investigation
+- **Security operations.** How alerts get investigated and the response time commitment
+- **Backup and recovery.** RTO and RPO targets defined, and recovery procedures actually tested
 
 ---
 
-## Phase 5: Innovate
+## Phase 4: Adopt
 
-**Purpose:** Modernize applications to extract additional cloud value beyond cost savings from rehosting.
+**Purpose:** Migrate, modernize, and build workloads in the prepared environment.
 
-### Post-Migration Modernization
+CAF breaks migration execution into five steps per wave.
 
-After rehosting, applications can be modernized incrementally to achieve cloud-native characteristics.
+| Step | What happens |
+|---|---|
+| **1. Plan migration** | Sequence workloads, choose data paths, define rollback criteria, get stakeholder approval |
+| **2. Prepare workloads** | Remediate blockers found in assessment, size targets, stage replication |
+| **3. Execute migration** | Replicate, test in a non-production failover, then cut over |
+| **4. Optimize in cloud** | Right-size against actual post-migration utilization, apply reservations |
+| **5. Decommission source** | Retire on-premises capacity, which is where the business case is finally realized |
 
-**Modernization patterns:**
+Step 5 is the one that gets deferred indefinitely. Until source infrastructure is decommissioned, the organization pays for both environments and the projected savings do not exist.
+
+### Choosing the data path
+
+How data moves is constrained by the network you have. Decide this before wave planning, because it sets how long each wave takes.
+
+| Path | When to use | Trade-off |
+|---|---|---|
+| **ExpressRoute** | Any workload, when you already have it | Fastest and most secure, but requires setup lead time and carries transfer cost |
+| **VPN** | Secure transfer without ExpressRoute | Encrypted over the internet, slower, needs a VPN Gateway in place first |
+| **Azure Data Box** | Large offline data sets | Bypasses the network entirely, but shipping time makes it the slowest path |
+| **Public internet** | Non-sensitive data with no other option | Available everywhere, least secure, consumes your bandwidth |
+
+### Migration waves
+
+Waves distribute risk and let lessons from early migrations improve later ones.
+
+| Wave | Composition | Purpose |
+|---|---|---|
+| **Wave 0** | One or two non-critical workloads | Prove the tooling, process, and team capability |
+| **Wave 1** | Five to ten quick wins with minimal dependencies | Build momentum and refine the runbook |
+| **Wave 2** | The bulk of the portfolio | Execute at scale using templates from Wave 1 |
+| **Wave 3** | Complex, business-critical systems | Migrate with proven process and the most safeguards |
+
+Three sequencing rules shape wave contents:
+
+- **Move non-production before production.** Development, staging, and QA environments let teams rehearse the full process, validate performance, and train operations without user impact.
+- **Group by dependency, not by convenience.** Direct dependencies requiring low latency move together. Indirect dependencies can split across waves if the connection tolerates latency. When you are unsure how critical a dependency is, keep the components together, since splitting later is easier than recovering from a broken cutover.
+- **Put one or two representative complex workloads in early waves.** Waves composed entirely of easy workloads teach you nothing about the hard ones, and the program then discovers its hardest problems in Wave 3, when there is no schedule left to absorb them.
+
+### Split-environment operation
+
+Some components cannot move, whether for regulatory, technical, or contractual reasons. Document why, what they connect to, and what data they share, then minimize the time a workload runs across both environments. API gateways, message queues, and data synchronization are the integration mechanisms that make the split period survivable. Where a workload would run split for a long time, delaying its migration until more components can move together is usually cheaper than operating the seam.
+
+### Choosing a cutover method
+
+| Method | Fits | Trade-off |
+|---|---|---|
+| **Downtime migration** | Non-critical workloads, dev and test, anything with a maintenance window | Simpler and faster, requires a planned outage |
+| **Near-zero downtime** | Customer-facing systems, real-time transactions, strict SLAs | Continuous replication and cutover, more setup and more testing |
+
+### Rollback planning
+
+Rollback is the antipattern most programs discover they have only in theory. A usable plan has five parts:
+
+1. **A definition of failure agreed in advance.** Specific triggers such as error rate, response time, or failed health checks, decided with business stakeholders rather than argued about during an incident.
+2. **Automated rollback in the deployment pipeline** where the workload supports it, so reverting does not depend on someone finding a runbook.
+3. **Workload-specific procedures.** Reapplying prior infrastructure-as-code templates, redeploying a previous container image, and restoring data are different operations with different recovery times.
+4. **Tested procedures.** Simulate the failure in staging and confirm the rollback restores a known-good state. An untested rollback plan is a document, not a capability.
+5. **Defined rollback authority.** Who can call it, and through what communication channel, at three in the morning.
+
+Keep source infrastructure operational until rollback criteria have expired, then decommission it deliberately.
+
+### Modernization targets
+
+Once workloads are running, modernization moves them off the patterns that make cloud expensive.
 
 | Pattern | Before | After |
-|---------|--------|-------|
-| **Managed databases** | SQL Server on VM | Azure SQL Database (managed, patched by Azure) |
-| **Containerization** | VMs with application | Docker containers orchestrated by AKS or Container Instances |
-| **Serverless compute** | Always-on application VMs | Azure Functions triggered by events; pay only for execution time |
-| **Messaging** | Polling database | Azure Service Bus or Event Grid for event-driven architecture |
-| **Caching** | Queries hit database every time | Azure Cache for Redis reduces database load and latency |
-| **Content delivery** | Files served from single region | Azure CDN distributes content globally |
-| **Analytics** | Ad-hoc SQL queries | Azure Synapse Analytics for data warehouse; Power BI for business intelligence |
+|---|---|---|
+| **Managed databases** | SQL Server on a VM | Azure SQL Database or SQL Managed Instance, patched by the platform |
+| **Containers** | Application on VMs | AKS or Container Apps |
+| **Serverless** | Always-on VMs serving intermittent load | Azure Functions, billed per execution |
+| **Messaging** | Polling a database table | Service Bus or Event Grid |
+| **Caching** | Every query reaching the database | Azure Managed Redis |
+| **Content delivery** | Files served from one region | Azure Front Door |
+| **Analytics** | Ad-hoc queries against production | A dedicated analytics platform, with Power BI for presentation |
 
-**Deciding what to modernize:**
-- Assess business impact - Does modernizing this component deliver revenue or significantly reduce cost?
-- Evaluate technical complexity - Can the team implement and maintain the modernization?
-- Consider organizational readiness - Does the team have skills with the new technology?
+Note that **Azure Managed Redis supersedes Azure Cache for Redis**, so a modernization plan targeting the older service should target the newer one.
 
-### Continuous Optimization
-
-Cloud environments require ongoing optimization as workload patterns change and new services become available.
-
-**Optimization practices:**
-- **Right-sizing** - Regularly review resource utilization and downsize over-provisioned VMs
-- **Cost management** - Monitor spend, investigate anomalies, identify unused resources
-- **Performance tuning** - Baseline application performance; identify and remediate bottlenecks
-- **Security hardening** - Regularly audit access controls and apply security updates
+Modernize where business impact justifies it, the team can operate the result, and the technical complexity is understood. Modernizing everything is a different failure from modernizing nothing.
 
 ---
 
-## Phase 6: Govern & Manage
+## Phases 5-7: Govern, Secure, and Manage
 
-**Purpose:** Operate cloud infrastructure with security, compliance, cost discipline, and reliability.
+These run continuously once workloads are live, in parallel with each other and with ongoing adoption.
 
-### Governance at Scale
+### Govern
 
-Ongoing governance ensures cloud environment remains compliant, cost-controlled, and secure as it grows.
-
-**Core governance activities:**
-
-| Activity | Frequency | Owner |
-|----------|-----------|-------|
-| **Cost review** | Weekly or monthly | Finance + cloud operations team |
-| **Compliance audit** | Quarterly | Compliance + security team |
-| **Access review** | Semi-annually | Identity and access management team |
+| Activity | Cadence | Owner |
+|---|---|---|
+| **Cost review** | Weekly or monthly | Finance and cloud operations |
+| **Compliance audit** | Quarterly | Compliance and security |
+| **Access review** | Semi-annually | Identity and access management |
 | **Policy effectiveness** | Quarterly | Cloud governance council |
-| **Disaster recovery testing** | Semi-annually | Operations team |
-| **Security posture assessment** | Monthly | Security team |
+| **Disaster recovery test** | Semi-annually | Operations |
 
-### Cost Management
+**Cost control** needs mechanisms rather than intentions: budgets and alerts scoped per subscription or cost center, chargeback or showback that puts spend in front of the team generating it, monthly review of top spenders, and commitment discounts applied once usage patterns are stable.
 
-Preventing cloud cost runaway requires active ongoing management, not one-time optimization.
+Commitment discounts carry a constraint that matters for multi-region designs. **Reservations cover compute only**, not licensing, storage, or networking, and VM reservations have instance size flexibility but **no region flexibility**. A reservation bought for the wrong region strands.
 
-**Cost management practices:**
-- **Budgets and alerts** - Set budgets per subscription, department, or cost center; alert when spend exceeds threshold
-- **Chargebacks** - Allocate cloud costs back to business units to incentivize cost discipline
-- **Showback reports** - Provide visibility into spending by workload, environment, and team
-- **Regular optimization** - Monthly reviews of top spenders; investigate anomalies
-- **Reserved Instances or Spot VMs** - Long-term commitments or interruptible compute for cost reduction
+### Secure
 
-### Security and Compliance Operations
+Security is a distinct CAF phase because it is not a subset of governance, and treating it as one is how migrations arrive in production with policy compliance and no threat detection.
 
-Cloud security is ongoing, not a one-time implementation.
+- **Access reviews.** Audit who has access to what, and revoke what is no longer needed
+- **Threat detection.** Monitor for suspicious activity and investigate alerts, with defined response commitments
+- **Patch management.** Apply updates to infrastructure and applications on a schedule
+- **Vulnerability scanning.** Scan for misconfiguration, missing patches, and exposed credentials
+- **Compliance validation.** Continuously audit against regulatory obligations rather than at audit time
 
-**Continuous security practices:**
-- **Access reviews** - Regularly audit who has access to what resources; revoke unnecessary permissions
-- **Threat detection** - Monitor security logs for suspicious activity; investigate alerts
-- **Patch management** - Apply security updates to infrastructure and applications
-- **Vulnerability scanning** - Regularly scan for misconfigurations, missing patches, and credentials
-- **Compliance validation** - Continuously audit for compliance with regulatory requirements
+### Manage
+
+- **Right-sizing.** Post-migration utilization rarely matches the pre-migration estimate. Review and resize on a schedule
+- **Performance.** Baseline application performance in Azure, then find and fix bottlenecks against that baseline
+- **Cost anomalies.** Investigate deviations rather than absorbing them into the run rate
+- **Continuous optimization.** New services and pricing models appear regularly, and yesterday's optimal architecture drifts
 
 ---
 
-## Common Migration Antipatterns and How to Avoid Them
+## Migration Antipatterns
 
-### Antipattern 1: "Lift and Shift Everything"
+**Lift and shift everything.** Rehosting the whole portfolio without assessment carries technical debt into Azure, leaves self-managed databases and always-on compute generating avoidable cost, and skips Retire entirely. Assess first and assign a strategy per workload.
 
-**Problem:** Assuming all workloads should be rehosted as-is to Azure without assessment or planning.
+**Skipping the business case.** Without quantified return, stakeholders hold different expectations, cost overruns surprise budget owners, and the program gets questioned mid-flight with no evidence to defend it. Build it in Azure Migrate from discovered inventory and update it quarterly against actuals.
 
-**Result:** Many workloads run inefficiently on Azure. Self-managed databases and always-on compute generate high costs. Opportunity to modernize is lost.
+**Landing zone as an afterthought.** Letting teams create their own subscriptions and networks produces inconsistent security, impossible cost allocation, and compliance gaps that get found during an audit. Deploy the landing zone first and require migrations to use it.
 
-**Solution:** Conduct thorough assessment and categorize workloads by the 5 Rs. Plan refactoring for expensive-to-operate workloads (especially databases). Start with rehosting for quick wins; modernize incrementally based on business value and team capability.
+**Underestimating skills gaps.** Teams without cloud skills keep everything in VM-shaped patterns, so neither the cost nor the security benefits materialize. Assess skills during Plan and fund the roadmap.
 
----
+**Ignoring cost during migration.** Overprovisioning, orphaned resources, and unnecessarily expensive SKUs accumulate quickly when cost is treated as a post-migration concern. Establish reviews and budgets from the first wave.
 
-### Antipattern 2: Skipping the Business Case
+**No tested rollback.** Assuming migration is one-directional leaves no option when post-cutover problems appear. Define failure criteria, keep the source running until they expire, and test the rollback before you need it.
 
-**Problem:** Beginning migration without quantifying ROI or defining business outcomes.
+**Manual migration.** Doing planning and execution by hand is slower, more error-prone, and discards the dependency and utilization data that assessment tooling produces for free. Azure Migrate costs nothing to use.
 
-**Result:** Stakeholders have misaligned expectations. Cost overruns surprise budget owners. Migration is questioned mid-way through.
-
-**Solution:** Invest time upfront to build a comprehensive business case. Include current state costs, projected cloud costs, migration costs, and productivity gains. Update the business case quarterly as actual costs emerge.
+**Never decommissioning.** Running both environments indefinitely means paying twice and realizing none of the projected savings. Decommissioning is a planned step with an owner and a date, not something that happens on its own.
 
 ---
 
-### Antipattern 3: Insufficient Landing Zone Planning
+## Organizational Readiness
 
-**Problem:** Allowing teams to create their own subscriptions and network infrastructure without governance.
+### The operating model changes
 
-**Result:** Inconsistent security policies, naming conventions, and network architecture. Cost allocation is impossible. Compliance gaps emerge.
+| Dimension | On-premises | Azure |
+|---|---|---|
+| **Provisioning** | Weeks, through procurement and racking | Minutes, through API or template |
+| **Scaling** | Manual capacity planning against a purchase cycle | Automatic against demand |
+| **Cost model** | CapEx, with cost fixed at purchase | OpEx, with cost following usage daily |
+| **Responsibility** | The team owns the whole stack | Shared, with the platform owned by Azure and the workload owned by the team |
+| **Recovery** | A DR site or backup media | Geo-replication and point-in-time restore |
+| **Change control** | Change advisory boards on a weekly cadence | Policy-as-code enforcing guardrails continuously |
 
-**Solution:** Deploy a pre-built landing zone template before migration begins. Establish governance policies through Azure Policy. Require all migrations to use the landing zone structure.
+The cost model change is the one that catches organizations. On-premises, cost is decided once at purchase and is invisible afterward. In Azure, an architecture decision made on a Tuesday shows up on the bill, which is why cost governance has to be an engineering practice rather than a finance report.
 
----
+### Change management
 
-### Antipattern 4: Underestimating Skills Gaps
-
-**Problem:** Assuming existing infrastructure team can operate cloud infrastructure without training.
-
-**Result:** Migrated workloads remain in VM-only patterns because team lacks skills with managed services. Cost and security benefits are not realized.
-
-**Solution:** Assess skills during planning phase. Build a skills development roadmap. Designate cloud champions in each team. Require certification for key roles.
-
----
-
-### Antipattern 5: Ignoring Cost During Migration
-
-**Problem:** Treating cloud cost as secondary concern; focusing only on technical migration success.
-
-**Result:** Costs are 2-3x higher than projected because overprovisioning, unused resources, and expensive VM SKUs go unchecked.
-
-**Solution:** Establish cost management practices from day one. Conduct cost reviews weekly or monthly. Set budgets and alerts. Right-size resources regularly.
+- **Executive communication.** Leadership explains why the migration matters and what it means for people's roles, repeatedly
+- **Training before contact.** Teams get hands-on time before they are responsible for migrated systems
+- **Pilots.** Early adopters build confidence and produce internal advocates
+- **Feedback channels.** Somewhere for teams to raise concerns without it counting against them
+- **Recognition.** Milestones acknowledged and contributing teams named
 
 ---
 
-### Antipattern 6: Failing to Test Failback Plans
-
-**Problem:** Assuming once migration is complete, the on-premises infrastructure can be decommissioned immediately.
-
-**Result:** If post-migration issues emerge, there is no fallback plan. Extended outage results.
-
-**Solution:** Keep on-premises infrastructure operational for a period after migration. Define failback criteria (e.g., if cloud workload experiences outage lasting 1+ hour, failover back to on-premises). Test failback once or twice before committing to decommissioning.
-
----
-
-### Antipattern 7: Insufficient Migration Tool Adoption
-
-**Problem:** Performing manual migration planning and execution instead of leveraging Azure Migrate and automation.
-
-**Result:** Migration is slow, error-prone, and expensive. Insights from assessment tools are not captured.
-
-**Solution:** Deploy Azure Migrate early in planning phase. Use discovery to understand dependencies and workload characteristics. Leverage Azure Migrate's replication and testing capabilities.
-
----
-
-## Organizational Readiness and Skills Development
-
-Successful migration requires more than technical preparation; it requires organizational change management.
-
-### Building the Cloud Operating Model
-
-Define how teams will work differently in cloud than on-premises.
-
-**Key differences:**
-
-| Dimension | On-Premises | Cloud |
-|-----------|------------|-------|
-| **Infrastructure provisioning** | Weeks (order, delivery, racking) | Minutes (through API or portal) |
-| **Scaling** | Manual capacity planning | Automatic based on demand |
-| **Cost model** | CapEx (owned assets) | OpEx (consumption-based) |
-| **Responsibility model** | Team owns entire stack | Shared responsibility (Azure owns platform, team owns application/data) |
-| **Disaster recovery** | On-premises DR site or backup tapes | Geo-replication and point-in-time restore in Azure |
-| **Monitoring** | Agent-based on each server | Cloud-native monitoring with full observability |
-
-### Change Management
-
-Migration is organizational change. Resistance is normal; address it thoughtfully.
-
-**Change management practices:**
-- **Executive communication** - Leadership regularly communicates why migration matters and what it means for the organization
-- **Training** - Provide hands-on training for teams before they work with migrated systems
-- **Pilot programs** - Allow early adopters to experiment and build confidence before organization-wide adoption
-- **Feedback channels** - Create safe spaces for teams to raise concerns and provide feedback
-- **Recognition** - Celebrate migration milestones and recognize teams that contribute successfully
-
----
-
-## Migration Assessment Tools and Services
+## Tooling and Programs
 
 ### Azure Migrate
 
-[Azure Migrate](https://learn.microsoft.com/en-us/azure/migrate/migrate-services-overview){:target="_blank" rel="noopener noreferrer"} is the primary Microsoft tool for migration planning and execution.
+[Azure Migrate](https://learn.microsoft.com/en-us/azure/migrate/migrate-services-overview){:target="_blank" rel="noopener noreferrer"} is the primary tool, and it is free. Paid costs come from partner tools and from the Azure resources you migrate into, not from the service.
 
-**Assessment capabilities:**
-- Server assessment and sizing recommendations
-- Dependency visualization showing application connections
-- Cost estimation for Azure VM SKUs
-- Application assessment for App Service migration readiness
-- Database compatibility assessment
+It runs a journey of **Decide, Plan, Execute**:
 
-**Migration capabilities:**
-- Agentless and agent-based VM replication
-- Database migration with minimal downtime
-- Web app migration assistance
+- **Decide:** discovery through the appliance, Collector, or import, then a business case
+- **Plan:** readiness, right-sizing, cost estimation, and dependency analysis
+- **Execute:** replication and cutover for servers, databases, web apps, and virtual desktops
 
-### Azure Total Cost of Ownership (TCO) Calculator
+**What it migrates:** VMware VMs (agentless or agent-based), Hyper-V VMs, physical servers, **VMs from other public clouds** treated as physical servers, SQL Server instances to Azure VMs or Azure SQL, ASP.NET web apps to App Service and AKS, and bulk offline data through Data Box.
 
-The [Azure TCO Calculator](https://azure.microsoft.com/en-us/pricing/tco/calculator/){:target="_blank" rel="noopener noreferrer"} helps quantify cost differences between on-premises and Azure.
+Two things about the current product surprise people working from older documentation:
 
-**Inputs:**
-- Current on-premises infrastructure (servers, storage, networking)
-- Network bandwidth costs
-- Software licensing (especially expensive licenses like SQL Server)
-- Labor costs for infrastructure operations
+- **There are two experiences.** The current Azure Migrate is application-aware and supports cross-workload views. **Azure Migrate Classic** is the older experience and does not. Documentation is pivoted between them, so check which one a procedure applies to.
+- **The Azure Copilot migration agent (preview)** provides a conversational interface over project data for exploring inventory, comparing strategies, reviewing business case insights, and generating landing zone templates. It is planning-only. Execution stays in the portal.
 
-**Outputs:**
-- Projected Azure costs for equivalent infrastructure
-- Cost comparison chart showing break-even timeline
-- Savings from operational efficiency
+Several tools commonly described as parts of Azure Migrate are actually standalone and integrate with it: **Data Migration Assistant** for SQL assessment, **Azure Database Migration Service** for the migration itself, and the **Azure App Service Migration Assistant** for .NET and PHP web apps. **Movere is retired.**
 
-### Migration Accelerator Program (MAP)
+### Frontier Accelerate for Azure
 
-Microsoft's [Migration Accelerator Program](https://www.microsoft.com/en-us/industry/azure/migration-accelerator-program){:target="_blank" rel="noopener noreferrer"} provides funding, tools, and expertise for large migrations.
+Microsoft's funding and delivery program provides partner funding, Azure credits, training, and zero-cost deployment assistance through the **Cloud Accelerate Factory**, where Microsoft engineers handle repeatable deployment tasks alongside a partner.
 
-**Benefits:**
-- Funding to cover Azure consumption and professional services
-- Access to experienced migration engineers
-- Structured methodology and best practices
-- Guidance on landing zone design and governance
+The name has changed twice recently. It consolidated **Azure Migrate and Modernize**, **Azure Innovate**, and **Cloud Accelerate Factory** into **Azure Accelerate**, which is now presented as **Frontier Accelerate for Azure**. Older material may also reference a "Migration Accelerator Program," which is not a Microsoft program name. MAP is AWS's Migration Acceleration Program. Confirm the current name and terms with your Microsoft account team rather than from documentation of any vintage.
 
 ---
 
 ## Governance and Compliance During Migration
 
-### Data Residency and Sovereignty
+### Data residency and sovereignty
 
-Some organizations have regulatory requirements for where data must be stored.
+- **Residency** requirements keep data inside a country or region, which constrains target region selection before anything else does
+- **Sovereignty** requirements can go further, demanding operation by local entities, which may point at a sovereign cloud rather than a public region
+- **Transfer** during migration is itself regulated in some jurisdictions, so the data path chosen above may need legal review, not just bandwidth math
 
-**Considerations:**
-- **Data residency** - Some regulations require data to remain within a specific country or region
-- **Data sovereignty** - Some countries require data centers to be owned/operated by local entities
-- **Azure compliance regions** - Understand which Azure regions are available in your country and which comply with specific regulations
-- **Data transfer** - Plan how data will be transferred during migration while complying with regulations
+CAF treats sovereignty as its own adoption scenario, which is a signal that these constraints shape architecture rather than sitting on top of it.
 
-### Compliance Audits and Certifications
+### Compliance
 
-Many organizations must demonstrate compliance with standards like SOC 2, HIPAA, or PCI-DSS.
+Azure holds certifications including SOC 2, ISO 27001, HIPAA, and PCI-DSS, but inheriting them requires using the platform's controls correctly. Network isolation, encryption configuration, and access control remain your responsibility, and a certified platform configured badly is not a compliant system. [Azure compliance offerings](https://learn.microsoft.com/en-us/azure/compliance/){:target="_blank" rel="noopener noreferrer"} document which standards apply where.
 
-**Azure compliance position:**
-- Azure achieves many compliance certifications out-of-the-box (SOC 2, ISO 27001, HIPAA, PCI-DSS)
-- Organizations are responsible for using Azure's compliance features correctly (proper network isolation, encryption, access controls)
-- [Azure Compliance offerings](https://learn.microsoft.com/en-us/azure/compliance/){:target="_blank" rel="noopener noreferrer"} provide details on which standards each region complies with
+### Hybrid governance
 
-### Hybrid Governance During Migration
+During migration you operate both environments, often for longer than planned, and governance has to span both.
 
-During migration, you operate both on-premises and Azure simultaneously. Governance must span both environments.
-
-**Hybrid governance considerations:**
-- **Identity** - Extend on-premises Active Directory (Entra ID) to Azure for consistent identity
-- **Compliance** - Ensure both environments comply with security policies
-- **Monitoring** - Monitor both environments from a unified dashboard
-- **Cost** - Track costs separately by environment to understand cloud ROI
+- **Identity.** On-premises Active Directory Domain Services and Microsoft Entra ID are separate directories with different protocols. Connecting them through Microsoft Entra Connect gives users one identity across both, and it is a prerequisite rather than a migration step
+- **Governance reach.** Azure Arc projects on-premises and other-cloud servers, Kubernetes clusters, and SQL Server instances into Azure Resource Manager, which makes Azure Policy, Defender for Cloud, and Azure Monitor apply to them. This is also the mechanism for workloads assigned the **Retain** strategy, which otherwise sit permanently outside governance
+- **Monitoring.** Collect from both environments into one workspace, so an incident spanning the seam can be investigated in one place
+- **Cost.** Track by environment so the business case can be measured against actuals rather than asserted
 
 ---
 
 ## Key Takeaways
 
-1. **Migration is business change, not just technical change.** Begin with clear business outcomes (cost reduction, agility, risk reduction). Build a business case quantifying ROI. Obtain executive sponsorship and organizational alignment.
+1. **CAF has seven phases, not six.** Strategy, Plan, and Ready run in sequence into Adopt, which absorbed the old Migrate and Innovate phases. Govern, Secure, and Manage run continuously alongside operations. Secure is now its own phase, and plans built on the six-phase model omit it.
 
-2. **Assessment drives migration strategy.** Use Azure Migrate to understand workload characteristics, dependencies, and cloud readiness. Categorize workloads by the 5 Rs. Prioritize based on business value and technical dependencies.
+2. **There are eight migration strategies.** Retire, Retain, Rehost, Replatform, Refactor, Rearchitect, Replace, Rebuild. The three the "5 Rs" leaves out are among the most valuable: Retire removes cost permanently, Retain plus Azure Arc handles what cannot move, and Replatform is what most people mean when they say refactor.
 
-3. **The Cloud Adoption Framework provides proven methodology.** Six phases from strategy through governance organize migration work. Each phase produces specific deliverables that feed into the next phase.
+3. **Rehost only when the workload will stay unchanged for two years.** That is CAF's test. Rehosting something you will modernize next year means paying for the migration twice. Rehosting a workload that already has performance or reliability problems carries them into Azure.
 
-4. **Landing zones are foundation, not afterthought.** Deploy a pre-built landing zone before migration begins. Establish governance policies, network architecture, and RBAC structure upfront to prevent later remediation work.
+4. **Build the business case in Azure Migrate.** It computes total cost of ownership from discovered utilization, applies Hybrid Benefit and reservation discounts, and flags end-of-support versions. The standalone TCO Calculator has been superseded.
 
-5. **Wave-based migration reduces risk and builds momentum.** Organize migration into waves (POC, early adopters, main migration, late migration). Learn from early waves and apply lessons to later waves.
+5. **Assessment finds what should not move.** Dependency analysis prevents cutover failures, and the Retire and Retain decisions it enables reduce migration scope more cheaply than any optimization performed afterward.
 
-6. **The 5 Rs guide workload categorization.** Rehost for quick wins (70-80% of workloads). Refactor expensive-to-operate workloads (especially databases). Rearchitect for strategic value. Replace with SaaS where applicable.
+6. **Landing zone first.** Management group hierarchy, network topology, RBAC, and Azure Policy applied before workloads arrive cost a fraction of retrofitting them afterward. Use `DoNotEnforce` to introduce restrictive policies without stopping a live migration.
 
-7. **Skills development is not optional.** Migration requires cloud-native operational practices. Build a skills roadmap. Provide training. Designate cloud champions. Validate with certifications.
+7. **Waves need hard workloads early.** A first wave of only easy workloads teaches nothing about the hard ones. Include one or two representative complex systems so the program surfaces its hardest problems while there is still schedule left.
 
-8. **Cost management must be continuous, not one-time.** Right-size resources during migration. Monitor spend weekly or monthly. Conduct regular cost reviews. Use reserved instances or spot VMs for long-term cost optimization.
+8. **A rollback plan is a tested capability, not a document.** Define failure criteria with business stakeholders in advance, automate reversion where possible, test in staging, and name who has authority to call it.
 
-9. **Governance enables scale without chaos.** Azure Policy enforces naming, tagging, network isolation, and compliance standards. Establish governance from day one; retrofitting is painful.
+9. **Decommissioning is the step that realizes the business case.** Until source infrastructure is retired, the organization pays for both environments and the projected savings do not exist. Give it an owner and a date.
 
-10. **Post-migration optimization realizes cloud value.** Rehosting is just the first step. Plan modernization to cloud-native patterns (managed databases, containers, serverless) based on business value and team capability. Continuous optimization prevents cost creep and improves performance.
+10. **Migration is organizational change with a technical component.** Skills, operating model, and change management determine whether migrated workloads get operated well or get frozen in the shape they arrived in.

@@ -3,614 +3,404 @@ title: "Azure Hybrid Cloud Architecture"
 layout: guide
 category: Azure
 subcategory: Migration & Hybrid Cloud
-description: "Azure Arc for multi-cloud management, Azure Stack HCI for on-premises hybrid workloads, and architectural patterns for bridging cloud and datacenter environments"
-tags: [azure, cloud-computing, infrastructure, distributed-systems, networking, governance, practical]
+description: "Azure Arc as the hybrid control plane and the Connected Machine agent constraints that decide what can be Arc-enabled, Azure Local for on-premises infrastructure, Route Server for hybrid transit routing, and the three hybrid identity authentication methods."
+tags: [azure-arc, azure-local, hybrid-identity, route-server, edge-computing, connected-machine-agent, practical]
 ---
 
-## What Is Hybrid Cloud Architecture
+## What Hybrid Cloud Architecture Solves
 
-Hybrid cloud architecture solves a real problem: organizations cannot simply abandon on-premises infrastructure overnight. Legacy applications, regulatory constraints, data sovereignty, and existing investments require a bridge. Rather than maintaining separate silos with different tools and processes, hybrid cloud architecture provides a single control plane and consistent experience across all infrastructure.
+Organizations rarely get to abandon on-premises infrastructure on a schedule. Legacy applications, regulatory constraints, data sovereignty, latency floors, and hardware still inside its depreciation window all keep workloads where they are. Hybrid architecture is about running that estate under one control plane instead of two, rather than about eventually eliminating it.
 
-Azure's hybrid approach uses two primary tools: [Azure Arc](https://learn.microsoft.com/en-us/azure/azure-arc/){:target="_blank" rel="noopener noreferrer"} extends Azure management to any infrastructure, and [Azure Stack HCI](https://learn.microsoft.com/en-us/azure-stack/hci/){:target="_blank" rel="noopener noreferrer"} runs Azure services directly on-premises.
+Azure approaches this from two directions. [Azure Arc](https://learn.microsoft.com/en-us/azure/azure-arc/){:target="_blank" rel="noopener noreferrer"} projects infrastructure you already own into Azure Resource Manager so Azure governance applies to it. [Azure Local](https://learn.microsoft.com/en-us/azure/azure-local/overview){:target="_blank" rel="noopener noreferrer"} runs Azure infrastructure on hardware in your own facility.
 
-### What Problems Hybrid Architecture Solves
+### The name changed
 
-**Without a hybrid strategy:**
-- On-premises and cloud infrastructure operate with separate tools and policies
-- Teams manage multiple identity systems and access controls
-- Workload portability requires re-architecture or manual migration
-- Compliance and governance policies must be defined and enforced separately
-- Organizational silos deepen between "cloud teams" and "infrastructure teams"
+**Azure Stack HCI is now Azure Local.** Documentation moved to `learn.microsoft.com/azure/azure-local/` and is versioned by release moniker rather than by the old 22H2 and 23H2 numbering. Anything still saying "Stack HCI" predates the rename. Microsoft positions Azure Local as part of its **adaptive cloud** approach, with Azure Arc as the control plane rather than as a bolt-on.
 
-**With hybrid architecture:**
-- Single Azure management plane controls on-premises and cloud resources
-- Unified identity and access control through Entra ID across all infrastructure
-- Workloads can run on-premises, cloud, or move between them with consistent policies
-- Compliance policies apply uniformly regardless of where resources run
-- Teams use the same tools and processes everywhere, reducing training and context switching
+### What changes against a pure-cloud design
 
-### How Hybrid Architecture Differs from Pure Cloud
+| Aspect | Pure cloud | Hybrid |
+|---|---|---|
+| **Resource scope** | Subscriptions only | Subscriptions plus projected on-premises and other-cloud resources |
+| **Management plane** | Azure Resource Manager over Azure resources | ARM extended by Arc, subject to agent support constraints |
+| **Identity** | Entra ID alone | Entra ID synchronized with on-premises AD DS, with one of three authentication methods |
+| **Capacity** | Elastic | Elastic in cloud, fixed and procurement-bound on-premises |
+| **Networking** | VNets and peering | VNets plus ExpressRoute or VPN, and transit routing that does not work by default |
+| **Data residency** | Region selection | Region selection, or physical control of the facility |
 
-Architects from pure cloud backgrounds should understand key differences:
-
-| Aspect | Pure Cloud | Hybrid Architecture |
-|--------|-----------|-------------------|
-| **Resource scope** | Cloud subscription only | Subscriptions + on-premises infrastructure |
-| **Management plane** | Azure Portal and ARM | Azure Arc extends Portal to on-premises resources |
-| **Identity** | Entra ID (cloud-native) | Entra ID + Entra ID Domain Services + on-premises AD |
-| **Workload mobility** | Rebuild for cloud design patterns | Lift-and-shift options with minimal changes |
-| **Regulatory compliance** | Data residency through region selection | Data residency through on-premises or private region |
-| **Capacity planning** | Elastic pay-as-you-go | Hybrid: elastic cloud + fixed on-premises capacity |
-| **Network integration** | VNets and peering | Hybrid networks: ExpressRoute/VPN + on-premises networks |
-| **Comparison** | Monolithic public cloud investment | Gradual migration with investment protection |
+The two rows that generate the most unplanned work are identity and networking. Both are covered below, and both fail in ways that look like something else.
 
 ---
 
-## Azure Arc: Extending Azure Management Everywhere
+## Azure Arc
 
-### What Azure Arc Provides
+Arc projects resources hosted outside Azure into ARM. Each connected machine gets an Azure Resource ID and lives in a resource group, so RBAC, Azure Policy, Defender for Cloud, Azure Monitor, and Update Manager reach it the way they reach a native VM.
 
-[Azure Arc](https://learn.microsoft.com/en-us/azure/azure-arc/overview){:target="_blank" rel="noopener noreferrer"} is Azure's management plane for resources outside Azure. It allows you to view, govern, and manage servers, Kubernetes clusters, data services, and applications running anywhere (on-premises, in other clouds, or at the edge) as if they were part of your Azure subscription.
+**What Arc covers:**
 
-Azure Arc projects resources into your Azure environment so that you manage them with the same Portal experience, policies, and identity system as native Azure resources.
+| Arc service | What it manages |
+|---|---|
+| **Arc-enabled servers** | Windows and Linux physical servers and VMs hosted outside Azure |
+| **Arc-enabled Kubernetes** | Any CNCF-certified Kubernetes cluster, wherever it runs |
+| **Arc-enabled SQL Server** | SQL Server instances on machines already Arc-enabled |
+| **Arc-enabled data services** | SQL Managed Instance, running in containers on your Kubernetes |
 
-**What Arc enables:**
-- **Servers:** Windows and Linux machines running on-premises or in other clouds appear as Azure resources with Entra ID login and access control
-- **Kubernetes:** Any Kubernetes cluster (EKS, GKE, self-hosted, or on-premises) becomes an Arc-connected cluster managed through Azure
-- **SQL Server:** SQL Server instances running on-premises can be managed, monitored, and updated through Azure
-- **Data services:** PostgreSQL, MySQL, and SQL Managed Instance can run in containers on your infrastructure and be billed through Azure
-- **Applications:** Azure App Service and Azure Functions can run in containers on your on-premises infrastructure
+Arc supports **Azure Lighthouse**, so a service provider can manage delegated Arc estates from their own tenant.
 
-### Arc-Connected Servers
+### Arc-enabled servers: what can actually be enrolled
 
-[Arc-connected servers](https://learn.microsoft.com/en-us/azure/azure-arc/servers/){:target="_blank" rel="noopener noreferrer"} are on-premises or multi-cloud machines that install the Azure Connected Machine agent. Once enrolled, they appear in your Azure subscription and can be managed with Azure policies, access control, monitoring, and tooling.
+This is where hybrid designs most often assume more reach than the product has. Four constraints decide whether a machine can be Arc-enabled at all.
 
-**Installation process:**
-1. Install the Azure Connected Machine agent on a Windows or Linux machine
-2. Agent authenticates to Azure with a managed identity (for on-premises) or Azure service principal
-3. Machine appears as a resource in your Azure subscription
-4. You assign policies, monitor it, and control access just like an Azure VM
+**Do not install the agent on machines that are already Azure resources.** Microsoft states you should not install Arc on virtual machines hosted in **Azure, Azure Stack Hub, or Azure Stack Edge**, because they already have equivalent capabilities. Installing it on an Azure VM is supported only to simulate an on-premises environment for testing. Supported environments are VMware (including Azure VMware Solution), Azure Local, and other clouds.
 
-**What you can do with Arc-connected servers:**
-- Enforce Azure policies on configuration, security, and compliance
-- Use Role-Based Access Control (RBAC) to control who can manage the server
-- Connect to the machine through Azure Bastion instead of managing your own jump hosts
-- Assign it to an Azure resource group and include it in subscriptions-wide governance
-- Monitor performance through Azure Monitor (same agent as Azure VMs)
-- Manage extensions (anti-malware, monitoring, patch management) consistently
+**The supported OS list is an allowlist, not a version floor.** Microsoft's wording is direct: if an OS version is not listed, it is not supported. **CentOS does not appear on the list at all.** Distributions are enumerated individually, with per-version end-of-Arc-support dates.
 
-### Arc-Connected Kubernetes
+**A large cliff lands in November 2026.** These reach end of Arc support then: Windows Server 2012 and 2012 R2, RHEL 7, Oracle Linux 7, Ubuntu 18.04 and 20.04, Debian 11 and 12, SLES 12 SP5 and 15 SP3 through SP6, Amazon Linux 2, and Azure Linux 3.0. An estate audit that only checks "is it Windows Server 2012" will miss most of that list.
 
-[Arc-enabled Kubernetes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/){:target="_blank" rel="noopener noreferrer"} brings any Kubernetes cluster (whether hosted on AWS, Google Cloud, on-premises, or edge devices) under Azure management.
+**Architecture matters.** x86-64 is fully supported. Arm64 is partial, and **Azure machine configuration is not compatible with Arm64**, so policy-driven in-guest settings do not apply there. The agent does not run on 32-bit at all.
 
-**How it works:**
-1. Deploy the Azure Arc agent to your Kubernetes cluster
-2. The cluster appears as an Arc-enabled Kubernetes resource in your Azure subscription
-3. Deploy policies, monitor the cluster, and use GitOps for configuration management
-4. Deploy applications directly from the Azure Portal to any cluster, regardless of location
+### Where Arc is the wrong tool
 
-**What you can do:**
-- Deploy applications across multiple Kubernetes clusters using Azure Arc's application model
-- Enforce Azure policies on cluster configuration and pod security
-- Monitor cluster and workload health through Azure Monitor
-- Use Azure App Service and Azure Functions on your Kubernetes cluster (create App Service plans that target the Arc cluster instead of cloud regions)
+**Short-lived servers and VDI.** Microsoft explicitly does not recommend Arc for ephemeral servers or virtual desktop infrastructure. Arc cannot distinguish a machine that is offline for maintenance from one that was deleted, so it does not clean up resources that stop sending heartbeats. Recreating a deleted VM with the same name then collides with the orphaned Arc resource. Azure Virtual Desktop on Azure Local is the documented exception, because those desktop VMs are not short-lived.
 
-### Arc-Enabled Data Services
+**Cloned machines and golden images.** Two agents sharing a source ID both try to act as one Azure resource, which produces inconsistent behavior and HTTP 429 errors. Onboard after cloning or restoring, using automation, rather than baking an enrolled agent into an image.
 
-[Arc-enabled data services](https://learn.microsoft.com/en-us/azure/azure-arc/data/){:target="_blank" rel="noopener noreferrer"} (PostgreSQL, MySQL, and SQL Managed Instance) run on your infrastructure in containers while being billed and managed through Azure.
+**End-user machines.** Windows 10 and 11 are supported only in server-like conditions: always powered, always connected, always on. Laptops belong in Intune or Configuration Manager.
 
-**When to use Arc data services:**
-- SQL Server workloads that must stay on-premises but you want cloud management experience
-- PostgreSQL or MySQL instances that must remain in your datacenter for data residency
-- Lifting and shifting databases from other clouds to your infrastructure without re-platforming
+### Agent connectivity lifecycle
 
-**Trade-offs:**
-- You manage the underlying infrastructure (compute, storage, networking)
-- Azure manages the database engine and patches
-- Billing flows through your Azure subscription with consumption-based pricing
-- Requires containerization of the database (Docker/Kubernetes backend)
+The status a machine shows is a function of three thresholds, and they set the floor on how quickly Arc can tell you anything is wrong.
 
----
+| Interval | Behavior |
+|---|---|
+| **Every 5 minutes** | The agent sends a heartbeat |
+| **15 to 30 minutes** without a heartbeat | Status changes to **Disconnected** |
+| **45 days** disconnected | Status may change to **Expired** |
 
-## Azure Stack HCI: Hybrid Infrastructure Platform
+An **Expired** machine cannot be managed through Arc until an administrator disconnects and reconnects it. The exact expiry follows the managed identity credential, which is valid for up to 90 days and renews every 45. Treating Arc as a real-time availability monitor does not work when the fastest possible detection is a quarter of an hour.
 
-### What Azure Stack HCI Is
+### Onboarding requirements
 
-[Azure Stack HCI](https://learn.microsoft.com/en-us/azure-stack/hci/overview){:target="_blank" rel="noopener noreferrer"} is a hyperconverged infrastructure (HCI) solution that runs Azure services, Windows Server, and Kubernetes on your hardware while maintaining the operational model of on-premises infrastructure. It bridges the gap between traditional on-premises systems and cloud-native architectures.
+**Resource providers** that must be registered: `Microsoft.HybridCompute`, `Microsoft.GuestConfiguration`, `Microsoft.HybridConnectivity`, `Microsoft.AzureArcData` (for Arc-enabled SQL Server), and `Microsoft.Compute` (for Update Manager and automatic extension upgrades).
 
-HCI consolidates compute, storage, and networking into a converged appliance. Stack HCI adds Azure integration so you can run Arc-enabled services, deploy containers, and manage everything through Azure.
+**Roles:** Azure Connected Machine Onboarding or Contributor to enroll machines, and Azure Connected Machine Resource Administrator to read, modify, and delete them.
 
-### Core Components
+**On Windows**, the agent runs under the low-privileged virtual account `NT SERVICE\himds`, which needs the "log on as a service" right. Group Policy that customizes user rights assignments will block onboarding until that account is added.
 
-**Hardware:**
-- Integrated systems from OEMs (Dell EMC, HPE, Lenovo, others) with pre-qualified components
-- Minimum two nodes (for high availability), typical configurations start at 4 nodes
-- Local NVMe for performance tier, SATA for capacity tier storage
+**Scale:** there is no limit on the number of Arc-enabled servers or extensions per resource group or subscription. The standard 800-instance limit does apply to the Azure Arc Private Link Scope resource type.
 
-**Software:**
-- Windows Server as the underlying OS
-- Hyper-V for virtualization
-- Storage Spaces Direct for converged storage
-- Software-defined networking (SDN) for network virtualization
-- Azure Stack HCI agent connecting to Azure
+### Reaching an Arc server remotely
 
-**Operational model:**
-- Managed through Windows Admin Center (on-premises UI) or increasingly through Azure Portal via Arc
-- Updates coordinated by Microsoft but deployed and managed locally
-- Capacity is fixed at deployment (unlike public cloud elasticity)
+**Azure Bastion does not work for Arc-enabled servers.** Bastion is a PaaS service that lives in an Azure VNet and reaches VMs by private IP on that VNet. Arc-enabled servers sit outside it, so Bastion has no route to them.
 
-### What You Can Run on Stack HCI
+The mechanisms that do work go through `Microsoft.HybridConnectivity`:
 
-**Azure Virtual Machines:** Windows and Linux VMs run on HCI exactly like cloud VMs, with the same ARM templates and configuration
+- **SSH access via Azure Arc**, which needs no public IP, no inbound firewall opening, and no VPN
+- **RDP over SSH** for Windows targets
+- **Windows Admin Center in Azure**, where the portal requests access through the hybrid connectivity provider, a Layer 4 SNI proxy brokers the session, and a short-lived unique URL is issued. No line of sight and no direct RDP required
 
-**Kubernetes:** AKS on Stack HCI lets you run Kubernetes workloads on-premises with Arc management and billing through Azure
+### Arc-enabled Kubernetes
 
-**Arc-enabled applications:** Deploy Azure App Service and Azure Functions as containers on HCI
+Any **CNCF-certified** Kubernetes cluster can be Arc-enabled, wherever it runs. Once connected, it takes Azure Policy, Azure Monitor, and GitOps configuration.
 
-**Traditional workloads:** Windows Server applications, VMs, Hyper-V clusters continue running as before
+Three details commonly get stated wrong:
 
-### When to Choose Stack HCI
+- **AKS is not Arc-enabled and does not need to be.** It is already an ARM resource. Arc adds a shared inventory view across clusters, not management AKS lacks.
+- **GitOps ships as two supported extensions**, Flux v2 **and** Argo CD, not Flux alone.
+- **Azure Policy for Kubernetes is a Gatekeeper admission webhook.** It admits or rejects at the API server. Pod security policies no longer exist in Kubernetes, so a guide prescribing them is describing a removed feature.
 
-Stack HCI makes sense in specific scenarios:
+### Arc-enabled data services
 
-**Choose Stack HCI when:**
-- You have substantial existing datacenter infrastructure and investment in Hyper-V
-- You need to run cloud-native workloads on-premises for data sovereignty or latency
-- You want to defer or avoid wholesale cloud migration while modernizing management
-- You need hybrid mobility (run workloads on-premises during normal times, burst to cloud during peaks)
-- Regulatory requirements mandate data residency in your controlled facilities
+**Arc-enabled data services means SQL Managed Instance.** The PostgreSQL offering is no longer part of the product, and MySQL was never in it. Any material listing three engines here is out of date.
 
-**Don't choose Stack HCI when:**
-- You're building new infrastructure from scratch (public cloud is often cheaper at scale)
-- You lack datacenter and virtualization expertise (operational complexity is high)
-- You want full cloud elasticity and auto-scaling (HCI has fixed capacity)
-- Your workloads are already cloud-native and stateless
+SQL Managed Instance enabled by Arc runs in containers on Kubernetes you operate. Microsoft supplies engine updates through the Microsoft Container Registry on a cadence you set, billing flows through your Azure subscription, and you remain responsible for the compute, storage, networking, and Kubernetes underneath it.
 
 ---
 
-## Azure Stack Hub vs Azure Stack HCI vs Azure Stack Edge
+## Azure Local
 
-Understanding the differences between Azure Stack variants prevents selecting the wrong tool:
+Azure Local is Microsoft's distributed infrastructure platform for customer-owned environments. It runs modern and legacy applications in distributed or sovereign locations, uses **Azure Arc as its control plane**, and supports deployments that are **connected or disconnected** from Azure.
 
-| Aspect | Azure Stack Hub | Azure Stack HCI | Azure Stack Edge |
-|--------|-----------------|-----------------|------------------|
-| **Purpose** | Disconnected/semi-connected Azure datacenters | Hybrid infrastructure with arc management | Edge ML and IoT at branch offices |
-| **Deployment** | Physical appliances, datacenter-scale | OEM integrated systems, 4-100+ nodes | Compact appliances, branch/edge scale |
-| **Workloads** | VMs, containers, managed services (App Service, SQL) | VMs, Kubernetes, containers | IoT, ML inference, data staging |
-| **Update cycle** | Independent from Azure, less frequent | Coordinated with Azure, more frequent | Frequent, cloud-driven updates |
-| **Capacity** | Large (1000s of VMs typical) | Medium to large (100s to 1000s) | Small (edge scale) |
-| **Use case** | Organizations disconnected from Azure, sovereign clouds | Hybrid migration, data residency, gradual cloud adoption | Edge computing, disconnected branch offices, IoT |
-| **Pricing** | Capacity-based appliance fees | Per-node licensing + Azure services | Per-device fees |
-| **Azure services** | App Service, SQL, MySQL, PostgreSQL, Event Hubs | Arc-enabled services, App Service, Functions | Kubernetes, Arc services |
+**Pricing is per physical core** on your machines, plus consumption charges for any Azure services you enable on top. Everything rolls into your existing Azure subscription.
 
-**Decision framework:**
+**Management** runs through the familiar Azure surfaces: portal, Azure CLI, and ARM templates, with Azure Policy, Defender for Cloud, and Azure Monitor available as add-ons. Hardware comes from a partner catalog with prescriptive bills of materials rather than being assembled ad hoc.
 
-1. **Need full disconnected Azure environment?** → Stack Hub
-2. **Want hybrid infrastructure with cloud management?** → Stack HCI
-3. **Running at the edge with AI/IoT?** → Stack Edge
+### When Azure Local fits
+
+Microsoft's own framing is four scenarios, and they are narrower and more specific than "hybrid":
+
+- **Local AI inferencing** where data must be processed at its source, such as retail self-checkout and loss prevention, or pipeline leak detection
+- **Mission-critical business continuity** for systems that must survive network outages, such as factory production lines and stadium or transit access control
+- **Control systems and near-real-time operations** with extreme latency requirements, such as manufacturing execution systems and industrial quality assurance
+- **Strict sovereignty and regulatory requirements** demanding data be kept and controlled locally
+
+### When it does not
+
+- You are building new infrastructure with no on-premises constraint, where public cloud is usually cheaper at scale
+- You lack data center and virtualization operations capability, which Azure Local still requires
+- You need elastic capacity, which fixed hardware cannot provide
+- Your workloads are already cloud-native and stateless, and nothing forces them to stay local
+
+### Azure Local, Azure Stack Hub, and Azure Stack Edge
+
+| Aspect | Azure Local | Azure Stack Hub | Azure Stack Edge |
+|---|---|---|---|
+| **Purpose** | Distributed infrastructure in your facilities, Arc-managed | Self-contained Azure region for disconnected or sovereign operation | Edge appliance for inference, IoT, and data staging |
+| **Control plane** | Azure Arc, connected or disconnected | Its own, independent of Azure | Azure, cloud-driven |
+| **Scale** | Edge site to data center | Data center | Branch or edge appliance |
+| **Workloads** | VMs, AKS, Arc services, traditional Windows Server | VMs, containers, a subset of Azure PaaS | Containers, ML inference, data staging |
+| **Pricing** | Per physical core, plus consumption | Capacity-based | Per device |
+| **Choose when** | You need Azure operations on your hardware | You need Azure APIs with no dependency on public Azure | You need compute at a branch or on a factory floor |
+
+The dividing question is what the control plane depends on. Azure Local is Arc-managed and designed to be Azure-connected, though it supports disconnected operation. Stack Hub carries its own control plane so it can run genuinely independent of Azure, which is why it suits sovereign and disconnected scenarios and why its update cadence is separate.
 
 ---
 
-## Hybrid Networking Patterns
+## Hybrid Networking
 
-Connecting on-premises infrastructure to Azure requires careful network design.
+### Connectivity options
 
-### Connectivity Options
+| Connection | Characteristics | Fits |
+|---|---|---|
+| **Site-to-site VPN** | IPsec over the internet, variable latency, set up in days, low cost | Initial connectivity, smaller estates, failover for ExpressRoute |
+| **ExpressRoute** | Private circuit to the Microsoft network, consistent latency, weeks of lead time via a connectivity provider, higher cost | Large sustained transfer, latency-sensitive workloads, compliance requirements |
+| **SD-WAN through an NVA** | Varies by appliance, application-aware routing | Many branch sites already running an SD-WAN fabric |
 
-| Connection | Bandwidth | Latency | Setup time | Cost | Use case |
-|-----------|-----------|---------|-----------|------|----------|
-| **Site-to-Site VPN** | Up to 10 Gbps | Variable | Days | Low | Initial hybrid connectivity, small data transfer |
-| **ExpressRoute** | 50 Mbps to 100 Gbps | Consistent, low | Weeks | High | Large data transfer, consistent latency, compliance |
-| **SD-WAN overlay** | Varies | Varies | Days | Medium | Multi-site connectivity, application-aware routing |
+The common production shape is ExpressRoute primary with VPN failover, which requires both gateways in the same virtual network.
 
-**Site-to-Site VPN:**
-- Uses IPsec encryption over the internet
-- Suitable for initial hybrid connectivity or backup links
-- Higher latency due to internet routing variability
-- Provides disaster recovery if ExpressRoute fails
-- Quick to set up with VPN Gateway in Azure
+### Transit routing does not work by default
 
-**ExpressRoute:**
-- Private dedicated connection from your datacenter to Microsoft network
-- Consistent low latency and high bandwidth
-- Requires coordination with your ISP or connectivity partner
-- Connects at multiple points (primary and secondary redundancy)
-- More expensive but essential for mission-critical workloads
+Two on-premises sites connected to the same VNet through different gateway types cannot reach each other by default. Neither can an NVA and a gateway exchange routes on their own. **Azure Route Server** is the component that fixes this, and it is the piece most often missing from a hybrid design that "should work."
 
-**Hybrid approach (ExpressRoute + VPN):**
-- Use ExpressRoute for primary connectivity
-- VPN as failover if ExpressRoute fails
-- Provides highest reliability and resiliency
-
-For detailed connectivity architecture, see the [ExpressRoute & VPN Gateway](/study-guides/infrastructure/azure/azure-expressroute-vpn.html) guide.
-
-### Hybrid Networking Architecture
-
-**Hub-and-spoke with on-premises connection:**
+Route Server provides automated BGP peering with virtual network gateways. By default it does **not** propagate routes between different component types, and each component only exchanges routes with the Route Server itself. Enabling **route exchange**, also called branch-to-branch, makes it act as a route reflector so NVAs, ExpressRoute gateways, and VPN gateways learn each other's routes.
 
 ```
-On-Premises Datacenter
-   ↓
-[VPN/ExpressRoute Gateway]
-   ↓
-Azure Hub VNet (10.0.0.0/16)
-├── [Azure Firewall]
-├── [VPN/ExpressRoute Gateway]
-├── [DNS, monitoring]
-   ↓
-Azure Spoke VNets (peered)
-├── Spoke 1 (10.1.0.0/16)
-├── Spoke 2 (10.2.0.0/16)
+   On-premises Site A                        On-premises Site B
+   (via VPN)                                 (via ExpressRoute)
+          |                                         |
+          | IPsec                                   | private circuit
+          v                                         v
+   +--------------+                          +------------------+
+   | VPN Gateway  |                          | ExpressRoute GW  |
+   | active-active|                          |                  |
+   | ASN 65515    |                          |                  |
+   +------+-------+                          +--------+---------+
+          |                                           |
+          |  BGP                                 BGP  |
+          +-------------+               +-------------+
+                        v               v
+                   +----------------------------+
+                   |    Azure Route Server      |
+                   |  route exchange ENABLED    |
+                   |  (acts as route reflector) |
+                   +----------------------------+
+                        |
+                        |  without route exchange enabled,
+                        |  A and B cannot reach each other
+                        v
+                   Spoke VNets
+
+   NOT supported: ExpressRoute circuit to ExpressRoute circuit.
+   Use ExpressRoute Global Reach for that.
 ```
 
-On-premises resources connect to the hub VNet through VPN/ExpressRoute. Spokes are peered with the hub. All inter-spoke and on-premises-to-spoke traffic flows through Azure Firewall in the hub for centralized security inspection.
+The constraints that break this in practice:
 
-**Arc-connected servers and hybrid resources:**
-- On-premises servers with Arc agent appear in your Azure subscription
-- Entra ID provides authentication and authorization
-- Azure Policy applies to on-premises resources same as cloud
-- Azure Monitor collects metrics and logs from everywhere
+- **The VPN gateway must be in active-active mode with its ASN set to 65515.** BGP does not have to be enabled on the VPN gateway to talk to the Route Server, but active-active and that ASN are requirements.
+- **All gateways must sit in the same virtual network as the Route Server.** Route exchange applies to every gateway in that VNet, not selectively.
+- **ExpressRoute circuit-to-circuit is not supported** through Route Server. Routes from one circuit are not advertised to another on the same gateway. Use **ExpressRoute Global Reach** instead.
+- **ExpressRoute routes take precedence over VPN routes** by default, adjustable through routing preference.
+- **Creating or deleting a Route Server in a VNet that already contains a gateway causes downtime** until the operation completes. Existing ExpressRoute circuits and their connections to other VNets are unaffected.
+- Avoid advertising the reserved BGP community `65517:65517` from on-premises.
 
----
+### Hub-and-spoke with on-premises connectivity
 
-## Hybrid Identity: Entra ID and On-Premises AD
-
-Hybrid identity connects cloud identity (Entra ID) with on-premises directory (Active Directory).
-
-### Three Hybrid Identity Models
-
-**Entra ID Connect (password hash sync):**
-- On-premises AD passwords are hashed and synced to Entra ID every 2 minutes
-- Users log in with same credentials everywhere
-- Entra ID stores only the password hash, not the actual password
-- Simplest to implement, no complex infrastructure
-- One-way sync from AD to Entra ID
-
-**Entra ID Connect with pass-through authentication:**
-- Passwords are not synced; authentication requests pass through to on-premises AD
-- On-premises AD validates the password
-- Slightly more complex than password hash sync
-- Stronger security posture (password never in cloud)
-- Requires always-on connection to on-premises AD
-
-**Entra ID Domain Services:**
-- Managed domain in Azure that extends Entra ID capabilities
-- Supports LDAP, group policy, and Kerberos authentication
-- Allows VMs in Azure to join the domain just like on-premises machines
-- Useful when applications require traditional AD features
-- More complex and expensive than other models
-
-### Managing Hybrid Identity
-
-[Entra ID Connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/){:target="_blank" rel="noopener noreferrer"} is the primary tool for syncing on-premises Active Directory with cloud Entra ID.
-
-**What gets synced:**
-- Users and their properties (name, email, phone, etc.)
-- Groups and group membership
-- Contact objects and distribution lists
-- Passwords (via hash sync or pass-through auth)
-
-**Sync process:**
-- Entra ID Connect runs on a server in your on-premises environment
-- It connects to your local Active Directory and reads changes
-- Changes are synced to Entra ID every 30 minutes (configurable)
-- Users log in with their on-premises credentials everywhere
-
-**Disaster recovery for Entra ID Connect:**
-- If the sync server fails, users can still log in with cloud credentials temporarily
-- Deploy a standby sync server for critical environments
-- Ensure your on-premises AD is resilient
+On-premises networks terminate on gateways in the hub VNet. Spokes peer with the hub. Inter-spoke and on-premises-to-spoke traffic routes through the hub's firewall for inspection. Address spaces on both sides must not overlap, which is a planning decision made once and expensive to revisit.
 
 ---
 
-## Hybrid Policy and Governance
+## Hybrid Identity
 
-Applying consistent policies across cloud and on-premises infrastructure prevents configuration drift and security gaps.
+Hybrid identity connects on-premises **Active Directory Domain Services** with **Microsoft Entra ID**. These are separate directories with different protocols, not one product renamed.
 
-### Azure Policy for Hybrid Resources
+### Sync technology and authentication method are separate choices
 
-[Azure Policy](https://learn.microsoft.com/en-us/azure/governance/policy/overview){:target="_blank" rel="noopener noreferrer"} enforces organizational standards on Azure resources and Arc-connected resources.
+**Microsoft Entra Connect** is the product. It comes in two sync technologies, **Entra Connect Sync** (the server-based agent) and **Entra Cloud Sync** (lightweight agents, cloud-managed configuration). Microsoft is explicit that the choice of sync technology does not determine or change authentication behavior. These are two independent decisions.
 
-**Policy types:**
+### The three authentication methods
 
-**Enforce compliance:** VMs must have specific tags, encryption enabled, specific software versions
-- Assigned to subscriptions or management groups
-- Evaluated continuously as resources are created and modified
-- Non-compliant resources are identified and can be remediated automatically
+| Method | Where authentication happens | On-premises footprint beyond Entra Connect |
+|---|---|---|
+| **Password hash synchronization (PHS)** | In the cloud, against a synchronized hash | None |
+| **Pass-through authentication (PTA)** | In the cloud, after a secure exchange with an on-premises agent | One server per additional agent, three recommended |
+| **Federation (AD FS)** | On-premises | Two or more AD FS servers plus two or more Web Application Proxy servers in the DMZ, plus load balancing |
 
-**Audit and report:** Flag resources that don't meet your standards without blocking them
-- Useful for gradual rollout of new policies
-- Report on compliance across the organization
+**Microsoft Entra Domain Services is not one of these.** It is a managed domain providing LDAP, Kerberos, and group policy for VMs that need traditional directory services, and it *requires* password hash synchronization to work. Treating it as a third authentication option confuses a consumer of hybrid identity with a way of doing it.
 
-**Guest configuration:** Audit and enforce settings inside the OS
-- Check if antivirus is running on a VM
-- Ensure specific Windows registry settings
-- Validate Linux system configuration files
-- Works on both Azure VMs and Arc-connected servers
+### The difference that decides most designs
 
-### Unified Governance Across Hybrid Infrastructure
+PHS is simplest and has no on-premises dependency, but it does not enforce on-premises account state immediately.
 
-**Management groups:**
-- Organize subscriptions into a hierarchy
-- Apply policies at the management group level (flows to all subscriptions below)
-- Use for organization-wide compliance (all VMs must be patched, encryption required, etc.)
+| Account state enforced at sign-in | PHS | PTA | Federation |
+|---|---|---|---|
+| Disabled account | Yes, up to 30-minute delay | Yes | Yes |
+| Account locked out | No | Yes | Yes |
+| Account expired | No | Yes | Yes |
+| Password expired | No | Yes | Yes |
+| Sign-in hours | No | Yes | Yes |
 
-**Tags:**
-- Apply consistent tagging across cloud and Arc resources
-- Use tags for cost allocation, environment identification, and team assignment
-- Enforce tag policies to ensure all resources are tagged
+An organization that must revoke access the instant an account is disabled needs PTA or federation. One that can tolerate a synchronization delay gets meaningfully better availability from PHS, because PHS has no on-premises component that can fail.
 
-**Role-Based Access Control (RBAC):**
-- Same RBAC model applies to cloud and Arc resources
-- Use Entra ID groups to manage access
-- Control who can create, modify, or delete resources
+Password hash synchronization runs every **two minutes** as part of Connect Sync. Note that the password-expired and account-locked-out states are not synced at all, so setting "user must change password at next logon" prevents the new hash from syncing until the user actually changes it.
 
----
+### Enable PHS regardless
 
-## Hybrid Monitoring and Observability
+Microsoft recommends enabling password hash synchronization whichever method you choose, for two reasons:
 
-Monitoring workloads across cloud and on-premises requires a unified platform.
+- **It is the fallback when on-premises is gone.** In ransomware incidents, organizations that already had PHS enabled alongside federation or PTA switched primary authentication and were back online in hours. Those that had not took weeks to restore on-premises identity infrastructure before anyone could sign in to cloud apps.
+- **Entra ID Protection's leaked-credentials report requires it**, regardless of the primary sign-in method.
 
-### Azure Monitor for Hybrid Workloads
+Failover from PTA to PHS is not automatic. You switch the sign-on method in Entra Connect manually, so write that step into a runbook before you need it.
 
-[Azure Monitor](https://learn.microsoft.com/en-us/azure/monitor/){:target="_blank" rel="noopener noreferrer"} collects metrics and logs from Azure resources, Arc-connected resources, and on-premises infrastructure.
-
-**What you can monitor:**
-- Azure VMs and services (native)
-- Arc-connected servers (via Azure Monitor agent)
-- On-premises applications and infrastructure (via Telegraf, Prometheus exporters, or custom collectors)
-- Kubernetes clusters (arc-enabled or otherwise)
-
-**Key components:**
-- **Metrics:** Real-time data (CPU, memory, disk, network)
-- **Logs:** Events, application traces, and audit logs (collected into Log Analytics workspace)
-- **Alerts:** Notifications when metrics exceed thresholds or specific events occur
-- **Dashboards:** Visualizations across all data sources
-
-**Arc-specific monitoring:**
-- Azure Monitor agent deployed to Arc-connected servers
-- Same monitoring capabilities as Azure VMs (no special configuration needed)
-- Create alerts that span cloud and on-premises resources
-
-For detailed monitoring guidance, see the [Observability & Monitoring](/study-guides/observability/observability-monitoring.html) guide.
+For availability, deploy a second Entra Connect server in **staging mode**, and for PTA deploy two additional agents beyond the one on the Connect server so a single agent can fail while another is under maintenance.
 
 ---
 
-## Edge Computing: Azure Stack Edge and IoT Edge
+## Policy and Governance Across Hybrid
 
-Azure extends to the edge, where data is created, not just to cloud datacenters.
+Azure Policy applies to Arc-connected resources the same way it applies to native ones, which is the practical payoff of projecting them into ARM.
 
-### Azure Stack Edge
+**Azure machine configuration** audits and enforces settings inside the OS: whether a service is running, registry values, Linux configuration files. This was previously called guest configuration, and it requires the `Microsoft.GuestConfiguration` resource provider. It does not support Arm64.
 
-[Azure Stack Edge](https://learn.microsoft.com/en-us/azure/databox-online/){:target="_blank" rel="noopener noreferrer"} is a compact appliance (about the size of a small switch) deployed at branch offices, factories, or remote locations.
+**Management groups** carry policy assignments down to subscriptions created later, which is what makes governance survive organizational growth. **Tags** applied consistently across cloud and Arc resources make cost allocation possible across the boundary. **RBAC** uses the same model and the same Entra groups on both sides.
 
-**What it does:**
-- Local processing and storage at the edge
-- Automatic sync of data to Azure (uploads periodically or continuously)
-- Kubernetes support for containerized workloads
-- GPU options for machine learning inference
-- Works disconnected (batches data, syncs when connected)
-
-**Use cases:**
-- IoT data collection and preprocessing at factories
-- ML inference on edge devices before uploading to cloud
-- Temporary data staging before upload to Azure
-- Branch office file services with cloud backup
-
-### Azure IoT Edge
-
-[Azure IoT Edge](https://learn.microsoft.com/en-us/azure/iot-edge/){:target="_blank" rel="noopener noreferrer"} runs containerized workloads on IoT devices and gateways.
-
-**Key differences from Stack Edge:**
-- Lighter weight (runs on Linux or Windows devices, not appliances)
-- Focuses on device and gateway intelligence
-- Integrates with IoT Hub for management and telemetry
-- Modules are standard containers (same as Kubernetes)
-
-**Typical IoT Edge deployment:**
-- Deploy containers to edge devices through Azure IoT Hub
-- Devices process sensor data locally
-- Send only relevant data to cloud (reduces bandwidth)
-- Continue working if cloud connectivity fails
+The gap to watch is scope. A policy assigned to a subscription reaches the Arc resources in it, but only for machines that were successfully onboarded. Everything blocked by the OS support list is outside governance entirely, and it will not appear as non-compliant, because it does not appear at all.
 
 ---
 
-## Workload Placement Decisions
+## Hybrid Monitoring
 
-Deciding where workloads should run is central to hybrid architecture.
+Azure Monitor collects from Azure resources, Arc-connected servers, and Kubernetes clusters into a shared Log Analytics workspace, so alerts and queries span the boundary.
 
-### When to Keep Workloads On-Premises
+- **Arc-connected servers** use the **Azure Monitor Agent**, deployed as an Arc VM extension. Data carries the machine's Azure Resource ID, which enables resource-context access control
+- **VM insights** covers OS performance and process dependency discovery
+- **Change tracking and inventory** runs through the Azure Monitor Agent
+- **Azure Update Manager** handles OS patching for Arc-enabled Windows and Linux servers, needing `Microsoft.Compute` registered
 
-**Keep on-premises when:**
-
-**Data sovereignty:** Laws or regulations require data to stay in specific countries or regions (GDPR, HIPAA for specific data residency, government contracts)
-
-**Existing infrastructure:** You have recent, capable hardware and maintenance contracts. The ROI of cloud does not justify replacing working systems.
-
-**Low-frequency demand:** Workloads run predictably without spikes. Cloud elasticity provides no value. Fixed on-premises capacity is cheaper.
-
-**Strict latency requirements:** Applications require sub-millisecond latency to other on-premises systems. Network latency to cloud exceeds requirements.
-
-**Data size:** Moving terabytes of data to cloud is impractical. Local processing and staging is more efficient.
-
-### When to Migrate to Cloud
-
-**Migrate to cloud when:**
-
-**Variable demand:** Workloads scale up and down unpredictably. Cloud elasticity saves money compared to maintaining peak capacity.
-
-**Global presence:** Application needs to serve users across multiple regions. Cloud provides regional deployment and edge caching.
-
-**Operational simplicity:** You want fewer infrastructure responsibilities. PaaS services (databases, message queues, APIs) reduce operational overhead.
-
-**New development:** Building new applications with cloud-native design patterns. Containerization, serverless, and managed services are natural.
-
-**Modernization:** Legacy applications prevent hiring and innovation. Cloud migration enables modernization investments.
-
-### Hybrid Placement Strategies
-
-**Lift-and-shift to Azure or Stack HCI:**
-- Move VMs as-is to cloud or hybrid infrastructure
-- Minimal code changes
-- Quick to move, provides breathing room for modernization
-- Workloads still run on VM infrastructure (not optimized for cloud)
-
-**Re-host on cloud-native platforms:**
-- Move workloads to PaaS services (Azure App Service, Azure SQL, etc.)
-- Requires application changes
-- Takes advantage of cloud services (auto-scaling, less ops overhead)
-- Better long-term economics and operational simplicity
-
-**Hybrid burst pattern:**
-- Keep baseline capacity on-premises
-- Burst to cloud during peak demand
-- Requires application design to handle distributed deployment
-- Optimizes cost (pay for peak on-premises + burst cloud capacity)
+Arc-connected monitoring has the agent heartbeat behind it, so the availability signal it produces is subject to the same 15-to-30-minute Disconnected threshold. Pair it with workload-level health checks rather than relying on Arc status as an outage detector.
 
 ---
 
-## Comparison with AWS and GCP Hybrid Solutions
+## Edge
 
-Organizations using AWS or GCP have different hybrid options:
+**Azure Stack Edge** is a managed appliance placed in branch offices, factories, and remote sites. It provides local compute and storage, containerized workloads, optional GPU for inference, and staged transfer of data to Azure. It works through disconnected periods, batching and syncing when connectivity returns.
 
-### AWS Hybrid Solutions
+**Azure IoT Edge** runs containerized modules on devices and gateways rather than on an appliance. It is managed through IoT Hub, processes sensor data locally, forwards only what matters, and continues operating when the cloud is unreachable.
 
-**AWS Outposts:**
-- AWS hardware and services deployed in your datacenter
-- You get AWS services (EC2, RDS, S3) running on-premises
-- Requires AWS to manage the hardware and maintain the connection
-- Suitable when you want AWS services but cannot move workloads to cloud
+The choice is about form factor and management surface. Stack Edge is hardware Microsoft ships and manages the lifecycle of. IoT Edge is a runtime you put on hardware you already have.
 
-**EKS Anywhere:**
-- Run Amazon EKS on your infrastructure
-- Kubernetes management plane runs on-premises
-- Hybrid Kubernetes but with AWS tooling and experience
-- Lighter weight than Outposts
+Note that Arc should not be installed on Azure Stack Edge, which already has equivalent management.
 
-**Hybrid networking:**
-- AWS Direct Connect for dedicated connectivity
-- VPN for backup
-- Similar to Azure ExpressRoute and VPN Gateway
+---
 
-### GCP Hybrid Solutions
+## Workload Placement
 
-**Google Cloud at the edge:**
-- Lightweight container runtime on edge devices
-- Distributed data processing at the edge
-- Less mature than AWS or Azure hybrid offerings
+### Keep it on-premises when
 
-**GKE Anywhere:**
-- Run Google Kubernetes Engine on your infrastructure
-- Kubernetes focus like AWS EKS Anywhere
-- Limited hybrid services compared to Azure
+- **Sovereignty or residency rules** require data in a specific facility or jurisdiction
+- **Existing hardware** is recent and under maintenance, so replacing working systems has no return
+- **Demand is flat and predictable**, which is the case where elasticity provides nothing and fixed capacity is cheaper
+- **Latency floors** are below what a round trip to a region can deliver
+- **Data volume** makes continuous transfer impractical, so processing belongs next to the data
 
-### Azure vs AWS vs GCP Hybrid Comparison
+### Move it when
+
+- **Demand varies** enough that paying for peak capacity year-round is wasteful
+- **Users are distributed** and regional deployment or edge caching matters
+- **Operational burden** is the constraint, and managed services remove it
+- **The application is new**, where cloud-native patterns are the natural design
+- **Modernization is blocked** by the platform it currently runs on
+
+### Hybrid patterns
+
+**Baseline plus burst** keeps steady capacity on-premises and expands into Azure at peak. It requires an application that tolerates being split, and it only pays off when the peak is both large and infrequent.
+
+**Arc-governed retention** keeps workloads where they are and brings governance to them. This is the pattern behind CAF's Retain strategy, and it is the lowest-effort way to stop running two governance regimes.
+
+**Replatform in place** moves workloads onto Azure Local, gaining Azure operational tooling without moving data out of the facility.
+
+---
+
+## AWS and GCP Hybrid Comparison
 
 | Aspect | Azure | AWS | GCP |
-|--------|-------|-----|-----|
-| **Unified management** | Azure Arc (full management plane to any infrastructure) | Outposts (AWS services only) | Limited; container-focused |
-| **On-premises infrastructure** | Azure Stack HCI (hyperconverged, purpose-built) | Outposts (AWS hardware/services) | No equivalent |
-| **Kubernetes** | Arc-enabled K8s + AKS on Stack HCI | EKS Anywhere | GKE Anywhere |
-| **Data services** | Arc-enabled SQL, PostgreSQL, MySQL | Aurora on Outposts, Outposts RDS | Limited |
-| **App Service** | App Service on Stack HCI and Arc | No equivalent | No equivalent |
-| **Management scope** | Any infrastructure (on-premises, AWS, GCP, edge) | Only AWS infrastructure | Only GCP infrastructure |
-| **Identity integration** | Deep AD sync (Entra ID Connect) | AWS IAM only | Google Workspace only |
-| **Edge services** | Azure Stack Edge, IoT Edge | Wavelength, Outposts | Cloud IoT Edge |
-| **Use case focus** | Comprehensive hybrid architecture | Extending AWS services to on-premises | Lightweight edge computing |
+|---|---|---|---|
+| **Governance plane for external resources** | Arc projects servers, Kubernetes, and SQL Server into ARM | Systems Manager for hybrid instances; Outposts extends AWS itself | Anthos/GKE Enterprise, Kubernetes-centered |
+| **On-premises infrastructure** | Azure Local, partner hardware, per-core pricing | Outposts, AWS-supplied and AWS-operated hardware | Google Distributed Cloud |
+| **Kubernetes anywhere** | Arc-enabled Kubernetes, any CNCF-certified cluster | EKS Anywhere | GKE on Google Distributed Cloud |
+| **Managed database on your hardware** | SQL Managed Instance enabled by Arc | RDS on Outposts | Limited |
+| **Disconnected operation** | Azure Local supports it; Azure Stack Hub is built for it | Outposts requires a connection to its home Region | Google Distributed Cloud has an air-gapped configuration |
 
-### Why Azure Leads in Hybrid
+The architectural difference is what each vendor extends. AWS Outposts extends AWS hardware and services into your facility, so the operating model is AWS's throughout. Azure Arc takes the opposite approach, leaving infrastructure where it is and extending only the control plane over it. Google Distributed Cloud sits closer to the Azure model but is more tightly centered on Kubernetes.
 
-Azure's hybrid strengths:
-- **Unified management:** Azure Arc extends the full Azure management plane (policies, RBAC, monitoring) to any infrastructure
-- **Stack HCI:** Purpose-built hybrid infrastructure platform (not just services on your hardware)
-- **Edge scale:** Azure Stack Edge and IoT Edge provide edge-specific platforms
-- **Identity integration:** Deep on-premises AD integration with Entra ID
-- **Service breadth:** More Arc-enabled services (databases, app service, functions) than competitors
-
-AWS and GCP focus on extending their cloud services to hybrid environments. Azure built a comprehensive hybrid story across management, infrastructure, and services.
+Which suits a given organization depends on what it already runs. An estate of VMware and Windows Server gains more from a control plane that reaches existing hardware. One that is already containerized has more equivalent options across all three.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Assuming Seamless Workload Mobility
+### Assuming everything can be Arc-enabled
 
-**Problem:** Building applications assuming they can easily move between on-premises and cloud without modification.
+Planning governance coverage across the estate, then discovering that CentOS machines are unsupported, several distributions hit end of Arc support in November 2026, and Arm64 machines cannot take machine configuration. Audit the estate against the supported OS list before promising coverage, and remember that unsupported machines do not show as non-compliant, they simply do not appear.
 
-**Result:** Cloud versions require significant architectural changes (statelessness, horizontal scaling, managed services). Migration takes far longer than expected.
+### Using Arc on ephemeral or VDI infrastructure
 
-**Solution:** Design applications for target platforms from the start. If the goal is mobility, use containerization and Kubernetes (both on-premises and cloud) from day one. Accept that some optimization will be needed for each platform.
+Arc does not clean up resources that stop heartbeating, because it cannot tell deletion from maintenance. Regularly recreating VMs with the same names produces orphaned resources and name collisions. Use Intune or Configuration Manager for end-user machines, and note that Azure Virtual Desktop on Azure Local is the documented exception.
 
----
+### Expecting transit routing to work without Route Server
 
-### Pitfall 2: Underestimating Hybrid Network Complexity
+Connecting one site by VPN and another by ExpressRoute to the same VNet, then finding they cannot reach each other. Route Server with route exchange enabled is the fix, and it carries its own requirements: VPN gateway in active-active mode with ASN 65515, all gateways in the Route Server's VNet, and downtime when the Route Server is created alongside an existing gateway. Circuit-to-circuit still needs Global Reach.
 
-**Problem:** Assuming ExpressRoute or VPN "just works" without planning address spaces, firewall rules, and routing policies.
+### Treating Entra Domain Services as an authentication method
 
-**Result:** Network connectivity fails, traffic takes unexpected paths, on-premises workloads cannot reach cloud resources.
+Choosing "Entra Domain Services" as an alternative to password hash sync or pass-through authentication. It is neither. It is a managed domain for workloads needing LDAP and Kerberos, and it depends on password hash synchronization being enabled.
 
-**Solution:** Plan your hybrid network explicitly. Ensure on-premises and cloud address spaces do not overlap. Test connectivity and routing thoroughly before deploying production workloads.
+### Choosing PHS without checking account-state requirements
 
----
+Password hash sync does not enforce lockout, expiry, or sign-in hours at sign-in, and disabled accounts can take up to 30 minutes to propagate. Where immediate revocation is a control requirement, that rules PHS out as the primary method, though Microsoft still recommends enabling it as a fallback.
 
-### Pitfall 3: Identity Synchronization Failures
+### Silent identity sync failure
 
-**Problem:** Entra ID Connect sync fails silently. Users in cloud Entra ID diverge from on-premises Active Directory.
+Entra Connect stops syncing and nobody notices until access control has drifted between the directories. Monitor Connect health, alert on sync failure, deploy a second server in staging mode, and know in advance that PTA-to-PHS failover is a manual switch.
 
-**Result:** Access control is inconsistent. Some users cannot log into cloud applications. Compliance audits reveal mismatched identities.
+### Capacity planning Azure Local like cloud
 
-**Solution:** Monitor Entra ID Connect health continuously. Set up alerts for sync failures. Regularly audit user accounts in both directories. Test failover scenarios.
+Provisioning for today's workload and expecting to scale on demand. Azure Local capacity is fixed at deployment and expanding it means procurement and change windows. Plan on the same multi-year horizon as any other hardware purchase.
 
----
+### Data transfer economics
 
-### Pitfall 4: Inconsistent Policies Across Cloud and On-Premises
-
-**Problem:** Policies are applied to cloud resources (encryption required, tags mandatory) but not to Arc-connected or on-premises resources.
-
-**Result:** On-premises systems become non-compliant. Audit finds unencrypted servers or untagged infrastructure in datacenters.
-
-**Solution:** Apply Azure Policy consistently to all resources, both cloud and Arc-connected. Use management groups to enforce policies organization-wide.
-
----
-
-### Pitfall 5: Forgetting Stack HCI Capacity Planning
-
-**Problem:** Deploying Azure Stack HCI with insufficient capacity for expected workloads, treating it like elastic cloud infrastructure.
-
-**Result:** Stack HCI fills to capacity. Adding nodes requires planning, procurement, and downtime.
-
-**Solution:** Plan Stack HCI capacity for 3-5 year horizons like traditional infrastructure. Provision for peak expected demand plus growth headroom. Understand that HCI, like on-premises infrastructure, has fixed capacity.
-
----
-
-### Pitfall 6: Data Transfer Costs Wiping Out Economics
-
-**Problem:** Moving large datasets between on-premises and cloud repeatedly without understanding data transfer costs.
-
-**Result:** Cloud data transfer costs exceed the cost of keeping workloads on-premises.
-
-**Solution:** Minimize data movement. Use local processing and caching to reduce data to cloud. Understand Azure data transfer pricing before committing to hybrid workloads. Consider periodic bulk transfers instead of continuous sync for archival data.
+Moving large datasets between on-premises and Azure repeatedly until egress cost exceeds the savings that justified the design. Process locally, cache aggressively, and prefer periodic bulk transfer over continuous synchronization for anything archival.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure Arc extends Azure management to any infrastructure.** Servers, Kubernetes clusters, data services, and applications everywhere appear in your Azure subscription with consistent policies, identity, and monitoring. This eliminates maintaining separate silos for cloud and on-premises.
+1. **Azure Stack HCI is now Azure Local**, priced per physical core, using Arc as its control plane and supporting connected or disconnected operation. Material using the old name predates the rename.
 
-2. **Azure Stack HCI is a hybrid infrastructure platform, not just cloud services on your hardware.** It provides hyperconverged compute and storage with Azure integration, suitable for organizations modernizing on-premises infrastructure while extending cloud capabilities.
+2. **The Connected Machine agent's support list is an allowlist.** If an OS version is not listed it is unsupported, CentOS is absent entirely, and a large set of distributions including Windows Server 2012 and 2012 R2 reaches end of Arc support in November 2026.
 
-3. **Hybrid identity requires synchronization.** Entra ID Connect syncs on-premises Active Directory to cloud Entra ID. Users authenticate consistently everywhere. Plan for sync failures and maintain backup authentication methods.
+3. **Do not Arc-enable machines that are already Azure resources.** Azure VMs, Azure Stack Hub, and Azure Stack Edge are excluded because they already have equivalent management.
 
-4. **Network design is critical for hybrid success.** Plan address spaces to avoid overlaps. Choose between VPN (simple, lower cost) and ExpressRoute (consistent latency, higher cost) based on workload requirements. Use hub-and-spoke to centralize security inspection.
+4. **Arc is not an availability monitor.** Heartbeat every 5 minutes, Disconnected at 15 to 30 minutes, Expired after 45 days, and an expired machine needs a manual disconnect and reconnect before it can be managed again.
 
-5. **Workload placement decisions should be intentional, not default.** Keep things on-premises if data sovereignty, latency, or existing infrastructure investment justifies it. Migrate to cloud when you need elasticity, global reach, or modernization. Use hybrid patterns for variable workloads.
+5. **Arc is a poor fit for ephemeral and VDI estates**, because it never cleans up resources that stop heartbeating and recreated VMs collide with orphaned ones.
 
-6. **Azure Policy applies uniformly across cloud and on-premises.** Use management groups to enforce compliance everywhere. Avoid policy gaps where on-premises resources remain non-compliant while cloud resources are locked down.
+6. **Azure Bastion cannot reach Arc-enabled servers.** Use SSH via Azure Arc, RDP over SSH, or Windows Admin Center in Azure, all brokered through `Microsoft.HybridConnectivity` without inbound firewall openings.
 
-7. **Data transfer costs matter significantly.** Minimize data movement between on-premises and cloud. Understand pricing before committing to continuous synchronization. Local processing at the edge can reduce costs dramatically.
+7. **Arc-enabled data services means SQL Managed Instance**, not a family of engines. The PostgreSQL offering has been removed.
 
-8. **Azure's hybrid story is comprehensive.** From management (Arc) to infrastructure (Stack HCI) to edge (Stack Edge, IoT Edge) to identity (Entra ID Connect), Azure provides purpose-built tools for hybrid scenarios. AWS and GCP focus on extending cloud services; Azure focuses on integrating cloud with on-premises.
+8. **ExpressRoute-to-VPN transit requires Azure Route Server with route exchange enabled**, plus an active-active VPN gateway with ASN 65515 and every gateway in the Route Server's VNet. Circuit-to-circuit needs ExpressRoute Global Reach instead.
 
-9. **Hybrid failures are often identity or network related.** Monitor Entra ID Connect health and network connectivity continuously. Plan for failure modes (sync failures, ExpressRoute outages). Test failover scenarios before they are needed in production.
+9. **Hybrid identity has three authentication methods**: password hash synchronization, pass-through authentication, and federation. Entra Domain Services is not one of them. PHS trades immediate account-state enforcement for having no on-premises dependency, and Microsoft recommends enabling it as a fallback whichever method is primary.
 
-10. **Start with a clear hybrid strategy.** Define which workloads stay on-premises and why. Design for specific business outcomes (cost, compliance, performance) rather than trying to be hybrid-ready for all scenarios. Hybrid is a means to business goals, not a goal itself.
+10. **Governance only covers what got onboarded.** Machines outside the supported OS list are not non-compliant, they are invisible, which is the more dangerous of the two states.
