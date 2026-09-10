@@ -6,6 +6,7 @@ subcategory: DevOps & Delivery
 description: "CI/CD fundamentals, pipeline design, automation strategies, security gates, testing approaches, and deployment workflows for modern software delivery."
 tags: [sdlc, cicd, automation, devops, testing, security, practical]
 ---
+{% raw %}
 
 ## What is CI/CD
 
@@ -1434,3 +1435,4 @@ steps:
 - [JMeter](https://jmeter.apache.org/){:target="_blank" rel="noopener noreferrer"} - Performance testing
 - [k6](https://k6.io/){:target="_blank" rel="noopener noreferrer"} - Modern load testing
 - [Pact](https://pact.io/){:target="_blank" rel="noopener noreferrer"} - Contract testing
+{% endraw %}

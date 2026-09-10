@@ -6,6 +6,7 @@ subcategory: GitHub
 description: "Organization management, repository governance, branch protection, Dependabot, code scanning, secret scanning, and security best practices for GitHub."
 tags: [github, security, governance, administration, practical, developer-tools]
 ---
+{% raw %}
 
 ## Table of Contents
 
@@ -698,3 +699,4 @@ IP allow lists work alongside SAML SSO rather than replacing it: SAML SSO contro
 System for Cross-domain Identity Management (SCIM) automates user and group provisioning from the IdP to GitHub. When a new employee joins and is added to a GitHub group in the IdP, SCIM provisions their GitHub membership automatically. When they leave and are deprovisioned, SCIM removes them. This eliminates the manual work and lag of managing GitHub membership separately from the HR or IdP workflow.
 
 SCIM is essential at scale. Organizations with hundreds of employees cannot reliably manage GitHub membership manually without SCIM to keep it synchronized with the authoritative identity source.
+{% endraw %}

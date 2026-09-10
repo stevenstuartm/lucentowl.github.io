@@ -6,6 +6,7 @@ subcategory: "Platform Integration"
 description: "Deploying WinUI 3 applications using MSIX packaging, unpackaged deployment, self-contained bundles, and distribution through the Microsoft Store or enterprise sideloading."
 tags: [winui, winui-3, msix, deployment, packaging, desktop, devops, practical]
 ---
+{% raw %}
 
 ## What MSIX Provides
 
@@ -155,3 +156,4 @@ Version numbers in MSIX packages must follow a four-part format such as `1.2.3.0
 For Azure DevOps, the [Windows Application Packaging task](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/store-publish-v0){:target="_blank" rel="noopener noreferrer"} provides structured support for building, signing, and publishing MSIX packages. The task handles the MSBuild arguments and signtool invocation, and it integrates with Azure Key Vault for certificate retrieval. Storing the signing certificate in Key Vault rather than as a pipeline secret provides better access control, rotation support, and an audit trail.
 
 A robust pipeline should include a smoke-test step that installs the produced MSIX on a clean virtual machine and verifies that the application launches without errors. WinUI 3 applications can fail to start for reasons like missing visual C++ redistributables, incorrect manifest declarations, or side-by-side assembly conflicts that only appear in a properly isolated environment. Running installation validation in the pipeline catches these problems before they reach users.
+{% endraw %}

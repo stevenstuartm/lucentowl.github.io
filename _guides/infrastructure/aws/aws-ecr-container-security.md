@@ -6,6 +6,7 @@ subcategory: Container Orchestration (Advanced)
 description: "Comprehensive guide to AWS Elastic Container Registry and container security covering image scanning, lifecycle policies, replication, runtime security, and secrets management"
 tags: [aws, containers, security, docker, kubernetes, devops, infrastructure, practical]
 ---
+{% raw %}
 
 ## What Problems ECR & Container Security Solve
 
@@ -1516,3 +1517,4 @@ Eliminates NAT Gateway costs for ECR traffic.
 **When to Use ECR**:
 - **Choose ECR** for: AWS-native workloads, unlimited pull rate, native IAM integration, production deployments
 - **Consider alternatives** for: Multi-cloud (Harbor), air-gapped (self-hosted), public open-source projects (Docker Hub)
+{% endraw %}

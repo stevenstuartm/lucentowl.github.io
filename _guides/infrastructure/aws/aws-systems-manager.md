@@ -6,6 +6,7 @@ subcategory: Management & Governance
 description: "Comprehensive guide to AWS Systems Manager covering Session Manager, Patch Manager, Parameter Store, Run Command, State Manager, automation, fleet management, and operational best practices"
 tags: [aws, systems-manager, automation, infrastructure, patch-management, configuration, secrets, fundamentals]
 ---
+{% raw %}
 
 ## What Problems Systems Manager Solves
 
@@ -507,7 +508,7 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          DB_PASSWORD={% raw %}{{resolve:ssm-secure:/myapp/prod/database/password}}{% endraw %}
+          DB_PASSWORD={{resolve:ssm-secure:/myapp/prod/database/password}}
 ```
 
 ### Parameter Store vs Secrets Manager
@@ -599,8 +600,8 @@ mainSteps:
   - name: createImage
     action: 'aws:createImage'
     inputs:
-      InstanceId: {% raw %}'{{InstanceId}}'{% endraw %}
-      ImageName: {% raw %}'MyApp-{{automation:EXECUTION_ID}}'{% endraw %}
+      InstanceId: '{{InstanceId}}'
+      ImageName: 'MyApp-{{automation:EXECUTION_ID}}'
       NoReboot: true
     outputs:
       - Name: ImageId
@@ -1090,3 +1091,4 @@ Developers access `/myapp/dev/*`, operations team accesses `/myapp/prod/*`.
 **Integrate with CloudWatch and EventBridge**: CloudWatch alarms trigger automation for auto-remediation. EventBridge rules start automation based on compliance state changes or security findings.
 
 **Systems Manager complements IaC tools**: CloudFormation/Terraform provision infrastructure, Systems Manager operates and maintains it. Use both for complete infrastructure lifecycle management.
+{% endraw %}

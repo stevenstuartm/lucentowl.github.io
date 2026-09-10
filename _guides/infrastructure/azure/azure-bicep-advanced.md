@@ -6,6 +6,7 @@ subcategory: Infrastructure as Code
 description: "Advanced Bicep patterns including module design, registries and template specs, loops and conditions, user-defined types, deployment stacks, extensions, and enterprise-scale IaC strategies."
 tags: [bicep, bicep-modules, user-defined-types, bicep-registry, template-specs, deployment-stacks, advanced]
 ---
+{% raw %}
 
 ## Building Complex Infrastructure with Bicep
 
@@ -1267,3 +1268,4 @@ Understanding where Bicep fits compared to other IaC tools helps you choose the 
 10. **Every module is a nested deployment.** Module names are deployment names, unique per scope and capped at 64 characters, which is why looped modules need the index in the name. The `scope` property is what lets one file span the resource hierarchy.
 
 11. **Bicep is Azure-specific; know when to use alternatives.** Bicep is the right choice for Azure-only deployments. Choose Terraform for multi-cloud or CloudFormation for AWS-only scenarios.
+{% endraw %}

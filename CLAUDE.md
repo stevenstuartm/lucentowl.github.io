@@ -236,6 +236,16 @@ To add/modify radar entries, edit `assets/data/radar-data.json`:
 
 Always include `rel="noopener noreferrer"` with `target="_blank"` to prevent security vulnerabilities.
 
+### Liquid and Code Samples
+
+**Jekyll runs Liquid before Markdown, so backticks and fenced code blocks give no protection.** Any `{{ ... }}` or `{% ... %}` in a guide is evaluated as a template tag. This bites hardest on GitHub Actions (`${{ secrets.X }}`), Azure Pipelines (`${{ ... }}`), AWS Systems Manager (`{{serviceName}}`), and any mustache-style templating.
+
+The failure mode is usually silent. Invalid Liquid produces a build warning, but *valid* Liquid — which `${{ secrets.AZURE_CLIENT_ID }}` is — resolves to an empty string and publishes as `client-id: $` with no warning at all. Never assume a clean build means the code samples survived.
+
+**Fix:** wrap the whole document body in `{% raw %}` / `{% endraw %}` — `{% raw %}` on the line right after the closing front-matter `---`, `{% endraw %}` as the last line. See `_guides/developer-tools/github-actions.md`. Guides contain no intentional Liquid, so a whole-document wrap is safe and catches future additions too. Raw blocks cannot nest: if a file already has inline `{% raw %}` pairs, remove them before wrapping.
+
+To audit, search content for `{{` and `{%` outside `pages/` (where Liquid *is* intentional) and confirm each hit sits inside a raw block.
+
 ## Best Practices
 
 ### When Working with Code

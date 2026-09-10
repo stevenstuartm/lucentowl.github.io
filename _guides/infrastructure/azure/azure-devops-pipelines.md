@@ -6,6 +6,7 @@ subcategory: Developer Tools & CI/CD
 description: "YAML pipeline architecture including stages, deployment jobs and strategies, environments, approvals and checks, service connections with workload identity federation, agents, and parallel job licensing."
 tags: [cicd, yaml-pipelines, deployment-jobs, service-connections, workload-identity, pipeline-templates, practical]
 ---
+{% raw %}
 
 ## What Is Azure DevOps Pipelines
 
@@ -739,3 +740,4 @@ Storage cost is not the reason to prune pipeline runs, since pipeline artifacts 
 9. **Cache dependencies, publish artifacts.** Cache what merely slows the job when missing, publish what breaks it. Caches are immutable, already scoped per branch, and expire after seven days of inactivity, so version the key rather than trying to clear it.
 
 10. **Retention is a project-level setting and protects only successful runs.** Deleting a run deletes its artifacts and logs. Pipeline artifacts and caches are exempt from storage billing, so retention is about traceability and compliance rather than cost. Container images and package feeds need their own retention rules.
+{% endraw %}

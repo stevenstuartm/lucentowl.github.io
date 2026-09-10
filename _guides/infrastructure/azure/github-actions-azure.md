@@ -6,6 +6,7 @@ subcategory: Developer Tools & CI/CD
 description: "Deploying Azure infrastructure and applications with GitHub Actions: OIDC federated credentials and subject claims, reusable workflow limits, deployment environments and protection rules, runner selection, and workflow security."
 tags: [github-actions, oidc, workload-identity, reusable-workflows, deployment-environments, bicep, practical]
 ---
+{% raw %}
 
 ## What Is GitHub Actions for Azure
 
@@ -528,3 +529,4 @@ Set the organization or repository default for `GITHUB_TOKEN` to read access on 
 9. **Never point a self-hosted runner at a public repository**, and prefer ephemeral runners everywhere else. A runner managed identity is shared by every job that lands on it, so isolation comes from runner groups rather than the credential.
 
 10. **Billing is elapsed minutes weighted by OS, not concurrency.** Windows costs roughly 1.7 times Linux and macOS roughly ten times. Larger runners are always billed, including on public repositories, and never draw on included minutes.
+{% endraw %}

@@ -6,6 +6,7 @@ subcategory: "API Programming Models"
 description: "Comprehensive guide to building controller-based Web APIs in ASP.NET Core, covering routing, model binding, filters, return types, and content negotiation."
 tags: [asp-net-core, web-api, mvc, controllers, routing, model-binding, filters]
 ---
+{% raw %}
 
 ## Controller-Based APIs
 
@@ -839,3 +840,4 @@ This pattern prevents unauthorized users from discovering whether resources exis
 - [Filters in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/controllers/filters?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
 - [Format response data in ASP.NET Core Web API](https://learn.microsoft.com/en-us/aspnet/core/web-api/advanced/formatting?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
 - [Upload files in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
+{% endraw %}

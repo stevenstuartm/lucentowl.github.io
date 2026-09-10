@@ -6,6 +6,7 @@ subcategory: "Language Fundamentals"
 description: "String manipulation, StringBuilder, string interpolation, formatting, parsing, and high-performance text processing."
 tags: [c-sharp, dotnet, fundamentals, strings, text-processing, performance, practical]
 ---
+{% raw %}
 
 ## String Fundamentals
 
@@ -665,3 +666,4 @@ The tradeoff is that interned strings live for the entire lifetime of the applic
 **Compiled regex for hot paths**: Use `RegexOptions.Compiled` or source-generated regex for performance.
 
 **Raw strings for embedded content**: Use `"""` for JSON, SQL, or other content with quotes.
+{% endraw %}

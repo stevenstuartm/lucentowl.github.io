@@ -6,6 +6,7 @@ subcategory: Networking & Content Delivery
 description: "How Azure API Management provides API gateway, developer portal, and lifecycle management capabilities, covering tier selection and its irreversible trade-offs, the policy pipeline, versioning, VNet integration, security, the AI gateway for LLM traffic, and the self-hosted gateway for hybrid deployments."
 tags: [api-management, api-gateway, apim-policies, developer-portal, self-hosted-gateway, ai-gateway, practical]
 ---
+{% raw %}
 
 ## What Is Azure API Management
 
@@ -522,3 +523,4 @@ That shape is what buys the latency, egress-cost, and data-residency wins: the s
 8. **The AI gateway is the same gateway.** Token limits, semantic caching, content safety, and priority-based routing across model backends are policies on the existing engine rather than a separate product, which is what lets AI traffic inherit the auth, throttling, and observability you already built.
 
 9. **Managed Identity authentication to backends eliminates credential management.** Use `authentication-managed-identity` policy to authenticate to Entra ID-protected backends without managing secrets or certificates.
+{% endraw %}

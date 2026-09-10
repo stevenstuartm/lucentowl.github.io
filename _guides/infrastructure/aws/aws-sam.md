@@ -6,6 +6,7 @@ subcategory: Serverless Architecture
 description: "AWS SAM templates, local testing, deployment pipelines, and comparison with AWS CDK for serverless infrastructure as code"
 tags: [aws, serverless, infrastructure-as-code, sam, deployment, automation]
 ---
+{% raw %}
 
 ## What Problem This Solves
 
@@ -1085,3 +1086,4 @@ MyFunction:
 27. **Outputs for integration**: Export API URLs, ARNs for cross-stack references
 
 AWS SAM simplifies serverless development with concise templates, local testing, and built-in best practices. Use SAM for pure serverless applications and CDK for complex multi-service architectures. Both extend CloudFormation and can be mixed in the same project.
+{% endraw %}

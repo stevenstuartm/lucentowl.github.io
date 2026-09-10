@@ -6,6 +6,7 @@ subcategory: Infrastructure as Code
 description: "Modular design, environment separation, layered architecture, and GitOps workflow patterns for organizing IaC code effectively."
 tags: [infrastructure, iac, design-patterns, best-practices, practical]
 ---
+{% raw %}
 
 ## Modular Design
 
@@ -890,4 +891,4 @@ secrets.yaml
 ```
 
 ---
-
+{% endraw %}
