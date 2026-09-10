@@ -3,251 +3,199 @@ title: "Advanced Container Patterns on Azure"
 layout: guide
 category: Azure
 subcategory: Container Orchestration (Advanced)
-description: "AKS advanced networking with Azure CNI overlay, service mesh integration, KEDA event-driven autoscaling, GitOps with Flux, and production-grade container orchestration patterns"
-tags: [azure, cloud-computing, kubernetes, infrastructure, scalability, devops, practical, advanced]
+description: "AKS pod networking as an IPAM choice separate from the data plane, the Istio add-on and what it cannot do, KEDA event-driven autoscaling, GitOps with Flux v2, workload identity token exchange, and node autoscaling now that node auto-provisioning is Karpenter"
+tags: [aks, kubernetes, keda, gitops, workload-identity, service-mesh, advanced]
 ---
 
 ## What Are Advanced Container Patterns
 
-[Azure Kubernetes Service](https://learn.microsoft.com/en-us/azure/aks/intro-kubernetes){:target="_blank" rel="noopener noreferrer"} (AKS) provides managed Kubernetes, but production-grade container platforms require patterns that address observability, security, cost optimization, and operational complexity at scale. Advanced AKS patterns leverage Azure-native integrations like Azure CNI networking modes, workload identity, KEDA autoscaling, and GitOps tooling to build resilient, observable, and cost-effective container platforms.
+[Azure Kubernetes Service](https://learn.microsoft.com/en-us/azure/aks/intro-kubernetes){:target="_blank" rel="noopener noreferrer"} (AKS) gives you managed Kubernetes. Turning that into a production platform means decisions about IP address consumption, pod-to-Azure authentication, how nodes appear and disappear, how deployments reach the cluster, and how much of the network you are willing to put a proxy in front of.
 
-These patterns extend beyond getting workloads running in Kubernetes to addressing the challenges that emerge when operating container platforms supporting multiple teams, diverse workload types, and stringent reliability requirements.
+This guide covers those decisions and the Azure-specific mechanics behind them.
 
 ### What Problems Advanced Container Patterns Solve
 
-**Without advanced patterns:**
-- Basic networking limits security isolation and multi-tenancy
-- Manual scaling strategies cannot respond to event-driven workload spikes
-- Observability gaps make troubleshooting microservices failures difficult
-- Manual deployment processes create drift between environments
-- Cost management relies on guesswork and reactive rightsizing
-- Securing pod-to-Azure service authentication requires complex credential management
+**Without them:**
+- Pod IP allocation exhausts VNet address space and caps cluster growth
+- Scaling responds to CPU, not to the queue depth that actually drives the work
+- Pod-to-Azure authentication depends on secrets someone has to rotate
+- Deployments drift from what is in source control, with no record of who changed what
+- Node capacity is either over-provisioned or too slow to appear
+- Cost is discovered after the fact
 
-**With advanced patterns:**
-- Sophisticated networking provides workload isolation, policy enforcement, and optimized pod IP allocation
-- Event-driven autoscaling responds to queue depth, custom metrics, and external event sources
-- Service mesh provides built-in observability, traffic management, and zero-trust security
-- GitOps ensures declarative, auditable deployments with drift detection
-- Workload identity eliminates credential management by leveraging Azure Entra ID
-- Multi-cluster patterns distribute workloads across regions and failure domains
+**With them:**
+- Pod IPs come from a CIDR outside the VNet, so cluster scale is bounded by the API server rather than by a subnet
+- Event-driven autoscaling reacts to queue depth, consumer lag, and custom metrics, down to zero replicas
+- Workload identity federates a Kubernetes service account to a managed identity, with no secret anywhere
+- GitOps reconciles the cluster against Git continuously and reverts manual changes
+- Node auto-provisioning picks the VM SKU that fits the pending pods instead of scaling a pool you sized in advance
+- Spot pools, right-sizing, and scale-to-zero are applied where the workload tolerates them
 
 ### How Azure AKS Differs from AWS EKS
 
-Architects familiar with AWS EKS should understand several key differences in how Azure approaches advanced Kubernetes patterns:
-
 | Concept | AWS EKS | Azure AKS |
 |---------|---------|-----------|
-| **Pod networking** | AWS VPC CNI assigns VPC IPs to pods (consumes VPC address space) | Azure CNI Overlay uses separate pod CIDR (conserves VNet space); Azure CNI Powered by Cilium adds eBPF capabilities |
-| **Serverless pods** | Fargate profiles for serverless pod execution | Virtual Nodes (Azure Container Instances burst capacity) |
-| **Node autoscaling** | Cluster Autoscaler + Karpenter (AWS-native provisioner) | Cluster Autoscaler + Node Auto-Provisioning (preview); no Karpenter support yet |
-| **Service mesh** | AWS App Mesh (managed) + community options | Istio-based Service Mesh add-on (managed), OSM, Linkerd |
-| **Workload identity** | IAM Roles for Service Accounts (IRSA) | Workload Identity (Azure Entra ID federation) |
-| **GitOps** | Flux via EKS add-on | Flux v2 via AKS GitOps extension |
-| **Event-driven autoscaling** | Manual KEDA installation or third-party | KEDA add-on (managed, integrated) |
-| **Multi-cluster** | EKS Connector, third-party tools | Azure Fleet Manager (managed multi-cluster orchestration) |
+| **Pod networking** | VPC CNI assigns VPC IPs to pods by default | Azure CNI Overlay is the default and recommended option, with pod IPs outside the VNet; flat networking is available through Azure CNI Pod Subnet |
+| **Node autoscaling** | Cluster Autoscaler, or Karpenter | Cluster Autoscaler, or node auto-provisioning, **which is Karpenter** with an AKS provider |
+| **Service mesh** | Community options, self-managed | Istio-based add-on with an Azure-managed control plane |
+| **Workload identity** | IAM Roles for Service Accounts (IRSA) | Microsoft Entra Workload ID, also OIDC federation |
+| **GitOps** | Flux or Argo CD, self-installed or add-on | Flux v2 through the AKS GitOps extension, managed by Azure |
+| **Event-driven autoscaling** | KEDA, self-installed | KEDA as a managed AKS add-on |
+| **Multi-cluster** | Self-assembled | Azure Kubernetes Fleet Manager |
 
 ---
 
-## AKS Advanced Networking
+## Pod Networking
 
-### Networking Models Overview
+### IPAM and Data Plane Are Separate Choices
 
-AKS supports four networking models, each with different trade-offs around IP consumption, performance, and operational complexity.
+The most common mistake in AKS network planning is treating "Azure CNI Overlay" and "Azure CNI Powered by Cilium" as two entries in the same list. They are answers to different questions.
 
-| Networking Model | Pod IPs Source | VNet IP Consumption | Performance | Use Case |
-|------------------|----------------|---------------------|-------------|----------|
-| **kubenet** | Overlay network (10.244.0.0/16 default) | Only node IPs | Good | Development, small clusters, IP-constrained environments |
-| **Azure CNI** | VNet address space | Node + pod IPs | Best | Production workloads needing direct pod-to-VNet connectivity |
-| **Azure CNI Overlay** | Separate pod CIDR overlay | Only node IPs | Good | Large clusters needing VNet IP conservation |
-| **Azure CNI Powered by Cilium** | Separate pod CIDR overlay | Only node IPs | Best (eBPF-optimized) | Advanced network policy, observability, performance |
+**IPAM** decides where pod IP addresses come from. **The data plane** decides how packets are processed. Azure CNI Powered by Cilium is a data plane, and it composes with Azure CNI Overlay, Azure CNI Pod Subnet, or Azure CNI Node Subnet. You pick one of each.
 
-### Azure CNI Overlay
+AKS has two networking models, and the IPAM options sit under them:
 
-[Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay){:target="_blank" rel="noopener noreferrer"} separates the pod IP address space from the VNet, using an overlay network for pod-to-pod communication while preserving direct VNet integration for nodes and services.
+```
+  OVERLAY  (Azure CNI Overlay)             FLAT  (Azure CNI Pod Subnet)
 
-**How it works:**
-- Nodes get IPs from the VNet subnet as usual
-- Pods get IPs from a separate CIDR range (e.g., 10.244.0.0/16) not part of the VNet
-- Kubernetes services can still receive VNet IPs via load balancers
-- Overlay network routes pod traffic through the node's VNet interface
+  ┌── VNet 10.0.0.0/16 ─────────────┐      ┌── VNet 10.0.0.0/16 ─────────────┐
+  │  node subnet 10.0.0.0/24        │      │  node subnet 10.0.0.0/24        │
+  │    ┌───────────────┐            │      │    ┌───────────────┐            │
+  │    │ node 10.0.0.4 │            │      │    │ node 10.0.0.4 │            │
+  │    └───────┬───────┘            │      │    └───────┬───────┘            │
+  └────────────┼────────────────────┘      │  pod subnet 10.0.1.0/24         │
+               │ egress SNAT'd              │    ┌──────┴────────┐           │
+               │ to the node IP             │    │ pod 10.0.1.7  │           │
+  ┌────────────┴────────────────────┐      │    └───────────────┘            │
+  │  pod CIDR 10.244.0.0/16         │      └─────────────────────────────────┘
+  │  (not part of the VNet)         │
+  │    ┌───────────────┐            │       a peered VNet or on-premises host
+  │    │ pod 10.244.0.7│            │       sees 10.0.1.7 and can open a
+  │    └───────────────┘            │       connection *to* the pod
+  └─────────────────────────────────┘
 
-**Advantages over standard Azure CNI:**
-- Supports up to 250 nodes and 100,000 pods per cluster (standard Azure CNI caps at 400 pods per node based on subnet size)
-- Conserves VNet address space; large clusters do not exhaust subnet IPs
-- Faster cluster scaling because pod IPs do not require VNet IP allocation
-- Compatible with existing VNet configurations
+   a peered VNet sees only 10.0.0.4.        Costs one VNet IP per pod, so the
+   Pods can initiate outbound, but          address plan has to hold every pod
+   nothing outside can initiate in.         you will ever run.
+```
 
-**Trade-offs compared to standard Azure CNI:**
-- Pods are not directly routable from outside the cluster (requires NodePort, LoadBalancer, or Ingress)
-- Some advanced VNet features like Private Endpoints integrated at the pod level may have limitations
-- Slight performance overhead from overlay encapsulation
+That difference in direction is the whole decision. Overlay conserves addresses and scales, but connections must be **pod-initiated**. Flat networking costs VNet addresses and buys **both-ways** connectivity, which you need when an on-premises system has to call a pod directly.
+
+### The Options
+
+| IPAM option | Model | Position | Notes |
+|---|---|---|---|
+| **Azure CNI Overlay** | Overlay | Recommended default | Pod IPs from a separate CIDR; 250 pods per node with cluster size bounded by the API server; no direct inbound pod access |
+| **Azure CNI Pod Subnet** | Flat | Recommended for flat scenarios | Pods get VNet IPs from a dedicated pod subnet and keep their IP across peered networks; has modes for efficient IP usage or for large-scale clusters (preview) |
+| **Azure CNI Node Subnet** | Flat | Legacy | Pods take IPs from the node subnet; limited scale and inefficient address use. Use only when you need an AKS-managed VNet |
+| **kubenet** | Overlay | **Retires 31 March 2028** | Manual user-defined routes, limited scale, no Windows node pools, no subnet sharing across clusters, and no Application Gateway for Containers |
+
+Note the distinction that the flat options do not share: with **Azure CNI Pod Subnet**, destinations in peered networks see the pod's own IP. With **Azure CNI Node Subnet**, destinations inside the cluster VNet see the pod IP but destinations outside it see the node IP.
+
+If you are still on kubenet, the migration target is Azure CNI Overlay and the deadline is fixed. Azure's own portal presets (Production Standard, Dev/Test, Production Economy, and Production Enterprise) all now default to Azure CNI Overlay.
+
+### Cluster Limits That Shape the Plan
+
+| Limit | Value |
+|---|---|
+| Max nodes per cluster (VMSS + Standard Load Balancer) | 5,000 across all node pools |
+| Max nodes per node pool | 1,000 |
+| Max node pools per cluster | 100 |
+| Max pods per node, Azure CNI or kubenet | 250 (default 30 in the portal, 110 via CLI and ARM for kubenet) |
+| Max load-balanced Kubernetes services per cluster | 300 |
+| Max clusters per subscription globally | 5,000 |
+
+Two more constraints surface as confusing failures rather than clear ones. **Reserved CIDR ranges** (`169.254.0.0/16`, `192.0.2.0/24`, `172.30.0.0/16`, and `172.31.0.0/16`) are rejected for service, pod, and VNet ranges, which means a seemingly reasonable `172.16.0.0/12` pod CIDR is invalid because it contains two of them. And **upgrades temporarily consume extra IPs and vCPU quota**, so a subnet or quota sized exactly to steady state fails the first time you upgrade a node pool.
 
 ### Azure CNI Powered by Cilium
 
-[Azure CNI Powered by Cilium](https://learn.microsoft.com/en-us/azure/aks/azure-cni-powered-by-cilium){:target="_blank" rel="noopener noreferrer"} combines Azure CNI Overlay with Cilium's eBPF-based data plane for enhanced performance, observability, and security capabilities.
+Cilium replaces the iptables-based data plane with eBPF programs in the kernel. What that buys:
 
-**What Cilium adds:**
-- **eBPF-accelerated networking:** Packet processing in the kernel, bypassing iptables overhead
-- **Enhanced network policies:** Layer 7 (HTTP, gRPC, Kafka) policy enforcement in addition to Layer 3/4
-- **Deep observability:** Hubble provides flow visualization, service dependency mapping, and DNS observability
-- **Transparent encryption:** WireGuard-based encryption between pods with minimal performance impact
-- **Advanced load balancing:** Maglev consistent hashing for service load balancing
+- Packet processing without the iptables rule-count problem that grows with service count
+- Network policy at Layer 7 (HTTP methods and paths, gRPC, Kafka) in addition to L3/L4
+- Hubble flow observability, including DNS-level visibility and service dependency maps
+- Transparent WireGuard encryption between pods
 
-**When to use Azure CNI Powered by Cilium:**
-- High-performance workloads where iptables overhead is a bottleneck
-- Security requirements for Layer 7 network policies (e.g., only allow GET requests to specific paths)
-- Observability requirements for fine-grained service-to-service traffic analysis
-- Multi-cluster service mesh architectures leveraging Cilium ClusterMesh
-- Zero-trust networking requirements with transparent pod-to-pod encryption
-
-**Trade-offs:**
-- More complex troubleshooting when issues arise (eBPF debugging requires specialized knowledge)
-- Newer technology with less operational maturity than standard Azure CNI
-- Some Kubernetes network policy features behave differently with Cilium's extended policy model
+Two costs come with it. eBPF troubleshooting needs skills your team may not have, and Cilium's extended policy model means some standard Kubernetes NetworkPolicy semantics behave differently than on other engines.
 
 ### Network Policy Engines
 
-Kubernetes network policies define rules for pod-to-pod traffic. AKS supports multiple policy engines.
+| Engine | Policy scope | When to choose it |
+|--------|---|---|
+| **Azure Network Policy Manager** | L3/L4 | Simple isolation requirements with no appetite for another component |
+| **Calico** | L3/L4, global network policy, egress controls | Cluster-wide policy that isn't namespace-bound |
+| **Cilium** | L3/L4 plus L7, with observability and encryption | Layer 7 enforcement, or performance and visibility requirements |
 
-| Engine | Performance | Features | Complexity | Use Case |
-|--------|-------------|----------|------------|----------|
-| **Azure Network Policies** | Good | Basic L3/L4 policies | Low | Simple production workloads |
-| **Calico** | Good | Advanced L3/L4 policies, global network policy, egress controls | Medium | Enterprise security requirements |
-| **Cilium** | Best (eBPF) | L7 policies, observability, encryption | High | High-performance workloads with advanced security |
-
-**Recommendation:** Start with Azure Network Policies for simplicity. Upgrade to Calico when you need advanced policy features like global policy or egress gateway. Choose Cilium when performance, observability, or Layer 7 policy enforcement is critical.
+The portal presets ship with network policy set to **None**, including the production ones. A cluster created from a preset has no pod-to-pod isolation at all until you enable an engine, and you cannot change the engine after cluster creation without recreating the cluster.
 
 ---
 
-## Service Mesh Integration
+## Service Mesh
 
-### What a Service Mesh Provides
+### What a Mesh Buys, and What It Costs
 
-A service mesh adds observability, traffic management, and security capabilities to microservices communication without changing application code. The mesh intercepts network traffic between services using sidecar proxies deployed alongside each pod.
+A mesh puts a proxy beside every pod and takes over service-to-service traffic. In exchange you get uniform mTLS, retries, timeouts, circuit breaking, traffic splitting, and per-hop telemetry, without changing application code.
 
-**Core service mesh capabilities:**
-- **Observability:** Automatic metrics, logs, and distributed traces for all service-to-service calls
-- **Traffic management:** Canary deployments, traffic splitting, circuit breaking, retries, timeouts
-- **Security:** Mutual TLS (mTLS) between services, certificate management, fine-grained authorization policies
-- **Resilience:** Automatic retries, outlier detection, connection pooling, load balancing
+The cost is a proxy per pod: memory, CPU, an extra network hop each way, and a second system that can be the reason traffic is behaving strangely. Both the resource overhead and the latency depend heavily on the workload, and Microsoft publishes no figures for either. Measure your own baseline before and after enabling a mesh rather than budgeting from someone else's numbers.
 
-### Service Mesh Options on AKS
+### Options on AKS
 
-Azure supports three primary service mesh options:
+| Mesh | Management | Status |
+|---|---|---|
+| **Istio-based add-on** | Azure-managed control plane, with managed upgrades | The supported path |
+| **Open Service Mesh (OSM)** | Was an AKS add-on | **Unsupported from 30 September 2027**; the upstream project is retired. Migrate to the Istio add-on |
+| **Linkerd** | Self-managed | Lighter and simpler, but no Azure add-on, no managed upgrades, and no Azure support |
 
-| Service Mesh | Management | Maturity | Complexity | Use Case |
-|--------------|-----------|----------|------------|----------|
-| **Istio-based Service Mesh add-on** | Managed by Azure | Stable | High | Production workloads needing comprehensive traffic control |
-| **Open Service Mesh (OSM)** | Community-maintained | Deprecated (EOL 2024) | Medium | Legacy; migrate to Istio or Linkerd |
-| **Linkerd** | Self-managed | Stable | Medium | Lightweight mesh for simpler use cases |
+### The Istio Add-On and Its Limits
 
-### Istio-based Service Mesh Add-on
+The [Istio-based service mesh add-on](https://learn.microsoft.com/en-us/azure/aks/istio-about){:target="_blank" rel="noopener noreferrer"} runs a control plane that Microsoft scales, configures, and upgrades on your trigger, with Istio versions tested against supported AKS versions. It comes with verified ingress setup and verified integration with Azure Monitor managed Prometheus and Azure Managed Grafana. AKS also adjusts `coredns` scaling when the mesh is enabled.
 
-The [Istio-based Service Mesh add-on](https://learn.microsoft.com/en-us/azure/aks/istio-about){:target="_blank" rel="noopener noreferrer"} provides a managed Istio installation where Azure handles control plane upgrades, patching, and lifecycle management.
+What it **cannot** do is the part to check against your design before you commit:
 
-**How it works:**
-- Azure manages the Istio control plane (istiod) as a system workload
-- Sidecar injection is automatic when you label namespaces (e.g., `istio-injection=enabled`)
-- Envoy proxies intercept all pod network traffic
-- Configuration uses standard Istio APIs (VirtualService, DestinationRule, Gateway, etc.)
+- **No ambient mode.** The add-on is sidecar-only. Ambient is on the roadmap, not in the product.
+- **No multi-cluster deployments.** If your design assumed a mesh federated across clusters, the add-on does not do that.
+- **No Windows Server containers**, because upstream Istio does not support them.
+- **No virtual node pods in the mesh.**
+- **Blocked custom resources:** `ProxyConfig`, `WorkloadEntry`, `WorkloadGroup`, `IstioOperator`, and `WasmPlugin`.
+- **Gateway API and GAMMA are not supported yet**, though ingress support is in development. Ingress gateways accept annotation and `externalTrafficPolicy` customization but not port or protocol configuration.
+- **`MeshConfig` is only partly customizable**, and `EnvoyFilter` is allowed but out of support scope.
+- **It conflicts with the OSM add-on and with self-managed Istio**, so an OSM migration is a replacement, not an overlay.
 
-**Key features:**
-- **Ingress Gateway:** Managed ingress gateway for external traffic routing
-- **Egress Gateway:** Controlled egress for outbound traffic to external services
-- **Certificate management:** Automatic certificate rotation for mTLS
-- **Integration with Azure Monitor:** Telemetry flows to Azure Monitor for centralized observability
-- **Multi-cluster support:** Federate service mesh across multiple AKS clusters
+### When You Do Not Need One
 
-**When to use the Istio add-on:**
-- Complex microservices architectures with sophisticated traffic routing needs
-- Security requirements for zero-trust mTLS between all services
-- Canary deployments, A/B testing, or blue-green deployments at the network layer
-- Integration with Azure PaaS services (Application Gateway, Azure Monitor)
+You probably do not need a mesh if you have few services, if you already get distributed tracing from OpenTelemetry instrumentation, or if your security requirement is isolation rather than in-transit encryption between every pair of pods.
 
-**Trade-offs:**
-- Resource overhead: Each pod gets an Envoy sidecar, increasing memory and CPU usage
-- Increased latency from sidecar proxy hops (typically 1-5ms per hop)
-- Steep learning curve for Istio APIs and concepts
-- Debugging complexity when traffic behavior differs from expectations
-
-### Linkerd
-
-[Linkerd](https://linkerd.io/){:target="_blank" rel="noopener noreferrer"} is a lightweight, CNCF-graduated service mesh focused on simplicity and performance.
-
-**Advantages over Istio:**
-- Lower resource overhead (smaller, more efficient proxies)
-- Simpler architecture with fewer moving parts
-- Faster control plane and data plane
-- Easier to learn and operate
-
-**Disadvantages compared to Istio:**
-- Fewer advanced traffic management features
-- Smaller ecosystem and community compared to Istio
-- Self-managed on AKS; no Azure-managed add-on
-
-**When to use Linkerd:**
-- Simpler microservices architectures where basic mTLS and observability suffice
-- Resource-constrained environments where sidecar overhead matters
-- Teams prioritizing operational simplicity over feature richness
-
-### When You Do NOT Need a Service Mesh
-
-Service meshes add complexity and overhead. Consider whether you need one before adopting.
-
-**You may not need a service mesh if:**
-- Your application is a monolith or has few services (service mesh overhead exceeds benefit)
-- You already have observability through APM tools (Datadog, New Relic, Application Insights)
-- Your services are stateless and failures are handled by Kubernetes retries and readiness probes
-- Network security requirements are met by network policies alone
-
-**Alternatives to service mesh:**
-- **Application-level instrumentation:** OpenTelemetry SDKs provide observability without a mesh
-- **API Gateway:** Azure API Management or open-source gateways provide traffic management at the edge
-- **Network policies:** Cilium or Calico network policies enforce pod-to-pod security without mTLS overhead
+The alternatives cover most of what people actually want from a mesh: OpenTelemetry SDKs for tracing and metrics, an API gateway for edge traffic management, and Cilium or Calico network policies for pod-to-pod authorization. Reach for a mesh when you need mTLS everywhere, or traffic splitting that the application cannot do for itself.
 
 ---
 
 ## Event-Driven Autoscaling with KEDA
 
-### What Is KEDA
+### What KEDA Adds
 
-[KEDA](https://keda.sh/){:target="_blank" rel="noopener noreferrer"} (Kubernetes Event-Driven Autoscaling) extends Kubernetes Horizontal Pod Autoscaler (HPA) to scale workloads based on external event sources like message queues, databases, and custom metrics.
+The Horizontal Pod Autoscaler scales on CPU and memory. [KEDA](https://keda.sh/){:target="_blank" rel="noopener noreferrer"} extends it to scale on external signals such as queue depth, consumer lag, or a Prometheus query, and, unlike HPA alone, it can scale **to zero**. AKS ships it as a managed add-on.
 
-Azure AKS provides KEDA as a managed add-on, eliminating manual installation and maintenance.
+**The moving parts:**
+- **ScaledObject** attaches autoscaling rules to a Deployment or StatefulSet
+- **ScaledJob** scales Kubernetes Jobs from an event source, which fits work that must run to completion
+- **Scaler** is the plugin for a given source
+- **Metrics adapter** feeds the external metric to HPA, which still does the actual scaling
 
-### How KEDA Works
+Underneath, KEDA creates and manages an HPA for you. That matters when you debug: a `ScaledObject` that isn't scaling is often an HPA that cannot read its external metric.
 
-Standard Kubernetes HPA scales based on CPU and memory metrics. KEDA extends HPA to scale based on external metrics from dozens of sources.
+### Common Azure Scalers
 
-**KEDA components:**
-- **ScaledObject:** Custom resource defining autoscaling rules and trigger metrics
-- **ScaledJob:** Scales Kubernetes Jobs based on event sources
-- **Scaler:** Plugin for a specific event source (Azure Service Bus, Azure Storage Queue, Kafka, Prometheus, etc.)
-- **Metrics Adapter:** Exposes external metrics to HPA
-
-**Scaling behavior:**
-- KEDA monitors the event source via the scaler
-- When the metric threshold is met (e.g., queue depth > 10), KEDA instructs HPA to scale pods
-- When the metric falls to zero, KEDA can scale to zero pods (not possible with standard HPA)
-
-### Common KEDA Scalers for Azure
-
-| Scaler | Event Source | Use Case |
+| Scaler | Metric | Fits |
 |--------|-------------|----------|
-| **Azure Service Bus Queue** | Queue message count or age | Background job processing, async tasks |
-| **Azure Service Bus Topic** | Subscription message count | Event-driven microservices |
-| **Azure Storage Queue** | Queue message count | Simple job queues without Service Bus features |
-| **Azure Blob Storage** | Blob count in container | Batch processing of uploaded files |
-| **Azure Event Hubs** | Unprocessed event count (lag) | Stream processing workloads |
-| **Prometheus** | Custom application metrics | Scaling based on business metrics (active users, pending orders) |
-| **RabbitMQ** | Queue length | Open-source message queue workloads |
-| **Kafka** | Consumer group lag | Event streaming platforms |
+| **Azure Service Bus** | Queue or subscription message count, or message age | Background job processing |
+| **Azure Storage Queue** | Message count | Simple job queues |
+| **Azure Blob Storage** | Blob count in a container | Batch processing of uploaded files |
+| **Azure Event Hubs** | Unprocessed event count (lag) | Stream processing |
+| **Azure Pipelines** | Queued agent jobs | Self-hosted build agents |
+| **Prometheus** | Any PromQL query | Business metrics like pending orders |
+| **Kafka** | Consumer group lag | Event streaming |
 
-### Example: Scaling Based on Azure Service Bus Queue
-
-**Scenario:** Pods process messages from an Azure Service Bus queue. When the queue depth exceeds 10 messages, scale up; when empty, scale to zero.
-
-**ScaledObject definition:**
+### Scaling on a Service Bus Queue
 
 ```yaml
 apiVersion: keda.sh/v1alpha1
@@ -260,164 +208,139 @@ spec:
     name: order-processor
   minReplicaCount: 0
   maxReplicaCount: 30
+  pollingInterval: 30
+  cooldownPeriod: 300
   triggers:
     - type: azure-servicebus
       metadata:
         queueName: orders
         namespace: mycompany-servicebus
         messageCount: "10"
+        activationMessageCount: "1"
       authenticationRef:
         name: azure-servicebus-auth
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: azure-servicebus-auth
+  namespace: production
+spec:
+  podIdentity:
+    provider: azure-workload
+    identityId: 12345678-1234-1234-1234-123456789abc
 ```
 
-**How this works:**
-- KEDA monitors the `orders` queue in `mycompany-servicebus`
-- When the queue has more than 10 messages, KEDA scales the `order-processor` deployment
-- Scaling is proportional: 100 messages scales to approximately 10 pods (100 / 10)
-- When the queue empties, KEDA scales to zero, eliminating idle pod costs
+`messageCount` is the target **per replica**, so 100 messages against a target of 10 asks for 10 pods. The two fields people leave out are the ones that control behavior at the edges: `activationMessageCount` is the threshold for leaving zero at all, distinct from the scaling target, and `cooldownPeriod` is how long KEDA waits with no events before returning to zero. Set the cooldown too low and a bursty queue thrashes between zero and N.
 
-### When to Use KEDA
+Authenticate the scaler with workload identity through a `TriggerAuthentication`, not a connection string in a secret. This is the same federation described below, applied to the KEDA operator's own access to Service Bus.
 
-**KEDA is valuable for:**
-- Background job processing with unpredictable workload spikes
-- Event-driven architectures where work arrives in bursts
-- Cost optimization by scaling to zero during idle periods
-- Queue-based decoupling between frontend and backend services
+### When Not to Use It
 
-**Do not use KEDA for:**
-- Workloads requiring constant availability (use standard HPA with min replicas > 0)
-- Workloads where cold-start latency is unacceptable (scaling from zero takes time)
-- Simple CPU-based scaling where standard HPA suffices
+Scale to zero is the feature and also the trap. Do not use it where the first request after idle cannot absorb a pod start, and do not use it for anything that needs to be continuously available. Set `minReplicaCount` above zero instead, which still gives you event-driven scaling without the cold path. If CPU is genuinely the right signal, plain HPA is one fewer component.
 
 ---
 
 ## GitOps with Flux v2
 
-### What Is GitOps
+### The Model
 
-GitOps uses Git as the single source of truth for declarative infrastructure and application definitions. Changes are made via pull requests, and automation reconciles the cluster state with the Git repository state.
+Git holds the declarative state. An operator in the cluster pulls from Git, applies it, and continuously reconciles, so a manual `kubectl edit` is reverted rather than silently kept. Nobody needs cluster credentials to deploy, which removes the most common reason for handing out admin access.
 
-**GitOps principles:**
-1. **Declarative:** Infrastructure and application state is expressed declaratively (YAML manifests)
-2. **Versioned and immutable:** Git commits provide version history and immutability
-3. **Pulled automatically:** Operators running in the cluster pull changes from Git
-4. **Continuously reconciled:** Operators detect drift and restore desired state
+The [AKS GitOps extension](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/conceptual-gitops-flux2){:target="_blank" rel="noopener noreferrer"} installs and manages Flux v2 as a cluster extension, and works the same way on Arc-enabled Kubernetes as it does on AKS.
 
-### Flux v2 on AKS
+**Flux's controllers**, each of which fails independently, so knowing their names is what makes a stalled reconciliation diagnosable:
+- **Source controller** fetches from Git, Helm repositories, OCI registries, and buckets
+- **Kustomize controller** builds and applies Kustomize overlays
+- **Helm controller** manages Helm releases
+- **Notification controller** sends alerts outbound and receives webhooks inbound
 
-The [AKS GitOps extension](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/conceptual-gitops-flux2){:target="_blank" rel="noopener noreferrer"} provides a managed Flux v2 installation for continuous delivery to AKS clusters.
+### Configuring It
 
-**Flux v2 components:**
-- **Source Controller:** Fetches manifests from Git, Helm repositories, S3 buckets
-- **Kustomize Controller:** Applies Kustomize overlays to manifests
-- **Helm Controller:** Manages Helm chart installations
-- **Notification Controller:** Sends alerts and integrates with external systems
+The Azure-managed configuration is an ARM resource, created with the CLI rather than by applying a CRD:
 
-**How Flux works on AKS:**
-1. Configure a `FluxConfiguration` resource pointing to a Git repository
-2. Azure provisions Flux controllers in the cluster
-3. Flux pulls manifests from the Git repository at regular intervals
-4. Flux applies changes to the cluster using Kustomize or Helm
-5. Flux detects drift and reconciles cluster state with Git
-
-### Example GitOps Workflow
-
-**Repository structure:**
-
-```
-my-app-gitops/
-├── base/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── kustomization.yaml
-├── overlays/
-│   ├── dev/
-│   │   └── kustomization.yaml
-│   ├── staging/
-│   │   └── kustomization.yaml
-│   └── prod/
-│       └── kustomization.yaml
+```bash
+az k8s-configuration flux create \
+  --resource-group myRG \
+  --cluster-name myAKS \
+  --cluster-type managedClusters \
+  --name my-app-prod \
+  --namespace flux-system \
+  --scope cluster \
+  --url https://github.com/mycompany/my-app-gitops \
+  --branch main \
+  --kustomization name=prod path=./overlays/prod prune=true sync_interval=5m
 ```
 
-**FluxConfiguration for production:**
+That provisions the controllers and creates the underlying Flux custom resources in the cluster, which you can also read and debug directly:
 
 ```yaml
-apiVersion: fluxcd.io/v1
-kind: FluxConfiguration
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
 metadata:
-  name: my-app-prod
+  name: prod
+  namespace: flux-system
 spec:
+  interval: 5m
+  path: ./overlays/prod
+  prune: true
   sourceRef:
     kind: GitRepository
-    name: my-app-gitops
-    namespace: flux-system
-  path: overlays/prod
-  prune: true
-  interval: 5m
+    name: my-app-prod
 ```
 
-**Workflow:**
-1. Developers change application manifests in the `my-app-gitops` repository
-2. Pull request is reviewed and merged to the main branch
-3. Flux detects the commit within 5 minutes
-4. Flux applies the new manifests to the production cluster
-5. If someone manually changes the cluster (e.g., kubectl edit), Flux reverts it to match Git
+`prune: true` is the setting that makes GitOps mean what people assume it means: without it, deleting a manifest from Git leaves the resource running in the cluster forever.
 
-### Benefits of GitOps on AKS
+### Repository Structure
 
-**Auditability:** Every change is a Git commit with author, timestamp, and review history
+A `base/` directory with the common manifests and an `overlays/<env>/` directory per environment is the standard Kustomize layout, and it maps cleanly onto one Flux configuration per environment pointing at a different path.
 
-**Rollback:** Revert a Git commit to roll back a deployment
-
-**Consistency:** All environments are declaratively defined and continuously reconciled across development, staging, and production
-
-**Security:** Cluster credentials are not required for deployments; Flux pulls from Git, developers never kubectl apply directly
-
-**Multi-cluster:** Deploy to multiple AKS clusters from a single Git repository with branch-based or directory-based separation
-
-### GitOps Anti-Patterns
-
-**Do not use GitOps for:**
-- Secrets management (use Azure Key Vault with External Secrets Operator or Sealed Secrets)
-- Storing generated or templated files that change frequently (use Helm or Kustomize to generate manifests dynamically)
-- Monolithic repositories that become bottlenecks for multiple teams (separate repositories by team or workload)
+**Where GitOps stops being the right tool:**
+- **Secrets.** Put them in Key Vault and pull them with the Secrets Store CSI driver or External Secrets Operator. Committing encrypted secrets works but makes rotation a code change.
+- **Generated manifests** that change on every build. Generate them with Kustomize or Helm at reconcile time instead of committing the output.
+- **One repository for every team**, which turns deployment into a merge-conflict queue. Split by team or workload and let Flux compose from multiple sources.
 
 ---
 
 ## Workload Identity
 
-### What Is Workload Identity
+### How the Token Exchange Works
 
-[Workload Identity](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview){:target="_blank" rel="noopener noreferrer"} enables Kubernetes service accounts to authenticate to Azure services using Azure Entra ID (formerly Azure Active Directory), eliminating the need to manage credentials in pods.
+[Microsoft Entra Workload ID](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview){:target="_blank" rel="noopener noreferrer"} lets a pod authenticate to Azure with no stored credential. The cluster acts as an OIDC token issuer, and Entra ID trusts it for a specific service account.
 
-Workload Identity replaces the deprecated Pod Identity model with a simpler, more secure federation-based approach.
+```
+  ┌────────────────────────────┐
+  │ Pod                        │  label:      azure.workload.identity/use: "true"
+  │  serviceAccountName: my-app│  annotation: azure.workload.identity/client-id
+  └─────────────┬──────────────┘
+                │ 1. kubelet projects a service account token,
+                │    audience api://AzureADTokenExchange,
+                │    at the path in $AZURE_FEDERATED_TOKEN_FILE
+                ▼
+  ┌────────────────────────────┐   2. token + client ID   ┌──────────────────────┐
+  │ Azure Identity library     │─────────────────────────▶│  Microsoft Entra ID  │
+  │ (DefaultAzureCredential)   │                          │                      │
+  └─────────────▲──────────────┘                          └──────────┬───────────┘
+                │                                                    │ 3. fetches
+                │                                                    │    the JWKS
+                │  5. Entra access token                             ▼    to verify
+                │                                         ┌──────────────────────┐
+                │                                         │  AKS OIDC issuer     │
+                │      4. the federated identity           │ /.well-known/openid- │
+                │         credential on the managed        │   configuration      │
+                │         identity must match this         │ /openid/v1/jwks      │
+                │         issuer URL and subject           └──────────────────────┘
+                ▼
+  ┌────────────────────────────┐
+  │ Azure resource (Key Vault) │  authorized by the managed identity's RBAC
+  └────────────────────────────┘
+```
 
-### How Workload Identity Works
+Nothing is stored. The trust lives in the **federated identity credential** on the managed identity, which pins an issuer URL and a subject of the form `system:serviceaccount:<namespace>:<name>`.
 
-1. Create an Azure managed identity with permissions to access Azure resources (e.g., Storage, Key Vault)
-2. Establish a federated identity credential linking the managed identity to a Kubernetes service account
-3. Annotate the Kubernetes service account with the managed identity's client ID
-4. Pods using the service account automatically receive an Azure token for authentication
+### Setting It Up
 
-**Under the hood:**
-- AKS workload identity uses OpenID Connect (OIDC) federation
-- The AKS cluster issues a Kubernetes service account token to the pod
-- Azure Entra ID exchanges the Kubernetes token for an Azure access token
-- The pod uses the Azure token to authenticate to Azure services
-
-**No credentials are stored in the cluster.** Authentication relies on trust between the AKS OIDC issuer and Azure Entra ID.
-
-### Example: Pod Accessing Azure Key Vault
-
-**Azure setup:**
-
-1. Create a managed identity: `my-app-identity`
-2. Grant the identity access to Key Vault: `Key Vault Secrets User` role
-3. Create a federated credential for the identity:
-   - Issuer: AKS OIDC issuer URL (e.g., `https://eastus.oic.prod-aks.azure.com/tenant-id/issuer-id/`)
-   - Subject: `system:serviceaccount:production:my-app`
-
-**Kubernetes setup:**
+Annotate the service account and label the pod:
 
 ```yaml
 apiVersion: v1
@@ -427,11 +350,7 @@ metadata:
   namespace: production
   annotations:
     azure.workload.identity/client-id: "12345678-1234-1234-1234-123456789abc"
-```
-
-**Pod using workload identity:**
-
-```yaml
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -447,381 +366,209 @@ spec:
       containers:
         - name: app
           image: mycompany/my-app:latest
-          env:
-            - name: AZURE_CLIENT_ID
-              value: "12345678-1234-1234-1234-123456789abc"
 ```
 
-**What happens at runtime:**
-- The pod receives a Kubernetes service account token
-- The Azure SDK exchanges the Kubernetes token for an Azure access token
-- The pod authenticates to Key Vault using the Azure token
-- No secrets, passwords, or connection strings in the pod
+The pod label is **required**, not decorative. Only labeled pods are mutated by the admission webhook, and AKS treats its absence as fail-close: a pod that needs workload identity without the label fails after restart. The webhook injects `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_FEDERATED_TOKEN_FILE`, so you do not set them yourself, and `DefaultAzureCredential` reads them without any code change.
 
-### Workload Identity vs Pod Identity
+Two rules the client libraries enforce that trip people up. **Read the token path from `AZURE_FEDERATED_TOKEN_FILE`** rather than hard-coding a mount path, because the path is a webhook implementation detail and a pod can project more than one token. And **request scopes in the v2 format `<resource>/.default`**, because workload identity uses the Entra v2 token endpoint, not the IMDS `resource` flow that managed identity uses, and a bare resource URI can simply fail.
 
-| Aspect | Workload Identity | Pod Identity (deprecated) |
-|--------|------------------|---------------------------|
-| **Authentication** | OIDC federation | Managed Identity assigned to VMSS |
-| **Credential storage** | None | None |
-| **Setup complexity** | Lower (fewer components) | Higher (NMI daemonset, aad-pod-identity) |
-| **Security** | Better (OIDC standard) | Good |
-| **Status** | Recommended, actively maintained | Deprecated |
+### Limits and Incompatibilities
 
-**Migration:** If using Pod Identity, migrate to Workload Identity. Microsoft provides a migration guide and tooling.
+- **20 federated identity credentials per managed identity.** This is the ceiling people hit first: one credential per cluster per service account means a fleet of clusters exhausts a shared identity quickly. Identity bindings, in preview, exist to let many clusters share one credential.
+- **Virtual nodes are not supported.** The virtual-kubelet-based add-on cannot use workload identity at all.
+- Federated credential creation on user-assigned identities is unavailable in some regions.
+- Changing a service account annotation requires restarting the pod.
+
+**AKS Automatic** preconfigures workload identity and the OIDC issuer; on AKS Standard you enable both explicitly.
+
+Microsoft Entra pod-managed identity is the previous approach and is being replaced by this one. Migrate rather than running both, because the two put different credentials in front of the same application and produce intermittent, hard-to-attribute authentication failures. A migration sidecar exists that proxies IMDS calls to OIDC as a bridge, but the destination is a supported Azure Identity library version.
 
 ---
 
 ## Node Pool Strategies
 
-### System vs User Node Pools
+### System and User Pools
 
-AKS distinguishes between system node pools (for AKS system components) and user node pools (for application workloads).
-
-| Pool Type | Purpose | Characteristics |
+| Pool | Runs | Constraints |
 |-----------|---------|-----------------|
-| **System node pool** | Runs CoreDNS, metrics-server, kube-proxy, tunnelfront | Must have at least one node, cannot be deleted, and is tainted to repel user pods |
-| **User node pool** | Runs application workloads | Can scale to zero, can be deleted, and has no special taints |
+| **System** | CoreDNS, metrics-server, and other `kube-system` workloads | At least one node, cannot scale to zero, and can be tainted with `CriticalAddonsOnly` to repel application pods |
+| **User** | Application workloads | Can scale to zero and can be deleted |
 
-**Best practice:** Separate system and user node pools. Use a small system pool with reliable VM SKUs and larger user pools for application workloads. This prevents resource contention from affecting cluster stability.
+Keep them separate. A system pool starved by an application workload takes CoreDNS down with it, and DNS failure inside a cluster presents as every service being intermittently broken.
+
+Size the system pool with the restrictions in mind: AKS requires at least 2 vCPU and 4 GB for system pool VMs, does not support B-series burstable VMs there, and does not recommend Av1. User pools need at least 2 vCPU and 2 GB. Since May 2025, a cluster created without an explicit VM SKU gets one AKS selects from available capacity rather than the old `Standard_DS2_v2` default, so pin the SKU if you care what you get.
 
 ### Spot Node Pools
 
-[Spot node pools](https://learn.microsoft.com/en-us/azure/aks/spot-node-pool){:target="_blank" rel="noopener noreferrer"} use Azure Spot VMs, offering significant cost savings in exchange for eviction risk when Azure needs capacity.
+Spot pools run on surplus capacity at a discount, with eviction when Azure needs it back. Evictions come with **30 seconds** of notice, which is enough for a graceful shutdown if your pods handle `SIGTERM` and not enough if they don't.
 
-**Characteristics:**
-- Spot VMs can be evicted with 30 seconds notice
-- Pricing varies based on demand; typically 60-90% cheaper than on-demand VMs
-- AKS gracefully drains spot nodes before eviction when possible
+The discount varies by SKU, region, and current demand, and Microsoft publishes no fixed percentage. Check the portal's pricing history view or query the Azure Resource Graph `SpotResources` table for the current rate on the SKUs you're considering rather than planning against a number from a blog post.
 
-**When to use spot node pools:**
-- Batch processing workloads that can tolerate interruptions
-- Stateless web applications with multiple replicas
-- CI/CD build agents
-- Data processing pipelines with checkpointing
-
-**Do not use spot pools for:**
-- Stateful workloads without graceful shutdown handling
-- Latency-sensitive workloads requiring consistent availability
-- Single-replica deployments where eviction causes downtime
-
-**Best practice:** Use pod topology spread constraints or pod anti-affinity to distribute replicas across spot and on-demand node pools, ensuring at least some replicas survive spot evictions.
+Spot suits batch processing, CI/CD agents, and stateless replicas with several copies. It does not suit single-replica deployments, stateful workloads without graceful shutdown, or anything latency-sensitive. Run spot alongside an on-demand pool and use pod topology spread constraints so an eviction wave cannot take every replica at once.
 
 ### GPU Node Pools
 
-AKS supports GPU-enabled VMs for machine learning inference, training, and high-performance computing workloads.
+AKS installs GPU drivers and the device plugin for you. Pods must request `nvidia.com/gpu` in their resource limits to land on GPU nodes, and the pools should be tainted so that pods which don't need a GPU cannot occupy one. Because the hourly cost dwarfs CPU nodes, GPU pools are the strongest case for scaling to zero when idle.
 
-**Common GPU VM series:**
+### Virtual Nodes
 
-| VM Series | GPU | Use Case |
-|-----------|-----|----------|
-| **NC-series** | NVIDIA Tesla | ML training, HPC |
-| **ND-series** | NVIDIA Volta, Ampere | Large-scale deep learning |
-| **NV-series** | NVIDIA Tesla M60 | Visualization, rendering |
+Virtual nodes schedule pods onto Azure Container Instances instead of VMs, so they start without waiting for a node to be provisioned.
 
-**GPU node pool considerations:**
-- GPU drivers and device plugins are installed automatically by AKS
-- Pods must request GPU resources in resource limits to be scheduled on GPU nodes
-- Taints and tolerations prevent non-GPU pods from wasting GPU node capacity
-- Cost is significantly higher than CPU-only nodes; use node autoscaler to scale to zero when idle
-
-### Virtual Nodes (Azure Container Instances Burst)
-
-[Virtual Nodes](https://learn.microsoft.com/en-us/azure/aks/virtual-nodes){:target="_blank" rel="noopener noreferrer"} enable AKS to burst workloads to Azure Container Instances (ACI) when cluster capacity is exhausted or for ultra-fast scaling.
-
-**How virtual nodes work:**
-- A virtual node appears as a node in the cluster with massive capacity
-- Pods scheduled to the virtual node run in ACI, not on VMs
-- Pods start in seconds without waiting for VM provisioning
-- Billed per-second based on CPU and memory consumption
-
-**When to use virtual nodes:**
-- Burst workloads exceeding cluster capacity
-- Event-driven jobs requiring instant scale-out
-- Cost optimization for infrequent, short-lived workloads
-
-**Limitations:**
-- Not all Kubernetes features are supported (host networking, DaemonSets, stateful workloads)
-- Networking configuration is more complex (requires subnet delegation)
-- Some Azure integrations (like managed identities) require additional configuration
+The limitations decide it for most clusters. Virtual nodes do **not support workload identity** and **cannot be added to the Istio mesh**, alongside the usual exclusions of DaemonSets, host networking, and stateful workloads. On a cluster built around federated identity and a mesh, which is most production AKS, that rules them out. Node auto-provisioning covers the same fast-scaling need without the exclusions.
 
 ---
 
-## Cluster Autoscaling
+## Node Autoscaling
 
 ### Cluster Autoscaler
 
-The [Cluster Autoscaler](https://learn.microsoft.com/en-us/azure/aks/cluster-autoscaler){:target="_blank" rel="noopener noreferrer"} automatically adjusts the number of nodes in a node pool based on pod scheduling and resource utilization.
+The [Cluster Autoscaler](https://learn.microsoft.com/en-us/azure/aks/cluster-autoscaler){:target="_blank" rel="noopener noreferrer"} watches for unschedulable pods and adds nodes to an existing node pool, then removes nodes that stay underutilized.
 
-**How it works:**
-- Pods enter a pending state due to insufficient cluster capacity
-- Cluster Autoscaler detects unschedulable pods
-- Autoscaler adds nodes to the node pool
-- When nodes are underutilized for a period (default 10 minutes), Autoscaler removes them
-
-**Configuration parameters:**
-
-| Parameter | Purpose | Typical Value |
+| Parameter | Controls | Default or typical |
 |-----------|---------|---------------|
-| `--min-count` | Minimum nodes in pool | 1 (system pool), 0 (user pool) |
-| `--max-count` | Maximum nodes in pool | Based on workload requirements |
-| `--scale-down-delay-after-add` | Wait time before scale-down after scale-up | 10 minutes |
-| `--scale-down-utilization-threshold` | CPU/memory usage threshold for scale-down | 0.5 (50%) |
+| `--min-count` / `--max-count` | Node pool bounds | 0 for user pools where the workload tolerates it |
+| `--scale-down-delay-after-add` | Delay before scale-down can follow a scale-up | 10 minutes |
+| `--scale-down-unneeded-time` | How long a node must look unneeded | 10 minutes |
+| `--scale-down-utilization-threshold` | Utilization below which a node is a candidate | 0.5 |
 
-**Best practices:**
-- Set min-count to 0 for user node pools to reduce costs during idle periods
-- Set max-count based on quota limits and cost constraints
-- Use pod disruption budgets (PDBs) to control scale-down behavior and prevent service disruption
-- Configure node pool taints and tolerations to ensure correct workload placement
+The autoscaler only chooses from the SKUs you already defined, so a pod requesting more memory than any pool's VM provides stays pending forever rather than triggering a larger node.
 
-### Node Auto-Provisioning (Preview)
+### Node Auto-Provisioning Is Karpenter
 
-[Node Auto-Provisioning](https://learn.microsoft.com/en-us/azure/aks/node-autoprovision){:target="_blank" rel="noopener noreferrer"} (NAP) is Azure's next-generation autoscaling feature, inspired by AWS Karpenter.
+[Node auto-provisioning](https://learn.microsoft.com/en-us/azure/aks/node-auto-provisioning){:target="_blank" rel="noopener noreferrer"} (NAP) is generally available, and it is not merely "inspired by" Karpenter. AKS deploys, configures, and manages **Karpenter itself**, through the open-source AKS Karpenter provider.
 
-**How NAP differs from Cluster Autoscaler:**
-- Cluster Autoscaler scales existing node pools; NAP provisions new node pools dynamically
-- NAP selects optimal VM SKUs based on pod requirements (CPU, memory, GPU, architecture)
-- NAP can consolidate workloads onto fewer nodes for cost optimization
-- NAP responds faster to scaling events because it is not limited to predefined node pools
+The difference from Cluster Autoscaler is what it is allowed to decide. NAP reads the pending pods' actual requirements (CPU, memory, architecture, GPU, zone) and provisions a node of a SKU that fits, rather than adding another copy of a SKU you picked in advance. It also consolidates, moving pods onto fewer nodes and removing the emptied ones.
 
-**Current status:** Preview feature; not recommended for production yet. Cluster Autoscaler remains the stable choice.
+You configure it with Karpenter's own resources: `NodePool` for the constraints on what may be provisioned, and `AKSNodeClass` for the Azure-specific node configuration. A migration path from Cluster Autoscaler is documented.
 
-**Watch for:** NAP reaching GA in 2026, at which point it will become the recommended autoscaling solution for AKS.
+Cluster Autoscaler remains the right choice where you need to pin workloads to specific, pre-declared node pools, or where a fixed SKU is a compliance or licensing requirement.
 
 ---
 
-## Multi-Cluster Patterns
+## Multi-Cluster with Fleet Manager
 
-### Azure Fleet Manager
+[Azure Kubernetes Fleet Manager](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/overview){:target="_blank" rel="noopener noreferrer"} manages a group of AKS clusters as one unit, across regions and subscriptions.
 
-[Azure Fleet Manager](https://learn.microsoft.com/en-us/azure/kubernetes-fleet/overview){:target="_blank" rel="noopener noreferrer"} provides centralized management for multiple AKS clusters across regions and subscriptions.
+**What it does:**
+- **Update orchestration** across member clusters in a defined order, with update runs and stages, so a Kubernetes version rolls through staging before production
+- **Resource propagation** through `ClusterResourcePlacement`, which copies selected cluster-scoped resources and namespaces from the hub to member clusters
+- **Multi-cluster load balancing and service discovery**, where a service exported from one cluster becomes reachable from others
+- **GitOps at scale**, applying Flux configurations across the fleet from one definition
 
-**Core capabilities:**
-- **Cluster orchestration:** Manage cluster upgrades, configuration, and policy across fleets
-- **Multi-cluster services:** Load balance traffic across clusters with cross-cluster service discovery
-- **GitOps at scale:** Apply Flux configurations to multiple clusters from a single definition
-- **Resource propagation:** Distribute resources (ConfigMaps, Secrets, Custom Resources) to clusters
+Placement policies select which members receive a resource: all of them, a fixed list, or *N* chosen by the scheduler with affinity and topology spread. That last mode is what makes a fleet useful for regional distribution rather than just fan-out.
 
-**Use cases for Fleet Manager:**
-
-| Scenario | How Fleet Helps |
-|----------|-----------------|
-| **Multi-region deployments** | Deploy applications to clusters in multiple regions from a central control plane |
-| **Disaster recovery** | Distribute workloads across regions with automated failover |
-| **Staging and production** | Manage cluster configuration across environments |
-| **Global traffic routing** | Route user requests to the nearest regional cluster |
-
-**Fleet resource propagation example:**
-
-```yaml
-apiVersion: fleet.azure.com/v1alpha1
-kind: ClusterResourcePlacement
-metadata:
-  name: deploy-app-to-all-regions
-spec:
-  resourceSelectors:
-    - group: apps
-      kind: Deployment
-      name: my-app
-      namespace: production
-  policy:
-    placementType: PickAll
-```
-
-**What this does:**
-- Fleet Manager replicates the `my-app` deployment to all clusters in the fleet
-- Changes to the deployment in the hub cluster propagate to member clusters
-- If a cluster is unhealthy, Fleet removes it from the placement
-
-### Cross-Cluster Service Discovery
-
-Fleet Manager supports service discovery across clusters, allowing pods in one cluster to call services in another.
-
-**How it works:**
-1. Export a service from one cluster using `ServiceExport`
-2. Fleet Manager creates a `ServiceImport` in other clusters
-3. DNS entries are created for cross-cluster service calls
-4. Traffic flows through Azure load balancers spanning clusters
-
-**Trade-offs:**
-- Latency increases for cross-cluster calls (typically 5-20ms depending on regions)
-- Network costs apply for inter-region traffic
-- Service mesh complexity increases when spanning multiple clusters
-
-**When to use cross-cluster services:**
-- Global applications requiring low-latency local processing with occasional cross-region calls
-- Disaster recovery scenarios where services fail over to a secondary cluster
-- Multi-region data processing pipelines where stages run in different clusters
+**What to weigh:** cross-cluster calls pay inter-region latency and inter-region egress charges, so a fleet is a deployment and lifecycle tool first and a runtime topology second. Design so the common path stays inside one cluster and cross-cluster traffic is the exception.
 
 ---
 
 ## Confidential Containers
 
-### What Are Confidential Containers
+Confidential containers on AKS run pods inside hardware-backed Trusted Execution Environments on AMD SEV-SNP, using Kata Containers to give each pod its own memory-encrypted utility VM. The host OS, the hypervisor, and Azure operators cannot read pod memory, and remote attestation lets a workload prove it is running in a genuine TEE before a secret is released to it.
 
-[Confidential containers on AKS](https://learn.microsoft.com/en-us/azure/confidential-computing/confidential-containers){:target="_blank" rel="noopener noreferrer"} run workloads in hardware-based Trusted Execution Environments (TEEs), protecting data in use from the host OS, hypervisor, and even Azure administrators.
+This fits multi-party computation, processing of data whose owner does not trust your infrastructure, and regulatory requirements that name data-in-use protection specifically. It costs you a restricted set of VM SKUs, a smaller memory ceiling, encryption overhead, and a key release flow to design.
 
-**How confidential containers work:**
-- Containers run inside AMD SEV-SNP or Intel SGX enclaves
-- Memory is encrypted and isolated from the host
-- Attestation verifies that the workload is running in a genuine TEE before processing sensitive data
-
-**Use cases:**
-- Processing highly sensitive data like financial records, healthcare information, or government secrets
-- Multi-party computation where parties do not trust each other's infrastructure
-- Regulatory compliance requirements for data protection at rest, in transit, and in use
-
-**Trade-offs:**
-- Limited VM SKU availability (DCasv5, DCadsv5 series)
-- Performance overhead from encryption (typically 10-20% depending on workload)
-- Smaller memory limits compared to general-purpose VMs
-- Additional complexity in application deployment and key management
-
-**Confidential containers are a specialized use case.** Most workloads do not require TEE-level protection and should use standard AKS node pools.
+It is a specialized tool. Most workloads should be on standard node pools, and reaching for confidential containers without a data-in-use requirement buys complexity and nothing else.
 
 ---
 
-## Cost Optimization Strategies
+## Cost Optimization
 
-### Spot Instances for Non-Critical Workloads
+**Spot pools** for anything interruption-tolerant, with topology spread across an on-demand pool so evictions degrade rather than break the service.
 
-Spot node pools reduce costs by 60-90% compared to on-demand VMs. Combine spot and on-demand pools with topology spread constraints to balance cost and availability.
+**Scale to zero** on user node pools and on GPU pools, and on workloads themselves through KEDA where cold start is acceptable.
 
-### Cluster Start/Stop
+**Cluster stop/start** for development and test clusters that nobody uses at night. [Stopping a cluster](https://learn.microsoft.com/en-us/azure/aks/start-stop-cluster){:target="_blank" rel="noopener noreferrer"} deallocates the nodes and stops the control plane. Restart takes long enough that this is a scheduled action, not an on-demand one, so pair it with an automation schedule rather than expecting people to run it.
 
-AKS supports [stopping and starting clusters](https://learn.microsoft.com/en-us/azure/aks/start-stop-cluster){:target="_blank" rel="noopener noreferrer"} to eliminate compute costs during non-business hours.
+**Right-sizing with the [Vertical Pod Autoscaler](https://learn.microsoft.com/en-us/azure/aks/vertical-pod-autoscaler){:target="_blank" rel="noopener noreferrer"}.** VPA observes actual usage and adjusts CPU and memory requests, which attacks the most common source of waste: requests copied from an example and never revisited. Its `updateMode` values are `Off` (recommendations only), `Initial` (set at pod creation), `Recreate`, and `Auto`. Run `Off` in production and apply the recommendations deliberately, because the modes that act do so by evicting pods.
 
-**When cluster stop makes sense:**
-- Development and test clusters used only during business hours
-- Batch processing clusters that run on a schedule
-- Demo environments used infrequently
+**Do not run VPA and HPA against the same resource metric.** VPA raising requests while HPA scales on CPU utilization produces a feedback loop where each one's action changes the other's input.
 
-**Limitations:**
-- Start time is 5-15 minutes depending on cluster size
-- Not suitable for production workloads requiring continuous availability
+**Reservations and savings plans** for the baseline capacity that never scales to zero, typically the system pool and the floor of the user pools. Remember that a VM reservation covers compute only, has instance size flexibility but **no region flexibility**, and is therefore a poor fit for a fleet that might move regions.
 
-### Right-Sizing with Vertical Pod Autoscaler
-
-[Vertical Pod Autoscaler](https://learn.microsoft.com/en-us/azure/aks/vertical-pod-autoscaler){:target="_blank" rel="noopener noreferrer"} (VPA) recommends and automatically adjusts pod CPU and memory requests based on observed usage.
-
-**How VPA helps with cost optimization:**
-- Prevents over-provisioning by reducing requests for idle resources
-- Prevents under-provisioning that causes OOMKills and throttling
-- Continuously tunes requests as workload patterns change
-
-**VPA modes:**
-- **Recommendation only:** VPA suggests optimal requests but does not apply them
-- **Auto:** VPA updates pod requests and restarts pods to apply changes
-- **Initial:** VPA sets requests at pod creation but does not modify running pods
-
-**Trade-off:** Auto mode restarts pods, causing brief downtime. Use recommendation mode for production workloads and apply changes during maintenance windows.
-
-### Reserved Instances for Stable Workloads
-
-Azure Reserved Instances provide up to 72% savings for workloads running continuously for one or three years.
-
-**When to use Reserved Instances:**
-- Predictable workloads with known capacity requirements
-- System node pools that run continuously
-- Minimum baseline capacity for user node pools
-
-**When NOT to use Reserved Instances:**
-- Dynamic workloads with unpredictable scaling patterns
-- Short-lived projects or proof-of-concepts
-- Node pools expected to change VM SKUs frequently
-
-### Monitoring Cost with Azure Cost Management
-
-Enable [Azure Cost Management](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/quick-acm-cost-analysis){:target="_blank" rel="noopener noreferrer"} to track AKS costs by node pool, workload namespace, and resource type.
-
-**Key metrics to monitor:**
-- Cost per node pool (identify expensive GPU or high-memory pools)
-- Cost per namespace (chargeback to teams)
-- Idle resource waste (nodes with low utilization)
-- Spot instance savings vs eviction frequency
+**Cost visibility** through Azure Cost Management, broken down by node pool and, with the AKS cost analysis add-on, by namespace. Namespace-level attribution is what turns an argument about the cluster bill into a conversation with the team that owns the workload.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Using Standard Azure CNI for Large Clusters Without Sufficient IP Addresses
+### Pitfall 1: Choosing Flat Networking Without an Address Plan
 
-**Problem:** Deploying a large AKS cluster with standard Azure CNI in a subnet without enough IP addresses. Azure CNI assigns a VNet IP to every pod, consuming IP space rapidly.
+**Problem:** Deploying with Azure CNI Node Subnet or Pod Subnet into a subnet sized for the nodes rather than for every pod.
 
-**Result:** Cluster cannot scale because the subnet runs out of IPs. Pods enter a pending state with IP allocation errors.
+**Result:** The cluster stops scaling. Pods sit pending with IP allocation errors, and the fix means renumbering a subnet that peered networks and firewall rules already depend on.
 
-**Solution:** Use Azure CNI Overlay or Azure CNI Powered by Cilium for large clusters. Calculate IP requirements as (max pods per node) x (max nodes) + node IPs before provisioning. Reserve a /22 or larger subnet for standard Azure CNI clusters.
-
----
-
-### Pitfall 2: Deploying Service Mesh Without Understanding Resource Overhead
-
-**Problem:** Installing a service mesh like Istio on a cluster without accounting for sidecar resource consumption.
-
-**Result:** Nodes run out of CPU and memory because every pod now has an Envoy sidecar consuming additional resources. Cluster autoscaler scales out, increasing costs unexpectedly.
-
-**Solution:** Before enabling a service mesh, measure baseline resource usage and add sidecar overhead (typically 50-100 MB memory and 10-50m CPU per pod). Increase node pool size or adjust pod resource limits accordingly. Use lightweight meshes like Linkerd for resource-constrained environments.
+**Solution:** Use Azure CNI Overlay unless you specifically need inbound connectivity to pod IPs. If you do need flat networking, size for (max pods per node × max nodes) plus node and upgrade headroom, and use Azure CNI Pod Subnet rather than the legacy node subnet mode.
 
 ---
 
-### Pitfall 3: KEDA Scaling to Zero Without Handling Cold Start Latency
+### Pitfall 2: Designing Around Istio Features the Add-On Doesn't Have
 
-**Problem:** Using KEDA to scale workloads to zero without accounting for pod startup time and readiness delays.
+**Problem:** Planning a multi-cluster mesh, ambient mode, Gateway API routing, or a `WasmPlugin` on the Azure-managed Istio add-on.
 
-**Result:** First requests after scale-up fail or time out because the pod is not ready yet. Users experience errors during scale-up events.
+**Result:** None of those are supported. The design either drops back to self-managed Istio, losing managed upgrades and Azure support, or gets rebuilt late.
 
-**Solution:** Accept cold start latency as a trade-off for cost savings, or set KEDA minReplicaCount to 1 to keep at least one pod warm. Use readiness probes to ensure pods are fully ready before receiving traffic. For latency-sensitive workloads, use standard HPA instead of KEDA.
-
----
-
-### Pitfall 4: Mixing Workload Identity and Legacy Pod Identity
-
-**Problem:** Migrating from Pod Identity to Workload Identity incrementally, leaving both systems running simultaneously.
-
-**Result:** Conflicting authentication configurations cause pods to fail Azure authentication intermittently. Troubleshooting is difficult because errors vary based on which identity system the pod uses.
-
-**Solution:** Plan a complete migration from Pod Identity to Workload Identity. Disable Pod Identity after migration completes. Use namespace-based phased migration if necessary, but avoid long-term coexistence.
+**Solution:** Check the add-on's limitation list against the design before committing. If you need what the add-on blocks, decide deliberately to self-manage, and note that the add-on and self-managed Istio cannot coexist on one cluster.
 
 ---
 
-### Pitfall 5: Not Setting Pod Disruption Budgets with Cluster Autoscaler
+### Pitfall 3: Scaling to Zero Where Cold Start Is Not Acceptable
 
-**Problem:** Enabling Cluster Autoscaler without defining Pod Disruption Budgets (PDBs) for critical services.
+**Problem:** KEDA `minReplicaCount: 0` on a workload that serves interactive requests.
 
-**Result:** Autoscaler drains nodes aggressively during scale-down, terminating too many replicas simultaneously and causing service outages.
+**Result:** The first request after an idle period waits for a pod to schedule, pull, start, and pass its readiness probe. Under a load balancer with a short timeout, it fails outright.
 
-**Solution:** Define PDBs for all services specifying the minimum available replicas during disruptions. Example: `minAvailable: 2` for a 3-replica deployment ensures at least 2 replicas remain during scale-down.
+**Solution:** Keep `minReplicaCount` at 1 or more for anything user-facing and take the event-driven scaling without the zero. Reserve scale-to-zero for queue-driven work where latency to first message does not matter, and tune `activationMessageCount` and `cooldownPeriod` so a trickle of messages doesn't thrash the deployment.
 
 ---
 
-### Pitfall 6: GitOps Repository Structure Causing Deployment Bottlenecks
+### Pitfall 4: Exhausting Federated Identity Credentials
 
-**Problem:** Using a monolithic Git repository for all applications, causing merge conflicts and bottlenecks when multiple teams deploy simultaneously.
+**Problem:** One managed identity shared across many clusters or many service accounts, with a federated credential added for each.
 
-**Result:** Deployments are delayed while teams resolve merge conflicts. Single repository becomes a coordination burden.
+**Result:** The 21st credential is rejected. On a growing fleet this appears as cluster provisioning failing for reasons unrelated to the cluster.
 
-**Solution:** Separate Git repositories by team or by workload. Use Flux's multi-source capabilities to compose manifests from multiple repositories. Balance between too many repositories (management overhead) and too few (coordination bottleneck).
+**Solution:** Use a managed identity per workload rather than a shared one, count credentials against the limit of 20 during design, and evaluate identity bindings if a single identity genuinely must span many clusters.
+
+---
+
+### Pitfall 5: Autoscaling Without Pod Disruption Budgets
+
+**Problem:** Cluster Autoscaler or NAP consolidation enabled, with no PDBs on the services that matter.
+
+**Result:** Scale-down and consolidation drain nodes freely, and a multi-replica service can lose all of its replicas at once because nothing told the scheduler otherwise.
+
+**Solution:** Define a PDB for every service that has an availability requirement. Note the other direction too: a PDB that can never be satisfied, such as `minAvailable` equal to the replica count, blocks scale-down and node upgrades entirely.
+
+---
+
+### Pitfall 6: Creating a Cluster From a Portal Preset and Assuming It Is Hardened
+
+**Problem:** Selecting "Production Standard" or "Production Enterprise" and treating the network configuration as production-ready.
+
+**Result:** Every preset ships with **network policy set to None**, so there is no pod-to-pod isolation. The policy engine cannot be added later without recreating the cluster.
+
+**Solution:** Choose the network policy engine at creation time, alongside the CNI decision. Treat presets as a starting point for the compute shape, not as a security baseline.
 
 ---
 
 ## Key Takeaways
 
-1. **Azure CNI Overlay and Cilium reduce IP consumption for large clusters.** Standard Azure CNI assigns VNet IPs to every pod, which exhausts subnets quickly. Overlay networking decouples pod IPs from VNet address space, enabling clusters with 100,000+ pods without consuming VNet IPs.
+1. **IPAM and data plane are separate choices.** Azure CNI Overlay, Pod Subnet, and Node Subnet decide where pod IPs come from; Cilium is a data plane that composes with any of them. Overlay is the recommended default and the target for kubenet migration.
 
-2. **Service meshes add significant value but also complexity and cost.** Istio provides powerful traffic management and zero-trust security, but the resource overhead and operational complexity are real. Evaluate whether application-level observability and network policies meet your needs before adopting a mesh.
+2. **kubenet retires 31 March 2028.** It also blocks Windows node pools, subnet sharing, and Application Gateway for Containers today.
 
-3. **KEDA enables cost-effective event-driven workloads by scaling to zero.** Integrating KEDA with Azure Service Bus, Event Hubs, or Storage Queues makes background processing workloads respond to demand dynamically while eliminating costs during idle periods. Handle cold start latency appropriately.
+3. **The direction of connectivity is what separates overlay from flat.** Overlay pods can initiate outbound but cannot be reached inbound from peered networks. That single property, not IP conservation, is usually the deciding factor.
 
-4. **GitOps with Flux provides auditability, consistency, and security.** Using Git as the single source of truth for cluster configuration and application manifests eliminates kubectl-based drift, provides rollback capability, and enforces review processes for all changes.
+4. **The Istio add-on has a specific list of things it cannot do:** no ambient mode, no multi-cluster, no Windows containers, no virtual node pods, no Gateway API, and five blocked custom resources. Check it before designing around Istio features.
 
-5. **Workload Identity replaces Pod Identity with simpler, more secure Azure authentication.** Federation-based authentication eliminates credential storage entirely and reduces the attack surface. Migrate legacy Pod Identity workloads to Workload Identity.
+5. **Open Service Mesh is unsupported from 30 September 2027** and the upstream project is retired. The migration target is the Istio add-on.
 
-6. **Separate system and user node pools for stability and cost optimization.** System node pools run AKS control plane components on reliable, always-on VMs. User node pools scale dynamically and can use spot instances for cost savings.
+6. **Node auto-provisioning is Karpenter and is GA.** It provisions a SKU that fits the pending pods and consolidates them onto fewer nodes. Cluster Autoscaler is now the choice for pinning workloads to pre-declared pools, not the safe default.
 
-7. **Cluster Autoscaler is the stable autoscaling solution; watch Node Auto-Provisioning.** Cluster Autoscaler scales predefined node pools based on pod scheduling. Node Auto-Provisioning dynamically creates optimal node pools but is still in preview. Use Cluster Autoscaler for production.
+7. **Workload identity is capped at 20 federated identity credentials per managed identity**, and does not work with virtual nodes at all. Use one identity per workload and read the token path from `AZURE_FEDERATED_TOKEN_FILE`.
 
-8. **Azure Fleet Manager simplifies multi-cluster management at scale.** Centralized orchestration, GitOps at scale, and cross-cluster service discovery make Fleet Manager essential for multi-region deployments and disaster recovery scenarios.
+8. **The pod label `azure.workload.identity/use: "true"` is required.** AKS fails closed without it, and pods that need identity break on their next restart.
 
-9. **Spot node pools reduce costs by 60-90% for fault-tolerant workloads.** Batch processing, CI/CD agents, and stateless applications benefit from spot instances. Distribute replicas across spot and on-demand pools to tolerate evictions.
+9. **KEDA scales to zero, which is both the feature and the risk.** Tune `activationMessageCount` and `cooldownPeriod`, and keep interactive workloads above zero.
 
-10. **Cost optimization requires a combination of strategies.** Use spot instances for fault-tolerant workloads, Reserved Instances for stable baselines, cluster start/stop for dev/test environments, and Vertical Pod Autoscaler for right-sizing. Monitor costs continuously with Azure Cost Management.
+10. **`prune: true` is what makes GitOps reconcile deletions.** Without it, removing a manifest from Git leaves the resource running in the cluster indefinitely.

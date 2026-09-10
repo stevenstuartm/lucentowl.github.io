@@ -3,46 +3,44 @@ title: "Azure Functions: Advanced Patterns"
 layout: guide
 category: Azure
 subcategory: Serverless Architecture
-description: "Durable Functions orchestration patterns, custom handlers for polyglot runtimes, Flex Consumption and dedicated hosting models, and advanced scaling strategies for production workloads"
-tags: [azure, cloud-computing, scalability, distributed-systems, design-patterns, performance, practical]
+description: "Durable Functions orchestration patterns on the isolated worker model, the five hosting options and how to choose between them, custom handlers, retry and concurrency behavior, and the design constraints that come with stateful serverless"
+tags: [durable-functions, serverless, orchestration, flex-consumption, event-driven, advanced]
 ---
 
 ## What Are Azure Functions
 
-[Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/){:target="_blank" rel="noopener noreferrer"} is Azure's event-driven serverless compute service. You write functions in languages like JavaScript, Python, C#, Java, PowerShell, or custom handlers that respond to events such as HTTP requests, timers, messages in Storage Queues, or Service Bus events. Azure manages the servers, scaling, and operational infrastructure while you focus on business logic.
+[Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/){:target="_blank" rel="noopener noreferrer"} is Azure's event-driven serverless compute service. You write functions in C#, JavaScript, TypeScript, Python, Java, PowerShell, Go, or a custom handler in any language, and they respond to events such as HTTP requests, timers, queue messages, or Service Bus messages. Azure manages the servers, scaling, and operational infrastructure while you focus on business logic.
 
-This guide covers advanced patterns and hosting decisions for production workloads. For foundational Azure Functions concepts, see [Azure Functions Fundamentals](/study-guides/infrastructure/azure/).
+This guide covers advanced patterns and hosting decisions for production workloads.
+
+**All C# examples use the isolated worker model.** [Support for the in-process model ends 10 November 2026](https://learn.microsoft.com/en-us/azure/azure-functions/migrate-dotnet-to-isolated-model){:target="_blank" rel="noopener noreferrer"}. The two models have different type names, and mixing them is the most common source of code that reads correctly and doesn't compile: isolated worker uses `[Function]` with `Microsoft.Azure.Functions.Worker.Extensions.*` packages, in-process uses `[FunctionName]` with `Microsoft.Azure.WebJobs.Extensions.*`. Durable orchestrators take `TaskOrchestrationContext` in the isolated model and `IDurableOrchestrationContext` in-process.
 
 ### What Problems Azure Functions Solves
 
 **Without Azure Functions:**
-- Event-driven workloads require you to manage infrastructure for variable demand
-- Small, isolated functions require container or VM overhead
-- Scaling up and down is manual or requires complex autoscaling rules
-- Development and operations teams manage infrastructure as well as code
+- Event-driven workloads require infrastructure sized for peak demand
+- Small, isolated units of work carry container or VM overhead
+- Scaling up and down is manual or requires autoscale rules you write and tune
+- Teams manage infrastructure alongside code
 
 **With Azure Functions:**
-- Automatic scaling based on demand (from zero to thousands of instances)
-- Pay only for execution time, not idle infrastructure
-- Built-in bindings for common Azure services eliminate boilerplate code
-- Stateless execution model simplifies distributed systems
-- Durable Functions add state management and orchestration capabilities
+- Event-driven scaling, including scale to zero on the serverless plans
+- Pay for execution rather than idle infrastructure
+- Built-in bindings for common Azure services replace connection and serialization boilerplate
+- A stateless execution model that scales horizontally without coordination
+- Durable Functions add state management and orchestration when you need them
 
 ### How Azure Functions Differs from AWS Lambda
 
-Architects familiar with AWS Lambda should understand these key differences:
+Architects familiar with AWS Lambda should understand these structural differences:
 
 | Concept | AWS Lambda | Azure Functions |
 |---------|-----------|-----------------|
-| **Stateful orchestration** | Step Functions (separate service) | Durable Functions (built into Functions) |
-| **Cold start cost** | Included in invocation cost | Depends on hosting plan |
-| **Custom runtimes** | Layers, custom runtimes | Custom handlers with any language |
-| **Hosting models** | Lambda is fully managed | Consumption, Flex Consumption, Premium, Dedicated plans |
-| **Scaling to zero** | Automatic and free | Consumption and Flex Consumption only |
-| **Reserved capacity** | Provisioned concurrency | Premium reserved capacity |
-| **VNet integration** | Requires NAT Gateway for outbound | Premium and Dedicated plans; Flex Consumption with load balancer |
-| **Monitoring** | CloudWatch | Application Insights integrated |
-| **Pricing model** | Per 1M invocations + GB-seconds | Per GB-second + plan-based costs |
+| **Stateful orchestration** | Step Functions, a separate service with its own state machine language | Durable Functions, an extension of Functions where the workflow is ordinary code |
+| **Hosting** | One managed runtime; you tune memory and concurrency | Five hosting options with different scaling, networking, and billing models |
+| **Service integration** | Event source mappings and the SDK | Declarative triggers and bindings, including output bindings |
+| **Custom runtimes** | Layers and custom runtimes | Custom handlers: any language that can serve HTTP |
+| **Monitoring** | CloudWatch | Application Insights, instrumented through OpenTelemetry |
 
 ---
 
@@ -50,242 +48,259 @@ Architects familiar with AWS Lambda should understand these key differences:
 
 ### What Durable Functions Provide
 
-[Durable Functions](https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview){:target="_blank" rel="noopener noreferrer"} is an extension to Azure Functions that adds stateful orchestration, checkpointing, and long-running coordination capabilities. Without Durable Functions, Azure Functions are stateless and short-lived. Durable Functions maintain state across multiple function invocations and provide guarantees about execution order and failure handling. Features include automatic checkpointing, retry logic, and event sourcing.
+[Durable Functions](https://learn.microsoft.com/en-us/azure/durable-task/durable-functions/durable-functions-overview){:target="_blank" rel="noopener noreferrer"} is an extension to Azure Functions that adds stateful orchestration, checkpointing, and long-running coordination. Plain functions are stateless and short-lived; Durable Functions maintain state across many invocations and give guarantees about execution order and failure handling. The workflow is written as ordinary control flow (loops, conditionals, `await`), and the runtime persists its progress.
 
-### Core Durable Functions Concepts
+### Core Concepts
 
-**Orchestrator Functions**: These are the conductors that coordinate your workflow. An orchestrator function defines the sequence of activities, handles branching logic, and manages state. Orchestrators must be deterministic (same inputs always produce the same sequence of operations) because they can be replayed from history if failures occur.
+**Orchestrator functions** coordinate the workflow. An orchestrator defines the sequence of activities, handles branching, and holds workflow state. Orchestrators must be deterministic, because the runtime re-executes them from the beginning every time the workflow advances.
 
-**Activity Functions**: These perform the actual work. An activity might call an API, write to a database, or send an email. Activity functions can be non-deterministic because they are not replayed. They execute once and their output is recorded in history.
+**Activity functions** do the actual work: call an API, write to a database, send an email. They can be non-deterministic because they run once and their output is recorded.
 
-**Entity Functions**: These maintain durable state scoped to a unique identifier. An entity function is like a microservice with built-in persistence. You send it messages, it updates its state, and other functions can query its current state. Entity functions are useful for maintaining counts, managing approval workflows, or tracking object lifecycle.
+**Entity functions** hold durable state addressed by a unique identifier, similar to a virtual actor. You signal them with one-way messages or call them and await a result.
 
-**Client Functions**: These initiate orchestrations. A client function (typically triggered by HTTP) calls an orchestrator and receives an instance ID and status check URL.
+**Client functions** start and manage orchestrations. A client function, usually HTTP-triggered, schedules an instance and gets back an instance ID.
+
+**Task hub** is the container for all of this: the history, the queues, and the entity state for one app. Every function app configured against the same task hub shares that state, so a staging app and a production app must use different task hubs or they will consume each other's work items.
+
+### How Replay Works
+
+Every action an orchestrator takes, whether scheduling an activity, creating a timer, or receiving an external event, is appended to the orchestration history. When the workflow needs to advance, the runtime runs the orchestrator function *from the top*, replaying the recorded history to rebuild local state, and only then executes the next new action.
+
+```
+  ┌───────────────────┐   schedule instance   ┌───────────────────────────┐
+  │  Client function  │──────────────────────▶│         Task hub          │
+  │  (HTTP, queue, …) │                       │  history + work queues    │
+  └───────────────────┘                       └──┬─────────────────▲──────┘
+                                                 │                 │
+                           dispatch work item    │                 │  append
+                                                 ▼                 │  event
+                                  ┌──────────────────────────┐     │
+                                  │  Orchestrator function   │─────┘
+                                  │  replays the full history│
+                                  │  on every dispatch       │
+                                  └────────────┬─────────────┘
+                                               │ schedule activity
+                                               ▼
+                                  ┌──────────────────────────┐
+                                  │    Activity function     │
+                                  │  runs once, result is    │
+                                  │  written to the history  │
+                                  └──────────────────────────┘
+```
+
+Two consequences follow directly from this loop, and they explain most of the rules below. First, the orchestrator must be deterministic: if `DateTime.UtcNow` or `Guid.NewGuid()` returns something different on replay, the runtime's view of what already happened diverges from the code's. Use `context.CurrentUtcDateTime` and `context.NewGuid()` instead, and push anything genuinely non-deterministic into an activity. Second, everything passed into and out of activities is serialized into the history, so large payloads make every subsequent replay more expensive.
 
 ### Orchestration Patterns
 
-**Function Chaining** is the simplest pattern: one activity completes, then the next begins. Orchestrator code reads linearly like imperative programming.
+**Function chaining** runs activities in sequence, with each result feeding the next. The orchestrator reads like ordinary imperative code.
 
 ```csharp
-public static async Task<int> RunOrchestrator(
-    IDurableOrchestrationContext context)
+[Function(nameof(ProcessOrder))]
+public static async Task<int> ProcessOrder(
+    [OrchestrationTrigger] TaskOrchestrationContext context)
 {
-    var result1 = await context.CallActivityAsync<int>("Activity1", null);
-    var result2 = await context.CallActivityAsync<int>("Activity2", result1);
-    var result3 = await context.CallActivityAsync<int>("Activity3", result2);
-    return result3;
+    int validated = await context.CallActivityAsync<int>("ValidateOrder");
+    int charged = await context.CallActivityAsync<int>("ChargeCard", validated);
+    return await context.CallActivityAsync<int>("ShipOrder", charged);
 }
 ```
 
-**Fan-Out/Fan-In** executes multiple activities in parallel, then waits for all to complete before proceeding. This pattern is valuable for parallel workflows like processing multiple items in a batch.
+**Fan-out/fan-in** runs activities in parallel and waits for all of them. The orchestrator's input comes from `context.GetInput<T>()`, not from a method parameter. The only parameters an orchestrator takes are its trigger binding and, optionally, `FunctionContext`.
 
 ```csharp
-public static async Task RunOrchestrator(
-    IDurableOrchestrationContext context,
-    string[] items)
+[Function(nameof(ProcessBatch))]
+public static async Task ProcessBatch(
+    [OrchestrationTrigger] TaskOrchestrationContext context)
 {
-    var tasks = items.Select(item =>
-        context.CallActivityAsync("ProcessItem", item)
-    ).ToArray();
+    string[] items = context.GetInput<string[]>() ?? Array.Empty<string>();
 
-    await Task.WhenAll(tasks);
-    await context.CallActivityAsync("Consolidate", null);
+    Task<long>[] tasks = items
+        .Select(item => context.CallActivityAsync<long>("ProcessItem", item))
+        .ToArray();
+
+    long[] results = await Task.WhenAll(tasks);
+    await context.CallActivityAsync("Consolidate", results.Sum());
 }
 ```
 
-**Async HTTP API** patterns handle long-running operations that clients want to monitor. The orchestrator starts, returns immediately with a status check URL, and the client polls for completion.
+**Async HTTP API** handles long-running work that a client wants to monitor. The starter returns immediately with a status URL and the client polls it, which is the standard 202-plus-`Location` polling consumer pattern. This is also the answer to the 230-second HTTP response ceiling described under Hosting Models.
 
 ```csharp
-[FunctionName("StartLongRunningWork")]
-public static async Task<IActionResult> HttpStart(
-    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestMessage req,
-    [DurableClient] IDurableOrchestrationClient client)
+[Function(nameof(StartLongRunningWork))]
+public static async Task<HttpResponseData> StartLongRunningWork(
+    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req,
+    [DurableClient] DurableTaskClient client)
 {
-    var instanceId = await client.StartNewAsync("LongRunningOrchestrator");
+    string instanceId = await client.ScheduleNewOrchestrationInstanceAsync(
+        "LongRunningOrchestrator");
+
     return client.CreateCheckStatusResponse(req, instanceId);
 }
 ```
 
-**Monitoring** patterns periodically check a condition until it becomes true, then proceed. This is useful for polling external systems.
+`CreateCheckStatusResponse` supports only `HttpRequestData` and `HttpResponseData`. If your app uses ASP.NET Core integration with `HttpRequest` and `IActionResult`, this API is not available to that function.
+
+**Monitoring** polls a condition on a durable timer until it becomes true. Give the loop a deadline: an unbounded monitor is an orchestration that never completes and whose history never stops growing.
 
 ```csharp
-public static async Task RunOrchestrator(
-    IDurableOrchestrationContext context,
-    string jobId)
+[Function(nameof(MonitorJob))]
+public static async Task MonitorJob(
+    [OrchestrationTrigger] TaskOrchestrationContext context)
 {
-    var retryOptions = new RetryOptions(
-        firstRetryInterval: TimeSpan.FromSeconds(30),
-        maxNumberOfAttempts: int.MaxValue)
-    {
-        Handle = ex => ex is TimeoutException
-    };
+    string jobId = context.GetInput<string>()!;
+    DateTime expiry = context.CurrentUtcDateTime.AddHours(2);
 
-    while (true)
+    while (context.CurrentUtcDateTime < expiry)
     {
-        var status = await context.CallActivityWithRetryAsync(
-            "CheckJobStatus", retryOptions, jobId);
-        if (status.IsComplete) break;
+        JobStatus status = await context.CallActivityAsync<JobStatus>(
+            "CheckJobStatus", jobId);
 
-        var nextCheck = context.CurrentUtcDateTime.AddSeconds(30);
-        await context.CreateTimer(nextCheck, CancellationToken.None);
+        if (status.IsComplete)
+        {
+            await context.CallActivityAsync("OnJobComplete", jobId);
+            return;
+        }
+
+        await context.CreateTimer(
+            context.CurrentUtcDateTime.AddSeconds(30), CancellationToken.None);
     }
+
+    await context.CallActivityAsync("OnJobTimedOut", jobId);
 }
 ```
 
-**Human Interaction** patterns pause orchestration waiting for external approval or input. The orchestrator waits for a specific event before proceeding, allowing humans to interact with the workflow.
+**Human interaction** pauses the orchestration until an external event arrives. `WaitForExternalEventAsync` waits indefinitely by default, so race it against a durable timer and cancel the timer when the event wins. Otherwise the pending timer keeps the instance alive after the work is done.
 
 ```csharp
-public static async Task RunOrchestrator(
-    IDurableOrchestrationContext context,
-    string approvalId)
+[Function(nameof(ApprovalWorkflow))]
+public static async Task ApprovalWorkflow(
+    [OrchestrationTrigger] TaskOrchestrationContext context)
 {
+    string approvalId = context.GetInput<string>()!;
     await context.CallActivityAsync("NotifyApprover", approvalId);
 
-    using (var cts = new CancellationTokenSource())
-    {
-        var approvalTask = context.WaitForExternalEvent("ApprovalReceived");
-        var timeoutTask = context.CreateTimer(
-            context.CurrentUtcDateTime.AddDays(1),
-            cts.Token);
+    using var cts = new CancellationTokenSource();
+    Task<bool> approvalTask = context.WaitForExternalEventAsync<bool>("ApprovalReceived");
+    Task timeoutTask = context.CreateTimer(
+        context.CurrentUtcDateTime.AddDays(1), cts.Token);
 
-        if (approvalTask == await Task.WhenAny(approvalTask, timeoutTask))
-        {
-            await context.CallActivityAsync("ProcessApproved", approvalId);
-        }
-        else
-        {
-            cts.Cancel();
-            await context.CallActivityAsync("ProcessRejected", approvalId);
-        }
+    Task winner = await Task.WhenAny(approvalTask, timeoutTask);
+
+    if (winner == approvalTask)
+    {
+        cts.Cancel();
+        bool approved = await approvalTask;
+        await context.CallActivityAsync(
+            approved ? "ProcessApproved" : "ProcessRejected", approvalId);
+    }
+    else
+    {
+        await context.CallActivityAsync("ProcessExpired", approvalId);
     }
 }
 ```
 
-**Sub-Orchestrations** allow an orchestrator to call another orchestrator, creating hierarchical workflows. This is useful for breaking complex workflows into manageable pieces.
+External events are delivered at least once, so include an ID in the payload that lets the orchestrator deduplicate. An event raised against an instance ID that doesn't exist is silently discarded.
+
+**Sub-orchestrations** let one orchestrator call another, which is how you decompose a workflow that has grown too large to reason about, and how you keep any single history bounded.
 
 ```csharp
-public static async Task RunOrchestrator(
-    IDurableOrchestrationContext context)
+[Function(nameof(ParentOrchestrator))]
+public static async Task<string> ParentOrchestrator(
+    [OrchestrationTrigger] TaskOrchestrationContext context)
 {
-    var result1 = await context.CallSubOrchestratorAsync("SubOrchestrator1", null);
-    var result2 = await context.CallSubOrchestratorAsync("SubOrchestrator2", result1);
-    return result2;
+    string staged = await context.CallSubOrchestratorAsync<string>("StageOne");
+    return await context.CallSubOrchestratorAsync<string>("StageTwo", staged);
 }
 ```
 
-### When Durable Functions Become Critical
+### When Durable Functions Are Worth It, and When They Aren't
 
-Durable Functions shine when you need to coordinate multiple services across long periods (minutes to days), handle failures with automatic retry, or maintain state across distributed operations. Without Durable Functions, you would implement all of this manually using databases, timers, and polling logic.
+Durable Functions earn their complexity when you need to coordinate multiple services over minutes to days, retry individual steps with independent policies, or keep workflow state without standing up a database and a scheduler to hold it.
 
-### Durable Functions State Management
+They are the wrong tool in three situations. If the work is a single step with a retry, the trigger's own retry behavior is simpler. If the workflow is mostly connector calls to SaaS systems rather than your own code, Logic Apps gives you the same durability without the replay constraints. And if the workflow must be edited while instances are in flight, note that changing an orchestrator's code changes what its history replays into, so in-flight instances written against the old shape can fail. The usual mitigations are versioning the orchestrator name and letting old instances drain, or deploying to a new task hub.
 
-Durable Functions use [event sourcing](https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-orchestrations){:target="_blank" rel="noopener noreferrer"} internally. Every action in an orchestrator (calling an activity, waiting for a timer, receiving an external event) is recorded as an event in the orchestration history. If the orchestrator fails and restarts, it replays the history to recover its state. This automatic replay is why orchestrators must be deterministic. The same history must always produce the same next action.
+### Storage Backends
+
+Durable Functions persist history, entity state, and internal messages to a [storage provider](https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-storage-providers){:target="_blank" rel="noopener noreferrer"} you choose. The choice is not reversible: there is no supported migration between backends, so switching means standing up a new app.
+
+| Backend | Position | Notes |
+|---|---|---|
+| **Durable Task Scheduler** | Recommended, fully managed | Highest throughput, managed identity support, includes a monitoring dashboard |
+| **Azure Storage** | Default, no setup | Uses queues, tables, and blobs in the app's storage account; consumption-priced; most mature |
+| **MSSQL** | Bring your own SQL Server | The only option for disconnected environments; **entities are not supported on .NET isolated** |
+| **Netherite** | Being retired | [Support ends 31 March 2028](https://azure.microsoft.com/updates/?id=489009){:target="_blank" rel="noopener noreferrer"}; not supported on Flex Consumption |
+
+New apps should default to the Durable Task Scheduler. Azure Storage remains a reasonable choice when you want the app's own storage account to be the only dependency.
 
 ---
 
 ## Hosting Models
 
-Azure Functions provides four hosting options, each with different scaling behaviors, cost structures, and operational characteristics.
+Azure Functions has five hosting options. They differ in how they scale, what networking they support, how they bill, and how long a function may run.
 
-### Consumption Plan
+**Flex Consumption** is the plan Microsoft directs new serverless apps to. It scales from zero to 1,000 instances, makes per-function scaling decisions rather than app-wide ones, supports virtual network integration, and lets you reduce cold starts with always-ready instances. Instance memory is fixed at 512 MB, 2,048 MB, or 4,096 MB.
 
-**What it provides:** Automatic scaling from zero, you pay only for execution time, functions scale up rapidly in response to demand.
+**Premium** keeps at least one instance warm at all times, runs on larger workers (EP1, EP2, and EP3 give 1, 2, and 4 vCPU with 3.5, 7, and 14 GB), and supports deployment slots and Hybrid Connections. It bills on core-seconds and memory across both active and prewarmed instances, so the floor is never zero.
 
-**Scaling behavior:**
-- Functions start from zero instances
-- Azure adds instances as demand increases (seconds to minutes latency for new instances)
-- Idle instances scale to zero after a period of inactivity
-- Peak scale-out capability is limited (typically hundreds of concurrent executions, not thousands)
+**Dedicated (App Service plan)** runs functions on an App Service plan you size and scale yourself, at App Service rates regardless of whether functions execute. It is the plan for continuous load, for reusing an existing plan, and for App Service Environment isolation.
 
-**Cost model:** Billed per GB-second of execution plus a monthly free grant.
+**Container Apps** runs a containerized function app in a managed environment, including on GPU compute. Scaling is event-driven, and scale to zero depends on the minimum replica count you set. Container Apps uses revisions rather than deployment slots.
 
-**Best for:** Development, testing, and event-driven workloads with unpredictable demand where cost is the primary concern.
+**Consumption** is the legacy plan. Windows Consumption is still generally available; Linux Consumption is closed to new apps, and the option retires **30 September 2028**. Apps still on the end-of-life v3 runtime on Linux Consumption stop running **30 September 2026**.
 
-**Trade-offs:**
-- Cold starts on the first invocation after scale-to-zero
-- Limited to short function execution times
-- Potential function timeout under high load (if all instances are busy)
-- No guaranteed scale-out capacity
+### Hosting Plan Comparison
 
-### Flex Consumption Plan
+| Aspect | Flex Consumption | Premium | Dedicated | Container Apps | Consumption (legacy) |
+|--------|-----------------|---------|-----------|----------------|----------------------|
+| **Scale to zero** | Yes | No | No | Yes, with min replicas 0 | Yes |
+| **Max instances** | 1,000 | 100 Windows, 20-100 Linux | 10-30, 100 on ASE | 300-1,000 | 200 Windows, 100 Linux |
+| **Timeout, default / max** | 30 min / unbounded | 30 min / unbounded | 30 min / unbounded | 30 min / unbounded | 5 min / 10 min |
+| **Memory per instance** | 512 MB, 2 GB, or 4 GB | 3.5-14 GB | 1.75-256 GB | Varies | 1.5 GB |
+| **VNet integration (outbound)** | Yes | Yes | Yes | Yes | No |
+| **Private endpoints (inbound)** | Yes | Yes | Yes | No | No |
+| **Deployment slots** | Not supported | 3 | 1-20 | Revisions instead | 2 |
+| **Container support** | No | Linux | Linux | Container-only | No |
+| **Billing** | Executions, active memory, always-ready instances | Core-seconds and memory, active and prewarmed | App Service plan rate | Container Apps plan | Executions, time, memory |
 
-[Flex Consumption](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan){:target="_blank" rel="noopener noreferrer"} is a newer option combining benefits of Consumption and Premium plans. It scales from zero like Consumption but offers faster cold starts, higher concurrency, and predictable performance like Premium.
+Two limits apply on every plan regardless of the timeout above. An HTTP-triggered function has **230 seconds** to respond, because of the Azure Load Balancer idle timeout, so longer work needs the async HTTP pattern. And the language worker process has a non-configurable **60-second** startup timeout.
 
-**Scaling behavior:**
-- Scales from zero to very high concurrency (thousands of concurrent executions)
-- Cold starts are significantly reduced compared to Consumption
-- Better warm start performance than Consumption through smarter pre-warming
+The "unbounded" maximums are not a promise that an execution runs forever. Flex Consumption and Premium give a running execution a 60-minute grace period during scale-in, and every plan gives 10 minutes during platform updates. Dedicated requires **Always On** for an unbounded timeout to mean anything.
 
-**Cost model:** Pay per GB-second like Consumption, but with higher rates due to reserved infrastructure.
+### Choosing a Plan
 
-**Best for:** Workloads that need scale-to-zero cost model but cannot tolerate Consumption's cold start latency or scale-out delays. Good for variable workloads with occasional traffic spikes that require rapid scaling.
+```
+Do you need a custom container image or GPU compute?
+├── yes ──▶ Container Apps
+└── no
+    │
+    Do you have a Windows-only dependency?
+    (v1 runtime, full .NET Framework, Windows-only PowerShell modules)
+    ├── yes ──▶ Dedicated on Windows, or Consumption on Windows (legacy)
+    └── no
+        │
+        Is load continuous, or do you need fixed billing,
+        or an App Service Environment?
+        ├── yes ──▶ Dedicated
+        └── no
+            │
+            Do you need deployment slots, Hybrid Connections,
+            or more than 4 GB per instance?
+            ├── yes ──▶ Premium
+            └── no  ──▶ Flex Consumption      (default for new apps)
+```
 
-**Trade-offs:**
-- Moderately higher cost than Consumption for the same execution time
-- Requires VNet integration setup if you need database or service connectivity inside a VNet
-- Newer offering with evolving feature set
+### What Is Scoped to What
 
-### Premium Plan
+Several settings behave in ways that only make sense once you know where they sit in the hierarchy: **subscription → hosting plan → function app → function**.
 
-**What it provides:** Pre-warmed instances, guaranteed concurrency, VNet integration, and longer execution times.
+A **hosting plan** holds one function app on Flex Consumption, up to 100 on Premium, and an unbounded number on Dedicated, so on Premium and Dedicated, one app's traffic spike scales the plan its neighbors are also running on.
 
-**Scaling behavior:**
-- Maintains at least one instance warm at all times (no scale-to-zero)
-- Adds instances as demand increases, but faster than Consumption
-- You reserve instance count (P1V2, P2V2, P3V2 sizes)
-- Elastic scale-out handles spikes beyond reserved capacity
+**`host.json` is scoped to the function app, not the function.** Concurrency settings such as `maxConcurrentCalls`, retry defaults, and everything under `extensions` apply to every function in the app. A throughput-hungry function and a fragile one cannot be tuned separately in the same app; splitting them into separate apps is the mechanism for that.
 
-**Cost model:** Fixed hourly rate for reserved instances plus overage charges for scale-out beyond reserved capacity.
+Concurrency limits are **per instance**, not per app. A `maxConcurrentCalls` of 16 across 50 instances is 800 concurrent messages arriving at your downstream service.
 
-**Best for:** Production workloads requiring predictable performance, VNet connectivity, or longer execution times. Suitable for businesses where cold start latency is unacceptable.
-
-**Trade-offs:**
-- Higher baseline cost (pre-warmed instances are always running)
-- Not suitable for highly variable workloads where Consumption would be cheaper
-- Still requires cost management (overage scale-out can become expensive under sustained high load)
-
-### Dedicated Plan (App Service Plan)
-
-**What it provides:** Full control over instance sizing and count. Functions run on the same infrastructure as App Service. You manage scaling through VM scale sets.
-
-**Scaling behavior:**
-- You choose instance size and count manually, or configure App Service autoscale rules
-- No automatic scale-to-zero
-- You scale by updating VM count, giving you precise control
-
-**Cost model:** Hourly rate for the App Service plan (based on instance size), regardless of function execution.
-
-**Best for:** High-volume workloads that would be expensive on consumption-based plans, environments where you already have App Service infrastructure, or workloads requiring custom Windows features or specific runtime versions.
-
-**Trade-offs:**
-- Highest operational overhead (you manage scaling rules)
-- Expensive for variable workloads (you pay for all instances regardless of usage)
-- Best for steady-state, predictable load
-
-### Container-Hosted Functions
-
-Functions can run in [containers on App Service](https://learn.microsoft.com/en-us/azure/azure-functions/functions-deploy-container){:target="_blank" rel="noopener noreferrer"} or [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/){:target="_blank" rel="noopener noreferrer"}. Container Apps combines managed container orchestration with scale-to-zero capability using KEDA (Kubernetes Event Scaling for Autoscaling).
-
-**When to use containers:**
-- You need custom runtime environments not supported by built-in runtimes
-- You have existing Docker images to repurpose
-- You want KEDA-based scaling with custom metrics
-- You prefer container-based deployment pipelines
-
-**Scaling with KEDA:** [KEDA (Kubernetes-based Event Driven Autoscaling)](https://keda.sh/){:target="_blank" rel="noopener noreferrer"} allows Container Apps to scale based on Azure service events (Storage Queue depth, Service Bus queue length) without needing pre-configured triggers. This enables fine-grained scaling behavior in containerized environments.
-
-### Hosting Plan Comparison Table
-
-| Aspect | Consumption | Flex Consumption | Premium | Dedicated | Containers |
-|--------|-------------|-----------------|---------|-----------|------------|
-| **Scale to zero** | Yes | Yes | No | No | No (typically) |
-| **Baseline cost** | Pay-per-use | Pay-per-use | Hourly for reserved | Hourly for VMs | Depends on plan |
-| **Cold start** | High (~5-10s) | Low (~1-2s) | None (pre-warmed) | None | Depends on image |
-| **Max concurrency** | Hundreds | Thousands | Thousands | Limited by VM count | Configurable |
-| **Execution time limit** | 5-10 minutes | 30 minutes | 60 minutes | Unlimited | Unlimited |
-| **VNet integration** | Limited | Via load balancer | Full | Full | Full |
-| **Cost for spiky load** | Cheapest | Moderate | Expensive | Expensive | Varies |
-| **Cost for steady load** | Expensive | Moderate | Moderate | Moderate-Cheap | Varies |
+A **task hub** is scoped to whichever apps point at it, which is why staging and production must not share one.
 
 ---
 
@@ -293,145 +308,197 @@ Functions can run in [containers on App Service](https://learn.microsoft.com/en-
 
 ### What Custom Handlers Enable
 
-[Custom handlers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-custom-handlers){:target="_blank" rel="noopener noreferrer"} allow you to write Azure Functions in any language by implementing a simple HTTP server. Azure Functions acts as a proxy, forwarding events to your HTTP server and returning responses. This enables languages like Rust, Go, Kotlin, or Swift to run as Azure Functions without waiting for native runtime support.
+[Custom handlers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-custom-handlers){:target="_blank" rel="noopener noreferrer"} let you write functions in any language that can serve HTTP. The Functions host stays in charge of triggers and bindings; your process only has to answer HTTP requests. This is how Rust, Go, C++, or anything else runs as a function without waiting for a native runtime.
 
 ### How Custom Handlers Work
 
-1. You write an HTTP server in your language of choice that listens on a port
-2. The Azure Functions runtime forwards each trigger event as an HTTP POST request to your server
-3. Your server processes the request and returns the result
-4. The runtime handles the response and manages function lifecycle
+```
+  trigger event                                            output bindings
+  (queue message, timer, HTTP request)                     (blob, queue, …)
+        │                                                        ▲
+        ▼                                                        │
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ Functions host process                                              │
+  │   1. receives the trigger and binds its input data                  │
+  │   2. POSTs a JSON payload to your handler                           │
+  │   4. reads Outputs and ReturnValue from the reply and writes them   │
+  └──────────────┬───────────────────────────────────▲──────────────────┘
+                 │ POST /<FunctionName>              │ 200 + JSON
+                 │ localhost:%FUNCTIONS_CUSTOMHANDLER_PORT%
+                 ▼                                   │
+  ┌──────────────────────────────────────────────────┴──────────────────┐
+  │ Your HTTP server, any language                                      │
+  │   3. does the work                                                  │
+  └─────────────────────────────────────────────────────────────────────┘
+```
 
-**Basic structure:**
-- Request body contains trigger data (HTTP body for HTTP triggers, queue message for Queue triggers, etc.)
-- Request headers include metadata about the invocation
-- Your server responds with status code and output data
-- The runtime handles marshalling between Azure services and HTTP
+You point the host at your executable in `host.json`:
+
+```json
+{
+  "version": "2.0",
+  "customHandler": {
+    "description": {
+      "defaultExecutablePath": "server",
+      "arguments": [ "--port", "%FUNCTIONS_CUSTOMHANDLER_PORT%" ]
+    },
+    "enableForwardingHttpRequest": false
+  }
+}
+```
+
+Setting `enableForwardingHttpRequest` to `true` forwards the original HTTP request to your handler rather than the wrapped payload, which is what you want when the function is only an HTTP trigger with an HTTP output and your server already speaks HTTP the way you need.
 
 ### When to Use Custom Handlers
 
-**Use custom handlers when:**
-- You need a language not supported by built-in runtimes (Rust for performance-critical functions, Go for rapid scaling)
-- You have existing HTTP microservices to expose as Functions
-- You want to reuse libraries only available in a specific language
-- You need fine-grained control over function behavior
+**Use them when** you need a language the runtime doesn't support natively, you have an existing HTTP service to expose through Functions triggers and bindings, or you need a library that exists only in one ecosystem.
 
-**Avoid custom handlers when:**
-- Built-in runtimes (C#, JavaScript, Python) provide what you need (startup overhead is higher)
-- Simplicity matters more than language choice
-- The HTTP forwarding latency is unacceptable (typically milliseconds overhead)
+**Avoid them when** a supported runtime already does the job. You take on the process lifecycle, the startup cost of your own binary, an extra local HTTP hop per invocation, and manual payload handling that the language workers do for you.
 
 ---
 
 ## Deployment Strategies
 
-### Blue-Green Deployment
+### Slots and the Zero-Downtime Question
 
-Azure Functions supports [deployment slots](https://learn.microsoft.com/en-us/azure/azure-functions/functions-deployment-slots){:target="_blank" rel="noopener noreferrer"} on Premium and Dedicated plans. Slots are staging environments where you deploy a new version before swapping it live.
+[Deployment slots](https://learn.microsoft.com/en-us/azure/azure-functions/functions-deployment-slots){:target="_blank" rel="noopener noreferrer"} are separate live instances of your app that you swap into production. Consumption gets 2 slots including production, Premium 3, and Dedicated 1-20. **Flex Consumption does not support slots**, and Container Apps uses revisions instead.
 
-**How it works:**
-1. Deploy new function version to a staging slot
-2. Test the staging slot (invoke functions, verify behavior)
-3. Swap traffic from production slot to staging slot (near-instantaneous)
-4. If issues occur, swap back to the previous version
+Note what that means in practice: the plan Microsoft recommends for new serverless apps is the one without slots. On Flex Consumption you get zero-downtime deployment through [site update strategies](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-site-updates){:target="_blank" rel="noopener noreferrer"}, which roll new instances in gradually rather than swapping a warmed slot into place.
 
-**Benefits:**
-- Zero-downtime deployments
-- Ability to test before swapping
-- Instant rollback if something breaks
+Use slots where the plan offers them, but be precise about what they buy:
 
-**Trade-offs:**
-- Slots are only available on Premium and Dedicated plans (not Consumption)
-- Swap operation still involves a brief connection warm-up
+- Instances are warmed before the swap, so a swapped-in app doesn't cold-start on its first request
+- The swap is a routing change, so no incoming trigger is dropped
+- Rolling back is another swap
+- **A swap does not guarantee zero downtime.** Executions in flight can be terminated, and scaled-out apps can see degraded availability during the swap
 
-### Zip Deploy
+Settings related to triggers and bindings must be marked as **deployment slot settings**, meaning sticky, *before* the first swap, or events will be routed to the wrong instance after it. Virtual network integration, hybrid connections, service endpoints, and private endpoints never swap by design.
 
-[Zip deployment](https://learn.microsoft.com/en-us/azure/azure-functions/deployment-zip-push){:target="_blank" rel="noopener noreferrer"} packages your function code as a zip file and uploads it directly to Azure. This is the fastest way to deploy functions from CI/CD pipelines.
+### Zip Deploy and Containers
 
-### Container Deployment
-
-For Functions running in containers, deployment follows standard container image workflows:
-1. Build and push image to a container registry
-2. Update the Function App to pull from the new image tag
-3. Container Apps or App Service pulls the new image and restarts
-
-Container deployment integrates naturally with existing CI/CD pipelines using Docker.
+[Zip deployment](https://learn.microsoft.com/en-us/azure/azure-functions/deployment-zip-push){:target="_blank" rel="noopener noreferrer"} pushes a packaged build directly to the app and is the normal path from a CI/CD pipeline. For container-hosted functions, deployment follows the ordinary image workflow: build, push to a registry, point the app at the new tag, and let the platform pull and restart.
 
 ---
 
 ## Concurrency, Throttling, and Performance
 
-### Instance Concurrency
+### Per-Instance Concurrency
 
-Each Azure Functions instance can execute multiple functions concurrently. The number of concurrent executions depends on the hosting plan and function language.
+Each instance runs many invocations at once, and the limits are set per trigger type rather than globally. This is [fixed per-instance concurrency](https://learn.microsoft.com/en-us/azure/azure-functions/functions-concurrency){:target="_blank" rel="noopener noreferrer"}, the default model. Most triggers configure it in `host.json`; Kafka and Cosmos DB configure it in the function declaration.
 
-**C# has explicit concurrency limits:** By default, a single instance can execute one async function at a time (orchestrator pattern). You configure `functionTimeout` and `maxConcurrentRequests` in host.json to allow more parallel work.
+The defaults that most often need changing:
 
-**JavaScript and Python are naturally concurrent:** Due to their async/await models, instances naturally handle multiple concurrent operations per instance.
+| Trigger | Setting | Default |
+|---|---|---|
+| Service Bus, single message | `maxConcurrentCalls` | 16, **multiplied by the instance's core count** |
+| Service Bus, sessions | `maxConcurrentSessions` | 8 |
+| Service Bus, batch | `maxMessageBatchSize` | 1,000 |
+| Queue Storage | `batchSize` | 16, maximum 32 |
+| HTTP on Flex Consumption | per-instance concurrency | 4 at 512 MB, 16 at 2 GB, 32 at 4 GB; 1 for Python |
 
-### Throttling in Service Connections
+The core multiplier on `maxConcurrentCalls` catches people out. On a two-core worker, the default 16 is 32 concurrent messages per instance.
 
-When your functions call external services through bindings (Service Bus, Storage, Cosmos DB), Azure applies throttling to prevent overwhelming the service. Service Bus clients are throttled at 1000 concurrent operations per instance by default. Storage has rate limits per account.
+**Dynamic concurrency** is the alternative. Turn it on in `host.json` and the host learns the right level per function by watching CPU and thread pressure, overriding your configured values:
 
-**How to handle throttling:**
-- Use [backoff-retry patterns](https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-error-handling-timeout-handling){:target="_blank" rel="noopener noreferrer"} with exponential backoff (Durable Functions provide built-in retry)
-- Partition work across multiple services (multiple Service Bus namespaces, multiple Storage accounts)
-- Use [autoscaling with target-based metrics](https://learn.microsoft.com/en-us/azure/azure-functions/functions-monitoring){:target="_blank" rel="noopener noreferrer"} (scale down when throttling signals appear)
+```json
+{
+  "version": "2.0",
+  "concurrency": {
+    "dynamicConcurrencyEnabled": true,
+    "snapshotPersistenceEnabled": true
+  }
+}
+```
 
-### Cold Start Mitigation
+It is off by default, supported only for the Blob Storage, Queue Storage, and Service Bus triggers on version 5.x extensions, and it starts each function at a concurrency of one and climbs. That learning period is the cost. `snapshotPersistenceEnabled`, on by default, persists what it learned so new instances don't start from one again.
 
-Cold starts occur when an instance needs to start the runtime and load your function code. This happens on Consumption plan when all instances are busy, or when scaling from zero.
+### Throttling Downstream
 
-**Mitigation strategies:**
-- **Premium plan:** Eliminates cold starts by keeping instances warm
-- **Flex Consumption:** Reduces cold starts through better pre-warming
-- **Application Insights warm-up:** Use a timer function to periodically invoke your function before the application would otherwise go idle (though this adds cost)
-- **Code optimization:** Lazy-load dependencies, reduce function startup code, compile functions ahead of time in C#
+Functions scale on the depth of *your* trigger source, which has nothing to do with what your database or downstream API can absorb. A queue backlog will happily scale you to 200 instances pointed at a SQL database sized for ten connections.
+
+**How to handle it:**
+- Cap per-instance concurrency deliberately rather than accepting defaults, remembering that the effective total is the per-instance value times the instance count
+- Cap the instance count itself on plans that allow it, such as Flex Consumption, Premium, and Container Apps
+- Retry with backoff, and let Durable Functions own the retry policy for multi-step work
+- Partition across multiple namespaces or storage accounts when a single entity's own limits are the ceiling
+- Alert on downstream throttling metrics, not only on function failures
+
+### Cold Starts
+
+A cold start happens when an instance has to start the runtime and load your code, which happens on scale from zero and on each newly added instance. **Microsoft publishes no cold start duration figures**, and every number in circulation comes from a third-party benchmark against a particular app. Measure your own.
+
+What the platform documents is which plans expose cold starts and what reduces them: always-ready instances on Flex Consumption and Premium, Always On for Dedicated, and a minimum replica count of one or more on Container Apps. On your side, the levers are keeping the deployment package small, deferring expensive initialization until it is needed, and avoiding work in the constructor path that every instance pays for.
 
 ---
 
 ## Error Handling and Retry Policies
 
-### Built-in Retry for Bindings
+### Retry Is Not Uniform Across Triggers
 
-Bindings for Azure services (Service Bus, Storage, Event Hubs) have built-in retry logic. If a trigger fires and your function fails, the runtime automatically retries the function with exponential backoff.
+This is the part of Functions most often described wrong. Only four trigger types support [Functions retry policies](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-error-pages){:target="_blank" rel="noopener noreferrer"}, the runtime-enforced kind you declare with an attribute. Everything else relies on the binding extension or the source service.
 
-**Retry behavior varies by trigger:**
-- **Service Bus:** Retries with exponential backoff up to 10 times (configurable)
-- **Storage Queue:** Retries up to 5 times (after which the message goes to a poison queue)
-- **Event Hubs:** No automatic retry (your function must handle failures)
+| Trigger | Where retry comes from | Behavior |
+|---|---|---|
+| **Cosmos DB, Event Hubs, Kafka, Timer** | Functions retry policies | The runtime reruns the execution; configured per function |
+| **Service Bus** | Binding extension | `host.json` settings on extension 5.x; older versions rely on the queue's max delivery count and the dead-letter queue |
+| **Queue Storage** | Binding extension | `maxDequeueCount`, default 5, then the message moves to the poison queue |
+| **Blob Storage** | Binding extension | Poison blobs, configured through the queues section of `host.json` |
+| **Event Grid** | The event subscription | Event Grid retries with backoff and dead-letters to a **blob container** |
+
+Two things follow. First, a retry policy attribute on a Service Bus or Queue trigger does nothing, because those triggers are not in the supported list. Second, the retry count for the policy-based triggers is held in instance memory, so an instance failure loses it: treat the maximum as best effort and design for idempotency regardless.
+
+Event Hubs deserves a specific warning. Checkpoints are not written until the retry policy for an execution finishes, so a retrying batch pauses progress on its entire partition.
 
 ### Durable Functions Retry
 
-Durable Functions provide explicit retry policies for activity functions and sub-orchestrators.
+Durable Functions apply retry policies to individual activities and sub-orchestrations, which is the finest-grained retry available anywhere in Functions.
 
 ```csharp
-var retryOptions = new RetryOptions(
+TaskOptions options = TaskOptions.FromRetryPolicy(new RetryPolicy(
+    maxNumberOfAttempts: 5,
     firstRetryInterval: TimeSpan.FromSeconds(1),
-    maxNumberOfAttempts: 5)
-{
-    BackoffCoefficient = 2.0,
-    Handle = ex => ex is not ArgumentException
-};
+    backoffCoefficient: 2.0,
+    maxRetryInterval: TimeSpan.FromMinutes(1),
+    retryTimeout: TimeSpan.FromMinutes(10)));
 
-var result = await context.CallActivityWithRetryAsync(
-    "MyActivity", retryOptions, input);
+string result = await context.CallActivityAsync<string>("MyActivity", input, options);
 ```
 
-**Retry configuration:**
-- `firstRetryInterval`: Delay before first retry
-- `maxNumberOfAttempts`: Maximum retry attempts
-- `BackoffCoefficient`: Multiplier for delay between retries (exponential backoff)
-- `Handle`: Predicate to determine if an exception should be retried
+`retryTimeout` is the one people miss: it bounds the total time spent retrying, which matters more than the attempt count once `backoffCoefficient` starts pushing the intervals out.
+
+When you need to decide per exception rather than per count (retry a timeout, give up immediately on a validation error), use a retry handler instead of a policy:
+
+```csharp
+TaskOptions options = TaskOptions.FromRetryHandler(retryContext =>
+{
+    if (retryContext.LastFailure.IsCausedBy<ArgumentException>())
+    {
+        return false;
+    }
+
+    return retryContext.LastAttemptNumber < 5;
+});
+
+try
+{
+    await context.CallActivityAsync("FlakyActivity", options: options);
+}
+catch (TaskFailedException)
+{
+    // reached when the handler returns false
+}
+```
 
 ### Dead-Letter Patterns
 
-When retries exhaust, messages move to dead-letter storage for manual inspection.
+When retries are exhausted, the message has to go somewhere you will actually look.
 
-**Implementing dead-lettering:**
-- Service Bus has built-in dead-letter queues for messages that fail processing after max delivery count
-- For custom logic, catch exceptions, log details, and store failed items in a dead-letter table or queue
-- Periodically review dead-letter storage and manually retry or fix root causes
+- Service Bus dead-letters automatically once max delivery count is reached, and also on lock expiry and message expiry
+- Queue Storage moves the message to `<queue-name>-poison` after `maxDequeueCount` attempts
+- Event Grid dead-letters to a blob container you configure on the subscription, not to a queue
+- Blob triggers write poison blobs through the same queue mechanism
+
+None of these alert anyone. Put a function on the poison queue and on the dead-letter queue that at minimum logs the payload and raises a metric, and alert on the depth of both.
 
 ---
 
@@ -439,112 +506,77 @@ When retries exhaust, messages move to dead-letter storage for manual inspection
 
 ### Custom Bindings
 
-Azure Functions provides [binding extensions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-triggers-bindings){:target="_blank" rel="noopener noreferrer"} for common Azure services. You can also build custom bindings as NuGet packages for domain-specific logic or third-party services.
-
-**When to build custom bindings:**
-- You have domain-specific logic that many functions need (e.g., authorization, data transformation)
-- You want to abstract away boilerplate code
-- You have internal services that need Function integration
+Azure Functions ships [binding extensions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-triggers-bindings){:target="_blank" rel="noopener noreferrer"} for common Azure services, and you can build your own as NuGet packages. Build one when a cross-cutting concern (an internal service client, a shared authorization step, a house data format) appears in enough functions that the boilerplate outweighs the cost of maintaining an extension. For anything less, dependency injection is the simpler answer.
 
 ### Event Grid Triggers
 
-[Event Grid triggers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-grid-trigger){:target="_blank" rel="noopener noreferrer"} respond to system and custom events. Event Grid provides publish-subscribe messaging with filtering, dead-lettering, and retry.
+[Event Grid triggers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-event-grid-trigger){:target="_blank" rel="noopener noreferrer"} respond to system and custom events with a push model, so Event Grid delivers to your function rather than your function polling. Retry, backoff, and dead-lettering are configured on the event subscription rather than in your app, and filtering by event type, subject prefix or suffix, or advanced attributes happens before delivery, so you are not billed for events you would have discarded.
 
-**Event Grid characteristics:**
-- Push model (Event Grid pushes events to your Function instead of polling)
-- Automatic retry with exponential backoff
-- Built-in dead-lettering for events that fail after retries
-- Filtering by event type, subject, or custom properties
+The Event Grid blob trigger is also the recommended blob trigger implementation, and the only one Flex Consumption supports. The default `LogsAndContainerScan` implementation polls storage logs and can lag by minutes.
 
-### Service Bus and Queue Triggers
+### Service Bus and Queue Storage Triggers
 
-[Service Bus triggers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-service-bus){:target="_blank" rel="noopener noreferrer"} provide message-based coordination with processing guarantees.
+[Service Bus triggers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-service-bus){:target="_blank" rel="noopener noreferrer"} bring ordering through sessions, a built-in dead-letter queue, scheduled delivery, and transactions across entities. Queue Storage is the cheaper, simpler option: a plain competing-consumers queue with at-least-once delivery, no ordering guarantee, and no publish-subscribe of any kind. If you need fan-out to multiple subscribers, that is a Service Bus topic or Event Grid, not a storage queue.
 
-**Service Bus features:**
-- Message ordering (partitioned queues)
-- Dead-letter queue for failed messages
-- Session state for maintaining per-message context
-- Delayed message delivery (schedule processing)
-
-**When to use Service Bus vs Storage Queue:**
-- **Service Bus:** Message ordering, sessions, advanced routing, compliance-sensitive workloads
-- **Storage Queue:** Simple pub-sub, cost-sensitive, high throughput, short TTL messages
+Use extension 5.x for either. The legacy Service Bus SDKs (`WindowsAzure.ServiceBus`, `Microsoft.Azure.ServiceBus`, and `com.microsoft.azure.servicebus`) and the SBMP protocol are retired on **30 September 2026**.
 
 ### Kafka Triggers
 
-Azure Functions supports [Kafka triggers and bindings](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-kafka){:target="_blank" rel="noopener noreferrer"} for consuming from Apache Kafka topics on Azure Event Hubs or self-managed Kafka clusters.
+Azure Functions supports [Kafka triggers and bindings](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-kafka){:target="_blank" rel="noopener noreferrer"} against the Event Hubs Kafka endpoint or a self-managed cluster, on Flex Consumption, Premium, and Dedicated, but **not on Consumption**. On Premium you must enable runtime scale monitoring for the app to scale beyond one instance.
 
-**Kafka characteristics:**
-- Parallel processing across partitions (one instance per partition)
-- Exactly-once delivery semantics with offset management
-- Batch processing support
+Two practical constraints: managed identity is not supported for Kafka connections, so credentials come from Key Vault or App Configuration; and consumption is offset-based within a consumer group, which means partition count caps parallelism and functions must be idempotent.
 
 ---
 
 ## Stateful vs Stateless Design
 
-### Stateless Functions (Default)
+### Stateless Functions Are the Default
 
-Stateless functions do not maintain state between invocations. Each invocation is independent.
+Each invocation is independent, which is what makes horizontal scaling free of coordination and makes failures cheap: a queue-triggered processor that crashes leaves the message to be redelivered.
 
-**Stateless advantages:**
-- Simple to understand and debug
-- Scale horizontally without coordination
-- No distributed state consistency issues
-
-**Stateless disadvantages:**
-- External storage required to maintain state
-- Multiple functions need to coordinate through messages
-
-Consider a stateless transaction processor that receives messages from a queue, processes them, and writes results to a database. If the function crashes, the message is retried from the queue.
+The cost is that state lives somewhere else, and multi-step work becomes a set of functions coordinating through messages, which means you own the correlation, the timeouts, and the compensation logic.
 
 ### Stateful Design with Durable Functions
 
-Durable Functions maintain state across invocations using event history.
-
-**Stateful advantages:**
-- Orchestrator state is automatically recovered from history
-- No need for external state storage for workflow state
-- Clear, imperative code that looks like single-threaded programming
-
-**Stateful disadvantages:**
-- Orchestrators must be deterministic (same input = same execution flow)
-- History grows over time (though cleanup policies can manage this)
-- More complex than stateless
-
-Consider a stateful approval workflow that uses an orchestrator to maintain workflow state across approval steps, timeouts, and human decisions. The orchestrator automatically resumes from the last checkpoint if it fails.
+An orchestrator holds workflow state in its history, so a multi-step approval flow with timeouts and human decisions is one readable method rather than a table of workflow rows and a timer job. The price is the determinism constraint, a history that grows with every step, and the versioning problem described earlier.
 
 ### Entity Functions for Shared State
 
-Entity functions maintain durable state accessible to other functions. Unlike orchestrators, entities can receive multiple messages and maintain mutable state.
+Entities hold mutable state addressed by a key and process their operations one at a time, which makes them the right tool for counters, per-user session state, resource locks, and aggregations that would otherwise need optimistic concurrency against a database.
 
-**Entity use cases:**
-- Counters (increment/decrement with ordering guarantees)
-- Approval workflows (track who approved, when)
-- Resource locks (prevent concurrent modification)
-- Session state (store per-user context)
+In the isolated worker model, the cleanest form derives from `TaskEntity<TState>`, which deserializes state into the `State` property and supports constructor injection:
 
 ```csharp
-[FunctionName("Counter")]
-public static async Task Counter(
-    [EntityFunctionInput] IDurableEntityContext ctx)
+public class Counter : TaskEntity<int>
 {
-    var state = ctx.State<int>();
+    public void Add(int amount) => this.State += amount;
 
-    switch (ctx.OperationName)
+    public Task Reset()
     {
-        case "increment":
-            state++;
-            break;
-        case "decrement":
-            state--;
-            break;
-        case "get":
-            ctx.SetResult(state);
-            break;
+        this.State = 0;
+        return Task.CompletedTask;
     }
+
+    public Task<int> Get() => Task.FromResult(this.State);
+
+    [Function(nameof(Counter))]
+    public static Task Run([EntityTrigger] TaskEntityDispatcher dispatcher)
+        => dispatcher.DispatchAsync<Counter>();
 }
 ```
+
+The entry point **must be `static`**, and it must not be named `RunAsync`, because `ITaskEntity` already defines an instance method by that name and the ambiguity surfaces as a runtime error rather than a compile error.
+
+An orchestrator signals an entity one-way, or calls it and awaits the result:
+
+```csharp
+var entityId = new EntityInstanceId("Counter", "myCounter");
+
+await context.Entities.SignalEntityAsync(entityId, "Add", 1);
+int currentValue = await context.Entities.CallEntityAsync<int>(entityId, "Get");
+```
+
+Two constraints on the isolated model shape how far you can take entities. Interface-based typed proxies are in-process only, so isolated access is string-based and unchecked at compile time. And the MSSQL backend does not support entities on .NET isolated at all.
 
 ---
 
@@ -552,40 +584,50 @@ public static async Task Counter(
 
 ### Code Optimization
 
-**Dependency injection:** Use Azure Functions dependency injection to avoid repeatedly instantiating expensive objects (HTTP clients, database connections) on every invocation.
+**Dependency injection** keeps expensive clients alive across invocations instead of rebuilding them per call. Registering `HttpClient` through `IHttpClientFactory` also gets you connection reuse and rotation, which matters because socket exhaustion is the classic Functions failure under load.
 
 ```csharp
-public class MyFunction
+public class RateFunctions
 {
     private readonly HttpClient _httpClient;
 
-    public MyFunction(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
+    public RateFunctions(IHttpClientFactory factory)
+        => _httpClient = factory.CreateClient();
 
-    [FunctionName("MyFunction")]
-    public async Task Run([HttpTrigger] HttpRequest req)
+    [Function(nameof(GetRates))]
+    public async Task<HttpResponseData> GetRates(
+        [HttpTrigger(AuthorizationLevel.Function, "get")] HttpRequestData req)
     {
-        // _httpClient is reused across invocations
-        var response = await _httpClient.GetAsync("...");
+        // the client and its connection pool are reused across invocations
+        string payload = await _httpClient.GetStringAsync("https://api.example.com/rates");
+
+        HttpResponseData response = req.CreateResponse(HttpStatusCode.OK);
+        await response.WriteStringAsync(payload);
+        return response;
     }
 }
 ```
 
-**Lazy initialization:** Load large dependencies (machine learning models, large datasets) only when needed, not on every invocation.
+**Lazy initialization** defers loading anything large (a model, a lookup table, a compiled ruleset) until a code path actually needs it, so instances that never hit that path never pay for it.
 
-**Async patterns:** Use async/await throughout to avoid blocking threads and waste resources.
+**Async throughout.** Blocking on a `Task` inside a function ties up a thread the host needs for other concurrent invocations on the same instance, which turns a concurrency setting into a deadlock risk.
 
-### Monitoring and Performance Analysis
+### Monitoring
 
-[Application Insights](https://learn.microsoft.com/en-us/azure/azure-functions/functions-monitoring){:target="_blank" rel="noopener noreferrer"} integration is built into Azure Functions and tracks execution time, failures, and dependencies.
+[Application Insights](https://learn.microsoft.com/en-us/azure/azure-functions/functions-monitoring){:target="_blank" rel="noopener noreferrer"} is integrated with Functions and is where execution time, failures, and dependency calls land. Connect it with a **connection string**, not an instrumentation key.
 
-**Key metrics to monitor:**
-- Function execution time (identify slow operations)
-- Failure rates (identify unstable dependencies)
-- Dependency call counts (identify unintended N+1 calls)
-- Cold start frequency and duration
+Instrumentation is OpenTelemetry now. Functions turns it on in `host.json`:
+
+```json
+{
+  "version": "2.0",
+  "telemetryMode": "OpenTelemetry"
+}
+```
+
+This is **not supported for C# in-process apps**, which is one more reason the November 2026 in-process deadline is a thing to plan around rather than defer.
+
+Watch execution duration against the plan's timeout, failure rate split by function rather than app-wide, dependency call counts (an N+1 inside a fan-out multiplies by the batch size), the depth of every poison and dead-letter queue, and instance count against the plan's ceiling. An app pinned at its maximum instance count is throttled whether or not anything is failing.
 
 ---
 
@@ -595,25 +637,17 @@ public class MyFunction
 
 | Aspect | Azure Functions + Durable | AWS Lambda + Step Functions |
 |--------|--------------------------|---------------------------|
-| **Orchestration** | Built into Functions | Separate Step Functions service |
-| **Hosting models** | Consumption, Premium, Dedicated | Lambda only |
-| **Language support** | C#, JavaScript, Python, Java, PowerShell, custom handlers | Node, Python, Java, Go, C# (via custom runtime) |
-| **State management** | Event sourcing in Durable Functions | Step Functions state machine definitions |
-| **Cost model** | GB-second based | Per-invocation + GB-second |
-| **Scaling** | Automatic (plan-dependent) | Automatic |
-| **VNet integration** | Premium/Dedicated/Flex with load balancer | Requires additional configuration |
+| **Where orchestration lives** | In your code, as an extension of the compute service | In a separate service, as a state machine definition |
+| **Orchestration authoring** | Ordinary control flow in the app's language | Amazon States Language, declarative |
+| **State durability** | Event-sourced history in a storage backend you choose | Managed by Step Functions |
+| **Service integration** | Declarative triggers and bindings, including outputs | Event source mappings; SDK calls for outputs |
+| **Hosting choice** | Five plans with different scaling and networking | One managed runtime, tuned by memory and concurrency |
 
-**Rough feature parity:** Durable Functions orchestrators are equivalent to Step Functions state machines, activity functions to Lambda, and entity functions to DynamoDB with built-in locks.
+The trade-off is the one that first row implies. Writing the workflow as code means it can be unit-tested, refactored, and reviewed like code; it also means the workflow inherits the replay determinism constraint and the versioning problem, neither of which a declarative state machine has.
 
-### vs Google Cloud Functions
+### vs Google Cloud
 
-| Aspect | Azure Functions | Google Cloud Functions |
-|--------|-----------------|----------------------|
-| **Pricing** | GB-second based | Per invocation + GB-second (lower invocation cost) |
-| **Orchestration** | Durable Functions built-in | Cloud Workflows (separate service) |
-| **Cold start** | Consumption: moderate; Premium: none | Generally faster cold starts |
-| **VNet integration** | Limited on Consumption; full on Premium | Native VPC integration |
-| **Memory scaling** | Per hosting plan | Per function (128 MB to 16 GB) |
+Google's equivalent split is Cloud Run functions for compute and Cloud Workflows for orchestration, again a separate declarative service, so the structural contrast above applies to both hyperscaler competitors. Cloud Run functions configure memory per function, where Azure sets it per plan or per instance size. That is the difference that most often forces a redesign during a migration: an Azure function app is sized as a unit, so one memory-hungry function pulls the whole app's instance size up with it.
 
 ---
 
@@ -621,82 +655,82 @@ public class MyFunction
 
 ### Pitfall 1: Non-Deterministic Orchestrator Code
 
-**Problem:** Writing orchestrators that include non-deterministic operations like `DateTime.Now` or random numbers.
+**Problem:** Using `DateTime.UtcNow`, `Guid.NewGuid()`, random numbers, or direct I/O inside an orchestrator.
 
-**Result:** When the orchestrator replays from history, the non-deterministic code produces different results, breaking the workflow state.
+**Result:** On replay the code takes a different path than the history records, and the orchestration fails or corrupts its state.
 
-**Solution:** Use `context.CurrentUtcDateTime` instead of `DateTime.UtcNow`, avoid random operations in orchestrators, and keep non-deterministic logic in activity functions.
-
----
-
-### Pitfall 2: Choosing Consumption Plan for Unpredictable Latency Workloads
-
-**Problem:** Deploying on Consumption plan for latency-sensitive functions without accounting for cold starts and scale-out delays.
-
-**Result:** Users experience variable response times (100ms warm start vs 5-10s cold start), violating SLA expectations.
-
-**Solution:** Use Premium or Flex Consumption plans for latency-sensitive workloads. Accept higher baseline cost for predictable performance.
+**Solution:** Use `context.CurrentUtcDateTime` and `context.NewGuid()`, and move anything genuinely non-deterministic into an activity function, whose result is recorded once and replayed thereafter.
 
 ---
 
-### Pitfall 3: Ignoring Throttling Limits on Azure Services
+### Pitfall 2: Treating the C# In-Process Model as Current
 
-**Problem:** Functions scale up faster than downstream services (Service Bus, SQL Database) can handle, causing cascading failures.
+**Problem:** New code written against `[FunctionName]`, `IDurableOrchestrationContext`, and the `Microsoft.Azure.WebJobs.Extensions.*` packages.
 
-**Result:** Functions timeout waiting for throttled service calls, messages pile up in trigger queues, and the function app becomes unresponsive.
+**Result:** The app sits on a model that loses support on **10 November 2026**, cannot use OpenTelemetry telemetry mode, and needs every function signature rewritten to migrate.
 
-**Solution:** Implement backoff-retry logic, use Durable Functions for long-running operations, partition work across multiple service instances, and monitor throttling metrics.
-
----
-
-### Pitfall 4: Storing Large State in Orchestrator History
-
-**Problem:** Passing large objects as input to orchestrators or storing large results in activity outputs.
-
-**Result:** History grows rapidly, consuming storage quota and degrading performance.
-
-**Solution:** Store large data in external storage (blob, database) and pass references (IDs, URLs) through orchestrations instead.
+**Solution:** Start new apps on the isolated worker model, and schedule the migration for existing ones rather than treating the deadline as distant.
 
 ---
 
-### Pitfall 5: Not Planning for Dead-Letter Handling
+### Pitfall 3: Scaling Faster Than Downstream Services
 
-**Problem:** Functions fail intermittently, messages exhaust retries, and dead-letter messages accumulate without investigation.
+**Problem:** Functions scale on trigger backlog depth while a database, an API, or a partitioned service stays the size it was.
 
-**Result:** Work is silently lost; root causes remain undiagnosed.
+**Result:** Throttled calls, timeouts inside functions, a growing trigger backlog that scales the app further, and a failure that looks like a Functions problem.
 
-**Solution:** Monitor dead-letter queues, implement automated dead-letter processing (log, alert, store for review), periodically review and retry failed messages.
+**Solution:** Set per-instance concurrency deliberately, cap the app's maximum instance count, and monitor downstream throttling metrics. The effective concurrency is the per-instance limit times the instance count.
 
 ---
 
-### Pitfall 6: Assuming All Hosting Plans Have Same Behavior
+### Pitfall 4: Large State in Orchestration History
 
-**Problem:** Developing on Consumption plan expecting scale-to-zero, then deploying to Premium plan without adjusting expectations.
+**Problem:** Passing large objects into orchestrators, or returning large results from activities.
 
-**Result:** Costs exceed budget due to always-on instances, or performance unexpectedly drops when scaling expectations change.
+**Result:** Every replay reads and deserializes the whole history, so orchestrations get slower as they progress, and storage costs climb with them.
 
-**Solution:** Choose the hosting plan early based on load characteristics and performance requirements, and test on the actual target plan.
+**Solution:** Pass identifiers and let activities fetch what they need. For long-running or eternal orchestrations, use `ContinueAsNew` to reset the history, or split the work into sub-orchestrations that each keep a bounded history.
+
+---
+
+### Pitfall 5: Assuming a Retry Policy Applies
+
+**Problem:** Adding a retry policy attribute to a Service Bus or Queue Storage trigger and assuming failures retry the way it says.
+
+**Result:** Nothing retries the way you configured. Delivery counts and dead-lettering govern instead, silently, with different limits.
+
+**Solution:** Check the trigger against the retry table above. Only Cosmos DB, Event Hubs, Kafka, and Timer honor retry policies; everything else is configured on the binding extension or the source service.
+
+---
+
+### Pitfall 6: Expecting Slots on Flex Consumption
+
+**Problem:** Designing a blue-green deployment around slot swaps, then choosing Flex Consumption because it is the recommended serverless plan.
+
+**Result:** No slots exist on that plan, and the deployment design has to be rebuilt late.
+
+**Solution:** Decide the plan and the deployment strategy together. Flex Consumption uses rolling site updates for zero-downtime deployment; slots are a Premium, Dedicated, and Consumption feature, and even there a swap does not guarantee zero downtime for executions already in flight.
 
 ---
 
 ## Key Takeaways
 
-1. **Durable Functions add orchestration and state management to Azure Functions.** Orchestrators define workflows, activity functions do the work, and entity functions maintain shared state. This is equivalent to AWS Step Functions but integrated directly into Azure Functions.
+1. **Durable Functions turn a workflow into ordinary code, and replay is the price.** Every advance re-executes the orchestrator from the top against its recorded history. Determinism constraints, history growth, and the versioning problem all follow from that one mechanism.
 
-2. **Choose the hosting plan based on load and cost priorities.** Consumption offers lowest cost for variable workloads. Premium offers predictable performance for production. Flex Consumption bridges both with better cold starts than Consumption.
+2. **Write new C# on the isolated worker model.** In-process support ends 10 November 2026, it cannot use OpenTelemetry telemetry mode, and the type names differ enough that migration is a real edit rather than a package bump.
 
-3. **Custom handlers enable any language.** If your primary language isn't natively supported, custom handlers provide a path forward, albeit with higher startup overhead.
+3. **Flex Consumption is the default for new serverless apps, and Consumption is legacy.** Flex scales to 1,000 instances, supports virtual network integration, and has no 10-minute timeout ceiling, but it has no deployment slots, so pick the plan and the deployment strategy together.
 
-4. **Concurrency and throttling require careful management.** Azure services throttle heavily under load. Use backoff-retry, partition work, and scale horizontally to handle throttling gracefully.
+4. **Two limits ignore your timeout setting.** HTTP responses cap at 230 seconds on every plan, and the language worker gets 60 non-configurable seconds to start.
 
-5. **Stateless functions are the default; use Durable Functions for workflows.** Most functions should be stateless and independently scalable. Durable Functions are for coordinating multi-step workflows.
+5. **Retry behavior is per trigger, not per platform.** Only Cosmos DB, Event Hubs, Kafka, and Timer honor Functions retry policies. Everything else uses delivery counts, poison queues, or the source service's own retry.
 
-6. **Event sourcing powers Durable Functions state recovery.** Orchestrators must be deterministic because they replay from history on restart. This enables automatic state recovery without explicit state storage.
+6. **Concurrency limits are per instance and `host.json` is per app.** The number that reaches your database is the per-instance limit times the instance count, and you cannot tune two functions differently inside one app.
 
-7. **Blue-green deployments with slots enable zero-downtime updates.** Slots are available only on Premium and Dedicated plans, but they provide the ability to test before swapping.
+7. **Choose the Durable storage backend deliberately, because you cannot change it.** Durable Task Scheduler is the recommended managed option; Netherite loses support 31 March 2028, and MSSQL does not support entities on .NET isolated.
 
-8. **Monitor cold starts, failures, and dependency performance.** Application Insights is integrated and should be your primary diagnostic tool.
+8. **No one publishes Azure Functions cold start durations.** Microsoft documents which plans scale to zero and what mitigates it. Every figure you will find quoted is somebody else's benchmark, so measure your own app.
 
-9. **Container deployment enables custom runtime environments.** Functions can run in containers on App Service or Container Apps, enabling custom languages and libraries via custom handlers.
+9. **Dead-letter destinations are all silent by default.** Poison queues, Service Bus dead-letter queues, and Event Grid's dead-letter blob container fill up without alerting anyone. Put a function and an alert on each one.
 
-10. **Dead-letter handling is essential for reliability.** Messages that fail retries must be captured, logged, and reviewed to prevent silent failures.
+10. **Entities are the answer to shared mutable state, with isolated-model caveats.** They serialize operations per key, which handles counters and locks cleanly, but typed proxies are in-process only and MSSQL cannot back them on isolated.

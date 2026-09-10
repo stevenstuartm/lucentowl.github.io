@@ -3,684 +3,468 @@ title: "Azure Container Registry & Container Security"
 layout: guide
 category: Azure
 subcategory: Container Orchestration (Advanced)
-description: "Azure Container Registry tiers and geo-replication, image scanning with Defender for Containers, content trust and signing, and supply chain security patterns for containerized workloads"
-tags: [azure, cloud-computing, security, infrastructure, devops, containers, practical]
+description: "ACR service tiers and their Premium-gated features, geo-replication as an active-active eventually consistent system, Defender vulnerability assessment, Notary Project image signing after the retirement of Docker Content Trust, and the Entra roles that govern registry access"
+tags: [acr, containers, supply-chain-security, image-signing, vulnerability-scanning, advanced]
 ---
 
 ## What Is Azure Container Registry
 
-An [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-intro){:target="_blank" rel="noopener noreferrer"} (ACR) stores container images that you deploy to Azure Container Instances, Azure Kubernetes Service (AKS), or any Docker-compatible runtime. Unlike Docker Hub or other public registries, ACR is private, integrated with Azure identity services, and provides vulnerability scanning built into the service.
+An [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-intro){:target="_blank" rel="noopener noreferrer"} (ACR) stores container images and other OCI artifacts that you deploy to Azure Kubernetes Service, Container Apps, Container Instances, App Service, or any OCI-compatible runtime. It is private, integrated with Microsoft Entra identity, and the target of Defender for Cloud's registry vulnerability assessment.
 
-ACR is scoped to a single Azure region by default, but you can enable geo-replication to replicate images to multiple regions for reduced latency, local redundancy, and disaster recovery.
+A registry lives in one home region. On the Premium tier you can add geo-replicas in other regions, which stay part of the same registry resource rather than becoming registries of their own.
 
 ### What Problems ACR Solves
 
 **Without a private registry:**
-- Container images flow through untrusted public registries, exposing source code and dependencies
-- No scanning for vulnerabilities before images reach production
+- Images flow through public registries, exposing dependency graphs and inviting rate limits
+- No vulnerability assessment before images reach production
 - No control over where images are stored or replicated
-- No audit trail of image pulls and pushes
-- No ability to enforce image signing or verify provenance
+- No audit trail of pulls and pushes
+- No way to enforce signing or verify provenance
 
 **With ACR:**
-- Images stored in a private, managed registry with access control
-- Automatic vulnerability scanning integrated with Microsoft Defender for Containers
-- Geo-replication for multi-region deployments with local image caches
-- Complete audit logs of image operations
-- Content trust and image signing to prevent unauthorized or tampered images
-- Integration with Azure Pipelines and GitHub Actions for automated builds and image scanning in CI/CD
+- Private storage with Entra-based access control, scopable to individual repositories
+- Registry vulnerability assessment through Microsoft Defender for Cloud
+- Geo-replication with one global endpoint and automatic routing to the nearest healthy replica
+- Diagnostic logs of image operations
+- OCI-standard signatures stored alongside images, verifiable in pipelines and on AKS
+- Artifact cache rules that pull public images through your registry instead of pulling from Docker Hub at deploy time
 
 ### How ACR Differs from AWS ECR
 
-Architects familiar with AWS should note several important differences:
+The differences that change a design are structural rather than featural:
 
 | Concept | AWS ECR | Azure ACR |
 |---------|---------|----------|
-| **Image scanning** | Provided via Amazon Inspector as a separate service with additional costs | Built into ACR and integrated with Defender for Containers |
-| **Geo-replication** | Manual setup with replication rules through AWS and additional data transfer costs | Native geo-replication with automatic regional replicas and no intra-region data transfer charges |
-| **Image signing** | Requires AWS Signer service as a separate service with limited integration | Native Notary v2 support (notation) for content trust, integrated into image metadata |
-| **Repository quotas** | Soft limits enforced per account; can be increased | Fixed by tier (Basic, Standard, Premium) |
-| **Artifact types** | Docker images and OCI artifacts | Docker images, OCI artifacts, Helm charts, SBOM (Software Bill of Materials) |
-| **On-premises integration** | ECR Anywhere (limited support) | ACR works with any Docker-compatible runtime, local development to AKS |
-| **Network isolation** | VPC endpoints for private access | Private endpoints via Azure Private Link |
-| **Build service** | AWS CodeBuild (separate) | ACR Tasks (integrated) |
+| **Replication identity** | Cross-region replication produces a separate repository per region, each with its own registry URI | Geo-replicas share one registry resource and one login server, so image references don't change per region |
+| **Vulnerability scanning** | Amazon Inspector, enabled per registry | Microsoft Defender for Cloud, enabled per subscription, scanning ACR alongside ECR, GAR, GCR, and configured external registries |
+| **Build service** | CodeBuild, a separate service | ACR Tasks, running inside the registry and able to rebuild on base image updates |
+| **Feature gating** | Mostly account-level settings | Gated by SKU: geo-replication, private endpoints, retention policy, and customer-managed keys are Premium-only |
+| **Network isolation** | VPC endpoints | Private endpoints via Azure Private Link, Premium only |
 
 ---
 
-## ACR Tiers and Capabilities
+## Service Tiers
 
-Azure Container Registry offers three tiers, each optimized for different workload sizes and performance requirements.
+ACR has three tiers: Basic, Standard, and Premium. They share the same data-plane APIs and programmatic capabilities. What differs is included storage, request-rate capacity, and which features exist at all.
 
-### Basic Tier
+The tier decision is usually not about storage. It is about the feature cliff at Premium.
 
-The Basic tier is suitable for learning, small projects, and development environments.
+### Tier Comparison
 
-**Characteristics:**
-- 10 GiB storage included
-- Upload/download throughput: 10 Mbps
-- Webhooks: 2
-- Geo-replication: Not supported
-- Private endpoint: Not supported
-- Image scanning: Available but basic
-- Retention policies: Not supported
-- Cost: Lowest tier, hourly charge
-
-**When to use:**
-- Development and testing
-- Personal projects
-- Proof of concepts
-
-**Limitation:** Basic tier's throughput limit (10 Mbps) becomes a bottleneck for large-scale image pulls during AKS scale-up events or during automated image rebuilds.
-
----
-
-### Standard Tier
-
-The Standard tier balances features and cost for small-to-medium production workloads.
-
-**Characteristics:**
-- 100 GiB storage included
-- Upload/download throughput: 60 Mbps
-- Webhooks: 10
-- Geo-replication: Supported
-- Private endpoint: Supported
-- Image scanning: Full integration with Defender for Containers
-- Retention policies: Supported
-- ACR Tasks: Supported
-
-**When to use:**
-- Small production deployments
-- Multi-region deployments with moderate image pull volume
-- Teams deploying to AKS with fewer than 100 nodes
-
-**Trade-offs:** Standard tier's 60 Mbps throughput is often sufficient for moderate workloads, but large AKS clusters pulling many images simultaneously can experience contention.
-
----
-
-### Premium Tier
-
-The Premium tier is designed for large-scale production deployments and enterprises requiring maximum performance and security.
-
-**Characteristics:**
-- Unlimited storage (4,000 repositories per registry)
-- Upload/download throughput: 500 Mbps (10x Standard)
-- Webhooks: 500
-- Geo-replication: Full multi-region support with automatic replication
-- Private endpoint: Supported with no throughput impact
-- Image scanning: Full integration with Defender for Containers
-- Retention policies: Supported with fine-grained control
-- ACR Tasks: Supported with advanced parallelization
-- Artifact streaming: Enabled for faster container startup
-- VNet integration: Service endpoint and private endpoint support
-
-**When to use:**
-- Large production clusters (500+ nodes)
-- High-frequency image deployments (continuous delivery)
-- Compliance-sensitive workloads requiring maximum control
-- Organizations with multi-region Kubernetes deployments
-- Workloads requiring artifact streaming to reduce container startup time
-
-**Premium tier cost:** Hourly subscription cost is higher but justified by the eliminated throughput bottleneck and geo-replication features that would otherwise require manual replication infrastructure.
-
-### Comparing Tiers
-
-| Capability | Basic | Standard | Premium |
-|-----------|-------|----------|---------|
-| **Storage** | 10 GiB | 100 GiB | Unlimited |
-| **Throughput** | 10 Mbps | 60 Mbps | 500 Mbps |
-| **Geo-replication** | No | Yes | Yes (optimized) |
-| **Private endpoints** | No | Yes | Yes |
-| **Retention policies** | No | Yes | Yes |
-| **Image scanning** | Yes (basic) | Yes (full) | Yes (full) |
+| Resource or feature | Basic | Standard | Premium |
+|---|---|---|---|
+| **Included storage** | 10 GiB | 100 GiB | 500 GiB |
+| **Storage limit** | 40 TiB | 40 TiB | 100 TiB |
+| **Max image layer size** | 195 GiB | 195 GiB | 195 GiB |
+| **Webhooks** | 2 | 10 | 500 |
+| **Availability zones** | Yes | Yes | Yes |
+| **Repository-scoped Entra permissions (ABAC)** | Yes | Yes | Yes |
+| **Non-Entra tokens and scope maps** | 100 | 500 | 50,000 |
+| **Anonymous pull** | No | Yes | Yes |
+| **Artifact cache rules** | No | Yes | Yes |
+| **Geo-replication** | No | No | Yes |
+| **Private endpoints** | No | No | Yes (200 max) |
+| **Dedicated data endpoints** | No | No | Yes |
+| **IP access rules** | No | No | Yes (200 max) |
+| **Retention policy for untagged manifests** | No | No | Yes |
+| **Customer-managed keys** | No | No | Yes |
 | **Artifact streaming** | No | No | Yes |
+| **Connected registries** | No | No | Yes |
+| **Export policy (data exfiltration control)** | No | No | Yes |
+| **Dedicated agent pools for Tasks** | No | No | Yes |
+| **Content trust (Docker Content Trust)** | No | No | Yes, deprecated |
+
+Storage beyond the included amount is billed per GiB per day up to the tier's storage limit. Zone redundancy is enabled by default on every tier in supported regions, which is a change from ACR's earlier behavior and means Basic and Standard registries are no longer single-zone.
+
+Note what is **not** tier-gated, because these are the usual misconceptions. Vulnerability assessment is a Defender for Cloud plan, not a registry SKU feature, so a Basic registry gets exactly the same scanning as a Premium one. Repository-scoped permissions work on every tier, both through Entra ABAC conditions and through non-Entra scope-mapped tokens.
+
+### Throughput and Rate Limits
+
+ACR publishes request-rate limits per SKU rather than bandwidth figures. Rates are per minute, and exceeding one returns HTTP 429 with a `Retry-After` header.
+
+| Operation | Scope | Basic and Standard | Premium |
+|---|---|---|---|
+| DataplaneRead (pulls, listing, HEAD) | Per registry | 10,000 r/m | 20,000 r/m |
+| DataplaneRead | Per identity per registry | 5,000 r/m | 10,000 r/m |
+| DataplaneWrite (pushes) | Per registry | 2,000 r/m | 4,000 r/m |
+| DataplaneWrite | Per identity per registry | 1,000 r/m | 2,000 r/m |
+| DataplaneDelete | Per registry | 1,000 r/m | 4,000 r/m |
+| ListReferrers (signatures, SBOMs) | Per registry | 500 r/m | 2,000 r/m |
+| OAuth (login and token exchange) | Per registry | 10,000 r/m | 20,000 r/m |
+
+Three details in that table decide real designs. The **per-identity** limits mean a single misconfigured scanner or a deployment that reuses one service principal across every node can exhaust its own bucket while the registry as a whole sits idle. **Anonymous pulls all count as one identity**, and so do all requests using the admin account, including both of its passwords. And **requests can count against two limits at once**: listing referrers is also a DataplaneRead, so heavy signature verification eats into the same capacity as image pulls.
+
+Enforcement is a token bucket, so short bursts above the steady rate succeed and a burst that empties the bucket can throttle for up to a full minute afterward. Microsoft states these are best-effort approximations with no SLA behind them.
+
+Bandwidth throughput is determined by SKU but is not published as a number. If you are hitting throttling or slow pulls, the documented remedies are exponential backoff with jitter, spacing out large deployments, raising the SKU, or asking support for a limit increase. Storage limits, private endpoint count, and push/pull bandwidth are all increasable case by case.
 
 ---
 
-## Geo-Replication for Multi-Region Deployments
+## Geo-Replication
 
-### What Geo-Replication Does
+### One Registry, Many Replicas
 
-[Geo-replication](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-geo-replication){:target="_blank" rel="noopener noreferrer"} automatically replicates images from your primary ACR to secondary registries in other Azure regions. This reduces image pull latency for AKS clusters and container instances deployed across regions.
-
-### How Geo-Replication Works
-
-1. You configure secondary regions in your primary ACR
-2. When you push an image to the primary registry, Azure automatically pushes it to all secondary registries
-3. Each region maintains a local replica of all images
-4. AKS clusters and other services in each region pull images from the local regional replica instead of the primary registry
-5. The image becomes available in the secondary registry immediately after the push completes
-
-### Benefits of Geo-Replication
-
-**Reduced latency:** Clusters pull images from a local regional replica instead of the primary registry across the internet.
-
-**Disaster recovery:** If the primary region becomes unavailable, secondary registries continue to serve images to workloads in other regions. This does not provide failover, so the image must already exist in the secondary registry before the primary region fails.
-
-**Compliance and data residency:** You can replicate images only to specific regions to meet data residency requirements.
-
-**No inter-region data transfer charges:** Replication traffic between ACR replicas does not incur data transfer costs (unlike egress charges in AWS).
-
-### Geo-Replication Configuration
-
-When you enable geo-replication on a Standard or Premium ACR:
+[Geo-replication](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-geo-replication){:target="_blank" rel="noopener noreferrer"} adds replica resources in other Azure regions to a **single** registry. It requires the Premium tier. Nothing about your image references changes when you add one: there is still one login server, one set of credentials, and one set of role assignments and network rules.
 
 ```
-Primary ACR (East US) → Push image → Webhook triggers replication
-  ↓
-Secondary ACR (West US) - Image replicated automatically
-  ↓
-Secondary ACR (Europe West) - Image replicated automatically
+   deployment manifests everywhere reference:  myregistry.azurecr.io/myapp:v1
+                                    │
+                                    ▼
+                      ┌──────────────────────────┐
+                      │  Global endpoint routing │  picks the replica with the
+                      │   (Azure-managed, DNS)   │  best network profile, and
+                      └──┬───────────┬────────┬──┘  routes away from unhealthy ones
+                         │           │        │
+          ┌──────────────┘           │        └──────────────┐
+          ▼                          ▼                       ▼
+  ┌───────────────┐          ┌───────────────┐       ┌───────────────┐
+  │ replica: East │◀────────▶│ replica: West │◀─────▶│ replica: EU   │
+  │ US (home)     │  async   │ US            │ async │ West          │
+  │ control plane │  bidir.  │               │       │               │
+  └───────┬───────┘          └───────┬───────┘       └───────┬───────┘
+          │ 307 redirect             │                       │
+          ▼                          ▼                       ▼
+   layer blobs from that same region's data endpoint, never cross-region
 ```
 
-Each region maintains:
-- Complete image replicas
-- Webhook endpoints for triggering additional actions (e.g., notifying AKS to pull new version)
-- Independent authentication and authorization (though usually configured identically)
+Every replica is **active-active and writable**. You can push, pull, and delete against any of them, and content syncs bidirectionally in the background. This is not a primary-with-passive-secondaries model.
 
-### Geo-Replication Considerations
+### Eventual Consistency Is the Thing to Design Around
 
-**Replication latency:** Large images take time to replicate across regions. During the replication window, the image is available in the primary region but not yet in secondaries. Plan image pushes before peak deployment windows.
+Replication is asynchronous, and replication time scales with image size. Four things go wrong as a result, and all of them look like intermittent bugs if you haven't planned for them:
 
-**Consistency:** All regions eventually have the same image content, but there is a brief window where images in secondary regions lag behind the primary. For critical deployments, verify the image exists in the target region before deploying.
+**Push-then-immediate-cross-region-pull** fails with `manifest unknown`. A CI runner pushes an image and pods in another region try to pull it before replication catches up. This is the most common one.
 
-**Selective replication:** You can configure ACR to replicate only specific images to specific regions using content filters, useful for compliance requirements.
+**Tag overwrite races.** Push `myapp:v1`, then re-push `myapp:v1` with different content, and during the replication window different replicas resolve the same tag to different digests.
+
+**Delete propagation.** A deleted tag can still be pulled from replicas the deletion hasn't reached.
+
+**Mid-push scatter.** A `docker push` is many HTTP requests: a blob upload per layer, then a manifest that references them by digest. Some Linux resolvers don't cache consistently, so DNS can bounce between nearby replicas mid-push, landing layers on one replica and the manifest on another. The symptom is a manifest validation error or `blob unknown`.
+
+The mitigations, in the order the docs prefer them: pin the push to one replica with a **regional endpoint**; use a short-lived DNS cache scoped to a single push; retry cross-region pulls with backoff; or use [webhooks](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-webhook){:target="_blank" rel="noopener noreferrer"} to learn when replication has completed in a given replica before triggering the pull. Note that a single push produces a webhook event from the receiving replica plus one from each replica as replication completes, so consumers need to deduplicate.
+
+### Health-Aware Failover
+
+ACR monitors each replica and reroutes global-endpoint traffic away from ones that can't serve requests. This is platform-managed with no customer trigger, evaluated per registry rather than per region, and takes on the order of minutes end to end plus DNS TTL. Failback is automatic once the region recovers.
+
+Two boundaries matter:
+
+- It applies **only to the global endpoint**. Regional endpoints talk to one replica directly and never reroute, so client-side failover is yours to implement.
+- It is **not triggered by throttling**. It responds to service and infrastructure health, not to HTTP 429. A replica that is throttling you in a healthy region keeps receiving your traffic.
+
+Because rate limits are per replica, a failover concentrates traffic onto the remaining replicas. Plan for at least two or three replicas so a single region loss doesn't push the survivors into throttling.
+
+### Home Region Outage
+
+The home region is fixed at creation and hosts the control plane. If it goes down, the data plane keeps working through other replicas: push, pull, delete, all authentication methods, and webhooks all continue. What stops is registry configuration changes, the home region's own regional endpoint, and **ACR Tasks**, which are bound to the home region and don't run while it's unavailable. That last one is the surprise: a geo-replicated registry survives a home region outage for deployments but not for builds.
+
+### Cost and Limits Across Replicas
+
+- **Storage is billed per replica.** A 1 GiB image replicated to five regions is billed as 5 GiB.
+- **Storage limits are shared**, not multiplied. That same image counts once against the tier's storage limit.
+- **Rate limits are per replica**, which is why regional endpoints are the tool for spreading load deliberately.
+- **Cross-region data transfer still applies to the replication traffic itself.** What geo-replication saves is the transfer cost of every subsequent in-region pull, which is where the volume is.
+
+### Regional Endpoints
+
+Regional endpoints (in preview, Premium only) give each replica its own login server at `myregistry.<region>.geo.azurecr.io`, alongside the global endpoint rather than replacing it. Use them for push-pull consistency in CI/CD, for pinning a cluster to its colocated replica, for client-side failover logic, and for capacity planning against per-replica limits.
+
+They come with three operational catches. Container tools store credentials per hostname, so switching endpoints needs a fresh `az acr login` for that hostname. AKS managed-identity pulls from regional endpoints require a recent node image, and older nodes need an image pull secret or the global endpoint instead. And each endpoint surface consumes a private endpoint IP: a registry with three replicas and regional endpoints enabled needs 1 global + 3 data + 3 regional = **7 private IPs** per private endpoint resource, against 4 without them.
 
 ---
 
-## Image Scanning and Vulnerability Assessment
+## Vulnerability Assessment
 
-### Microsoft Defender for Containers
+### What Scans Your Images
 
-[Microsoft Defender for Containers](https://learn.microsoft.com/en-us/azure/defender-for-cloud/defender-for-containers-introduction){:target="_blank" rel="noopener noreferrer"} provides vulnerability scanning for images stored in ACR. Every image is scanned for known vulnerabilities (CVEs) from Microsoft and other threat intelligence sources.
+[Microsoft Defender for Cloud](https://learn.microsoft.com/en-us/azure/defender-for-cloud/agentless-vulnerability-assessment-azure){:target="_blank" rel="noopener noreferrer"} uses **Microsoft Defender Vulnerability Management (MDVM)** to assess images in registries and images used by running containers. It reaches ACR, Amazon ECR, Google Artifact Registry, Google Container Registry, and configured external registries such as Docker Hub and JFrog Artifactory, which makes it the single pane for a multi-registry estate.
 
-### How Scanning Works
+Registry vulnerability assessment comes with Defender for Containers, and with Defender CSPM for supported scenarios, where findings additionally carry contextual risk signals and risk-based prioritization. It requires **Registry access** to be enabled.
 
-**On image push:**
-1. When you push an image to ACR, a webhook triggers vulnerability scanning
-2. The image layers are analyzed against vulnerability databases
-3. Scan results appear in the Azure portal within minutes
-4. If vulnerabilities are found, they are displayed with severity ratings and remediation guidance
+Coverage is asymmetric. **OS package assessment covers Linux and Windows, but language package assessment is Linux only.**
 
-**Continuous scanning:**
-- Previously scanned images are re-scanned periodically (monthly by default) as new vulnerability data becomes available
-- If a new vulnerability is discovered in an image layer, you are notified even if the image was clean when originally pushed
+### Scanning Cadence
 
-**Scope of scanning:**
-- Scans detect vulnerabilities in base OS packages (Alpine, Ubuntu, Debian, CentOS, etc.)
-- Scans detect vulnerabilities in common application frameworks and libraries
-- Results include the layer in which the vulnerability appears and the package affected
+The timing is the detail most often assumed wrong.
 
-### Vulnerability Severity Levels
+- Newly pushed or imported images are **typically scanned within a few hours**, not within minutes.
+- A **daily rescan** updates findings for images pushed in the last 30 days, images pulled in the last 30 days, and images currently running in monitored Kubernetes clusters.
+- Images that fall outside all three windows **stop being rescanned** and stop receiving updated findings. If an image is missing from results, pulling it reactivates scanning.
+- Deleted images usually have their findings removed within an hour, but it can take up to three days if ACR's deletion notification is delayed.
 
-Vulnerabilities are classified by CVSS (Common Vulnerability Scoring System) score:
+That 30-day window is the trap in a long-lived registry: an image sitting untouched for a quarter is not being reassessed against new CVEs, and its clean bill of health is stale rather than current.
 
-| Severity | CVSS Score | Typical Impact |
-|----------|-----------|----------------|
-| **Critical** | 9.0-10.0 | Immediate patch required; exploitable without authentication |
-| **High** | 7.0-8.9 | Patch required before production; likely exploitable |
-| **Medium** | 4.0-6.9 | Plan to patch; less likely to be exploited |
-| **Low** | 0.0-3.9 | Monitor and patch during regular maintenance |
+### Runtime Assessment
 
-### Vulnerability Assessment Workflow
+Beyond the registry, Defender can assess images used by running containers, in two shapes. **Runtime findings with registry context** maps registry-scanned images onto running workloads and needs Registry access plus either K8s API access or the Defender sensor. **Registry-agnostic runtime scanning** collects images from the cluster regardless of origin and needs agentless machine scanning plus K8s API access or the sensor.
 
-**1. Image push and scan:**
-```
-Developer pushes image → ACR scans → Results in portal
-```
+Runtime assessment doesn't scan the container runtime layer, doesn't support Windows nodes or nodes on AKS ephemeral OS disks, and can return partial results on autoscaled clusters where nodes are down at scan time. Agentless inventory runs roughly every 24 hours; the Defender sensor updates inventory near real time.
 
-**2. Review findings:**
-- Critical and high-severity vulnerabilities should be addressed before deployment
-- Medium and low vulnerabilities can be accepted as risk or mitigated through admission controllers
+### Acting on Findings
 
-**3. Remediation options:**
-- Update the base image to a patched version
-- Update the application framework or dependency to a patched version
-- Rebuild the image with the updated layers and re-push
+ACR does not block deployment of vulnerable images. Enforcement is yours to build, and there are three places to put it:
 
-**4. Admission control (optional):**
-- Use Kubernetes admission controllers (Pod Security Admission, Kyverno) to prevent deployment of images with critical vulnerabilities
-- ACR does not block vulnerable image deployments automatically; policy enforcement is the administrator's responsibility
+1. **In the pipeline**, failing the build when findings exceed a threshold. This is the only place that stops a bad image from ever reaching the registry.
+2. **At admission**, with an admission controller that rejects images by policy. This catches images that were clean at push and are not any more.
+3. **In the registry**, using quarantine so pushed images can't be pulled until they're released.
 
-### Scanning Integration with ACR Tasks
-
-When using ACR Tasks for automated builds, you can configure tasks to fail if scan results contain vulnerabilities above a threshold. This prevents vulnerable images from being stored in the registry.
+Registry-wide quarantine is a preview feature, documented outside Microsoft Learn, and governed by the `AcrQuarantineReader` and `AcrQuarantineWriter` roles. It is stronger than the tag-convention approach it is often confused with: a quarantined image genuinely cannot be pulled, rather than merely being labeled as unfit.
 
 ---
 
-## Content Trust and Image Signing
+## Image Signing
 
-### What Image Signing Does
+### Docker Content Trust Is Retiring
 
-Image signing ensures that an image has not been tampered with and provides a chain of trust from the build system to deployment. When you sign an image, you add cryptographic proof that the image came from an authorized builder and has not been modified.
+This is the fact to act on before anything else in this section. ACR's [Docker Content Trust (DCT)](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-content-trust-deprecation){:target="_blank" rel="noopener noreferrer"} entered deprecation on **31 March 2025** and is removed from ACR entirely on **31 March 2028**. It was Premium-only, and it is **not supported at all on registries configured for ABAC repository permissions**, so adopting the current RBAC model already forecloses it.
 
-### Notary v2 and Notation
+The replacement is the [Notary Project](https://notaryproject.dev/){:target="_blank" rel="noopener noreferrer"} and its `notation` tooling. Signatures are OCI artifacts attached to the image as referrers, which makes them portable across any OCI-compliant registry rather than tied to ACR.
 
-Azure supports [Notary v2 and notation](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-sign-build-push){:target="_blank" rel="noopener noreferrer"} for content trust. Notation is a toolset that allows you to sign images and store signatures alongside the image in ACR.
+Disabling DCT is a prerequisite for the transition: unset `DOCKER_CONTENT_TRUST` in your shells, and run `az acr config content-trust update -r myregistry --status disabled`.
 
-**Key concepts:**
+### The Signing and Verification Path
 
-**Image signature:** A cryptographic proof attached to an image that verifies:
-- The identity of the signer (which build system or developer signed it)
-- That the image has not been modified since signing
-- When the image was signed
-
-**Trust on first use (TOFU):** Before accepting a signed image, you must configure a signing key as trusted. After that, any image signed with that key is accepted.
-
-**Signature verification:** When pulling an image, the container runtime or Kubernetes admission controller can verify that the image signature is valid and signed by a trusted key.
-
-### Setting Up Image Signing
-
-**1. Create signing keys:**
 ```
-Generate a cryptographic key pair (private key kept secure, public key distributed)
-```
-
-**2. Sign images after build:**
-```
-Build image → Push to ACR → Sign with notation → Store signature in ACR
-```
-
-**3. Configure verification:**
-```
-Kubernetes admission controller or container runtime checks signature before deploying
+  ┌──────────────────┐        sign        ┌──────────────────────┐
+  │  CI/CD pipeline  │───────────────────▶│   Azure Key Vault    │
+  │  builds image    │◀───────────────────│  signing key + cert  │
+  └────────┬─────────┘   signature bytes  └──────────────────────┘
+           │
+           │ push image, then push signature as an OCI referrer
+           ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │                   Azure Container Registry                   │
+  │   myapp:v1  ◀── referrer ──  sha256:… (Notary signature)     │
+  └────────┬─────────────────────────────────────────────────────┘
+           │ kubelet requests image
+           ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │  AKS admission: Azure Policy + Ratify                        │
+  │    1. resolve the image's signature referrers                │
+  │    2. verify the signature chains to a trusted identity      │
+  │    3. admit, or reject the pod                               │
+  └──────────────────────────────────────────────────────────────┘
 ```
 
-### Image Signing Workflow
+Four properties of this flow decide whether it works:
 
-For a typical CI/CD pipeline:
+**The key never leaves Key Vault.** Notation signs against a key in Key Vault, using either a self-signed certificate or one issued by a CA. The pipeline holds an identity that may use the key, not the key itself.
 
-1. **Build stage:** Build system creates image and pushes to ACR
-2. **Sign stage:** Signing tool (notation) signs the image using the private key stored in a secure key vault
-3. **Signature stored:** Signature is stored in ACR alongside the image (not embedded in the image itself)
-4. **Deploy stage:** Admission controller verifies the signature before allowing deployment
-5. **Runtime verification:** Container runtime confirms the image signature matches
+**The signature is a separate artifact.** It is pushed as an OCI referrer attached to the image digest, not embedded in the image. That is why pushing a signature needs a *write* role and why listing referrers has its own rate limit.
 
-### Signing Keys and Key Management
+**Verification happens twice, in different places.** In pipelines, `notation verify` runs in the Azure DevOps task or GitHub Action. On AKS, verification is enforced at admission by **Ratify with Azure Policy**, which is the piece people leave out and then wonder why signing changed nothing.
 
-The private signing key must be:
-- Generated and stored securely (e.g., in Azure Key Vault)
-- Used only by authorized systems (CI/CD pipeline, not human developers)
-- Rotated periodically (annually or when access is compromised)
-- Never stored in the source repository
+**Trust policy is what makes signing meaningful.** Verifying that an image carries *a* valid signature proves nothing: an attacker's key produces a valid signature too. The verifier must be configured with the specific identities it trusts, and that trust policy is the security control. Signing without it is theater.
 
-The public key must be:
-- Distributed to all clusters that need to verify images
-- Configured as trusted in admission controllers
-- Rotated when the private key is rotated
+### When to Require Signatures
 
-### When to Require Signed Images
+Signing pays for itself where provenance is audited or where images cross a trust boundary: regulated industries, multi-tenant platforms, images consumed by teams that didn't build them, and anywhere a base image comes from outside your organization. It is friction without much benefit in development clusters where the same people build and deploy and a compromised image has nowhere to go.
 
-**Enterprise and compliance-sensitive workloads:**
-- Regulated industries (finance, healthcare, government)
-- Multi-tenant systems where image provenance is audited
-- Organizations with strict change control processes
-
-**Not required for:**
-- Development and testing environments
-- Internal teams with high trust and low risk tolerance
-- Workloads where image content is less critical
+Whatever you decide, apply it per cluster rather than per registry. A single registry can serve both a strictly verifying production cluster and a permissive development one, because the enforcement lives at admission.
 
 ---
 
-## ACR Tasks for Automated Image Building
+## ACR Tasks
 
-### What ACR Tasks Does
+[ACR Tasks](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview){:target="_blank" rel="noopener noreferrer"} builds, tests, and pushes images on Azure-managed infrastructure, inside the registry, with no build agents of your own.
 
-[ACR Tasks](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview){:target="_blank" rel="noopener noreferrer"} is a suite of features that automate image building, scanning, and pushing without managing build infrastructure.
+**Quick tasks** (`az acr build`, `az acr run`) build on demand from local or remote source without persisting a task definition. They are the fastest way to check that a Dockerfile builds for the target architecture without a local Docker daemon.
 
-### Quick Tasks
+**Multi-step tasks** define a sequence of build, run, and push steps in YAML, versioned alongside your source.
 
-Quick tasks build and push an image from source code in a single command, without persisting the build configuration.
+**Triggers** are where Tasks earn their place over a generic CI system. Alongside commit, pull request, and cron triggers, a task can trigger on **base image update**: when the image in your `FROM` line gets patched, dependent images rebuild automatically. That is the mechanism that keeps OS-level CVEs from accumulating in images nobody has touched in months, and it is the single most valuable thing Tasks do.
 
-**Characteristics:**
-- Run on-demand from the Azure CLI or portal
-- Do not require a Git repository webhook
-- Build output is a Docker image stored in ACR
-- Results include scan data if vulnerabilities are found
-
-**Use cases:**
-- One-off builds for testing
-- Building images from local source code
-- Quick verification that a Dockerfile works
-
-### Multi-Step Tasks
-
-Multi-step tasks define a sequence of build, test, and push operations in a YAML configuration stored in your Git repository.
-
-**Characteristics:**
-- Triggered automatically by Git commits, pull requests, or schedule
-- Can build multiple images from a single task
-- Can run commands between build steps (e.g., running tests)
-- Can conditionally execute steps based on build parameters
-- Task YAML is versioned alongside your source code
-
-**Example multi-step task workflow:**
-
-```
-On Git push:
-  1. Build base image from Dockerfile.base
-  2. Build app image from Dockerfile.app
-  3. Run security scan and check for critical vulnerabilities
-  4. If scan passes, push both images to ACR
-  5. Trigger webhook to notify Kubernetes of new images
-```
-
-### Triggered Builds
-
-Automatic builds trigger when:
-- **Git commit:** Push to a specific branch automatically builds
-- **Pull request:** Opening a pull request builds a preview image
-- **Schedule:** Builds run on a cron schedule (e.g., nightly rebuild to pick up OS patches)
-- **Base image update:** When the base image (e.g., `mcr.microsoft.com/windows/servercore`) is updated, dependent images rebuild automatically
-
-### ACR Tasks Performance
-
-Tasks run on Azure-managed infrastructure (build agents in various SKUs). For Premium ACR, you can enable parallel builds to speed up multi-image tasks.
+Two operational constraints. Tasks run in the registry's **home region** and stop during a home region outage. And on a registry with the public endpoint disabled, tasks need a dedicated agent pool in a delegated subnet, which is Premium-only.
 
 ---
 
-## Repository and Image Lifecycle Management
+## Image Lifecycle Management
 
-### Retention Policies
+ACR's cleanup story is three separate mechanisms that get conflated. Knowing which one does what avoids designing a retention scheme that the service doesn't implement.
 
-[Retention policies](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-retention-policy){:target="_blank" rel="noopener noreferrer"} automatically delete images based on age or tag patterns, preventing registry bloat and reducing storage costs.
+**Retention policy** applies to **untagged manifests only**, and is Premium-only. It deletes manifests that lost their last tag after a set number of days. It does not delete by tag pattern and it does not keep the last N images.
 
-**Retention policy rules:**
-- Delete images older than X days
-- Delete images with specific tag patterns (e.g., delete all `pr-*` tags)
-- Keep the last N images of a repository
-- Exclude specific images from deletion (e.g., always keep `latest`)
+**`acr purge`** is what does tag-based cleanup. It runs [as an ACR Task](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-auto-purge){:target="_blank" rel="noopener noreferrer"}, matches repositories and tags by filter, and deletes by age. Scheduling it on a cron trigger is how you implement "delete `pr-*` tags older than 14 days", a rule that reads like a retention policy but isn't one.
 
-**Retention policy workflow:**
+**Soft delete** is a separate policy that retains deleted artifacts for a recovery window instead of removing them immediately. Turn it on before you automate deletion, not after your first accidental purge.
 
-```
-ACR scans all images → Matches rule criteria → Deletes matching images
-```
-
-### Image Quarantine
-
-Image quarantine flags new or suspicious images for review before they are considered production-ready. This is a manual process where administrators review scans and approve or reject images.
-
-**Quarantine workflow:**
-
-1. Image is pushed and scanned
-2. If vulnerabilities are found, the image is tagged with a quarantine label (e.g., `quarantine`)
-3. Administrators review the vulnerabilities and remediation plan
-4. Administrators either retag as approved or delete the quarantine image
-5. Only approved images are available for deployment
-
-### Repository Lifecycle Example
-
-A typical image lifecycle in production:
-
-```
-Build → ACR push → Scan → Tag as 'candidate' → Quarantine review → Approved → Tag as 'stable'
-                                                                          ↓
-                                                         Deploy to prod → Geo-replicate → Available in regions
-                                                                          ↓
-                                         Days later → Tag as 'archive' → Eventually deleted by retention policy
-```
+A workable default is `acr purge` on a nightly task for build-artifact tag patterns, retention policy on untagged manifests to sweep up what purge untags, and soft delete enabled underneath both so a bad filter is recoverable.
 
 ---
 
 ## Authentication and Authorization
 
-### Registry-Level Authentication
+### How Identities Authenticate
 
-When pulling images from ACR, you must authenticate with credentials scoped to the registry.
-
-**Authentication methods:**
-
-| Method | Use Case |
+| Method | Use case |
 |--------|----------|
-| **Managed identity (recommended)** | AKS pods, App Service, Automation Account; no secrets to manage |
-| **Service principal** | CI/CD pipelines, external systems; uses client ID and secret |
-| **Admin account** | Development and debugging only; not for production |
-| **Personal access token** | Legacy integrations and scripting (deprecated, use managed identity instead) |
+| **Managed identity** | AKS kubelet, Container Apps, Container Instances, App Service, Functions, Machine Learning. No secrets, automatic rotation. The default answer. |
+| **Service principal** | CI/CD systems outside Azure, and cross-tenant AKS-to-ACR pulls |
+| **Non-Entra scope-mapped tokens** | Repository-scoped credentials for systems that can't hold an Entra identity |
+| **Admin account** | Debugging only. Both of its passwords share one identity for rate limiting, and it has no audit attribution. |
 
-### Managed Identity Integration
+### Two Permission Modes
 
-When AKS runs on Azure, use [managed identity](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication-managed-identity){:target="_blank" rel="noopener noreferrer"} to authenticate to ACR without storing credentials in pod specifications.
+A registry runs in one of two **role assignment permissions modes**, and which one it is determines which role names apply. Check it under Properties before you write any role assignment.
 
-**How it works:**
+**RBAC Registry + ABAC Repository Permissions** is the current model. Roles can carry Entra ABAC conditions that scope them to specific repositories:
 
-1. Create a managed identity (system-assigned or user-assigned)
-2. Grant the identity pull permissions on the ACR using RBAC
-3. Configure AKS to use the managed identity (kubelet identity)
-4. Pods automatically authenticate to ACR without explicit credentials
+| Role | Grants |
+|---|---|
+| `Container Registry Repository Reader` | Pull images and artifacts, view tags and OCI referrers. Supports ABAC conditions. |
+| `Container Registry Repository Writer` | Push, pull, update (not delete), manage tags and referrers. **This is the role that pushes Notary signatures.** Supports ABAC conditions. |
+| `Container Registry Repository Contributor` | Adds delete. Supports ABAC conditions. |
+| `Container Registry Repository Catalog Lister` | List all repositories. **Does not support ABAC conditions**, so it is always registry-wide. |
+| `Container Registry Contributor and Data Access Configuration Administrator` | Control plane: `az acr login`, SKU, networking, policies, and deleting the registry. No data plane access. |
+| `Container Registry Tasks Contributor` | Manage tasks, agent pools, quick builds, and auto-purge |
+| `Container Registry Data Importer and Data Reader` | Trigger `az acr import` and read the result |
 
-**Benefits:**
-- No secrets stored in pod specs, Helm values, or configuration files
-- Identity is rotated automatically by Azure
-- Audit logs show which pod pulled which image
-- Seamless integration with AKS
+**RBAC Registry Permissions** is the legacy mode, where the familiar `AcrPull`, `AcrPush`, `AcrDelete`, and `AcrImageSigner` roles apply registry-wide with no repository scoping.
 
-### Repository-Scoped Access Tokens
+Three things trip people up in the ABAC model:
 
-[Repository-scoped tokens](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-repository-scoped-permissions){:target="_blank" rel="noopener noreferrer"} limit access to specific repositories within a registry, reducing the blast radius if a token is compromised.
+- **The repository roles don't grant catalog list.** A reader can pull `myapp:v1` if it knows the name but can't enumerate what's in the registry. That is deliberate least privilege, and it breaks tools that list first.
+- **`az acr login` is a control-plane permission.** An identity with `Container Registry Contributor and Data Access Configuration Administrator` can log in and still be unable to pull anything without a data-plane role.
+- **Vulnerability scanners need registry-wide access.** Assign `Container Registry Repository Reader`, `Container Registry Repository Catalog Lister`, and `Container Registry Configuration Reader and Data Access Configuration Reader` **without** ABAC conditions, because a scanner scoped to some repositories silently leaves the rest unassessed.
 
-**Use cases:**
-- CI/CD pipeline that builds and pushes to only one repository
-- Third-party services that need pull-only access to specific images
-- Granting different permissions to different teams
+### Repository-Scoped Access
 
-**Token permissions:**
-- `pull` - Only read/pull images (typical for production deployments)
-- `push` - Create and push images (typical for CI/CD build systems)
-- `delete` - Remove images and repositories
+Two mechanisms scope access below the registry, and they are available on **every tier**:
 
-### RBAC (Role-Based Access Control)
+**Entra ABAC conditions** on the repository roles above. This is the path for anything that has an Entra identity.
 
-ACR integrates with Azure RBAC to assign roles at the registry level:
-
-| Role | Permissions | Use Case |
-|------|-----------|----------|
-| **AcrPull** | Pull images | Production deployments, read-only access |
-| **AcrPush** | Push and pull | CI/CD build systems |
-| **AcrDelete** | Delete images and repositories | Administrators managing retention |
-| **AcrImport** | Import images from external registries | Admins migrating from Docker Hub |
+**Non-Entra tokens with scope maps** cover everything else: a partner system, an on-premises builder, a tool that only knows how to hold a username and password. A scope map lists actions (`content/read`, `content/write`, `content/delete`, `metadata/read`, `metadata/write`) against repositories, and a token is bound to it. Limits are 100 tokens on Basic, 500 on Standard, and 50,000 on Premium, with 500 actions and 500 repositories per scope map on every tier.
 
 ---
 
-## Private Endpoints and Network-Restricted Registries
+## Network Isolation
 
-### What Private Endpoints Do
+[Private endpoints](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link){:target="_blank" rel="noopener noreferrer"} give the registry private IPs inside your VNet so pulls never traverse the public internet. They are **Premium only**, capped at 200 per registry, and configuring one **automatically enables dedicated data endpoints**, because layer downloads would otherwise redirect to `*.blob.core.windows.net` and defeat the isolation.
 
-[Private endpoints](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link){:target="_blank" rel="noopener noreferrer"} provide a private IP address for ACR within your VNet, so image pulls do not traverse the public internet.
+Size the subnet before you create the endpoint. Each endpoint surface takes one IP: one for the global endpoint, one per replica for data endpoints, and one per replica again if regional endpoints are on. Getting this wrong breaks in two ways, and both produce unhelpful errors:
 
-### When to Use Private Endpoints
+- Adding a geo-replica to a registry whose private endpoint uses **static** IP allocation fails, because the new region's data endpoint member can't be auto-added. Use dynamic allocation if you might add replicas later, or create the private endpoint only after every replica exists.
+- If **any** connected subnet across any VNet runs out of IPs, replica creation rolls back without naming which subnet is exhausted.
 
-**Compliance and security-sensitive workloads:**
-- Images must not traverse the public internet
-- Regulatory requirements mandate network isolation
-- Internal images contain proprietary or sensitive intellectual property
-
-**Network isolation patterns:**
-- AKS cluster with all nodes in a private subnet (no public IP)
-- All image pulls routed through the private endpoint (no egress to the internet)
-- ACR's public endpoint can be disabled entirely
-
-### Disabling the Public Endpoint
-
-For maximum security, you can disable ACR's public endpoint entirely, allowing access only through private endpoints.
-
-**Trade-offs of disabling the public endpoint:**
-- Image builds via ACR Tasks must run in a delegated subnet or private environment
-- External integrations (CI/CD platforms hosted outside Azure) cannot push images unless they have VNet connectivity
-- Developers building images locally must use VPN or ExpressRoute to access the registry
+Disabling the public endpoint entirely is the stronger posture, with three consequences to plan for: ACR Tasks need a dedicated agent pool in a delegated subnet, external CI/CD platforms need VNet connectivity to push, and developers need VPN or ExpressRoute to reach the registry at all.
 
 ---
 
-## Supply Chain Security Patterns
+## Supply Chain Patterns
 
-### Pattern 1: Signed Images with Automated Admission Control
+### Signed Images with Enforced Admission
 
-**Goal:** Ensure only images signed by the official build pipeline can be deployed.
+Sign in the pipeline against a Key Vault key, push the signature as a referrer, and enforce with Ratify and Azure Policy on the AKS clusters that matter. The pipeline identity needs `Container Registry Repository Writer`, scoped by ABAC to the repositories it builds.
 
-**Components:**
-1. **Build system** signs images with a key stored in Azure Key Vault
-2. **ACR** stores signed images with signature metadata
-3. **Kubernetes admission controller** (e.g., Kyverno or Kyverno + notation) enforces signature verification
-4. **Deployment fails** if the image signature is missing or invalid
+The control that makes this work is the **trust policy on the verifier**, not the signing step. Enforce on production clusters and audit-only on the rest, so a broken signing step fails a deployment rather than blocking every developer.
 
-**Implementation:**
-- Store signing key in Azure Key Vault
-- Configure CI/CD pipeline to sign images using notation after build
-- Deploy Kyverno in AKS with a policy requiring valid image signatures
-- Only images signed by the trusted key can be deployed
+### Blocking Vulnerable Images
 
-**Trade-off:** Developers building images locally cannot deploy without signing, slowing down rapid development cycles. This pattern is best reserved for production clusters.
+Gate in the pipeline on Defender findings, because that is the only point where a bad image never reaches the registry at all. Back it with admission policy for images that were clean at push and have since aged into a CVE, and remember the 30-day rescan window: an image nobody has pulled recently is not being reassessed, so continuous coverage depends on the image staying in use or in a monitored cluster.
 
----
+### Registry Segmentation by Environment
 
-### Pattern 2: Image Scanning with Automatic Rejection
+Separate development, staging, and production registries limit the blast radius of a compromised build and force deliberate promotion. `az acr import` moves images between registries server-side without pulling and re-pushing, and needs only `Container Registry Data Importer and Data Reader` on the target.
 
-**Goal:** Prevent deployment of images with critical vulnerabilities.
+Weigh it against the alternative that ABAC now makes viable: one registry with repository-scoped role assignments, which keeps a single geo-replicated Premium registry rather than paying for three. Segment by registry when the environments have genuinely different network boundaries or different tiers; segment by repository and ABAC condition when the difference is only who may push.
 
-**Components:**
-1. **ACR** scans images automatically on push
-2. **Build system** checks scan results before marking image as deployable
-3. **Admission controller** blocks images with unresolved critical vulnerabilities
-4. **Pipeline fails** if scan results exceed threshold
+### Artifact Cache Instead of Public Pulls
 
-**Implementation:**
-- Configure ACR Tasks to fail if Defender for Containers finds critical vulnerabilities
-- Use an admission controller to prevent deployment of images tagged with `vulnerability=critical`
-- Images tagged `approved` can bypass the policy if remediation is documented
-
-**Trade-off:** Balance between security and delivery speed. Critical vulnerabilities should always block deployment, but medium and low vulnerabilities can be accepted with risk documentation.
-
----
-
-### Pattern 3: Multi-Registry Segmentation by Environment
-
-**Goal:** Separate development, staging, and production images to limit blast radius of compromised images.
-
-**Components:**
-1. **Development ACR**: Stores all build artifacts with less restricted scanning
-2. **Staging ACR**: Contains only promoted images with stricter scanning and signing
-3. **Production ACR**: Contains only signed, fully scanned, approved images with geo-replication
-
-**Promotion workflow:**
-```
-Develop → Dev ACR → Scan → Pass? → Staging ACR → Sign → Prod ACR → Deploy
-```
-
-**Benefits:**
-- Isolates the blast radius of a compromised development image
-- Forces deliberate promotion steps
-- Each registry has different access controls and policies
+Artifact cache rules (Standard and Premium) pull public images through your registry on first request and serve them from it afterward. This removes Docker Hub rate limits from your deployment path, gives you one place to scan base images, and keeps a copy if upstream deletes a tag. It is the lowest-effort supply chain improvement available in ACR.
 
 ---
 
 ## Artifact Streaming
 
-### What Artifact Streaming Does
+[Artifact streaming](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-artifact-streaming){:target="_blank" rel="noopener noreferrer"} (Premium only) lets a container start before all of its layers have been downloaded, with layers fetched on demand as files are accessed. It is aimed at large images, where full-image download dominates pod startup and slows every scale-out event.
 
-[Artifact streaming](https://learn.microsoft.com/en-us/azure/container-registry/artifact-streaming){:target="_blank" rel="noopener noreferrer"} allows containers to start before all image layers are downloaded. This is particularly useful for large images (2+ GB) where full download delays container startup.
+The trade-off is a latency penalty the first time a container touches data in a layer that hasn't arrived. That is fine for cold paths and painful for anything on a hot path, so the images that benefit are large ones where most of the size is rarely touched, not large ones that read everything at startup.
 
-**How it works:**
-1. Image layers are stored in ACR with special streaming metadata
-2. Container runtime downloads layers on-demand as the container accesses files
-3. Container starts while missing layers are still downloading
-4. Layers are cached locally after first access
-
-### Benefits
-
-**Reduced startup time:** Containers start within seconds instead of minutes, even for large images.
-
-**Improved scalability:** AKS clusters scale up faster because new pods start immediately without waiting for full image download.
-
-**Reduced bandwidth:** Only layers that are actually accessed are downloaded (unused code paths are never transferred).
-
-### Trade-offs
-
-**Network latency:** If a container accesses data from a layer that has not been downloaded yet, there is a latency penalty. This is acceptable for startup-critical code but problematic for frequently accessed deep layers.
-
-**Limited support:** Artifact streaming requires Premium ACR and container runtimes that support streaming (containerd 1.7+, which is standard in modern Kubernetes versions).
+Streaming configuration is itself governed by RBAC in a slightly surprising way: `Container Registry Repository Writer` can **enable** streaming but not disable it, while `Container Registry Repository Contributor` can do both.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Not Enabling Geo-Replication Before Multi-Region Deployment
+### Pitfall 1: Assuming Standard Supports Geo-Replication or Private Endpoints
 
-**Problem:** Pushing images to a primary ACR without enabling geo-replication, then deploying AKS clusters in secondary regions. Each region pulls images from the primary region across the internet.
+**Problem:** Designing a multi-region or network-isolated architecture on a Standard registry.
 
-**Result:** High latency for image pulls, higher bandwidth costs, and poor deployment performance during scale-up events when many nodes pull images simultaneously.
+**Result:** Both features are Premium-only. So are retention policies, customer-managed keys, dedicated data endpoints, IP access rules, export policy, and artifact streaming. The design fails at implementation, usually after the tier decision is already embedded in Bicep and cost models.
 
-**Solution:** Enable geo-replication on Standard or Premium ACR when you plan multi-region deployments. This ensures local image replicas are available in each region before deploying clusters.
-
----
-
-### Pitfall 2: Pushing Vulnerable Images to Production
-
-**Problem:** Ignoring scan results that show critical vulnerabilities in images. The image is pushed to ACR despite known CVEs.
-
-**Result:** Production containers run known vulnerable code. Exploits become available before you patch. Compliance audits fail.
-
-**Solution:** Fail the build pipeline if scan results exceed a critical vulnerability threshold. For images already in production, set up alerts for new vulnerabilities discovered during continuous scanning and patch immediately.
+**Solution:** Treat Premium as a feature decision, not a scale decision. If the architecture needs any of the above, the tier is settled regardless of how small the registry is.
 
 ---
 
-### Pitfall 3: Using Admin Account Instead of Managed Identity
+### Pitfall 2: Push-Then-Pull Across Regions
 
-**Problem:** Configuring AKS imagePullSecrets with the ACR admin account credentials instead of using managed identity. Credentials are stored in pod specs, Helm values, or etcd.
+**Problem:** A pipeline pushes an image and immediately rolls out to clusters in several regions through the global endpoint.
 
-**Result:** Credentials can be discovered through configuration inspection. Rotating the admin password requires updating secrets in all deployments. No audit trail of which pod pulled which image.
+**Result:** Intermittent `manifest unknown` failures in whichever regions replication hasn't reached, which look like flaky infrastructure and get retried away rather than fixed.
 
-**Solution:** Use managed identity for AKS-to-ACR authentication. This eliminates secrets entirely and provides automatic credential rotation.
-
----
-
-### Pitfall 4: Storage Bloat from Unmanaged Image Lifecycle
-
-**Problem:** Pushing images without retention policies or quarantine. Build pipelines push dozens of images per day, and no cleanup ever occurs.
-
-**Result:** ACR storage grows unbounded. Costs increase. Image discovery becomes difficult. Old images with security issues remain accessible.
-
-**Solution:** Implement retention policies to delete images older than 90 days (or your organization's retention requirement). Exclude only critical production images from deletion. Clean up build artifacts (`pr-*`, `tmp-*`, `test-*` tags) aggressively.
+**Solution:** Push through a regional endpoint to pin the whole push to one replica, then either wait on replication webhooks or retry pulls with backoff. Design publish steps to be idempotent so retries are safe.
 
 ---
 
-### Pitfall 5: Scanning Only at Push Time
+### Pitfall 3: Still Building on Docker Content Trust
 
-**Problem:** Configuring image scanning to run only when the image is pushed. No continuous re-scanning of existing images.
+**Problem:** New signing work implemented with DCT and `AcrImageSigner`.
 
-**Result:** New vulnerabilities discovered weeks after push are never detected. Production images running known vulnerabilities go unpatched.
+**Result:** DCT is deprecated as of 31 March 2025 and removed on 31 March 2028, and it doesn't work at all on ABAC-enabled registries, so the work blocks the RBAC modernization too.
 
-**Solution:** Enable continuous scanning (re-scan existing images monthly or more frequently). Set up alerts for new critical vulnerabilities in images deployed to production. Establish a patching SLA (e.g., critical vulnerabilities patched within 48 hours).
+**Solution:** Sign with Notation against a Key Vault key, store signatures as OCI referrers, and verify with Ratify and Azure Policy on AKS.
 
 ---
 
-### Pitfall 6: Trusting Signed Images Without Validation
+### Pitfall 4: Using the Admin Account for Pulls
 
-**Problem:** Implementing image signing but not configuring admission controllers to actually verify signatures. Any image with a signature is allowed, regardless of which key signed it.
+**Problem:** AKS `imagePullSecrets` populated with admin credentials, stored in pod specs, Helm values, and etcd.
 
-**Result:** Signing provides a false sense of security. Compromised images can be signed with the attacker's key.
+**Result:** Credentials are readable by anyone who can inspect the cluster, rotation means updating every deployment, all traffic shares one rate-limit bucket, and audit logs attribute everything to the same identity.
 
-**Solution:** Configure strict admission controller policies that require signatures from only specific trusted keys. Regularly audit signing keys and rotate them when access is compromised.
+**Solution:** Attach the kubelet managed identity to the registry with `Container Registry Repository Reader`, scoped by ABAC condition to the repositories that cluster actually needs.
+
+---
+
+### Pitfall 5: Expecting Retention Policy to Clean Up Tagged Images
+
+**Problem:** Enabling the retention policy and assuming it will delete old `pr-*` and `build-*` tags.
+
+**Result:** It only touches **untagged** manifests. Tagged build artifacts accumulate indefinitely, and storage keeps growing, billed once per geo-replica.
+
+**Solution:** Schedule `acr purge` as an ACR Task for tag-pattern cleanup, keep the retention policy for the untagged manifests purge leaves behind, and turn on soft delete before automating any of it.
+
+---
+
+### Pitfall 6: Trusting a Signature Without a Trust Policy
+
+**Problem:** Verification configured to check that an image has a valid signature, without constraining which identity signed it.
+
+**Result:** Any signature passes, including one an attacker made with their own key. The pipeline reports "signature verified" and the control provides nothing.
+
+**Solution:** Configure the verifier's trust policy with the specific trusted identities and certificate chains, and audit that policy the way you'd audit a firewall rule.
 
 ---
 
 ## Key Takeaways
 
-1. **Choose the right ACR tier based on scale.** Basic is sufficient for development. Standard works for small-medium production workloads. Premium is necessary for large-scale deployments, high-frequency image pulls, and multi-region deployments.
+1. **Premium is a feature cliff, not a size upgrade.** Geo-replication, private endpoints, retention policy, customer-managed keys, dedicated data endpoints, connected registries, export policy, and artifact streaming exist only there. Storage rarely drives the decision.
 
-2. **Enable geo-replication for multi-region deployments.** Images replicate automatically to secondary regions, eliminating cross-region pull latency and reducing bandwidth costs. Plan multi-region deployments before they are needed.
+2. **Geo-replication is one registry with one login server, active-active and eventually consistent.** Every replica is writable, image references never change per region, and the design work is handling replication lag rather than orchestrating failover.
 
-3. **Scan images automatically and act on critical vulnerabilities.** Enable Defender for Containers, configure scan failures to block vulnerable images from production, and set up continuous scanning for new vulnerabilities in existing images.
+3. **Health-aware failover is automatic but bounded.** It works on the global endpoint, takes minutes, and doesn't apply to regional endpoints or respond to throttling. Keep two or three replicas so a failover doesn't throttle the survivors.
 
-4. **Use managed identity for AKS-to-ACR authentication.** This eliminates secrets entirely, provides automatic credential rotation, and enables audit trails. Avoid storing credentials in pod specs or configuration files.
+4. **ACR Tasks are bound to the home region.** A geo-replicated registry keeps serving pulls through a home region outage but stops building.
 
-5. **Implement content trust with image signing for sensitive workloads.** Use Notary v2 and notation to sign images with a key stored in Key Vault. Configure admission controllers to verify signatures before allowing deployment.
+5. **Vulnerability assessment is a Defender plan, not a registry tier feature**, and it rescans daily only for images pushed or pulled in the last 30 days or currently running. An untouched image's clean result is stale, not current.
 
-6. **Manage image lifecycle with retention policies.** Delete old images automatically to prevent storage bloat. Exclude only critical production images from deletion.
+6. **Docker Content Trust is deprecated and gone on 31 March 2028.** Sign with Notation against Key Vault, store signatures as OCI referrers, and verify with Ratify and Azure Policy.
 
-7. **Use Private Endpoints for compliance-sensitive workloads.** Private endpoints ensure image pulls do not traverse the public internet. Disable the public endpoint entirely if compliance requirements demand network isolation.
+7. **Signing without a trust policy proves nothing.** The control is the list of identities the verifier accepts, not the presence of a signature.
 
-8. **Segment registries by environment for defense in depth.** Separate development, staging, and production registries with different access controls and scanning policies.
+8. **Know which permissions mode the registry is in.** ABAC-enabled registries use `Container Registry Repository Reader`/`Writer`/`Contributor` with repository conditions; legacy registries use `AcrPull` and `AcrPush` registry-wide. The repository roles deliberately don't grant catalog list.
 
-9. **Use artifact streaming in Premium ACR for large images.** Containers start faster when layers are downloaded on-demand instead of waiting for full image transfer.
+9. **Rate limits are per identity and per replica.** One shared service principal, anonymous pulls, or admin credentials all collapse into a single bucket, and a failover concentrates load onto fewer replicas.
 
-10. **Registry security is part of the supply chain.** A secure registry is worthless without secure build processes, admission control, and runtime protection. Integrate ACR with Defender for Containers and admission controllers to enforce policy end-to-end.
+10. **Retention policy covers untagged manifests only.** Tag-pattern cleanup is `acr purge` on an ACR Task, and soft delete is the safety net you enable first.
