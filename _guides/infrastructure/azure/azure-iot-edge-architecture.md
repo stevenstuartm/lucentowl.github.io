@@ -1,8 +1,8 @@
 ---
 title: "Azure IoT Edge: Architecture and Development"
 layout: guide
-category: IoT
-subcategory: Azure IoT Services
+category: Azure
+subcategory: IoT & Edge
 description: "Azure IoT Edge runtime architecture, module communication patterns, building custom .NET modules, and deployment manifests for edge computing workloads."
 tags: [iot, azure, edge-computing, dotnet, architecture, distributed-systems, practical]
 ---

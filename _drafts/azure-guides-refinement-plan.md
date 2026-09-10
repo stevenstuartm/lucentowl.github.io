@@ -264,8 +264,13 @@ Leads for rows not yet done. **A pre-flag is a lead, not a finding** — re-veri
 
 | Target row | Lead |
 |---|---|
-
-*(Empty. All rows are complete.)*
+| 62-67 (all IoT & Edge) | Never refined. All six are still at the `First rough version copied from stevenstuartm repo` commit — the recategorization that moved them here touched front matter only, so every checklist item is unrun, not merely stale. |
+| 62-67 (all IoT & Edge) | Written as IoT-category guides, where the config placed them after IoT foundations (protocols, hardware, device security). Under the Azure ordering they follow the messaging guides instead, so any opening that assumes the reader arrives with MQTT, device provisioning, or edge-topology background no longer holds. Check for prerequisite framing that the config ordering no longer supplies. |
+| 62-67 (all IoT & Edge) | Every one leads its tags with `iot`, and `digital-twins` appears on row 67. The item 9 tag-frequency measurement under **Domain notes** was taken across the Azure category before these six joined it, so those tags are unmeasured here — re-measure or judge by hand rather than reading them as filler. |
+| 62 iot-hub, 65 edge-operations | Both lean on Azure Stream Analytics. The Stream Analytics entry under **Cross-guide facts in force** is already verified (Trill engine, exactly-once processing, runs on IoT Edge) — reuse it instead of re-researching, and check neither guide understates the engine as queries-only. |
+| 65 edge-operations | The ML-at-the-edge section describes exporting an Azure ML model to ONNX and wrapping it in a container. The Azure ML entry under **Cross-guide facts in force** records that ACI and IoT Edge are no longer in the endpoint list — verify this section describes a hand-rolled container, not a managed Azure ML deployment target. |
+| 65 edge-operations | Carries the only outbound cross-link in the six, to `/study-guides/dotnet/iot/dotnet-nanoframework.html`. The no-cross-links rule in the header covers siblings in scope; this one points outside the Azure pass, so decide whether it survives rather than assuming either way. |
+| 66 iot-central, 67 digital-twins | Both sat under the retired `Advanced IoT` subcategory and were written to be read late, after the rest of the IoT block. They now close the `IoT & Edge` run instead. Check the openings do not lean on the IoT guides that no longer precede them. |
 
 ## Unverified, left standing
 
@@ -350,6 +355,8 @@ Claims on finished guides that could not be confirmed against a source. Each was
 
 ## Progress
 
+Rows 62-67 were added after rows 1-61 were complete, when the six Azure IoT guides moved into `_guides/infrastructure/azure/` from `_guides/iot/`. They carry the next free numbers rather than their config positions, per the row-numbering invariant in the standard. **In reading order they belong after row 28** (`azure-logic-apps.md`, the last of Application Integration & Messaging) and before row 29 (`azure-bicep-fundamentals.md`) — that is where the `IoT & Edge` subcategory sits in `assets/data/study_guides_config.json`.
+
 | # | Subcategory | Guide | Status |
 |---|---|---|---|
 | 1 | Architecture Principles | azure-well-architected-framework.md | Complete |
@@ -413,3 +420,9 @@ Claims on finished guides that could not be confirmed against a source. Each was
 | 59 | Container Orchestration (Advanced) | advanced-container-patterns-azure.md | Complete |
 | 60 | Architecture Patterns (Advanced) | multi-region-architecture-azure.md | Complete |
 | 61 | Architecture Patterns (Advanced) | disaster-recovery-azure.md | Complete |
+| 62 | IoT & Edge | azure-iot-hub.md | Not started |
+| 63 | IoT & Edge | azure-iot-dps.md | Not started |
+| 64 | IoT & Edge | azure-iot-edge-architecture.md | Not started |
+| 65 | IoT & Edge | azure-iot-edge-operations.md | Not started |
+| 66 | IoT & Edge | azure-iot-central.md | Not started |
+| 67 | IoT & Edge | azure-digital-twins.md | Not started |

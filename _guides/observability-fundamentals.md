@@ -2,7 +2,7 @@
 title: "Observability Fundamentals"
 layout: guide
 category: Observability
-subcategory: Fundamentals
+subcategory: Monitoring & Observability
 description: "Build observable systems with the three pillars: distributed logging, metrics monitoring, and distributed tracing, plus profiling and best practices."
 tags: [observability, monitoring, logging, tracing, fundamentals, practical]
 ---

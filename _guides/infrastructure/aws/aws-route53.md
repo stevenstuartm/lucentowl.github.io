@@ -2,7 +2,7 @@
 title: "AWS Route 53 for System Architects"
 layout: guide
 category: AWS
-subcategory: Networking & Content Delivery
+subcategory: Networking
 description: "Comprehensive guide to AWS Route 53 covering DNS routing policies, health checks, traffic management, failover strategies, cost optimization, and global traffic distribution"
 tags: [aws, route53, dns, routing-policies, health-checks, traffic-management, cost-optimization, fundamentals]
 ---

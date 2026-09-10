@@ -2,7 +2,7 @@
 title: "IoT Data Pipelines"
 layout: guide
 category: IoT
-subcategory: Architecture & Security
+subcategory: Architecture & Data
 description: "Hot, warm, and cold processing paths for IoT telemetry, event-driven architectures, stream processing patterns, Lambda and Kappa architectures, and storage strategies for time-series device data."
 tags: [iot, architecture, real-time, scalability, distributed-systems, analytics, telemetry]
 ---

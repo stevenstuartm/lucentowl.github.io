@@ -2,7 +2,7 @@
 title: "AWS Elastic Load Balancing for System Architects"
 layout: guide
 category: AWS
-subcategory: Networking & Content Delivery
+subcategory: Networking
 description: "Comprehensive guide to AWS Elastic Load Balancing covering ALB, NLB, and GWLB comparison, target groups, health checks, TLS termination, cross-zone load balancing, cost optimization, and deployment patterns"
 tags: [aws, load-balancing, alb, nlb, gwlb, high-availability, scalability, cost-optimization, fundamentals]
 ---

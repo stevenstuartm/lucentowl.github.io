@@ -2,7 +2,7 @@
 title: "Architecture Governance"
 layout: guide
 category: Architecture
-subcategory: Leadership & Governance
+subcategory: Governance
 description: "Principles, processes, and practices for governing software architecture decisions and ensuring alignment with business objectives"
 tags: [architecture, governance, leadership, decision-making, collaboration, standards]
 ---

@@ -2,7 +2,7 @@
 title: "Lean Software Methodology"
 layout: guide
 category: Software Development Lifecycle
-subcategory: SDLC Fundamentals
+subcategory: SDLC Frameworks
 description: "Comprehensive guide to Lean Software Development - principles, practices, and philosophy for eliminating waste, amplifying learning, and delivering value continuously."
 tags: [sdlc, methodology, lean, efficiency, waste-reduction]
 ---

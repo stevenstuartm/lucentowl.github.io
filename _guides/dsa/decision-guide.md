@@ -1,6 +1,8 @@
 ---
 title: "Practical Decision Guide"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Fundamentals
 description: "Practical guide for choosing the right data structure and algorithm for your problem, comparing interview practices with production best practices."
 tags: [algorithms, data-structures, decision-making, practical, reference]
 ---

@@ -2,7 +2,7 @@
 title: "AWS Direct Connect & VPN for System Architects"
 layout: guide
 category: AWS
-subcategory: Networking & Content Delivery
+subcategory: Networking
 description: "Comprehensive guide to AWS Direct Connect and Site-to-Site VPN covering hybrid connectivity options, resiliency patterns, high availability architectures, cost analysis, and when to use each solution"
 tags: [aws, direct-connect, vpn, hybrid-cloud, networking, high-availability, cost-optimization, fundamentals]
 ---

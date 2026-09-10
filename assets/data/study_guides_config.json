@@ -561,6 +561,18 @@
           ]
         },
         {
+          "name": "IoT & Edge",
+          "description": "Device connectivity, provisioning, edge runtime, and digital twin services on Azure",
+          "guides": [
+            "infrastructure/azure/azure-iot-hub.md",
+            "infrastructure/azure/azure-iot-dps.md",
+            "infrastructure/azure/azure-iot-edge-architecture.md",
+            "infrastructure/azure/azure-iot-edge-operations.md",
+            "infrastructure/azure/azure-iot-central.md",
+            "infrastructure/azure/azure-digital-twins.md"
+          ]
+        },
+        {
           "name": "Infrastructure as Code",
           "description": "Azure infrastructure automation using Bicep and ARM templates",
           "guides": [
@@ -752,7 +764,7 @@
             "dotnet/c-sharp/fundamentals/exceptions-and-errors.md",
             "dotnet/c-sharp/fundamentals/attributes-and-reflection.md",
             "dotnet/c-sharp/fundamentals/memory-management.md",
-            "dotnet/c-sharp/modern/nullable-reference-types.md"
+            "dotnet/c-sharp/fundamentals/nullable-reference-types.md"
           ]
         },
         {
@@ -813,6 +825,15 @@
           ]
         },
         {
+          "name": "IoT & Embedded",
+          "description": "Driving sensors and constrained hardware from C#, on full .NET and on bare-metal microcontrollers",
+          "guides": [
+            "dotnet/iot/dotnet-iot-libraries.md",
+            "dotnet/iot/dotnet-nanoframework.md",
+            "dotnet/iot/mqttnet-iot-communication.md"
+          ]
+        },
+        {
           "name": "Tooling",
           "description": "Developer tooling for code quality, formatting, and project configuration",
           "guides": [
@@ -863,7 +884,8 @@
             "dotnet/asp/aspnet-controller-apis.md",
             "dotnet/asp/aspnet-minimal-apis.md",
             "dotnet/asp/aspnet-grpc.md",
-            "dotnet/asp/aspnet-signalr-realtime.md"
+            "dotnet/asp/aspnet-signalr-realtime.md",
+            "dotnet/asp/signalr-iot-dashboards.md"
           ]
         },
         {
@@ -914,64 +936,47 @@
     "IoT": {
       "subcategories": [
         {
-          "name": "IoT Foundations",
-          "description": "Core IoT concepts, protocols, communication technologies, and hardware fundamentals",
+          "name": "Foundations",
+          "description": "Core IoT concepts, hardware and electronics, communication protocols, and telemetry payload formats",
           "guides": [
             "iot/iot-fundamentals.md",
+            "iot/iot-hardware-electronics.md",
             "iot/iot-protocols-communication.md",
-            "iot/iot-hardware-electronics.md"
+            "iot/iot-data-serialization.md"
           ]
         },
         {
-          "name": "Architecture & Security",
-          "description": "IoT architecture patterns, security fundamentals, firmware updates, and data pipeline design",
+          "name": "Architecture & Data",
+          "description": "Device-to-cloud architecture patterns, telemetry pipeline design, and running inference at the edge",
           "guides": [
             "iot/iot-architecture-patterns.md",
+            "iot/iot-data-pipelines.md",
+            "iot/ml-at-the-edge.md"
+          ]
+        },
+        {
+          "name": "Security & Firmware",
+          "description": "Securing constrained devices and delivering firmware safely over the air",
+          "guides": [
             "iot/iot-security-fundamentals.md",
-            "iot/iot-firmware-ota-updates.md",
-            "iot/iot-data-pipelines.md"
+            "iot/iot-firmware-ota-updates.md"
           ]
         },
         {
-          "name": ".NET IoT Development",
-          "description": "Using C# for IoT development with .NET IoT Libraries, MQTTnet, and .NET nanoFramework",
+          "name": "Fleet Operations",
+          "description": "Managing devices at scale across their lifecycle, from provisioning through retirement",
           "guides": [
-            "iot/dotnet-iot-libraries.md",
-            "iot/mqttnet-iot-communication.md",
-            "iot/dotnet-nanoframework.md"
-          ]
-        },
-        {
-          "name": "Azure IoT Services",
-          "description": "Azure IoT Hub, Device Provisioning Service, and IoT Edge for cloud-connected device management",
-          "guides": [
-            "iot/azure-iot-hub.md",
-            "iot/azure-iot-dps.md",
-            "iot/azure-iot-edge-architecture.md",
-            "iot/azure-iot-edge-operations.md"
-          ]
-        },
-        {
-          "name": "Dashboards & Apps",
-          "description": "Real-time IoT dashboards with SignalR and cross-platform companion apps with MAUI",
-          "guides": [
-            "iot/signalr-iot-dashboards.md",
-            "iot/maui-iot-companion-apps.md"
-          ]
-        },
-        {
-          "name": "Advanced IoT",
-          "description": "Digital twins, IoT Central, industrial IoT, edge ML, fleet management, and data serialization",
-          "guides": [
-            "iot/azure-digital-twins.md",
-            "iot/azure-iot-central.md",
-            "iot/iiot-foundations-control-systems.md",
-            "iot/iiot-security-maintenance-safety.md",
-            "iot/iiot-architecture-implementation.md",
-            "iot/ml-at-the-edge.md",
             "iot/iot-fleet-management-lifecycle.md",
-            "iot/iot-fleet-management-operations.md",
-            "iot/iot-data-serialization.md"
+            "iot/iot-fleet-management-operations.md"
+          ]
+        },
+        {
+          "name": "Industrial IoT",
+          "description": "Control systems, OT/IT convergence, and the safety and reliability demands of industrial environments",
+          "guides": [
+            "iot/iiot-foundations-control-systems.md",
+            "iot/iiot-architecture-implementation.md",
+            "iot/iiot-security-maintenance-safety.md"
           ]
         }
       ]

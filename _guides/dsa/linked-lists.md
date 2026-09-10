@@ -1,6 +1,8 @@
 ---
 title: "Linked Lists"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Linear Data Structures
 description: "Learn singly and doubly linked lists with implementations, time complexity analysis, and common interview problems including cycle detection and reversal."
 tags: [data-structures, algorithms, fundamentals, practical, interview-prep]
 ---

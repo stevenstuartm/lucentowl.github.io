@@ -1,8 +1,8 @@
 ---
 title: "Observability Architecture & Strategy"
 layout: guide
-category: Architecture
-subcategory: Design
+category: Observability
+subcategory: Monitoring & Observability
 description: "Advanced observability patterns including distributed tracing strategies, SLO/SLI frameworks, sampling techniques, cardinality management, OpenTelemetry adoption, and observability-driven development for production systems"
 tags: [architecture, observability, monitoring, distributed-systems, reliability, slo, sli, opentelemetry, practical]
 ---

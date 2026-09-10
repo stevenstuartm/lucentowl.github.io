@@ -2,7 +2,7 @@
 title: "IoT Firmware and OTA Updates"
 layout: guide
 category: IoT
-subcategory: Architecture & Security
+subcategory: Security & Firmware
 description: "Firmware fundamentals, secure boot chains, code signing, OTA update mechanisms including A/B partitioning and delta updates, rollback protection, and fleet-scale update management."
 tags: [iot, firmware, security, embedded, reliability, deployment, scalability]
 ---

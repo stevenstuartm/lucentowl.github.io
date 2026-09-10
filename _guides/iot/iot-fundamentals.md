@@ -2,7 +2,7 @@
 title: "IoT Fundamentals"
 layout: guide
 category: IoT
-subcategory: IoT Foundations
+subcategory: Foundations
 description: "Core IoT concepts including architecture layers, device types, edge versus cloud processing, telemetry patterns, and the key challenges that shape every IoT system design."
 tags: [iot, fundamentals, architecture, sensors, edge-computing, telemetry, scalability]
 ---

@@ -1,6 +1,8 @@
 ---
 title: "Recursion"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Hash Tables & Algorithms
 description: "Master recursive thinking with base cases, recursive cases, common patterns, memoization techniques, and converting between recursive and iterative solutions."
 tags: [algorithms, recursion, fundamentals, problem-solving, interview-prep]
 ---

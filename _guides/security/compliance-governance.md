@@ -1,6 +1,8 @@
 ---
 title: "Compliance and Governance"
+layout: guide
 category: Security
+subcategory: Governance & Response
 description: "Essential framework for risk management, compliance standards like SOX and PCI DSS, security auditing processes, and continuous monitoring strategies."
 tags: [security, compliance, governance, regulations, frameworks]
 ---

@@ -2,7 +2,7 @@
 title: "Azure Activity Log and Diagnostic Settings"
 layout: guide
 category: Azure
-subcategory: Security and Compliance
+subcategory: Security & Compliance
 description: "A system architect's guide to Azure Activity Log, diagnostic settings, and data collection rules covering the three telemetry paths, log routing destinations, Log Analytics table plans and retention, and compliance archival."
 tags: [activity-log, diagnostic-settings, data-collection-rules, log-analytics, azure-monitor, log-retention, practical]
 ---

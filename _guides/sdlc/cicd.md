@@ -2,7 +2,7 @@
 title: "CI/CD: Continuous Integration and Continuous Delivery"
 layout: guide
 category: Software Development Lifecycle
-subcategory: SDLC & Modeling
+subcategory: DevOps & Delivery
 description: "CI/CD fundamentals, pipeline design, automation strategies, security gates, testing approaches, and deployment workflows for modern software delivery."
 tags: [sdlc, cicd, automation, devops, testing, security, practical]
 ---

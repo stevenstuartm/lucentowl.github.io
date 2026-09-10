@@ -1,6 +1,8 @@
 ---
 title: "Heaps & Priority Queues"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Trees & Heaps
 description: "Learn heap data structure properties, heapify operations, priority queue implementations, and applications from task scheduling to finding top-K elements."
 tags: [data-structures, algorithms, heaps, priority-queues, practical]
 ---

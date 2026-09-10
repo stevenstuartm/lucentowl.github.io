@@ -2,7 +2,7 @@
 title: "C# HttpClient and Networking"
 layout: guide
 category: ".NET & C#"
-subcategory: "Libraries & Frameworks"
+subcategory: "Core Libraries"
 description: "HttpClient patterns, IHttpClientFactory, resilience, REST APIs, and modern networking best practices."
 tags: [c-sharp, dotnet, networking, httpclient, rest-api, resilience, practical]
 ---

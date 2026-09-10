@@ -2,7 +2,7 @@
 title: "Architecture Governance Tools & Automation"
 layout: guide
 category: Architecture
-subcategory: Leadership & Governance
+subcategory: Governance
 description: "Practical tools and automation for implementing architecture governance - AWS, .NET, IaC, and security"
 tags: [architecture, governance, automation, aws, security, practical]
 ---

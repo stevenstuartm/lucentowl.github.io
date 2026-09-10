@@ -2,7 +2,7 @@
 title: "IoT Protocols and Communication"
 layout: guide
 category: IoT
-subcategory: IoT Foundations
+subcategory: Foundations
 description: "Application-layer protocols like MQTT, CoAP, and AMQP, network-layer technologies from WiFi to LoRaWAN, and data serialization formats for IoT systems."
 tags: [iot, mqtt, protocols, networking, fundamentals, embedded, real-time]
 ---

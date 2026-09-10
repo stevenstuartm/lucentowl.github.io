@@ -1,8 +1,8 @@
 ---
 title: "Real-Time IoT Dashboards with SignalR"
 layout: guide
-category: IoT
-subcategory: Dashboards & Apps
+category: "ASP.NET Core"
+subcategory: "API Programming Models"
 description: "Building real-time IoT dashboards with ASP.NET Core SignalR and Azure SignalR Service, covering the telemetry pipeline from device to browser, Blazor integration, and scaling patterns."
 tags: [iot, dotnet, real-time, telemetry, azure, practical, architecture]
 ---

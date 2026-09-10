@@ -2,7 +2,7 @@
 title: "IoT Architecture Patterns"
 layout: guide
 category: IoT
-subcategory: Architecture & Security
+subcategory: Architecture & Data
 description: "Edge computing, fog computing, device-cloud communication patterns, protocol translation gateways, and data processing architectures for scalable IoT systems."
 tags: [iot, architecture, edge-computing, scalability, distributed-systems, design-patterns, reliability]
 ---

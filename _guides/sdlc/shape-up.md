@@ -2,7 +2,7 @@
 title: "ShapeUp Methodology"
 layout: guide
 category: Software Development Lifecycle
-subcategory: SDLC & Modeling
+subcategory: SDLC Frameworks
 description: "Comprehensive guide to Shape Up methodology - Basecamp's approach to product development featuring six-week cycles, shaping, betting, and building phases."
 tags: [sdlc, methodology, agile, product-development, basecamp]
 ---

@@ -2,7 +2,7 @@
 title: "IIoT Architecture and Implementation"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Industrial IoT
 description: "Industrial IoT architecture patterns including Azure IoT for industrial environments, digital twins for manufacturing, brownfield vs greenfield deployments, edge computing, IT-OT convergence, and IIoT data flow architectures."
 tags: [iot, iiot, architecture, azure, edge-computing, distributed-systems, practical]
 ---

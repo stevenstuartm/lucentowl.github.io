@@ -2,7 +2,7 @@
 title: "C# Dependency Injection"
 layout: guide
 category: ".NET & C#"
-subcategory: "Libraries & Frameworks"
+subcategory: "Core Libraries"
 description: "Microsoft.Extensions.DependencyInjection, service lifetimes, registration patterns, and DI best practices."
 tags: [c-sharp, dotnet, dependency-injection, ioc, design-patterns, architecture, practical]
 ---

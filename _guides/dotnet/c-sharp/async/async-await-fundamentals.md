@@ -2,7 +2,7 @@
 title: "C# Async/Await Fundamentals"
 layout: guide
 category: ".NET & C#"
-subcategory: "Async Programming"
+subcategory: "Async & Concurrency"
 description: "Asynchronous programming with async/await, Task-based patterns, cancellation, and best practices for I/O-bound operations."
 tags: [c-sharp, dotnet, async, concurrency, task, performance, practical]
 ---

@@ -1,6 +1,8 @@
 ---
 title: "Arrays & Dynamic Arrays"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Linear Data Structures
 description: "Master static and dynamic arrays with O(1) access, amortized analysis, common techniques like two pointers and sliding window, and essential interview problems."
 tags: [data-structures, algorithms, fundamentals, practical, interview-prep]
 ---

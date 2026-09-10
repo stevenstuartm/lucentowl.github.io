@@ -2,7 +2,7 @@
 title: "Microsoft Defender for Cloud and Sentinel"
 layout: guide
 category: Azure
-subcategory: Security and Compliance
+subcategory: Security & Compliance
 description: "A system architect's guide to Microsoft Defender for Cloud and Microsoft Sentinel covering cloud security posture management, Defender plan selection, SIEM and SOAR architecture, and the move to the unified Defender portal."
 tags: [defender-for-cloud, microsoft-sentinel, siem, cspm, threat-detection, security-operations, practical]
 ---

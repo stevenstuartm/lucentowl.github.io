@@ -1,6 +1,8 @@
 ---
 title: "Complexity Cheat Sheet"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Fundamentals
 description: "Quick reference for time and space complexity of common data structures, algorithms, and operations with practical guidelines for algorithm selection and performance optimization."
 tags: [algorithms, complexity-analysis, reference, interview-prep]
 ---

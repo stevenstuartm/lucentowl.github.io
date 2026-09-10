@@ -2,7 +2,7 @@
 title: "IoT Data Serialization"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Foundations
 description: "Comparing JSON, Protocol Buffers, CBOR, MessagePack, and Avro for IoT data serialization, with bandwidth analysis, schema evolution strategies, and C# implementation examples."
 tags: [iot, protocols, performance, dotnet, practical, fundamentals, telemetry]
 ---

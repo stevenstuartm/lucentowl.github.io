@@ -1,6 +1,8 @@
 ---
 title: "Advanced Tree Structures"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Trees & Heaps
 description: "Master advanced tree structures including tries for prefix matching, segment trees, balanced trees like AVL and Red-Black, and specialized applications."
 tags: [data-structures, algorithms, trees, advanced, interview-prep]
 ---

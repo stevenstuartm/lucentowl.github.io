@@ -2,7 +2,7 @@
 title: "C# Parallel and Concurrent Programming"
 layout: guide
 category: ".NET & C#"
-subcategory: "Async Programming"
+subcategory: "Async & Concurrency"
 description: "Parallel processing, concurrent collections, thread synchronization, and CPU-bound work in C#."
 tags: [c-sharp, dotnet, parallel, concurrency, threading, performance, practical]
 ---

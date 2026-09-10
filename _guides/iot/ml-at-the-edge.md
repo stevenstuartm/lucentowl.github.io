@@ -2,7 +2,7 @@
 title: "Machine Learning at the Edge"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Architecture & Data
 description: "Running ML inference on IoT edge devices with ONNX Runtime and .NET, covering model optimization, deployment patterns, anomaly detection, computer vision, and the cloud-to-edge ML lifecycle."
 tags: [iot, edge-computing, architecture, dotnet, practical, real-time, advanced]
 ---

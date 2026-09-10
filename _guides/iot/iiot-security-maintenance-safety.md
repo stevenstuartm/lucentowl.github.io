@@ -2,7 +2,7 @@
 title: "IIoT Security, Maintenance, and Safety"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Industrial IoT
 description: "Industrial cybersecurity with IEC 62443, predictive maintenance using vibration, thermal, and ultrasonic monitoring, condition monitoring strategies, safety instrumented systems, and time-series data at industrial scale."
 tags: [iot, iiot, security, reliability, analytics, edge-computing, advanced]
 ---

@@ -1,6 +1,8 @@
 ---
 title: "Graph Fundamentals"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Graphs
 description: "Foundation of graph theory covering terminology, representations, graph types, and basic traversal concepts for modeling complex relationships and networks."
 tags: [data-structures, algorithms, graphs, fundamentals, interview-prep]
 ---

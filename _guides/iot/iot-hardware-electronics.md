@@ -2,7 +2,7 @@
 title: "IoT Hardware and Electronics Basics"
 layout: guide
 category: IoT
-subcategory: IoT Foundations
+subcategory: Foundations
 description: "GPIO, I2C, SPI, PWM, and other communication interfaces, common sensor types, power management, and a comparison of starter hardware platforms for IoT development."
 tags: [iot, embedded, sensors, microcontrollers, raspberry-pi, fundamentals, hardware]
 ---

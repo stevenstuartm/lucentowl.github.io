@@ -2,7 +2,7 @@
 title: "Azure Key Vault for System Architects"
 layout: guide
 category: Azure
-subcategory: Security and Compliance
+subcategory: Security & Compliance
 description: "Choosing between Standard vaults, Premium vaults, and Managed HSM; the control-plane and data-plane split that governs Key Vault access; what rotation actually automates; and the throttling, caching, and soft-delete behavior that breaks designs in production."
 tags: [security, key-vault, secrets-management, encryption, managed-identity, rbac, practical]
 ---

@@ -2,7 +2,7 @@
 title: "Azure Firewall and DDoS Protection"
 layout: guide
 category: Azure
-subcategory: Security and Compliance
+subcategory: Security & Compliance
 description: "How Azure Firewall's three SKUs filter traffic, the order its rules are processed in, when IDPS and TLS inspection earn their cost, and how the DDoS Protection tiers cover the network layer that a WAF does not."
 tags: [security, networking, azure-firewall, ddos-protection, idps, waf, practical]
 ---

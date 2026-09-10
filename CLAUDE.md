@@ -132,6 +132,10 @@ tags: [tag1, tag2, tag3, tag4]
 
 **CRITICAL: Always update `assets/data/study_guides_config.json`** when adding or removing guides. Guides that exist in `_guides/` but aren't listed in this config file will not appear on the website. Always modify both files together.
 
+**CRITICAL: `category` and `subcategory` must match the config exactly.** The config is the source of truth — the study guides listing renders from it, so a guide with drifted front matter still appears in the right place and the mismatch stays invisible until something reads the front matter. Match the strings character for character, including `&` vs `and`. When you rename a subcategory in the config, update every guide it contains in the same pass.
+
+When recategorizing a guide, change it in three places together: the file's `category`/`subcategory` front matter, its entry in the config, and — if the file moves directories — every internal link pointing at its old URL (`grep -rn "study-guides/<old-path>"`).
+
 For format details, tag vocabulary, configuration requirements, organization patterns, and quality standards, see [`.claude/content/study-guide-guide.md`](.claude/content/study-guide-guide.md).
 
 ### Resource Format

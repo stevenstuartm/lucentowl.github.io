@@ -2,7 +2,7 @@
 title: "Team Architecture & Organization"
 layout: guide
 category: Software Development Lifecycle
-subcategory: SDLC & Modeling
+subcategory: SDLC Fundamentals
 description: "Modern team structures and collaboration patterns for software development, including domain-driven design, feature teams, and architectural governance."
 tags: [sdlc, leadership, team-organization, collaboration, structure]
 ---

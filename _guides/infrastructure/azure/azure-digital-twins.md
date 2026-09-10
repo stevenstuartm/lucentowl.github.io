@@ -1,8 +1,8 @@
 ---
 title: "Azure Digital Twins"
 layout: guide
-category: IoT
-subcategory: Advanced IoT
+category: Azure
+subcategory: IoT & Edge
 description: "Modeling real-world environments with Azure Digital Twins, covering DTDL modeling language, graph-based twin management, the .NET SDK, IoT Hub integration, and event-driven processing patterns."
 tags: [iot, azure, digital-twins, architecture, dotnet, practical, modeling]
 ---

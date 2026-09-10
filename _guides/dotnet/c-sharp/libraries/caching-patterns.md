@@ -2,7 +2,7 @@
 title: "C# Caching Patterns"
 layout: guide
 category: ".NET & C#"
-subcategory: "Libraries & Frameworks"
+subcategory: "Core Libraries"
 description: "In-memory caching, distributed caching, cache strategies, and best practices for performance optimization."
 tags: [c-sharp, dotnet, caching, performance, distributed-systems, scalability, practical]
 ---

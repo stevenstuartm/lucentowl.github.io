@@ -1,8 +1,8 @@
 ---
 title: "Azure IoT Edge: Deployment and Operations"
 layout: guide
-category: IoT
-subcategory: Azure IoT Services
+category: Azure
+subcategory: IoT & Edge
 description: "Deploying and operating Azure IoT Edge at scale, covering offline capabilities, common edge patterns, device management, security architecture, provisioning, and observability."
 tags: [iot, azure, edge-computing, deployment, security, scalability, practical]
 ---
@@ -185,7 +185,7 @@ Data sovereignty regulations are another strong forcing function. In sectors lik
 
 ### Edge vs. Embedded
 
-IoT Edge is not a good fit for deeply embedded microcontrollers with kilobytes of RAM. The runtime itself requires a container engine and enough memory to run multiple containers. For constrained microcontrollers, libraries like [.NET nanoFramework](/study-guides/iot/dotnet-nanoframework.html) or bare-metal firmware are more appropriate. IoT Edge targets gateway-class hardware: devices with at least a few hundred megabytes of RAM running a full Linux or Windows operating system.
+IoT Edge is not a good fit for deeply embedded microcontrollers with kilobytes of RAM. The runtime itself requires a container engine and enough memory to run multiple containers. For constrained microcontrollers, libraries like [.NET nanoFramework](/study-guides/dotnet/iot/dotnet-nanoframework.html) or bare-metal firmware are more appropriate. IoT Edge targets gateway-class hardware: devices with at least a few hundred megabytes of RAM running a full Linux or Windows operating system.
 
 A common architecture combines both tiers: microcontrollers measure physical signals and transmit raw readings over a short-range protocol, while an IoT Edge gateway nearby performs protocol translation, filtering, and cloud forwarding. Each layer handles what it is suited for, and neither is being asked to operate outside its design envelope.
 

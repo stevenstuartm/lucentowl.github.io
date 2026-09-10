@@ -1,6 +1,8 @@
 ---
 title: "Security Controls and Defense"
+layout: guide
 category: Security
+subcategory: Threats & Defense
 description: "Implement defense-in-depth strategies, zero trust architecture principles, access control models, and network security fundamentals for comprehensive protection."
 tags: [security, defense, controls, practical, implementation]
 ---

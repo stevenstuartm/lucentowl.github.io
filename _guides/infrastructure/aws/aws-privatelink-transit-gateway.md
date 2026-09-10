@@ -2,7 +2,7 @@
 title: "AWS PrivateLink & Transit Gateway for System Architects"
 layout: guide
 category: AWS
-subcategory: Networking & Content Delivery
+subcategory: Networking
 description: "Comprehensive guide to AWS PrivateLink and Transit Gateway covering private service connectivity, multi-VPC architectures, hub-and-spoke patterns, cost comparison with VPC peering, and scaling strategies"
 tags: [aws, privatelink, transit-gateway, vpc, multi-vpc, networking, cost-optimization, fundamentals]
 ---

@@ -1,8 +1,8 @@
 ---
 title: ".NET nanoFramework"
 layout: guide
-category: IoT
-subcategory: .NET IoT Development
+category: ".NET & C#"
+subcategory: "IoT & Embedded"
 description: "Running C# on bare-metal microcontrollers with .NET nanoFramework, covering supported hardware like ESP32 and STM32, programming model differences, built-in libraries, and constrained device patterns."
 tags: [iot, dotnet, embedded, microcontrollers, fundamentals, practical, firmware]
 ---

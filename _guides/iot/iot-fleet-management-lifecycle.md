@@ -2,7 +2,7 @@
 title: "IoT Fleet Management Part 1: Lifecycle and Provisioning"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Fleet Operations
 description: "Managing IoT device fleets at scale, covering the device lifecycle from provisioning through grouping, health monitoring, firmware update campaigns, and configuration management."
 tags: [iot, scalability, deployment, reliability, azure, architecture, advanced]
 ---

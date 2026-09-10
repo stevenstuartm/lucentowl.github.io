@@ -1,8 +1,8 @@
 ---
 title: ".NET IoT Libraries"
 layout: guide
-category: IoT
-subcategory: .NET IoT Development
+category: ".NET & C#"
+subcategory: "IoT & Embedded"
 description: "System.Device.Gpio and Iot.Device.Bindings for Raspberry Pi development, covering GPIO, I2C, SPI, and PWM communication with sensors and actuators using C#."
 tags: [iot, dotnet, raspberry-pi, sensors, embedded, fundamentals, practical]
 ---

@@ -2,7 +2,7 @@
 title: "SEO Guide & Checklist for 2025"
 layout: guide
 category: Web Development
-subcategory: SEO
+subcategory: SEO & Web
 description: "Complete 2025 SEO checklist covering Core Web Vitals, technical optimization, content strategy, structured data, link building, and modern ranking factors."
 tags: [seo, web-development, marketing, practical, optimization]
 ---

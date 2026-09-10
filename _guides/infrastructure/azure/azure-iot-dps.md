@@ -1,8 +1,8 @@
 ---
 title: "Azure IoT Device Provisioning Service"
 layout: guide
-category: IoT
-subcategory: Azure IoT Services
+category: Azure
+subcategory: IoT & Edge
 description: "Zero-touch device provisioning with Azure DPS, covering attestation mechanisms, enrollment types, allocation policies, the provisioning flow, and C# SDK patterns for automated device registration."
 tags: [iot, azure, security, scalability, dotnet, deployment, practical]
 ---

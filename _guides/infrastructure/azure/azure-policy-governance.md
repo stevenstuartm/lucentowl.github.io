@@ -2,7 +2,7 @@
 title: "Azure Policy and Governance"
 layout: guide
 category: Azure
-subcategory: Security and Compliance
+subcategory: Security & Compliance
 description: "How Azure Policy evaluates and enforces standards across a management group hierarchy: the eleven effects and the order they run in, the assignment controls that make rollout safe, what compliance percentages actually count, and how to migrate off Azure Blueprints before it retires."
 tags: [governance, azure-policy, management-groups, compliance, landing-zones, security, practical]
 ---

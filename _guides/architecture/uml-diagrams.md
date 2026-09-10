@@ -2,7 +2,7 @@
 title: "UML Diagrams"
 layout: guide
 category: Architecture
-subcategory: Design
+subcategory: Modeling
 description: "Practical UML diagram guide covering class diagrams, sequence diagrams, use cases, activity diagrams, and when to use each throughout the SDLC."
 tags: [architecture, modeling, documentation, uml, diagrams, practical]
 ---

@@ -1,6 +1,8 @@
 ---
 title: "Tree Fundamentals"
+layout: guide
 category: Data Structures & Algorithms
+subcategory: Trees & Heaps
 description: "Learn tree fundamentals including terminology, types, traversal methods, and why trees enable logarithmic time operations for hierarchical data structures."
 tags: [data-structures, algorithms, trees, fundamentals, interview-prep]
 ---

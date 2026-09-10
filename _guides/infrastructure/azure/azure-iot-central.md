@@ -1,8 +1,8 @@
 ---
 title: "Azure IoT Central"
 layout: guide
-category: IoT
-subcategory: Advanced IoT
+category: Azure
+subcategory: IoT & Edge
 description: "Azure IoT Central as a managed SaaS IoT platform, covering device templates, dashboards, rules, data export, and when to choose Central versus building on IoT Hub directly."
 tags: [iot, azure, scalability, practical, deployment, telemetry, fundamentals]
 ---

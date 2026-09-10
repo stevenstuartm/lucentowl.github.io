@@ -1,8 +1,8 @@
 ---
 title: "Azure IoT Hub"
 layout: guide
-category: IoT
-subcategory: Azure IoT Services
+category: Azure
+subcategory: IoT & Edge
 description: "Azure IoT Hub for bidirectional device-cloud communication, covering telemetry ingestion, cloud-to-device messaging, device twins, message routing, file uploads, and the .NET device SDK."
 tags: [iot, azure, mqtt, telemetry, scalability, dotnet, practical]
 ---

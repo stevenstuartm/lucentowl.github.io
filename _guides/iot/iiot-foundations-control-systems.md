@@ -2,7 +2,7 @@
 title: "IIoT Foundations and Control Systems"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Industrial IoT
 description: "How industrial IoT differs from consumer IoT, with deep coverage of OPC-UA, SCADA systems, PLCs, and the Purdue Model for network segmentation in industrial environments."
 tags: [iot, iiot, architecture, reliability, networking, fundamentals]
 ---

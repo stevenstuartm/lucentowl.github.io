@@ -1,6 +1,8 @@
 ---
 title: "Frameworks and Standards"
+layout: guide
 category: Security
+subcategory: Security Fundamentals
 description: "Comprehensive overview of security frameworks including NIST CSF 2.0, OWASP standards, ISO 27000 series, CIS Controls, and MITRE ATT&CK."
 tags: [security, frameworks, standards, compliance, reference]
 ---

@@ -1,8 +1,8 @@
 ---
 title: "MQTTnet for IoT Communication"
 layout: guide
-category: IoT
-subcategory: .NET IoT Development
+category: ".NET & C#"
+subcategory: "IoT & Embedded"
 description: "Building MQTT clients and brokers in C# with MQTTnet, covering publish/subscribe patterns, QoS levels, TLS security, topic hierarchies, and IoT-specific messaging patterns."
 tags: [iot, dotnet, mqtt, real-time, practical, protocols, telemetry]
 ---

@@ -2,7 +2,7 @@
 title: "IoT Fleet Management Part 2: Operations at Scale"
 layout: guide
 category: IoT
-subcategory: Advanced IoT
+subcategory: Fleet Operations
 description: "Day-two fleet operations including automatic remediation, fleet analytics, device decommissioning, organizational patterns, security at scale, cost optimization, and operational maturity."
 tags: [iot, scalability, deployment, reliability, azure, architecture, advanced]
 ---

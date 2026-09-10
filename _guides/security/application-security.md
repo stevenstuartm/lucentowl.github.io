@@ -1,6 +1,8 @@
 ---
 title: "Application Security"
+layout: guide
 category: Security
+subcategory: Application Security
 description: "Comprehensive guide to secure development lifecycle, threat modeling methodologies including STRIDE and PASTA, and essential secure coding practices for robust applications."
 tags: [security, application-security, threat-modeling, secure-coding, sdlc, practical]
 ---

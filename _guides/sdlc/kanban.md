@@ -2,7 +2,7 @@
 title: "Kanban Methodology"
 layout: guide
 category: Software Development Lifecycle
-subcategory: SDLC Fundamentals
+subcategory: SDLC Frameworks
 description: "Comprehensive guide to Kanban - visualizing workflow, limiting WIP, optimizing flow, and continuous delivery through pull-based systems."
 tags: [sdlc, methodology, kanban, workflow, continuous-delivery, lean, practical]
 ---

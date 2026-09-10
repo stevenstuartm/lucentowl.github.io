@@ -2,7 +2,7 @@
 title: "IoT Security Fundamentals"
 layout: guide
 category: IoT
-subcategory: Architecture & Security
+subcategory: Security & Firmware
 description: "Device identity and authentication methods, communication security with TLS and mTLS, constrained device challenges, network segmentation, and common IoT attack vectors."
 tags: [iot, security, fundamentals, networking, reliability, embedded, firmware]
 ---

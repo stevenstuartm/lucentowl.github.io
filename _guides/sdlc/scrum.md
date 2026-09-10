@@ -2,7 +2,7 @@
 title: "Scrum Methodology"
 layout: guide
 category: Software Development Lifecycle
-subcategory: SDLC Fundamentals
+subcategory: SDLC Frameworks
 description: "Comprehensive guide to Scrum - roles, ceremonies, artifacts, and practices for iterative software development with structure and empirical process control."
 tags: [sdlc, methodology, agile, scrum, sprints, ceremonies]
 ---
