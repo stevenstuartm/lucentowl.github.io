@@ -15,7 +15,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
 | [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Running a review-and-refine pass over an existing block of study guides — the checklist, process, and the structure of the accompanying plan doc in `_drafts/` |
 
-After drafting content, run `/refine-prose` on it — it lints to a clean state and does a narrative self-review the linter can't do. The skill and its bundled linter script live in `.claude/skills/refine-prose/`.
+### Content pipeline
+
+Blog post drafts move through three stages, in order. Each assumes the previous one is done.
+
+| Stage | Command | Operates on | Output |
+| --- | --- | --- | --- |
+| Shape | `/shape-post-draft` | Raw or half-formed drafts | Restructures the draft, marks new argument `PROPOSED`, plus a plan doc |
+| Refine | `/refine-prose` | A draft whose argument has settled | Lints to clean, then narrative self-review |
+| Review | `/review-publishable` | A draft ready for final scrutiny | Full report, then a prose reduction pass |
+
+`/shape-post-draft` is a **gate**. A draft should not reach `/refine-prose` until its argument has stopped moving, because polishing prose on an argument that is about to be restructured is wasted work, and polished prose disguises structural defects. Skip it only for drafts that already know what they argue. A draft it has touched is not ready for `/refine-prose` until every `PROPOSED` marker in it is resolved.
+
+`/refine-prose` lints to a clean state and does a narrative self-review the linter can't do. The skill and its bundled linter script live in `.claude/skills/refine-prose/`.
 
 ---
 
