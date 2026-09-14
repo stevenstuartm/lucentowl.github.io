@@ -2,7 +2,7 @@
 title: "AI-Assisted Development"
 layout: guide
 category: AI & Machine Learning
-subcategory: Generative AI
+subcategory: AI in Engineering Practice
 description: "Practical strategies for effective AI-assisted coding: staying in control, verification workflows, context management, and avoiding common pitfalls."
 tags: [ai, generative-ai, llm, development, practical, devops]
 ---

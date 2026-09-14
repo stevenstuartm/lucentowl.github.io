@@ -2,449 +2,290 @@
 title: "Core AI Concepts"
 layout: guide
 category: AI & Machine Learning
-subcategory: Generative AI
-description: "Foundational concepts for understanding generative AI: how LLMs work, tokens, context windows, embeddings, parameters, skills vs tools, and model limitations."
-tags: [ai, generative-ai, llm, fundamentals, embeddings, transformers, tools]
+subcategory: Building with LLMs
+description: "How large language models work: transformers and token-by-token generation, tokenization, context windows and why every request resends the conversation, sampling parameters, embeddings, kinds of models, and the memory math for running models yourself."
+tags: [transformers, tokenization, context-window, sampling, embeddings, quantization, fundamentals]
 ---
+
+**Generative AI** describes models that produce new content, such as text, code, images, and audio, rather than only classifying or scoring existing data. **Large language models (LLMs)** are the generative models behind chat assistants, coding tools, and most AI features in software today. They're neural networks trained on very large amounts of text to predict what comes next, and nearly everything about how they behave, including what they cost, what they forget, and why they sometimes invent facts, follows from how that prediction works.
 
 ## How Large Language Models Work
 
-Large Language Models (LLMs) are neural networks trained on massive text datasets to understand and generate human-like language. Understanding their architecture helps explain both their capabilities and limitations.
-
 ### The Transformer Architecture
 
-Modern LLMs are built on the transformer architecture, introduced in the 2017 paper "Attention Is All You Need" by Vaswani et al. at Google. This architecture revolutionized natural language processing.
+Modern LLMs are built on the transformer, introduced in the 2017 paper ["Attention Is All You Need"](https://arxiv.org/abs/1706.03762){:target="_blank" rel="noopener noreferrer"} (Vaswani et al.). Earlier language models, based on recurrent neural networks, read text one word at a time and struggled to carry information across long passages. The transformer's **self-attention** mechanism lets every position in a sequence draw directly on every other position, so a pronoun can attend to the noun it refers to fifty words back. Because attention is computed across the whole sequence at once rather than step by step, training parallelizes well on GPUs, which is what made training on internet-scale text practical.
 
-**Why transformers changed everything**:
-- **Parallelization**: Unlike earlier architectures (RNNs), transformers process entire sequences simultaneously, enabling massive GPU acceleration
-- **Long-range dependencies**: Captures relationships between distant words effectively
-- **Scalability**: Performance improves with more data and compute, with no apparent ceiling yet
-- **Transfer learning**: Pre-trained models can be adapted for specific tasks
+| Component | Role |
+|---|---|
+| **Self-attention** | Lets each token weigh the relevance of every other token in the context |
+| **Multi-head attention** | Runs several attention computations in parallel, each free to track a different kind of relationship |
+| **Feed-forward layers** | Transform each position's representation after attention, and hold much of the model's learned knowledge |
+| **Positional information** | Tells the model the order of tokens, since attention on its own ignores order |
 
-### Core Components
+A model stacks many of these layers. Most current LLMs use a decoder-only variant of the transformer, which predicts each token from the tokens before it.
 
-| Component | Function |
-|-----------|----------|
-| **Self-attention layers** | Allow each position to attend to all other positions |
-| **Feed-forward networks** | Process attention outputs |
-| **Positional encoding** | Provides sequence order information |
-| **Multi-head attention** | Multiple attention mechanisms working in parallel |
+### Generation Is One Token at a Time
 
-### How Generation Works
-
-LLMs generate text one token at a time, predicting the most likely next token based on all previous tokens. The model doesn't "think" or "understand" in a human sense; it calculates probability distributions over possible continuations.
+An LLM doesn't compose a whole answer and then output it. It predicts a probability for every possible next token, picks one, appends it to the input, and repeats.
 
 ```
-Input: "The capital of France is"
-Model predicts: "Paris" (highest probability)
+ ┌─────────────────────────┐
+ │  Tokens so far          │◄──────────────────────────────┐
+ │  (prompt + output)      │                               │
+ └────────────┬────────────┘                               │
+              ▼                                            │
+ ┌─────────────────────────┐                               │
+ │  Transformer scores     │                               │
+ │  every token in the     │                               │
+ │  vocabulary             │                               │
+ └────────────┬────────────┘                               │
+              ▼                                            │ append
+ ┌─────────────────────────┐    ┌──────────────────────┐   │
+ │  Scores become a        │───►│  Sample one token    │───┘
+ │  probability            │    │  (temperature and    │
+ │  distribution           │    │  top-p shape this)   │
+ └─────────────────────────┘    └──────────┬───────────┘
+                                           │ stop token or
+                                           │ output limit reached
+                                           ▼
+                                        Response
 ```
 
-This autoregressive generation means the model can produce fluent text but can also confidently generate incorrect information.
+Three consequences follow directly. Output streams token by token, which is why responses appear progressively. Generating is slower and more expensive per token than reading input, since each output token takes its own pass through the model. And the model has no separate step where it checks facts before committing to them. It produces the continuation that its training makes likely, which is usually right and occasionally fluent nonsense.
+
+### From Text Predictor to Assistant
+
+A model becomes a useful assistant in stages:
+
+1. **Pretraining** teaches next-token prediction on a huge corpus of text and code. This is self-supervised, since the text supplies its own labels. The result, a base model, continues text but doesn't reliably follow instructions.
+2. **Instruction tuning** trains on examples of requests paired with good responses, so the model learns to answer rather than merely continue.
+3. **Preference training**, such as reinforcement learning from human feedback (RLHF), trains the model toward responses people rate as more helpful, honest, and safe.
+
+The later stages shape behavior far more than they add knowledge. What a model knows comes overwhelmingly from pretraining.
 
 ---
 
-## Tokens and Tokenization
+## Tokens
 
-Tokens are the fundamental units LLMs use to process text. Understanding tokenization helps explain model behavior, costs, and limitations.
+### What a Token Is
 
-### What Are Tokens?
+Models don't read characters or words. They read **tokens**, which are chunks of text from a fixed vocabulary that usually holds tens of thousands to a few hundred thousand entries. Most tokenizers use subword schemes such as byte-pair encoding, so common words are often a single token, while rare words, names, and unusual strings split into several pieces. The same text tokenizes differently under different models.
 
-Tokens can be words, parts of words, or individual characters, depending on the tokenization method. Most modern LLMs use subword tokenization like BPE (Byte Pair Encoding).
+### Token Counts Depend on the Tokenizer
 
-**Examples**:
-```
-"Hello world" → ["Hello", " world"] (2 tokens)
-"tokenization" → ["token", "ization"] (2 tokens)
-"🎉" → ["🎉"] (1 token, but may vary by model)
-```
+For English prose, a common rule of thumb is that one token is about four characters, or roughly three-quarters of a word, so 100 tokens is around 75 words. Treat it as a rough estimate, not a constant. Anthropic's [model overview](https://platform.claude.com/docs/en/about-claude/models/overview){:target="_blank" rel="noopener noreferrer"}, for example, notes that 1M tokens holds about 750,000 words on its earlier tokenizer but about 555,000 on the newer one, so the same document costs more tokens on the newer models.
 
-### Why Tokenization Matters
+The gap between languages is larger still. [Petrov et al. (NeurIPS 2023)](https://arxiv.org/abs/2305.15425){:target="_blank" rel="noopener noreferrer"} found the same text translated into different languages could differ in tokenized length by up to 15 times, because tokenizers trained mostly on English break other scripts into more pieces. Code, JSON, and text with lots of whitespace or symbols also tend to use more tokens than prose of the same length. When the count matters, measure it with the provider's tokenizer or token-counting endpoint.
 
-| Aspect | Impact |
-|--------|--------|
-| **Cost** | API pricing is per token; understanding token count helps predict costs |
-| **Context limits** | Context windows are measured in tokens, not words or characters |
-| **Performance** | Rare words may tokenize into many pieces, affecting model behavior |
-| **Languages** | Non-English text often requires more tokens for the same content |
+### Why Token Counts Matter
 
-### Token Estimates
-
-| Content | Approximate Ratio |
-|---------|-------------------|
-| **English text** | ~0.75 tokens per word |
-| **Code** | ~1.5 tokens per line (varies by language) |
-| **Non-Latin scripts** | 2-4x more tokens than English equivalent |
-
-### Practical Implications
-
-- Long prompts consume more of your context window
-- Unusual words or technical terms may tokenize inefficiently
-- Token counts for the same meaning vary across models
+| Aspect | Effect |
+|---|---|
+| **Cost** | Hosted APIs price per token, usually with output tokens costing several times more than input tokens |
+| **Limits** | Context windows and output limits are measured in tokens, not words or characters |
+| **Latency** | More output tokens take proportionally longer to generate |
+| **Character-level tasks** | Models see tokens, not letters, which is why counting the letters in a word or reversing a string can go wrong |
 
 ---
 
 ## Context Windows
 
-The context window is the maximum amount of text (in tokens) a model can consider at once. Everything the model knows about your conversation must fit within this window.
+### Everything Shares One Window
 
-### How Context Windows Work
+The **context window** is the maximum number of tokens a model can work with in a single request. It isn't only the prompt. The system prompt, the conversation so far, any documents or tool results included, the new message, and the tokens the model generates in response (including any reasoning tokens) all have to fit. A request that fills the window with input leaves no room for the answer.
+
+Current frontier models offer context windows from roughly 200,000 tokens to around a million, and smaller or older models often much less. These figures change with every model generation, so check the provider's current model documentation rather than relying on a remembered number.
+
+### Every Request Resends the Conversation
+
+A model has no memory between requests. Chat feels continuous because the application sends the entire conversation again with each new message:
 
 ```
-┌─────────────────────────────────────────────┐
-│              Context Window                  │
-│  ┌───────────────────────────────────────┐  │
-│  │ System prompt + conversation history   │  │
-│  │ + current input + space for output     │  │
-│  └───────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
+Request 1:  [system] [user 1]                                          → reply 1
+Request 2:  [system] [user 1] [reply 1] [user 2]                       → reply 2
+Request 3:  [system] [user 1] [reply 1] [user 2] [reply 2] [user 3]    → reply 3
 ```
 
-Everything must fit: system instructions, previous messages, any context you provide, your current input, AND space for the model's response.
+Each request is larger than the last, so a long conversation costs more per message as it goes, and eventually it hits the context limit. Some APIs offer to hold conversation state on the server, but that changes who stores the history, not whether the model processes it. OpenAI's [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state){:target="_blank" rel="noopener noreferrer"}, for instance, states that when chaining responses by ID, all previous input tokens in the chain are still billed. Prompt caching can make the repeated portion cheaper and faster, but the tokens still count against the window.
 
-### Context Window Sizes (2025)
+This is also why anything placed in a conversation, like a pasted log file or a tool's output, keeps getting sent on every later request until the history is trimmed.
 
-| Model | Context Window |
-|-------|---------------|
-| **GPT-4 Turbo** | 128K tokens |
-| **Claude 3** | 200K tokens |
-| **Gemini 1.5 Pro** | 1M+ tokens |
-| **Llama 3** | 8K-128K tokens |
+### Longer Isn't Automatically Better
 
-Larger isn't always better; cost increases with context size, and some models perform worse on very long contexts.
+A large window doesn't mean the model uses all of it equally well. [Liu et al., "Lost in the Middle"](https://arxiv.org/abs/2307.03172){:target="_blank" rel="noopener noreferrer"} found that performance was highest when relevant information sat at the beginning or end of the input and degraded significantly when it sat in the middle, even for models built for long contexts. Newer models handle long inputs better than the ones in that study, but filling the window still costs money and latency and can dilute attention. Including the right material generally beats including all of it.
 
-### Managing Context
+### Managing a Full Context
 
-| Strategy | When to Use |
-|----------|-------------|
-| **Summarization** | Compress old conversation history |
-| **Retrieval (RAG)** | Pull in only relevant context dynamically |
-| **Truncation** | Remove oldest messages when limit approached |
-| **Chunking** | Process long documents in pieces |
-
-### The "Lost in the Middle" Problem
-
-Research shows models pay more attention to the beginning and end of context windows. Information in the middle may be partially ignored. Place critical information at the start or end of your prompts.
+| Strategy | How it works | Trade-off |
+|---|---|---|
+| **Truncation** | Drop the oldest messages | Simple, but early instructions or facts silently disappear |
+| **Summarization** | Replace older history with a model-written summary | Keeps the gist, loses detail, and adds a model call |
+| **Retrieval** | Store material outside the context and insert only the relevant pieces per request | Scales to large knowledge bases, but depends on retrieval quality |
+| **Chunking** | Process a long document in pieces, then combine the results | Works for documents larger than the window, but loses cross-chunk connections |
 
 ---
 
-## Key Parameters
+## Sampling Parameters
 
-Understanding model parameters helps you tune outputs for specific use cases.
+The model produces a probability distribution over the next token. Sampling parameters decide how a token gets picked from it.
 
 ### Temperature
 
-Controls randomness in output generation. Lower values make output more deterministic; higher values make it more creative and varied.
+Temperature rescales the distribution before sampling. Low temperature sharpens it toward the most likely tokens, so output becomes more focused and repeatable. High temperature flattens it, so less likely tokens get picked more often and output becomes more varied, then eventually incoherent.
 
-| Temperature | Effect | Use Case |
-|-------------|--------|----------|
-| **0** | Deterministic (same input → same output) | Factual tasks, code generation |
-| **0.3-0.5** | Mostly consistent with slight variation | General tasks |
-| **0.7-1.0** | Creative, varied outputs | Creative writing, brainstorming |
-| **>1.0** | Highly random, may become incoherent | Experimental only |
+| Setting | Behavior | Typical use |
+|---|---|---|
+| **Low (near 0)** | Strongly favors the most likely tokens | Extraction, classification, code, factual answers |
+| **Moderate** | Some variety, still coherent | General conversation and writing |
+| **High** | Diverse, less predictable | Brainstorming, generating varied options |
 
-### Top-p (Nucleus Sampling)
+The valid range and the default differ between providers, so the same number isn't comparable across APIs. **Temperature 0 doesn't guarantee identical output.** Both Anthropic and OpenAI document that results aren't fully deterministic even at temperature 0, because floating-point arithmetic, batching, and hardware can shift nearly tied token scores. OpenAI's `seed` parameter improves reproducibility on a best-effort basis only. Build systems that tolerate small variations rather than depending on byte-identical responses.
 
-Alternative to temperature. Only considers tokens whose cumulative probability exceeds the threshold.
+Low temperature also doesn't prevent hallucination. It makes the model more consistently pick what it considers likely, which is just as wrong when its most likely answer is wrong.
 
-- **Top-p = 0.9**: Consider tokens until 90% probability mass is covered
-- Lower values = more focused, higher values = more diverse
+### Top-p
 
-Most practitioners use either temperature OR top-p, not both.
+Top-p (nucleus sampling) limits sampling to the smallest set of tokens whose probabilities add up to p. At 0.9, the model samples only from the tokens covering the top 90% of probability mass, cutting off the long tail of unlikely choices. Temperature and top-p both control randomness, and providers generally recommend adjusting one and leaving the other at its default. Some reasoning-capable models restrict or ignore these parameters, so check what a specific model accepts.
 
-### Max Tokens
+### Output Limits and Stop Sequences
 
-Limits the response length. Useful for controlling costs and preventing runaway responses.
-
-- Set based on expected response length
-- Too low may cut off responses mid-thought
-- Too high wastes potential cost on unused capacity
-
-### System Prompt
-
-Background instructions that shape the model's behavior throughout the conversation. Sets persona, constraints, and behavioral guidelines.
-
-```
-System: You are a helpful coding assistant. Always explain your reasoning.
-        Use Python for examples unless asked otherwise. Be concise.
-```
-
-### Other Parameters
-
-| Parameter | Purpose |
-|-----------|---------|
-| **Frequency penalty** | Reduces repetition of tokens already used |
-| **Presence penalty** | Reduces repetition of topics already discussed |
-| **Stop sequences** | Tokens that signal the model to stop generating |
+**Max output tokens** caps the length of a response. A response cut off at the limit ends mid-sentence, and APIs report that the limit was the reason it stopped, so check the stop reason instead of assuming the output is complete. **Stop sequences** end generation when the model produces a specified string, which is useful for structured formats. Some APIs also offer **frequency** and **presence penalties**, which discourage repeating tokens that have already appeared.
 
 ---
 
 ## Embeddings
 
-Embeddings are dense vector representations that capture semantic meaning. They're fundamental to many AI applications, especially retrieval and similarity search.
+### Text as Points in Vector Space
 
-### What Are Embeddings?
+An **embedding model** converts text into a fixed-length list of numbers, a vector, positioned so that texts with similar meanings land near each other. "How do I reset my password?" and "I forgot my login credentials" share almost no words, but their embeddings are close, while "The weather is nice today" lands far away. Embedding models are separate from the models that generate text, and they output vectors, not words.
 
-The name comes from the mathematical concept of embedding one space into another. An embedding model takes text, which lives in the messy, ambiguous space of human language, and maps it into a structured geometric space where meaning becomes measurable. The text is literally embedded into a vector space, and its position in that space encodes what it means.
+This is what makes search by meaning possible. Embed a collection of documents once, embed each incoming query the same way, and the nearest document vectors are the most semantically related documents.
 
-The result is a fixed-size vector (array of numbers), typically 384-1536 dimensions. Similar concepts end up with similar vectors, enabling semantic comparison.
+### Measuring Similarity
 
-```
-"How do I reset my password?"  →  [0.12, -0.45, 0.78, ...]
-"I forgot my login credentials" →  [0.11, -0.43, 0.76, ...]
-                                    (similar vectors!)
+Closeness is usually measured with **cosine similarity**, the cosine of the angle between two vectors, which ranges from −1 to 1 and in practice is used to rank candidates rather than read as an absolute score. Many embedding models output vectors normalized to length 1, in which case cosine similarity equals the dot product. OpenAI's [embeddings guide](https://developers.openai.com/api/docs/guides/embeddings){:target="_blank" rel="noopener noreferrer"} notes that for its normalized embeddings, cosine similarity and Euclidean distance produce identical rankings.
 
-"The weather is nice today"     →  [0.89, 0.23, -0.15, ...]
-                                    (different vector)
-```
+Vectors from different embedding models aren't comparable. A collection embedded with one model has to be queried with the same model, and switching models means re-embedding everything.
 
-### How Similarity Works
+### Dimensions
 
-Vector similarity (usually cosine similarity) measures how close two embeddings are:
-- **1.0**: Identical meaning
-- **0.0**: Unrelated
-- **-1.0**: Opposite meaning (rare in practice)
+Embeddings typically have hundreds to a few thousand dimensions. More dimensions can capture finer distinctions but cost more to store and search. Some models are trained so their vectors can be shortened with modest quality loss. OpenAI's `text-embedding-3-small` and `text-embedding-3-large` default to 1,536 and 3,072 dimensions and accept a `dimensions` parameter to return shorter vectors.
 
-### Embedding Use Cases
+### Where Embeddings Are Used
 
-| Use Case | How Embeddings Help |
-|----------|---------------------|
-| **Semantic search** | Find documents by meaning, not keywords |
-| **RAG retrieval** | Match queries to relevant knowledge chunks |
-| **Clustering** | Group similar content together |
-| **Classification** | Categorize text by comparing to examples |
-| **Deduplication** | Find near-duplicate content |
+| Use | How embeddings help |
+|---|---|
+| **Semantic search** | Match queries to documents by meaning instead of shared keywords |
+| **Retrieval for LLMs** | Find the passages to insert into a model's context |
+| **Clustering** | Group similar support tickets, reviews, or documents |
+| **Classification** | Label text by comparing it with labeled examples |
+| **Deduplication** | Detect near-duplicate content phrased differently |
+| **Recommendations** | Suggest items similar to ones a user engaged with |
 
-### Embedding Models
+### Storing Embeddings at Scale
 
-| Model | Dimensions | Notes |
-|-------|------------|-------|
-| **OpenAI text-embedding-3-small** | 1536 | High quality, easy API |
-| **OpenAI text-embedding-3-large** | 3072 | Highest quality |
-| **Sentence Transformers** | 384-768 | Open source, runs locally |
-| **Cohere embed-v3** | 1024 | Strong multilingual |
-
-**Key principle**: Always use the same embedding model for indexing and querying. Vectors from different models are incompatible.
-
-### Storing and Searching Embeddings
-
-An embedding is just a computed representation. Once generated, it's an array of numbers that can live anywhere: held in memory for a real-time comparison, written to a flat file for batch processing, or stored in a database column. A small application comparing a handful of documents might keep vectors in a simple list and compute cosine similarity directly. There's no requirement to use specialized infrastructure at small scale.
-
-The storage question becomes interesting when the number of vectors grows. A real application might generate millions of embeddings across a document corpus, product catalog, or conversation history. At that scale, brute-force comparison (checking every stored vector against the query) becomes impractical, and standard databases aren't optimized for high-dimensional similarity search.
-
-**Vector databases** solve this scaling problem. They store embeddings alongside metadata and provide fast similarity search using approximate nearest neighbor (ANN) algorithms. Instead of comparing against every stored vector, ANN algorithms build index structures that narrow the search space dramatically, trading a small amount of accuracy for orders-of-magnitude speed improvement.
-
-| Database | Type | Good Fit |
-|----------|------|----------|
-| **Pinecone** | Managed cloud service | Teams that want zero infrastructure overhead |
-| **Weaviate** | Open source, self-hosted or cloud | Flexible deployment with built-in hybrid search |
-| **Qdrant** | Open source, self-hosted or cloud | High-performance filtering alongside vector search |
-| **Milvus** | Open source | Massive scale (billion+ vectors) |
-| **pgvector** | PostgreSQL extension | Teams already running Postgres who want to avoid a new database |
-| **ChromaDB** | Open source, lightweight | Prototyping and small-scale applications |
-
-**How the search works conceptually**: when a user submits a query, it gets converted to a vector using the same embedding model that indexed the documents. The vector database then finds the stored vectors closest to this query vector using cosine similarity or dot product distance, returning the most semantically relevant results.
-
-**Metadata filtering** adds precision beyond pure vector similarity. Most vector databases let you store metadata (source, date, category, access level) alongside each vector and filter on it during search. A query like "find documents similar to this question, but only from the engineering team's knowledge base created in the last 6 months" combines semantic search with structured filtering.
-
-For production patterns around chunking, retrieval strategies, and building full pipelines with vector databases, see the [RAG guide](/study-guides/ai/rag-retrieval-augmented-generation.html).
+For a few thousand vectors, computing similarity against every stored vector in memory is fast enough. At millions of vectors, that brute-force comparison becomes too slow, which is the problem [vector databases](/study-guides/data/vector-databases.html) solve with approximate nearest-neighbor indexes. Many general-purpose databases now offer vector search as well, so a dedicated vector database isn't the only option.
 
 ---
 
-## Model Capabilities and Limitations
+## What Models Do Well and Poorly
 
-Understanding what models can and cannot do helps set appropriate expectations.
+### Strengths
 
-### What LLMs Do Well
-
-| Capability | Why |
-|------------|-----|
-| **Language fluency** | Trained on massive text corpora |
-| **Pattern recognition** | Statistical patterns in training data |
-| **Following instructions** | RLHF training on instruction-following |
-| **Code generation** | Extensive code in training data |
-| **Summarization** | Compressing information while preserving meaning |
-| **Translation** | Multilingual training data |
-
-### What LLMs Struggle With
-
-| Limitation | Why |
-|------------|-----|
-| **Factual accuracy** | Generate plausible-sounding text, not verified facts |
-| **Current events** | Knowledge frozen at training cutoff |
-| **Math and logic** | Predict tokens, don't compute |
-| **Counting and precise tasks** | Tokenization obscures character/word boundaries |
-| **Consistent persona** | May drift across long conversations |
-| **Saying "I don't know"** | Trained to be helpful, may fabricate |
+LLMs are strong at transforming and generating language, including summarizing, rewriting for a different audience, translating, extracting structured fields from messy text, classifying, drafting, and writing and explaining code. They're also capable at reasoning over information supplied in the context, such as comparing options in a document or tracing logic in a code file.
 
 ### Hallucination
 
-Hallucination occurs when models generate information that appears plausible but is false. This happens because:
-- Models predict likely text, not verified facts
-- Training data contains errors
-- Models aim to be helpful, even when uncertain
+A **hallucination** is fluent, confident output that's false, such as an invented citation, a nonexistent API method, or a wrong date. It follows from how generation works. The model produces likely-sounding continuations, and a plausible fabrication can be likely-sounding. Training on imperfect data and training toward helpfulness can both make it more willing to answer than to say it doesn't know.
 
-**Mitigation strategies**:
-- Ask for sources (models may still fabricate them)
-- Use RAG to ground responses in real documents
-- Verify critical information independently
-- Lower temperature for factual tasks
+Mitigations reduce the rate without eliminating it:
+
+- **Ground answers in supplied material.** Put the relevant documents in the context and instruct the model to answer only from them.
+- **Give the model tools** for facts it can't know, like search, database lookups, or code execution for calculations.
+- **Verify what matters.** Check citations, run generated code, and have consequential claims reviewed.
+- **Ask for sources**, knowing models can fabricate those too unless the sources were supplied.
 
 ### Knowledge Cutoff
 
-Models only know information from their training data. They have no awareness of events after their training cutoff date.
+A model knows only what was in its training data, which ends at a cutoff date. It has no awareness of later events, new library versions, or recent changes to APIs, and it may not realize its information is outdated. Providers sometimes distinguish the training data cutoff from a reliable knowledge cutoff, since coverage of the last months before the cutoff tends to be thin. For anything current, supply the information in the context or give the model a search tool.
 
-**Implications**:
-- Can't answer about recent events
-- May have outdated information about evolving topics
-- Use RAG or web search for current information
+### Arithmetic and Precise Operations
 
----
-
-## Skills vs Tools
-
-When building on top of LLMs, every capability you expose falls into one of two categories: a **skill** that the model performs natively through prompting, or a **tool** that the model invokes to interact with an external system. The distinction matters because it drives architecture decisions, cost profiles, latency characteristics, and failure modes.
-
-### What Are Skills?
-
-Skills are capabilities the model already has. They come from training data, and you access them entirely through prompt design. No external integration, no API calls, no infrastructure beyond the model itself.
-
-| Skill | What the Model Does Natively |
-|-------|------------------------------|
-| **Summarization** | Compress long text into key points |
-| **Translation** | Convert between languages |
-| **Classification** | Sort inputs into categories |
-| **Extraction** | Pull structured data from unstructured text |
-| **Reasoning** | Draw conclusions, compare options, analyze tradeoffs |
-| **Code generation** | Write, explain, or refactor code |
-| **Creative writing** | Draft prose, marketing copy, or technical documentation |
-| **Reformatting** | Convert between formats like JSON, CSV, XML, or markdown |
-
-Skills require no external infrastructure, but they are not free. Every skill invocation runs through inference, which means every input token and output token costs money and takes time. Summarizing a 50-page document means sending the entire document through the model. Translating a large codebase means processing every file as tokens. For large inputs, skills can be the most expensive part of a pipeline because there is no shortcut around token consumption.
-
-The other tradeoff is that skills are bounded by training data. A model can summarize a document you provide, but it cannot look up a document it hasn't seen. It can reason about data in context, but it cannot compute a precise financial projection across thousands of rows. It can generate code in languages it was trained on, but it cannot execute that code to verify it works.
-
-### What Are Tools?
-
-Tools are external functions the model can call to extend beyond what it learned during training. When the model encounters a task that requires current data, precise computation, or interaction with the outside world, it generates a structured request to invoke a tool, receives the result, and incorporates that result into its response.
-
-Common tool categories include:
-
-- **Information retrieval**: web search, database queries, file system access, API calls to external services
-- **Computation**: code execution, calculators, data analysis engines
-- **State modification**: creating files, sending messages, updating records, deploying code
-- **Verification**: running tests, checking URLs, validating schemas
-
-Tools require infrastructure. Someone has to define the tool's interface, host the execution environment, handle authentication, and manage failures. The model doesn't "use" the tool directly; it generates a request (typically a function name and arguments), the orchestration layer executes it, and the result flows back into the model's context for the next inference step.
-
-For a deeper look at how tools work in agent architectures, see the [AI Agents guide](/study-guides/ai/ai-agents.html#tool-use). For the standard protocol that connects models to tools, see the [MCP guide](/study-guides/ai/model-context-protocol.html).
-
-### When to Use Each
-
-The choice between a skill and a tool depends on what the task actually requires. Some tasks are clearly one or the other, but many sit in a gray area where either approach could work.
-
-| Dimension | Skill (Native) | Tool (External) |
-|-----------|----------------|-----------------|
-| **Latency** | Scales with input/output token count | Tool execution is often instant; round-trip adds overhead |
-| **Cost** | All processing burns tokens (can be expensive for large inputs) | Tool execution itself is often free; results re-enter token stream |
-| **Accuracy** | Probabilistic, may hallucinate | Deterministic for computation and data retrieval |
-| **Current data** | Limited to training cutoff | Can access real-time information |
-| **Computation** | Approximate reasoning | Precise execution |
-| **Side effects** | None (read-only by nature) | Can modify state in external systems |
-| **Failure modes** | Hallucination, reasoning errors | Network failures, auth errors, timeouts, malformed requests |
-| **Infrastructure** | None beyond the model | Requires tool definitions, hosting, error handling |
-
-**Use a skill when** the task is pattern recognition, language transformation, or reasoning over context that's already in the prompt. Summarizing a meeting transcript, classifying support tickets, extracting entities from an email, or drafting a response based on provided guidelines are all skill-native tasks.
-
-**Use a tool when** the task requires something the model cannot do from memory: fetching live data, performing exact arithmetic, executing code, modifying external state, or verifying facts against an authoritative source.
-
-### Tradeoffs in Practice
-
-The tension between skills and tools plays out in real system design decisions.
-
-**Over-relying on skills** leads to hallucination risk. A model asked to "look up the current price of AAPL stock" will generate a plausible-looking number from training data rather than admitting it doesn't know. Without a tool to fetch the actual price, the output looks confident but is wrong. Any task where accuracy depends on data the model hasn't seen requires a tool.
-
-**Over-relying on tools** leads to unnecessary complexity. If a model has a web search tool available and a user asks "what is a binary search tree?", the model might invoke the search tool to answer a question it already knows well from training. The tool result then enters the context window, consuming additional tokens on the next inference call and introducing a failure point that didn't need to exist. When the model can handle a task accurately from training data, a tool call adds infrastructure burden without improving quality.
-
-**The gray area** is where it gets interesting. Consider math: a model can reason through simple arithmetic and get it right most of the time, but it will occasionally make errors on multi-step calculations. A code execution tool will always get the math right and runs instantly, but requires infrastructure to define and host. The right choice depends on how much accuracy matters for the use case. A rough estimate in a brainstorming session favors the skill; a financial calculation in a production system demands the tool.
-
-### Decision Framework
-
-When deciding whether a capability should be a skill or a tool, work through these questions:
-
-**Does the task require information the model hasn't seen?** If the answer depends on data after the training cutoff, data in a private database, or real-time state, you need a tool. No amount of prompt engineering gives a model access to information that isn't in its context window.
-
-**Does the task require deterministic precision?** Mathematical calculations, date arithmetic, regex matching, and data aggregation across large datasets all benefit from tools. Models approximate these operations through pattern matching and will occasionally produce wrong results, especially as complexity increases.
-
-**Does the task require action in the outside world?** Sending emails, creating files, updating databases, and deploying code are all side effects that require tools. Skills are inherently read-only: they transform input into output but cannot change state beyond the conversation.
-
-**Is the model already good at this from training?** Summarization, classification, translation, code generation, and text analysis are tasks where models are strong out of the box. Adding a tool for these capabilities typically adds cost and latency without improving quality. Invest in better prompts before reaching for a tool.
-
-**How much does an error cost?** For low-stakes tasks like drafting an email or generating test ideas, skill-level accuracy is usually sufficient. For high-stakes tasks like calculating dosages, generating legal documents, or making financial decisions, tool-backed verification is worth the added complexity.
+Models predict tokens rather than executing arithmetic. They often get simple calculations right and become unreliable as numbers grow or steps multiply. Character-level operations are similarly shaky because of tokenization. When exactness matters, have the model write and run code or call a tool rather than compute in its head.
 
 ---
 
-## Model Types and Sizes
+## Kinds of Models
 
-Different models serve different purposes. Understanding the landscape helps with selection.
+### Base, Instruction-Tuned, and Reasoning Models
 
-### Model Size Impacts
+A **base model** is the output of pretraining alone and continues text rather than following instructions. It's mainly a starting point for further training. An **instruction-tuned** (or chat) model has gone through the later training stages and is what applications normally use.
 
-| Size | Typical Params | Characteristics |
-|------|----------------|-----------------|
-| **Small** | 1-7B | Fast, cheap, basic tasks |
-| **Medium** | 7-30B | Good balance, most tasks |
-| **Large** | 30-70B | Complex reasoning, nuanced tasks |
-| **Frontier** | 100B+ | State-of-the-art capabilities |
+**Reasoning models** are trained to generate intermediate reasoning, often called thinking, before their final answer, which improves results on multi-step problems like math, planning, and complex code. That thinking consists of tokens. Anthropic's [extended thinking documentation](https://platform.claude.com/docs/en/build-with-claude/extended-thinking){:target="_blank" rel="noopener noreferrer"}, for example, reports thinking tokens as part of billed output tokens and counts them toward the output limit, and many providers let you control how much the model thinks. Reasoning improves quality on hard problems at the price of latency and cost, and it adds little on simple ones.
 
-Larger models generally perform better but cost more and run slower.
+### Model Size, Dense and Mixture-of-Experts
 
-### Model Types
+A model's **parameter count** is the number of learned weights. Within a model family, larger models are generally more capable and more expensive and slower to run. Closed-model providers usually don't publish parameter counts, so size comparisons are mostly possible among open-weight models, which commonly range from about one billion to hundreds of billions of parameters.
 
-| Type | Examples | Best For |
-|------|----------|----------|
-| **General purpose** | GPT-4, Claude, Gemini | Wide range of tasks |
-| **Code-focused** | Codex, StarCoder, DeepSeek Coder | Programming tasks |
-| **Instruction-tuned** | ChatGPT, Claude | Following directions |
-| **Base models** | Llama base | Fine-tuning starting point |
+**Mixture-of-experts (MoE)** models complicate the comparison. Instead of running every parameter for every token, a router activates a few specialized sub-networks per token. [DeepSeek-V3](https://arxiv.org/abs/2412.19437){:target="_blank" rel="noopener noreferrer"}, for example, has 671 billion total parameters but activates 37 billion per token. An MoE model runs with roughly the compute of its active parameters, but all of its parameters still have to be loaded into memory.
 
-### Open vs. Closed Models
+### Multimodal Models
 
-| Aspect | Open Models | Closed Models |
-|--------|-------------|---------------|
-| **Access** | Download and run anywhere | API access only |
-| **Cost** | Infrastructure costs | Per-token pricing |
-| **Privacy** | Data stays local | Data sent to provider |
-| **Customization** | Fine-tuning possible | Limited or none |
-| **Examples** | Llama, Mistral | GPT-4, Claude |
+Many current models accept images, and some accept audio or video, alongside text. Most general-purpose LLMs still output text, while separate model types generate images, audio, or video. Inputs in other modalities are also converted into tokens and count against the context window.
+
+### Model Identity: Families, Snapshots, and Aliases
+
+A model name like "the latest Claude" or "GPT-something" refers to a family. What an API call actually runs is a specific **snapshot**, a fixed set of weights with its own identifier. Providers differ in whether their short names are pinned snapshots or **aliases** that can point to a newer snapshot over time. An alias that moves can change an application's behavior without any code change. Production systems generally pin a snapshot identifier and upgrade deliberately, after re-running their evaluations, and track each snapshot's announced retirement date.
 
 ---
 
-## Quick Reference
+## Hosted APIs and Self-Hosted Models
 
-### Key Metrics to Know
+### Open-Weight and Closed Models
 
-| Metric | What It Means |
-|--------|---------------|
-| **Tokens** | Processing units; ~0.75 per English word |
-| **Context window** | Max input + output size |
-| **Temperature** | Randomness control (0 = deterministic) |
-| **Embedding dimensions** | Vector size for semantic representation |
+| Aspect | Open-weight models | Closed models |
+|---|---|---|
+| **Access** | Weights downloadable, run on your own or rented hardware (license terms vary) | Available only through the provider's API or cloud partners |
+| **Cost structure** | Hardware and operations, whether or not requests are coming in | Per token, scaling with use |
+| **Data handling** | Can stay entirely inside your infrastructure | Sent to the provider under its data terms |
+| **Customization** | Full fine-tuning and modification possible | Limited to what the provider offers |
+| **Capability** | Strong and improving, typically trailing the frontier | Usually where the most capable models appear first |
+| **Change control** | You decide when the model changes | The provider retires snapshots on its schedule |
 
-### Common Token Estimates
+"Open-weight" is more precise than "open source". Many downloadable models come with licenses that restrict use, and few release their training data.
 
-| Content Type | Tokens |
-|--------------|--------|
-| 1 page of text | ~500-800 tokens |
-| 1 paragraph | ~100-150 tokens |
-| Average email | ~200-400 tokens |
-| Code file (100 lines) | ~150-300 tokens |
+### Estimating Memory for a Local Model
 
-### Parameter Cheat Sheet
+The memory needed to load a model's weights is its parameter count times the storage per parameter:
 
-| Task | Temperature | Other Settings |
-|------|-------------|----------------|
-| Code generation | 0-0.3 | Clear, consistent output |
-| Factual Q&A | 0-0.3 | Accuracy matters |
-| Creative writing | 0.7-1.0 | Variety desired |
-| Brainstorming | 0.8-1.0 | Many ideas wanted |
-| General chat | 0.5-0.7 | Balance |
+```
+weight memory (GB) ≈ parameters (billions) × bits per weight ÷ 8
+```
+
+Full 16-bit precision uses 16 bits per weight. **Quantization** stores weights at lower precision to shrink the model, at some cost in quality that grows as the bit width drops. In llama.cpp's widely used GGUF formats, `Q8_0` works out to about 8.5 bits per weight and `Q4_K_M` to roughly 4.8, since the formats also store scaling factors.
+
+| Parameters | 16-bit | 8-bit (~8.5 bpw) | 4-bit Q4_K_M (~4.8 bpw) |
+|---|---|---|---|
+| **7B** | ~14 GB | ~7.4 GB | ~4.2 GB |
+| **13B** | ~26 GB | ~13.8 GB | ~7.8 GB |
+| **70B** | ~140 GB | ~74 GB | ~42 GB |
+
+These figures cover the weights only. Inference also needs memory for the **KV cache**, which stores attention state for every token in the context and grows with context length and the number of concurrent requests, plus runtime overhead. A 70B model at 4-bit therefore doesn't fit in a single 24 GB consumer GPU. It needs more GPU memory, splitting across devices, or offloading layers to system RAM, which makes generation much slower.
+
+### Choosing Between Hosted and Self-Hosted
+
+```
+Must the data stay on infrastructure you control (regulation, contract, air gap)?
+├── Yes ─► Self-host an open-weight model, or use a provider deployment
+│          inside your own cloud boundary if that meets the requirement
+└── No
+    ├── Do you need the most capable models available? ─► Hosted API
+    ├── Do you need to modify weights or keep a model unchanged indefinitely?
+    │     └── Yes ─► Open-weight model (self-hosted or on a hosting service)
+    ├── Is request volume high and steady enough to keep GPUs busy?
+    │     └── Yes ─► Compare self-hosting cost against API pricing,
+    │                including batch and caching discounts
+    └── Otherwise ─► Hosted API
+```
+
+Self-hosting shifts costs rather than removing them. The GPUs cost money whether or not requests arrive, and serving at scale takes engineering effort for batching, scaling, and upgrades. A hosted API tends to win on total cost at low or bursty volume, while steady, high-volume workloads that a smaller open-weight model handles well are where self-hosting can pay off.

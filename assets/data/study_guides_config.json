@@ -718,25 +718,35 @@
       "subcategories": [
         {
           "name": "Machine Learning",
-          "description": "Core ML concepts and techniques",
+          "description": "How models learn from data, and how to run them in production",
           "guides": [
-            "ai/machine-learning.md"
+            "ai/machine-learning.md",
+            "ai/mlops.md"
           ]
         },
         {
-          "name": "Generative AI",
-          "description": "Generative AI fundamentals, tools, techniques, and practical applications",
+          "name": "Building with LLMs",
+          "description": "How large language models work and how to build reliable systems on them",
           "guides": [
             "ai/core-ai-concepts.md",
-            "ai/generative-ai.md",
             "ai/prompt-engineering.md",
-            "ai/ai-assisted-development.md",
-            "ai/rag-retrieval-augmented-generation.md",
+            "ai/tool-calling.md",
             "ai/model-context-protocol.md",
+            "ai/rag-retrieval-augmented-generation.md",
+            "ai/llm-fine-tuning.md",
             "ai/ai-agents.md",
-            "ai/ai-security-for-organizations.md",
+            "ai/llm-evaluation.md",
+            "ai/llm-application-security.md",
+            "ai/running-llms-in-production.md"
+          ]
+        },
+        {
+          "name": "AI in Engineering Practice",
+          "description": "Using AI tools in day-to-day development and governing the data they touch",
+          "guides": [
+            "ai/ai-assisted-development.md",
             "ai/scaling-ai-workflows.md",
-            "ai/llm-fine-tuning.md"
+            "ai/ai-security-for-organizations.md"
           ]
         }
       ]

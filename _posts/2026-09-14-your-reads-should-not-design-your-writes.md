@@ -2,25 +2,25 @@
 layout: post
 title: "Your Reads Should Not Design Your Writes"
 date: 2026-09-14
-description: "Partial updates can't tell an omitted field from a cleared one, and patch formats push the fix onto every client. Normalizing the write surface avoids both, keeping reads as composed views and writes as small resources any client can replace whole."
+description: "API writes that go through a wide body, whether PATCH or PUT, can't reliably tell an omitted field from a cleared one, and patch formats push the fix onto every client. Normalizing the write surface avoids both, keeping reads as composed views and writes as small resources any client can replace whole."
 tags: [architecture, api-design, rest, design-patterns]
 author: steven-stuart
 ---
 
-Any endpoint that accepts a partial update has to decide whether an omitted field was left alone on purpose or meant to be cleared. Few problems have left me as dizzy as this one, not because the problem is hard, but because of how many competing solutions keep getting promoted for it, from patch formats to field masks to change-tracking client libraries.
+Any API endpoint that writes a nullable field or a collection has to work out what the client meant by it. A partial update has to decide whether an omitted field was left alone on purpose or meant to be cleared. A full replacement with PUT only moves the question, because it clears whatever arrives missing or null, which is correct only if the client sent every field on purpose. A collection in either body can only be sent whole, so adding one element means resending the rest. Few problems have left me as dizzy as this one, not only because the problem is challenging, but because of how many competing solutions keep getting promoted for it, from patch formats to field masks to change-tracking client libraries.
 
 Most of those solutions ask every client to get something subtle right, when what most teams need is a write surface simple enough that any client can call it correctly on the first try. The simplest way there, I think, sidesteps all of them by not writing through the read at all. When a group of fields has a single owner, when a change starts a workflow, or when a collection's items come and go individually, each of those can have its own path. A write then sends the whole of something smaller rather than a piece of something large. That can look like a workaround at first, but I'd argue it's closer to healthy normalization in the write surface.
 
-## Partial Updates' Intentions Exceed Request Semantics
+## Write Intentions Exceed Request Semantics
 
-Every fix for this runs into the same limit. Each field in a partial update is trying to carry one of four intents:
+Every fix for this runs into the same limit. Each field in a write body is trying to carry one of four intents:
 
 - **Leave alone.** The field isn't part of this change.
 - **Set a value.** The field takes a new value, including zero, empty, or false.
 - **Clear.** The field's current value is removed, leaving it with no value.
 - **Change one element of a collection.** An item is added or removed without resending the rest.
 
-The JSON body can express the first three. A property can hold a value, be set to `null`, or be left out of the body entirely, which lines up with set, clear, and leave alone. But when the server deserializes that body into a typed request object, a nullable property offers only two states, a value or null, so a property that was left out and one that was sent as `null` both arrive as null. The difference is gone before any handler code runs, and every nullable field ends up supporting only two of the three intents, usually without anyone writing down which two. The fourth doesn't fit a single field at all, because a collection property can only be sent whole. The lost intent stays invisible until a request needs it.
+The JSON body can express the first three. A property can hold a value, be set to `null`, or be left out of the body entirely, which lines up with set, clear, and leave alone. But when the server deserializes that body into a typed request object, a nullable property offers only two states, a value or null, so a property that was left out and one that was sent as `null` both arrive as null. The difference is gone before any handler code runs, and every nullable field ends up supporting only two of the three intents, usually without anyone writing down which two. PUT picks set and clear and drops leave alone, which holds only while every client really sends every field. A serializer that skips nulls, or a client built before a field existed, breaks that without any error. The fourth doesn't fit a single field at all, because a collection property can only be sent whole. The lost intent stays invisible until a request needs it.
 
 ## An Omitted Field and a Deactivated Customer
 
@@ -83,7 +83,7 @@ A read is allowed to be a composition. A customer screen wants the display name,
 
 The wide write happens when the view becomes the write target, usually because one model serves both directions. That's a governance gap more than a technical one. Nobody decided what the write surface should be, so the read model decided for them, and every rule inside the view now has to be enforced field by field inside a single body.
 
-Replacing the view whole with PUT doesn't rescue it. [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-put){:target="_blank" rel="noopener noreferrer"} defines PUT as replacing "the state of the target resource" with "the state defined by the representation enclosed," so every field is present and nothing has to be interpreted. But that only works when the caller is entitled to replace every field in the resource, and the customer view mixes fields no single caller is entitled to replace.
+Replacing the view whole with PUT doesn't rescue it. [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-put){:target="_blank" rel="noopener noreferrer"} defines PUT as replacing "the state of the target resource" with "the state defined by the representation enclosed," so in principle every field is present and nothing has to be interpreted. In practice that only works when every client can produce every field and is entitled to replace every one of them. The customer view mixes fields no single caller is entitled to replace.
 
 ## Normalize the Write Surface
 

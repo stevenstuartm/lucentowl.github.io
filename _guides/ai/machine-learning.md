@@ -3,508 +3,269 @@ title: "Machine Learning"
 layout: guide
 category: AI & Machine Learning
 subcategory: Machine Learning
-description: "Comprehensive ML fundamentals covering supervised/unsupervised learning, model training, neural networks, MLOps practices, and 2025 industry trends."
-tags: [machine-learning, ai, fundamentals, algorithms, data-science]
+description: "Machine learning fundamentals: how models learn from examples, the three kinds of learning, evaluating a model without fooling yourself, explainability, and when machine learning is the wrong tool."
+tags: [supervised-learning, unsupervised-learning, reinforcement-learning, neural-networks, model-evaluation, fundamentals]
 ---
 
-## 1. Core Definitions and Concepts
+## How AI, Machine Learning, and Deep Learning Relate
 
-### Artificial Intelligence (AI)
-The theory and development of computer systems able to perform tasks that normally require human intelligence, such as visual perception, speech recognition, decision-making, and translation between languages.
+The three terms nest inside each other. **Artificial intelligence** is the broadest: any computer system performing tasks that normally take human intelligence, such as perception, language, and decision-making, whether it gets there through hand-written rules or learned behavior. **Machine learning** is the subset of AI where the system learns its behavior from data instead of following instructions a programmer wrote. **Deep learning** is the subset of machine learning that uses neural networks with many layers.
 
-**Simple analogy**: Think of AI as giving computers the ability to "think" and make decisions like humans do, but using mathematical calculations instead of biological processes.
+### Machine Learning Replaces Rules With Examples
 
-### Machine Learning (ML)
-The use and development of computer systems that are able to learn and adapt without following explicit instructions, by using algorithms and statistical models to analyze and draw inferences from patterns in data.
+A traditional program encodes the rules directly. A spam filter written that way checks for known phrases, suspicious senders, and too many links, and every new spam tactic needs a new rule. A machine learning spam filter is instead shown thousands of emails already marked spam or not spam, and it works out for itself which patterns separate the two. The programmer's job shifts from writing the rules to choosing the data, the learning method, and the way success is measured.
 
-**Key insight**: Like teaching a child to recognize cats by showing them many cat pictures, rather than describing every possible cat feature.
+The output of that learning process is a **model**: a function with learned internal values that maps new inputs to predictions. The **algorithm** is the procedure that produces the model from data. A decision tree algorithm, run on two different datasets, produces two different models.
 
-### Deep Learning
-A subset of machine learning that uses multilayered neural networks (called deep neural networks) to simulate the complex decision-making power of the human brain. Particularly effective for tasks like image recognition and natural language processing.
+### Deep Learning Is Machine Learning With Many-Layered Neural Networks
 
-**Architecture concept**: "Deep" refers to multiple layers (often 10-100+ layers) where each layer processes and transforms information before passing it to the next layer, similar to how human brain processes information through multiple stages.
+A neural network is a set of connected units arranged in layers. Each unit multiplies its inputs by weights, sums them, and passes the result through a non-linear function to the next layer. The design was loosely inspired by biological neurons, but the resemblance ends at the metaphor. A network with more than one hidden layer between input and output is called deep, and modern networks range from a handful of layers to hundreds.
 
-### Neural Networks
+Depth matters because each layer can build on the representations the previous one learned. In an image model, early layers tend to respond to edges, middle layers to textures and shapes, and later layers to whole objects. Nobody programs those intermediate features. They emerge from training, which is why deep learning dominates tasks like vision, speech, and language where hand-designing features is impractical.
 
-*Concept originated with McCulloch-Pitts neuron model (1943), first practical implementation as Perceptron by Frank Rosenblatt (1958). Modern deep learning enabled by backpropagation algorithm (Rumelhart, Hinton, Williams 1986).*
+### Narrow AI and Artificial General Intelligence
 
-Machine learning programs that make decisions in a manner similar to the human brain, using processes that mimic how biological neurons work together to identify phenomena, weigh options, and arrive at conclusions.
-
-**Basic structure**: Consists of interconnected nodes (neurons) that receive inputs, apply mathematical transformations, and pass outputs to other nodes. The "learning" happens by adjusting the strength of connections between neurons based on training data.
-
-**Historical milestone**: The "AI Winter" (1970s-1980s) occurred partly because single-layer perceptrons couldn't solve certain problems (XOR problem). Deep learning renaissance began in 2000s with GPUs enabling training of multi-layer networks.
-
-### AI Classification by Capability
-
-#### Applied ("Weak") AI
-- **Definition**: AI tailored for specific tasks with human-level or superior performance in dedicated domains
-- **Goal**: Address real-world problems by creating AI solutions for specific sector challenges
-- **Examples**: Image recognition systems, recommendation engines, chatbots
-
-#### Artificial General Intelligence (AGI)
-- **Definition**: AI systems with general-purpose intelligence comparable to (or beyond) human cognitive abilities
-- **Status**: Emerging field focused on building "thinking machines"
-- **Timeline**: Still theoretical, with significant research ongoing
-
-### Explainability and Transparency
-
-#### Black Box Models
-- **Definition**: ML models that provide results without explaining their decision-making process
-- **Characteristics**: Internal processes and weighted factors remain unknown, lacking transparency
-- **Real-world analogy**: Like a doctor giving you a diagnosis without explaining their reasoning - you get the answer but don't understand how they arrived at it
-- **Challenge**: Growing demand for explainable AI (XAI) in regulated industries where decisions must be justified
-
-#### Explainable AI (XAI)
-- **Purpose**: Make ML models interpretable and understandable to humans
-- **Why it matters**: Builds trust, enables debugging, meets regulatory requirements, and helps identify model biases
-- **Methods**: Feature importance scores, decision trees, attention mechanisms, simplified explanations
-- **Trend**: Major focus area for 2025, especially in finance, healthcare, and legal applications where "black box" decisions can have serious consequences
+Every AI system in production today is **narrow** (sometimes called weak or applied) AI. It performs well within the tasks it was built or trained for and has no competence outside them. **Artificial general intelligence (AGI)** describes a system with general-purpose ability comparable to a human's across domains. There's no agreed definition or test for it, so claims that a system has reached it are contested.
 
 ---
 
-## 2. Current ML Landscape and Trends (2025)
+## How a Model Learns
 
-### Key Driving Forces
+### Features, Labels, and Parameters
 
-#### Infrastructure Evolution
-- **Storage & Processing**: Massive data integration capabilities beyond previous AI cycles
-- **Computing Power**: GPUs now standard for ML workloads, replacing CPU-only approaches
-- **Cloud Services**: 
-  - Infrastructure as a Service (IaaS) provides cost-effective ML solutions
-  - Software as a Service (SaaS) offers diverse, accessible ML models
+**Features** are the measurable inputs describing each example. For predicting house prices, features might include floor area, number of bedrooms, location, and the age of the house. Choosing informative features has a large effect on what a model can learn, and the work of deriving them from raw data is called feature engineering.
 
-#### Development Ecosystem
-- **Frameworks**: Increasingly sophisticated and market-driven development tools
-- **AutoML**: Automated machine learning democratizing access to ML capabilities
-- **No-Code Platforms**: Enabling non-technical users to build ML solutions
+**Labels** are the correct answers the model learns to predict, like the actual sale price of each house or the species name for each bird photo. Labels come from wherever ground truth exists: human annotators, historical records, or later outcomes such as whether a customer actually churned. Obtaining labels is often the most expensive part of a project.
 
-### Emerging Technologies and Trends
+**Parameters** are the values the model learns during training, such as the weights in a neural network or the split points in a decision tree. **Hyperparameters** are settings chosen before training that control how learning happens, such as the learning rate, the maximum depth of a tree, or the number of clusters. Training finds the parameters. The practitioner, usually through experiments, picks the hyperparameters.
 
-#### Foundation Models
-- **Definition**: Large-scale pre-trained models (like GPT, Claude, Gemini) serving as backbones for specialized applications
-- **Concept**: Think of them as "Swiss Army knives" of AI - general-purpose tools that can be adapted for many specific tasks
-- **Process**: Pre-trained on massive datasets (trillions of words), then fine-tuned for specific tasks
-- **Application**: Customer support, scientific research, content creation, code generation
-- **Market shift**: Foundation models are becoming commoditized; differentiation now focuses on cost, user experience, and integration ease
+### The Training Loop
 
-#### Edge Computing & Real-Time ML
-- **Purpose**: Minimize latency and enable real-time decision-making by processing data closer to its source
-- **Traditional approach**: Send data to cloud → process → send results back (high latency)
-- **Edge approach**: Process data locally on device or nearby server (low latency)
-- **Applications**: Autonomous vehicles (can't wait for cloud processing), financial trading, medical devices, smart cameras
-- **Benefit**: Faster responses, reduced bandwidth costs, improved privacy, works without internet connection
+Most models learn by repeatedly measuring how wrong they are and adjusting to be less wrong.
 
-#### Multimodal AI
-- **Capability**: Processing and generating multiple types of content (text, images, video, audio)
-- **Trend**: Moving beyond text-only models to comprehensive multimedia understanding
-- **Applications**: Content creation, analysis, and cross-modal understanding
+```
+ ┌──────────────┐     ┌──────────────┐     ┌───────────────┐
+ │  Batch of    │────►│    Model     │────►│  Predictions  │
+ │  training    │     │ (parameters) │     └───────┬───────┘
+ │  examples    │     └──────▲───────┘             │
+ └──────────────┘            │                     ▼
+                      ┌──────┴───────┐     ┌───────────────┐
+                      │  Optimizer   │◄────│  Loss: how    │
+                      │  adjusts the │     │  far off the  │
+                      │  parameters  │     │  predictions  │
+                      └──────────────┘     │  are from the │
+                          gradient         │  labels       │
+                                           └───────────────┘
+```
 
-#### Autonomous Agents
-- **Definition**: AI systems performing tasks independently without direct human intervention
-- **Powered by**: Large Language Models with strong reasoning capabilities
-- **Tools**: Access to web search, APIs, databases, and other systems
-- **Growth**: Exponential research expansion due to LLM advancements
+A **loss function** turns prediction error into a single number, such as the average squared difference between predicted and actual prices. The **gradient** of the loss says which direction each parameter should move to reduce it. **Gradient descent** moves every parameter a small step in that direction, with the step size set by the learning rate, and then the loop repeats on the next batch. A learning rate that's too high makes the loss jump around or diverge. One that's too low makes training slow and can stall it.
 
-### Specialized Applications
+Not every algorithm uses gradient descent. Decision trees, for example, grow by greedily choosing the split that best separates the labels at each node. The pattern of fitting to data and measuring error against labels still holds.
 
-#### Small Language Models (SLMs)
-- **Purpose**: Efficient, task-specific models requiring fewer resources
-- **Advantage**: Lower computational costs, faster inference, specialized performance
-- **Use Cases**: Edge deployment, real-time applications, resource-constrained environments
+### Neural Networks and Backpropagation
 
-#### Federated Learning
-- **Approach**: Training models across decentralized data without centralizing the data
-- **Benefits**: Privacy preservation, reduced data transfer, compliance with regulations
-- **Applications**: Healthcare, finance, mobile devices
+In a network with many layers, computing the gradient for every weight is the hard part. **Backpropagation** solves it by applying the chain rule backwards from the loss, layer by layer, so one backward pass yields every gradient.
+
+The ideas took decades to come together. The McCulloch-Pitts neuron model dates to 1943 and Frank Rosenblatt's perceptron to 1958. In 1969, Minsky and Papert's *Perceptrons* showed that a single-layer perceptron can only learn linearly separable functions (it can't learn XOR), which contributed to a collapse in neural network funding and interest. The reverse-mode differentiation behind backpropagation appeared in Seppo Linnainmaa's 1970 thesis, and Paul Werbos proposed applying it to neural networks in 1974. It was [Rumelhart, Hinton, and Williams' 1986 paper in Nature](https://www.nature.com/articles/323533a0){:target="_blank" rel="noopener noreferrer"} that demonstrated backpropagation training multi-layer networks and revived the field. The modern deep learning era took off after 2012, when a GPU-trained convolutional network (AlexNet) won the ImageNet image-recognition competition by a wide margin.
+
+### Training and Inference
+
+**Training** is the loop above, run until the model stops improving on data it hasn't trained on. It's the computationally expensive phase. **Inference** is using the finished model to make predictions on new inputs, with the parameters frozen. Inference is usually far cheaper per prediction, but it runs continuously in production, so for widely used models its total cost can exceed training's. Where inference runs (a cloud service, a server, a phone) depends on the model's size and the latency the application needs.
 
 ---
 
-## 3. Model Training Fundamentals
+## The Three Kinds of Learning
 
-### Training Dataset Components
+### Supervised Learning
 
-#### Features
-- **Definition**: Input dimensions that describe characteristics of training data
-- **Simple explanation**: The "ingredients" or attributes you feed into the model to help it learn patterns
-- **Role**: Individual measurable properties of observed objects (height, weight, color, price, etc.)
-- **Quality matters**: The choice of meaningful, distinguishable, and independent features is fundamental to efficient ML algorithms
-- **Example**: For predicting house prices, features might include square footage, number of bedrooms, location, age of house
+The model learns from examples paired with correct answers, then predicts answers for new examples. Two task types cover most uses:
 
-#### Labels
-- **Definition**: Ground truth data that output is compared against - the "correct answers" during training
-- **Purpose**: Show the ML model what the desired response should be for each example
-- **Process**: Data labeling (annotation) requires human experts to provide correct answers, often expensive and time-consuming
-- **Training relationship**: Model learns by comparing its predictions to these labels and adjusting to minimize errors
-- **Example**: Feature = image of a bird; Label = "robin" (the correct species name the model should predict)
+- **Classification** predicts a category. Binary classification picks between two (spam or not spam, fraud or legitimate), and multiclass classification picks among several (which of ten handwritten digits, which product category).
+- **Regression** predicts a continuous number, like a price, a temperature, or delivery time.
 
-### Training Process Phases
+Common algorithms trade interpretability, accuracy, and data requirements against each other:
 
-#### 1. Model Training
-- **Pattern Recognition**: Identifying generalizations in data
-- **Prediction Generation**: Creating predictive capabilities
-- **Optimization**: Improving performance through iterative adjustments
+| Algorithm | How it works | Strengths | Watch out for |
+|---|---|---|---|
+| **Linear regression** | Fits a weighted sum of features to a numeric target | Fast, interpretable, a strong baseline | Can't capture non-linear relationships without engineered features |
+| **Logistic regression** | Fits a weighted sum and squashes it into a probability for classification | Interpretable, calibrated probabilities | Same linearity limit as linear regression |
+| **Decision tree** | Learns a hierarchy of if/then splits on features | Easy to visualize and explain | A single deep tree overfits readily |
+| **Random forest** | Averages many trees, each trained on random subsets of rows and features (Breiman, 2001) | Robust, little tuning needed | Harder to explain than one tree |
+| **Gradient-boosted trees** | Adds trees one at a time, each correcting the errors of those before | Frequently the most accurate choice on tabular data | More hyperparameters to tune, easier to overfit than a forest |
+| **Support vector machine** | Finds the boundary with the widest margin between classes, using the kernel trick for non-linear boundaries (Boser, Guyon, and Vapnik, 1992) and a soft margin for overlapping classes (Cortes and Vapnik, 1995) | Effective in high-dimensional spaces with modest data | Scales poorly to very large datasets |
+| **Neural network** | Layers of weighted units trained by backpropagation | Learns its own features from raw images, audio, and text | Needs a lot of data and compute; hard to interpret |
 
-#### 2. Inference
-- **Deployment**: Can be performed on any device with the trained model
-- **Production Use**: Real-world application of learned patterns
+Decision trees trace to the CART (Breiman et al., 1984) and ID3 (Quinlan, 1986) algorithms.
 
-### Common Training Problems
+### Unsupervised Learning
+
+The model gets data with no labels and finds structure in it. Evaluating the result is harder than in supervised learning because there's no correct answer to compare against. A clustering is only as good as the decisions it supports, such as whether the customer segments it finds respond differently to marketing.
+
+- **Clustering** groups similar items together, such as segmenting customers by purchasing behavior. There's no single best clustering criterion, and different algorithms (k-means, density-based methods, hierarchical clustering) can produce very different groupings of the same data.
+- **Dimensionality reduction** compresses many features into fewer while keeping as much of the variation as possible. It's used to visualize high-dimensional data, speed up other algorithms, and remove noise. Principal component analysis (PCA) is the classic method.
+- **Anomaly detection** flags points that don't fit the patterns in the rest of the data, such as unusual transactions or sensor readings.
+
+**Self-supervised learning** sits between supervised and unsupervised. It creates labels from the data itself, for example by hiding a word in a sentence and training the model to predict it. It needs no human labeling, which makes training on enormous unlabeled datasets possible, and it's how large language models are pretrained.
+
+### Reinforcement Learning
+
+An **agent** takes actions in an **environment**, observes the resulting **state**, and receives a **reward** signal. Nobody tells it the correct action. It learns a **policy** (a strategy for choosing actions) that maximizes the total reward it collects over time.
+
+```
+                     action
+        ┌──────────────────────────────┐
+        │                              ▼
+  ┌─────┴─────┐                 ┌─────────────┐
+  │   Agent   │                 │ Environment │
+  │ (policy)  │                 │             │
+  └─────▲─────┘                 └──────┬──────┘
+        │      new state + reward      │
+        └──────────────────────────────┘
+```
+
+Two things make reinforcement learning harder than supervised learning. Rewards can arrive long after the actions that earned them, so the agent has to work out which earlier actions deserve credit. And the agent has to balance exploiting actions it knows pay off against exploring actions that might pay off more.
+
+Much of reinforcement learning rests on the **Bellman equation**, from Richard Bellman's work on dynamic programming in the 1950s. It defines the value of a state recursively: the best achievable value is the immediate reward plus the discounted value of wherever the best action leads. The optimality form, as written in [Sutton and Barto's *Reinforcement Learning*](http://incompleteideas.net/book/the-book-2nd.html){:target="_blank" rel="noopener noreferrer"}, is:
+
+```
+V*(s) = max over actions a of  Σ  p(s', r | s, a) × [ r + γ · V*(s') ]
+                              s',r
+```
+
+Here `p(s', r | s, a)` is the probability of reaching state `s'` with reward `r` after taking action `a` in state `s`, and the discount factor `γ` (between 0 and 1) sets how much future rewards count relative to immediate ones. The sum matters: environments are often random, so the equation weighs every possible outcome by its probability rather than assuming one. A related form defines Q-values, the value of taking a specific action in a state, which algorithms like Q-learning estimate directly.
+
+**Deep reinforcement learning** uses neural networks to approximate these value functions or the policy itself. DeepMind's AlphaGo combined networks trained partly through self-play reinforcement learning with tree search to beat top human Go players. Beyond games, reinforcement learning is applied to robotics control, resource allocation, and recommendation, and a variant that learns from human preference judgments is used to fine-tune large language models.
+
+### Choosing a Learning Type
+
+```
+Do you have examples with known correct answers?
+├── Yes ─► Supervised learning
+│          Is the answer a category or a number?
+│          ├── Category ─► Classification
+│          └── Number   ─► Regression
+└── No
+    ├── Is the goal to find structure in the data? ─► Unsupervised learning
+    │     ├── Groups of similar items   ─► Clustering
+    │     ├── Fewer, denser features    ─► Dimensionality reduction
+    │     └── Points that don't fit     ─► Anomaly detection
+    └── Does a system act repeatedly and receive a reward signal?
+          └── Yes ─► Reinforcement learning
+```
+
+A common intermediate case is having a large unlabeled dataset and a small labeled one. Self-supervised pretraining on the unlabeled data, followed by supervised training on the labeled data, often beats training on the small labeled set alone.
+
+---
+
+## Evaluating a Model
+
+A model that performs well on the data it trained on has proven nothing. The whole point is performance on data it hasn't seen, and most evaluation practice exists to measure that honestly.
+
+### Train, Validation, and Test Splits
+
+[scikit-learn's cross-validation guide](https://scikit-learn.org/stable/modules/cross_validation.html){:target="_blank" rel="noopener noreferrer"} calls testing a model on the data it trained on "a methodological mistake," since a model that simply memorized the labels would score perfectly and predict nothing useful. The standard remedy divides the data by role:
+
+| Split | Used for | Rule |
+|---|---|---|
+| **Training set** | Fitting the model's parameters | The model sees these labels |
+| **Validation set** | Comparing models and tuning hyperparameters | Used repeatedly during development |
+| **Test set** | One final estimate of real-world performance | Touched once, after all decisions are made |
+
+The validation set exists because tuning against the test set leaks information. Every time you adjust a hyperparameter because the test score improved, the test set stops being unseen data, and its score stops reflecting how the model will generalize.
+
+### Cross-Validation
+
+Holding out a separate validation set wastes data when data is scarce. **K-fold cross-validation** splits the training data into k parts, trains k times using k−1 parts, and validates on the remaining part each time. The reported score is the average across folds, which is also more stable than a single validation split. The test set still stays held out for the final check.
+
+Random splitting assumes examples are independent. For time series, validation data has to come after the training data in time, or the model gets to learn from the future.
+
+### Data Leakage
+
+**Data leakage** occurs, in [scikit-learn's words](https://scikit-learn.org/stable/common_pitfalls.html){:target="_blank" rel="noopener noreferrer"}, "when information that would not be available at prediction time is used when building the model." It produces evaluation scores that look excellent and a model that disappoints in production. It happens in a few recurring ways:
+
+- **Preprocessing before splitting.** Fitting a scaler, feature selector, or imputer on the full dataset lets statistics from the test data shape the training data. Split first, fit preprocessing on the training set only, and apply the same fitted transform to the test set. Pipelines that bundle preprocessing with the model enforce this automatically.
+- **Features that encode the answer.** A churn model that uses "account closure date" as a feature will look brilliant, because that field only exists for customers who already churned.
+- **Duplicates across splits.** Near-identical records in both training and test sets let the model score well by recognition rather than generalization.
+
+### Underfitting and Overfitting
 
 <div class="comparison">
 <div class="content-card content-card--accent">
-<h4>Under-fitting</h4>
+<h4>Underfitting</h4>
 <ul>
-<li><strong>Symptom</strong>: Model works poorly on both training data and new data; it hasn't learned enough</li>
-<li><strong>Analogy</strong>: Like a student who barely studied for a test; they perform poorly on practice problems and the actual exam</li>
-<li><strong>Causes</strong>: Model too simple, insufficient training examples, not enough training time</li>
+<li><strong>Symptom</strong>: Poor performance on both training and validation data</li>
+<li><strong>Cause</strong>: The model is too simple for the pattern, the features don't carry enough signal, or training stopped too early</li>
+<li><strong>Remedies</strong>: A more expressive model, better features, longer training</li>
 </ul>
 </div>
 <div class="content-card content-card--accent-secondary">
-<h4>Over-fitting</h4>
+<h4>Overfitting</h4>
 <ul>
-<li><strong>Symptom</strong>: Model performs excellently on training data but poorly on new, unseen data; it memorized instead of learned</li>
-<li><strong>Analogy</strong>: Like a student who memorized practice test answers but can't solve similar problems with different numbers</li>
-<li><strong>Solutions</strong>: Increase training data, reduce model complexity, apply regularization, use cross-validation</li>
+<li><strong>Symptom</strong>: Strong training performance, much weaker validation performance</li>
+<li><strong>Cause</strong>: The model learned noise and quirks of the training set instead of the general pattern</li>
+<li><strong>Remedies</strong>: More training data, a simpler model, regularization, early stopping</li>
 </ul>
 </div>
 </div>
 
-### Modern Training Enhancements
+The two pull against each other, which is often described as the bias-variance trade-off. A simple model makes consistent but systematically wrong predictions (high bias). A very flexible model fits each training set closely but changes a lot between training sets (high variance). **Regularization** adds a penalty for complexity to the loss. L2 regularization (ridge) shrinks all weights toward zero, L1 (lasso) can drive some weights exactly to zero and so drops features, and elastic net combines the two. **Early stopping** ends training when the validation loss starts rising even as training loss keeps falling.
 
-#### Automated Feature Engineering
-- **Purpose**: Automatically discover and create relevant features from raw data
-- **Benefit**: Reduces manual effort and potentially discovers hidden patterns
-- **Tools**: AutoML platforms increasingly include this capability
+### Choosing a Metric
 
-#### Continuous Training
-- **Concept**: Models automatically retrain with new data
-- **Importance**: Maintains model accuracy as data patterns evolve
-- **Implementation**: Part of MLOps pipelines for production systems
+The metric decides what "good" means, and the default one is often the wrong one.
 
----
+| Metric | Measures | Use when |
+|---|---|---|
+| **Accuracy** | Share of all predictions that are correct | Classes are roughly balanced and all errors cost the same |
+| **Precision** | Of the items predicted positive, the share that actually are | False positives are expensive, like flagging legitimate transactions as fraud |
+| **Recall** | Of the items actually positive, the share the model found | False negatives are expensive, like missing a disease |
+| **F1 score** | Harmonic mean of precision and recall | You need one number that balances both |
+| **ROC AUC** | How well the model ranks positives above negatives across all thresholds | Comparing models before choosing a decision threshold |
+| **MAE** | Average absolute error of a numeric prediction | Every unit of error costs the same |
+| **RMSE** | Square root of the average squared error | Large errors are disproportionately bad |
+| **R²** | Share of the target's variance the model explains | Comparing regression models on the same target |
 
-## 4. Classification of Machine Learning
-
-## Supervised Learning
-
-### Overview
-- **Method**: System learns from example inputs and their corresponding correct outputs, provided by human experts
-- **Goal**: Learn a general rule that can map any new input to the correct output
-- **Mathematical representation**: Y = f(X), where Y is the predicted output (label), X is the input (features), and f is the learned transformation function
-- **Data requirement**: Needs labeled datasets, which can be expensive to create but provides clear learning objectives
-
-### Applications
-- **Binary Classification**: Spam detection, image recognition (dog/not dog)
-- **Multiclass Classification**: Object detection, sentiment analysis
-- **Regression**: Predicting continuous values (prices, temperatures, stock values)
-
-### Key Algorithms
-
-- **Support Vector Machines (SVM)** (*Vladimir Vapnik & Alexey Chervonenkis, 1960s; practical implementation by Vapnik, 1990s*):
-  - Effective for classification with clear margins
-  - Finds optimal hyperplane separating classes
-  - Uses "kernel trick" for non-linear boundaries
-
-- **Decision Trees** (*Originated in 1960s, popularized by ID3 algorithm (Quinlan, 1986) and CART (Breiman et al., 1984)*):
-  - Interpretable models for both classification and regression
-  - Learns hierarchical decision rules from data
-  - Easy to visualize and explain to non-technical stakeholders
-
-- **Random Forests** (*Leo Breiman, 2001*):
-  - Ensemble method combining multiple decision trees
-  - Each tree trained on random subset of data and features
-  - Reduces overfitting through "wisdom of crowds" approach
-
-- **Neural Networks**: Powerful for complex pattern recognition (see attribution above)
-
-### Regression Types
-- **Linear Regression**: Models linear relationships between variables
-- **Logistic Regression**: Used for binary classification problems
-- **Polynomial Regression**: Captures non-linear relationships
-- **Advanced**: Ridge, Lasso, Elastic Net for regularization
-
-## Unsupervised Learning
-
-### Overview
-- **Method**: Finding hidden structure and patterns in data without any correct answers or guidance
-- **Learning process**: Like an explorer discovering patterns in uncharted territory without a map or guide
-- **Purpose**: Discover hidden relationships, group similar items, or reduce data complexity
-- **Challenge**: Harder to evaluate success since there's no "correct" answer to compare against
-- **Value**: Most real-world data is unlabeled, making unsupervised learning crucial for extracting insights from raw data
-- **Cost advantage**: No expensive labeling process required, can work with data you already have
-
-### Clustering
-- **Goal**: Organize objects into groups where members are similar within groups and dissimilar across groups
-- **Challenge**: No absolute "best" criterion - depends on user's specific needs
-- **Applications**:
-  - Customer segmentation for marketing
-  - Anomaly detection in security/finance
-  - Semi-supervised learning (clusters become labels)
-
-### Dimensionality Reduction
-- **Purpose**: Transform high-dimensional data to lower dimensions while preserving essential information
-- **Benefits**: Simplifies modeling, reduces computational costs, enables visualization
-- **Applications**:
-  - Image compression while maintaining recognizability
-  - Data preprocessing for other ML algorithms
-  - Noise reduction and feature extraction
-
-### Modern Unsupervised Techniques
-- **Generative Models**: Create new data similar to training data
-- **Self-Supervised Learning**: Creates labels from the data itself
-- **Representation Learning**: Learns meaningful data representations automatically
-
-## Reinforcement Learning (RL)
-
-### Overview
-- **Method**: Agent (the learner) interacts with an environment to achieve specific goals, learning from trial and error
-- **Learning process**: Like training a pet with treats and corrections - the agent tries actions, receives feedback (rewards/penalties), and learns to maximize rewards
-- **Feedback mechanism**: Instead of being told the right answer, the agent discovers it through experimentation
-- **Key insight**: Learns optimal behavior through experience, not from examples of correct behavior
-- **Time dimension**: Actions have consequences that unfold over time, requiring long-term strategic thinking
-
-### Core Components
-- **Decision-Making Agent**: The learning entity taking actions
-- **Environment**: The context in which the agent operates
-- **Reward Signal**: Feedback mechanism indicating action quality
-- **State**: Current situation or configuration of the environment
-
-### Applications
-- **Game Playing**: Chess, Go, video games against human or AI opponents
-- **Robotics**: Autonomous navigation, manipulation tasks
-- **Business**: Resource allocation, warehouse optimization, energy distribution
-- **Finance**: Algorithmic trading, portfolio management
-
-### Key Concepts
-
-#### Bellman Equation
-
-*Named after Richard Bellman, who developed dynamic programming in the 1950s. The Bellman equation is foundational to modern reinforcement learning.*
-
-- **Purpose**: Expresses relationship between current state value and expected future rewards
-- **Principle**: Long-term reward = current reward + expected future rewards (discounted)
-- **Mathematical insight**: V(s) = max[R(s,a) + γ * V(s')], where γ is discount factor (0-1)
-- **Forms**: State value functions (V) and action value functions (Q-functions)
-- **Importance**: Fundamental to most RL algorithms and optimal decision-making
-- **Modern applications**: Powers AlphaGo, autonomous vehicle navigation, resource allocation
-
-#### Modern RL Developments
-- **Deep Reinforcement Learning**: Combines RL with deep neural networks
-- **Multi-Agent RL**: Multiple agents learning simultaneously
-- **Real-World Applications**: Moving beyond games to practical business problems
-- **Transfer Learning**: Applying learned policies to new but related environments
+Accuracy misleads badly on imbalanced data. If 1% of transactions are fraudulent, a model that labels everything legitimate is 99% accurate and catches no fraud at all. Precision and recall also trade against each other through the decision threshold. Lowering the score at which a model says "fraud" finds more fraud (higher recall) and flags more legitimate transactions (lower precision), so picking the threshold is a business decision about which error costs more.
 
 ---
 
-## 5. MLOps and Production Systems
+## Explainability
 
-### What is MLOps?
+### Black Boxes and Interpretable Models
 
-MLOps (Machine Learning Operations) combines DevOps practices with the unique challenges of machine learning to enable reliable, scalable deployment and management of ML models in production environments.
+Some models explain themselves. A linear model's weights say how much each feature pushes the prediction, and a shallow decision tree can be read as a flowchart. Others, like large ensembles and deep neural networks, are **black boxes** that produce predictions without a readable account of why. The more expressive models tend to be the less interpretable ones, so a regulated decision such as a loan approval can favor a slightly less accurate model whose reasoning can be shown to an auditor or the person affected.
 
-### Core MLOps Principles
+### Explanation Methods
 
-#### Continuous Integration (CI)
-- **Extension**: Beyond code testing to include data and model validation
-- **Components**: Automated testing of data quality, model performance, and integration points
-- **Benefits**: Early detection of issues, consistent quality standards
+**Explainable AI (XAI)** covers techniques that describe a black-box model's behavior after the fact:
 
-#### Continuous Delivery (CD)
-- **Focus**: Automated delivery of ML training pipelines and model deployment
-- **Automation**: Reduces manual errors and deployment time
-- **Scalability**: Enables rapid iteration and updates
+- **Global feature importance** ranks which features matter most across all predictions, for example by measuring how much performance drops when a feature's values are shuffled (permutation importance).
+- **Local explanations** attribute a single prediction to its features. SHAP assigns each feature a contribution based on game-theoretic Shapley values, and LIME fits a simple interpretable model around one prediction.
+- **Partial dependence plots** show how the predicted outcome changes as one feature varies.
 
-#### Continuous Training (CT)
-- **Unique to ML**: Automatically retrain models with new data
-- **Triggers**: Calendar events, data changes, performance degradation
-- **Importance**: Maintains model accuracy as real-world conditions change
-
-### MLOps Maturity Levels
-
-#### Level 0: Manual Process
-- **Characteristics**: Experimental, data scientist-driven, manual steps
-- **Tools**: Jupyter notebooks, manual deployment
-- **Suitable for**: Rare model changes, proof-of-concept projects
-
-#### Level 1: ML Pipeline Automation
-- **Features**: Automated training pipelines, continuous delivery of models
-- **Benefits**: Faster experimentation, consistent training process
-- **Challenges**: Still requires manual deployment decisions
-
-#### Level 2: CI/CD Pipeline Automation
-- **Advanced**: Automated testing, deployment, and monitoring
-- **Integration**: Full DevOps integration with ML-specific considerations
-- **Result**: Rapid, reliable model updates and rollbacks
-
-### Key MLOps Components
-
-#### Model Registry
-- **Purpose**: Centralized repository for trained models with metadata
-- **Benefits**: Version control, model comparison, deployment tracking
-- **Features**: Model lineage, performance metrics, approval workflows
-
-#### Feature Store
-- **Function**: Reusable feature definitions across multiple models
-- **Advantages**: Consistency, efficiency, reduced duplication
-- **Components**: Feature computation, storage, serving, and monitoring
-
-#### Model Monitoring
-- **Data Drift**: Changes in input data distribution over time
-- **Model Drift**: Degradation in model performance
-- **Business Metrics**: Impact on business outcomes and KPIs
-- **Alerts**: Automated notifications for performance issues
-
-#### Infrastructure Management
-- **Containerization**: Docker for consistent environments
-- **Orchestration**: Kubernetes for scalable deployment
-- **Serverless**: Cost-effective, auto-scaling options
-- **Cloud Integration**: AWS, GCP, Azure MLOps services
-
-### Best Practices for Production ML
-
-#### Versioning and Reproducibility
-- **Model Versioning**: Track all model versions with metadata
-- **Data Versioning**: Ensure training data consistency
-- **Code Versioning**: Standard Git practices extended to ML
-- **Environment Versioning**: Container images, dependency management
-
-#### Testing Strategies
-- **Unit Tests**: Individual components and functions
-- **Integration Tests**: End-to-end pipeline validation
-- **Model Tests**: Performance benchmarks, bias detection
-- **A/B Testing**: Gradual rollout and performance comparison
-
-#### Deployment Patterns
-- **Blue-Green Deployment**: Switch between two identical environments
-- **Canary Deployment**: Gradual traffic shifting to new model
-- **Shadow Deployment**: Run new model alongside existing without affecting users
-- **Multi-Armed Bandit**: Dynamic traffic allocation based on performance
-
-### Governance and Compliance
-
-#### Model Governance
-- **Approval Processes**: Formal review before production deployment
-- **Audit Trails**: Complete history of model changes and decisions
-- **Compliance**: Regulatory requirements (GDPR, CCPA, sector-specific)
-- **Risk Management**: Impact assessment and mitigation strategies
-
-#### Ethical AI Considerations
-- **Bias Detection**: Regular assessment for fairness across demographics
-- **Transparency**: Explainable model decisions where required
-- **Privacy**: Data protection and model privacy techniques
-- **Accountability**: Clear responsibility chains for model decisions
+These methods describe what the model is sensitive to, not the true causal reasoning, and they can disagree with each other. Attention weights in neural networks are a particular trap. They look like an explanation of which inputs mattered, but [Jain and Wallace (2019)](https://aclanthology.org/N19-1357/){:target="_blank" rel="noopener noreferrer"} found that attention weights frequently didn't correlate with gradient-based importance measures, and that very different attention patterns could produce the same predictions.
 
 ---
 
-## 6. Key Challenges and Solutions
+## When Not to Use Machine Learning
 
-### Deployment Challenges
+Machine learning trades the effort of writing rules for the effort of gathering data, validating models, and monitoring them indefinitely. That trade doesn't always pay:
 
-#### The 80% Problem
-- **Issue**: 80% of ML projects never reach production deployment
-- **Causes**: 
-  - Inadequate planning for production requirements
-  - Lack of collaboration between data science and engineering
-  - Insufficient infrastructure and operational capabilities
-- **Solutions**: Early MLOps adoption, cross-functional teams, production-first mindset
-
-#### Model Performance Degradation
-- **Data Drift**: Changes in input data patterns over time
-- **Concept Drift**: Changes in the relationship between features and targets
-- **Solution**: Continuous monitoring, automated retraining, drift detection systems
-
-### Scalability and Resource Management
-
-#### Infrastructure Scaling
-- **Challenge**: Models may need to handle millions of requests
-- **Solutions**: Auto-scaling, load balancing, efficient serving architectures
-- **Considerations**: Cost optimization, latency requirements, reliability
-
-#### Model Complexity vs. Performance
-- **Trade-off**: More complex models may perform better but are harder to deploy and maintain
-- **Solutions**: Model compression, quantization, distillation techniques
-- **Edge Computing**: Simplified models for resource-constrained environments
-
-### Data and Privacy Challenges
-
-#### Data Quality and Governance
-- **Issues**: Inconsistent data, missing values, labeling errors
-- **Solutions**: Data validation pipelines, quality metrics, automated checks
-- **Governance**: Data lineage, access control, compliance tracking
-
-#### Privacy-Preserving ML
-- **Techniques**: Federated learning, differential privacy, secure multi-party computation
-- **Applications**: Healthcare, finance, personal data processing
-- **Benefits**: Model training without centralizing sensitive data
-
-### Ethical and Regulatory Considerations
-
-#### Bias and Fairness
-- **Sources**: Training data bias, algorithmic bias, feedback loops
-- **Detection**: Statistical parity, equalized odds, demographic parity
-- **Mitigation**: Diverse datasets, fairness constraints, regular auditing
-
-#### Regulatory Compliance
-- **EU AI Act**: New compliance standards for AI systems
-- **Industry Standards**: Healthcare (FDA), finance (regulatory requirements)
-- **Documentation**: Model cards, dataset documentation, impact assessments
+- **The rules are known and stable.** Tax calculations, access control, and input validation are better as explicit code that can be read, tested, and audited.
+- **There isn't enough data, or no reliable labels.** A model can't learn a pattern the data doesn't contain, and noisy labels teach noisy behavior.
+- **Every error needs a guarantee.** Model predictions are probabilistic. If a wrong answer is unacceptable and there's no human review or fallback, a deterministic system fits better.
+- **A simple heuristic gets close enough.** Start with a baseline, even "always predict the most common class" or a hand-written rule. If a model can't beat it by enough to justify the ongoing cost, don't ship the model.
+- **The decision must be explained and the explanation must be exact.** Post-hoc explanation methods approximate a black box's behavior without reproducing its reasoning.
 
 ---
 
-## 7. Quick Reference Guide
+## Common Pitfalls
 
-### When to Use Each ML Type
-
-| ML Type | Best For | Examples |
-|---------|----------|----------|
-| **Supervised** | Prediction with labeled data | Email spam detection, price prediction |
-| **Unsupervised** | Pattern discovery in unlabeled data | Customer segmentation, anomaly detection |
-| **Reinforcement** | Sequential decision-making | Game playing, robotics, resource optimization |
-
-### Model Selection Criteria
-
-| Criterion | Considerations |
-|-----------|----------------|
-| **Data Size** | Small: Simple models; Large: Complex models (deep learning) |
-| **Interpretability** | High need: Linear models, decision trees; Low need: Neural networks |
-| **Real-time Requirements** | Fast inference: Simple models, optimized architectures |
-| **Accuracy Requirements** | High accuracy: Ensemble methods, deep learning with sufficient data |
-
-### MLOps Implementation Checklist
-
-- [ ] **Version Control**: Models, data, code, and environments
-- [ ] **Automated Testing**: Unit, integration, and model performance tests
-- [ ] **CI/CD Pipeline**: Automated training and deployment
-- [ ] **Monitoring**: Data drift, model performance, business metrics
-- [ ] **Model Registry**: Centralized model management
-- [ ] **Feature Store**: Reusable feature definitions
-- [ ] **Documentation**: Model cards, API documentation, runbooks
-- [ ] **Security**: Access control, data encryption, model protection
-- [ ] **Compliance**: Regulatory requirements, audit trails
-- [ ] **Incident Response**: Automated alerts, rollback procedures
-
-### Common Pitfalls and Solutions
-
-| Pitfall | Solution |
-|---------|----------|
-| **Data Leakage** | Careful feature engineering, temporal validation |
-| **Overfitting** | Cross-validation, regularization, more data |
-| **Poor Generalization** | Diverse training data, proper validation strategy |
-| **Model Drift** | Continuous monitoring, automated retraining |
-| **Deployment Failures** | Comprehensive testing, staged rollouts |
-| **Scalability Issues** | Performance testing, infrastructure planning |
-
-### Essential Metrics to Track
-
-#### Model Performance
-- **Classification**: Accuracy, Precision, Recall, F1-Score, AUC-ROC
-- **Regression**: MAE, MSE, RMSE, R-squared
-- **Business**: Revenue impact, user satisfaction, operational efficiency
-
-#### Operational Metrics
-- **Latency**: Response time, throughput
-- **Availability**: Uptime, error rates
-- **Resource Usage**: CPU, memory, storage costs
-- **Data Quality**: Completeness, consistency, freshness
-
----
+| Pitfall | What happens | Prevention |
+|---|---|---|
+| **Evaluating on training data** | Scores reflect memorization, not generalization | Hold out validation and test sets |
+| **Tuning against the test set** | The test score becomes optimistic | Tune on validation data or cross-validation; use the test set once |
+| **Data leakage** | Excellent offline scores, poor production performance | Split before preprocessing; audit features for information unavailable at prediction time |
+| **Accuracy on imbalanced classes** | A model that ignores the rare class looks nearly perfect | Use precision, recall, or F1, and inspect the confusion matrix |
+| **Random splits on time-ordered data** | The model learns from the future | Split by time |
+| **No baseline** | No way to tell whether the model adds value | Compare against a simple rule or majority-class prediction first |

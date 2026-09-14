@@ -187,7 +187,7 @@ When writing about software architecture, use correct terminology:
 | Object-Oriented Programming | OOP Foundations, Design Patterns |
 | Security | Security Fundamentals, Threats & Defense, Application Security, Governance & Response |
 | Software Development Lifecycle | SDLC & Modeling |
-| AI & Machine Learning | Machine Learning |
+| AI & Machine Learning | Machine Learning, Building with LLMs, AI in Engineering Practice |
 | Data & Analytics | Analytics |
 | Observability | Monitoring & Observability |
 | Networking | Network Fundamentals |

@@ -2,7 +2,7 @@
 title: "AI Agents"
 layout: guide
 category: AI & Machine Learning
-subcategory: Generative AI
+subcategory: Building with LLMs
 description: "Understanding agentic AI: autonomous task completion, tool use, planning, multi-agent systems, and building reliable agent workflows."
 tags: [ai, generative-ai, llm, agents, tools, automation, practical]
 ---
@@ -211,82 +211,6 @@ The local-execution / remote-inference split means source code, configuration fi
 The agent cannot reason about data it has not been sent, so there is no way to get model assistance on a file without that file's contents crossing the network. Context window limits provide a natural ceiling on how much data is in flight at any given time, but over a long session the cumulative data transmitted can be substantial.
 
 For organizational controls around managing this data flow, see the [AI Security for Organizations](/study-guides/ai/ai-security-for-organizations.html) guide.
-
----
-
-## Tool Use
-
-Tools are the primary way agents interact with the world beyond generating text.
-
-### What Are Tools?
-
-Tools are functions the agent can call. Each tool has:
-- **Name**: How the agent references it
-- **Description**: What the tool does (critical for agent's decision-making)
-- **Parameters**: What inputs it accepts
-- **Output**: What it returns
-
-### Common Tool Categories
-
-| Category | Examples | Purpose |
-|----------|----------|---------|
-| **Information retrieval** | Web search, database query, file read | Get data the agent needs |
-| **Computation** | Calculator, code execution | Perform precise calculations |
-| **Communication** | Send email, post message | Interact with users or services |
-| **State modification** | Write file, update database | Change external state |
-| **Specialized** | Image analysis, code linting | Domain-specific operations |
-
-### Tool Definition Example
-
-```json
-{
-  "name": "search_documentation",
-  "description": "Search the product documentation for relevant information. Use this when you need to answer questions about product features, APIs, or troubleshooting steps.",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "query": {
-        "type": "string",
-        "description": "The search query describing what information you need"
-      },
-      "max_results": {
-        "type": "integer",
-        "description": "Maximum number of results to return",
-        "default": 5
-      }
-    },
-    "required": ["query"]
-  }
-}
-```
-
-### Tool Selection
-
-Agents choose tools based on their descriptions. Good descriptions are crucial:
-
-**Poor description**:
-```
-"name": "db_query"
-"description": "Queries the database"
-```
-
-**Better description**:
-```
-"name": "query_customer_database"
-"description": "Search the customer database by name, email, or account ID.
-               Returns customer records including contact info and account status.
-               Use this when you need to look up specific customer information."
-```
-
-### Tool Design Principles
-
-| Principle | Why It Matters |
-|-----------|---------------|
-| **Single responsibility** | Easier for agent to understand and use correctly |
-| **Clear descriptions** | Agent's only guide for when/how to use |
-| **Predictable outputs** | Agent needs to parse and reason about results |
-| **Error messages** | Help agent recover from failures |
-| **Idempotent when possible** | Safe to retry on failure |
 
 ---
 
@@ -578,15 +502,6 @@ Track agent behavior for debugging and improvement:
 | **Token usage** | Cost management |
 | **Time to completion** | Performance |
 
-### Testing Agents
-
-| Test Type | Purpose | Approach |
-|-----------|---------|----------|
-| **Unit tests** | Individual tools work | Mock agent, test tool outputs |
-| **Integration tests** | Agent uses tools correctly | Controlled scenarios |
-| **Scenario tests** | End-to-end task completion | Representative tasks |
-| **Adversarial tests** | Handle edge cases | Unusual inputs, failures |
-
 ---
 
 ## Agent Frameworks
@@ -621,42 +536,14 @@ Several frameworks simplify building agents.
 
 ## Practical Considerations
 
-### Cost Management
-
-Agents can be expensive due to multiple LLM calls per task.
-
-| Strategy | Impact |
-|----------|--------|
-| **Smaller models for simple steps** | Reduce cost per call |
-| **Caching** | Avoid redundant calls |
-| **Step limits** | Cap maximum cost |
-| **Batching** | Reduce API overhead |
-
-### Latency
-
-Multi-step agents have inherent latency from sequential operations.
-
-| Strategy | Impact |
-|----------|--------|
-| **Parallelization** | Run independent steps concurrently |
-| **Streaming** | Show progress during execution |
-| **Caching** | Skip redundant operations |
-| **Simpler models** | Faster inference |
-
 ### Security and Data Flow
 
 Agents with tool access introduce two categories of security risk: agent-level risks around what the agent does, and data-level risks around what information enters the inference pipeline.
-
-**Agent-level risks** are about the agent's behavior. Prompt injection, unauthorized tool calls, and malicious code execution fall into this category. The mitigations are guardrails, sandboxing, and human approval gates.
 
 **Data-level risks** are about what content gets sent to the model provider as context. As described in [Agent Execution Architecture](#agent-execution-architecture), every tool result crosses the network boundary during inference. This creates exposure pathways that are independent of the agent's intent.
 
 | Risk | Category | Mitigation |
 |------|----------|------------|
-| **Prompt injection** | Agent-level | Sanitize inputs, use guardrails |
-| **Unauthorized access** | Agent-level | Principle of least privilege |
-| **Malicious code execution** | Agent-level | Sandbox code execution |
-| **Data exfiltration** | Agent-level | Monitor outbound actions |
 | **Context accumulation** | Data-level | Session limits, context pruning, data classification policies |
 | **Credential leakage via context** | Data-level | Exclude sensitive files from AI tool access, use secret scanning |
 

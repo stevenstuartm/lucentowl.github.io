@@ -4,13 +4,13 @@ layout: resource
 type: code
 category: "AI"
 description: "A copy-paste plan file and orchestrator prompt for running parallel AI agents through a batch content-generation pipeline, with model tiering and validation built in."
-last_updated: 2026-07-02
+last_updated: 2026-09-14
 tags: [ai, generative-ai, llm, agents, automation, workflow]
 related_guides:
   - /study-guides/ai/scaling-ai-workflows.html
 ---
 
-Three artifacts, used together: a format reference (one hand-written output every agent copies the shape of), a plan file (tracks tasks, models, and status), and an orchestrator prompt (hands each task to its own agent, then validates what comes back). Write the format reference first; the plan file's Format Reference field and Validation Checklist both point back to it.
+Three artifacts, used together: a format reference (one hand-written output every agent copies the shape of), a plan file (tracks tasks, models, and status), and an orchestrator prompt (hands each task to its own agent, then validates what comes back). Write the format reference first; the plan file's Format Reference field and Validation Checklist both point back to it. If you start the plan file before the format reference exists, keep that first draft to the output directory, content rules, and a plain list of tasks per phase, then add the format reference path, validation checklist, and model assignments once the reference is written.
 
 The example below batches nine entries for a distributed systems glossary: six single-term definitions and three comparisons that require reasoning across multiple terms. Swap in your own domain, section names, and fields; the mechanics don't change.
 
@@ -123,7 +123,7 @@ register each output in <tracking-file>, and note any issues found.
 
 > **Note:** On a phase's first run, every row is already pending, so ENUMERATE has nothing to filter out yet. Its value shows up on a rerun, when some rows already carry Status = complete and only the leftovers should be dispatched again.
 
-> **Note:** The agent never opens the plan file. DISPATCH resolves the title, filename, and content rules into the prompt text itself, so the only file the agent reads is the format reference.
+> **Note:** The agent never opens the plan file. DISPATCH resolves the title, filename, and content rules into the prompt text itself, so the only file the agent reads is the format reference. A batch of fifty tasks costs each agent nothing extra over a batch of five, because none of them ever see the other forty-nine rows.
 
 Resolved against Task 2, the DISPATCH prompt the orchestrator actually sends looks like this:
 
@@ -135,6 +135,8 @@ Reliability), and tags; include Definition, Details, and Related Terms
 sections in that order; leave a blank line before markdown tables. Write
 the output to output/quorum.md.
 ```
+
+> **Note:** This version has the orchestrator validate every output itself. Resuming each agent to check its own output first costs less, since the output is already in that agent's context, and cuts the orchestrator's work down to the mechanical checks above. The trade-off is that the orchestrator is no longer the one catching problems.
 
 ### Resulting Output
 

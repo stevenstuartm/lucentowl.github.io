@@ -2,7 +2,7 @@
 title: "AI Security for Organizations"
 layout: guide
 category: AI & Machine Learning
-subcategory: Generative AI
+subcategory: AI in Engineering Practice
 description: "Operational security guidance for organizations where developers use AI daily: data classification, network controls, tool governance, and risk assessment."
 tags: [ai, security, governance, practical, risk-management]
 ---

@@ -2,456 +2,246 @@
 title: "LLM Fine-Tuning"
 layout: guide
 category: AI & Machine Learning
-subcategory: Generative AI
-description: "When and how to fine-tune language models: choosing between prompting, RAG, and fine-tuning, techniques like LoRA and QLoRA, and practical implementation guidance."
-tags: [ai, generative-ai, llm, fine-tuning, training, practical]
+subcategory: Building with LLMs
+description: "When fine-tuning a language model is worth it and how to do it: choosing between prompting, RAG, and fine-tuning, supervised and preference tuning, full fine-tuning versus LoRA and QLoRA, preparing data, training, evaluating, and deploying adapters."
+tags: [fine-tuning, lora, qlora, peft, dpo, training, practical]
 ---
 
-## What Is Fine-Tuning?
+**Fine-tuning** continues training a pre-trained language model on your own examples, adjusting its weights so it behaves differently. Where a prompt tells the model what to do on each request, fine-tuning changes the model's default responses so the instructions no longer need repeating. It's powerful, but it's also the most expensive and least reversible way to customize a model, and it's frequently reached for when a better prompt or retrieval would have done the job.
 
-Fine-tuning is the process of further training a pre-trained language model on a specific dataset to adapt it for particular tasks, domains, or behaviors. The model learns from examples in your data to modify its weights, changing how it generates outputs.
+## What Fine-Tuning Changes
 
-**The key distinction**: Prompting tells the model what to do. Fine-tuning changes what the model *is*.
+### Behavior, Not Knowledge
 
-### When Fine-Tuning Makes Sense
+Fine-tuning is good at shaping how a model responds, such as producing a consistent output format, a house style or tone, a classification scheme, domain-specific phrasing, or a narrow task done reliably with a short prompt. It's poor at teaching facts.
 
-Fine-tuning is appropriate when you need to change the model's behavior, style, or knowledge in ways that can't be achieved through prompting alone.
+Two studies make the point. [Ovadia et al. (2023)](https://arxiv.org/abs/2312.05934){:target="_blank" rel="noopener noreferrer"} compared unsupervised fine-tuning with retrieval-augmented generation for adding knowledge and found that RAG consistently outperformed fine-tuning, both for information the model had seen before and for entirely new facts, which models struggled to learn through fine-tuning. [Gekhman et al. (2024)](https://arxiv.org/abs/2405.05904){:target="_blank" rel="noopener noreferrer"} found that fine-tuning examples containing new knowledge were learned much more slowly than examples consistent with what the model already knew, and that once learned, they linearly increased the model's tendency to hallucinate. Models acquire knowledge mostly in pre-training. Fine-tuning mostly teaches them how to use it.
 
-| Use Case | Why Fine-Tuning Helps |
-|----------|----------------------|
-| **Consistent output format** | Learn to always produce specific structure |
-| **Domain terminology** | Internalize specialized vocabulary |
-| **Style/tone** | Match specific writing style |
-| **Behavior patterns** | Follow complex multi-step procedures |
-| **Efficiency** | Replace long prompts with learned behavior |
+Fine-tuned knowledge is also static. When a fact changes, the model has to be retrained, while a retrieval index is updated in minutes.
 
-### When Not to Fine-Tune
+### Kinds of Fine-Tuning
 
-| Situation | Better Alternative |
-|-----------|-------------------|
-| Need current information | RAG |
-| One-off customization | Prompting |
-| Simple format changes | Structured output prompts |
-| Access to specific data | RAG |
-| Cost is primary concern | Start with prompting |
+| Method | Training data | Teaches | Example use |
+|---|---|---|---|
+| **Supervised fine-tuning (SFT)** | Prompts paired with ideal responses | Imitate the example responses | A fixed output format, a classification scheme, a support tone |
+| **Preference tuning** (such as DPO) | Prompts with a preferred and a rejected response | Prefer one kind of response over another | Summaries at the right length, replies with an appropriate tone |
+| **Reinforcement fine-tuning** | Prompts plus a grader that scores responses | Produce responses that score well | Domain reasoning tasks with checkable answers |
+| **Distillation** | Outputs of a larger model on your tasks | Match a larger model's behavior on a narrow task | Serving a smaller, cheaper model for one high-volume job |
+
+**Direct Preference Optimization** ([Rafailov et al., 2023](https://arxiv.org/abs/2305.18290){:target="_blank" rel="noopener noreferrer"}) made preference tuning practical. The earlier approach, reinforcement learning from human feedback, required training a separate reward model and then optimizing against it with reinforcement learning. DPO trains directly on preference pairs with a simple classification-style loss, and the authors report it matches or exceeds that approach while being substantially simpler to train.
 
 ---
 
-## Decision Framework
+## Prompting, RAG, or Fine-Tuning
 
-### Prompting vs. RAG vs. Fine-Tuning
+The three approaches change different things, and they combine rather than compete.
+
+| Aspect | Prompting | RAG | Fine-tuning |
+|---|---|---|---|
+| **What changes** | The instructions and examples in each request | The information supplied with each request | The model's weights |
+| **Best at** | Most tasks, and every starting point | Private, current, or large bodies of knowledge | Consistent behavior, format, and style; shortening long prompts |
+| **Time to iterate** | Minutes | Hours to days to build, minutes to update content | Days per training cycle |
+| **Updating** | Edit the prompt | Update the index | Retrain |
+| **Cost profile** | Per-token, growing with prompt length | Indexing, search infrastructure, plus tokens | Training runs, possibly dedicated hosting, plus tokens |
+| **Source attribution** | Only for supplied material | Built in | None |
 
 ```
-                     ┌─────────────────┐
-                     │ What do you need│
-                     │   to change?    │
-                     └────────┬────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-   │   Knowledge  │   │   Behavior   │   │    Both      │
-   │   (what it   │   │   (how it    │   │              │
-   │    knows)    │   │    acts)     │   │              │
-   └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-          │                  │                  │
-          ▼                  ▼                  ▼
-   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-   │     RAG      │   │  Fine-tuning │   │   RAG +      │
-   │              │   │      or      │   │ Fine-tuning  │
-   │              │   │   Prompting  │   │              │
-   └──────────────┘   └──────────────┘   └──────────────┘
+What's wrong with the output?
+├── It lacks information: private, recent, or too large to include
+│     └─► RAG (or include it in the prompt if it fits)
+├── It ignores instructions, format, or style
+│     ├── Have you tried clearer instructions, examples, and structured outputs?
+│     │     └── No ─► Prompting first
+│     └── Yes, and it's still inconsistent at the volume you need
+│           └─► Fine-tuning
+├── It's correct, but the prompt needed to get there is long and expensive
+│     └─► Fine-tuning to internalize the instructions, or distillation to a smaller model
+└── Both information and behavior are problems
+      └─► RAG for the knowledge, fine-tuning for the behavior
 ```
 
-### Detailed Comparison
-
-| Aspect | Prompting | RAG | Fine-Tuning |
-|--------|-----------|-----|-------------|
-| **What changes** | Instructions | Available knowledge | Model weights |
-| **Setup effort** | Minimal | Moderate | Significant |
-| **Update frequency** | Instant | Easy | Requires retraining |
-| **Cost** | Per-token | Infrastructure + per-token | Training + per-token |
-| **Knowledge cutoff** | Training date | Real-time | Training date |
-| **Behavior change** | Limited | Limited | Significant |
-| **Consistency** | Variable | Variable | High |
-
-### The Progression
-
-Start simple, escalate only when needed:
-
-1. **Prompting**: Try clear instructions with examples first
-2. **Advanced prompting**: Chain-of-thought, persona, few-shot
-3. **RAG**: If knowledge access is the issue
-4. **Fine-tuning**: When behavior consistently doesn't match needs
+Work through them in order. Prompting is fastest to change, so establish how far it gets you, and measure it, before building anything else. Add retrieval when the gap is information. Fine-tune only when a measured gap in behavior remains, and when you have an evaluation set that will show whether fine-tuning closed it.
 
 ---
 
-## Fine-Tuning Techniques
+## When Fine-Tuning Pays Off
+
+Fine-tuning tends to earn its cost when:
+
+- **A task runs at high volume** and a fine-tuned smaller model can replace a larger one, or a short prompt can replace a long one, saving on every request.
+- **Output must follow a pattern that's hard to specify** in instructions but easy to show in hundreds of examples, like a particular editorial voice or a detailed labeling scheme.
+- **Latency matters** and a smaller fine-tuned model is fast enough where a large model with a long prompt isn't.
+- **You control an open-weight model** and need it to perform a narrow task reliably inside your own infrastructure.
+
+It tends not to pay off when requirements change often, the task needs current or private knowledge, the volume is low, or there's no reliable way to evaluate the result.
+
+---
+
+## Techniques
 
 ### Full Fine-Tuning
 
-Update all model parameters with your training data.
+Full fine-tuning updates every weight in the model. It can make the largest changes, and it has the highest cost. Training needs memory not just for the weights but for their gradients and the optimizer's state. With the common mixed-precision Adam setup, that comes to about 16 bytes per parameter (the accounting used in Microsoft's [ZeRO paper](https://arxiv.org/abs/1910.02054){:target="_blank" rel="noopener noreferrer"}): 16-bit weights and gradients plus 32-bit master weights and two optimizer moments. A 7-billion-parameter model therefore needs around 112 GB for model state alone, before activations, which means multiple data-center GPUs. Full fine-tuning also produces a complete copy of the model for every variant you train, and it risks **catastrophic forgetting**, where performance on tasks outside the training data degrades.
 
-**Pros**: Maximum flexibility, can make significant changes
-**Cons**: Expensive, requires significant compute, risk of catastrophic forgetting
+### LoRA
 
-**Resource requirements**: Full model size × optimizer states × gradients
-- 7B model: ~56GB+ GPU memory
-- 70B model: Requires multi-GPU clusters
+**Low-Rank Adaptation** ([Hu et al., 2021](https://arxiv.org/abs/2106.09685){:target="_blank" rel="noopener noreferrer"}) freezes the original weights and learns a small update to selected weight matrices. Instead of learning a full update to a matrix W, it learns two small matrices, A and B, whose product has a low rank r, and uses W + BA in their place. Only A and B are trained. On GPT-3 175B, the authors report reducing trainable parameters by 10,000 times and GPU memory by 3 times compared with full fine-tuning, and because BA can be merged into W after training, **a merged LoRA model adds no inference latency**.
 
-### Parameter-Efficient Fine-Tuning (PEFT)
+The trade-off is capacity. [Biderman et al. (2024)](https://arxiv.org/abs/2405.09673){:target="_blank" rel="noopener noreferrer"} found that LoRA "learns less and forgets less." It substantially underperformed full fine-tuning on programming and math training, but better preserved the base model's performance on other tasks. They also found that full fine-tuning learns weight changes with a rank 10 to 100 times higher than typical LoRA settings, which helps explain the gap.
 
-Update only a small subset of parameters, keeping most frozen.
+Key settings, using the names in Hugging Face's [PEFT library](https://huggingface.co/docs/peft/package_reference/lora){:target="_blank" rel="noopener noreferrer"}:
 
-#### LoRA (Low-Rank Adaptation)
+| Setting | What it controls | Notes |
+|---|---|---|
+| **`r` (rank)** | Size of the learned update, and so its capacity | PEFT defaults to 8; higher ranks learn more at more memory cost |
+| **`lora_alpha`** | Scaling of the update, applied as alpha ÷ r | PEFT defaults to 8; setting alpha to twice the rank is a common convention, not a rule |
+| **`target_modules`** | Which weight matrices get adapters | `"all-linear"` applies adapters to all linear layers; covering more layers usually helps more than raising rank |
+| **`use_rslora`** | Scales by alpha ÷ √r instead of alpha ÷ r | Rank-stabilized LoRA, which keeps higher ranks from being under-scaled |
 
-Injects small trainable matrices into model layers while keeping original weights frozen.
+### QLoRA
 
-**How it works**:
-- Original weights W remain frozen
-- Add low-rank decomposition: W' = W + BA
-- Only train B and A matrices (much smaller)
+**QLoRA** ([Dettmers et al., 2023](https://arxiv.org/abs/2305.14314){:target="_blank" rel="noopener noreferrer"}) loads the frozen base model in 4-bit precision and trains LoRA adapters on top of it. It introduced a 4-bit NormalFloat data type suited to the distribution of model weights, double quantization to shrink the quantization constants themselves, and paged optimizers to absorb memory spikes. The authors fine-tuned a 65-billion-parameter model on a single 48 GB GPU while preserving the task performance of full 16-bit fine-tuning. QLoRA trains more slowly than LoRA on a 16-bit base, because weights are dequantized during computation, so it trades speed for fitting larger models on smaller hardware.
 
-**Benefits**:
-- 10-100x fewer trainable parameters
-- Can fit on consumer GPUs
-- Fast training
-- Easy to swap adapters
+### Choosing a Technique
 
-**Typical LoRA config**:
-```
-rank (r): 8-64 (smaller = fewer params, larger = more capacity)
-alpha: Usually 2x rank
-target modules: Query, Key, Value projections
-```
-
-#### QLoRA (Quantized LoRA)
-
-Combines LoRA with 4-bit quantization for even lower memory.
-
-**How it works**:
-- Load base model in 4-bit precision
-- Add LoRA adapters in higher precision
-- Train only the adapters
-
-**Benefits**:
-- Fine-tune 65B models on single 48GB GPU
-- Minimal quality loss from quantization
-- Dramatically lower hardware requirements
-
-**Trade-off**: Slightly slower inference due to dequantization
-
-### Comparison
-
-| Technique | Memory | Quality | Speed | Flexibility |
-|-----------|--------|---------|-------|-------------|
-| **Full fine-tuning** | Very high | Highest | Slow | Maximum |
-| **LoRA** | Low | High | Fast | High |
-| **QLoRA** | Very low | High | Medium | High |
+| Situation | Technique |
+|---|---|
+| The model and budget allow it, and the task needs large changes | Full fine-tuning |
+| Most custom behavior, format, and style work | LoRA |
+| The base model is too large for your GPUs at 16-bit | QLoRA |
+| Many task variants served from one base model | LoRA or QLoRA adapters, swapped per request |
+| Preserving general capabilities matters most | LoRA, which forgets less |
 
 ---
 
-## Data Preparation
+## Data
 
-The quality of fine-tuning depends heavily on data quality.
+### Formats
 
-### Dataset Requirements
-
-| Factor | Guidance |
-|--------|----------|
-| **Size** | Hundreds to thousands of examples (more for complex tasks) |
-| **Quality** | Clean, accurate, representative |
-| **Diversity** | Cover the range of expected inputs |
-| **Format** | Consistent structure matching intended use |
-
-### Data Format
-
-Most fine-tuning uses instruction-following format:
+Most fine-tuning data is either **conversational**, with a list of messages per example, or **prompt-completion**, with an input and the desired output.
 
 ```json
-{
-  "messages": [
-    {"role": "system", "content": "You are a helpful customer service agent."},
-    {"role": "user", "content": "I need to return my order"},
-    {"role": "assistant", "content": "I'd be happy to help with your return..."}
-  ]
-}
+{"messages": [
+  {"role": "system", "content": "You are Acme's support assistant. Reply in two to four sentences and end with a next step."},
+  {"role": "user", "content": "My invoice shows a charge twice for March."},
+  {"role": "assistant", "content": "I'm sorry about the duplicate charge. I can see two March charges on your account, and one will be refunded within five business days. You'll receive a confirmation email when it's processed. If it doesn't appear by then, reply here with your invoice number."}
+]}
 ```
 
-Or simpler prompt-completion pairs:
+Loss is typically computed only on the parts the model should learn to produce, the completion or the assistant turns, rather than on the prompt. For chat models, format the data with the same chat template the model uses at inference time, or behavior after training will differ from behavior in testing.
 
-```json
-{
-  "prompt": "Summarize this article: [article text]",
-  "completion": "The article discusses..."
-}
+### Quality Over Quantity
+
+The model learns whatever the examples consistently show, including their mistakes and quirks.
+
+- **Draw examples from real usage**, and have domain experts write or approve the target responses.
+- **Cover the difficult cases**, like ambiguous requests, refusals, and edge cases, not just the easy majority.
+- **Keep formatting consistent.** If half the examples end with a next step and half don't, the model learns to do it half the time.
+- **Remove duplicates and near-duplicates**, which overweight some behaviors and can leak into evaluation data.
+- **Hold out a test set** before training and never train on it.
+- **Validate synthetic examples.** Data generated by a larger model is a legitimate way to scale a dataset, but it carries that model's errors unless reviewed.
+
+### How Many Examples
+
+There's no universal number. Narrow formatting tasks can improve with a modest set of consistent examples, while complex behavior needs far more. A practical approach is to start with a small, carefully reviewed set, train, evaluate, and repeat with more data. If doubling the data doesn't improve the held-out results, more of the same data won't help, and the examples need to change instead.
+
+---
+
+## Training
+
+### Key Hyperparameters
+
+| Hyperparameter | Effect | Guidance |
+|---|---|---|
+| **Learning rate** | Size of each weight update | Adapters are commonly trained at higher rates than full fine-tuning; TRL's documentation suggests about 1e-4 for adapters, against its 2e-5 default |
+| **Epochs** | Passes over the dataset | Few passes are typical; watch validation loss for overfitting |
+| **Batch size and gradient accumulation** | Examples per update | Accumulate gradients to reach a larger effective batch on limited memory |
+| **Warmup** | Gradual increase of the learning rate at the start | Stabilizes early training |
+| **Maximum sequence length** | Longest example processed | Examples beyond it are truncated, which can cut off the response being learned |
+
+### Reading the Loss Curves
+
+| Pattern | Likely cause | Response |
+|---|---|---|
+| Training and validation loss both falling | Learning | Continue |
+| Training loss falling, validation loss rising | Overfitting | Stop earlier, use fewer epochs, or add data |
+| Loss flat from the start | Learning rate too low, or a data or masking problem | Check that labels cover the responses, then raise the rate |
+| Loss spiking or diverging | Learning rate too high | Lower the rate or add warmup |
+
+A falling loss says the model is fitting the data. It doesn't say the model got better at the task, which only an evaluation can show.
+
+### A Minimal Training Run
+
+Hugging Face's [TRL](https://huggingface.co/docs/trl/sft_trainer){:target="_blank" rel="noopener noreferrer"} library wraps supervised fine-tuning, and combines with PEFT for LoRA and with bitsandbytes for 4-bit loading. A QLoRA run on a conversational dataset looks like this:
+
+```python
+import torch
+from datasets import load_dataset
+from peft import LoraConfig
+from transformers import BitsAndBytesConfig
+from trl import SFTConfig, SFTTrainer
+
+# Each line: {"messages": [{"role": ..., "content": ...}, ...]}
+dataset = load_dataset("json", data_files="support_conversations.jsonl", split="train")
+
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-0.6B",
+    train_dataset=dataset,
+    args=SFTConfig(
+        output_dir="support-assistant-lora",
+        learning_rate=1e-4,
+        num_train_epochs=2,
+        assistant_only_loss=True,  # learn from assistant turns only
+    ),
+    peft_config=LoraConfig(r=16, lora_alpha=32, target_modules="all-linear"),
+    quantization_config=BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+    ),
+)
+
+trainer.train()
+trainer.save_model()
 ```
 
-### Data Quality Guidelines
-
-**Do**:
-- Use real examples from your domain
-- Include edge cases and difficult examples
-- Maintain consistent formatting
-- Have experts validate outputs
-- Balance positive and negative examples
-
-**Avoid**:
-- Synthetic data without validation
-- Biased or unrepresentative samples
-- Inconsistent formatting
-- Examples with errors
-- Duplicates
-
-### Data Quantity Guidelines
-
-| Task Complexity | Minimum Examples | Recommended |
-|-----------------|------------------|-------------|
-| **Simple format** | 50-100 | 200-500 |
-| **Domain adaptation** | 200-500 | 1,000-5,000 |
-| **Complex behavior** | 1,000+ | 5,000-10,000+ |
-
-More data generally helps, but quality matters more than quantity.
+Training only on assistant turns relies on the model's chat template marking those turns. TRL handles this automatically for some model families, and its documentation lists the requirements for others. Library APIs in this space change frequently, so check the current TRL and PEFT documentation for the version you install.
 
 ---
 
-## Training Process
+## Evaluating the Result
 
-### Training Configuration
+Compare the fine-tuned model against the best prompted version of the base model, on the same held-out test set, using the metrics that define success for the task. A fine-tuned model that only beats a weak prompt hasn't justified itself.
 
-Key hyperparameters to consider:
-
-| Parameter | Typical Range | Impact |
-|-----------|---------------|--------|
-| **Learning rate** | 1e-5 to 5e-4 | Too high = instability, too low = slow |
-| **Epochs** | 1-5 | More = overfitting risk |
-| **Batch size** | 4-32 | Limited by memory |
-| **Warmup steps** | 5-10% of total | Stability early in training |
-| **LoRA rank** | 8-64 | Capacity vs. efficiency |
-
-### Training Steps
-
-1. **Prepare data**: Format, clean, split (train/validation)
-2. **Choose base model**: Match capability to task
-3. **Configure training**: Set hyperparameters
-4. **Train**: Monitor loss and validation metrics
-5. **Evaluate**: Test on held-out data
-6. **Iterate**: Adjust based on results
-
-### Monitoring Training
-
-Watch for:
-
-| Signal | Meaning | Action |
-|--------|---------|--------|
-| **Loss decreasing** | Model learning | Continue |
-| **Validation loss increasing** | Overfitting | Stop early, reduce epochs |
-| **Loss stuck** | Learning rate issue | Adjust learning rate |
-| **Loss unstable** | Learning rate too high | Reduce learning rate |
-
-### Evaluation
-
-Before deploying, evaluate on:
-
-- **Held-out test set**: Data model hasn't seen
-- **Task-specific metrics**: Accuracy, F1, BLEU, etc.
-- **Human evaluation**: Quality assessment by domain experts
-- **Comparison to base**: Does fine-tuning actually help?
+Also test what fine-tuning might have broken. Run a set of general tasks the application still relies on, like following instructions outside the training distribution, refusing inappropriate requests, and handling unexpected input, and compare those against the base model. Forgetting and new failure patterns show up there, not in the target-task metrics.
 
 ---
 
-## Practical Implementation
+## Deploying
 
-### Platform Options
+### Merged Models and Adapters
 
-| Platform | Type | Best For |
-|----------|------|----------|
-| **OpenAI Fine-tuning** | Managed | GPT models, easy API |
-| **Together AI** | Managed | Open models, cost-effective |
-| **Hugging Face** | Framework | Self-hosted, full control |
-| **Axolotl** | Tool | Simplified local training |
-| **Unsloth** | Tool | Optimized LoRA/QLoRA |
+A LoRA adapter can be merged into the base weights, producing a standalone model with no added inference latency. In PEFT, `merge_and_unload()` returns the merged model. Alternatively, the adapter can stay separate and be loaded on top of the base model. Keeping adapters separate lets one deployed base model serve many tasks, with a small adapter swapped in per request, and makes rollback as simple as unloading an adapter.
 
-### Local Fine-Tuning Setup
+### Managed Fine-Tuning
 
-Minimal setup for LoRA fine-tuning:
+Hosted providers offer fine-tuning without managing GPUs, but only for specific models. OpenAI's [model optimization guide](https://developers.openai.com/api/docs/guides/model-optimization){:target="_blank" rel="noopener noreferrer"} lists supervised fine-tuning, vision fine-tuning, DPO, and reinforcement fine-tuning, each supported on particular model snapshots, and recommends building evals and iterating on prompts before fine-tuning. Anthropic doesn't offer fine-tuning through its own API, though fine-tuning of an older Claude model has been available through Amazon Bedrock. Check each provider's current list of fine-tunable models, since it changes and is usually narrower than the full model lineup.
 
-**Hardware**: GPU with 16GB+ VRAM (RTX 4090, A100)
+### The Maintenance Cost
 
-**Software stack**:
-- transformers (model loading)
-- peft (LoRA implementation)
-- datasets (data handling)
-- accelerate (training optimization)
-- bitsandbytes (quantization for QLoRA)
-
-### Typical Workflow
-
-```
-1. Load base model (possibly quantized)
-2. Apply LoRA configuration
-3. Load and preprocess dataset
-4. Configure trainer
-5. Train
-6. Evaluate
-7. Merge LoRA weights or deploy adapter
-```
-
-### Deployment Options
-
-After training, you can:
-
-**Keep adapter separate**:
-- Load base model + adapter at inference
-- Easy to swap adapters for different tasks
-- Slightly slower inference
-
-**Merge into base model**:
-- Create single model with adapter merged
-- Faster inference
-- Larger storage
+A fine-tuned model is pinned to the base model it was trained from. When the provider retires that base model, or a better one is released, the fine-tuning has to be redone, and the evaluation has to be rerun to confirm the new version is at least as good. Keep the training data, configuration, and evaluation set versioned so retraining is a repeatable job rather than a research project.
 
 ---
 
-## Common Challenges
+## Common Pitfalls
 
-### Catastrophic Forgetting
-
-Model loses general capabilities while learning specific ones.
-
-**Mitigations**:
-- Lower learning rate
-- Mix in general data
-- Use PEFT methods (preserves base weights)
-- Regularization techniques
-
-### Overfitting
-
-Model memorizes training data rather than learning patterns.
-
-**Signs**: Low training loss, high validation loss, poor generalization
-
-**Mitigations**:
-- More training data
-- Early stopping
-- Regularization (dropout, weight decay)
-- Data augmentation
-
-### Poor Quality Outputs
-
-Fine-tuned model performs worse than expected.
-
-**Diagnose**:
-- Check data quality
-- Verify format matches base model's training
-- Test with more/less training
-- Compare to prompting baseline
-
-### Mode Collapse
-
-Model produces same or very similar outputs.
-
-**Mitigations**:
-- Temperature adjustment at inference
-- More diverse training data
-- Check for data imbalance
-
----
-
-## Cost Considerations
-
-### Training Costs
-
-| Factor | Impact |
-|--------|--------|
-| **Model size** | Larger = more compute |
-| **Dataset size** | More data = longer training |
-| **Technique** | Full > LoRA > QLoRA |
-| **Platform** | Managed > self-hosted (usually) |
-
-### Managed Platform Pricing (Example)
-
-| Platform | Approximate Cost |
-|----------|------------------|
-| **OpenAI** | ~$0.008/1K tokens (varies by model) |
-| **Together AI** | ~$0.50-2/hour (varies by model) |
-| **Self-hosted** | GPU cost + time |
-
-### Break-Even Analysis
-
-Fine-tuning makes economic sense when:
-- Reduced prompt length saves token costs over time
-- Improved quality reduces retry/correction costs
-- Consistency reduces manual review costs
-
-Calculate: Training cost vs. (per-query savings × expected query volume)
-
----
-
-## Best Practices
-
-### Before Fine-Tuning
-
-1. **Establish baseline**: Measure prompting performance first
-2. **Define success criteria**: What improvement justifies the effort?
-3. **Collect quality data**: Don't fine-tune until data is ready
-4. **Start small**: Test with subset before full training
-
-### During Fine-Tuning
-
-1. **Monitor metrics**: Track loss and validation performance
-2. **Save checkpoints**: Enable recovery and comparison
-3. **Test incrementally**: Evaluate before training completes
-4. **Document everything**: Hyperparameters, data versions, results
-
-### After Fine-Tuning
-
-1. **Comprehensive evaluation**: Test across expected use cases
-2. **A/B comparison**: Fine-tuned vs. base with prompting
-3. **Monitor in production**: Track quality over time
-4. **Plan for updates**: How will you retrain as needs change?
-
----
-
-## Quick Reference
-
-### Decision Checklist
-
-When to consider fine-tuning:
-
-- [ ] Prompting doesn't achieve needed consistency
-- [ ] RAG doesn't solve the problem (it's behavior, not knowledge)
-- [ ] Have quality training data (hundreds+ examples)
-- [ ] Can afford training compute
-- [ ] Have evaluation strategy
-- [ ] Justified by use case volume
-
-### Technique Selection
-
-| Situation | Recommended Technique |
-|-----------|----------------------|
-| Consumer GPU (16-24GB) | QLoRA |
-| Cloud GPU (40GB+) | LoRA or full |
-| Maximum quality needed | Full fine-tuning |
-| Quick iteration | LoRA |
-| Very large model (70B+) | QLoRA |
-
-### Training Quick Reference
-
-| Model Size | LoRA Memory | QLoRA Memory | Training Time* |
-|------------|-------------|--------------|----------------|
-| 7B | ~16GB | ~8GB | Hours |
-| 13B | ~32GB | ~12GB | Hours |
-| 70B | ~140GB | ~40GB | Days |
-
-*Varies significantly based on dataset size and hardware
-
-### Common Mistakes
-
-| Mistake | Consequence | Prevention |
-|---------|-------------|------------|
-| Skipping prompting baseline | Don't know if fine-tuning helps | Always compare |
-| Low quality data | Poor model performance | Invest in data quality |
-| Too few examples | Insufficient learning | Collect more data |
-| Too many epochs | Overfitting | Monitor validation loss |
-| Ignoring evaluation | Unknown quality | Systematic testing |
+| Pitfall | What happens | Better approach |
+|---|---|---|
+| **Fine-tuning to add knowledge** | Facts are learned poorly, hallucination can rise, and updates need retraining | Use retrieval for knowledge |
+| **No prompting baseline** | No way to know whether fine-tuning helped | Measure the best prompt on the same test set first |
+| **Evaluating on training-adjacent data** | Inflated results from duplicates or leakage | Deduplicate and hold out a test set before training |
+| **Inconsistent examples** | The model reproduces the inconsistency | Standardize format and review target responses |
+| **Chat template mismatch** | The model behaves differently in production than in testing | Train with the same template used at inference |
+| **Checking only the target task** | General capabilities regress unnoticed | Include regression tests on broader behavior |
+| **Treating falling loss as success** | The model fits the data without improving the task | Judge by evaluation results, not loss |
+| **Forgetting the base model will change** | A retired base model strands the fine-tuned version | Version data, config, and evals so retraining is routine |
