@@ -12,7 +12,7 @@ The ripgrep engine that backs Claude Code's Grep tool does not support lookahead
 
 **AI-tell phrases**:
 ```
-\b(the key insight|the insight|the takeaway|it'?s (important to note|worth noting)|it should be noted|in conclusion|in summary|final version|final conclusion|ultimately|essentially|fundamentally|at the end of the day|the bottom line is|something (real|genuine|tangible|meaningful)|the question isn'?t|the question is|worth \w+ing|is reasonable|distinction matters|failure modes?)\b
+\b(the key insight|the insight|the takeaway|it'?s (important to note|worth noting)|it should be noted|in conclusion|in summary|final version|final conclusion|ultimately|essentially|fundamentally|at the end of the day|the bottom line is|something (real|genuine|tangible|meaningful)|the question isn'?t|the question is|worth \w+ing|is reasonable|distinction matters|failure modes?|sharp(er|est))\b
 ```
 Each of these announces or hedges instead of stating the point directly:
 - "the key insight" / "the insight" / "the takeaway" → state the point, drop the label. Exception: skip a hit where "the insight" is immediately followed by "into" (e.g. "the insight into the problem") — that's legitimate usage, not the AI-tell phrase.
@@ -26,6 +26,7 @@ Each of these announces or hedges instead of stating the point directly:
 - "is reasonable" → vague; state specifically what makes it acceptable or why it works
 - "distinction matters" → announces importance without stating it; state the distinction and its consequence directly
 - "failure mode(s)" → describe the specific failure instead
+- "sharper" / "sharpest" (e.g., "the objection is sharpest on back-office screens", "a sharper version of the argument") → vague intensifier standing in for a claim; say what makes it stronger, harder to answer, or more costly in that case
 
 **"Real" as filler** (two separate patterns — the adjective form and the noun-modifier form):
 ```
