@@ -3,358 +3,197 @@ title: "AI-Assisted Development"
 layout: guide
 category: AI & Machine Learning
 subcategory: AI in Engineering Practice
-description: "Practical strategies for effective AI-assisted coding: staying in control, verification workflows, context management, and avoiding common pitfalls."
-tags: [ai, generative-ai, llm, development, practical, devops]
+description: "Getting value from a coding assistant, covering what the evidence actually shows about the speedup, deciding what to delegate, supplying context the model cannot infer, verification that catches plausible-looking wrong code, and reviewing generated code for security."
+tags: [coding-assistants, code-review, verification, tdd, developer-workflow, practical]
 ---
 
-## The Right Mindset
+A coding assistant shifts where your effort goes rather than removing it. Less time is spent typing and recalling syntax, and more is spent specifying, reviewing, and verifying. Whether that trade comes out ahead depends almost entirely on how disciplined the second half is, which is what this guide is about.
 
-### You Are the Architect
+## The Speedup Is Not Automatic
 
-AI code generators are powerful tools, but they work best when you treat them as skilled assistants rather than autonomous developers. You bring domain knowledge, architectural vision, and accountability. The AI brings speed, pattern recognition, and tireless implementation capacity.
+The most useful evidence on this is uncomfortable. METR ran a [randomized controlled trial](https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/){:target="_blank" rel="noopener noreferrer"} with 16 experienced open-source developers working on 246 issues drawn from their own large repositories rather than synthetic tasks, randomly assigning whether AI tools were permitted per issue. Developers took **19% longer** on the issues where they used AI. They had predicted a 24% speedup beforehand, and after the slowdown had happened, still believed AI had sped them up by 20%.
 
-**What this means in practice**:
-- You decide *what* to build and *why*; AI helps with *how*
-- You review every change before it ships
-- You understand the code that goes into your codebase
-- You take responsibility for the output
+METR is careful about what this does and does not show. The participants were experienced contributors working in codebases they knew deeply, which is close to the worst case for assistance, since the model's advantage is largest exactly where your own knowledge is thinnest. It does not show that AI fails to help most developers, and it does not predict how newer tools or more practiced users perform.
 
-### Write the Code You Can
+The part that generalizes is the perception gap. Developers were wrong about their own speed by roughly 40 percentage points, in the flattering direction. Time spent waiting on generation, reading a diff, and correcting an approach does not feel like work in the way typing does, so it is systematically under-counted. Anyone deciding where to apply assistance on intuition alone is deciding on a signal known to be unreliable.
 
-If you can write something quickly and correctly, just write it. AI assistance has overhead: prompting, reviewing, correcting. For straightforward code you know well, that overhead exceeds the benefit.
-
-**Use AI when**:
-- The task involves boilerplate or repetitive patterns
-- You're working in an unfamiliar language or framework
-- You need to explore multiple approaches quickly
-- The code requires synthesizing information from multiple sources
-
-**Write it yourself when**:
-- You can type it faster than you can explain it
-- The logic is simple and you know exactly what you want
-- The code involves critical security or business logic you need to deeply understand
-
-### Don't Be Silly
-
-Rushing leads to poor outcomes. Accepting code without reading it leads to bugs you don't understand. Asking AI to do something you couldn't verify leads to false confidence.
-
-Common "silly" mistakes:
-- Accepting large diffs without reviewing each change
-- Letting AI modify files unrelated to your task
-- Continuing to prompt when you don't understand the output
-- Using AI-generated code you couldn't debug or explain
-- Prompting for the same thing repeatedly expecting different results
+The practical conclusion is not to avoid the tools. It is that "this feels faster" is not evidence, and that the places assistance helps most are specific rather than universal.
 
 ---
 
-## Workflow Strategies
+## Deciding What to Delegate
 
-### Plan Before You Code
+Assistance carries overhead: describing the task, reading the result, and correcting it. Where you could type the code faster than you could describe it, that overhead is the whole transaction.
 
-Use planning modes (like Claude Code's plan mode) before jumping into implementation. Planning first:
-- Forces you to articulate what you actually want
-- Reveals ambiguities before they become bugs
-- Creates a shared understanding between you and the AI
-- Produces a reviewable approach before any code exists
+| Favors the assistant | Favors writing it yourself |
+|---|---|
+| An unfamiliar language, framework, or API | Code you know well in a codebase you know well |
+| Boilerplate and mechanical repetition | Logic that is short and precisely known |
+| Exploring several approaches quickly | Security-critical or business-critical logic you need to hold in your head |
+| Synthesizing scattered documentation into working code | Anything where explaining the constraints is the hard part |
+| Writing tests against behavior you can state | Work where the specification is still moving |
 
-**The pattern**:
-1. Describe the goal and constraints
-2. Let AI propose an approach
-3. Review and refine the plan
-4. Only then move to implementation
+The last row on each side is the one that decides most cases. Where you can state precisely what you want, a model is good at producing it. Where stating it is itself the difficulty, prompting turns into a slow way of thinking out loud.
 
-Planning prevents the frustrating cycle of generating code, finding it wrong, regenerating, finding it still wrong.
+Familiarity cuts the other way from intuition. The instinct is to reach for help on the hard, unfamiliar parts and handle the routine yourself, but the routine parts are where the model is most reliable and the review is cheapest. The unfamiliar parts are where you are least able to tell good output from plausible output.
 
-### Small, Focused Tasks
+---
 
-AI performs better on focused tasks than sprawling ones. A prompt asking to "refactor the authentication system" will produce worse results than a sequence of focused requests.
+## Working in Small, Verifiable Steps
 
-**Break work into**:
-- Single-responsibility changes (one file, one concern)
-- Clear inputs and outputs
-- Verifiable steps
+### Plan Before Implementation
 
-**Example decomposition**:
+Getting an approach agreed before any code exists catches ambiguity while it is still cheap. Most assistants offer a mode that proposes an approach without editing anything, and the same effect is available anywhere by asking for a plan first.
+
+The value is less in the model's plan than in what producing one forces out of you. A goal vague enough to produce a wrong plan was vague enough to produce wrong code, and a plan is faster to read and reject than a diff.
+
+### Keep Each Task Small
+
+"Add user authentication to the app" produces sprawling output that is hard to review and harder to correct. The same work as four requests, each with a clear input and a checkable result, produces better code and a review you can actually do:
+
 ```
-❌ "Add user authentication to the app"
-
-✅ Sequential focused tasks:
-1. "Create the User model with email and password hash fields"
-2. "Add the login endpoint that validates credentials"
-3. "Implement JWT token generation for authenticated users"
-4. "Add middleware to protect routes requiring authentication"
+1. Create the User model with email and password hash fields
+2. Add the login endpoint that validates credentials
+3. Implement token generation for authenticated users
+4. Add middleware to protect routes requiring authentication
 ```
 
-### Iterate, Don't Expect Perfection
+Each step ends somewhere you can run something. That matters more than the size of the step, because an increment you cannot verify is one you are accepting on faith no matter how small it is.
 
-First outputs are drafts. Treat them as starting points for refinement, not finished products.
+### Commit as a Restore Point
 
-**Effective iteration**:
-- Review the output and identify specific issues
-- Provide targeted feedback: "The error handling is missing for the null case"
-- Ask for explanations: "Why did you use a dictionary here instead of a class?"
-- Request alternatives: "Show me a different approach using async/await"
-
-### Commit Frequently
-
-AI can make sweeping changes quickly. Frequent commits create restore points.
-
-**Discipline**:
-- Commit before asking AI to make significant changes
-- Commit after each verified, working increment
-- Use descriptive commit messages (AI can help write these)
-- Don't let multiple AI-assisted changes pile up uncommitted
+An assistant can rewrite a lot of files quickly, and "undo" stops being a meaningful operation several exchanges in. Commit before anything substantial and after each verified increment, so that discarding a bad direction costs nothing and the diff you review is only the change you asked for.
 
 ---
 
-## Context Management
+## Supplying Context the Model Cannot Infer
 
-### Explicit Over Implicit
+### Be Explicit About Constraints
 
-AI cannot read your mind or your codebase's history. State your constraints, conventions, and expectations explicitly.
+The model sees what you put in front of it. Conventions your team settled three years ago, the caching library already in the container, the error-handling pattern used everywhere else: none of it is visible unless something in the context shows it.
 
-**Be explicit about**:
-- Language version and framework conventions
-- Error handling patterns used in the codebase
-- Naming conventions
-- Dependencies that are or aren't available
-- Performance requirements
-
-**Example**:
 ```
 ❌ "Add a caching layer"
 
 ✅ "Add a caching layer using IMemoryCache (already in our DI container).
-   Follow our existing pattern in UserService.cs for cache key naming.
-   Cache entries should expire after 5 minutes.
-   Log cache hits/misses using our ILogger pattern."
+   Follow the cache key naming in UserService.cs.
+   Entries expire after 5 minutes.
+   Log hits and misses through our existing ILogger pattern."
 ```
 
-### Share Relevant Context
+The most valuable thing you can add is an existing example. "Do this the way `UserService.cs` does it" carries more than a paragraph describing the convention, and it stays accurate as the convention evolves.
 
-AI assistants work better with more context, but irrelevant context adds noise. Share what's relevant.
+Say what not to touch as well as what to do. Scope creep into unrelated files is common, and a stated boundary both reduces it and makes an out-of-scope change obvious in the diff.
 
-**High-value context**:
-- The file(s) being modified
-- Related interfaces or contracts
-- Test files showing expected behavior
-- Error messages and stack traces
-- Examples of similar implementations in your codebase
+### Choose Context Deliberately
 
-**Low-value context**:
-- Entire codebases "just in case"
-- Unrelated configuration files
-- Historical context that doesn't affect current implementation
+More context is not better context. Everything in the window competes for the model's attention and is billed on every subsequent turn, and irrelevant material makes the relevant material harder to find.
 
-### Use MCP Servers for Persistent Context
+High-value context is the files being changed, the interfaces they implement, tests showing expected behavior, the actual error message and stack trace, and one example of the pattern to follow. Low-value context is whole repositories added speculatively, unrelated configuration, and history that does not bear on the change.
 
-Model Context Protocol (MCP) servers provide AI tools with access to external data sources, documentation, and services. This creates persistent, up-to-date context without manual copying.
-
-**Common MCP integrations**:
-- Database schemas and documentation
-- API specifications
-- Internal wikis and documentation
-- Issue trackers and project management tools
-
-**Benefits**:
-- AI can query current state rather than relying on stale information
-- Reduces prompt length by providing context on-demand
-- Enables AI to verify assumptions against real data
+Where an assistant can query systems directly, through a Model Context Protocol server or an equivalent integration, it can pull current schemas, specifications, and issue details on demand instead of working from whatever was pasted in an hour ago. That trades a large upfront context for a small one plus the ability to look things up, which is usually the better shape.
 
 ---
 
-## Verification Strategies
+## Verification
 
-### Trust But Verify
+### The Review Burden Moves
 
-AI-generated code can look correct and be subtly wrong. Verification isn't optional.
+Generating code is now cheaper than reviewing it, which inverts the usual constraint. The limiting factor on an AI-assisted change is how much code you can genuinely read, and accepting more than that is the origin of most of the trouble in this section.
 
-**Verification layers**:
-1. **Read the code**: Understand what it does before running it
-2. **Static analysis**: Let linters catch obvious issues
-3. **Tests**: Prove the code does what you expect
-4. **Runtime observation**: See the code actually work
+Plausibility is the specific hazard. Hand-written wrong code usually looks wrong somewhere, while generated wrong code is fluent, idiomatic, consistently named, and wrong in the middle. Reading for style tells you nothing. Reading for behavior is the only review that counts.
 
-### Use Linting and Static Analysis
+### Let Tooling Review First
 
-Configure your linter strictly. Let tooling catch issues before you even read the output.
+Static analysis is the cheapest reviewer available, and it never gets bored on the fortieth diff of the day. Configure linting and type checking strictly, run them automatically on save or in a pre-commit hook, and treat warnings as errors during development. Every issue a tool catches is one your attention does not have to spend, leaving it for logic and design where tooling cannot help.
 
-**Why this works**:
-- Catches syntax errors, type mismatches, unused variables
-- Enforces coding standards automatically
-- Provides immediate feedback on AI output
-- Frees your review time for logic and design issues
+Put the linter configuration in the model's context too, since output that already conforms needs fewer correction rounds.
 
-**Practical setup**:
-- Run linting on save or in a pre-commit hook
-- Treat warnings as errors during development
-- Share your linting config with the AI so it generates conformant code
+### Tests as the Specification
 
-### Test-Driven Development with AI
+Test-first work pairs unusually well with assistance, because a failing test is an unambiguous specification and an automatic check in one. Write the test that describes the behavior, have the model implement against it, and run it.
 
-TDD pairs powerfully with AI assistance. Write the test first, then let AI implement to pass the test.
+Watch for the specific way this goes wrong. A model asked to make a test pass may modify the test. Review test changes at least as carefully as implementation changes, since a weakened assertion removes the verification you were relying on while leaving everything green.
 
-**The pattern**:
-1. Write a failing test that specifies the behavior you want
-2. Ask AI to implement code that passes the test
-3. Run the test to verify
-4. Refactor with confidence (tests catch regressions)
+### The Debug Logging Loop
 
-**Example workflow**:
+One workflow repays its cost more than any other. Rather than reasoning about why something misbehaves, have the model add logging at the points where values could diverge, run it, and paste the output back.
+
 ```
-You: "Here's my failing test. Implement the CalculateDiscount method to pass it."
+You: "Orders with multiple line items calculate tax incorrectly.
+      Add debug logging to trace the tax calculation."
 
-[paste test]
+AI:  [adds logging at inputs, intermediate values, and outputs]
 
-AI: [implements method]
+You: [runs it, pastes the log]
 
-You: [runs test - passes]
-
-You: "Good. Now add test cases for edge cases: zero quantity, negative price,
-     discount exceeding 100%"
-
-AI: [adds tests - some fail]
-
-You: "Update the implementation to handle these edge cases"
+AI: "Tax is applied per-item before the discount, but the discount
+     applies to the subtotal. The log shows subtotal=$100, discount=$10,
+     and tax computed on $100 rather than $90."
 ```
 
-### Debug Logging Strategy
+This works because it replaces speculation with observation. The model is reasoning about the values that actually flowed rather than the values the code appears to produce, and that distinction is where most stubborn bugs hide. Remove or flag-gate the logging once the issue is resolved.
 
-One of the most powerful AI-assisted workflows: have AI add debug logging, run the code, then share the output back with AI to diagnose issues. This collaborative loop can save hours of manual troubleshooting.
+### Run It and Look at the Data
 
-**The workflow**:
-1. Describe the issue or unexpected behavior
-2. Ask AI to add debug logging at key points
-3. Run the code with test data
-4. Share the log output back with AI
-5. AI analyzes the actual data and state to identify the problem
-
-**Why this works**: Instead of you manually reading logs and reasoning about what went wrong, AI sees the actual data flowing through the system. It can quickly spot where values diverge from expectations, where null references sneak in, or where transformations produce unexpected results.
-
-**Example conversation**:
-```
-You: "Orders with multiple line items are calculating tax incorrectly.
-      Add debug logging to trace the tax calculation flow."
-
-AI: [adds logging showing inputs, intermediate calculations, and outputs]
-
-You: [runs code, pastes log output]
-     "Here's what I see for order #1234..."
-
-AI: "The issue is on line 47. The tax rate is being applied per-item
-     before the discount, but the discount is applied to the subtotal.
-     The log shows: subtotal=$100, discount=$10, but tax was calculated
-     on $100 instead of $90. Here's the fix..."
-```
-
-After resolving the issue, remove or gate the debug logging behind a flag.
-
-### Run the Code, Observe the Data
-
-Don't just read AI-generated code; execute it. Observe real inputs and outputs.
-
-**Practices**:
-- Run with representative test data
-- Check edge cases explicitly
-- Compare output to expected results
-- Use debuggers to step through complex logic
-
-This is where AI can save days of work. Instead of reasoning about what code *might* do, you see what it *actually* does.
+Reading generated code tells you what it was meant to do. Running it with representative data, checking the edges deliberately, and comparing output against what you expected tells you what it does. For anything non-trivial, do both, in that order.
 
 ---
 
-## Anti-Patterns
+## Reviewing Generated Code for Security
 
-### Accepting Changes You Don't Understand
+Generated code carries some risks that hand-written code does not, and they are invisible to a review looking only at logic.
 
-If you can't explain what the code does, you can't debug it when it breaks. And it will break.
+### Hallucinated Dependencies
 
-**Signs you're in trouble**:
-- You're copy-pasting without reading
-- You can't explain why a particular approach was chosen
-- You don't know what would happen if inputs changed
-- You couldn't modify the code without AI help
+Models invent package names. A [study of 576,000 generated code samples](https://arxiv.org/abs/2406.10279){:target="_blank" rel="noopener noreferrer"} found non-existent packages recommended at a rate of at least 5.2% for commercial models and 21.7% for open-source ones, across 205,474 unique invented names.
 
-**Recovery**: Ask the AI to explain. Step through with a debugger. Rewrite simpler if needed.
+The security consequence is that invented names are predictable and repeatable, so an attacker can register one and wait for the next developer to install it. Verify that every new dependency in a generated diff actually exists, is the package you meant, and is one your project should be pulling in. A lockfile and a dependency allowlist turn this from a per-review judgment into an automated check.
 
-### Letting AI Change Unrelated Code
+### The Usual Classes, Reached by a New Route
 
-AI assistants sometimes "helpfully" modify code beyond what you asked. This creates unexpected changes that break things in surprising ways.
+Everything else is conventional, and the point is that generated code does not get a pass on any of it. Check for credentials and tokens inlined as literals, because models reproduce patterns from training data including the bad ones. Check that input reaching a query, a shell, or a deserializer is parameterized. Check that authorization is enforced rather than merely mentioned. Check that the licence of any copied-looking block is compatible with your project.
 
-**Prevention**:
-- Be explicit about scope: "Only modify the AuthService class"
-- Review diffs carefully before accepting
-- Use version control to identify unexpected changes
-- Reject changes that touch unrelated files
-
-### Prompting Without Direction
-
-Vague prompts produce vague results. "Make it better" teaches you nothing and wastes cycles.
-
-**Instead of vague prompts**:
-```
-❌ "Fix the bug"
-✅ "The login fails when email contains a plus sign.
-    The error is 'invalid email format' from line 47 of AuthValidator.cs"
-
-❌ "Optimize this"
-✅ "This query takes 3 seconds on 10k rows.
-    Profile shows full table scan. Add appropriate indexes
-    or restructure to use the existing user_id index."
-```
-
-### Continuing When Stuck
-
-If you've prompted the same thing multiple ways and keep getting wrong results, stop. The AI either lacks necessary context or the task isn't suitable for AI assistance.
-
-**When to stop**:
-- Same error after 3+ attempts with different prompts
-- AI keeps misunderstanding a core requirement
-- Outputs are getting worse, not better
-- You're spending more time prompting than coding would take
-
-**Recovery options**:
-- Add more context (examples, constraints, related code)
-- Break the task into smaller pieces
-- Write this part yourself and use AI for the next task
-- Research the problem independently, then return with better understanding
+Run the same security tooling you would on hand-written code, and give the generated portions more attention rather than less. A reviewer who reads a fluent diff quickly is the mechanism by which these reach production.
 
 ---
 
-## Quick Reference
+## Knowing When to Stop
 
-### Before You Prompt
+Repeating a prompt with variations, hoping for different output, is the most common way to lose an afternoon. Treat a few specific conditions as signals to stop rather than continue:
 
-| Check | Why |
-|-------|-----|
-| Can I write this faster myself? | Avoid overhead for simple tasks |
-| Is my request focused and specific? | Broad requests produce poor results |
-| Have I committed recent changes? | Create a restore point |
-| Do I have verification ready? | Tests, linting, debug environment |
+- The same failure after three attempts with genuinely different phrasings
+- The model repeatedly misunderstanding a core requirement
+- Output getting worse across attempts rather than better
+- More time spent prompting than writing it yourself would have taken
+- Not understanding the current state of the code well enough to describe what is wrong with it
 
-### Effective Prompting Checklist
+Each has a different recovery. A missing-context problem is fixed by adding the example or the constraint that was absent. A too-large-task problem is fixed by decomposition. Anything else is fixed by writing this part yourself, which is a normal outcome and not a failure of the approach.
 
-- State the goal explicitly
-- Include relevant context (files, constraints, patterns)
-- Specify what NOT to change
-- Mention conventions to follow
-- Include examples if the pattern isn't obvious
+The last condition deserves its own treatment, because continuing past it is how a codebase accumulates code nobody can maintain. If you cannot explain what a change does, you cannot debug it when it breaks. Revert it, or have it explained until you can, before committing.
 
-### Verification Checklist
+---
 
-- [ ] Read and understand the generated code
-- [ ] Linting passes with no warnings
-- [ ] Tests pass (or new tests added and passing)
-- [ ] Ran with realistic test data
-- [ ] Checked edge cases
-- [ ] Diff shows only expected changes
+## Common Pitfalls
 
-### Red Flags
+| Pitfall | What happens | Better approach |
+|---|---|---|
+| **Accepting a diff larger than you read** | Bugs enter the codebase with no one who understands them | Cap the change size at what you will genuinely review |
+| **Judging speed by feel** | Assistance gets applied where it slows you down | Reserve it for work where the model has an edge, and check outcomes |
+| **Reaching for help on the least familiar code** | Exactly where you cannot distinguish correct from plausible | Use it most where review is cheap, and slow down where it is not |
+| **Letting the model touch unrelated files** | Surprising breakage far from the change | State the scope, and reject diffs that exceed it |
+| **Letting tests be modified to pass** | Green suite, lost verification | Review test changes at least as carefully as implementation |
+| **Trusting new dependencies** | Invented package names are a live supply-chain attack | Verify every added dependency exists and belongs |
+| **Prompting without specifics** | Vague requests produce vague code and waste cycles | Name the symptom, the file, the error, and the constraint |
+| **Continuing when stuck** | Attempts get worse and time disappears | Stop at three, then add context, decompose, or write it yourself |
+| **Committing code you cannot explain** | Unmaintainable code with no owner who understands it | Understand it, simplify it, or revert it |
 
-| Warning Sign | Action |
-|--------------|--------|
-| Large diff you haven't fully read | Stop and review every line |
-| Changes to files you didn't mention | Reject and re-prompt with explicit scope |
-| Code you couldn't explain to a colleague | Ask AI to explain or rewrite simpler |
-| Same error after 3 attempts | Step back, add context, or do it manually |
-| "It works but I don't know why" | Understand before committing |
+### Before Committing an AI-Assisted Change
+
+- [ ] You can explain what every changed line does and why
+- [ ] The diff touches only what you asked for
+- [ ] Linting and type checking pass clean
+- [ ] Tests pass, and any modified test still asserts what it did before
+- [ ] It has been run with realistic data, edge cases included
+- [ ] New dependencies have been verified to exist and to belong
+- [ ] No credentials, tokens, or connection strings appear as literals

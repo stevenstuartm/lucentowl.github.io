@@ -3,122 +3,118 @@ title: "AI Security for Organizations"
 layout: guide
 category: AI & Machine Learning
 subcategory: AI in Engineering Practice
-description: "Operational security guidance for organizations where developers use AI daily: data classification, network controls, tool governance, and risk assessment."
-tags: [ai, security, governance, practical, risk-management]
+description: "Operational security for organizations whose developers use AI tools daily, covering data classification, how data reaches AI tools without anyone deciding it should, what providers actually retain, tool governance, network and identity controls, and calibrating the risk."
+tags: [security, governance, dlp, data-classification, shadow-ai, risk-management, practical]
 ---
 
+Developers already use AI tools every day for writing code, debugging, reviewing, and documenting. For a security team, prohibition is rarely a live option, and attempting it mostly moves usage somewhere unmonitored. The work that remains is managing the data flow those tools create.
 
-## Why This Guide Exists
+This guide covers the operational side, meaning the policies, controls, and architectural decisions that protect an organization when AI tools are part of the daily workflow. It is written for security administrators and engineering leadership. Attacks against models themselves, such as data poisoning, model inversion, and adversarial examples, are covered in [Emerging Technologies Security](/study-guides/security/emerging-technologies.html).
 
-Developers are already using AI tools daily for code generation, debugging, code review, and documentation. The question for security teams is not whether to allow AI usage but how to manage the data flow it creates.
+## Start with What Data May Go Where
 
-This guide covers operational security: the policies, controls, and architectural decisions that protect an organization when AI tools are part of the daily workflow. It is written for IT security administrators and engineering leadership who need practical guidance rather than a threat taxonomy. For coverage of AI-specific threats like data poisoning, model inversion, adversarial examples, and prompt injection, see the [Emerging Technologies Security](/study-guides/security/emerging-technologies.html) guide.
+Every other AI policy depends on one decision: which data is permissible as input to which kind of tool. Map the organization's existing classification tiers to tool permissions rather than inventing a new scheme.
 
----
+| Classification | Typical contents | Permitted AI input |
+|---|---|---|
+| **Public** | Open-source code, public documentation | Any tool, any tier |
+| **Internal** | Proprietary source code, internal documentation, architecture diagrams | Commercial-tier tools under a data processing agreement |
+| **Confidential** | Customer PII, financial data, credentials, security configuration | Self-hosted models, or prohibited |
+| **Restricted** | Regulated data such as HIPAA and PCI-DSS scope, trade secrets, encryption keys | Prohibited, or only under an arrangement specifically approved for that regulation |
 
-## Data Classification for AI Inputs
+Two tests make the table usable in the moment. If you would not paste it into a public forum, it does not go into a consumer-tier tool. If you would not email it to a vendor, it does not go into any cloud-hosted tool, whatever the tier.
 
-Before setting any AI-related policy, the organization needs a clear answer to one question: what data is permissible as AI input?
-
-A practical approach maps existing data classification tiers to AI tool permissions:
-
-| Classification | Description | AI Tool Permission |
-|---------------|-------------|-------------------|
-| **Public** | Open-source code, public documentation, general knowledge | Any AI tool, any tier |
-| **Internal** | Proprietary source code, internal docs, architecture diagrams | Enterprise-tier tools with data processing agreements only |
-| **Confidential** | Customer PII, financial data, credentials, security configs | Self-hosted models only, or prohibited entirely |
-| **Restricted** | Regulated data (HIPAA, PCI-DSS), trade secrets, encryption keys | Never permitted as AI input under any circumstances |
-
-A useful decision heuristic: if you would not paste the data into a public forum, it should not go into a free-tier AI tool. If you would not email it to a vendor, it should not go into any cloud-hosted AI tool regardless of tier.
-
-The classification must be specific enough to act on. "Don't share sensitive data" is too vague; developers need concrete examples. Connection strings are confidential. Stack traces from production may contain session tokens and are therefore confidential. Internal API schemas are internal. Public library documentation is public.
+Classification only works when it is concrete enough to apply without asking. "Don't share sensitive data" gives a developer nothing to act on. Connection strings are confidential. Production stack traces may carry session tokens, so they are confidential too. Internal API schemas are internal. Public library documentation is public. Publish examples like these alongside the tiers.
 
 ---
 
-## How Data Leaks Into AI Tools
+## How Data Reaches AI Tools Without Anyone Deciding It Should
 
-Most data exposure through AI tools is unintentional. Developers are not trying to exfiltrate data; they are trying to fix a bug or write a feature. The exposure is a side effect of how AI tools consume context, and understanding the specific pathways helps security teams design targeted controls.
+Most exposure through AI tools is a side effect of ordinary work. Developers are trying to fix a bug or ship a feature, and the data goes along because of how the tools gather context. Controls work best when they target the specific pathways rather than the user's intent.
 
-### Secrets in Prompts
+### Secrets Pasted Into Prompts
 
-A developer hits an authentication error and pastes the full error output into an AI chat tool. The error output includes a connection string, an API key, or a bearer token. The developer is focused on the error, not on the credential embedded in the output.
+A developer hits an authentication error and pastes the full output into a chat tool. The output contains a connection string, an API key, or a bearer token, and the developer is looking at the error, not the credential inside it. The same thing happens when someone asks for a Terraform configuration or a Kubernetes manifest and supplies real production values as context.
 
-Similarly, a developer asks an AI tool to generate a Kubernetes manifest or Terraform configuration and provides actual production values as context: database passwords, service account keys, or storage account connection strings. The AI now has those values in its conversation context, and depending on the tool tier, they may be stored in conversation history or logged server-side.
+**Control:** DLP inspection of outbound traffic to AI provider endpoints, matching known credential formats. Secret scanning on the repositories those values came from catches the ones that were already committed.
 
-**Control**: DLP inspection on outbound API calls to AI provider endpoints, pattern-matching for known credential formats like AWS access keys, private key headers, connection strings, and JWTs.
+### Files the Tool Reads on Its Own
 
-### Context Window Leakage
+IDE-integrated assistants read surrounding files to produce better suggestions, and chat features index repository content to answer questions. A `.env` file, an `appsettings.json` with real values, or Terraform with hardcoded secrets can reach the provider without the developer ever sharing it explicitly.
 
-IDE-integrated AI tools like GitHub Copilot read surrounding files to generate better suggestions. If a `.env` file, `appsettings.json`, or `docker-compose.yml` containing real credentials sits in the same workspace, those file contents may be sent to the AI provider's API as context. The developer never explicitly shared them; the tool's context window included them automatically.
+**Control:** Keep credentials in a secret manager rather than in workspace files, which removes the problem at its source. Content exclusion rules in the tool reduce it further, but verify their coverage before relying on them. GitHub Copilot's [content exclusion](https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot){:target="_blank" rel="noopener noreferrer"}, configurable per repository, organization, or enterprise, does not apply to agent mode in Copilot Chat in IDEs, and changes can take up to 30 minutes to reach the editor. An exclusion that silently does not cover the agentic workflows is exactly the one developers are moving to.
 
-This also applies to Copilot Chat features that index repository content to answer questions. A developer asking "how does our deployment pipeline work?" in a repo containing Terraform files with hardcoded secrets will cause those secrets to be sent as context for the answer.
+### Notebook Output Cells
 
-**Control**: Configure AI tool content exclusion rules for sensitive file patterns (`.env`, `*secrets*`, `appsettings.*.json`, `*.pem`). Ensure credentials are stored in secret management systems rather than in files within the workspace.
+Notebooks keep their outputs, and those outputs routinely hold query results with customer PII, sample rows from production tables, or API responses with authentication headers visible. An AI tool processing the notebook sees the outputs along with the code.
 
-### Jupyter Notebook Output Cells
+**Control:** Strip outputs before committing, enforced through repository hooks or filters rather than habit, and clear sensitive outputs before asking for assistance.
 
-Data scientists working in Jupyter notebooks often have output cells containing query results with customer PII, database schemas with real table names and sample data, or API responses with authentication headers visible. When AI tools process the notebook to provide assistance, they see everything including the outputs, not just the code cells.
+### Logs and Pasted Output in the Workspace
 
-**Control**: Strip output cells before AI processing. Enforce `.gitattributes` rules that clear outputs on commit. Establish a practice of clearing sensitive outputs before requesting AI assistance.
+Log files dumped into a project directory for debugging become context for any tool that indexes the workspace. Production logs commonly carry session identifiers, internal addresses, and sometimes full request and response bodies. The same happens when a developer copies a stack trace from a monitoring tool into a scratch file in the editor to read it more comfortably.
 
-### Log Files in the Workspace
+**Control:** Exclude log patterns in `.gitignore` templates and in the AI tool's exclusion rules. Where the monitoring data is especially sensitive, browser isolation or endpoint DLP on copy operations from those tools closes the clipboard route, and training that describes this specific workflow does more than a general warning.
 
-Developers sometimes dump log files into their project directory for debugging. If the workspace is indexed by an AI tool, those logs become part of the context. Production logs routinely contain user session identifiers, internal IP addresses, stack traces with sensitive file paths, and sometimes full request/response bodies.
+---
 
-**Control**: Enforce `.gitignore` patterns at the organization level that exclude log files from code directories. Configure AI tool content exclusion rules for common log patterns (`*.log`, `logs/`). Consider endpoint detection rules that alert on log files appearing in code project directories.
+## What the Provider Actually Keeps
 
-### Clipboard Pipelines
+The consumer and commercial tiers of the same product can differ more in data handling than in features, and this is the axis most organizations under-examine. Terms change often, so treat the specifics below as a snapshot to verify against each vendor's current terms, not as settled policy.
 
-A developer copies a stack trace from a production monitoring tool like Datadog or Splunk, pastes it into their editor to read it more easily, and then asks an AI tool a question. The pasted content is now in a file in the workspace, and depending on tool configuration, it may be included in the next prompt's context automatically.
+| | Consumer and individual plans | Commercial and business plans |
+|---|---|---|
+| **Training on your inputs** | Varies by vendor; often governed by a user-level setting | Contractually excluded by the major vendors |
+| **Retention** | Conversation history persists until deleted, and longer where the user allowed training | Short default windows, with zero-retention arrangements available by agreement |
+| **Identity** | Personal accounts | SSO through the corporate identity provider |
+| **Audit** | None or minimal | Usage logs and admin dashboards |
+| **Contractual protection** | Consumer terms | Data processing agreements, breach notification obligations |
 
-**Control**: Browser isolation for production monitoring tools to restrict copy/paste operations. Endpoint DLP monitoring on clipboard content when AI tools are active. Awareness training that specifically addresses this workflow.
+The per-vendor details are where the useful answers live, and where most generalizations turn out to be wrong:
+
+| Vendor and plan | Training | Default retention | Notable carve-outs |
+|---|---|---|---|
+| **OpenAI API** | Not used for training unless you opt in | Abuse monitoring logs up to 30 days | Stateful endpoints such as conversations and assistants retain until deleted; zero data retention for approved customers |
+| **Anthropic API** | Never used for training without express permission | Inputs and outputs deleted within 30 days | Flagged content retained up to 2 years even under zero retention; zero retention excludes stateful features like batch jobs, files, and code execution |
+| **Anthropic consumer plans** | Only if the user opts in | 30 days if not opted in; 5 years if opted in | Commercial plans and API use are not affected by this setting |
+| **GitHub Copilot Business and Enterprise** | Not used to train models | Zero data retention agreements with OpenAI and Anthropic for generally available features | Individual plans are handled differently |
+| **GitHub Copilot individual plans** | Interaction data may be used for training | Per GitHub's general privacy statement | Users can opt out of training |
+
+Sources, checked September 2026: OpenAI's [API data usage guide](https://developers.openai.com/api/docs/guides/your-data){:target="_blank" rel="noopener noreferrer"}, Anthropic's [API and data retention](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention){:target="_blank" rel="noopener noreferrer"} and [consumer terms update](https://www.anthropic.com/news/updates-to-our-consumer-terms){:target="_blank" rel="noopener noreferrer"}, and GitHub's [Copilot model hosting](https://docs.github.com/en/copilot/reference/ai-models/model-hosting){:target="_blank" rel="noopener noreferrer"} documentation.
+
+Three patterns in that table generalize beyond these vendors. Zero data retention is an arrangement you request and get approved for, not a default. Every zero-retention arrangement has exclusions, usually for features that are stateful by design and for content flagged by trust and safety systems. And when a model is consumed through a cloud platform such as Amazon Bedrock or Google Cloud, the cloud provider is typically the data processor, so its terms apply rather than the model developer's.
 
 ---
 
 ## Tool Governance
 
-### Approved Tool Lists
+### Make the Approved Path the Easy One
 
-Maintain an explicit registry of sanctioned AI tools with their approved use cases and tier levels. Shadow AI (developers using unapproved tools) is the highest-risk pattern because it bypasses all organizational controls simultaneously: no enterprise data agreements, no audit logging, no SSO, and potentially no training opt-out.
+Shadow AI, meaning developers using tools the organization has not sanctioned, is the highest-risk pattern because it bypasses every control at once. There is no data agreement, no audit log, no SSO, and often a consumer-tier training setting nobody checked.
 
-The most effective response to shadow AI is governance, not punishment. If the approved tools are slow to provision, difficult to access, or significantly less capable than what developers can get on their own, shadow AI is inevitable. Make the approved path easy, fast, and genuinely useful.
+Punishment does not fix it, and usually drives it further out of sight. Shadow AI is a symptom of an approved path that is slow to provision, hard to reach, or noticeably less capable than what a developer can get with a personal credit card. Maintain an explicit registry of sanctioned tools with their approved uses and tiers, and measure how long access takes to grant. That number predicts shadow usage better than any policy document.
 
-### Enterprise vs. Free Tier Differences
+### Evaluating a New Tool
 
-The difference between enterprise and free-tier AI tools is not just a feature set; it is a different data handling model entirely.
-
-| Aspect | Enterprise Tier | Free / Consumer Tier |
-|--------|----------------|---------------------|
-| **Training on inputs** | Contractually excluded | May be used for model improvement unless opted out |
-| **Data retention** | Limited window (typically 30 days) for abuse monitoring | Often indefinite conversation history |
-| **Audit logging** | Available (usage dashboards, API logs) | None or minimal |
-| **SSO integration** | Supported (Entra ID, Okta) | Personal accounts only |
-| **Compliance** | SOC 2 Type II, ISO 27001, data processing agreements | No compliance guarantees |
-| **Breach notification** | Contractual obligations | Best-effort, if any |
-
-The single most impactful security action an organization can take regarding AI tools is ensuring that all developer usage happens on enterprise-tier agreements with explicit training exclusion and data processing terms.
-
-### Evaluation Criteria for New Tools
-
-When developers request access to a new AI tool, evaluate it against these criteria:
-
-- **Data residency**: Where are prompts and responses stored? Which jurisdiction?
-- **Retention policy**: How long is conversation data retained? Can it be deleted on request?
-- **Training opt-out**: Is input data excluded from model training by default, or does it require opt-out?
-- **Compliance certifications**: SOC 2 Type II, ISO 27001, and any industry-specific certifications (HIPAA BAA, FedRAMP)
-- **Authentication**: Does the tool support SSO integration with your identity provider?
-- **Audit capability**: Can you see who used the tool, when, and at what volume?
-- **API vs. browser**: Browser-based tools are harder to monitor; API-based tools integrate with existing proxy infrastructure
+| Criterion | What to establish |
+|---|---|
+| **Training** | Whether inputs are excluded by default, by setting, or only by contract |
+| **Retention** | The default window, the carve-outs, and whether deletion can be requested |
+| **Residency** | Where prompts and responses are processed and stored, and under which jurisdiction |
+| **Data processor** | Whether the tool vendor, the model developer, or a cloud platform processes the data |
+| **Attestations** | SOC 2 Type II, ISO 27001, and any sector-specific commitments such as a HIPAA BAA or FedRAMP |
+| **Identity** | SSO support through your identity provider |
+| **Audit** | Whether you can see who used it, when, how much, and which features |
+| **Exclusion controls** | Whether sensitive paths can be excluded, and which modes the exclusion actually covers |
+| **Traffic path** | Whether it runs through infrastructure you can inspect, or pins certificates and bypasses it |
 
 ---
 
 ## Network Controls
 
-### What Existing Infrastructure Already Covers
+### What Existing Proxies Already Cover
 
-If the organization already operates TLS-inspecting forward proxies like Zscaler, Netskope, or Palo Alto Prisma, the infrastructure for monitoring AI tool traffic is already in place. An HTTPS POST to `api.openai.com` is no different from an HTTPS POST to any other SaaS endpoint from the proxy's perspective.
-
-The proxy terminates TLS, inspects the payload, and re-encrypts before forwarding. This means the proxy can see the contents of API calls to AI provider endpoints, including the full prompt and any file contents or tool results included in the request. Without TLS inspection, visibility is limited to the destination hostname via SNI.
+Organizations running TLS-inspecting forward proxies such as Zscaler, Netskope, or Palo Alto Prisma already have the infrastructure to monitor AI tool traffic. From the proxy's perspective, a request to an AI provider's API is one more HTTPS call to a SaaS endpoint.
 
 ```
 Developer Workstation          Corporate Proxy / DLP          AI Provider
@@ -134,137 +130,103 @@ Developer Workstation          Corporate Proxy / DLP          AI Provider
                               Alert / Block / Log
 ```
 
-### DLP for AI Endpoints
+The proxy terminates TLS, inspects the payload, and re-encrypts before forwarding. That means it can see the full request, including prompts and any file contents or tool results the tool attached. Without TLS inspection, visibility stops at the destination hostname.
 
-Most enterprise proxy platforms include DLP engines that pattern-match against known sensitive data formats. These engines can inspect the JSON payload of API calls to AI providers and flag or block requests containing:
+### DLP Patterns for AI Traffic
 
-- AWS access keys (strings starting with `AKIA`)
-- Azure connection strings (containing `DefaultEndpointsProtocol`)
-- Private key headers (`-----BEGIN RSA PRIVATE KEY-----`)
-- JWTs (three base64 segments separated by dots)
-- Credit card numbers, Social Security numbers, and other PII patterns
-- Custom patterns defined by the organization (internal project codenames, classification markers)
+Enterprise proxy DLP engines can inspect the JSON payloads of AI API calls and flag or block requests containing recognizable sensitive formats:
 
-The gap is usually not capability but policy configuration. Most organizations have DLP rules tuned for email and file sharing, not for API calls to AI services. The practical work is creating an AI-specific URL category and applying DLP policies to that category.
+- AWS access key IDs beginning with `AKIA`
+- Azure Storage connection strings, which contain `DefaultEndpointsProtocol`
+- PEM private key headers of the form `-----BEGIN ... PRIVATE KEY-----`
+- JWTs, recognizable as three base64url segments separated by dots
+- Payment card numbers, national identifiers, and other PII patterns
+- Organization-specific markers such as internal project codenames and classification labels
 
-### AI-Specific URL Categories
-
-Create a URL category or destination group for AI tool endpoints so targeted policies can be applied without affecting general browsing performance. Most proxy vendors now ship pre-built AI/ML URL categories that include major providers. This enables policies like "apply strict DLP inspection to all traffic in the AI Tools category" or "block AI tool traffic from devices that are not enrolled in MDM."
+The gap is usually configuration rather than capability. DLP rules tend to be tuned for email and file sharing, not API calls. The practical work is defining a URL category for AI endpoints, many proxy vendors ship one pre-built, and applying stricter inspection to that category, or blocking it from devices that are not managed.
 
 ### Where Network Controls Fall Short
 
-- **Certificate-pinned applications**: Some AI desktop apps or IDE plugins use certificate pinning, which prevents TLS inspection. The proxy cannot see inside the traffic. Options are to block the application entirely or rely on endpoint-level controls.
-- **Personal networks**: Developers routing through personal hotspots or VPNs bypass the corporate proxy entirely. Endpoint controls and acceptable use policies fill this gap.
-- **Local models**: Developers running local LLMs like Ollama or LM Studio never hit the network. Whether this is a risk depends on the threat model; data stays on the endpoint but outside organizational governance.
+Network inspection has three blind spots, and each needs a control elsewhere.
+
+**Certificate pinning.** Some desktop applications and IDE plugins pin certificates, which defeats TLS inspection. The choice is between blocking the application and relying on endpoint controls.
+
+**Traffic that never touches the proxy.** A personal hotspot or a personal VPN routes around it entirely. Endpoint controls and device compliance requirements fill this gap, not the network.
+
+**Local models.** Models run on the developer's machine never generate network traffic. Data stays on the endpoint, which may suit the threat model, but it is also outside organizational visibility and governance.
 
 ---
 
-## Access Controls and Identity
+## Identity and Audit
 
-AI tools should be behind the organization's identity provider with the same conditional access policies applied to any other SaaS application.
+AI tools belong behind the organization's identity provider under the same conditional access policies as any other SaaS application. Require SSO with no personal accounts for work use, enforce MFA, and apply device compliance and session limits.
 
-- **SSO integration**: All approved AI tools should authenticate through the corporate IdP (Entra ID, Okta, or equivalent). No personal accounts for work AI usage.
-- **MFA enforcement**: AI tools should require multi-factor authentication, particularly because conversation history can contain accumulated sensitive context over time.
-- **Conditional access**: Apply device compliance requirements, network location restrictions, and session duration limits. AI tools are high-context applications where a compromised session exposes more data than a typical SaaS tool because conversation history accumulates sensitive content.
-- **RBAC for AI features**: Not every developer needs the same AI capabilities. GitHub Copilot policies allow enabling or disabling features per organization, team, or repository. Use these controls to restrict access to sensitive repositories.
+These matter more for AI tools than for a typical SaaS application, because conversation history accumulates sensitive context over time. A compromised account exposes every secret its owner ever pasted, going back as far as the history retains. Scope features by team or repository where the tool supports it, so that access to the most sensitive codebases is a deliberate grant.
 
-### Audit Logging
-
-Ensure AI tools emit logs that are consumable by the organization's SIEM. At minimum, log:
-
-- Who used the tool (user identity from SSO)
-- When they used it (timestamps)
-- Usage volume (number of requests, tokens consumed)
-- Which features were used (chat, code completion, agent mode)
-
-Full prompt content logging is typically not feasible or desirable (privacy concerns, storage volume), but metadata logging provides the baseline for anomaly detection and incident investigation.
+Route usage logs to the SIEM. At minimum, capture the user identity, timestamps, request and token volume, and which features were used, such as chat, completion, or agent mode. Logging full prompt content is usually neither feasible nor desirable, given privacy obligations and storage volume, but metadata is enough to detect anomalies and support an investigation.
 
 ---
 
-## Code Review for AI-Generated Output
+## Gating AI-Generated Code
 
-AI-generated code should pass the same quality and security gates as human-written code. Treat it as a contribution from an untrusted source that requires the same review rigor as any external dependency.
+Generated code enters the codebase through the same pipeline as everything else, and it should meet the same gates without exception. Treat the organizational requirement as a policy question, and leave the individual review technique to the developers doing the work.
 
-- **Static analysis (SAST)**: Run tools like SonarQube, Semgrep, or CodeQL on all pull requests regardless of whether AI generated the code. AI tools regularly produce common vulnerability patterns including SQL injection, cross-site scripting, and insecure deserialization.
-- **Dynamic analysis (DAST)**: Include AI-generated code paths in your existing DAST scanning coverage.
-- **License compliance**: AI code generators can reproduce open-source code with license obligations. Tools like FOSSA or Black Duck should scan for known snippets and license risks. This is a legal exposure, not just a security one.
-- **Human review requirement**: AI-generated code should never be committed without human review. The developer who uses the AI tool owns the code it produces, including any vulnerabilities or license violations.
+The gates that matter at the organization level are the ones that run regardless of who or what wrote the code. Static analysis with tools such as Semgrep, CodeQL, or SonarQube runs on every pull request. Dynamic scanning covers the paths generated code introduces. License scanning catches reproduced open-source code with obligations attached, which is a legal exposure as much as a security one. Dependency controls verify that newly added packages exist and are approved, since models suggest package names that do not exist and attackers register them.
 
----
-
-## Acceptable Use Policy Elements
-
-An acceptable use policy for AI tools should include these elements. This is not a template but a list of what the policy needs to address.
-
-- **Data classification boundaries**: Which data classification tiers are permitted as input to which tool tiers, with specific examples that developers can reference
-- **Approved tools**: The list of sanctioned tools and how to request access to new ones
-- **Review requirements**: AI-generated code must be reviewed before committing; the developer is responsible for its quality and security
-- **Incident reporting**: Clear instructions for reporting accidental data exposure through AI tools, with emphasis on reporting without fear of punishment
-- **Consequences framing**: Emphasize learning and process improvement over punitive measures. Punitive policies drive shadow AI underground, which makes the risk worse, not better
+Accountability belongs in the policy explicitly. The developer who commits generated code owns it, including its vulnerabilities and licensing, exactly as if they had written it.
 
 ---
 
-## Risk Assessment
+## Writing the Acceptable Use Policy
 
-Security teams should calibrate AI risk accurately. Some risks are real and require controls; others are frequently overstated and can distract from higher-priority work.
+An acceptable use policy for AI tools needs to address a small set of elements. Each one exists because its absence produces a predictable problem.
 
-### Real Risks
+**Classification boundaries**, with concrete examples of which data may go into which tier of tool. Without examples, developers guess.
 
-- **Server-side breach exposure**: Even when prompts are excluded from training, conversation data exists on the provider's infrastructure during the retention window. If the provider is breached, that data is in the blast radius. OpenAI experienced a conversation history leak in 2023 where users saw other users' chat titles.
-- **Conversation history as an attack surface**: If a developer's AI account is compromised (weak password, no MFA, session hijack), the attacker gets access to the full conversation history. That history may contain every secret the developer ever pasted.
-- **Logging and observability gaps**: Organizations typically have no visibility into what happens on the provider side. They cannot audit provider logs, verify deletion, or confirm training exclusion beyond the contractual commitment. This is a governance risk for regulated industries.
-- **Third-party plugins and integrations**: When AI tools call plugins, browse the web, or execute code in sandboxes, prompt data may transit through additional services with their own retention policies.
+**The approved tool list and how to request additions**, with a stated turnaround. Without a fast path, the request becomes a personal subscription.
 
-### Overstated Risks
+**Review and ownership requirements** for generated code. Without them, "the AI wrote it" becomes an accepted explanation for a defect.
 
-- **"The AI will memorize our secrets and give them to someone else"**: With modern large language models on enterprise tiers, verbatim memorization of a single prompt surfacing in another user's session is extremely unlikely. Enterprise agreements explicitly exclude training on customer data.
-- **"Our code will end up in someone else's suggestions"**: Enterprise tiers like GitHub Copilot Business explicitly exclude customer code from training. This is contractually enforced and independently audited.
-- **"AI-generated code is inherently insecure"**: AI-generated code has the same vulnerability patterns as human-written code. The mitigation is the same: code review and static analysis. This is not a new risk category; it is an existing risk at potentially higher volume.
+**Incident reporting** for accidental exposure, made explicitly safe to use. A developer who pastes a credential into a consumer tool and reports it within the hour allows a rotation. One who fears the consequences stays quiet.
 
-### Enterprise vs. Free Tier Risk Comparison
-
-| Risk Factor | Enterprise Tier | Free / Consumer Tier |
-|-------------|----------------|---------------------|
-| **Data used for training** | Contractually excluded | Likely, unless manually opted out |
-| **Retention window** | Limited (typically 30 days) | Often indefinite |
-| **Breach notification** | Contractual obligation with SLA | Best-effort |
-| **Audit trail** | Available for SIEM integration | None |
-| **Account security** | SSO + MFA via corporate IdP | Personal credentials, optional MFA |
-| **Conversation history exposure** | Limited by retention policy | Full history persists as long as account exists |
-
-The highest practical risk for most organizations is developers using free-tier tools where training opt-out is not enabled and conversation history persists indefinitely. The single most effective control is providing enterprise-tier alternatives that are easy to access and genuinely capable.
+**A learning-first stance on consequences.** Punitive policies push AI usage out of sight, which is the outcome the policy exists to prevent.
 
 ---
 
-## Quick Reference
+## Calibrating the Risk
 
-### Data Classification Decision Table
+Security teams do better when they separate the risks that need controls from the ones that attract attention out of proportion to their likelihood.
 
-| Data Type | Example | Classification | AI Permission |
-|-----------|---------|---------------|--------------|
-| Open-source code | Public GitHub repos | Public | Any tool |
-| Internal source code | Proprietary application code | Internal | Enterprise tier only |
-| Configuration with secrets | `.env`, connection strings | Confidential | Prohibited |
-| Customer PII | Names, emails, account data | Confidential | Prohibited |
-| Regulated data | HIPAA records, PCI cardholder data | Restricted | Never |
-| Architecture docs | Internal design documents | Internal | Enterprise tier only |
-| Public documentation | Library docs, API references | Public | Any tool |
+### Risks That Need Controls
 
-### Tool Evaluation Checklist
+**Provider-side exposure during retention.** Even where training is excluded, data exists on provider infrastructure for the retention window, and longer where content is flagged. A provider incident puts it in scope. In [March 2023](https://openai.com/index/march-20-chatgpt-outage/){:target="_blank" rel="noopener noreferrer"}, a bug in an open-source library let some ChatGPT users see the titles of other active users' conversations, and exposed limited payment details for a small share of subscribers.
 
-1. Does the tool support SSO integration with our identity provider?
-2. Does the tool provide audit logging consumable by our SIEM?
-3. Is customer data explicitly excluded from model training by default?
-4. What is the data retention window, and can data be deleted on request?
-5. Does the vendor hold SOC 2 Type II or ISO 27001 certification?
-6. Where is data stored geographically, and does it comply with our data residency requirements?
-7. Does the tool support content exclusion rules for sensitive file patterns?
+**Conversation history as an attack surface.** An attacker with access to a developer's AI account gets the full conversation history, and with it anything sensitive the developer ever pasted. This is the argument for SSO, MFA, and retention settings that keep the history short.
 
-### Network Control Checklist
+**Limited provider-side visibility.** Organizations cannot audit provider logs, verify deletion, or confirm training exclusion beyond the contractual commitment. For regulated industries, that is a governance gap to document and accept deliberately.
 
-1. Is TLS inspection enabled for AI provider URL categories?
-2. Are DLP policies applied to the AI Tools URL category?
-3. Are credential format patterns (AWS keys, private keys, JWTs, connection strings) included in DLP dictionaries?
-4. Is AI tool traffic logged and forwarded to the SIEM?
-5. Are unsanctioned AI endpoints blocked at the proxy level?
-6. Are alerts configured for high-volume outbound traffic to AI API endpoints?
+**Data passing through additional services.** When a tool calls plugins, browses, executes code in a sandbox, or connects to third-party integrations, request data may transit services with their own retention terms.
+
+### Risks That Are Usually Overstated
+
+**"The model will memorize our secrets and repeat them to someone else."** On commercial tiers where training is contractually excluded, inputs are not training data, so there is no mechanism for a single prompt to resurface in another customer's session. The concern is legitimate for consumer tiers where training has been allowed.
+
+**"Our code will turn up in other companies' suggestions."** The same reasoning applies. GitHub states that it does not use Copilot Business or Copilot Enterprise customer data to train models. The exposure exists on individual plans where training has not been turned off.
+
+**"AI-generated code is a new category of security risk."** Generated code exhibits the same vulnerability classes as hand-written code, and the same review and scanning catch them. The change is in volume and in how fluent flawed code looks, which argues for enforcing existing gates, not inventing new ones. Invented dependencies are the one genuinely new wrinkle, and dependency controls handle them.
+
+---
+
+## Common Pitfalls
+
+| Pitfall | What happens | Better approach |
+|---|---|---|
+| **Classification without examples** | Developers guess, and guess inconsistently | Publish concrete examples for each tier |
+| **Assuming "enterprise tier" settles data handling** | Carve-outs for stateful features and flagged content go unnoticed | Read the retention terms per vendor and per feature |
+| **Treating zero retention as a default** | Data is retained under the standard terms nobody replaced | Request the arrangement and confirm which features it covers |
+| **Relying on content exclusion for agentic tools** | Agent modes the exclusion does not cover read the excluded files | Check exclusion coverage per mode; remove secrets from workspaces |
+| **Slow provisioning of approved tools** | Shadow AI on personal accounts with no controls | Measure and shorten time to access |
+| **DLP tuned only for email and file sharing** | Credentials leave through API calls unexamined | Apply AI-specific URL categories and credential patterns |
+| **Assuming the proxy sees everything** | Pinned certificates, personal networks, and local models bypass it | Pair network controls with endpoint and identity controls |
+| **Punitive incident handling** | Accidental exposures go unreported and unrotated | Make reporting safe and fast |
+| **Separate rules for generated code** | Inconsistent gates, or none | Run the same SAST, license, and dependency gates on every change |

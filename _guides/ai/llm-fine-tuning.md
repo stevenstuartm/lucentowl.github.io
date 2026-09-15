@@ -4,7 +4,7 @@ layout: guide
 category: AI & Machine Learning
 subcategory: Building with LLMs
 description: "When fine-tuning a language model is worth it and how to do it: choosing between prompting, RAG, and fine-tuning, supervised and preference tuning, full fine-tuning versus LoRA and QLoRA, preparing data, training, evaluating, and deploying adapters."
-tags: [fine-tuning, lora, qlora, peft, dpo, training, practical]
+tags: [fine-tuning, lora, qlora, peft, sft, dpo, practical]
 ---
 
 **Fine-tuning** continues training a pre-trained language model on your own examples, adjusting its weights so it behaves differently. Where a prompt tells the model what to do on each request, fine-tuning changes the model's default responses so the instructions no longer need repeating. It's powerful, but it's also the most expensive and least reversible way to customize a model, and it's frequently reached for when a better prompt or retrieval would have done the job.
@@ -85,7 +85,18 @@ Full fine-tuning updates every weight in the model. It can make the largest chan
 
 ### LoRA
 
-**Low-Rank Adaptation** ([Hu et al., 2021](https://arxiv.org/abs/2106.09685){:target="_blank" rel="noopener noreferrer"}) freezes the original weights and learns a small update to selected weight matrices. Instead of learning a full update to a matrix W, it learns two small matrices, A and B, whose product has a low rank r, and uses W + BA in their place. Only A and B are trained. On GPT-3 175B, the authors report reducing trainable parameters by 10,000 times and GPU memory by 3 times compared with full fine-tuning, and because BA can be merged into W after training, **a merged LoRA model adds no inference latency**.
+**Low-Rank Adaptation** ([Hu et al., 2021](https://arxiv.org/abs/2106.09685){:target="_blank" rel="noopener noreferrer"}) freezes the original weights and learns a small update to selected weight matrices. Instead of learning a full update to a matrix W, it learns two small matrices, A and B, whose product has a low rank r, and uses W + BA in their place. Only A and B are trained.
+
+```
+                  ┌──► W (frozen, d × k) ─────────────┐
+                  │                                   │
+  input x (d) ────┤                                  (+)───► output (k)
+                  │                                   │
+                  └──► A (d × r) ──► B (r × k) ───────┘
+                          (trainable, r ≪ d)
+```
+
+The rank r is the bottleneck the whole method rests on. Every change the model can learn has to pass through an r-dimensional layer, which is what keeps the update small enough to train cheaply and to store as a separate file. On GPT-3 175B, the authors report reducing trainable parameters by 10,000 times and GPU memory by 3 times compared with full fine-tuning, and because BA can be merged back into W after training, **a merged LoRA model adds no inference latency**.
 
 The trade-off is capacity. [Biderman et al. (2024)](https://arxiv.org/abs/2405.09673){:target="_blank" rel="noopener noreferrer"} found that LoRA "learns less and forgets less." It substantially underperformed full fine-tuning on programming and math training, but better preserved the base model's performance on other tasks. They also found that full fine-tuning learns weight changes with a rank 10 to 100 times higher than typical LoRA settings, which helps explain the gap.
 
@@ -128,7 +139,7 @@ Most fine-tuning data is either **conversational**, with a list of messages per 
 ]}
 ```
 
-Loss is typically computed only on the parts the model should learn to produce, the completion or the assistant turns, rather than on the prompt. For chat models, format the data with the same chat template the model uses at inference time, or behavior after training will differ from behavior in testing.
+Loss should be computed only on the parts the model should learn to produce, the completion or the assistant turns, rather than on the prompt, so the model isn't also trained to generate the inputs. Whether that's the default depends on the library and the dataset format, so check rather than assume. For chat models, format the data with the same chat template the model uses at inference time, or behavior after training will differ from behavior in testing.
 
 ### Quality Over Quantity
 
@@ -221,7 +232,7 @@ Also test what fine-tuning might have broken. Run a set of general tasks the app
 
 ### Merged Models and Adapters
 
-A LoRA adapter can be merged into the base weights, producing a standalone model with no added inference latency. In PEFT, `merge_and_unload()` returns the merged model. Alternatively, the adapter can stay separate and be loaded on top of the base model. Keeping adapters separate lets one deployed base model serve many tasks, with a small adapter swapped in per request, and makes rollback as simple as unloading an adapter.
+A LoRA adapter can be merged into the base weights, producing a standalone model with nothing extra to load at inference. In PEFT, `merge_and_unload()` returns the merged model. Alternatively, the adapter can stay separate and be loaded on top of the base model. Keeping adapters separate lets one deployed base model serve many tasks, with a small adapter swapped in per request, and makes rollback as simple as unloading an adapter.
 
 ### Managed Fine-Tuning
 
@@ -229,7 +240,7 @@ Hosted providers offer fine-tuning without managing GPUs, but only for specific 
 
 ### The Maintenance Cost
 
-A fine-tuned model is pinned to the base model it was trained from. When the provider retires that base model, or a better one is released, the fine-tuning has to be redone, and the evaluation has to be rerun to confirm the new version is at least as good. Keep the training data, configuration, and evaluation set versioned so retraining is a repeatable job rather than a research project.
+A fine-tuned model is pinned to the exact base weights it was trained from, and an adapter won't load onto a different snapshot of the same model family. When the provider retires that base model, or a better one is released, the fine-tuning has to be redone, and the evaluation has to be rerun to confirm the new version is at least as good. Keep the base model version alongside the training data, the configuration, and the evaluation set so retraining is a repeatable job rather than a research project.
 
 ---
 

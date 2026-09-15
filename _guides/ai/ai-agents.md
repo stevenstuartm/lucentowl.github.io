@@ -3,152 +3,94 @@ title: "AI Agents"
 layout: guide
 category: AI & Machine Learning
 subcategory: Building with LLMs
-description: "Understanding agentic AI: autonomous task completion, tool use, planning, multi-agent systems, and building reliable agent workflows."
-tags: [ai, generative-ai, llm, agents, tools, automation, practical]
+description: "How a language model becomes a system that completes tasks, covering the observe-think-act loop, where each step actually executes, planning and memory, multi-agent patterns and what they cost, and the guardrails that stop a loop running away."
+tags: [agents, react, multi-agent, orchestration, planning, guardrails, practical]
 ---
 
+An **agent** is a language model placed in a loop with tools, pursuing a goal over many steps instead of answering one question. The model decides what to do next, something outside the model carries it out, the result comes back, and the loop runs again until the goal is met or a limit stops it. That loop is the whole idea. Everything else here is about making it terminate, stay on task, and avoid doing damage on the way.
 
-## What Are AI Agents?
+## What Makes a System an Agent
 
-AI agents are systems that use large language models to autonomously accomplish goals. Unlike simple chatbots that respond to single queries, agents can plan multi-step tasks, use tools, observe results, and iterate until they achieve an objective.
+What separates an agent from a chatbot or a workflow is not intelligence but control flow, meaning who decides what happens next.
 
-**The key distinction**: A chatbot answers questions. An agent completes tasks.
+| | Chatbot | Workflow | Agent |
+|---|---|---|---|
+| **Decides the next step** | The user | The developer, in advance | The model, at each step |
+| **Tool access** | None | Fixed calls at fixed points | Chooses which tool, and when |
+| **Termination** | When the user stops | The end of the defined path | Goal met, or a limit trips |
+| **Predictability** | High | High | Lower, since the path varies per run |
+| **Debugging** | Read the transcript | Follow the defined path | Reconstruct the reasoning behind each step |
+| **Cost** | One call | Known in advance | Variable, and unbounded without limits |
 
-### From Chatbot to Agent
-
-| Capability | Chatbot | Agent |
-|------------|---------|-------|
-| **Interaction** | Single turn or conversation | Goal-oriented task completion |
-| **Planning** | None | Breaks goals into steps |
-| **Tool use** | None | Calls external tools and APIs |
-| **Feedback loops** | None | Observes results, adjusts approach |
-| **Autonomy** | Waits for each prompt | Acts independently toward goal |
-
-### Agent Capabilities
-
-Agents extend LLM capabilities through:
-
-- **Reasoning**: Breaking complex goals into manageable steps
-- **Tool use**: Executing code, calling APIs, reading files
-- **Memory**: Maintaining context across interactions
-- **Observation**: Processing tool outputs and environment state
-- **Iteration**: Refining approach based on results
+Flexibility is the only thing an agent buys, and it is paid for in predictability, debuggability, and a bill nobody can forecast. Use a workflow wherever the steps are known ahead of time. Reach for an agent when the steps depend on what earlier steps turn up, such as a research task whose next query depends on what the last one returned, or a debugging session whose next file to read depends on the last stack trace. If an ordinary function would do the job, write the function.
 
 ---
 
 ## The Agent Loop
 
-Most agents follow a core loop: Observe → Think → Act → Repeat.
-
-### Basic Agent Loop
+Nearly every agent runs the same cycle. The model observes the current state, reasons about what to do, acts through a tool, and sees the result as part of its next observation.
 
 ```
-┌─────────────────────────────────────────┐
-│                  Goal                    │
-└─────────────────┬───────────────────────┘
-                  ▼
-         ┌───────────────┐
-         │    Observe    │◄──────────────┐
-         │  (read state) │               │
-         └───────┬───────┘               │
-                 ▼                       │
-         ┌───────────────┐               │
-         │     Think     │               │
-         │   (reason)    │               │
-         └───────┬───────┘               │
-                 ▼                       │
-         ┌───────────────┐               │
-         │      Act      │               │
-         │  (use tools)  │───────────────┘
-         └───────┬───────┘
-                 ▼
-         ┌───────────────┐
-         │  Goal met?    │
-         └───────┬───────┘
-                 ▼
-              Complete
+  Goal
+   │
+   ▼
+  Observe ───► Think ───► Act ───► done, or a limit hit?
+    ▲         (choose    (call         │           │
+    │          a step)    tool)     no │           │ yes
+    │                                  │           ▼
+    └──────────────────────────────────┘         Stop
 ```
 
-### ReAct Pattern
+The loop has no natural stopping point. A model that misreads its own progress will keep going, and the only things that end the run are the model declaring success or a limit tripping. Both matter, and only one of them is under your control.
 
-The ReAct (Reasoning + Acting) pattern formalizes this loop:
+### ReAct: Interleaving Reasoning and Action
 
-1. **Thought**: Agent reasons about what to do next
-2. **Action**: Agent selects and invokes a tool
-3. **Observation**: Agent receives tool output
-4. **Repeat**: Until task is complete
+[ReAct](https://arxiv.org/abs/2210.03629){:target="_blank" rel="noopener noreferrer"} (Yao et al., ICLR 2023) is the pattern most agent implementations follow, and it interleaves a reasoning trace with the actions rather than planning everything up front. Each turn produces a thought, an action, and an observation:
 
-**Example trace**:
 ```
 Goal: Find the latest sales figures and email them to the team
 
-Thought: I need to query the database for recent sales data
-Action: query_database("SELECT * FROM sales WHERE date > '2024-01-01'")
-Observation: [sales data returned]
+Thought: I need recent sales data before I can summarize anything
+Action: query_database("SELECT * FROM sales WHERE date > '2026-01-01'")
+Observation: [rows returned]
 
-Thought: I have the data. Now I need to format it for email
+Thought: I have the data. It needs formatting before it goes out
 Action: format_report(sales_data, format="summary")
 Observation: [formatted report]
 
-Thought: Report ready. Now send the email
+Thought: Report ready. Send it
 Action: send_email(to="team@company.com", subject="Sales Update", body=report)
 Observation: Email sent successfully
 
 Thought: Task complete
 ```
 
+Interleaving is what makes the pattern work. Because the model sees each observation before choosing the next action, external results correct its reasoning as it goes. The authors found this reduced the hallucination and error propagation that affect reasoning-only prompting on question answering, and it improved absolute success rates by 34% on ALFWorld and 10% on WebShop over imitation and reinforcement learning baselines.
+
+The visible reasoning trace has a second benefit that matters more in production than in the paper. It is the only record of why the agent did what it did, and without it a failed run is a sequence of tool calls with no explanation attached.
+
 ---
 
 ## Agent Execution Architecture
 
-The agent loop describes the logical flow of observe-think-act. The execution architecture describes where each of those steps runs physically. In most current AI agent systems, there is a split between local execution and remote inference that has significant implications for data flow and security.
+The loop describes what happens. It says nothing about *where* each step runs, and in most agent systems the steps are split across a network boundary that shapes both cost and data exposure.
 
 ### The Local-Execution / Remote-Inference Split
 
-Most developer-facing AI agents (Claude Code, Cursor, GitHub Copilot, Cline) follow the same architectural pattern: tools execute on the developer's machine while model inference runs on the provider's servers.
+Developer-facing agents run tools on the user's machine while inference runs on the provider's servers. The model never sees the machine. It receives an assembled context, returns either text or a request to call a tool, and the runtime executes that request locally before assembling the next context.
 
-```
-Developer Workstation                          Provider Cloud
-┌──────────────────────────────────────────┐
-│                                          │
-│  Agent Runtime                           │
-│  ┌────────────────────────────────────┐  │
-│  │                                    │  │
-│  │  ┌──────────┐  ┌──────────────┐   │  │
-│  │  │   Tool   │  │     File     │   │  │
-│  │  │Execution │  │   System     │   │  │
-│  │  │(bash,    │  │  (read,      │   │  │
-│  │  │ scripts) │  │   write,     │   │  │
-│  │  │          │  │   search)    │   │  │
-│  │  └────┬─────┘  └──────┬───────┘   │  │
-│  │       │               │           │  │
-│  │  ┌────┴───┐   ┌───────┴────────┐  │  │
-│  │  │  MCP   │   │ Git, Search,  │  │  │
-│  │  │Servers │   │ Grep, etc.    │  │  │
-│  │  └────┬───┘   └───────┬────────┘  │  │
-│  │       │               │           │  │
-│  │       └───────┬───────┘           │  │
-│  │               │                   │  │
-│  │        Tool results               │  │
-│  │               │                   │  │
-│  │               ▼                   │  │
-│  │      ┌────────────────┐           │  │
-│  │      │Context Builder │           │  │      ┌──────────────┐
-│  │      │(assembles msg  │───────────┼──┼─────►│  LLM API     │
-│  │      │ for LLM API)  │◄──────────┼──┼──────│ (Claude,     │
-│  │      └────────────────┘           │  │      │  GPT, etc.)  │
-│  │                                    │  │      │              │
-│  └────────────────────────────────────┘  │      │ Returns:     │
-│                                          │      │ - Text       │
-└──────────────────────────────────────────┘      │ - Tool calls │
-                                                  └──────────────┘
-```
+| Operation | Runs locally | Reaches the provider as context |
+|---|---|---|
+| **File reads** | Content read from disk | The full file content, in the next request |
+| **Shell commands** | Executed in the local shell | Command output, in the next request |
+| **Git operations** | Executed by the local git | Diffs, logs, and status output |
+| **MCP server tools** | Tool runs as a local process | Tool results, in the next request |
+| **Model reasoning** | Does not run locally | Happens entirely on provider servers |
+| **Tool selection** | Does not run locally | The model decides remotely and sends back instructions |
 
-The model never runs locally (unless using a self-hosted model). It receives the full conversation context, including all tool results, and returns either a text response or instructions to call more tools. Those instructions execute locally, and the cycle repeats.
+### What Crosses the Boundary on Every Turn
 
-### Agent Session Lifecycle
-
-Each cycle in the agent loop crosses the network boundary. Here is one complete iteration with the boundary marked:
+Each iteration of the loop crosses the network. One complete cycle, with the boundary marked:
 
 ```
   LOCAL EXECUTION                           REMOTE INFERENCE
@@ -163,9 +105,8 @@ Each cycle in the agent loop crosses the network boundary. Here is one complete 
         ├──────── HTTPS ──────────────► 3. Model reasons about goal
         │                                     │
         │                                     ▼
-        │                               4. Model returns tool call
-        │                                  (e.g., "read file X")
-        │◄─────── HTTPS ───────────────
+        │                               4. Model returns a tool call
+        │◄─────── HTTPS ───────────────    ("read file X")
         │
         ▼
   5. Execute tool locally
@@ -179,82 +120,30 @@ Each cycle in the agent loop crosses the network boundary. Here is one complete 
         │                                     │
         │                                     ▼
         │                               8. Returns next tool call
-        │◄─────── HTTPS ───────────────    or final response
+        │◄─────── HTTPS ───────────────    or a final response
         │
         ▼
   9. Execute next tool locally
      ...cycle repeats...
 ```
 
-Every rightward arrow is data leaving the developer's machine. Each inference request sends the entire conversation context to the remote API, which means all previous tool results are included. If the agent read a file in step 5, the contents of that file are sent to the remote API in step 6. If the agent executed a bash command, the output of that command goes with it.
+Every rightward arrow is data leaving the machine, and each request carries the entire conversation so far rather than just the newest turn. A file read at step 5 is in the request at step 6, and in every request after it. By step 20 a single request may carry the contents of dozens of files, command outputs, and search results.
 
-This accumulation matters. By step 20 of an agent session, the inference request may contain the contents of dozens of files, command outputs, and search results, all sent over HTTPS to the model provider.
+### What the Provider Receives
 
-### What Runs Where
+The split means source code, configuration, and command output reach the provider's infrastructure as a condition of getting help with them. An agent cannot reason about data it has not been sent, so there is no way to get model assistance on a file without that file crossing the network.
 
-| Operation | Executes Locally | Sent to Remote API as Context |
-|-----------|-----------------|-------------------------------|
-| **File reads** | File content read from disk | Full file content included in next inference request |
-| **Bash commands** | Command executed in local shell | Command output included in next inference request |
-| **Git operations** | Executed via local git | Diffs, logs, and status output included |
-| **MCP server tools** | Tool runs as local process | Tool results included in next inference request |
-| **Web searches** | Varies by implementation | Search results included in next inference request |
-| **Model reasoning** | Does not run locally | Happens entirely on provider servers |
-| **Tool selection** | Does not run locally | Model decides remotely, sends instructions back |
+The exposure this creates is incidental rather than malicious. A developer asking an agent to fix an authentication bug may send it reading configuration files, environment dumps, and logs holding connection strings, API keys, or tokens. None of those reads are wrong. They are the agent doing the job it was given. But those values now sit in the inference context, governed by whatever retention and access terms apply to the account. Retention periods, training-data exclusions, and enterprise carve-outs vary by provider and by plan, and they change often enough that the terms page is the only reliable source.
 
-For a deeper look at how MCP servers handle data flow across these boundaries, see the [Model Context Protocol](/study-guides/ai/model-context-protocol.html#transport-architecture) guide.
-
-### Privacy Implications
-
-The local-execution / remote-inference split means source code, configuration files, and command outputs are sent to the model provider's infrastructure for inference. Enterprise API agreements typically govern how this data is handled, including retention windows (usually 30 days for abuse monitoring) and explicit exclusion from model training. Free-tier usage may permit data retention for model improvement unless the user opts out.
-
-The agent cannot reason about data it has not been sent, so there is no way to get model assistance on a file without that file's contents crossing the network. Context window limits provide a natural ceiling on how much data is in flight at any given time, but over a long session the cumulative data transmitted can be substantial.
-
-For organizational controls around managing this data flow, see the [AI Security for Organizations](/study-guides/ai/ai-security-for-organizations.html) guide.
+Two controls limit the blast radius without giving up the tool. Keep secrets out of the paths the agent can read, using scoped credentials and secret scanning rather than trusting the model to avoid them. Then treat a long session as an accumulating liability and start a fresh one when the task changes, since context pruning and session limits cap how much is in flight at once.
 
 ---
 
-## Planning and Reasoning
+## Planning
 
-Effective agents don't just react; they plan.
+An agent that reacts one step at a time handles short tasks well and long ones badly, because nothing holds the overall shape of the work while the model is absorbed in a subtask. Planning gives it that shape.
 
-### Planning Approaches
-
-#### Zero-Shot Planning
-
-Agent receives goal and reasons step-by-step without examples.
-
-```
-Goal: Deploy the application to production
-
-Let me think through the steps:
-1. First, I should run the tests to ensure code quality
-2. Then build the production artifact
-3. Then deploy to staging for verification
-4. Then deploy to production
-5. Finally, verify the deployment succeeded
-```
-
-#### Few-Shot Planning
-
-Agent is given examples of similar tasks and their plans.
-
-```
-Example 1:
-Goal: Add a new API endpoint
-Plan: 1. Create route handler 2. Implement business logic 3. Add tests 4. Update docs
-
-Example 2:
-Goal: Fix the login bug
-Plan: 1. Reproduce issue 2. Identify root cause 3. Implement fix 4. Add regression test
-
-Now plan for:
-Goal: Optimize database queries
-```
-
-#### Hierarchical Planning
-
-Complex goals are decomposed into subgoals, each with their own plans.
+How a model is prompted to produce a plan, whether with no examples or with a few worked ones, is ordinary prompting applied to a planning step. What is specific to agents is decomposition, which breaks a goal into subgoals that can each be pursued, checked, and recovered from independently:
 
 ```
 Goal: Launch new feature
@@ -275,76 +164,52 @@ Subgoal 3: Deploy and monitor
   - Deploy to production
 ```
 
-### Reasoning Strategies
+Decomposition earns its cost in three ways. A written plan survives context compaction when the reasoning behind it does not, subgoals give the agent a place to record progress so a resumed run knows what is already done, and a failure is scoped to one subgoal instead of derailing the whole task.
 
-Agents leverage prompting techniques to reason effectively. See the [Prompt Engineering](/study-guides/ai/prompt-engineering.html) guide for detailed coverage of these techniques.
+The cost is that a plan made before any tool has run is a guess. Agents that hold their plan too rigidly keep executing steps that the first observation already invalidated, so the plan needs revisiting whenever an observation contradicts it.
 
-| Technique | Agent Application |
-|-----------|-------------------|
-| **Chain-of-Thought** | Agent reasons through each step before acting |
-| **Tree-of-Thought** | Agent explores multiple approaches before selecting |
-| **Self-Consistency** | Agent generates multiple solutions and picks the best |
+### Self-Reflection
 
-#### Self-Reflection
-
-Unique to agents: evaluating their own outputs and adjusting approach.
+Reflection is the one reasoning technique that belongs to agents specifically, because it needs a loop to be useful. The agent evaluates its own output or a tool result, names what went wrong, and adjusts before the next attempt:
 
 ```
 Action result: Query returned 0 results
 
-Reflection: The query returned no results. This could mean:
+Reflection: No results came back. Three explanations fit:
 1. The search terms were too specific
 2. The data doesn't exist
-3. There's a syntax error in my query
+3. The query has a syntax error
 
-Let me try a broader search first...
+Trying a broader search first distinguishes the first from the other two.
 ```
+
+[Reflexion](https://arxiv.org/abs/2303.11366){:target="_blank" rel="noopener noreferrer"} (Shinn et al., NeurIPS 2023) formalized this as keeping the verbal self-critique in an episodic memory that later attempts read, so the agent carries the lesson forward instead of repeating the same failed approach.
+
+Reflection is weakest exactly where it is most tempting to rely on it. An agent judging its own work with no external signal tends to agree with itself, so reflection is worth the tokens when it reacts to something outside the model, like a failing test, a non-zero exit code, or an empty result set, and much less so when it grades its own prose.
 
 ---
 
 ## Memory and Context
 
-Agents need memory to work on complex tasks that span multiple interactions.
+"Memory" gets used for three different things, and most confusion about agent memory comes from not saying which one is meant.
 
-### Types of Memory
+| Scope | Lives in | Survives | Typical content |
+|---|---|---|---|
+| **In-context** | The current context window | Nothing; gone when the window is rebuilt | The running transcript, recent tool results |
+| **Session** | Storage outside the window, re-injected each turn | Trimming or compaction of the window | A rolling summary, the current plan, task state |
+| **Cross-session** | A durable store, retrieved on demand | The session ending | User preferences, past decisions, project facts |
 
-| Type | Duration | Purpose | Example |
-|------|----------|---------|---------|
-| **Working memory** | Current task | Immediate context | Current conversation, recent tool outputs |
-| **Short-term memory** | Session | Recent interactions | What was discussed earlier |
-| **Long-term memory** | Persistent | Learned knowledge | User preferences, past decisions |
+Only the first is automatic. The other two exist only if the application writes them somewhere and puts them back into the context deliberately, which is why an agent that "forgot" something usually never had it written down.
 
-### Memory Implementations
+### Implementing Memory
 
-#### Conversation History
+Keeping the full conversation in context is the simplest approach and works until the window fills. Beyond that, the common techniques are compaction, retrieval, and structured state, and most production agents use all three.
 
-Simplest form: keep recent messages in context.
+**Compaction** replaces a long stretch of history with a summary of it. Fifty messages of debugging become three sentences naming what was tried, what worked, and what remains. This preserves the thread of the task while discarding the detail, and the risk is that the summary drops the one detail that mattered. Summarizing against a fixed template, so the plan and the open questions are always carried forward verbatim, loses less than free-form summarization.
 
-**Limitation**: Context window limits how much history fits.
+**Retrieval** stores past interactions and pulls back the relevant ones on demand, matching on similarity rather than recency. It suits cross-session memory where the useful fact may be weeks old.
 
-#### Summarization
-
-Periodically summarize old context to compress it.
-
-```
-Original: [50 messages of detailed conversation]
-Summary: "User asked to refactor the authentication module.
-         We identified 3 issues and fixed 2. Remaining: session timeout handling."
-```
-
-#### Vector-Based Memory
-
-Store memories as embeddings, retrieve relevant ones.
-
-**Flow**:
-1. Embed each memory/interaction
-2. When context is needed, embed the query
-3. Retrieve most similar memories
-4. Include in prompt
-
-#### Structured Memory
-
-Store specific facts in structured format.
+**Structured state** holds specific facts in a schema the application controls, rather than trusting the model to remember them:
 
 ```json
 {
@@ -360,194 +225,129 @@ Store specific facts in structured format.
 }
 ```
 
+Anything the application needs to be exactly right, like the target branch or the customer's account tier, belongs here rather than in prose the model might paraphrase.
+
 ---
 
 ## Multi-Agent Systems
 
-Complex tasks can benefit from multiple specialized agents working together.
+Splitting work across several specialized agents is the standard answer to a task that overwhelms one agent. It is often the right answer, and it is reached for well before it pays.
 
-### Why Multiple Agents?
+### What Multiple Agents Buy
 
-| Benefit | Description |
-|---------|-------------|
-| **Specialization** | Each agent optimized for specific tasks |
-| **Parallelization** | Multiple agents work simultaneously |
-| **Separation of concerns** | Clear boundaries between responsibilities |
-| **Checks and balances** | Agents can review each other's work |
+| Benefit | What it gives you |
+|---|---|
+| **Specialization** | Each agent gets a narrower tool set and a system prompt written for one job |
+| **Parallelization** | Independent branches of work run at the same time |
+| **Context isolation** | One agent's noisy exploration never enters another's window |
+| **Cross-checking** | An agent reviewing another's output catches errors the author will not |
+
+Context isolation is the benefit that survives scrutiny best. A subagent can read thirty files, discard twenty-nine, and return one paragraph, so the orchestrator pays for the paragraph rather than the thirty files.
+
+### What Multiple Agents Cost
+
+Anthropic's writeup of its own [multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system){:target="_blank" rel="noopener noreferrer"} puts a number on it. Single agents use roughly 4 times the tokens of a chat interaction, and multi-agent systems roughly 15 times. That is the cost of the architecture before any task-specific work, so the task has to be valuable enough to carry it.
+
+The same writeup is specific about shape. Multi-agent suits work with heavy parallelization, information exceeding a single context window, and many complex tools. It suits poorly any domain where every agent needs the same context, or where subtasks depend on each other, because models are not yet good at coordinating and delegating to each other mid-task. Coding is called out directly as having fewer genuinely parallelizable subtasks than research does.
+
+The practical test is whether the subtasks can be described completely enough up front that a worker could finish one without talking to its siblings. Where they cannot, the coordination overhead exceeds whatever parallelism buys.
 
 ### Multi-Agent Patterns
 
-#### Orchestrator-Worker
-
-A central orchestrator agent plans the work and assigns tasks to specialized worker agents that execute independently.
+Orchestrator-worker is the pattern most systems land on. A planning agent decomposes the goal, hands each piece to a worker with its own context and tools, and assembles the returned results.
 
 ```
-┌────────────────┐
-│  Orchestrator  │
-│   (planning)   │
-└───────┬────────┘
-        │ assigns tasks
-   ┌────┼────┬────────┐
-   ▼    ▼    ▼        ▼
-┌────┐┌────┐┌────┐┌────────┐
-│Code││Test││Docs││Security│
-│Agent│Agent│Agent│ Agent  │
-└────┘└────┘└────┘└────────┘
+        ┌────────────────┐
+        │  Orchestrator  │
+        │   (planning)   │
+        └───────┬────────┘
+                │ assigns scoped subtasks
+      ┌─────────┼─────────┬──────────┐
+      ▼         ▼         ▼          ▼
+  ┌───────┐ ┌───────┐ ┌───────┐ ┌──────────┐
+  │ Code  │ │ Test  │ │ Docs  │ │ Security │
+  │ agent │ │ agent │ │ agent │ │  agent   │
+  └───┬───┘ └───┬───┘ └───┬───┘ └────┬─────┘
+      └─────────┴────┬────┴──────────┘
+                     ▼
+            results back to orchestrator
 ```
 
-#### Pipeline
+| Pattern | Work flows | Suits | Breaks down when |
+|---|---|---|---|
+| **Orchestrator-worker** | Out to workers in parallel, back to a planner | Independent subtasks under one goal | Subtasks need each other's intermediate results |
+| **Pipeline** | Through fixed stages in sequence | A known series of transformations | The stages are known, in which case a workflow is cheaper |
+| **Debate** | Between proposing and critiquing agents, then to an arbiter | Judgment calls where errors are costly | The agents share a blind spot and agree on a wrong answer |
+| **Hierarchical** | Down through managers to workers | Deep decompositions too large for one planner | Each extra level multiplies tokens and dilutes the original goal |
 
-Agents process work sequentially, with each agent handling one stage and passing results to the next.
+Pipeline deserves suspicion. If the stages are fixed and known, the flexibility of an agent is being paid for and not used, and a workflow calling the model at each stage does the same job for a predictable cost.
 
-```
-Request → [Intake Agent] → [Analysis Agent] → [Implementation Agent] → [Review Agent] → Result
-```
+### Passing Information Between Agents
 
-#### Debate/Consensus
+Every agent has its own context window, so anything one agent learned has to be re-sent for another to know it. That transfer is where multi-agent systems leak both tokens and meaning.
 
-Multiple agents propose solutions and critique each other's work, with an arbiter making final decisions.
+| Method | How it works | Suits |
+|---|---|---|
+| **Shared context** | All agents read one common context | Small, tightly coupled sets of agents |
+| **Message passing** | Explicit, scoped messages between agents | Loosely coupled or asynchronous work |
+| **Blackboard** | A central store agents read from and write to | Collaboration where contributions arrive out of order |
 
-```
-┌──────────┐    ┌──────────┐
-│ Agent A  │◄──►│ Agent B  │
-│ (propose)│    │(critique)│
-└────┬─────┘    └────┬─────┘
-     │               │
-     └───────┬───────┘
-             ▼
-      ┌─────────────┐
-      │   Arbiter   │
-      │  (decides)  │
-      └─────────────┘
-```
-
-#### Hierarchical
-
-Agents manage other agents in a hierarchy.
-
-```
-         ┌─────────────┐
-         │   Manager   │
-         └──────┬──────┘
-      ┌─────────┼─────────┐
-      ▼         ▼         ▼
-┌──────────┐┌──────────┐┌──────────┐
-│Team Lead ││Team Lead ││Team Lead │
-│ Backend  ││ Frontend ││   QA     │
-└────┬─────┘└────┬─────┘└────┬─────┘
-     │           │           │
-   workers     workers     workers
-```
-
-### Communication Between Agents
-
-| Method | Description | Use Case |
-|--------|-------------|----------|
-| **Shared memory** | Common context all agents access | Small, tightly coupled teams |
-| **Message passing** | Explicit messages between agents | Loosely coupled, async |
-| **Blackboard** | Central knowledge store agents read/write | Complex collaboration |
+The orchestrator's subtask description is the highest-leverage text in the whole system. A worker that receives "look into the auth thing" burns its context rediscovering what the orchestrator already knew, and it returns something the orchestrator cannot use.
 
 ---
 
 ## Building Reliable Agents
 
-Agents can fail in unexpected ways. Building reliability requires intentional design.
+### How Agents Fail
 
-### Failure Modes
+| Failure | What it looks like | Mitigation |
+|---|---|---|
+| **Looping** | The same action repeated with the same result | Step limits, plus detection of repeated identical calls |
+| **Tool errors** | An external tool fails or returns something unparseable | Return the error to the model as an observation, with retry limits |
+| **Invented tools** | The model calls a tool that does not exist | Validate every call against the declared tool set and reject unknown names |
+| **Goal drift** | The agent solves an interesting subproblem instead of the task | Restate the goal in context periodically; check output against the original goal |
+| **Context overflow** | State outgrows the window mid-task | Compaction, structured state, subagents that return summaries |
+| **Silent success** | The agent reports completion without having done the work | Verify with a tool, not by asking the model whether it succeeded |
 
-| Failure | Description | Mitigation |
-|---------|-------------|------------|
-| **Infinite loops** | Agent repeats same action | Step limits, loop detection |
-| **Tool errors** | External tools fail | Error handling, retries |
-| **Hallucinated actions** | Agent invents non-existent tools | Strict tool validation |
-| **Goal drift** | Agent loses track of objective | Regular goal reminder |
-| **Context overflow** | Too much state for context window | Summarization, memory management |
+Silent success is the one that survives testing. The others announce themselves, while a confident false completion looks identical to a real one until someone checks the result.
 
 ### Guardrails
 
-#### Action Limits
+An agent loop needs a limit it cannot reason its way past, enforced by the runtime rather than requested in the prompt. Three limits cover most of it: a maximum number of iterations, a maximum number of tool calls, and a spend ceiling for the run. Set them low enough that a runaway loop is caught in seconds, and treat hitting one as a signal to inspect the run rather than as a number to raise.
 
-```python
-max_iterations = 20
-max_tool_calls = 50
-max_cost = 10.00  # dollars
-```
-
-Stop execution if limits exceeded.
-
-#### Human-in-the-Loop
-
-Require human approval for sensitive actions:
-- State-modifying operations
-- External communications
-- High-cost operations
-- Irreversible actions
-
-#### Output Validation
-
-Verify agent outputs before using them:
-- Schema validation for structured outputs
-- Sanity checks on values
-- Security scanning for generated code
+Two further controls belong to the application around the loop. State-changing, irreversible, and externally visible actions route through a human approval step before executing. Structured output is validated against a schema before anything acts on it.
 
 ### Observability
 
-Track agent behavior for debugging and improvement:
+An agent run is a reasoning trace, not a stack trace, so the usual logs say little about why it went wrong. Capture the full sequence of thoughts, tool calls, and observations per run, and track these across runs:
 
-| Metric | Why Track |
-|--------|-----------|
-| **Steps to completion** | Efficiency, potential issues |
-| **Tool usage patterns** | Which tools are useful |
-| **Error rates** | Reliability issues |
-| **Token usage** | Cost management |
-| **Time to completion** | Performance |
+| Metric | What it tells you |
+|---|---|
+| **Steps to completion** | Efficiency, and a rising trend that signals confusion |
+| **Tool usage distribution** | Which tools earn their place in the context, and which are never chosen |
+| **Tool error rate by tool** | Which tool descriptions or interfaces the model misunderstands |
+| **Token usage per run** | Cost, and context pressure before it becomes overflow |
+| **Limit-trip rate** | How often runs end by guardrail rather than by success |
 
 ---
 
 ## Agent Frameworks
 
-Several frameworks simplify building agents.
+Frameworks in this space consolidate and rename faster than most, so pick on the shape of what you need rather than on a name.
 
-### Framework Comparison
+| Kind | What it gives you | Examples |
+|---|---|---|
+| **Provider SDK** | The loop, tool execution, guardrails, and tracing for one provider's models | Claude Agent SDK, OpenAI Agents SDK, Google Agent Development Kit |
+| **Orchestration framework** | A provider-agnostic runtime, graph or middleware based, with durable execution and state | LangGraph, Microsoft Agent Framework |
+| **Role-based multi-agent** | Agents declared by role and goal, composed into teams | CrewAI |
 
-| Framework | Strengths | Best For |
-|-----------|-----------|----------|
-| **LangChain/LangGraph** | Extensive tools, composability | Complex workflows |
-| **AutoGen** | Multi-agent conversations | Research, multi-agent systems |
-| **CrewAI** | Role-based agents | Team simulations |
-| **Semantic Kernel** | .NET/enterprise focus | Microsoft ecosystem |
-| **Haystack** | RAG + agents | Document-heavy applications |
+Two recent consolidations catch people out, because plenty of tutorials still teach the superseded names. Microsoft's [Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/){:target="_blank" rel="noopener noreferrer"} is the direct successor to both AutoGen and Semantic Kernel, built by the same teams, with published migration guides from each. New work targets Agent Framework rather than either predecessor. On the other side, [LangChain and LangGraph reached 1.0 together](https://www.langchain.com/blog/langchain-langgraph-1dot0){:target="_blank" rel="noopener noreferrer"} in October 2025, with LangChain's `create_agent` as the fast path and LangGraph as the runtime underneath it for agents needing explicit control.
 
-### When to Use a Framework
+### Whether You Need One
 
-**Use a framework when**:
-- Building complex multi-agent systems
-- Need many pre-built integrations
-- Want established patterns
-- Team benefits from structure
+A framework pays off when you want multi-agent orchestration, durable execution across restarts, or tracing you would otherwise build, and when pre-built integrations cover the tools you need.
 
-**Build custom when**:
-- Simple, focused agent
-- Need full control over behavior
-- Framework overhead isn't justified
-- Learning how agents work
-
----
-
-## Practical Considerations
-
-### Security and Data Flow
-
-Agents with tool access introduce two categories of security risk: agent-level risks around what the agent does, and data-level risks around what information enters the inference pipeline.
-
-**Data-level risks** are about what content gets sent to the model provider as context. As described in [Agent Execution Architecture](#agent-execution-architecture), every tool result crosses the network boundary during inference. This creates exposure pathways that are independent of the agent's intent.
-
-| Risk | Category | Mitigation |
-|------|----------|------------|
-| **Context accumulation** | Data-level | Session limits, context pruning, data classification policies |
-| **Credential leakage via context** | Data-level | Exclude sensitive files from AI tool access, use secret scanning |
-
-Context accumulation is worth particular attention. A developer asking an agent to "fix the auth bug" may trigger the agent to read configuration files, environment variables, and log outputs that contain connection strings, API keys, or tokens. None of those reads are malicious; they are the agent doing its job. But those values now exist in the inference context and are sent to the provider's servers, where they are subject to the provider's data retention and access policies.
+Building the loop directly pays off more often than framework documentation suggests. A single-agent loop over a handful of tools is a short piece of code, and writing it keeps the context assembly visible, which is where most agent bugs live. Framework abstractions hide exactly the thing you need to inspect when the agent starts behaving strangely.
 
 ---
 
@@ -555,33 +355,23 @@ Context accumulation is worth particular attention. A developer asking an agent 
 
 ### Agent Design Checklist
 
-1. [ ] Clear goal definition
-2. [ ] Appropriate tools for the task
-3. [ ] Good tool descriptions
-4. [ ] Memory strategy for long tasks
-5. [ ] Iteration limits and guardrails
-6. [ ] Error handling for tool failures
-7. [ ] Human approval for sensitive actions
-8. [ ] Observability and logging
-9. [ ] Cost monitoring
+1. [ ] The goal is stated precisely enough that completion is checkable
+2. [ ] The tool set is the smallest one that covers the task
+3. [ ] Tool descriptions are written for a reader with no other context
+4. [ ] Memory scopes are chosen deliberately, and the durable ones are written down
+5. [ ] Iteration, tool-call, and cost limits are enforced by the runtime
+6. [ ] Tool failures return to the model as observations, with retry limits
+7. [ ] Irreversible and externally visible actions require human approval
+8. [ ] Full reasoning traces are captured per run
+9. [ ] Completion is verified by a tool, not by asking the model
 
-### When to Use Agents
+### When an Agent Is the Right Shape
 
-| Scenario | Agent Appropriate? |
-|----------|-------------------|
-| Single question/answer | No, use direct LLM |
-| Multi-step task with tools | Yes |
-| Real-time conversation | Maybe, depends on complexity |
-| Batch processing | Yes, with supervision |
-| High-stakes decisions | Careful, human-in-loop |
-
-### Agent vs. Workflow
-
-| Characteristic | Agent | Workflow |
-|----------------|-------|----------|
-| **Flexibility** | High, adapts to situation | Fixed, predetermined steps |
-| **Predictability** | Lower, emergent behavior | Higher, explicit paths |
-| **Debugging** | Harder, reasoning varies | Easier, clear execution |
-| **Cost** | Variable, depends on reasoning | Predictable |
-
-Use agents when flexibility matters. Use workflows when predictability matters.
+| Scenario | Agent? |
+|---|---|
+| A single question with a single answer | No. Call the model directly |
+| Steps known in advance | No. A workflow is cheaper and easier to debug |
+| Next step depends on what the last step found | Yes |
+| A task spanning more information than one context window | Yes, with subagents returning summaries |
+| Batch processing over many similar items | Yes, with limits per item and sampling for review |
+| High-stakes or irreversible decisions | Only with approval gates on the consequential actions |
