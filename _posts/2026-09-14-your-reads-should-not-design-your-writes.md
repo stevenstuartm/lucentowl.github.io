@@ -7,7 +7,7 @@ tags: [architecture, api-design, rest, design-patterns]
 author: steven-stuart
 ---
 
-Any API endpoint that writes a nullable field or a collection has to work out what the client meant by it. A partial update has to decide whether an omitted field was left alone on purpose or meant to be cleared. A full replacement with PUT only moves the question, because it clears whatever arrives missing or null, which is correct only if the client sent every field on purpose. A collection in either body can only be sent whole, so adding one element means resending the rest. Few problems have left me as dizzy as this one, not only because the problem is challenging, but because of how many competing solutions keep getting promoted for it, from patch formats to field masks to change-tracking client libraries.
+Any API endpoint that writes a nullable field or a collection has to work out what the client meant by it. A partial update has to decide whether an omitted field was left alone on purpose or meant to be cleared. A full replacement with PUT only moves the question, because it clears whatever arrives missing or null, which is correct only if the client sent every field on purpose. A collection in either body can only be sent whole, so adding one element means resending the rest. It bites hardest on the records most business APIs are made of, like customers, orders, and accounts that people edit through forms and typed clients. Few problems have left me as dizzy as this one, not only because the problem is challenging, but because of how many competing solutions keep getting promoted for it, from patch formats to field masks to change-tracking client libraries.
 
 Most of those solutions ask every client to get something subtle right, when what most teams need is a write surface simple enough that any client can call it correctly on the first try. The simplest way there, I think, sidesteps all of them by not writing through the read at all. When a group of fields has a single owner, when a change starts a workflow, or when a collection's items come and go individually, each of those can have its own path. A write then sends the whole of something smaller rather than a piece of something large. That can look like a workaround at first, but I'd argue it's closer to healthy normalization in the write surface.
 
@@ -20,42 +20,39 @@ Every fix for this runs into the same limit. Each field in a write body is tryin
 - **Clear.** The field's current value is removed, leaving it with no value.
 - **Change one element of a collection.** An item is added or removed without resending the rest.
 
-The JSON body can express the first three. A property can hold a value, be set to `null`, or be left out of the body entirely, which lines up with set, clear, and leave alone. But when the server deserializes that body into a typed request object, a nullable property offers only two states, a value or null, so a property that was left out and one that was sent as `null` both arrive as null. The difference is gone before any handler code runs, and every nullable field ends up supporting only two of the three intents, usually without anyone writing down which two. PUT picks set and clear and drops leave alone, which holds only while every client really sends every field. A serializer that skips nulls, or a client built before a field existed, breaks that without any error. The fourth doesn't fit a single field at all, because a collection property can only be sent whole. The lost intent stays invisible until a request needs it.
-
-## An Omitted Field and a Deactivated Customer
-
-Customer 42 has a phone number and an active flag. A client updates the phone number and mentions nothing else:
+The examples in this post use one customer, which the API reads whole:
 
 ```http
-PATCH /customers/42
-{ "phoneNumber": "555-1234" }
+GET /customers/42
+{
+  "displayName": "Ada",
+  "phoneNumber": "555-1234",
+  "email": "ada@example.com",
+  "verified": true,
+  "isActive": true,
+  "tags": ["vip", "beta"]
+}
 ```
 
-The handler binds that body to a request type and applies it:
+By convention, PATCH and PUT on `/customers/42` accept the same shape, bound to a request type that mirrors it:
 
 ```csharp
-public record UpdateCustomerRequest(string? PhoneNumber, bool IsActive);
-
-customer.PhoneNumber = request.PhoneNumber;
-customer.IsActive = request.IsActive;
+public record UpdateCustomerRequest(
+    string? DisplayName, string? PhoneNumber, string? Email,
+    bool? Verified, bool? IsActive, List<string>? Tags);
 ```
 
-`isActive` never appeared in the body. JSON can tell a missing property from one set to `false`, but a non-nullable `bool` can't, so binding fills the gap with `false`, and a request that set a phone number has quietly deactivated the customer.
+JSON can express the first three intents for `phoneNumber`, which can hold a value, be `null`, or be left out. The bound property has only two states, so a missing `phoneNumber` and a `null` one both arrive as null before any handler code runs, and the method decides which two intents survive:
 
-The standard remedy is to make every property nullable and skip the ones that arrive null:
+| Body | PUT replaces the resource | PATCH skips nulls |
+| --- | --- | --- |
+| `"phoneNumber": "555-1234"` | Set | Set |
+| `"phoneNumber": null` | Clear | Leave alone |
+| `phoneNumber` omitted | Clear | Leave alone |
 
-```csharp
-public record UpdateCustomerRequest(string? PhoneNumber, bool? IsActive);
+PATCH gives up clear, so a phone number, once set, can never be removed. PUT gives up leave alone, so a field the client didn't send is wiped, which is correct only while every client sends every field. A serializer that skips nulls breaks that silently, and so does a client built before the field existed, which means adding a writable field to a PUT changes its contract. The fourth intent doesn't fit a single field at all, because `tags` can only be sent whole.
 
-if (request.PhoneNumber is not null) customer.PhoneNumber = request.PhoneNumber;
-if (request.IsActive is not null) customer.IsActive = request.IsActive.Value;
-```
-
-For `IsActive`, that works. A customer is always either active or inactive, so the column never holds null and `null` is free to mean "the client said nothing."
-
-The cost lands on `PhoneNumber`. A customer can have no phone number, so `null` already meant "remove it." The guard gives the same `null` a second meaning, "leave it alone," and honors that one, so the phone number can no longer be removed through this endpoint.
-
-The remedy fixes every field that can't be empty, and breaks every field that can. The usual response is another special case for the field that broke, which leaves the design that broke it in place for the next one.
+The nullable properties are already the fix for a worse bug. Declared as a plain `bool`, an omitted `isActive` binds to `false`, and a PATCH that only changed the phone number deactivates the customer. Skipping nulls cures that for every field that can't be empty and breaks every field that can. The usual response is another special case for the field that broke, which leaves the design that broke it in place for the next one.
 
 ## Clients Hold State, Not Changes
 
@@ -75,11 +72,13 @@ Design guides carry a different risk, because unlike patch formats they aren't n
 
 Those choices fit organizations that own their clients, generate their SDKs, and employ governance teams to enforce conformance. Copied into a team that has none of that, they become cargo culture, trading the simple write surface the team needs for machinery built around someone else's clients.
 
+None of that makes PATCH a mistake, only a tool for resources shaped like documents rather than records. A preferences bag that gains keys every release suits JSON Merge Patch, and because it binds to a dictionary rather than a typed record, a key that's present, null, or absent still carries all three intents. A large configuration document suits JSON Patch, which changes one value without resending the rest. Kubernetes lets many controllers write the same object through [server-side apply](https://kubernetes.io/docs/reference/using-api/server-side-apply/){:target="_blank" rel="noopener noreferrer"}, which tracks which manager owns each field, machinery that pays for itself on a platform built around it. The rest of this post is about records.
+
 ## The Wide Write Is a Normalization Failure
 
-`GET /customers/42` returns a shape, and by convention `PATCH /customers/42` accepts the same shape. Every field the read returns becomes a field the write has to have an opinion about, including the ones a given caller has no business touching.
+`UpdateCustomerRequest` mirrors the read, so every field the read returns becomes a field the write has to have an opinion about, including `verified`, which no client should set, and `isActive`, which most callers have no business touching.
 
-A read is allowed to be a composition. A customer screen wants the display name, the phone number, the email and whether it's verified, the active flag, and the tags, all in one request, and serving that in one GET is good design. What the screen receives is a view over several things with different rules. The email starts a verification workflow when it changes, and `verified` is set by the server. Deactivation carries its own permission and consequences. Tags are a collection whose elements come and go individually.
+A read is allowed to be a composition, and serving the whole customer in one GET is good design. But what the screen receives is a view over several things with different rules. The email starts a verification workflow when it changes, and `verified` is set by the server. Deactivation carries its own permission and consequences. Tags are a collection whose elements come and go individually.
 
 The wide write happens when the view becomes the write target, usually because one model serves both directions. That's a governance gap more than a technical one. Nobody decided what the write surface should be, so the read model decided for them, and every rule inside the view now has to be enforced field by field inside a single body.
 
@@ -115,9 +114,21 @@ PUT /customers/42/profile
 { "displayName": "Ada", "phoneNumber": null }
 ```
 
-Both fields are always present in this body, so `"phoneNumber": null` can only mean remove it, and the phone number from the opening can be cleared again.
+The request type marks both properties `required`, which System.Text.Json enforces by rejecting any body that leaves one out:
 
-`email` fails only the workflow test, and that's enough to separate it, because the verification rules then live on the one endpoint that triggers them. `isActive` fails on owner and scope, so it becomes a named operation. The opening bug isn't defended against but made unrepresentable, because there's no longer a body it could ride along in.
+```csharp
+public record UpdateProfileRequest
+{
+    public required string DisplayName { get; init; }
+    public required string? PhoneNumber { get; init; }
+}
+```
+
+An omitted property now fails binding with a 400 instead of arriving as null, so `"phoneNumber": null` can only mean remove it, and the phone number can be cleared again.
+
+`email` fails only the workflow test, and that's enough to separate it, because the verification rules then live on the one endpoint that triggers them. `isActive` fails on owner and scope, so it becomes a named operation. The deactivation that rode along with a phone-number change isn't defended against but made unrepresentable, because there's no longer a body it could ride along in.
+
+Normalization can be taken too far. A deactivation doesn't have its own identity and lifecycle the way a tag does, so unless the domain keeps deactivations as records a client can list, `POST /customers/42/deactivations` invents a collection no GET can back. The named operation `POST /customers/42/deactivate` describes the transition more honestly.
 
 ### Collections With Identity Get Their Own Addresses
 
@@ -130,8 +141,6 @@ POST /customers/42/tags
 DELETE /customers/42/tags/beta
 ```
 
-Normalization can be taken too far. A deactivation doesn't have its own identity and lifecycle the way a tag does, so unless the domain keeps deactivations as records a client can list, `POST /customers/42/deactivations` invents a collection no GET can back. The named operation `POST /customers/42/deactivate` describes the transition more honestly.
-
 A collection with no natural per-element key, like an ordered list of steps, has nothing to hang a sub-resource URL on. It stays in its parent's body and is replaced whole along with it.
 
 ## What Normalizing Costs
@@ -140,15 +149,29 @@ A collection with no natural per-element key, like an ordered list of steps, has
 
 The obvious objection is call count, usually raised on behalf of admin and operations apps on the assumption that they edit everything at once. They rarely do. Their work moves from correcting contact details to reviewing product access to deactivating an account, and each step is a write this design already names. The endpoint count goes up, but reads can still be aggregates shaped for whichever app uses them.
 
-The customer screen from earlier is the harder case, because it shows every concern on one page. If it offers a single Save button across all of them, that button now makes one call per concern it touches plus one per tag added or removed, and the screen has to report which ones failed. A screen shaped like the write surface tends to serve users better, with contact details saved together and email change and deactivation as their own actions, each with its own confirmation. Much of modern interface design already leans this way. Toggles tend to save the moment they're flipped, and tags shown as chips often save as each one is added or removed, so the screen's own controls line up with the narrow writes. Not every screen works like that, but where UX conventions lean, they lean toward small, scoped changes rather than one Save for the whole page. A deactivation that rides along with a phone-number edit is the opening bug with a nicer interface.
+The customer screen from earlier is the harder case, because it shows every concern on one page. A single Save button across all of them now makes one call per concern it touches plus one per tag, and the screen has to report which ones failed. A screen shaped like the write surface tends to serve users better, with contact details saved together and email change and deactivation as their own actions. Modern interfaces already lean this way. Nielsen Norman Group's [toggle-switch guidelines](https://www.nngroup.com/articles/toggle-switch-guidelines/){:target="_blank" rel="noopener noreferrer"} say a switch "should take immediate effect and should not require the user to click Save or Submit," and tags shown as chips often save one at a time. A deactivation that rides along with a phone-number edit is the same bug with a nicer interface.
 
-### Cross-Concern Actions Lose Implicit Atomicity
+The call count does hurt clients that write in volume, like an offline app syncing a day of edits or an importer loading thousands of customers. Those clients need a batch endpoint, not a return to the wide body. Modeled on [Microsoft Graph's JSON batching](https://learn.microsoft.com/en-us/graph/json-batching){:target="_blank" rel="noopener noreferrer"}, each entry carries its own method, URL, and body and gets its own status back, so it passes through the same rules as the narrow endpoint it names, and the batch only saves round trips. Graph applies entries independently, which keeps a batch from quietly becoming a transaction.
 
-A wide PATCH is usually applied all or nothing, and separate calls are not, so a failure between them leaves the customer half-changed. If an action needs that atomicity, it's a use case, and it belongs in a named operation that performs the writes together rather than in a general-purpose merge.
+### Atomicity Across Concerns Has to Be Named
 
-### Concurrent Edits Collide on Whole Resources
+A wide PATCH is usually applied all or nothing, and separate calls are not, so a screen that saves contact details and tags together can fail halfway. As long as the server validates each write against the customer's current state, every call that succeeds still leaves a valid customer behind. A new phone number with one tag missing is an incomplete edit, not a corrupt customer.
 
-A correct partial update has one advantage this design gives up. If one support agent changes `displayName` while another changes `phoneNumber`, two partial updates touch different fields and both survive. Two PUTs to `/customers/42/profile` each send both fields, so the later one silently restores the value the earlier one replaced. Smaller resources narrow that window, because an email change or a deactivation can no longer collide with a profile edit, but they don't close it. An `If-Match` header carrying the resource's ETag turns the silent overwrite into a 412 the client can resolve.
+Separate calls stop being enough when the writes are only valid together. Closing an account deactivates the customer and cancels their subscriptions, and a customer who is deactivated but still billed is the half-changed state that has to be impossible. That change is a use case, and it gets a named operation such as `POST /customers/42/close`.
+
+That can sound like a return to RPC, the endpoint-per-action style that resource-oriented APIs replaced. But the wide PATCH never removed those actions. It hid them in field values, so `"isActive": false` is a deactivation command the handler has to detect by comparing against the stored value. A normalized surface is still mostly resources read and replaced with GET and PUT, with named operations kept for transitions, the way Stripe [finalizes invoices](https://docs.stripe.com/api/invoices/finalize){:target="_blank" rel="noopener noreferrer"} and GitHub [merges pull requests](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request){:target="_blank" rel="noopener noreferrer"}. An operation earns a name when the business needs its writes to succeed together, not when one screen happens to save several things at once.
+
+### Concurrent Edits Surface as Conflicts Instead of Merging
+
+If one support agent changes `displayName` while another changes `phoneNumber`, two PUTs to `/customers/42/profile` each send both fields, and the later one overwrites the earlier change. A partial update would keep both, but only if its client sent just the touched field, which is the change tracking clients rarely manage. Even then, merging by field can save a combination neither agent saw.
+
+The usual guard is a version check. The GET returns a version tag in its `ETag` header, the client sends that tag back in an `If-Match` header on the PUT, and if the resource changed in between, the server answers `412 Precondition Failed` instead of overwriting. Small resources are what make that check practical. On the wide customer resource, a tag another agent adds fails every save that loaded the customer before it. On the profile, a 412 means someone changed the same details at the same time, which is rare and should reach the user. A server that requires the header answers [428 Precondition Required](https://datatracker.ietf.org/doc/html/rfc6585#section-3){:target="_blank" rel="noopener noreferrer"} when it's missing, so a client that forgets it finds out on its first request.
+
+### Adding a Writable Field Changes the Contract
+
+If `preferredName` joins the profile, an older client's PUT leaves it out, and the server either clears it or, with required properties, rejects the request. Under replacement, a new writable field is a breaking change for every client that writes the resource, and the way through is a new version of it. The old request type stays bound to the old version, so requests in that shape never touch `preferredName`.
+
+A partial update avoids that version by treating a missing field as leave alone, the same rule that stopped the phone number from being cleared. Normalizing keeps versions rare instead. Reads gain fields freely, and most new data a screen wants belongs to the read. A new field with its own owner, scope, or workflow fails the tests and gets its own resource, adding an endpoint without changing an existing one. Versions fall only on fields that join an existing concern, and small, cohesive resources rarely gain those. A resource that gains them every release is a document, and belongs with PATCH.
 
 ### Migration Runs Alongside the Wide Write
 
@@ -156,13 +179,46 @@ An API that partners already call through a wide PATCH can't simply start answer
 
 ## Letting Reads and Writes Take Different Shapes
 
-I've come to think most software problems trace back to a failure to align with the need, a failure of architecture governance, or a failure to change direction. The wide PATCH shows all three, in adopting a spec written for someone else's clients, in letting the read model decide a write surface nobody owned, and in special-casing each ambiguous field instead of changing the design that keeps producing them. None of the corrections takes new technology:
+I've come to think most software problems trace back to a failure to align with the need, a failure of architecture governance, or a failure to change direction. The wide PATCH shows all three, in adopting a spec written for someone else's clients, in letting the read model decide a write surface nobody owned, and in special-casing each ambiguous field instead of changing the design that keeps producing them.
+
+Applied to the customer, the six-property `UpdateCustomerRequest` becomes this write surface:
+
+```csharp
+// GET /customers/42 keeps serving the composed view. PUT and PATCH answer 405.
+
+// PUT /customers/42/profile, If-Match required
+public record UpdateProfileRequest
+{
+    public required string DisplayName { get; init; }
+    public required string? PhoneNumber { get; init; }
+}
+
+// PUT /customers/42/email, If-Match required, starts verification
+public record UpdateEmailRequest
+{
+    public required string Email { get; init; }
+}
+
+// POST /customers/42/tags, and DELETE /customers/42/tags/{name}
+public record AddTagRequest
+{
+    public required string Name { get; init; }
+}
+
+// POST /customers/42/deactivate, no body
+// POST /customers/42/close, no body, deactivates and cancels subscriptions together
+// verified has no write. The verification workflow sets it.
+```
+
+Every body carries all of its fields, every field has one place to be written, and no handler has to guess what a missing property meant. 
+
+None of the corrections takes new technology:
 
 - Group fields into a writable resource only when they share an owner, an authorization scope, and a workflow
+- Replace those resources whole with PUT, binding every field as required
 - Give collections with identity-bearing elements their own POST and DELETE endpoints
-- Name the operation when a change carries a workflow or has to be atomic across concerns
+- Name the operation when a change is a state transition or has to be atomic across concerns
 - Require `If-Match` on PUTs to resources more than one person edits
+- Version a writable resource when it gains a field, and let reads grow freely
 - Move existing clients onto the narrow endpoints, then let aggregate URLs answer GET and refuse writes
-- Adopt a spec only when you have the problem it was written for
-
-What they do take is letting the read shape and the write shape be different things.
+- Save PATCH and patch formats for documents, like preference bags and large configurations
