@@ -2,7 +2,7 @@
 title: "Testing Strategy & Architecture"
 layout: guide
 category: Architecture
-subcategory: Design
+subcategory: Quality & Risk
 description: "Comprehensive guide to testing distributed systems including test strategy patterns, contract testing, property-based testing, testing architectural characteristics, and testing in production"
 tags: [architecture, testing, quality, distributed-systems, reliability, practical, design-patterns]
 ---

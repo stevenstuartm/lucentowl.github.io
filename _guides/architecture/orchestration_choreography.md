@@ -3,64 +3,44 @@ layout: guide
 title: "Orchestration and Choreography Patterns"
 category: Architecture
 subcategory: Patterns
-description: "Compare centralized orchestration vs distributed choreography for coordinating complex business processes across multiple services with trade-offs and implementation patterns."
-tags: [architecture, design-patterns, distributed-systems, microservices, workflow, transactions]
+description: "Coordinating a business process across services: centralized orchestration against event-driven choreography, and the saga pattern that keeps a multi-service transaction consistent through compensation."
+tags: [practical, saga, orchestration, choreography, compensating-transaction, workflow]
 ---
 
-These patterns define how multiple services coordinate to complete complex business processes, either through centralized control (orchestration) or distributed coordination (choreography).
+A business process that touches four services has to be driven by something. Orchestration and choreography are the two answers to where that something lives: in one service that calls the others in order, or in the services themselves, each reacting to what the previous one announced.
 
-## Orchestration Pattern
+The saga pattern is a different question layered on top. Orchestration and choreography decide who drives the process. A saga decides what happens when the process gets halfway through and fails, which matters whenever the steps have already changed data in databases no single transaction can reach. A saga can be built either way, so these are two choices, not three.
 
-<blockquote class="pull-quote">
-<p>Centralized orchestration provides visibility and control at the cost of creating a coordination bottleneck.</p>
-</blockquote>
+## Orchestration
 
-Centralized approach where a single orchestrator service controls and coordinates the execution of multiple services in a specific sequence.
-
-**Use When**:
-- Need centralized control over business processes
-- Complex workflows with multiple steps
-- Require transaction-like behavior across services
-- Need detailed workflow monitoring and error handling
-
-**Considerations**:
-
-- Orchestrator can become a single point of failure
-- Risk of creating a distributed monolith
-- May introduce performance bottlenecks
-
-**Example**: Order fulfillment process where an orchestrator coordinates payment processing, inventory reservation, shipping arrangement, and customer notification in sequence.
+One service holds the workflow. It calls each participant in turn, holds the state of the process between calls, and decides what happens when a call fails. Participants expose operations and know nothing about the process they are part of.
 
 ```
 Order Orchestrator:
-  1. Call Payment Service → Wait for response
-  2. If success, call Inventory Service → Wait for response
-  3. If success, call Shipping Service → Wait for response
-  4. If success, call Notification Service
-  5. If any fail, execute compensation logic
+  1. Call Payment Service     → wait for response
+  2. Call Inventory Service   → wait for response
+  3. Call Shipping Service    → wait for response
+  4. Call Notification Service
+  5. On any failure, run the compensation for every completed step
 ```
 
-**Implementation**: AWS Step Functions | Temporal | Camunda | Custom orchestrator
+**Use when**:
+- The process has enough steps, branches, and retries that nobody can hold the whole thing in their head
+- Someone needs to answer "where is order 4471 right now" without correlating logs
+- Failure handling differs step by step rather than being uniform
+- The sequence itself is a business rule that changes on its own schedule
+
+**Example**: An order fulfillment process where the orchestrator takes payment, reserves inventory, arranges shipping, and notifies the customer, in that order, and unwinds what it has done if a step fails.
+
+**Trade-offs**: The orchestrator knows every participant, so it accumulates the coupling the participants shed, and a workflow change usually means changing and redeploying it. It also sits on the path of every process it runs, which makes it both a bottleneck under load and a component whose failure stops work that the participants themselves could have done. Pushed far enough, an orchestrator that holds all the logic and calls services that hold none is a monolith with network calls in the middle.
+
+Dedicated workflow engines exist because the state handling is the hard part rather than the calling. AWS Step Functions, Temporal, and Camunda all persist workflow state, resume after a crash, and handle retries and timeouts, which is most of what a hand-written orchestrator gets wrong.
 
 ---
 
-## Choreography Pattern
+## Choreography
 
-Distributed approach where each service knows when to act and what to do without central coordination, typically through event-driven communication.
-
-**Use When**:
-- Services can operate independently
-- Don't need strict workflow control
-- Want maximum decoupling between services
-- Building event-driven architectures
-
-**Considerations**:
-
-- Difficult to monitor and debug workflows
-- Complex error handling and compensation
-- No central view of the business process
-
-**Example**: E-commerce system where placing an order triggers events that cause inventory, payment, and shipping services to act independently without central coordination.
+No service owns the process. Each one does its work, publishes an event saying what it did, and other services react to the events they care about. The workflow exists only as the sum of those reactions.
 
 ```
 Order Service → OrderCreated event → Event Bus
@@ -71,19 +51,39 @@ Order Service → OrderCreated event → Event Bus
     Service        Service         Service        Service
 ```
 
-**Implementation**: Event brokers (Kafka, RabbitMQ, AWS EventBridge)
+**Use when**:
+- Steps are genuinely independent and don't need to happen in a fixed order
+- New participants should be able to join by subscribing, without a change anywhere else
+- Services are owned by teams that shouldn't have to coordinate a release to add a reaction
+- The process is short enough that no one needs a central view of it
+
+**Example**: Placing an order publishes `OrderCreated`, and the inventory, payment, shipping, and notification services each pick it up and act without anything telling them to.
+
+**Trade-offs**: The process exists but is written down nowhere, so understanding it means reading every subscriber, and answering what happened to one order means correlating events across services. Adding a subscriber is easy in exactly the way that makes cycles easy to create, where service A's event triggers B, whose event triggers A. Failure handling is also distributed, so each participant has to decide for itself what to do about a step it didn't perform and can't see.
 
 ---
 
-## Saga Pattern
+## Choosing Between Them
 
-*Pattern introduced by Hector Garcia-Molina and Kenneth Salem (1987), popularized for microservices by Chris Richardson and others*
+|  | Orchestration | Choreography |
+|---|---------------|--------------|
+| Where the workflow is written | In one place, as explicit steps | Nowhere, so it emerges from what each service subscribes to |
+| Adding a step | Change and redeploy the orchestrator | Deploy a new subscriber, often touching nothing else |
+| Finding out what happened | Read the orchestrator's state for that instance | Correlate events across services, which needs tracing to be bearable |
+| Who knows about whom | The orchestrator knows every participant; participants know nobody | Nobody knows anybody, but everybody knows the event shapes |
+| How it fails badly | Becomes a bottleneck, or a monolith with the services as libraries | Becomes an undocumented workflow with cycles nobody designed |
 
-A saga breaks a distributed transaction into a sequence of local transactions. Each service performs its local transaction and publishes an event or calls the next step. If any step fails, the saga executes compensating transactions in reverse order to undo the changes already made.
+The split is not usually all-or-nothing. A common arrangement orchestrates the part of a process that has a required order and real compensation, and lets everything downstream of it, such as notifications, analytics, and search indexing, happen by choreography.
 
-**The Problem Sagas Solve**:
+---
 
-In a monolith, a single database transaction can span multiple operations atomically. In microservices with separate databases, you can't use a single transaction. Traditional distributed transactions (2PC/XA) are slow, don't scale, and many databases don't support them.
+## Saga
+
+*Introduced by Hector Garcia-Molina and Kenneth Salem (1987), and adapted for microservices by Chris Richardson among others*
+
+A saga is a sequence of local transactions, each committed in one service's own database, with a compensating action defined for each one. If a later step fails, the saga runs the compensations for the steps that already committed, in reverse order.
+
+**The problem it solves**: In a single database, one transaction covers every write and either all of it happens or none does. Across services with separate databases, there is no such transaction. Two-phase commit exists, but it holds locks across every participant for the whole duration and stalls if the coordinator dies mid-commit, and the datastores services actually use, including document stores, message brokers, and many managed cloud services, frequently don't offer it at all.
 
 ```
 Monolith (single transaction):          Microservices (no shared transaction):
@@ -97,7 +97,7 @@ Monolith (single transaction):          Microservices (no shared transaction):
                                               How do we make these consistent?
 ```
 
-**How a Saga Works**:
+**How a saga runs**:
 
 ```
 Happy Path (all steps succeed):
@@ -128,38 +128,40 @@ Step 1              Step 2              Step 3 FAILS
                    └──────────┘       └──────────┘
 ```
 
-**Compensating Transactions**:
+### Compensating Transactions
 
-A compensating transaction undoes the effect of a previous step. It's not always a simple rollback—it's a semantic undo that makes business sense.
+A compensation is not a rollback. The original transaction has committed and other work has happened since, so the compensation is a new transaction that makes business sense of the reversal rather than pretending the first one never ran.
 
-| Original Transaction | Compensating Transaction | Why Not Simple Rollback? |
-|---------------------|-------------------------|-------------------------|
-| Create order | Cancel order | Order ID already assigned, must mark cancelled not delete |
-| Reserve inventory | Release inventory | Other orders may have reserved same items since |
-| Charge payment | Refund payment | Can't undo a charge; must issue separate refund |
-| Send email | Send correction email | Can't unsend; must send follow-up |
+| Original transaction | Compensation | Why it isn't a rollback |
+|---------------------|--------------|-------------------------|
+| Create order | Cancel order | The order id is already issued and may have been shown to the customer, so it is marked cancelled, not deleted |
+| Reserve inventory | Release inventory | Other orders have reserved and released stock since, so the compensation returns quantity rather than restoring a prior state |
+| Charge payment | Refund payment | A settled charge can't be withdrawn, so a refund is a separate movement of money that both parties can see |
+| Send email | Send correction | Nothing can unsend it |
+
+### Compensatable, Pivot, and Retriable
+
+Not every step can be undone, which means a saga has a point of no return. Richardson's taxonomy names the three kinds of step, and identifying the pivot is the part of saga design that is easy to skip and expensive to get wrong.
+
+- **Compensatable transactions** run before the point of no return and each have a compensation that can undo them.
+- **The pivot transaction** is the go/no-go point. Once it commits, the saga is committed to finishing, so there is exactly one of these. It may be the last compensatable step, the first retriable one, or a step that is neither.
+- **Retriable transactions** come after the pivot. They cannot be undone, so the saga has to keep retrying each one until it succeeds, which means they must be designed so that succeeding is always eventually possible.
 
 ```
-Example: Order saga with compensation
-
-T1: CreateOrder(items, customer)     → C1: CancelOrder(orderId)
-T2: ReserveInventory(items)          → C2: ReleaseInventory(items)
-T3: ChargePayment(customer, amount)  → C3: RefundPayment(customer, amount)
-T4: ShipOrder(orderId)               → C4: ??? (can't unship!)
-
-Note: Some actions can't be compensated (shipping). These are called
-"pivot transactions" - once executed, the saga must complete forward.
+T1: CreateOrder(items, customer)     → C1: CancelOrder(orderId)        compensatable
+T2: ReserveInventory(items)          → C2: ReleaseInventory(items)     compensatable
+T3: ChargePayment(customer, amount)  → C3: RefundPayment(...)          pivot
+T4: ShipOrder(orderId)               → no compensation exists          retriable
+T5: SendConfirmation(orderId)        → no compensation exists          retriable
 ```
 
-**Use When**:
-- Need consistency across multiple services with separate databases
-- Cannot use distributed transactions (2PC/XA)
-- Business processes span multiple services
-- You can define compensating actions for each step
+Placing the pivot is a business decision rather than a technical one. Charging before shipping makes the charge the last reversible step, and everything after it has to be something the business is willing to retry until it works.
 
-**Implementation Approaches**:
+### Orchestrated and Choreographed Sagas
 
-**Orchestration-based Saga**: A central orchestrator tells each service what to do and handles failures.
+Both coordination styles from earlier in this guide apply to sagas, and the comparison table above holds here too. Compensation raises what is at stake, because failure handling is exactly what the two styles place differently.
+
+**Orchestrated**: the orchestrator holds the saga state and calls compensations itself when a step fails.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -175,16 +177,14 @@ Note: Some actions can't be compensated (shipping). These are called
     │ Service │   │ Service │   │ Service │   │ Service │
     └─────────┘   └─────────┘   └─────────┘   └─────────┘
 
-Orchestrator:
-  1. Call OrderService.create() → OK, orderId=123
-  2. Call InventoryService.reserve(123) → OK
-  3. Call PaymentService.charge(123) → FAILED
-  4. Call InventoryService.release(123) → OK (compensate)
-  5. Call OrderService.cancel(123) → OK (compensate)
-  6. Return failure to client
+  1. OrderService.create()      → OK, orderId=123
+  2. InventoryService.reserve() → OK
+  3. PaymentService.charge()    → FAILED
+  4. InventoryService.release() → OK   (compensating T2)
+  5. OrderService.cancel()      → OK   (compensating T1)
 ```
 
-**Choreography-based Saga**: Services react to events and publish their own events. No central coordinator.
+**Choreographed**: each service reacts to events, and a failure event is what triggers the compensations upstream of it.
 
 ```
 ┌─────────┐  OrderCreated  ┌─────────┐ InventoryReserved ┌─────────┐
@@ -196,106 +196,36 @@ Orchestrator:
      │    OrderCancelled        │    InventoryReleased        │ PaymentFailed
      └──────────────────────────┴─────────────────────────────┘
 
-Each service:
-  1. Listens for events it cares about
-  2. Performs its local transaction
-  3. Publishes result event
-  4. If it receives a failure event, publishes compensation event
+Each service listens for the events it cares about, commits its local
+transaction, and publishes the result. A failure event tells every
+upstream participant to run its own compensation.
 ```
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Orchestration | Easy to understand workflow, centralized error handling, clear saga state | Orchestrator is coupling point, can become bottleneck |
-| Choreography | Loose coupling, no single point of failure, services are independent | Hard to understand full workflow, difficult to debug, no central view |
+The saga state in the choreographed version is implied by which events have been published and which have not, so there is no single place to query how far a given order has progressed. That is the cost people underestimate.
 
-**Handling Failures in Compensations**:
+### When a Compensation Fails
 
-What if a compensating transaction fails? You can't compensate a compensation.
+Nothing compensates a compensation, so a failed compensation leaves the system in a state the saga cannot resolve on its own.
 
 ```
-Saga failure during compensation:
-
-T1 ✓ → T2 ✓ → T3 ✗ → C2 ✗ (compensation failed!)
-
-Options:
-1. Retry C2 with backoff (compensations should be idempotent)
-2. Log for manual intervention
-3. Forward recovery: try to complete saga anyway if possible
-
-Best practice: Make compensations idempotent and retriable
-  ReleaseInventory(orderId) should succeed even if called twice
+T1 ✓ → T2 ✓ → T3 ✗ → C2 ✗   (compensation itself failed)
 ```
+
+Compensations therefore have to be retriable, which means they have to be idempotent, because a retry can't tell whether the previous attempt partly succeeded. `ReleaseInventory(orderId)` called twice must release the stock once. Where retries are exhausted, the remaining options are to escalate to a human with enough context to resolve it by hand, or to complete the saga forward if finishing is less damaging than staying half-done.
 
 <div class="callout callout--warning">
 <p class="callout__title">Saga Limitations</p>
-<p><strong>No isolation</strong>: Other transactions can see intermediate states (order exists but payment pending). Use semantic locks or "pending" states to handle this.</p>
-<p><strong>Complexity</strong>: N steps means N compensating transactions to implement and test.</p>
-<p><strong>Eventual consistency</strong>: System is temporarily inconsistent during saga execution.</p>
+<p><strong>No isolation.</strong> A saga's intermediate states are visible to everyone else, so another reader can see an order that exists with a payment that hasn't happened. Semantic locks, such as an explicit pending status that other operations check, are the usual answer.</p>
+<p><strong>Every step doubles.</strong> N steps means N compensations to write, test, and keep correct as the business logic they reverse changes.</p>
+<p><strong>The window is visible to everyone.</strong> The system is inconsistent for as long as the saga runs, which can be seconds or, where a step waits on a human or an external provider, considerably longer.</p>
 </div>
 
 ---
-
-<div class="callout callout--tip">
-<p class="callout__title">Choosing Between Patterns</p>
-<p>Use orchestration when you need visibility into complex workflows and centralized error handling. Use choreography when service independence and loose coupling are more important than workflow visibility.</p>
-</div>
 
 ## Quick Reference
 
-### Pattern Comparison
-
-| Pattern | Control | Coupling | Monitoring | Use Case |
-|---------|---------|----------|------------|----------|
-| **Orchestration** | Centralized | Medium-High | Easy | Complex workflows, strict control |
-| **Choreography** | Distributed | Low | Difficult | Independent services, loose coupling |
-| **Saga** | Either | Varies | Medium | Distributed transactions |
-
-### Decision Framework
-
-| Question | Pattern |
-|----------|---------|
-| Need strict workflow control? | Orchestration |
-| Want loose coupling? | Choreography |
-| Need distributed transactions? | Saga (choose orchestration or choreography based on other needs) |
-
-### Trade-offs
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Orchestration</h4>
-<p><strong>Pros:</strong></p>
-<ul>
-<li>Easy to monitor workflows</li>
-<li>Clear workflow visualization</li>
-<li>Centralized error handling</li>
-</ul>
-<p><strong>Cons:</strong></p>
-<ul>
-<li>Single point of failure</li>
-<li>Potential bottleneck</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Choreography</h4>
-<p><strong>Pros:</strong></p>
-<ul>
-<li>Loose coupling</li>
-<li>No single point of failure</li>
-<li>High scalability</li>
-</ul>
-<p><strong>Cons:</strong></p>
-<ul>
-<li>Hard to monitor</li>
-<li>Complex debugging</li>
-<li>No workflow visibility</li>
-</ul>
-</div>
-</div>
-
-<div class="callout callout--note">
-<p class="callout__title">Saga Pattern</p>
-<p><strong>Pros:</strong> Maintains consistency without distributed transactions</p>
-<p><strong>Cons:</strong> Complexity of compensating actions, eventual consistency</p>
-</div>
-
----
+| | What it decides | Reach for it when | Main cost |
+|---|---|---|---|
+| **Orchestration** | Where the workflow logic lives | The sequence is complex, or someone must be able to see process state | A component every process runs through, holding all the coupling |
+| **Choreography** | Where the workflow logic lives | Participants are independent and should be addable without coordination | A workflow that exists nowhere and can only be reconstructed |
+| **Saga** | What happens when a multi-service process fails partway | Steps commit to separate databases and a partial result is unacceptable | A compensation per step, no isolation, and a visible inconsistency window |

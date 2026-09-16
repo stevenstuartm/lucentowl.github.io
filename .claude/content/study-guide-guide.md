@@ -148,7 +148,7 @@ When writing about software architecture, use correct terminology:
 - Correct term: **Architectural Characteristics**
 - Also acceptable: Quality attributes, "-ilities"
 - ❌ Avoid: "Non-functional requirements" (outdated term)
-- Reference: [Architecture Foundations](/study-guides/architecture/ArchitectureFoundations.html#architecture-characteristics)
+- Reference: [Architecture Characteristics](/study-guides/architecture/architecture-characteristics.html)
 
 **Selection process**:
 1. Identify 7 characteristics critical to the project's success
@@ -172,7 +172,7 @@ When writing about software architecture, use correct terminology:
 - List "Architectural Characteristics" as the FIRST design decision
 - Emphasize that the top 3 characteristics drive the architecture style choice
 - Reference the worksheets for systematic evaluation
-- Link to Architecture Foundations guide for detailed explanations
+- Link to the Architecture Characteristics guide for detailed explanations
 
 ---
 
@@ -182,7 +182,7 @@ When writing about software architecture, use correct terminology:
 
 | Category | Subcategories |
 | --- | --- |
-| Architecture | Foundations, Styles, Leadership, Design, Patterns, Data & Infrastructure, Business & Economics |
+| Architecture | Foundations, Styles, Patterns, Design, Modeling, Quality & Risk, Governance, Business & Economics |
 | Data Structures & Algorithms | Fundamentals, Linear Data Structures, Trees & Heaps, Graphs, Hash Tables & Algorithms |
 | Object-Oriented Programming | OOP Foundations, Design Patterns |
 | Security | Security Fundamentals, Threats & Defense, Application Security, Governance & Response |

@@ -11,13 +11,13 @@ The pass has two phases:
 | **0. Consolidation** | Audit the whole set, decide what the category should contain, restructure files and config to match | Once, at the gate, before any file is touched |
 | **1. Refinement** | The standard checklist, one guide at a time, in the new config order, including finishing the new guides | Never |
 
-**Current position: Phase 0 and all Phase 1 rows are complete. Closing the pass is pending the decision on promoting the Phase 0 method into the standard.**
+**Current position: the pass is complete. The Phase 0 method has been promoted into the standard.**
 
 ---
 
 ## Phase 0: Consolidation
 
-Kept as the record of the method, since the closing step asks whether to promote it into the standard.
+The reusable method now lives in the standard; this section records how it was applied to this pass.
 
 ### Why it runs first
 

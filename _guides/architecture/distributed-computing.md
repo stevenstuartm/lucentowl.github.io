@@ -3,11 +3,11 @@ layout: guide
 title: "Distributed Computing Fundamentals"
 category: Architecture
 subcategory: Foundations
-description: "Understanding the fallacies of distributed computing, architecture quantum concept, and how to decide between monolithic and distributed architectures."
-tags: [architecture, distributed-systems, microservices, scalability, decision-making, fundamentals]
+description: "The fallacies of distributed computing, including three added by Mark Richards and Neal Ford, the architecture quantum and its static and dynamic coupling, and how to decide whether a system should be distributed at all."
+tags: [fundamentals, fallacies-of-distributed-computing, architecture-quantum, static-coupling, dynamic-coupling, monolith-vs-distributed]
 ---
 
-Distributed systems promise scalability, resilience, and flexibility, but they introduce significant complexity. Understanding the fundamental challenges and decision frameworks helps architects choose the right level of distribution for their context.
+Distributed systems promise scalability, resilience, and team independence, but they introduce complexity that a single deployable system never has to face. Understanding where that complexity comes from, and what actually defines a boundary between independent parts, helps architects choose the right amount of distribution for their context.
 
 <blockquote class="pull-quote">
 <p>The network is reliable. Latency is zero. Bandwidth is infinite. These assumptions seem reasonable until production proves otherwise.</p>
@@ -15,172 +15,109 @@ Distributed systems promise scalability, resilience, and flexibility, but they i
 
 ## The Fallacies of Distributed Computing
 
-*Originally identified by Peter Deutsch (1994), later expanded by James Gosling and others at Sun Microsystems*
+*Catalogued at Sun Microsystems in the 1990s. The first seven are most often credited to L Peter Deutsch and colleagues, and James Gosling is credited with the eighth.*
 
-Developers new to distributed systems often make false assumptions that lead to serious problems in production. Peter Deutsch and colleagues at Sun Microsystems identified eight fallacies: incorrect assumptions that seem reasonable but break in real distributed systems.
+The fallacies are assumptions that hold inside a single process and quietly break once calls cross a network. Teams moving from monolithic to distributed architectures tend to make them without noticing, because the code for a local call and a remote call can look almost identical.
 
-### The Original Eight Fallacies
+### The Original Eight
 
-**1. The network is reliable**
+| Fallacy | What actually happens | Design response |
+|---|---|---|
+| **The network is reliable** | Packets are lost, connections drop, and hosts become unreachable | Treat network failure as a normal condition. Set timeouts on every call, retry with backoff, and stop calling dependencies that keep failing |
+| **Latency is zero** | A remote call is orders of magnitude slower than an in-process call | Minimize round trips, avoid chatty APIs, batch where possible, and use asynchronous communication when an immediate answer isn't needed |
+| **Bandwidth is infinite** | Bandwidth is limited, shared, and in the cloud, billed | Keep payloads small, paginate large result sets, and compress bulk transfers |
+| **The network is secure** | Traffic crosses infrastructure you don't control and can be intercepted or altered | Encrypt in transit, authenticate every request, and authorize every operation |
+| **Topology doesn't change** | Instances scale, move, fail, and get replaced, so addresses change constantly | Use service discovery rather than hardcoded addresses, and let health checks route around failures |
+| **There is one administrator** | Different teams and vendors own different parts of the system | Make dependencies explicit through versioned contracts, and communicate changes early |
+| **Transport cost is zero** | Serialization consumes CPU and memory, and network traffic costs money | Count transport cost in the design. Sometimes consolidating services is cheaper than calling between them |
+| **The network is homogeneous** | Hardware, operating systems, protocols, and software versions vary | Use standard protocols and formats, and version interfaces |
 
-Networks fail constantly. Packets get lost, connections drop, switches crash, and cables get unplugged. Distributed systems must handle network failures as normal conditions, not exceptional cases.
+### Three Fallacies Added by Richards and Ford
 
-Use retries with exponential backoff, timeouts on all network calls, and circuit breakers to prevent cascading failures. Design for failure as the default state.
+Mark Richards and Neal Ford have proposed three more assumptions that distributed architectures break ([Thoughtworks Technology Podcast, 2025](https://www.thoughtworks.com/en-us/insights/podcasts/technology-podcasts/three-new-fallacies-distributed-computing){:target="_blank" rel="noopener noreferrer"}).
 
-**2. Latency is zero**
+**Versioning is easy.** Rolling deployments run old and new versions of a service side by side, and clients upgrade on their own schedules. Every contract change has to work with both sides for as long as both exist, which turns schema evolution and backward compatibility into ongoing design work rather than a one-time step.
 
-Network calls are orders of magnitude slower than local method calls. A local method call takes nanoseconds. A network call takes milliseconds at best. That's a factor of one million or more.
+**Compensating updates always work.** Distributed workflows often undo a failed step by running a compensating update, such as refunding a charge after a shipment fails. But the compensating update can fail too, and some effects can't be undone at all, like an email already sent or a physical item already shipped. Designs need a plan for when compensation itself fails.
 
-Minimize round trips between services. Batch operations when possible. Use asynchronous communication where immediate responses aren't required. Design APIs to avoid chatty back-and-forth communication.
+**Observability is optional.** In a monolith, a stack trace often shows where a request failed. In a distributed system, one request crosses many services, and without distributed tracing, structured logging, and metrics, diagnosing a failure becomes guesswork. Observability has to be built in from the start.
 
-**3. Bandwidth is infinite**
+## The Architecture Quantum
 
-Network bandwidth is limited and often shared. Large payloads slow down everything using the same network. Bandwidth is also expensive in cloud environments.
-
-Be mindful of payload sizes. Compress data when transferring large amounts. Avoid sending unnecessary data. Consider pagination for large result sets.
-
-**4. The network is secure**
-
-Networks are inherently insecure. Data travels through switches, routers, and infrastructure you don't control. Attackers can intercept, modify, or inject traffic.
-
-Encrypt data in transit using TLS. Authenticate every request. Authorize every operation. Never trust network-level security alone.
-
-**5. Topology doesn't change**
-
-Services move, scale, fail, and get replaced continuously. IP addresses change. Services get deployed to new hosts. Load balancers route traffic differently.
-
-Use service discovery mechanisms rather than hardcoded addresses. Design for services to come and go dynamically. Health checks and graceful degradation handle topology changes.
-
-**6. There is one administrator**
-
-In distributed systems, different teams manage different components. You don't control every part of the infrastructure. Coordination across teams becomes a challenge.
-
-Document dependencies clearly, communicate changes early, and establish contracts between services using API versioning and backward compatibility.
-
-**7. Transport cost is zero**
-
-Infrastructure, bandwidth, and serialization all have costs. Cloud providers charge for network traffic. Serializing and deserializing data consumes CPU and memory.
-
-Consider transport costs in architectural decisions. Sometimes consolidating services makes sense to avoid network overhead. Profile and measure actual costs.
-
-**8. The network is homogeneous**
-
-Distributed systems run on a mix of hardware, operating systems, network equipment, and software versions. This heterogeneity creates compatibility challenges.
-
-Handle incompatibilities gracefully. Use standard protocols. Version your APIs. Test across different environments.
-
-### Modern Additional Fallacies
-
-As distributed systems evolved, practitioners identified additional fallacies:
-
-**9. Versioning is easy**
-
-Managing multiple versions of services in production is complex. Rolling deployments mean old and new versions run simultaneously. Clients may be on different versions than servers.
-
-Plan for backward compatibility, use API versioning strategies, and support multiple versions during transition periods. Schema evolution requires careful design.
-
-**10. Compensating transactions always work**
-
-Distributed systems often rely on eventual consistency and compensating transactions to roll back failed operations. However, some operations can't be easily reversed.
-
-Understand the limitations of compensating transactions. Some business operations are inherently difficult to undo. Design for idempotency where possible. Consider sagas carefully.
-
-**11. Observability is optional**
-
-In monolithic systems, debugging is hard but possible. In distributed systems, debugging without observability is nearly impossible. Requests flow through multiple services, making problems difficult to diagnose.
-
-Invest in observability from the start. Implement distributed tracing, structured logging, and metrics collection. Without observability, you're debugging blind.
-
-## Architecture Quantum
-
-*Concept from Mark Richards & Neal Ford's Fundamentals of Software Architecture (2020)*
+*Definition from Neal Ford, Mark Richards, Pramod Sadalage, and Zhamak Dehghani, Software Architecture: The Hard Parts (2021)*
 
 <blockquote class="pull-quote">
-<p>An architecture quantum is the smallest useful piece of the system that can be deployed on its own, determining deployment strategy, scalability approach, and team organization.</p>
+<p>An architecture quantum is the smallest part of a system that can be deployed, and can run, on its own.</p>
 </blockquote>
 
-An architecture quantum is an independently deployable artifact with high functional cohesion and synchronous connascence. Think of it as the smallest useful piece of the system that can be deployed on its own.
+An architecture quantum is an independently deployable artifact with high functional cohesion, high static coupling, and synchronous dynamic coupling. Each part of that definition does specific work.
 
-### Understanding the Components
+**Independently deployable** means the quantum can be released without releasing any other part of the system. It has its own deployment pipeline and release schedule.
 
-**Independent deployment** means the quantum can be deployed without deploying other parts of the system. It has its own deployment pipeline, versioning, and release schedule.
+**High functional cohesion** means the quantum does something purposeful and complete, such as handling a business capability end to end.
 
-**High functional cohesion** means the quantum does something purposeful and complete. It encompasses all the functionality needed to deliver a specific business capability.
+**High static coupling** means everything the quantum needs in order to run belongs to it, including its database, broker, and shared libraries. Two services that share a database are one quantum, however separately they deploy, because neither can run correctly without the shared piece.
 
-**Synchronous connascence** includes all parts of the system that must work together synchronously. If component A makes synchronous calls to component B, they belong in the same quantum. Asynchronous communication creates quantum boundaries.
+**Synchronous dynamic coupling** means components that call each other synchronously are part of the same quantum at runtime. If one must wait for the other's response, the two must be available together and effectively share operational characteristics like availability and scalability.
 
-### Examples of Architecture Quanta
+### Static and Dynamic Coupling
 
-**Single quantum (monolith)**: An entire e-commerce application deployed as one unit. The shopping cart, checkout, inventory, and user management all deploy together. Changes to any component require deploying the entire application.
+The definition rests on two kinds of coupling.
 
-**Multiple quanta (microservices)**: Separate Order Service, Payment Service, and Inventory Service. Each deploys independently. Each has its own database and communicates asynchronously with others through events.
+**Static coupling** is how the system is wired. It covers the dependencies a quantum needs just to start and function, such as its contracts, libraries, databases, and message brokers. It is visible in the code and the deployment configuration.
 
-**Hybrid architecture**: A modular monolith serving the main application with a separate background job processor. The monolith and job processor are two distinct quanta that can deploy independently but communicate asynchronously through a message queue.
+**Dynamic coupling** is how quanta interact while running. It varies along three dimensions:
+
+- **Communication**: synchronous or asynchronous
+- **Consistency**: atomic transactions or eventual consistency
+- **Coordination**: a central orchestrator or independent choreography
+
+Communication is the dimension that decides quantum boundaries. A synchronous call binds the caller to the callee's availability. An asynchronous message lets each side continue when the other is slow or down.
+
+```
+Synchronous call: one quantum            Asynchronous message: two quanta
+
+┌──────────────────────────────────┐     ┌───────────┐          ┌───────────┐
+│  Order ─── request ──▶ Payment   │     │   Order   │─▶ queue ─▶│  Payment  │
+│        ◀── response ──           │     └───────────┘          └───────────┘
+└──────────────────────────────────┘
+
+If Payment is down, orders stop.         If Payment is down, orders wait in
+                                         the queue and are paid later.
+```
 
 ### Why Quanta Matter
 
-The number of quanta in a system determines the architectural style, deployment strategy, scalability approach, and team organization.
+The number of quanta shapes the rest of the architecture. Each quantum can use its own technology, scale on its own, deploy on its own schedule, and belong to its own team, and each can have its own architecture characteristics. More quanta give more of that flexibility.
 
-More quanta provide more flexibility. Different quanta can use different technologies, scale independently, and deploy on different schedules. Different teams can own different quanta with minimal coordination.
+More quanta also cost more to operate. Distributed tracing, service discovery, network failures, data consistency, and failure handling all get harder with every boundary added.
 
-However, more quanta mean more operational complexity. Distributed tracing, service discovery, network communication, data consistency, and failure handling all become harder. The operational overhead of managing ten services is significantly higher than managing one.
+A few examples show how the definition plays out:
 
-The right number of quanta depends on your context. Start with one quantum unless you have specific reasons to split. Add quanta only when you need the flexibility they provide.
+**Single quantum**: An e-commerce application deployed as one unit. Cart, checkout, inventory, and user management all deploy together, and a change to any of them redeploys the whole application.
+
+**Multiple quanta**: Separate order, payment, and inventory services, each with its own database, communicating through events. Each deploys and fails independently.
+
+**Hidden single quantum**: Three services that deploy separately but share one database, or call each other synchronously on every request. They look like three quanta and behave like one, with the operational cost of distribution and the coupling of a monolith.
 
 ## Monolith vs Distributed: Making the Decision
 
-The choice between monolithic and distributed architecture is not binary. It's a spectrum with many options in between. Understanding when distribution makes sense prevents both over-engineering and under-engineering.
+The choice between a monolithic and a distributed architecture is a spectrum, not a switch. The questions below help place a system on it.
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Choose Distributed Architecture When</h4>
-<ul>
-<li>Different parts need different architecture characteristics</li>
-<li>High scalability or availability requirements exist</li>
-<li>Teams need independent deployment</li>
-<li>Domain boundaries are clear and stable</li>
-<li>Organization has multiple teams</li>
-<li>Operational maturity is high</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Choose Monolithic Architecture When</h4>
-<ul>
-<li>A single set of architecture characteristics suffices</li>
-<li>Simpler deployment is preferred</li>
-<li>Smaller team or scope (1-10 engineers)</li>
-<li>Cost and complexity must be minimized</li>
-<li>Limited operational experience with distributed systems</li>
-<li>Domain boundaries are unclear or frequently changing</li>
-</ul>
-</div>
-</div>
+| Question | Points toward monolithic | Points toward distributed |
+|---|---|---|
+| Do different parts need different architecture characteristics? | No, one set suffices | Yes, parts differ in scalability, availability, or other needs |
+| How critical is independent scalability? | Load is modest or uniform | Load is high or varies sharply between parts |
+| Do teams need to deploy independently? | One team, or teams that release together | Several teams blocked by a shared release |
+| Are domain boundaries clear and stable? | Unclear or still changing | Clear and stable |
+| How mature is operational practice? | Limited experience running distributed systems | Established automation, observability, and incident response |
+| How tight are cost and complexity constraints? | Tight | Distribution's cost is justified by the benefits |
 
-### The Modular Monolith Middle Ground
+If most answers point toward monolithic, start there. A system can distribute later as needs emerge, and moving from distributed back to monolithic tends to be the harder direction.
 
 <div class="callout callout--tip">
-<p class="callout__title">The Modular Monolith Advantage</p>
-<p>A modular monolith provides many benefits of distributed systems while retaining monolithic simplicity. Organize code into well-defined modules with clear boundaries and interfaces.</p>
-<p><strong>Benefits:</strong> Clear domain boundaries | Easier refactoring | Path to future distribution | Lower operational complexity | Faster development</p>
-<p>Many systems should start as modular monoliths and distribute only when specific needs justify the complexity.</p>
+<p class="callout__title">The Modular Monolith Middle Ground</p>
+<p>A modular monolith keeps a single deployment while organizing code into well-defined modules with clear boundaries. It delivers clear domain boundaries, easier refactoring, and a path to future distribution, while keeping operational complexity low. Many systems are well served by starting as a modular monolith and distributing only the parts whose needs justify it.</p>
 </div>
 
-## Decision Framework
-
-Use this framework to evaluate whether distribution makes sense for your system:
-
-| Question | Monolith | Distributed |
-|----------|----------|-------------|
-| Do different parts need different architecture characteristics? | No | Yes |
-| Is extreme scalability critical? | Low-Medium needs | High needs |
-| Do teams need independent deployment? | No | Yes |
-| Are domain boundaries clear and stable? | No | Yes |
-| What is the team size? | Small (1-10) | Multiple teams |
-| What is the operational maturity? | Limited | High |
-
-If most answers point toward monolithic, start there. You can always distribute later if needs change. Going from distributed back to monolithic is much harder.
-
-The best architecture is the simplest one that meets your requirements. Distribution is a tool, not a goal. Use it when the benefits outweigh the costs.
-
----
-
+The best architecture is the simplest one that meets the requirements. Distribution is a tool, not a goal.

@@ -19,6 +19,66 @@ One plan document per pass. A pass covers whatever block of guides was scoped wh
 
 ---
 
+## Phase 0: Consolidation (run first when the set itself is rough)
+
+The checklist below refines guides one at a time. It assumes the set of guides is already right. When a block of guides is rough, that assumption fails: topics overlap, one guide answers two unrelated questions, lookup material sits inside learning content, and obvious gaps have no guide at all. Refining a guide that is about to be merged away wastes the work, and polished prose hides the structural problem the same way it hides a weak argument in a blog draft. Phase 0 settles the structure so the refinement pass runs on the final file set.
+
+**When to run it.** Run Phase 0 whenever the scope is a category or subcategory that has not had a consolidation pass, or when a quick read shows overlapping guides, guides made of product lists, or a subcategory split that follows topic buckets rather than reader intent. Skip it for a single guide or for a block that has already been consolidated.
+
+| Phase | What happens | Stops for approval |
+| --- | --- | --- |
+| **0. Consolidation** | Audit the whole set, decide what it should contain, restructure files and config to match | Once, at the gate, before any file is touched |
+| **1. Refinement** | The checklist below, one guide at a time, in the new config order, including finishing any new guides | Never |
+
+### What earns a guide its place
+
+Apply these tests to every existing guide and every candidate gap. A guide that fails one gets a disposition other than **Keep**.
+
+1. **One reader question.** State in one sentence what a reader comes to this guide to learn. If two guides give the same answer, merge them. If one guide needs two unrelated sentences, split it.
+2. **Learning content, not lookup.** Apply the Lookup Test from [`resource-guide.md`](resource-guide.md). Material a reader consults rather than learns from, such as templates, worked pipelines, and selection tables, moves to `_resources/`.
+3. **Durable substance.** A guide whose core is a list of products, tools, model names, versions, or specs goes stale faster than anyone updates it. Keep its durable reasoning and fold that into a concept guide. Drop the list.
+4. **Right category.** A topic another category already owns stays there. Guides may link to guides outside the pass's scope, but they don't re-teach them.
+5. **Gap test.** A candidate new guide qualifies only if a practitioner in the domain would expect the category to cover it, no existing guide owns it, and folding it into an existing guide would break that guide's one-reader-question test. Judge at study-guide altitude, not doc-completeness.
+6. **Subcategory shape.** Avoid single-guide subcategories. The subcategory split should follow a real difference in reader intent, not just group guides into topic buckets.
+
+### Disposition vocabulary
+
+| Disposition | Meaning |
+| --- | --- |
+| **Keep** | Survives as its own guide; scope may be tightened by the ownership map |
+| **Merge into `<file>`** | Unique content moves into the named survivor; this file is deleted |
+| **Split into `<files>`** | Named sections move to other files; this file survives with the rest |
+| **Move to resource** | Lookup material leaves the guide for `_resources/` |
+| **Move out** | Belongs to another category; content goes to that category's guide and this file is deleted |
+| **Remove** | No unique content worth keeping; deleted outright |
+| **New** | A gap that passed the gap test. Created in Phase 0 as a seed holding the sections the ownership map moves into it, added to config then, and finished during Phase 1 at its row |
+
+**Never rename a file.** A merged guide keeps the survivor's filename, and only the `title:` changes.
+
+### The topic ownership map
+
+The ownership map is the lasting output of Phase 0. It is a table of `Concept | Owner | Non-owners treat it as`, and it assigns every concept that more than one guide touches to exactly one owning guide. A non-owner either defines the concept in a clause where it's used, or omits it, and doesn't link to the owner. Out-of-scope owners (a guide in another category) are allowed and named by path.
+
+The map stays in the plan for the life of the pass, and Phase 1 checklist item 2 checks each guide against it.
+
+### Steps
+
+1. Read everything in scope, plus the boundary material in other categories the audit must not duplicate.
+2. Build the topic ownership map.
+3. Fill a disposition table for every existing guide and candidate gap, with a one-sentence reader question each. Propose subcategories and reading order, with the rationale for the order.
+4. **Gate:** present the proposal. Nothing is edited before approval.
+5. Execute: merges, splits, and New seeds (content moved wholesale, unpolished); moves to resource (diff against any existing resource first, carry over anything missing); removals; config and front matter; inbound links to moved or deleted files; the organization table in `study-guide-guide.md`.
+6. Validate without a build: config parses, every config path exists, no inbound links point at deleted files.
+7. Close: build the Progress table in the new config order, rewrite pre-flags by row number, delete the disposition table, keep the ownership map.
+
+### How Phase 0 changes Phase 1
+
+- **New guide rows get written, not just refined.** A seed holds only moved sections, unpolished and often uncoordinated. Write the rest of the guide around them following `study-guide-guide.md` and the scope the ownership map assigns, then run the full checklist. Item 1 applies to freshly written prose with no discount, since a new guide is exactly the plausible, unverified text item 1 exists to catch.
+- **Item 2 runs across guides.** Beyond within-file redundancy, check the guide against the ownership map. If it doesn't own a concept, it doesn't re-teach it.
+- **Closing adds one check.** After the last row, re-run the sibling-link grep across the scope and confirm no concept is re-taught against the ownership map.
+
+---
+
 ## Review checklist (apply to every guide)
 
 **Order of operations:** run item 1 (correctness and completeness) **first** — it is the only pass that adds or rewrites content, and every later check has to operate on the corrected text, not the original. Items 2-7 then refine that content. The two front-matter items (8 and 9) run last so they confirm tags and description against the final content.
@@ -107,10 +167,11 @@ These are not stylistic preferences. Each one exists because something else in t
 ### Starting a new pass
 
 1. Create `_drafts/<scope>-refinement-plan.md` from the skeleton below.
-2. Build the progress table from `assets/data/study_guides_config.json`, in config order, one row per guide. That order is the consumption order.
-3. Write the scope sentence and name the sources. Leave the three tracking sections empty under their headings.
-4. Run the tag-frequency measurement for the category and record it under **Domain notes** — item 9 needs to know which tags are filler *here*, and that is a per-category fact.
-5. Start at row 1.
+2. Decide whether the pass needs **Phase 0** (see above). If it does, run Phase 0 through its gate before building the progress table, keep the **Topic ownership map** section in the plan, and build the table from the post-consolidation config. If it doesn't, delete that section from the skeleton.
+3. Build the progress table from `assets/data/study_guides_config.json`, in config order, one row per guide. That order is the consumption order.
+4. Write the scope sentence and name the sources. Leave the three tracking sections empty under their headings.
+5. Run the tag-frequency measurement for the category and record it under **Domain notes** — item 9 needs to know which tags are filler *here*, and that is a per-category fact.
+6. Start at row 1.
 
 ### Header
 
@@ -165,6 +226,13 @@ Tracks the review-and-refine pass over all guides in `_guides/[path]/`. Guides a
 **Item 7 (hierarchy and scope clarity)** in this domain means [the containment hierarchy].
 
 **Item 9 (tag audit)** — measured across the [N] guides before the pass: [tag frequencies]. So for this category: drop [category-restating tag], and treat [filler tags] as the ones to replace with real content signal.
+
+## Topic ownership map
+
+*(Only when the pass runs Phase 0; delete this section otherwise. Stays for the life of the pass.)*
+
+| Concept | Owner | Non-owners treat it as |
+|---|---|---|
 
 ## Domain gotchas
 

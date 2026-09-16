@@ -3,165 +3,179 @@ layout: guide
 title: "Service-Based Architecture"
 category: Architecture
 subcategory: Styles
-description: "Pragmatic distributed architecture with coarse-grained domain services balancing scalability and complexity."
-tags: [architecture, distributed-systems, microservices, scalability, practical]
+description: "The pragmatic distributed style built from a handful of coarse-grained, separately deployed domain services: its topology, why services often share a database and keep ACID transactions, the three data topology options, and when it beats both monoliths and microservices."
+tags: [practical, service-based-architecture, domain-services, coarse-grained-services, shared-database, data-topology]
 ---
 
 <blockquote class="pull-quote">
-<p>Service-based architecture is the pragmatic middle ground between monoliths and microservices. You get distributed system benefits without microservices' operational complexity.</p>
+<p>Service-based architecture distributes a system into a few large services, and keeps enough in common that the system stays simple to run.</p>
 </blockquote>
 
-Service-based architecture organizes a system into a small number of coarse-grained domain services (typically 4-12) sitting between the user interface and data layer. Each service represents a significant chunk of business capability: think "catalog service," "checkout service," "inventory service," not fine-grained functions.
+Service-based architecture organizes a system into a small number of coarse-grained domain services, typically somewhere between four and twelve, sitting between a user interface and a data layer. Each service covers a significant business capability, such as catalog, checkout, or inventory, rather than a single fine-grained function. Services deploy separately, and they often share a database.
 
 ## How It Works
 
-Each service follows an internal layered structure with an API facade, business logic, and persistence layer. Services own significant business capabilities and encapsulate everything needed to deliver that capability.
+Each domain service is a separately deployed unit with its own internal layers: an API facade, business logic, and persistence. A user interface, sometimes behind an API gateway or reverse proxy, routes requests to the service that owns the requested capability. Services communicate remotely, usually through REST or gRPC, and sometimes through messaging.
 
-Services communicate via remote calls using REST, gRPC, or messaging. A UI layer or API gateway sits in front, routing requests to appropriate services based on the requested capability.
+The coarse grain is deliberate. Fewer, larger services mean less communication between services and simpler deployment than microservices. A single service often handles a whole business workflow, such as placing an order, from start to finish.
 
-The coarse grain size is intentional. Having fewer, larger services reduces inter-service communication and simplifies deployment compared to microservices. Teams can work on entire business capabilities without coordinating across dozens of services.
+```
+┌───────────────────────── User interface ─────────────────────────┐
+└───────┬──────────────┬───────────────┬───────────────┬───────────┘
+        ▼              ▼               ▼               ▼
+  ┌───────────┐  ┌───────────┐  ┌────────────┐  ┌─────────────┐
+  │  Catalog  │  │ Checkout  │  │ Inventory  │  │ Fulfillment │
+  │  service  │  │  service  │  │  service   │  │   service   │
+  │ facade    │  │ facade    │  │ facade     │  │ facade      │
+  │ logic     │  │ logic     │  │ logic      │  │ logic       │
+  │ data      │  │ data      │  │ data       │  │ data        │
+  └─────┬─────┘  └─────┬─────┘  └─────┬──────┘  └──────┬──────┘
+        └──────────────┴──────┬───────┴────────────────┘
+                              ▼
+          ┌───────────────────────────────────────────┐
+          │ Shared database, with tables grouped by   │
+          │ domain: catalog | orders | stock | ship   │
+          └───────────────────────────────────────────┘
+```
 
-### Service Topology
+### Service Granularity
 
-**UI Layer**: Web application, mobile app, or API gateway that presents a unified interface to users. The UI aggregates data from multiple services and handles cross-service workflows.
+An e-commerce system built this way might have five services covering its entire domain:
 
-**Domain Services**: 4-12 coarse-grained services, each representing a significant business capability. Each service has:
-- **API Facade**: Public interface exposing service capabilities
-- **Business Logic Layer**: Domain rules and workflows
-- **Persistence Layer**: Data access and caching
-- **Database**: Service may have dedicated database or share with other services
+- **Catalog** for product browsing, search, and details
+- **Cart** for shopping cart management
+- **Checkout** for order placement and payment
+- **Inventory** for stock management
+- **Fulfillment** for shipping and delivery tracking
 
-**Service Granularity**: Services are coarser than microservices. An e-commerce system might have:
-- Catalog Service (product browsing, search, details)
-- Cart Service (shopping cart management)
-- Checkout Service (order placement, payment)
-- Inventory Service (stock management)
-- Fulfillment Service (shipping, delivery tracking)
+A microservices version of the same system would split those capabilities much further, often into several dozen services with narrow responsibilities.
 
-That's 5 services covering the entire domain. A microservices version might have 30-50 services with much finer-grained responsibilities.
+### ACID Transactions Within a Service
+
+Because each service covers a whole business capability, most workflows start and finish inside one service. That lets the service use ordinary database transactions for the workflow, so an order and its payment record commit or roll back together. Microservices, by contrast, often split a single workflow across services and have to coordinate it with sagas and eventual consistency. Keeping ACID transactions is one of the main practical reasons to choose service-based architecture over microservices.
+
+### The User Interface Routes, Services Coordinate
+
+The user interface presents a unified experience and routes each request to the right service. It can take several forms: a single user interface for the whole system, one per domain, or one per service. Business workflows belong inside the services. When the user interface starts coordinating steps across several services, it becomes the place where every workflow change lands, which erodes the independence of the services behind it.
 
 ## Data Topology Options
 
-<div class="callout callout--tip">
-<p class="callout__title">Critical Decision Point</p>
-<p>Data architecture is one of the most critical decisions in service-based architecture. The database topology you choose (monolithic, domain-based, or service-specific) determines coupling, transaction complexity, and operational overhead.</p>
-</div>
+The data topology is one of the most consequential decisions in this style, because it sets how coupled the services are, how complex transactions become, and how much there is to operate.
 
-Data architecture is one of the most critical decisions in service-based architecture. Three primary approaches exist:
+It also decides how many architecture quanta the system has. Services that share a database depend on it to run, so a system with one shared database usually remains a single quantum even though its services deploy separately. Separate databases are what give services separate quanta.
 
-### Monolithic Database
+### Shared Database
 
-All services share one database. Services access their own tables but everything lives in the same database instance.
+All services share one database, and each service works with the tables for its own domain.
 
 **Advantages**:
-- Transactions are simple (ACID within the database)
-- Queries spanning multiple service domains are straightforward
-- Familiar development patterns
-- Lower operational complexity (one database to manage)
-- Easier to enforce data integrity constraints
+- Transactions stay simple, with ACID guarantees inside the database
+- Queries that span domains are straightforward
+- Development patterns stay familiar
+- There is one database to operate
+- Data integrity constraints are easy to enforce
 
-**Tradeoffs**:
-- Services couple through the schema
-- Database changes risk affecting multiple services
-- Database becomes a potential bottleneck
-- Harder to enforce service boundaries (temptation to directly query other services' tables)
-- Shared database can become a deployment coupling point
+**Trade-offs**:
+- Services are coupled through the schema, so a table change can break several services
+- The database can become a performance bottleneck and a single point of failure
+- Service boundaries are harder to enforce, since querying another domain's tables is always possible
 
-**When to use**: Most service-based architectures start here. The simplicity advantage outweighs the coupling cost until the system reaches a scale where the database becomes a bottleneck or service independence becomes critical.
+**Reducing schema coupling:** Split the data access code into libraries per domain, such as a catalog entity library and an orders entity library, plus a small common library for tables that genuinely everyone uses. A change to the orders tables then only affects the services that depend on the orders library, rather than every service that shares the database.
+
+**When to use:** Many service-based systems start here. The simplicity outweighs the coupling until the database becomes a bottleneck or service independence becomes critical.
 
 ### Domain Databases
 
-Each business domain gets its own database. Services within a domain share a database. Services across domains use separate databases.
-
-For example: Catalog and Search services share a "catalog database." Cart and Checkout services share an "orders database." Inventory and Fulfillment services share a "logistics database."
+Each business domain gets its own database. Services within a domain share it, and services in different domains don't. Catalog and Search might share a catalog database, Cart and Checkout an orders database, and Inventory and Fulfillment a logistics database.
 
 **Advantages**:
-- Domain autonomy (catalog domain can evolve its data independently)
-- Related services can still leverage transactions within a domain
-- Reduces database size and query complexity compared to monolithic database
-- Clearer ownership and boundaries
+- Each domain can evolve its data independently
+- Related services can still share transactions within their domain
+- Each database is smaller and simpler than one shared database
+- Ownership and boundaries are clearer
 
-**Tradeoffs**:
-- Cross-domain queries require service-to-service calls or data synchronization
-- Transactions spanning domains require distributed patterns (sagas)
-- More databases to manage than monolithic approach
-- Still couples services within a domain through shared schema
+**Trade-offs**:
+- Cross-domain queries need service calls or data synchronization
+- Transactions that span domains need sagas or eventual consistency
+- There are more databases to operate
+- Services within a domain remain coupled through their shared schema
 
-**When to use**: When you have clear domain boundaries and cross-domain transactions are rare. This provides a middle ground between monolithic and service-specific databases.
+**When to use:** When domain boundaries are clear and cross-domain transactions are rare.
 
-### Service-Specific Databases
+### Service-Owned Databases
 
-Each service owns its own database. Maximum data isolation. This mirrors the microservices approach to data.
+Each service owns its own database, which mirrors the microservices approach to data.
 
 **Advantages**:
-- Complete service independence
-- Services evolve data models without affecting others
-- Clear ownership and boundaries
-- Can choose different database technologies per service (polyglot persistence)
+- Services are fully independent at the data level
+- Each service evolves its data model without affecting others
+- Ownership is unambiguous
+- Each service can choose the database technology that suits it
 
-**Tradeoffs**:
-- Most complex option
-- No distributed transactions (must use sagas or eventual consistency)
-- Cross-service queries require aggregation at the application layer
-- Data duplication across services
-- Highest operational overhead
+**Trade-offs**:
+- It is the most complex option
+- No transaction can span services, so cross-service consistency needs sagas or eventual consistency
+- Cross-service queries need aggregation in application code
+- Some data gets duplicated across services
+- Operational overhead is highest
 
-**When to use**: When service independence is critical, when preparing for eventual migration to microservices, or when services genuinely need different database technologies.
+**When to use:** When service independence is critical, when a later move to microservices is likely, or when services genuinely need different database technologies.
 
 ## Characteristics
 
+Ratings are relative to other architecture styles, not measurements.
+
 | Characteristic | Rating | Notes |
 |----------------|--------|-------|
-| **Simplicity** | ⭐⭐⭐ | More complex than monolith, simpler than microservices |
-| **Scalability** | ⭐⭐⭐⭐ | Services scale independently |
-| **Evolvability** | ⭐⭐⭐⭐ | Services evolve independently |
-| **Deployability** | ⭐⭐⭐⭐ | Independent deployment of services |
-| **Testability** | ⭐⭐⭐ | Services testable independently, integration testing harder |
-| **Modularity** | ⭐⭐⭐⭐ | Clear service boundaries |
-| **Cost** | ⭐⭐⭐ | Higher than monolith, lower than microservices |
+| **Deployability** | ⭐⭐⭐⭐ | Services deploy independently |
+| **Evolvability** | ⭐⭐⭐⭐ | Services change independently within their domains |
+| **Modularity** | ⭐⭐⭐⭐ | Clear, domain-aligned service boundaries |
+| **Fault tolerance** | ⭐⭐⭐⭐ | A failing service doesn't take down the others, unless the shared database fails |
+| **Scalability** | ⭐⭐⭐ | Services scale independently, but a shared database limits how far |
+| **Simplicity** | ⭐⭐⭐ | More complex than a monolith, simpler than microservices |
+| **Testability** | ⭐⭐⭐ | Services test independently, and integration testing gets harder |
+| **Cost** | ⭐⭐⭐ | Higher than a monolith, lower than microservices |
 
 ## When Service-Based Architecture Fits
 
-**Organizations wanting distributed system benefits without microservices complexity**: You need independent scaling, deployment flexibility, and technology diversity. But you can't justify microservices' operational overhead.
+**Distributed benefits without microservices overhead.** The system needs independent deployment and some independent scaling, but the organization can't justify the operational cost of dozens of services.
 
-**Teams organized by business domains who need deployment independence**: Domain teams (Catalog team, Checkout team, Inventory team) want to deploy changes without coordinating. Service-based architecture enables this with fewer services than microservices.
+**Domain teams that need to deploy independently.** Catalog, checkout, and inventory teams can each release their service without coordinating, with far fewer services to manage than microservices would need.
 
-**Systems with clear domain boundaries and moderate complexity**: When the domain naturally partitions into 4-12 major capabilities. Not so simple that a monolith suffices, not so complex that microservices' fine-grained modularity is required.
+**Clear domain boundaries and moderate complexity.** The domain divides naturally into a handful of major capabilities. It is too complex for a monolith to stay comfortable, and not complex enough to need fine-grained services.
 
-**Mid-size systems or organizations**: Microservices work well at large scale with mature operations. Monoliths work well for small systems. Service-based architecture fits the middle: systems too large for monoliths but not large enough to justify microservices complexity.
+**Workflows that need transactional consistency.** When most business workflows fit inside one capability, coarse services keep ACID transactions that finer-grained services would lose.
 
-**Transitional architecture**: When evolving from a monolith but not ready for microservices. Extract major capabilities as coarse services. Learn distributed system patterns. Move to finer-grained services if needed.
+**A step away from a monolith.** Extracting major capabilities as coarse services lets a team learn to run a distributed system before deciding whether finer-grained services are worth it.
 
 ## When to Avoid Service-Based Architecture
 
-**Applications requiring distributed transactions across services**: If workflows constantly need atomic transactions spanning multiple services, the service boundaries are probably wrong. Either redesign boundaries or use a monolithic database.
+**Workflows that constantly span services transactionally.** If most workflows need atomic transactions across several services, the service boundaries are probably wrong. Redraw them, or keep the data in a monolithic topology.
 
-**Very simple domains where a monolith would suffice**: If the system is simple enough that a modular monolith delivers sufficient modularity, don't add distributed system complexity unnecessarily.
+**Simple domains.** If a modular monolith delivers enough modularity, adding distribution adds cost without benefit.
 
-**Organizations ready to commit fully to microservices**: If you have operational maturity, mature DevOps practices, and need microservices' benefits (extreme scalability, fine-grained deployment, technology polyglot), don't compromise with service-based architecture. Go fully to microservices.
+**A genuine need for fine-grained services.** If the organization has mature operations and needs extreme scalability, fine-grained deployment, or technology diversity per capability, microservices fit better than a compromise.
 
-**Systems with unclear boundaries**: If you can't identify 4-12 clear service boundaries, service-based architecture forces premature decisions. Start with a modular monolith, discover boundaries, then extract services.
+**Unclear boundaries.** If the domain's major capabilities can't be identified yet, splitting into services forces premature decisions. Start with a modular monolith, discover the boundaries, then extract services.
 
 ## Common Pitfalls
 
-**Too much inter-service communication**: Services constantly call each other for every operation. This creates chattiness, latency, and tight coupling. Solution: Redesign service boundaries. Services that talk constantly probably belong together. Or cache frequently accessed data locally.
+**Chatty services.** Services call each other for nearly every operation, adding latency and tight coupling. Services that talk constantly probably belong together, so redraw the boundary, or cache data a service reads often.
 
-**Too many services**: More than 12 services suggests you're building microservices without admitting it. At that scale, you need microservices' operational sophistication. Solution: Either consolidate services into coarser boundaries or commit to microservices.
+**Too many services.** Once the count climbs well past a dozen, the system is turning into microservices and needs microservices' operational practices. Either consolidate into coarser services or commit to microservices deliberately.
 
-**Excessive data sharing across services**: Services directly query each other's databases or share tables. This breaks service boundaries and creates tight coupling. Solution: Enforce boundaries. Services communicate through APIs, not direct database access.
+**Reaching into other domains' data.** Services query tables that belong to another domain, which couples them in ways no interface shows. Route cross-domain data access through service APIs, or split the data access code into domain libraries.
 
-**UI becomes a distributed monolith**: The UI layer contains business logic coordinating across services. Changes to workflows require UI changes and coordination across multiple services. Solution: Push coordination logic into services. The UI should be a thin presentation layer.
+**A user interface that coordinates workflows.** Business logic that orchestrates several services ends up in the user interface, so every workflow change needs coordinated user interface and service changes. Move the coordination into a service.
 
-**Wrong service boundaries**: Services don't align with domain concepts. Boundaries feel arbitrary. Changes constantly require modifying multiple services. Solution: Use Domain-Driven Design to identify bounded contexts. Align services with contexts.
+**Boundaries that don't match the domain.** Services feel arbitrary, and most changes require modifying several of them. Use domain-driven design to identify bounded contexts and align services with them.
 
 ## Evolution and Alternatives
 
 When service-based architecture stops fitting:
 
-**Evolve to microservices**: If services are too coarse and you need finer-grained deployment, break services into smaller microservices. The transition is natural; your 8 services might become 40 microservices.
+**Split services into microservices.** If some services are too coarse and need finer-grained scaling or deployment, break them into smaller services. It doesn't have to happen everywhere at once. Services that don't need it can stay coarse.
 
-**Consolidate back to modular monolith**: If inter-service communication overhead outweighs benefits, or if you don't actually need independent deployment, consolidate services back into a modular monolith. Keep the domain boundaries as modules.
+**Consolidate into a modular monolith.** If communication overhead outweighs the benefits, or independent deployment turns out not to matter, fold the services back into a modular monolith and keep the domain boundaries as modules.
 
-**Implement event-driven patterns**: If service coordination becomes complex, introduce event-driven patterns. Services publish domain events. Other services subscribe and react. This decouples services while maintaining service-based architecture.
-
-For more architectural style options, see the [Architecture Styles](/study-guides/architecture/ArchitectureStyles.html) overview.
+**Add event-driven communication.** If coordination between services grows complex, services can publish domain events that others react to. That reduces direct dependencies while the overall style stays the same.

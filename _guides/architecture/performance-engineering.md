@@ -2,7 +2,7 @@
 title: "Performance Engineering"
 layout: guide
 category: Architecture
-subcategory: Design
+subcategory: Quality & Risk
 description: "Comprehensive guide to performance engineering including requirements definition, profiling and analysis, optimization strategies, capacity planning, performance testing methodology, and architectural patterns for scalable systems"
 tags: [architecture, performance, scalability, optimization, profiling, capacity-planning, design-patterns, practical]
 ---

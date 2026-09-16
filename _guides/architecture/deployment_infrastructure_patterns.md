@@ -1,13 +1,36 @@
 ---
 layout: guide
-title: "Deployment and Infrastructure Patterns"
+title: "Gateway and Proxy Patterns"
 category: Architecture
 subcategory: Patterns
-description: "Infrastructure patterns including sidecar, ambassador, backend for frontend (BFF), and service mesh for robust deployment strategies."
-tags: [architecture, design-patterns, infrastructure, kubernetes, service-mesh, deployment]
+description: "Patterns that move cross-cutting network concerns out of application code: API gateways at the edge, backends for frontends per client type, and sidecar and ambassador proxies beside each service."
+tags: [architecture, design-patterns, api-gateway, bff, sidecar, ambassador]
 ---
 
-These patterns address how applications are deployed, managed, and operated in distributed environments, focusing on infrastructure concerns and operational efficiency.
+These patterns decide where cross-cutting network concerns live: at the edge in front of all services, in a backend tailored to one client, or in a proxy deployed beside each service.
+
+## API Gateway
+
+An API gateway is a server that acts as a single entry point for a collection of microservices. It routes requests, enforces policies, and provides cross-cutting concerns.
+
+**Core responsibilities**:
+- Request routing and composition
+- Authentication and authorization
+- Rate limiting and throttling
+- Request/response transformation
+- Protocol translation (REST to gRPC, HTTP to messaging)
+- Caching
+- Logging and monitoring
+
+**Gateway variations**:
+
+**Aggregation**: Gateway calls multiple services and combines responses into single response.
+
+**Transformation**: Gateway adapts legacy SOAP services to modern REST APIs.
+
+**Edge gateway**: Deployed close to users (CDN edge) for low-latency responses.
+
+---
 
 ## Sidecar Pattern
 
@@ -85,120 +108,41 @@ IoT Device → IoT BFF (product IDs only, no images)
 
 ---
 
-## Service Mesh
-
-*Popularized by Buoyant's Linkerd (2016) and later Istio (2017)*
-
-Dedicated infrastructure layer that handles service-to-service communication, providing observability, security, and traffic management without requiring code changes. Implements the sidecar pattern at scale.
-
-**Use When**:
-- Large number of microservices (typically >10-20 services)
-- Need consistent security and observability across all services
-- Complex traffic management requirements (canary, A/B testing, retries, timeouts)
-- Multiple teams developing services in different languages
-- Want to extract networking concerns from application code
-
-**Components**:
-
-**Data Plane** (per-service sidecar proxies):
-- Intercepts all network traffic for the service
-- Implements routing, load balancing, retries, circuit breaking
-- Collects metrics and traces
-- Common proxy: **Envoy** (high-performance C++ proxy)
-
-**Control Plane** (centralized management):
-- Configures all data plane proxies
-- Manages certificates for mTLS
-- Collects telemetry and distributes policies
-- Provides service discovery
-
-**Example**: Kubernetes cluster with Istio service mesh providing mTLS encryption, traffic splitting for canary deployments, and distributed tracing.
-
-```
-Service Mesh Architecture:
-
-Control Plane (Istio Components):
-  - Pilot: Traffic management, service discovery
-  - Citadel: Certificate management, mTLS
-  - Galley: Configuration management
-  - Telemetry: Metrics collection
-
-Data Plane (Envoy Sidecars):
-  Each microservice pod contains:
-    - Application Container (business logic)
-    - Envoy Sidecar Proxy (networking)
-      - Mutual TLS encryption
-      - Traffic routing & load balancing
-      - Circuit breaking & retries
-      - Metrics & distributed tracing
-```
-
-**Popular Service Meshes**:
-- **Istio**: Feature-rich, complex, large footprint
-- **Linkerd**: Lightweight, simpler, Rust-based
-- **Consul Connect**: HashiCorp, multi-platform
-- **AWS App Mesh**: Managed service mesh for AWS
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Service Mesh Benefits</h4>
-<ul>
-<li>Zero code changes required</li>
-<li>Consistent policies across all services</li>
-<li>Powerful traffic management (canary, A/B testing)</li>
-<li>Built-in observability and tracing</li>
-<li>Automatic mTLS encryption</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Service Mesh Costs</h4>
-<ul>
-<li>High operational complexity</li>
-<li>Resource overhead (CPU/memory for sidecars)</li>
-<li>Latency increase (~1-5ms per hop)</li>
-<li>Steep learning curve</li>
-<li>Additional failure points</li>
-</ul>
-</div>
-</div>
-
----
-
 ## Quick Reference
 
 ### Pattern Comparison
 
 | Pattern | Scope | Complexity | Use Case |
 |---------|-------|------------|----------|
+| **API Gateway** | All external clients | Medium | Single entry point and edge policies |
 | **Sidecar** | Single app | Low | Cross-cutting concerns |
 | **Ambassador** | Outbound calls | Low | Centralize networking |
 | **BFF** | Per client type | Medium | Client-specific needs |
-| **Service Mesh** | All services | High | Large-scale microservices |
 
 ### Decision Tree
 
 | Question | Pattern |
 |----------|---------|
+| Need one entry point that enforces policy for external clients? | API Gateway |
 | Need cross-cutting functionality? | Sidecar |
 | Centralize outbound networking? | Ambassador |
 | Different client requirements? | BFF |
-| Many microservices needing consistent policies? | Service Mesh |
 
 ### Implementation Tools
 
+**API Gateway**: Managed cloud gateways | Envoy | NGINX
 **Sidecar**: Kubernetes sidecars | Docker Compose
 **Ambassador**: Envoy | NGINX
 **BFF**: Custom services | API Gateway with routing
-**Service Mesh**: Istio | Linkerd | Consul Connect
 
 ### When to Avoid
 
 <div class="callout callout--warning">
 <p class="callout__title">Complexity Warning</p>
-<p><strong>Sidecar:</strong> Adds complexity for simple apps<br>
+<p><strong>API Gateway:</strong> Adds a hop and a shared component to operate for a single service with one client<br>
+<strong>Sidecar:</strong> Adds complexity for simple apps<br>
 <strong>Ambassador:</strong> Unnecessary for apps with few external calls<br>
-<strong>BFF:</strong> Overkill for single client type<br>
-<strong>Service Mesh:</strong> Too complex for systems with fewer than 10 services</p>
+<strong>BFF:</strong> Overkill for single client type</p>
 </div>
 
 ---

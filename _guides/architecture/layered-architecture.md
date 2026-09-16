@@ -3,139 +3,130 @@ layout: guide
 title: "Layered Architecture"
 category: Architecture
 subcategory: Styles
-description: "Technical layer-based monolithic architecture organizing systems by capability: presentation, business logic, persistence, and database layers."
-tags: [architecture, monolithic, design-patterns, fundamentals, practical]
+description: "The technically partitioned monolithic style that organizes a system into presentation, business, persistence, and database layers: closed and open layers, layers of isolation, the architecture sinkhole anti-pattern, and when the style fits."
+tags: [fundamentals, layered-architecture, n-tier, layers-of-isolation, architecture-sinkhole, technical-partitioning]
 ---
 
-Layered architecture organizes a system by technical capability rather than business function. The classic example has four layers: presentation (UI), business logic, persistence (data access), and database. Each layer depends only on the layer directly below it, creating a clean separation of technical concerns.
+Layered architecture, also called n-tier architecture, organizes a system by technical capability rather than business function. The classic form has four layers: presentation, business logic, persistence, and database. Each layer has one kind of responsibility, and requests flow down through the layers and back up.
 
-## How It Works
+The layers are logical, and they don't dictate deployment. Many layered systems deploy the presentation, business, and persistence layers as one application with a separate database. Others split the presentation layer or the database onto their own servers. Whatever the physical arrangement, the style stays a monolith in the sense that matters, because a change to any layer ships as part of one application.
 
-The presentation layer handles user interaction and delegates business operations to the business layer. The business layer implements domain logic and uses the persistence layer to read and write data. The persistence layer abstracts database access. The database stores the data.
+## How Requests Flow Through Layers
+
+The presentation layer handles user interaction and hands business operations to the business layer. The business layer applies the domain rules and uses the persistence layer to read and write data. The persistence layer hides how data is stored, and the database stores it.
+
+| Layer | Responsibilities | Must not |
+|---|---|---|
+| **Presentation** | User interaction, display logic, input validation, API endpoints | Contain business rules or access the database |
+| **Business** | Domain logic, business rules, workflow coordination, business constraints | Know about UI concerns or contain SQL and data access code |
+| **Persistence** | Data access behind interfaces, mapping between domain objects and schemas, queries and connections | Contain business rules or know about UI concerns |
+| **Database** | Durable storage, integrity constraints, transactions | Hold business logic, since stored procedures that do tie business rules to the schema |
+
+### Closed Layers and Layers of Isolation
+
+A layer can be closed or open. A request can't skip a closed layer. It must pass through, so the presentation layer calls the business layer, which calls the persistence layer, and so on.
+
+Closed layers create **layers of isolation**. Each layer knows only the interface of the layer beneath it, so a change inside one layer doesn't affect the others. If the persistence layer switches from raw SQL to an ORM, the business layer doesn't notice. Without closed layers, the presentation layer could end up coupled directly to database access code, and replacing the persistence approach would break it.
+
+### Open Layers
+
+An open layer can be bypassed. The common reason to open one is a shared services layer holding cross-cutting components such as logging, auditing, or date utilities. Placed below the business layer and marked open, it lets the business layer reach the persistence layer directly while still using the shared services when needed.
+
+```
+┌─────────────────────────────────────────┐
+│ Presentation                   (closed) │
+└────────────────────┬────────────────────┘
+                     ▼
+┌─────────────────────────────────────────┐
+│ Business                       (closed) │
+└──────────┬───────────────────────┬──────┘
+           ▼                       │ skips the open layer
+┌──────────────────────────┐       │
+│ Shared services   (open) │       │
+└──────────┬───────────────┘       │
+           ▼                       ▼
+┌─────────────────────────────────────────┐
+│ Persistence                    (closed) │
+└────────────────────┬────────────────────┘
+                     ▼
+┌─────────────────────────────────────────┐
+│ Database                                │
+└─────────────────────────────────────────┘
+```
+
+Open layers remove pass-through calls, but every open layer creates dependencies that cross layer boundaries and weakens isolation. Document which layers are open and why, because an undocumented open layer tends to become an excuse for bypassing every layer.
+
+## The Architecture Sinkhole Anti-Pattern
 
 <blockquote class="pull-quote">
-<p>Closed layers provide better isolation; changes to one layer don't ripple through others.</p>
+<p>If most requests flow from presentation to persistence without meaningful business logic, the system pays the cost of layers without getting their benefits.</p>
 </blockquote>
 
-Layers can be "closed" (forcing requests through every layer) or "open" (allowing layers to be skipped). Open layers improve performance by avoiding unnecessary pass-through calls.
-
-### Closed vs Open Layers
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Closed Layers</h4>
-<p>Force requests to flow through every layer in sequence. The presentation layer must call the business layer, which must call the persistence layer, which accesses the database. No skipping allowed.</p>
-<p><strong>Benefit:</strong> Strict flow provides isolation. If the persistence layer changes how it accesses the database, the business layer doesn't care; it only knows the persistence layer's interface. Changes are contained within layers.</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Open Layers</h4>
-<p>Allow components to skip layers when appropriate. For example, if the presentation layer needs to read static reference data that requires no business logic, it might call the persistence layer directly, bypassing the business layer.</p>
-<p><strong>Benefit:</strong> Improve performance by eliminating unnecessary pass-through calls. But they create dependencies that cross layers, making changes riskier. Use open layers sparingly and only when the performance benefit justifies the coupling cost.</p>
-</div>
-</div>
-
-## The Sinkhole Antipattern
-
-<blockquote class="pull-quote">
-<p>If 80% of your requests flow from presentation to persistence without significant business logic, you're paying the cost of layers without getting their benefits.</p>
-</blockquote>
-
-The sinkhole antipattern happens when too many requests pass straight through layers without any processing. The 80/20 rule applies: if 20% or fewer of your requests are simple pass-throughs, that's acceptable overhead.
+The architecture sinkhole happens when requests pass straight through layers with no processing, such as a read that the business layer forwards to persistence untouched. Some pass-through is normal. As a rule of thumb, if around 20 percent of requests are simple pass-throughs, that's acceptable overhead. If around 80 percent are, the layering isn't earning its cost.
 
 <div class="callout callout--warning">
-<p class="callout__title">Signs of a Sinkhole Problem</p>
-<p>Excessive pass-through traffic suggests one of two problems:</p>
-<p><strong>Wrong layer boundaries:</strong> Maybe you're organizing by the wrong technical concerns. The system's natural structure doesn't align with the layering model.</p>
-<p><strong>Primarily CRUD operations:</strong> If the system is mostly create, read, update, delete operations with minimal business logic, layered architecture adds ceremony without value. Consider a simpler architecture that embraces the CRUD nature rather than fighting it.</p>
+<p class="callout__title">What a Sinkhole Signals</p>
+<p><strong>The layer boundaries are wrong.</strong> The technical concerns chosen for the layers don't match where the system's business logic actually runs.</p>
+<p><strong>The system is mostly CRUD.</strong> With little business logic to host, the business layer adds ceremony without value. A simpler structure, or opening selected layers, fits better than forcing every request through all of them.</p>
 </div>
 
-## Topology Details
-
-### Presentation Layer
-- Handles user interaction (web UI, mobile app, API endpoints)
-- Manages display logic and user input validation
-- Delegates business operations to the business layer
-- Does NOT contain business logic
-- Does NOT access the database directly
-
-### Business Layer
-- Implements domain logic and business rules
-- Coordinates workflow across domain concepts
-- Enforces business constraints and validation
-- Uses the persistence layer for data access
-- Does NOT know about UI concerns
-- Does NOT contain SQL or data access code
-
-### Persistence Layer
-- Abstracts database access behind interfaces
-- Translates between domain objects and database schemas
-- Handles SQL queries, ORM mapping, and connection management
-- Provides data access methods used by the business layer
-- Does NOT contain business logic
-- Does NOT know about UI concerns
-
-### Database Layer
-- Stores data persistently
-- Enforces data integrity constraints
-- Provides transactional guarantees
-- May contain stored procedures (though this creates coupling)
-
 ## Characteristics
+
+Ratings are relative to other architecture styles, not measurements.
 
 | Characteristic | Rating | Notes |
 |----------------|--------|-------|
 | **Simplicity** | ⭐⭐⭐⭐⭐ | Easy to understand and explain |
-| **Scalability** | ⭐ | All layers scale together; no independent scaling |
-| **Evolvability** | ⭐⭐ | Changes often affect multiple layers |
-| **Deployability** | ⭐⭐⭐ | Single deployment unit is simple |
-| **Testability** | ⭐⭐⭐ | Layers can be mocked for testing |
-| **Modularity** | ⭐⭐ | Technical partitioning doesn't match domain concepts |
-| **Cost** | ⭐⭐⭐⭐⭐ | Low cost; requires minimal infrastructure |
+| **Cost** | ⭐⭐⭐⭐⭐ | Minimal infrastructure |
+| **Scalability** | ⭐ | All layers scale together, with no independent scaling |
+| **Fault tolerance** | ⭐ | A fault in one part of the application can take the whole application down |
+| **Evolvability** | ⭐⭐ | A domain change usually touches every layer |
+| **Deployability** | ⭐⭐ | One unit is simple to ship, but any change redeploys the whole application |
+| **Testability** | ⭐⭐⭐ | Layers can be tested behind their interfaces with lower layers substituted |
+| **Modularity** | ⭐⭐ | Technical partitioning scatters each domain concept across layers |
 
 ## When Layered Architecture Fits
 
-**Small applications with straightforward business logic**: When the system is simple enough that organizing by technical concerns makes sense and the overhead of layers doesn't outweigh their benefits.
+**Small applications with straightforward business logic.** When the system is simple enough that organizing by technical concern makes sense, the layers cost little and keep responsibilities clear.
 
-**Tight budgets requiring fast initial development**: Layered architecture is conceptually simple and doesn't require sophisticated infrastructure. Teams can build and deploy quickly without learning distributed system patterns.
+**Tight budgets and fast initial development.** The style is familiar, needs no distributed infrastructure, and lets teams build and deploy quickly.
 
-**Starting point when requirements are unclear**: When you don't yet know what the system needs to do, layered architecture provides a familiar structure while you discover requirements. You can refactor to a different style later if needed.
+**A starting point when requirements are unclear.** It provides a familiar structure while the team discovers what the system needs, and the system can move to another style later.
 
-**MVPs and prototypes**: For systems where speed to market matters more than long-term scalability or evolvability. Get something working quickly, learn from users, then decide whether to refactor or rebuild.
+**MVPs and prototypes.** When speed to market matters more than long-term scalability or evolvability, the style gets something working quickly.
 
-**Teams new to the domain**: When the team doesn't understand the business domain well enough to partition by domain concepts, technical layers provide a safe starting structure.
+**Teams new to the domain.** When the team doesn't yet understand the business well enough to partition by domain, technical layers are a safe starting structure.
 
 ## When to Avoid Layered Architecture
 
-**Large applications where scalability matters**: You can't scale the presentation layer separately from business logic. Everything scales together, wasting resources and limiting maximum scale.
+**Scalability matters.** The presentation layer can't scale separately from business logic. Everything scales together, which wastes resources and limits maximum scale.
 
-**Systems where evolvability matters**: Changes to domain concepts often ripple across all layers. Adding a new field means touching presentation, business, persistence, and database layers. This makes change expensive and risky.
+**Evolvability matters.** A change to a domain concept ripples through every layer. Adding a field to an order means touching presentation, business, persistence, and database code, which makes change slower and riskier.
 
-**Independent deployment requirements**: The entire system deploys as one unit. You can't deploy a change to the presentation layer without deploying the entire application. This limits deployment frequency and increases risk.
+**Parts need independent deployment.** The application deploys as one unit, so a small presentation change still ships the entire application. That limits deployment frequency and raises the risk of each release.
 
-**Different operational characteristics needed**: If some parts of the system need high availability while others don't, or some parts need different scaling characteristics, layered architecture can't accommodate these differences. Everything shares the same operational profile.
+**Parts need different operational characteristics.** If one area needs high availability or a different scaling profile, the style can't give it one without giving it to everything.
 
-**As the codebase grows**: Navigation and maintenance become increasingly difficult. Finding where logic lives becomes harder. Understanding dependencies across layers requires holding more context in your head.
+**The codebase grows large.** With every domain concept spread across layers, finding where logic lives and understanding dependencies takes more and more context.
 
 ## Common Pitfalls
 
-**Business logic leaking into presentation layer**: UI code contains business rules because it's "convenient." This creates duplication (mobile and web both implement the same rules) and makes business logic hard to test.
+**Business logic leaking into the presentation layer.** UI code picks up business rules because it's convenient. The rules then get duplicated across clients, such as web and mobile, and become hard to test.
 
-**Persistence logic leaking into business layer**: Business logic contains SQL queries or ORM-specific code. This couples business rules to database structure and makes testing harder.
+**Persistence logic leaking into the business layer.** Business code contains SQL or ORM-specific calls. That couples business rules to the database structure and defeats the layers of isolation.
 
-**Too many layers**: Adding layers for "flexibility" without clear purpose. Each layer adds indirection and complexity. Only add layers when they provide clear benefits.
+**Too many layers.** Adding layers for "flexibility" without a clear purpose adds indirection and pass-through calls. Add a layer only when it isolates a concern that changes independently.
 
-**Inconsistent layer boundaries**: Some components follow layering strictly while others shortcut. This creates confusion about the architecture's actual rules and makes the codebase harder to navigate.
+**Inconsistent layer rules.** Some components follow the layering strictly while others take shortcuts. Nobody can tell what the architecture's rules actually are, and the shortcuts multiply.
 
-**Anemic domain model**: Business layer objects become pure data containers with no behavior. All logic moves to service classes. This is often a sign that domain-driven design or a different architectural style would fit better.
+**An anemic domain model.** Business layer objects become data containers with no behavior, and all logic moves into service classes. This often signals that the domain would be better served by domain-driven design or a domain-partitioned style.
 
 ## Evolution and Alternatives
 
 When layered architecture stops working:
 
-**Evolve to modular monolith**: Reorganize by business domains instead of technical layers. Each module contains its own presentation, business, and persistence logic. This improves modularity while maintaining monolithic deployment.
+**Evolve to a modular monolith.** Reorganize by business domain instead of technical layer, with each module containing its own presentation, business, and persistence code. Modularity improves while deployment stays simple.
 
-**Evolve to service-based architecture**: Extract coarse-grained services for major business capabilities. This enables independent scaling and deployment while avoiding microservices complexity.
+**Evolve to service-based architecture.** Extract coarse-grained services for major business capabilities to gain independent scaling and deployment without the full complexity of microservices.
 
-**Stick with layering but improve modularity**: Use Domain-Driven Design tactical patterns within the business layer to better organize domain logic. This doesn't change the architectural style but can improve maintainability.
-
-For more architectural style options, see the [Architecture Styles](/study-guides/architecture/ArchitectureStyles.html) overview.
+**Keep the layers but improve the business layer.** Applying domain-driven design's tactical patterns inside the business layer can improve maintainability without changing the style.

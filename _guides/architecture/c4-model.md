@@ -137,6 +137,16 @@ C4 and UML complement each other when used appropriately. The goal is to use eac
 
 **Use diagramming-as-code tools**: Tools like [Structurizr](https://structurizr.com/){:target="_blank" rel="noopener noreferrer"}, [PlantUML](https://plantuml.com/){:target="_blank" rel="noopener noreferrer"} with C4 extensions, or [Diagrams](https://diagrams.mingrammer.com/){:target="_blank" rel="noopener noreferrer"} let you define diagrams in code. This makes them versionable, reviewable, and easier to keep in sync with architecture changes.
 
+## Diagramming Discipline
+
+These habits apply to any architecture diagram, C4 or not.
+
+**Representational consistency**: Show relationships between parts of the architecture before changing views, and show context before details, so readers always know where a diagram sits in the whole.
+
+**Avoid irrational artifact attachment**: Attachment to a diagram grows with the time spent on it, which makes it harder to change. Use low-fidelity sketches early, while the design is still moving, so iteration stays cheap.
+
+**ArchiMate**: An open standard from The Open Group for modeling enterprise ecosystems, designed to be as small as possible. Consider it when diagrams must span business, application, and technology layers across an enterprise rather than a single system.
+
 ## Common Pitfalls
 
 **Mixing abstraction levels**: Don't show components on a container diagram or containers on a context diagram. Each level should maintain its focus. If readers need more detail, create a separate diagram at the next level down.

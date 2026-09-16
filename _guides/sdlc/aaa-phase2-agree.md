@@ -45,7 +45,7 @@ Regardless of project size or methodology, agreement follows these steps:
 - **Architectural Characteristics**: What quality attributes matter most?
   - Identify 7 characteristics critical to success (performance, scalability, availability, security, maintainability, etc.)
   - Prioritize the top 3; these drive architecture style selection
-  - See [Architecture Foundations](/study-guides/architecture/ArchitectureFoundations.html#architecture-characteristics){:target="_blank" rel="noopener noreferrer"}
+  - See [Architecture Characteristics](/study-guides/architecture/architecture-characteristics.html){:target="_blank" rel="noopener noreferrer"}
 
 - **Architectural Style**: Monolithic, microservices, serverless, event-driven?
   - Choose style based on top 3 architectural characteristics
@@ -56,10 +56,10 @@ Regardless of project size or methodology, agreement follows these steps:
   - Align boundaries with domain partitioning when possible
 
 - **Integration Patterns**: How do components and external systems communicate?
-  - See [Communication Patterns](/study-guides/architecture/communication_patterns.html){:target="_blank" rel="noopener noreferrer"}, [Integration Patterns](/study-guides/architecture/integration_patterns.html){:target="_blank" rel="noopener noreferrer"}
+  - See [Communication Patterns](/study-guides/architecture/communication_patterns.html){:target="_blank" rel="noopener noreferrer"}, [Messaging Patterns](/study-guides/architecture/messaging_patterns.html){:target="_blank" rel="noopener noreferrer"}
 
 - **Data Architecture**: How is data stored and managed?
-  - See [Data Architecture](/study-guides/data-architecture.html){:target="_blank" rel="noopener noreferrer"}, [Data Management Patterns](/study-guides/architecture/data_management_patterns.html){:target="_blank" rel="noopener noreferrer"}
+  - See [Data Architecture](/study-guides/data/data-architecture.html){:target="_blank" rel="noopener noreferrer"}, [Data Management Patterns](/study-guides/architecture/data_management_patterns.html){:target="_blank" rel="noopener noreferrer"}
 
 **Document Your Decisions**:
 - Architecture Decision Records (ADRs): Context → Decision → Consequences

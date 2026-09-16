@@ -3,200 +3,225 @@ layout: guide
 title: "Event-Driven Architecture"
 category: Architecture
 subcategory: Styles
-description: "Asynchronous event-based architecture enabling responsiveness, decoupling, and scalability through event brokers and reactive processors."
-tags: [architecture, distributed-systems, messaging, scalability, async, practical]
+description: "The distributed style built on asynchronous events: broker and mediator topologies, events versus messages, data-based versus key-based payloads, preventing data loss and handling errors, and when the style's responsiveness justifies its complexity."
+tags: [practical, event-driven-architecture, broker-topology, mediator-topology, event-payloads, asynchronous-processing]
 ---
 
-Event-driven architecture organizes a system around asynchronous event broadcasts. Components publish events representing things that happened ("order placed," "payment processed," "inventory depleted"). Other components listen for events they care about and react accordingly. There's no direct coupling between event publishers and subscribers.
+Event-driven architecture organizes a system around asynchronous events. Components publish events that describe something that happened, such as "order placed," "payment processed," or "inventory depleted." Other components listen for the events they care about and react. Publishers don't call subscribers and usually don't know who they are.
 
 <blockquote class="pull-quote">
-<p>Events announce what happened. Messages command what should happen. This distinction determines whether you have loose coupling or hidden dependencies.</p>
+<p>Events announce what happened. Messages ask for something to happen. Mixing the two up hides dependencies behind what looks like loose coupling.</p>
 </blockquote>
 
-This architecture enables high responsiveness, complex workflows with many independent reactions, and systems that must handle unpredictable, variable workloads.
+The style suits systems that need high responsiveness, workflows where one trigger sets off many independent reactions, and workloads that are unpredictable and spiky.
 
 ## How It Works
 
-An event broker sits at the center, receiving events from publishers and routing them to subscribers. When something significant happens in one part of the system, it publishes an event. The broker broadcasts the event to all interested subscribers. Each subscriber processes the event independently and may publish new derived events in response.
+When something significant happens, a component publishes an event to an event channel. Interested components, called event processors, receive it, do their work independently, and may publish new events describing what they did.
 
-For example, an "order placed" event might trigger inventory reservation, payment processing, and shipping notification, all happening asynchronously and independently. Each processor does its work and publishes new events ("inventory reserved," "payment captured") that other processors might react to.
+An "order placed" event might set off inventory reservation, payment processing, and a customer notification at the same time. Inventory publishes "inventory reserved" and payment publishes "payment captured," and those events trigger further reactions of their own.
 
 ### Core Components
 
-**Event Producers**: Components that detect significant occurrences and publish events. These can be user actions (button clicks), system events (scheduled tasks), or domain events (state changes).
+**Event producers** detect significant occurrences and publish events. The occurrence might be a user action, a scheduled job, or a change in domain state.
 
-**Event Broker**: Infrastructure that receives events and routes them to subscribers. Can be a message queue (RabbitMQ, AWS SQS), event stream (Kafka, AWS Kinesis), or pub/sub service (Google Pub/Sub, AWS SNS).
+**Event channels** carry events from producers to processors. Depending on the delivery the system needs, a channel might be a topic on a message broker such as RabbitMQ or Amazon SNS, a queue such as Amazon SQS, or a partition of an event stream such as Kafka.
 
-**Event Consumers/Processors**: Components that subscribe to specific event types and react. Each processor runs independently, processes the event, performs its logic, and potentially publishes new events.
+**Event processors** subscribe to event types, perform their piece of the work, and often publish derived events.
 
-**Event Store** (optional): Persistent log of all events for auditing, replay, or event sourcing patterns.
+**An event store**, optionally, keeps a durable log of events for auditing, replay, or event sourcing.
+
+### Quantum Boundaries
+
+Processors that communicate only through asynchronous events can be separate architecture quanta, each deployable and scalable on its own. That independence disappears when processors share a database or call each other synchronously, at which point the processors involved behave as one quantum.
 
 ## Events vs Messages
 
 <div class="comparison">
 <div class="content-card content-card--accent">
-<h4>Events (Informational)</h4>
+<h4>Events</h4>
 <ul>
-<li>Announce what happened</li>
-<li>State facts, not commands</li>
-<li>Publisher doesn't know who reacts</li>
-<li>Multiple subscribers react independently</li>
+<li>Announce something that already happened</li>
+<li>State a fact rather than make a request</li>
+<li>The publisher doesn't know who reacts</li>
+<li>Any number of subscribers react independently</li>
 <li>Example: "Inventory depleted"</li>
-<li><strong>Result:</strong> Maximum decoupling</li>
 </ul>
 </div>
 <div class="content-card content-card--accent-secondary">
-<h4>Messages (Prescriptive)</h4>
+<h4>Messages</h4>
 <ul>
-<li>Command what should happen</li>
-<li>Directed at specific receiver</li>
-<li>Sender expects specific action</li>
-<li>One-to-one communication</li>
+<li>Request that something happen</li>
+<li>Are directed at a specific receiver</li>
+<li>The sender expects a particular action</li>
+<li>One sender, one receiver</li>
 <li>Example: "Replenish inventory"</li>
-<li><strong>Result:</strong> Tighter coupling</li>
 </ul>
 </div>
 </div>
 
-Event-driven architectures use events. Publishers broadcast facts. Subscribers independently decide how to react. This maximizes decoupling.
+Events keep publishers independent of whoever reacts, which is the source of the style's flexibility. A message sent as if it were an event, such as publishing "replenish inventory" to a topic and assuming the warehouse service will act, keeps the dependency but hides it where no interface shows it.
 
-## Architectural Patterns
+## Broker and Mediator Topologies
+
+Event-driven systems take one of two basic shapes, depending on whether anything coordinates the workflow.
+
+```
+Broker topology: no coordinator, processors react and publish
+
+                          ┌─▶ Inventory ─── "inventory reserved" ─┐
+Order ─ "order placed" ───┼─▶ Payment ───── "payment captured" ───┼─▶ further processors
+                          └─▶ Notification
+
+Mediator topology: a mediator directs the steps of the workflow
+
+                                   ┌─ step 1 ─▶ Inventory
+Order ─ "order placed" ─▶ Mediator ┼─ step 2 ─▶ Payment      (after step 1 succeeds)
+                                   └─ step 3 ─▶ Notification (after step 2 succeeds)
+```
 
 <div class="comparison">
 <div class="content-card content-card--accent">
-<h4>Choreographed Event-Driven</h4>
-<p><strong>How it works:</strong> No central coordinator. Events broadcast freely, processors react independently.</p>
+<h4>Broker Topology</h4>
+<p><strong>How it works:</strong> There is no central coordinator. Processors receive events from channels, do their work, and broadcast new events.</p>
 <p><strong>Advantages:</strong></p>
 <ul>
-<li>Maximum decoupling</li>
-<li>Easy to add new reactions</li>
-<li>No single point of failure</li>
-<li>Highly scalable</li>
+<li>Processors are highly decoupled</li>
+<li>New reactions can be added without changing existing processors</li>
+<li>No coordinator to become a bottleneck or single point of failure</li>
+<li>High scalability and responsiveness</li>
 </ul>
-<p><strong>Tradeoffs:</strong></p>
+<p><strong>Trade-offs:</strong></p>
 <ul>
-<li>Workflows hard to trace</li>
-<li>Complex error handling</li>
-<li>Distributed state management</li>
+<li>No component knows the state of the overall workflow</li>
+<li>Error handling and recovery are hard to coordinate</li>
+<li>Restarting a failed workflow is difficult</li>
 </ul>
-<p><strong>Use when:</strong> Complex workflows with many independent reactions</p>
+<p><strong>Use when:</strong> One event sets off many independent reactions, and none needs to know whether the others succeeded.</p>
 </div>
 <div class="content-card content-card--accent-secondary">
-<h4>Mediated Event-Driven</h4>
-<p><strong>How it works:</strong> Orchestrator controls workflow, coordinates processors.</p>
+<h4>Mediator Topology</h4>
+<p><strong>How it works:</strong> An event mediator receives the initiating event and sends processing steps to processors in order, tracking the workflow as it goes. Integration frameworks and workflow or BPM engines are common mediators.</p>
 <p><strong>Advantages:</strong></p>
 <ul>
-<li>Central workflow visibility</li>
-<li>Easy to understand and debug</li>
-<li>Explicit error handling</li>
-<li>Complex logic support</li>
+<li>The workflow's state and progress are visible in one place</li>
+<li>Errors can be handled, retried, and recovered centrally</li>
+<li>Complex conditional logic is easier to express</li>
 </ul>
-<p><strong>Tradeoffs:</strong></p>
+<p><strong>Trade-offs:</strong></p>
 <ul>
-<li>Reintroduces coupling</li>
-<li>Potential bottleneck</li>
-<li>Single point of failure</li>
-<li>Reduced flexibility</li>
+<li>Processors are coupled to the mediator's workflow</li>
+<li>The mediator can become a bottleneck</li>
+<li>The mediator is a single point of failure unless made highly available</li>
+<li>Adding a reaction means changing the mediator</li>
 </ul>
-<p><strong>Use when:</strong> Workflows need central control and visibility</p>
+<p><strong>Use when:</strong> The workflow has ordered steps, needs central error handling, or must be restartable.</p>
 </div>
 </div>
+
+Many systems use both, with mediators for the few workflows that need control and broker-style events for everything else.
 
 ## Event Payload Strategies
 
 ### Data-Based Events
 
-Events include all relevant data in the payload. An "OrderPlaced" event contains customer details, order items, prices, and addresses: everything needed to process the order.
+The event carries all the data subscribers need. An "OrderPlaced" event includes customer details, items, prices, and the shipping address.
 
 **Advantages**:
-- Subscribers process events immediately without additional queries
-- Resilient (subscribers don't depend on other services being available)
-- Fast (no network calls to fetch data)
-- Works well offline or with eventual connectivity
+- Subscribers can act immediately, without querying anything
+- Subscribers keep working even when the publishing service is down
+- No extra network calls, so processing is faster
 
-**Tradeoffs**:
-- Brittle (changing data structures breaks subscribers)
-- Data duplication across events and subscribers
-- Large event payloads consume bandwidth and storage
-- Events contain data that not all subscribers need
+**Trade-offs**:
+- Changing the event's structure can break every subscriber
+- Data is duplicated across events and subscribers
+- Large payloads cost bandwidth and storage
+- Most subscribers receive data they don't need
 
-**When to use**: High availability requirements, subscribers need complete data, network latency matters, subscribers should work even if source systems are down.
+**When to use**: When subscribers must keep working if source systems are unavailable, when they need most of the data anyway, and when latency matters.
 
 ### Key-Based Events
 
-Events include only identifiers. An "OrderPlaced" event contains the order ID. Subscribers query for full data when needed.
+The event carries only identifiers. An "OrderPlaced" event contains just the order ID, and subscribers fetch the details they need.
 
 **Advantages**:
-- Stable contracts (IDs rarely change)
-- Small event payloads
-- Data consistency (subscribers always fetch current data)
-- Subscribers get only data they need
+- Contracts stay stable, because identifiers rarely change
+- Payloads stay small
+- Each subscriber fetches only the data it needs
 
-**Tradeoffs**:
-- Slower (requires additional queries)
-- Creates runtime dependencies on source services
-- Higher latency
-- Subscribers fail if source services are unavailable
+**Trade-offs**:
+- Every subscriber adds a query, which adds latency
+- Subscribers depend on the source service being available at runtime
+- A subscriber sees the data as it is when it asks, which may differ from its state when the event occurred
 
-**When to use**: Data changes frequently, consistency matters more than speed, event payloads would be very large, source services are highly available.
+**When to use**: When data changes frequently and subscribers need its latest state, when full payloads would be very large, and when source services are highly available.
+
+## Preventing Data Loss and Handling Errors
+
+Asynchronous processing opens gaps where an event can disappear. It can be lost between the producer and the channel, between the channel and a processor, or in the processor after it has taken the event but before its work is saved.
+
+**Make channels durable.** Configure the broker to persist events, and have producers wait for the broker to confirm receipt.
+
+**Acknowledge after the work is saved.** A processor should acknowledge an event only after its database changes commit. If it crashes first, the broker redelivers the event. Since that means an event can arrive more than once, processors need to handle duplicates safely.
+
+**Publish reliably.** Saving state and publishing the resulting event are two separate writes. Recording the event in the same database transaction as the state change, and publishing it afterward, keeps the two from diverging.
+
+**Don't block on a failing event.** When an event can't be processed, move it aside, for example to a dead letter channel or a separate repair workflow, so the events behind it keep flowing. Track and alert on those failures, because a backlog of them usually points to a systemic problem rather than bad luck.
 
 ## Characteristics
 
+Ratings are relative to other architecture styles, not measurements.
+
 | Characteristic | Rating | Notes |
 |----------------|--------|-------|
-| **Simplicity** | ⭐⭐ | Asynchronous workflows are harder to reason about |
-| **Scalability** | ⭐⭐⭐⭐⭐ | Excellent horizontal scaling, decoupled components |
-| **Evolvability** | ⭐⭐⭐⭐ | Easy to add new reactions, harder to change events |
-| **Deployability** | ⭐⭐⭐⭐ | Independent deployment of processors |
-| **Testability** | ⭐⭐ | Difficult to test complete workflows |
-| **Performance** | ⭐⭐⭐⭐⭐ | High responsiveness, asynchronous processing |
-| **Fault Tolerance** | ⭐⭐⭐⭐ | Failures isolated to individual processors |
+| **Scalability** | ⭐⭐⭐⭐⭐ | Processors scale horizontally and independently |
+| **Performance** | ⭐⭐⭐⭐⭐ | Work runs in parallel and callers don't wait on it |
+| **Fault tolerance** | ⭐⭐⭐⭐ | A failing processor doesn't stop the others |
+| **Evolvability** | ⭐⭐⭐⭐ | New reactions are easy to add, while changing existing events is hard |
+| **Deployability** | ⭐⭐⭐⭐ | Processors deploy independently |
+| **Testability** | ⭐⭐ | End-to-end workflows are hard to test deterministically |
+| **Simplicity** | ⭐⭐ | Asynchronous workflows are hard to reason about |
 
 ## When Event-Driven Architecture Fits
 
-**Systems requiring high responsiveness**: Actions must happen quickly without waiting for synchronous processing. Users submit requests and get immediate confirmation. Processing happens asynchronously in the background.
+**High responsiveness.** Users get immediate confirmation while processing continues in the background.
 
-**Complex workflows with many independent reactions to the same trigger**: When one event triggers multiple unrelated actions. User registration triggers: welcome email, analytics tracking, account provisioning, onboarding workflow, CRM record creation. These can all happen independently.
+**Many independent reactions to one trigger.** A user registration might set off a welcome email, analytics tracking, account provisioning, and a CRM record, none of which depends on the others.
 
-**Domains with unpredictable, variable workloads**: Asynchronous processing smooths demand spikes. Events queue up during high load. Processors work through the backlog at sustainable pace. The system remains responsive even under load.
+**Unpredictable, spiky workloads.** Events queue up during peaks and processors work through the backlog, so the system stays responsive under load.
 
-**Systems where loose coupling is critical**: When parts of the system change frequently or when you need to add new capabilities without modifying existing components. Event-driven architecture enables this through the subscribe/publish pattern.
+**Loose coupling as a priority.** New capabilities can be added by subscribing to existing events, without modifying the components that publish them.
 
-**IoT and real-time data processing**: Sensors publish events constantly. Multiple systems need to react (storage, analytics, alerting). Event-driven architecture handles high-volume streaming data naturally.
+**IoT and real-time data.** Sensors publish constantly, and storage, analytics, and alerting all need to react to the same stream.
 
 ## When to Avoid Event-Driven Architecture
 
-**Applications with deterministic workflows where certainty and control matter more than flexibility**: Financial transactions requiring strong consistency. Workflows where each step must complete before the next begins. Processes where audit trails must show exact ordering.
+**Deterministic workflows that need strict control.** Financial operations requiring strong consistency, and processes where each step must finish before the next begins, fit a synchronous or orchestrated design better.
 
-**Systems where understanding and debugging workflows is critical**: Regulated environments requiring clear workflow documentation. Domains where workflow changes require regulatory approval. Systems where debugging production issues must be straightforward.
+**Workflows that must be easy to understand and audit.** In regulated environments, or wherever a workflow's exact path must be documented and debugged quickly, a web of asynchronous reactions works against that.
 
-**Teams without experience managing eventual consistency and distributed state**: Event-driven systems are eventually consistent. Different processors might temporarily see different state. If the team doesn't understand these challenges, they'll create data consistency bugs.
+**Teams new to eventual consistency.** Different processors temporarily see different states. Teams unfamiliar with that tend to introduce consistency bugs.
 
-**Simple workflows that don't benefit from asynchronous processing**: If the workflow is linear with few steps, synchronous request/response is simpler. Don't add event-driven complexity unless you need its benefits.
+**Simple, linear workflows.** A short sequence of steps is simpler as synchronous request-response.
 
 ## Common Pitfalls
 
-<div class="callout callout--warning">
-<p class="callout__title">Watch Out For</p>
-<p><strong>Nondeterministic side effects:</strong> Events trigger unpredictable numbers of reactions. You publish an event expecting three reactions but ten occur. <em>Solution: Make processors idempotent. Document expected reactions. Monitor actual behavior.</em></p>
+**Unexpected reactions.** A published event triggers more reactions than anyone planned for, because any component can subscribe. Make processors safe against duplicates, document which reactions each event is expected to cause, and monitor what actually happens.
 
-**Static coupling via contracts**: Changing event structure breaks subscribers. Event evolution requires coordinating all subscribers. Solution: Version events. Support multiple event versions during transitions. Use flexible schemas (add fields, don't remove).
+**Coupling through event contracts.** Changing an event's structure breaks its subscribers, so events are contracts even when no one calls them that. Version events, support more than one version during transitions, and prefer additive changes over removing fields.
 
-**Too much synchronous communication between processors**: Processors make synchronous calls to each other, defeating the asynchronous purpose. You've built a distributed monolith with event broker overhead. Solution: Processors should be fully independent. If they need data from others, subscribe to those events and maintain local copies.
+**Synchronous calls between processors.** Processors that call each other directly defeat the asynchronous design and produce a distributed monolith with broker overhead. A processor that needs another's data can subscribe to its events and keep a local copy.
 
-**Difficult state management**: No single component knows the full system state. Debugging why something happened requires tracing event chains across multiple processors. Solution: Implement distributed tracing. Use correlation IDs on events. Maintain event stores for replay and auditing.
+**Untraceable workflows.** No component knows the full state of a workflow, and debugging means tracing event chains across processors. Propagate a correlation ID on every event, use distributed tracing, and keep an event store where replay and auditing matter.
 
-<p><strong>Event storms:</strong> A single event triggers cascades of derived events. The system bogs down processing events. <em>Solution: Be selective about what warrants an event. Implement circuit breakers. Monitor event volumes.</em></p>
-</div>
+**Event storms.** One event triggers a cascade of derived events that overwhelms the system. Be selective about what deserves an event, watch event volumes, and throttle processors that feed runaway cascades.
 
 ## Evolution and Alternatives
 
 When event-driven architecture stops fitting:
 
-**Add workflow orchestration**: If choreography becomes too complex to understand and debug, introduce orchestrators for critical workflows while keeping event-driven patterns for independent reactions.
+**Add orchestration for critical workflows.** If broker-style choreography becomes too hard to follow, introduce a mediator for the workflows that need control, and keep events for independent reactions.
 
-**Hybrid with synchronous services**: Use event-driven architecture for asynchronous workflows and independent reactions. Use synchronous services for queries and transactional operations. Many systems combine both.
+**Combine with synchronous services.** Use events for asynchronous workflows and independent reactions, and synchronous calls for queries and transactional operations. Where a caller truly needs a response to an event-driven request, a request-reply exchange with a correlation ID and a reply channel can provide it.
 
-**Implement CQRS and Event Sourcing**: If state management becomes problematic, fully commit to event sourcing. Store events as the source of truth. Build read models from events. This embraces the event-driven model completely.
-
-For more architectural style options, see the [Architecture Styles](/study-guides/architecture/ArchitectureStyles.html) overview.
+**Make events the source of truth.** If reconstructing state becomes the main problem, event sourcing stores the events themselves as the system of record and builds read models from them, committing fully to the event-driven model.

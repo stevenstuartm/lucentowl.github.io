@@ -261,6 +261,18 @@ Run static analysis automatically on every commit or pull request:
 - Uses OPA/Rego for policies
 - Works with Terraform, Kubernetes, Dockerfiles, and more
 
+**[AWS CloudFormation Guard](https://github.com/aws-cloudformation/cloudformation-guard){:target="_blank" rel="noopener noreferrer"}:**
+- Policy-as-code for CloudFormation templates, including CDK-synthesized ones
+- Domain-specific rule language
+- Runs pre-deployment in CI (`cfn-guard validate`) and fails the build on violations
+- Evaluates templates only; runtime compliance needs a detective control such as AWS Config
+
+**CDK Aspects:**
+- A visitor applied to every construct in a CDK app or stack
+- Governance logic written in the CDK language (C#, TypeScript, and others) with type safety
+- Reports errors or warnings at synthesis time, before a template exists
+- Suits complex checks; Guard suits simple checks and raw CloudFormation
+
 ### What Compliance Tests Validate
 
 **Security policies:**

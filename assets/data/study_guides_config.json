@@ -73,6 +73,7 @@
             "architecture/ArchitectureFoundations.md",
             "architecture/modularity-coupling.md",
             "architecture/architecture-characteristics.md",
+            "architecture/DesignImplementation.md",
             "architecture/distributed-computing.md"
           ]
         },
@@ -93,25 +94,30 @@
           ]
         },
         {
-          "name": "Governance",
-          "description": "Architecture governance frameworks, processes, and tools",
+          "name": "Patterns",
+          "description": "Patterns for communication, messaging, data, coordination, reliability, and scale in distributed systems",
           "guides": [
-            "architecture/governance.md",
-            "architecture/governance-frameworks.md",
-            "architecture/governance-tools.md"
+            "architecture/communication_patterns.md",
+            "architecture/messaging_patterns.md",
+            "architecture/data_management_patterns.md",
+            "architecture/orchestration_choreography.md",
+            "architecture/coordination_patterns.md",
+            "architecture/reliability_patterns.md",
+            "architecture/performance_scalability_patterns.md",
+            "architecture/deployment_infrastructure_patterns.md",
+            "architecture/service-mesh-architecture.md",
+            "architecture/legacy-modernization-strategies.md"
           ]
         },
         {
           "name": "Design",
-          "description": "Component design and risk analysis",
+          "description": "Designing domain boundaries, API contracts, and tenant isolation",
           "guides": [
-            "architecture/DesignImplementation.md",
             "architecture/domain-driven-design.md",
             "architecture/api-design-architecture.md",
             "architecture/grpc-architecture-design.md",
             "architecture/expressing-change-intent-in-api-payloads.md",
-            "architecture/testing-strategy-architecture.md",
-            "architecture/performance-engineering.md"
+            "architecture/multi-tenant-architecture.md"
           ]
         },
         {
@@ -123,20 +129,21 @@
           ]
         },
         {
-          "name": "Patterns",
-          "description": "Architectural and design patterns for distributed systems",
+          "name": "Quality & Risk",
+          "description": "Verifying that an architecture delivers its characteristics and managing its risk",
           "guides": [
-            "architecture/communication_patterns.md",
-            "architecture/messaging_patterns.md",
-            "architecture/coordination_patterns.md",
-            "architecture/orchestration_choreography.md",
-            "architecture/integration_patterns.md",
-            "architecture/data_management_patterns.md",
-            "architecture/performance_scalability_patterns.md",
-            "architecture/reliability_patterns.md",
-            "architecture/deployment_infrastructure_patterns.md",
-            "architecture/legacy-modernization-strategies.md",
-            "architecture/service-mesh-architecture.md"
+            "architecture/architecture-risk-analysis.md",
+            "architecture/testing-strategy-architecture.md",
+            "architecture/performance-engineering.md"
+          ]
+        },
+        {
+          "name": "Governance",
+          "description": "Architecture governance frameworks, processes, and automation",
+          "guides": [
+            "architecture/governance.md",
+            "architecture/governance-frameworks.md",
+            "architecture/governance-tools.md"
           ]
         },
         {

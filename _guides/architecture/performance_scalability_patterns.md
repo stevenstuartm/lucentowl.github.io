@@ -3,11 +3,60 @@ layout: guide
 title: "Performance and Scalability Patterns"
 category: Architecture
 subcategory: Patterns
-description: "Optimize system performance and scale with patterns for caching, throttling, load shedding, horizontal/vertical scaling, and partitioning strategies."
+description: "Patterns for handling more load: load balancing across instances, throttling and rate limiting, cache-aside and cache-through caching, and sharding."
 tags: [architecture, design-patterns, performance, scalability, caching, rate-limiting]
 ---
 
 These patterns optimize system performance, handle increased load, and ensure systems can scale efficiently as demand grows.
+
+## Load Balancing
+
+Distributes incoming requests across multiple service instances to prevent any single instance from becoming overwhelmed, improving availability, reliability, and scalability.
+
+**Use When**:
+- Multiple instances of the same service exist
+- Need to distribute traffic to prevent bottlenecks
+- Want high availability through redundancy
+- Horizontal scaling required
+
+<div class="callout callout--note">
+<p class="callout__title">Common Load Balancing Algorithms</p>
+<p><strong>Round Robin</strong>: Distributes requests sequentially across instances in circular order (simple, no state required, assumes equal capacity)</p>
+<p><strong>Weighted Round Robin</strong>: Assigns different weights to instances based on capacity (2x capacity server gets 2x traffic)</p>
+<p><strong>Least Connections</strong>: Routes to the instance with fewest active connections (better for long-lived connections or varying request durations)</p>
+<p><strong>Least Response Time</strong>: Routes to instance with fastest response time (requires health monitoring, adapts to performance)</p>
+<p><strong>IP Hash/Sticky Sessions</strong>: Routes requests from the same client to the same instance (maintains session state, but can cause imbalance)</p>
+<p><strong>Geographic/Latency-based</strong>: Routes based on client location or proximity (optimizes for network latency)</p>
+</div>
+
+<div class="comparison">
+<div class="content-card content-card--accent">
+<h4>Layer 4 (Transport)</h4>
+<ul>
+<li>Routes based on IP/port (TCP/UDP)</li>
+<li>Fast performance</li>
+<li>Limited routing logic</li>
+</ul>
+</div>
+<div class="content-card content-card--accent-secondary">
+<h4>Layer 7 (Application)</h4>
+<ul>
+<li>Routes based on HTTP headers, URLs, cookies</li>
+<li>Slower but flexible</li>
+<li>Advanced routing capabilities</li>
+</ul>
+</div>
+</div>
+
+**Example**: E-commerce with three web server instances. Load balancer receives requests and distributes them evenly, ensuring no single server is overloaded during peak shopping.
+
+```
+Client → Load Balancer → [Server 1, Server 2, Server 3]
+```
+
+**Common implementations**: NGINX, HAProxy, AWS ELB/ALB, Envoy
+
+---
 
 ## Throttling and Rate Limiting
 
@@ -244,6 +293,7 @@ For ORDER BY + LIMIT queries, worse:
 
 | Pattern | Purpose | Complexity | Performance Gain |
 |---------|---------|------------|-----------------|
+| **Load Balancing** | Spread load across instances | Low | Enables horizontal scaling |
 | **Throttling** | Prevent overload | Low | N/A (protection) |
 | **Cache-Aside** | Reduce DB load | Low | High for reads |
 | **Cache-Through** | Simplify caching | Low | Medium for reads |
@@ -253,6 +303,7 @@ For ORDER BY + LIMIT queries, worse:
 
 | Question | Pattern |
 |----------|---------|
+| Several instances of one service? | Load Balancing |
 | Protecting against overload? | Throttling and Rate Limiting |
 | Read-heavy workload? | Cache-Aside or Cache-Through |
 | Single DB can't handle load? | Sharding |

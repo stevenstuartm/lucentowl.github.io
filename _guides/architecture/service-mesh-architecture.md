@@ -3,8 +3,8 @@ title: "Service Mesh Architecture"
 layout: guide
 category: Architecture
 subcategory: Patterns
-description: "Comprehensive guide to service mesh architecture covering core concepts, patterns, when to adopt, service mesh vs API gateway, and implementation considerations for AWS ECS (App Mesh) and EKS (Istio, Linkerd)"
-tags: [architecture, service-mesh, microservices, networking, distributed-systems, aws, kubernetes, observability, security]
+description: "Service mesh architecture covering data and control planes, traffic management, mTLS, observability, when a mesh is worth its cost, how it differs from an API gateway, and how the major implementations compare."
+tags: [architecture, service-mesh, microservices, networking, distributed-systems, kubernetes, observability, security]
 ---
 
 ## What is a Service Mesh?
@@ -359,29 +359,6 @@ Lightweight, Kubernetes-native service mesh focused on simplicity and performanc
 
 **Best for**: Kubernetes-focused organizations, teams prioritizing simplicity, performance-sensitive workloads.
 
-### AWS App Mesh
-
-AWS-managed service mesh for ECS, EKS, and EC2.
-
-**Architecture**:
-- **Data plane**: Envoy proxy sidecars
-- **Control plane**: Managed by AWS
-
-**Strengths**:
-- Integrated with AWS services (CloudWatch, X-Ray, CloudMap)
-- No control plane to manage
-- Works across ECS, EKS, and EC2 (VM-based services)
-- Pay-as-you-go pricing (no upfront cost)
-
-**Challenges**:
-- AWS-specific (vendor lock-in)
-- Fewer features than Istio
-- Less mature than open-source alternatives
-
-**Best for**: AWS-centric organizations, teams using ECS and EKS together, preference for managed services.
-
-**Official documentation**: [AWS App Mesh Documentation](https://docs.aws.amazon.com/app-mesh/){:target="_blank" rel="noopener noreferrer"}
-
 ### Consul Connect
 
 Service mesh from HashiCorp, part of Consul service discovery platform.
@@ -403,160 +380,7 @@ Service mesh from HashiCorp, part of Consul service discovery platform.
 
 **Best for**: Multi-cloud deployments, hybrid environments with VMs and containers, existing Consul users.
 
-## Service Mesh on AWS ECS (App Mesh)
-
-AWS App Mesh is the recommended service mesh for Amazon ECS. It provides service mesh capabilities for containerized applications running on ECS (Fargate or EC2).
-
-### App Mesh Architecture on ECS
-
-```
-┌──────────────────────────────────────────────┐
-│             AWS App Mesh                     │
-│         (Control Plane - Managed)            │
-└──────────────────────────────────────────────┘
-                    │
-        ┌───────────┴────────────┐
-        ▼                        ▼
-┌─────────────────┐      ┌─────────────────┐
-│  ECS Service A  │      │  ECS Service B  │
-│  ┌───────────┐  │      │  ┌───────────┐  │
-│  │ App       │  │      │  │ App       │  │
-│  │ Container │  │      │  │ Container │  │
-│  └───────────┘  │      │  └───────────┘  │
-│  ┌───────────┐  │      │  ┌───────────┐  │
-│  │ Envoy     │  │      │  │ Envoy     │  │
-│  │ Sidecar   │  │      │  │ Sidecar   │  │
-│  └───────────┘  │      │  └───────────┘  │
-└─────────────────┘      └─────────────────┘
-```
-
-### App Mesh Core Concepts
-
-**Mesh**: Logical boundary for service mesh (typically one per application or environment). Defines egress filtering policy.
-
-**Virtual Service**: Abstract name for a service (e.g., `order-service.mesh.local`). Clients call virtual services, not actual task IPs. Decouples service consumers from providers.
-
-**Virtual Node**: Represents a logical service (ECS service or task group). Configures health checks, backends it can call, and service discovery mechanism.
-
-**Virtual Router**: Routes traffic to virtual nodes based on rules (weighted routing, header matching). Enables canary deployments and A/B testing.
-
-**Route**: Defines routing logic within a virtual router (HTTP routes, gRPC routes, TCP routes). Specifies retry policies, timeouts, and traffic distribution.
-
-**Virtual Gateway**: Entry point for traffic from outside the mesh to services inside the mesh.
-
-### App Mesh Implementation Considerations
-
-**ECS Task Definition Setup**:
-- Configure proxy configuration to integrate Envoy sidecar
-- Define app container dependencies on Envoy health check
-- Include X-Ray daemon container for distributed tracing
-- Set proper IAM roles for App Mesh API access
-
-**Service Discovery Integration**:
-- App Mesh integrates with AWS Cloud Map for service discovery
-- Virtual nodes reference Cloud Map services
-- Enables dynamic endpoint discovery as tasks scale
-
-**Traffic Management Capabilities**:
-- **Weighted routing**: Distribute traffic across service versions (90/10, 50/50, etc.)
-- **Header-based routing**: Route to different versions based on request headers
-- **Retry policies**: Configure automatic retries on failures with exponential backoff
-- **Timeout policies**: Set per-request and idle timeouts to prevent hanging requests
-
-**Security Features**:
-- **mTLS encryption**: Configure TLS certificates from AWS Certificate Manager (ACM)
-- **Client policy**: Enforce TLS validation for outbound connections
-- **IAM integration**: Use IAM task roles to control access to App Mesh APIs
-- **Egress filtering**: Block or allow traffic to external services
-
-**Observability Integration**:
-- **CloudWatch Metrics**: Envoy exports metrics automatically
-- **AWS X-Ray**: Distributed tracing for request paths
-- **CloudWatch Logs**: Access logs for all service-to-service calls
-- **CloudWatch Alarms**: Set alerts on error rates and latency
-
-**Canary Deployment Strategy**:
-1. Deploy new version as separate virtual node
-2. Create route with small weight to canary (10%)
-3. Monitor error rates and latency metrics
-4. Gradually increase canary weight (25%, 50%, 75%, 100%)
-5. Remove old version after successful rollout
-
-## Service Mesh on AWS EKS
-
-EKS supports multiple service mesh options. Istio and Linkerd are the most popular.
-
-### Istio on EKS
-
-Istio provides comprehensive service mesh capabilities with extensive features. It uses Envoy as the data plane proxy and a centralized control plane (istiod).
-
-**Installation approach**: Use the Istio CLI (istioctl) or Helm charts to install the control plane and configure automatic sidecar injection for namespaces.
-
-**Core configuration resources**:
-- **VirtualService**: Define routing rules (traffic splitting, header-based routing, retries, timeouts)
-- **DestinationRule**: Configure load balancing, connection pools, circuit breaking, TLS settings
-- **Gateway**: Define ingress/egress points for the mesh
-- **PeerAuthentication**: Enforce mTLS requirements
-- **AuthorizationPolicy**: Define which services can communicate
-
-**Traffic Management Patterns**:
-- **Canary deployments**: Route percentage of traffic to new version based on weight
-- **Header-based routing**: Route beta users to new version while others use stable
-- **Traffic mirroring**: Copy production traffic to test environment for validation
-- **Fault injection**: Intentionally introduce delays or errors for chaos testing
-
-**Security Capabilities**:
-- **Automatic mTLS**: Encrypt all service-to-service communication automatically
-- **Service-level authorization**: Control which services can call which endpoints
-- **External CA integration**: Use external certificate authorities for identity management
-- **Request authentication**: Validate JWT tokens from external identity providers
-
-**Observability Tools**:
-- **Prometheus**: Automatic metrics collection from Envoy proxies
-- **Grafana**: Dashboards for service metrics and mesh health
-- **Jaeger**: Distributed tracing to visualize request flows
-- **Kiali**: Service mesh topology visualization and configuration management
-
-**Performance Considerations**:
-- Higher resource overhead compared to Linkerd (Envoy proxy is heavier)
-- More complex configuration (many CRDs to learn)
-- Extensive features justify overhead for large-scale deployments
-
-### Linkerd on EKS
-
-Linkerd focuses on simplicity and performance with a lightweight Rust-based proxy.
-
-**Installation approach**: Use Linkerd CLI to install control plane components and enable automatic sidecar injection.
-
-**Core configuration resources**:
-- **TrafficSplit**: SMI (Service Mesh Interface) resource for weighted traffic distribution
-- **ServiceProfile**: Define routes with retries, timeouts, and response classifications
-- **Server**: Define what ports a service exposes and protocol details
-- **ServerAuthorization**: Control which services can access specific servers
-
-**Traffic Management Patterns**:
-- **Traffic splitting**: Simple percentage-based routing between service versions
-- **Retry budgets**: Limit total retry percentage to prevent retry storms
-- **Timeouts**: Per-route timeout configuration
-- **Load balancing**: Exponentially weighted moving average (EWMA) by default
-
-**Security Capabilities**:
-- **Automatic mTLS by default**: All meshed traffic encrypted without configuration
-- **Policy-based authorization**: Define which service accounts can access which services
-- **Zero-config security**: Simpler than Istio with fewer knobs to turn
-
-**Observability Tools**:
-- **Linkerd Viz**: Built-in dashboard for service metrics and topology
-- **CLI observability**: Real-time traffic monitoring via CLI (tap, stat, top)
-- **Prometheus integration**: Export metrics for external monitoring
-- **Grafana dashboards**: Pre-built dashboards for Linkerd metrics
-
-**Performance Advantages**:
-- Lower resource overhead (Rust proxy is lighter than Envoy)
-- Faster request processing
-- Simpler architecture reduces operational complexity
-
-### Istio vs Linkerd on EKS
+### Istio vs Linkerd
 
 | Aspect | Istio | Linkerd |
 |--------|-------|---------|
@@ -644,11 +468,7 @@ Know how to quickly disable mesh features or remove mesh entirely.
 
 **API gateway and service mesh are complementary**: Use API gateway for north-south traffic, service mesh for east-west.
 
-**Multiple implementation options**: Istio (feature-rich), Linkerd (simple), App Mesh (AWS-managed), Consul Connect (multi-platform).
-
-**AWS ECS uses App Mesh**: Managed control plane, Envoy sidecars, integrated with CloudWatch and X-Ray.
-
-**AWS EKS supports Istio and Linkerd**: Choose Istio for advanced features, Linkerd for simplicity and performance.
+**Multiple implementation options**: Istio (feature-rich), Linkerd (simple), Consul Connect (multi-platform).
 
 **Start small and iterate**: Pilot with a few services, enable features progressively, monitor resource overhead.
 

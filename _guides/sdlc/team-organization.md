@@ -54,6 +54,35 @@ Most organizations use a hybrid approach:
 - Platform/component teams for shared infrastructure (authentication, data platform, CI/CD)
 - Architecture team for governance and standards
 
+### Team Topologies
+
+*Framework by Matthew Skelton and Manuel Pais from "Team Topologies" (2019)*
+
+Team organization directly affects architecture through Conway's Law, but not all team structures are equal. Matthew Skelton and Manuel Pais identified four fundamental team types that optimize software delivery:
+
+<div class="card-group">
+<div class="content-card content-card--accent">
+<h4>Stream-Aligned Teams</h4>
+<p>Align to a flow of work from a business domain. They focus on a single business domain, moving quickly to deliver discrete value. This is the primary team type in most organizations.</p>
+<p><em>Examples: checkout team, inventory team, customer service team</em></p>
+</div>
+<div class="content-card content-card--accent-secondary">
+<h4>Enabling Teams</h4>
+<p>Bridge capability gaps across stream-aligned teams. They provide research, learning, and specialized knowledge to help teams overcome obstacles.</p>
+<p>These teams offer temporary assistance rather than creating permanent dependencies.</p>
+</div>
+<div class="content-card content-card--accent-warning">
+<h4>Complicated-Subsystem Teams</h4>
+<p>Build and maintain systems requiring specialized knowledge that would overwhelm stream-aligned teams.</p>
+<p><em>Examples: video processing engines, mathematical algorithm libraries, real-time trading systems</em></p>
+</div>
+<div class="content-card content-card--accent">
+<h4>Platform Teams</h4>
+<p>Provide internal products that accelerate stream-aligned teams. They build self-service APIs, tools, and services that form the foundation other teams build upon.</p>
+<p>They treat other teams as customers, providing product experiences that make stream-aligned teams more productive.</p>
+</div>
+</div>
+
 ---
 
 ## Domain-Driven Team Organization

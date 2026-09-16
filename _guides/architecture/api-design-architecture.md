@@ -101,47 +101,16 @@ Resources are the fundamental abstraction in REST. A resource is any information
 
 ### HTTP Method Semantics
 
-Use HTTP methods according to their defined semantics:
+Use HTTP methods according to their defined semantics. Two properties matter most when designing an API:
 
-| Method | Semantics | Safe? | Idempotent? | Use For |
-|--------|-----------|-------|-------------|---------|
-| GET | Retrieve representation | Yes | Yes | Reading data |
-| POST | Create subordinate resource | No | No | Creating resources, non-idempotent operations |
-| PUT | Replace resource | No | Yes | Full updates, idempotent creates |
-| PATCH | Partial update | No | No | Partial updates |
-| DELETE | Remove resource | No | Yes | Deleting resources |
-| HEAD | GET without body | Yes | Yes | Checking existence, metadata |
-| OPTIONS | Describe capabilities | Yes | Yes | CORS preflight, capability discovery |
-
-**Safe**: No side effects on the server (read-only).
-**Idempotent**: Multiple identical requests produce the same result as a single request.
+**Safe**: No side effects on the server (read-only). GET, HEAD, and OPTIONS are safe.
+**Idempotent**: Multiple identical requests produce the same result as a single request. PUT and DELETE are idempotent, as are the safe methods. POST and PATCH are not.
 
 **Why idempotency matters**: Networks are unreliable. Clients often retry requests. Idempotent operations can be safely retried without duplicating side effects.
 
 ### Status Code Conventions
 
-Use HTTP status codes to communicate operation outcomes:
-
-**Success codes**:
-- `200 OK`: Request succeeded (GET, PUT, PATCH with response body)
-- `201 Created`: Resource created (POST)
-- `202 Accepted`: Request accepted for async processing
-- `204 No Content`: Success with no response body (DELETE, PUT)
-
-**Client error codes**:
-- `400 Bad Request`: Invalid syntax or validation failure
-- `401 Unauthorized`: Authentication required
-- `403 Forbidden`: Authenticated but not authorized
-- `404 Not Found`: Resource doesn't exist
-- `409 Conflict`: Request conflicts with current state (e.g., duplicate, version mismatch)
-- `422 Unprocessable Entity`: Syntax valid but semantic validation failed
-- `429 Too Many Requests`: Rate limit exceeded
-
-**Server error codes**:
-- `500 Internal Server Error`: Unexpected server failure
-- `502 Bad Gateway`: Upstream service failure
-- `503 Service Unavailable`: Temporary unavailability (overload, maintenance)
-- `504 Gateway Timeout`: Upstream service timeout
+Use HTTP status codes to communicate operation outcomes. Clients act on the three classes differently: 2xx means success, 4xx means the caller must change the request before retrying, and 5xx means a server-side failure that may succeed on retry.
 
 **Be consistent**: Use the same status code for the same condition across your entire API.
 
@@ -536,42 +505,6 @@ Validate all inputs at the API boundary. Never trust client data.
 - Validate content-type headers
 - Check for injection attacks (SQL, NoSQL, command injection)
 - Sanitize all user-provided strings before logging
-
-## API Gateway Patterns
-
-### What is an API Gateway?
-
-An API gateway is a server that acts as a single entry point for a collection of microservices. It routes requests, enforces policies, and provides cross-cutting concerns.
-
-**Core responsibilities**:
-- Request routing and composition
-- Authentication and authorization
-- Rate limiting and throttling
-- Request/response transformation
-- Protocol translation (REST to gRPC, HTTP to messaging)
-- Caching
-- Logging and monitoring
-
-### Gateway vs Service Mesh
-
-| Concern | API Gateway | Service Mesh |
-|---------|-------------|--------------|
-| **Scope** | North-south (client to service) | East-west (service to service) |
-| **Layer** | Application layer (L7) | Network layer (L4) and application (L7) |
-| **Deployment** | Centralized or edge | Sidecar per service |
-| **Use cases** | External API management | Service-to-service reliability |
-
-**You may need both**: Gateway for external APIs, service mesh for internal communication.
-
-### Gateway Patterns
-
-**Backend for Frontend (BFF)**: One gateway per client type (mobile, web, partners). Each BFF provides an API tailored to that client's needs.
-
-**Aggregation**: Gateway calls multiple services and combines responses into single response.
-
-**Transformation**: Gateway adapts legacy SOAP services to modern REST APIs.
-
-**Edge gateway**: Deployed close to users (CDN edge) for low-latency responses.
 
 ## API Governance and Standards
 

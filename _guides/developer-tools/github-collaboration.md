@@ -209,7 +209,7 @@ Beyond CODEOWNERS, GitHub supports auto-assignment of reviewers through team rev
 
 Branch protection rules prevent direct pushes to important branches like `main` or `release/*`, enforce PR-based workflows, and require status checks to pass before merging. Setting up protections correctly is the difference between policies that teams aspire to follow and ones that are actually enforced.
 
-For a detailed walkthrough of branch protection configuration, rulesets, required status checks, and signed commits, see the [GitHub Security and Administration](/study-guides/developer-tools/github-administration.html) guide.
+For a detailed walkthrough of branch protection configuration, rulesets, required status checks, and signed commits, see the [GitHub Security and Administration](/study-guides/developer-tools/github-administration-security.html) guide.
 
 ---
 

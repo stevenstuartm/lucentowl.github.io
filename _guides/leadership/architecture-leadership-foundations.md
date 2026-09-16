@@ -20,7 +20,35 @@ Being an architect is more than making technical decisions. It requires balancin
 7. **Lead Teams**: Exceptional interpersonal skills like teamwork, facilitation, and leadership
 8. **Navigate Politics**: Negotiation skills to get decisions approved and implemented
 
-This guide focuses on responsibilities 7 and 8: leading teams and navigating organizational dynamics. These soft skills separate effective architects from those who struggle despite technical excellence.
+This guide focuses on staying technical (responsibility 5), leading teams, and navigating organizational dynamics (responsibilities 7 and 8). The last two are soft skills that separate effective architects from those who struggle despite technical excellence.
+
+## Staying Technical
+
+### Technical Breadth vs Depth
+
+<blockquote class="pull-quote">
+<p>Architects must develop technical breadth rather than depth.</p>
+</blockquote>
+
+Breadth means knowing a little about many technologies, patterns, and domains. Depth means expert-level knowledge in a narrow area. While developers benefit from deep expertise in specific technologies, architects need broad awareness across the technology landscape.
+
+The goal is to move technologies and concepts from "unknown unknowns" (things you don't know you don't know) into "known unknowns" (things you know exist but don't deeply understand). When a decision requires deep knowledge, you can then invest time to move that specific area into "knowns."
+
+<div class="callout callout--warning">
+<p class="callout__title">Common Dysfunctions</p>
+<p><strong>Trying to maintain expertise in too many areas</strong> leads to burnout. You cannot be an expert in everything. Accept that breadth means surface-level knowledge in most areas.</p>
+<p><strong>Stale expertise</strong> occurs when outdated knowledge is treated as current. An architect with deep Java experience from 2010 may not recognize how modern Java has evolved.</p>
+<p><strong>Frozen Caveman antipattern</strong> describes reverting to irrational concerns based on past trauma instead of objective assessment.</p>
+</div>
+
+### Hands-On Coding Balance
+
+Architects must stay technically current through hands-on coding, but they must avoid the Bottleneck Trap. When architects own critical-path code, they become blockers. Every feature waits for the architect's availability, and delivery velocity drops.
+
+<div class="callout callout--tip">
+<p class="callout__title">Recommended Approach</p>
+<p>Architects should delegate framework code to senior developers and focus their coding efforts on non-critical areas: proof-of-concepts, technical debt reduction, bug fixes, automation tooling, and code reviews. Working on features one to three iterations ahead of the main team keeps architects connected to the codebase without blocking progress.</p>
+</div>
 
 ## Making Teams Effective
 
