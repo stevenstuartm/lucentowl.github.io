@@ -1,0 +1,30 @@
+{%- comment -%}
+Renders a post's sources from front matter, below the body.
+
+Posts keep every URL, external or internal, out of the Markdown body and
+cite each source by name in the prose instead. Internal URLs (starting with
+"/") open in the same tab; external ones open in a new tab. The body can then be syndicated to sites that
+penalize outbound links, and this section is simply left behind.
+
+Front matter shape:
+  sources:
+    - title: "RFC 5789: PATCH Method for HTTP"
+      url: https://datatracker.ietf.org/doc/html/rfc5789
+    - title: "AAA Cycle: Align-Agree-Apply"
+      url: /study-guides/sdlc/aaa-cycle.html
+{%- endcomment -%}
+{%- if page.sources and page.sources.size > 0 -%}
+<section class="post-sources" aria-labelledby="post-sources-heading">
+    <h2 id="post-sources-heading" class="post-sources-heading">Sources</h2>
+    <ol class="post-sources-list">
+        {%- for source in page.sources %}
+        {%- assign first_char = source.url | slice: 0 -%}
+        {%- if first_char == "/" %}
+        <li><a href="{{ source.url | relative_url }}">{{ source.title }}</a></li>
+        {%- else %}
+        <li><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title }}</a></li>
+        {%- endif %}
+        {%- endfor %}
+    </ol>
+</section>
+{%- endif -%}

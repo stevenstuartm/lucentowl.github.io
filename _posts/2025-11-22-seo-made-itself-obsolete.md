@@ -5,6 +5,9 @@ date: 2025-11-22
 tags: [industry, infrastructure, innovation, search]
 description: "The 'SEO is dead' narrative draws a false binary between SEO and social media. SEO has a real problem: authority signals that once filtered spam now create insurmountable barriers for newcomers. But it still excels at surfacing authority and trust. Use social channels for democratic reach and speed; let SEO compound as a long-term credibility asset."
 author: steven-stuart
+sources:
+  - title: "Alphabet 2023 Annual Report"
+    url: "https://abc.xyz/investor/"
 ---
 
 A few months ago, I read a post about how SEO is dead and that we need to let the past die and find greener pastures. I'm finally getting around to writing my thoughts on it. That contention was correct in many ways, but it also drew an undeserved binary between SEO and social media as two means to the same end. I think that framing misses the point.
@@ -38,7 +41,7 @@ SEO never delivered on the promise of democratization. Tim Berners-Lee designed 
 
 But those democratic "votes" became the gatekeeping mechanism they were supposed to replace. Links became currency to game. Authority signals made sense when the web was young and spam was rampant, but they compounded over time into insurmountable advantages for incumbents.
 
-The promise decayed into algorithmic gatekeeping that serves Google's advertising revenue. Search advertising generated approximately $175 billion for Google in 2023, roughly 58% of Alphabet's total revenue ([Alphabet 2023 Annual Report](https://abc.xyz/investor/){:target="_blank" rel="noopener noreferrer"}). Google's search engine exists primarily to serve ads. This explains why Google killed Google Reader (which competed with web traffic), why AMP attempted to keep content within Google's ecosystem, and why search results increasingly feature Google-owned properties.
+The promise decayed into algorithmic gatekeeping that serves Google's advertising revenue. Search advertising generated approximately $175 billion for Google in 2023, roughly 58% of Alphabet's total revenue (Alphabet 2023 Annual Report). Google's search engine exists primarily to serve ads. This explains why Google killed Google Reader (which competed with web traffic), why AMP attempted to keep content within Google's ecosystem, and why search results increasingly feature Google-owned properties.
 
 This mirrors pre-internet gatekeeping, when only established publishers could reach mass audiences. The internet promised to democratize that access. SEO re-centralized it through algorithmic authority. The difference is that SEO's barriers are algorithmic and opaque. You can't argue with an algorithm or pitch your case to a human gatekeeper.
 

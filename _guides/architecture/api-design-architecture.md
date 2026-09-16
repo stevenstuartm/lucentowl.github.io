@@ -3,264 +3,184 @@ title: "API Design & Architecture"
 layout: guide
 category: Architecture
 subcategory: Design
-description: "Comprehensive guide to designing, architecting, and evolving APIs for distributed systems including REST, GraphQL, versioning strategies, and API governance"
-tags: [architecture, api-design, rest, graphql, integration, microservices, design-patterns, practical]
+description: "Designing APIs as long-lived contracts: contract-first design, REST resource modeling, Problem Details error responses, pagination and filtering, GraphQL schema and resolver design, versioning, backward compatibility, and deprecation with the Deprecation and Sunset headers."
+tags: [practical, api-design, rest, graphql, api-versioning, pagination, problem-details]
 ---
 
-## What is API Design & Architecture?
+An API is a contract between the team that builds a system and every team that depends on it, and unlike internal code it can't be refactored in one commit. Once a client depends on a field, a status code, or an error shape, changing it means coordinating with that client or breaking it. That makes API design less about the first version and more about how cheaply the API can evolve afterwards.
 
-API (Application Programming Interface) design is the practice of creating stable, maintainable contracts between software components. API architecture addresses how APIs integrate into broader system design, including versioning, security, governance, and evolution over time.
+## Design Principles
 
-<blockquote class="pull-quote">
-<p>APIs are architectural boundaries. They define how systems communicate, what data they exchange, and how dependencies propagate. Poor API design creates technical debt that cascades through every service that consumes it.</p>
-</blockquote>
+### Design the Contract First
 
-## Core API Design Principles
+Write the contract before implementing either side, as an OpenAPI document for HTTP APIs, a GraphQL schema, or Protocol Buffers definitions. Review it with the people who will consume it, then generate server stubs, client SDKs, and request validation from it.
 
-### Contract-First Design
+Implementing first and describing afterwards tends to publish the implementation. The resource shapes mirror database tables, field names mirror column names, and clients become coupled to a data model the team will want to change. `GET /orders/{orderId}` returning an order designed for its consumers ages far better than `GET /order_data` returning whatever the table holds.
 
-Design the API contract before implementing either client or server. This forces clarity about what the API actually does and prevents implementation details from leaking into the interface.
+### Prefer Extension over Change
 
-**Why it matters**: When you implement first and design second, the API reflects internal data structures rather than client needs. This creates brittle coupling that's expensive to fix later.
+Every client is coupled to the API's current shape, so the cheapest changes are additions that existing clients can ignore. A new optional request field, a new response field, and a new endpoint can all ship without anyone else changing anything. Removing, renaming, or re-typing a field can't, and neither can changing what an existing field means.
 
-**How to do this well**:
-- Write the API specification (OpenAPI, GraphQL schema, Protocol Buffers) first
-- Review the contract with stakeholders and consumers before writing code
-- Use the specification to generate client SDKs and server stubs
-- Validate requests/responses against the spec in tests
+The other half of that bargain belongs to clients. A client that ignores response fields it doesn't recognize and tolerates unknown enum values, known as a tolerant reader, is what lets the server add fields and values without breaking it.
 
-**Example**: An e-commerce API designed contract-first defines `GET /orders/{orderId}` returning a consistent Order schema. Implementation-first might expose `GET /order_data` returning internal database columns, requiring clients to understand your data model.
+### Resources and Operations
 
-### Stability Over Flexibility
+| | Resource-oriented | Operation-oriented |
+|---|------------------|--------------------|
+| **Models the domain as** | Nouns manipulated with standard methods | Actions with their own names |
+| **Example** | `PATCH /orders/{id}` with a new status | `POST /orders/{id}/cancel` |
+| **Suits** | Data that is created, read, updated, and deleted | Workflows whose steps have business meaning and rules |
+| **Strength** | Uniform, cacheable, predictable across the API | Explicit about intent, so rules attach to the action |
 
-API contracts must be stable. Breaking changes force all clients to update simultaneously, creating coordination overhead and deployment risk. Prefer extending APIs over modifying them.
-
-<div class="callout callout--warning">
-<p class="callout__title">API Stability Rules</p>
-<p><strong>Never</strong>:</p>
-<ul>
-<li>Remove fields or endpoints without deprecation process</li>
-<li>Change field types or semantics</li>
-<li>Make optional fields required</li>
-<li>Change error response structures</li>
-</ul>
-<p><strong>Always</strong>:</p>
-<ul>
-<li>Add new fields as optional</li>
-</ul>
-</div>
-
-### Resource-Oriented vs Operation-Oriented
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Resource-Oriented (REST)</h4>
-<ul>
-<li>Models domain as resources (nouns)</li>
-<li>Standard operations: GET, POST, PUT, DELETE</li>
-<li>Works well for entities and CRUD</li>
-<li>Example: GET /orders/{id}</li>
-<li>Leverages HTTP semantics</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Operation-Oriented (RPC-style)</h4>
-<ul>
-<li>Models domain as operations (verbs)</li>
-<li>Custom operations for workflows</li>
-<li>Works well for complex business logic</li>
-<li>Example: POST /orders/{id}/cancel</li>
-<li>More explicit about intent</li>
-</ul>
-</div>
-</div>
-
-Neither is universally better, so choose based on your domain. Most systems use both: resource-oriented for data access and operation-oriented for workflows.
+Most APIs need both. Cancelling an order is not merely setting a status field. It releases stock, refunds a payment, and may be refused, so a dedicated operation says what is being asked for more honestly than a generic update does.
 
 ## REST API Design
 
 ### Resource Modeling
 
-Resources are the fundamental abstraction in REST. A resource is any information that can be named: a document, an image, a user, an order.
+A resource is anything that can be named and addressed: an order, a customer, a customer's orders, the current user's profile.
 
-**Resource naming conventions**:
-- Use nouns, not verbs (`/orders` not `/getOrders`)
-- Use plural nouns for collections (`/users`, `/products`)
-- Use hierarchical paths for relationships (`/users/{userId}/orders`)
-- Use lowercase, hyphen-separated words (`/order-items` not `/orderItems`)
+| Pattern | Example | Use |
+|---------|---------|-----|
+| Collection | `GET /orders` | List resources, with pagination |
+| Item | `GET /orders/{orderId}` | One resource |
+| Sub-collection | `GET /customers/{customerId}/orders` | Resources scoped by a parent |
+| Singleton | `GET /me/profile` | A resource with no collection |
+| Operation | `POST /orders/{orderId}/cancel` | An action that doesn't map onto a standard method |
 
-**Common resource patterns**:
+Use plural nouns for collections, consistent casing across the whole API, and nesting only where the child genuinely belongs to the parent. Deep paths like `/customers/{c}/orders/{o}/lines/{l}/adjustments` couple clients to a hierarchy that rarely survives the domain changing.
 
-| Pattern | Example | Use Case |
-|---------|---------|----------|
-| Collection | `GET /orders` | List all resources |
-| Single resource | `GET /orders/{orderId}` | Retrieve specific resource |
-| Sub-collection | `GET /users/{userId}/orders` | Related resources scoped by parent |
-| Singleton | `GET /account/profile` | Single resource without collection |
-| Controller resource | `POST /orders/{orderId}/cancel` | Complex operations that don't fit CRUD |
+### Methods and Status Codes
 
-### HTTP Method Semantics
+HTTP methods carry meaning clients and intermediaries rely on. **Safe** methods, such as `GET` and `HEAD`, don't change server state, so caches, crawlers, and prefetchers can call them freely. **Idempotent** methods, such as `PUT` and `DELETE` as well as the safe methods, produce the same end state however many times they are repeated, so a client can retry them after a timeout without doing damage. `POST` and `PATCH` are neither by definition, which is why operations that must be retried safely need an idempotency key.
 
-Use HTTP methods according to their defined semantics. Two properties matter most when designing an API:
+Status codes tell a client what to do next, not only what happened. A `2xx` means the request worked. A `4xx` means the request itself has to change before it will work, so retrying it unchanged is pointless. A `5xx` means the server failed, and the same request may succeed later. Being consistent matters more than being clever. The same condition should produce the same code everywhere in the API.
 
-**Safe**: No side effects on the server (read-only). GET, HEAD, and OPTIONS are safe.
-**Idempotent**: Multiple identical requests produce the same result as a single request. PUT and DELETE are idempotent, as are the safe methods. POST and PATCH are not.
+### Error Responses with Problem Details
 
-**Why idempotency matters**: Networks are unreliable. Clients often retry requests. Idempotent operations can be safely retried without duplicating side effects.
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html){:target="_blank" rel="noopener noreferrer"}, Problem Details for HTTP APIs, is the standard format for HTTP error bodies. It obsoleted RFC 7807 in July 2023, keeping the same format while tightening guidance. A problem details response uses the media type `application/problem+json` and these members:
 
-### Status Code Conventions
+| Member | Meaning |
+|--------|---------|
+| `type` | A URI identifying the kind of problem, which clients branch on. Defaults to `about:blank` |
+| `title` | A short, human-readable summary of that kind of problem, the same for every occurrence |
+| `status` | The HTTP status code, repeated for convenience |
+| `detail` | A human-readable explanation of this particular occurrence |
+| `instance` | A URI identifying this particular occurrence, useful for support and log correlation |
 
-Use HTTP status codes to communicate operation outcomes. Clients act on the three classes differently: 2xx means success, 4xx means the caller must change the request before retrying, and 5xx means a server-side failure that may succeed on retry.
-
-**Be consistent**: Use the same status code for the same condition across your entire API.
-
-### Error Response Design
-
-Provide structured error responses that help clients handle failures:
+A problem type can add its own members. Validation failures commonly add a list of individual errors, each pointing at the part of the request that failed.
 
 ```json
+HTTP/1.1 422 Unprocessable Content
+Content-Type: application/problem+json
+
 {
-  "error": {
-    "code": "VALIDATION_FAILED",
-    "message": "One or more fields failed validation",
-    "details": [
-      {
-        "field": "email",
-        "message": "Email address is invalid"
-      },
-      {
-        "field": "age",
-        "message": "Must be 18 or older"
-      }
-    ],
-    "request_id": "req_abc123",
-    "timestamp": "2025-01-15T10:30:00Z"
-  }
+  "type": "https://api.example.com/problems/validation-error",
+  "title": "Your request is not valid.",
+  "status": 422,
+  "detail": "Two fields failed validation.",
+  "instance": "/orders/requests/7f3c9a",
+  "errors": [
+    { "pointer": "#/email", "detail": "Must be a valid email address." },
+    { "pointer": "#/quantity", "detail": "Must be greater than zero." }
+  ]
 }
 ```
 
-**Essential error fields**:
-- **code**: Machine-readable error identifier (stable, never changes)
-- **message**: Human-readable description (can change for clarity)
-- **details**: Specific validation failures or context
-- **request_id**: Correlation ID for debugging
-- **timestamp**: When the error occurred
+Clients should branch on `type`, which is a stable identifier, and never parse `title` or `detail`, which exist for humans and can be reworded. Error bodies should also never carry stack traces, SQL, or internal hostnames.
 
-### Pagination Patterns
+ASP.NET Core produces problem details natively. Registering the service makes unhandled exceptions and empty error responses use the format, and endpoints can return problems directly.
 
-APIs returning collections must paginate to prevent unbounded response sizes.
+```csharp
+builder.Services.AddProblemDetails();
 
-**Offset-based pagination** (simple but has consistency issues):
+var app = builder.Build();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+app.MapPost("/orders", (CreateOrderRequest request) =>
+{
+    var errors = OrderValidator.Validate(request);   // Dictionary<string, string[]>
+    if (errors.Count > 0)
+        return Results.ValidationProblem(errors, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+    // ...
+    return Results.Created($"/orders/{orderId}", order);
+});
 ```
-GET /orders?limit=20&offset=40
-```
 
-**Cursor-based pagination** (consistent but opaque):
-```
-GET /orders?limit=20&cursor=eyJpZCI6MTIzfQ
-```
+### Pagination
 
-**Response format**:
+Any endpoint returning a collection needs pagination, because collections grow and an unbounded response eventually times out or exhausts memory on one side or the other.
+
+| | Offset pagination | Cursor pagination |
+|---|-------------------|-------------------|
+| **Request** | `GET /orders?limit=20&offset=40` | `GET /orders?limit=20&cursor=eyJpZCI6MTIzfQ` |
+| **Jump to page N** | Yes | No, only next and previous |
+| **Items inserted or deleted while paging** | Pages shift, so items are skipped or repeated | Stable, since the cursor marks a position in the ordering |
+| **Deep pages** | Slow, because the database still reads and discards every skipped row | Constant cost, since the cursor becomes an indexed range condition |
+| **Suits** | Small, stable collections and admin screens | Feeds, large collections, and anything clients sync from |
+
 ```json
 {
-  "data": [...],
-  "pagination": {
-    "total": 1247,
-    "limit": 20,
-    "offset": 40,
-    "next": "/orders?limit=20&offset=60",
-    "previous": "/orders?limit=20&offset=20"
-  }
+  "data": [ ... ],
+  "next_cursor": "eyJpZCI6MTQzfQ",
+  "has_more": true
 }
 ```
 
-**Cursor-based is preferred for large datasets** where consistency matters. New items inserted during pagination don't cause duplicate results or skipped items.
+Keep cursors opaque, so the encoding can change without breaking clients. Think twice before returning a total count: counting a large filtered collection can cost more than fetching the page.
 
-### Filtering, Sorting, and Searching
+### Filtering, Sorting, and Field Selection
 
-Provide query parameters for filtering and sorting collections:
-
-**Filtering**:
 ```
 GET /orders?status=pending&customer_id=123
-GET /products?price_min=10&price_max=100
-```
-
-**Sorting**:
-```
-GET /orders?sort=created_at:desc,total:asc
-```
-
-**Searching** (full-text across multiple fields):
-```
+GET /orders?created_after=2026-01-01T00:00:00Z
+GET /orders?sort=-created_at,total
 GET /products?q=laptop
+GET /orders/123?fields=id,status,total
 ```
 
-**Field selection** (reduce response size):
-```
-GET /orders?fields=id,status,total
-```
-
-**Guidelines**:
-- Document which fields support filtering and the allowed operators
-- Support combining filters with AND semantics
-- Use standard parameter names (`sort`, `q`, `fields`)
-- Validate filter values and return 400 for invalid queries
+Choose one convention for each, such as a leading minus for descending sort, and apply it across the whole API. Document which fields can be filtered and sorted, since each one usually needs an index behind it, and reject unsupported filters with a `400` rather than silently ignoring them. A client whose filter is ignored receives the whole collection and believes it was filtered.
 
 ## GraphQL Design
 
-### When to Use GraphQL
+### When GraphQL Fits
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>GraphQL Works Well When</h4>
-<ul>
-<li>Clients need flexible queries across multiple resources</li>
-<li>Over-fetching or under-fetching is a performance problem</li>
-<li>Diverse client types (mobile, web, partners) with different data needs</li>
-<li>Schema evolution and introspection are valuable</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>REST Works Better When</h4>
-<ul>
-<li>Simple CRUD dominates</li>
-<li>Caching with HTTP semantics is critical</li>
-<li>Operations are naturally resource-oriented</li>
-<li>Tooling and organizational expertise favor REST</li>
-</ul>
-</div>
-</div>
+| GraphQL tends to fit when | REST tends to fit when |
+|---------------------------|------------------------|
+| Several client types need different shapes of the same data | Clients need broadly the same representations |
+| Screens assemble data from many related entities, and REST would take many round trips | Operations map naturally onto resources |
+| A frontend team wants to change what it fetches without backend changes | HTTP caching by URL at CDNs and proxies matters |
+| A single typed schema over several backends is valuable | Tooling, security review, and team experience are built around HTTP semantics |
 
-<div class="callout callout--warning">
-<p class="callout__title">Common Mistake</p>
-<p>Using GraphQL for everything. GraphQL adds complexity. Use it when flexibility justifies the cost.</p>
-</div>
+GraphQL moves complexity rather than removing it. Clients get flexibility, and the server takes on query cost control, authorization per field, and caching that plain HTTP no longer does for it.
 
-### Schema Design Principles
+### Schema Design
 
-GraphQL schemas define types, fields, and relationships. Design schemas around client use cases, not database structure.
+Design the schema around what clients do, not around database tables, and use the type system to make invalid states unrepresentable. GraphQL's built-in scalars are only `Int`, `Float`, `String`, `Boolean`, and `ID`, so any other primitive, such as a date-time or a decimal amount, has to be declared as a custom scalar.
 
-**Example schema**:
 ```graphql
+scalar DateTime
+scalar Decimal
+
 type Query {
   order(id: ID!): Order
-  orders(status: OrderStatus, limit: Int, cursor: String): OrderConnection!
+  orders(status: OrderStatus, first: Int, after: String): OrderConnection!
 }
 
 type Order {
   id: ID!
   status: OrderStatus!
   total: Money!
-  items: [OrderItem!]!
+  lines: [OrderLine!]!
   customer: Customer!
   createdAt: DateTime!
 }
 
-type OrderItem {
-  product: Product!
-  quantity: Int!
-  price: Money!
+type Money {
+  amount: Decimal!
+  currency: String!
 }
 
 enum OrderStatus {
@@ -270,524 +190,140 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
 }
-
-type Money {
-  amount: Decimal!
-  currency: String!
-}
 ```
 
-**Schema design guidelines**:
-- Use strong typing (non-null `!` where appropriate)
-- Model domain concepts, not database tables
-- Use enums for fixed value sets
-- Provide pagination for lists (connections pattern)
-- Use scalar types for domain primitives (Money, DateTime, Email)
+Non-null markers are a commitment, since a field declared `String!` can never be made nullable without breaking clients, while a nullable field can later become non-null safely. Paginated lists conventionally follow the connection pattern, with `first`, `after`, and `pageInfo`, which gives cursor pagination a shape clients and tooling recognize.
 
-### Mutations and Side Effects
+### Mutations
 
-Mutations modify server state. Design mutations to be explicit about inputs and outputs.
+Model mutations as specific business actions rather than generic updates, take a single input object, and return a payload that can carry either the result or expected errors.
 
 ```graphql
 type Mutation {
-  createOrder(input: CreateOrderInput!): CreateOrderPayload!
-  cancelOrder(orderId: ID!): CancelOrderPayload!
+  placeOrder(input: PlaceOrderInput!): PlaceOrderPayload!
+  cancelOrder(input: CancelOrderInput!): CancelOrderPayload!
 }
 
-input CreateOrderInput {
-  items: [OrderItemInput!]!
+input PlaceOrderInput {
+  clientMutationId: String
+  lines: [OrderLineInput!]!
   shippingAddress: AddressInput!
-  paymentMethod: PaymentMethodInput!
 }
 
-type CreateOrderPayload {
+type PlaceOrderPayload {
   order: Order
   userErrors: [UserError!]!
 }
 
 type UserError {
-  field: String
+  field: [String!]
   message: String!
 }
 ```
 
-**Mutation design patterns**:
-- Use input types for mutation arguments
-- Return payload types that include both success data and errors
-- Support partial success (some items succeeded, others failed)
-- Make mutations idempotent where possible
+Returning expected failures, such as an out-of-stock item, as `userErrors` in the payload keeps them typed and part of the schema. GraphQL's top-level `errors` array is better reserved for unexpected failures, since clients can't discover its contents from the schema.
 
-### Resolver Design
+### Resolvers and Query Cost
 
-Resolvers fetch data for each field. Poor resolver design causes N+1 query problems.
+Each field has a resolver, and naive resolvers produce the N+1 problem. A query for 50 orders with their customers runs one query for the orders and then one per order for its customer.
 
-**N+1 problem example**:
 ```graphql
 query {
-  orders {
-    id
-    customer { name }  # Triggers separate query per order
+  orders(first: 50) {
+    edges { node { id customer { name } } }
   }
 }
 ```
 
-**Solution: Use DataLoader** for batching and caching:
-- Batches multiple requests into single database query
-- Caches results within a single request
-- Prevents duplicate fetches for the same ID
+The standard fix is batching through a DataLoader, which collects every customer id requested while resolving one level of the query and loads them in a single call, caching them for the rest of the request.
 
-**Resolver performance guidelines**:
-- Implement DataLoader for all relational lookups
-- Limit query depth to prevent abuse
-- Implement query cost analysis
-- Consider persisted queries for production
+Because clients write their own queries, the server also has to bound what a query can cost. Limit query depth, assign a cost to fields and reject queries over a budget, cap page sizes, and for first-party clients consider persisted queries, where the server accepts only queries registered in advance.
 
-## API Versioning Strategies
+## Versioning
 
-APIs must evolve without breaking existing clients. Versioning strategies manage this evolution.
+Versioning is how an API makes a breaking change without breaking existing clients, by running old and new contracts side by side.
 
-### URI Versioning
+| Strategy | Example | Strengths | Weaknesses |
+|----------|---------|-----------|------------|
+| **URI path** | `GET /v2/orders` | Visible, easy to route, easy to see in logs and to test | Versions the whole API at once, and the same resource gets several URLs |
+| **Media type** | `Accept: application/vnd.example.order.v2+json` | Stable URLs, and each resource can version independently | Harder to discover, test, and cache correctly |
+| **Custom header** | `Api-Version: 2` | Stable URLs, simple for clients | Invisible in URLs, and caches need `Vary` configured |
+| **Query parameter** | `GET /orders?api-version=2` | Simple, visible | Mixes versioning into filtering parameters |
 
-Include version in the URL path:
+For most HTTP APIs, a major version in the URI path is the pragmatic default. It is the easiest to route, document, and observe, and its main weakness matters little if major versions are rare. Between major versions, make only backward-compatible changes.
+
+The goal is to need versions as seldom as possible. Every live version is a contract to maintain, test, and secure, so a second major version should be a last resort after additive changes have been ruled out, not a routine release.
+
+GraphQL APIs generally don't version at all. The schema evolves continuously, with new fields added alongside old ones and old ones marked `@deprecated` until usage reaches zero.
+
+## Evolution and Compatibility
+
+| Backward-compatible, safe to ship | Breaking, needs a new version or a migration |
+|-----------------------------------|----------------------------------------------|
+| Adding an endpoint or operation | Removing or renaming an endpoint or field |
+| Adding an optional request field or query parameter | Adding a required request field, or making an optional one required |
+| Adding a response field | Changing a field's type, format, or meaning |
+| Adding an enum value, if clients tolerate unknown values | Removing an enum value |
+| Relaxing validation | Tightening validation on existing input |
+| Adding a new error `type` for a new condition | Changing the error format, or the status code for an existing condition |
+
+Two changes on the left are only safe if clients cooperate. A client that fails on unknown enum values, or that switches exhaustively over error types, turns an additive change into a breaking one. Say in the API's documentation that clients must tolerate both.
+
+### Deprecation
+
+Removing something clients depend on should be a process with a known end date, not an event.
+
+1. **Announce** the deprecation in the changelog and documentation, with the replacement and the removal date.
+2. **Signal it in responses**. The `Deprecation` header, standardized in [RFC 9745](https://www.rfc-editor.org/rfc/rfc9745.html){:target="_blank" rel="noopener noreferrer"} in March 2025, says when the resource was or will be deprecated, and the `Sunset` header from RFC 8594 says when it will stop responding. A `Link` header can point to migration documentation.
+3. **Measure usage** of the deprecated resource per client, and contact the clients still calling it.
+4. **Remove** it after the sunset date, once usage has reached a level the business accepts.
+
 ```
-GET /v1/orders
-GET /v2/orders
-```
-
-**Pros**:
-- Explicit and visible
-- Easy to route to different implementations
-- Clear in logs and monitoring
-
-**Cons**:
-- Versions entire API surface (can't version individual resources)
-- URL changes break bookmarks and links
-
-### Header Versioning
-
-Specify version in HTTP header:
-```
-GET /orders
-Accept: application/vnd.company.v2+json
-```
-
-**Pros**:
-- URLs stay stable
-- Can version individual resources
-- Follows REST principles
-
-**Cons**:
-- Less visible (harder to discover in docs)
-- Tooling support varies
-
-### Content Negotiation
-
-Use `Accept` header to request different representations:
-```
-Accept: application/json; version=2
-Accept: application/vnd.company.order.v2+json
+Deprecation: @1767225600
+Sunset: Wed, 30 Jun 2027 23:59:59 GMT
+Link: <https://api.example.com/docs/migrate-orders-v2>; rel="deprecation"
 ```
 
-**Pros**:
-- Fine-grained control
-- Standard HTTP mechanism
+`Deprecation` uses a structured-field date, an `@` followed by Unix seconds, while `Sunset` keeps the older HTTP-date format, and the sunset must not come before the deprecation. How long the notice period runs depends on who the clients are. Internal teams can move in weeks, while public API consumers may need a year or more.
 
-**Cons**:
-- Complex to implement and document
-- Client libraries may not support easily
+## HTTP Performance
 
-### Query Parameter Versioning
+**Caching**: `Cache-Control` tells browsers, CDNs, and proxies whether and for how long a response can be reused, with `private` restricting reuse to the requesting client and `no-store` forbidding it entirely. Responses that change unpredictably can carry an `ETag`, so clients revalidate with `If-None-Match` and receive a bodiless `304 Not Modified` when nothing changed.
 
-Pass version as query parameter:
-```
-GET /orders?version=2
-```
+**Compression**: Clients advertise supported encodings in `Accept-Encoding`, commonly `gzip` and Brotli (`br`), and the server compresses accordingly. Text formats like JSON compress well, so compression is usually worthwhile for anything beyond small responses.
 
-**Pros**:
-- Simple for clients
-- Visible in URLs
+**Round trips**: Chatty APIs that need several calls for one screen are slowest on high-latency mobile connections. Composite endpoints designed for a screen, embedding related resources on request with parameters like `?expand=customer`, or field selection all reduce round trips without abandoning resource orientation. Generic batch endpoints that wrap many requests in one are harder to cache, authorize, and debug, and are usually a last resort.
 
-**Cons**:
-- Pollutes query parameter namespace
-- Can conflict with filtering/pagination
+## Governance
 
-### Recommendation: URI Versioning for Major Versions
+In an organization with many APIs, consistency is itself a feature. A client team that has integrated with one API should find the next one familiar.
 
-<div class="callout callout--tip">
-<p class="callout__title">Best Practice: URI Versioning</p>
-<p><strong>Use URI versioning for major versions</strong> (<code>/v1/</code>, <code>/v2/</code>) when breaking changes occur. Between major versions, make backward-compatible changes only:</p>
-<ul>
-<li>Add optional fields</li>
-<li>Add new endpoints</li>
-<li>Add new query parameters with defaults</li>
-<li>Deprecate fields (mark deprecated but don't remove)</li>
-</ul>
-<p><strong>Major version increment triggers</strong>:</p>
-<ul>
-<li>Removing endpoints or fields</li>
-<li>Changing field types or semantics</li>
-<li>Changing authentication mechanisms</li>
-<li>Changing error response format</li>
-</ul>
-<p><strong>Goal</strong>: Stay on a single major version as long as possible. Each additional version is code you must maintain.</p>
-</div>
+- **A style guide** fixes the decisions every API would otherwise make differently: naming and casing, error format, pagination style, date and time format (RFC 3339), money representation, versioning strategy, and authentication scheme.
+- **Automated linting** of OpenAPI documents against the style guide, with a tool like Spectral, catches deviations in review rather than after release.
+- **Design review** of new or changed contracts, before implementation, is where the expensive mistakes are cheapest to fix.
+- **Generated reference documentation** from the contract, alongside hand-written guides and examples, keeps documentation from drifting away from behavior.
 
-## API Security
+Authentication and authorization, rate limiting, and testing are all part of an API's design. The API decides how callers are identified and which resources each may reach, publishes its limits and returns `429 Too Many Requests` with `Retry-After` when they are exceeded, and verifies its contract with consumers through contract tests. Each of those is a subject of its own, and the API's job is to apply them consistently.
 
-### Authentication Mechanisms
+## Common Antipatterns
 
-| Mechanism | Use Case | Pros | Cons |
-|-----------|----------|------|------|
-| API Keys | Server-to-server, simple clients | Simple, widely supported | No user identity, hard to rotate |
-| OAuth 2.0 | User authorization, third-party access | Standard, supports delegated access | Complex, many flows to choose from |
-| JWT | Stateless authentication | Self-contained, scales well | Token revocation is hard |
-| mTLS | High-security service-to-service | Strong mutual authentication | Complex certificate management |
+| Antipattern | What it looks like | What helps |
+|-------------|--------------------|------------|
+| Leaking the data model | Field names match columns, and `?join=customers` appears in URLs | Design resources around consumer needs, and map to storage behind the contract |
+| Ignoring HTTP semantics | `POST` for everything, and `200 OK` with `"success": false` in the body | Standard methods and status codes, so clients and intermediaries behave correctly |
+| Inconsistent errors | Every endpoint invents its own error shape | Problem Details everywhere, with stable `type` URIs |
+| Unbounded collections | `GET /orders` returns every order | Mandatory pagination with a maximum page size |
+| Versioning by default | `v7` of an API whose changes were mostly additive | Additive evolution, with new versions only for real breaks |
+| Silent breaking changes | A field's meaning changes without a version or notice | Compatibility rules, contract tests, and a deprecation process |
 
-**Common patterns**:
-- **Public APIs**: OAuth 2.0 for user authorization
-- **Internal APIs**: JWT or mTLS
-- **Partner APIs**: API keys with allowlisting
-- **Mobile/Web apps**: OAuth 2.0 with PKCE
+## Quick Reference
 
-### Authorization Models
-
-**API-level authorization**: Control access to entire endpoints.
-
-**Resource-level authorization**: Control access to specific resources (e.g., user can only access their own orders).
-
-**Field-level authorization**: Control access to specific fields (e.g., hide sensitive data from certain roles).
-
-**Implementation pattern**:
-```
-1. Authenticate: Verify who is making the request
-2. Authorize: Check if they can perform this action
-3. Filter: Return only data they're allowed to see
-```
-
-### Rate Limiting and Throttling
-
-Protect APIs from abuse and ensure fair usage.
-
-**Rate limiting strategies**:
-- **Per-user limits**: 1000 requests/hour per API key
-- **Per-endpoint limits**: 10 requests/second for expensive operations
-- **Burst allowances**: Allow short bursts above average rate
-
-**Response headers**:
-```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 743
-X-RateLimit-Reset: 1642244400
-```
-
-**When limit exceeded**: Return `429 Too Many Requests` with `Retry-After` header.
-
-**Algorithms**:
-- **Token bucket**: Allow bursts, smooth long-term rate
-- **Leaky bucket**: Enforce steady rate, reject bursts
-- **Fixed window**: Simple but allows double-rate at window boundaries
-- **Sliding window**: Fair but more complex
-
-### Input Validation
-
-Validate all inputs at the API boundary. Never trust client data.
-
-**Validation layers**:
-1. **Syntax validation**: Parse JSON/XML, check types
-2. **Schema validation**: Validate against API spec (OpenAPI, JSON Schema)
-3. **Business validation**: Check domain rules (age >= 18, email unique)
-4. **Sanitization**: Escape or reject dangerous inputs
-
-**Return detailed validation errors** (see Error Response Design above).
-
-**Security validations**:
-- Reject unexpectedly large requests
-- Validate content-type headers
-- Check for injection attacks (SQL, NoSQL, command injection)
-- Sanitize all user-provided strings before logging
-
-## API Governance and Standards
-
-### API Standards and Style Guides
-
-Establish API standards across your organization to ensure consistency.
-
-**Key areas to standardize**:
-- Naming conventions (resources, fields, parameters)
-- Error response format
-- Authentication mechanisms
-- Versioning strategy
-- Status code usage
-- Pagination approach
-- Date/time formats (ISO 8601)
-- Currency and money representation
-
-**Document standards** in a style guide that all teams follow. Review new APIs against the guide.
-
-### API Lifecycle Management
-
-APIs progress through a lifecycle:
-
-1. **Design**: Define contract, review with stakeholders
-2. **Develop**: Implement server and client SDKs
-3. **Test**: Validate contract compliance, performance, security
-4. **Publish**: Deploy to production, publish documentation
-5. **Monitor**: Track usage, performance, errors
-6. **Version**: Evolve API while maintaining compatibility
-7. **Deprecate**: Sunset old versions, migrate clients
-8. **Retire**: Remove deprecated versions
-
-**Critical transition: Publish to Monitor**. Once an API is public, you lose control. Treat every API as permanent.
-
-### API Documentation
-
-Documentation must be complete, accurate, and always up to date with the implementation.
-
-**Essential documentation**:
-- Overview and purpose
-- Authentication and authorization
-- Base URL and versioning
-- Complete endpoint reference (request/response examples)
-- Error codes and meanings
-- Rate limits and quotas
-- Pagination and filtering
-- Code examples in multiple languages
-- Changelog
-
-**Documentation generation**: Use OpenAPI (Swagger), GraphQL introspection, or API Blueprint to generate documentation from specifications. This ensures docs stay synchronized with implementation.
-
-**Interactive documentation**: Tools like Swagger UI, GraphQL Playground, and Postman Collections let developers try APIs without writing code.
-
-## API Evolution and Backward Compatibility
-
-### Backward-Compatible Changes
-
-These changes don't break existing clients:
-
-**Safe additions**:
-- New optional request fields
-- New response fields
-- New endpoints
-- New optional query parameters
-- New error codes (clients should handle unknown codes gracefully)
-- New enum values (if clients ignore unknown values)
-
-**Guidelines**:
-- Always make new fields optional with sensible defaults
-- Never repurpose existing fields for new meanings
-- Add fields, don't replace them
-
-### Breaking Changes
-
-These changes break existing clients and require a new major version:
-
-**Breaking changes**:
-- Removing endpoints or fields
-- Renaming fields
-- Changing field types
-- Making optional fields required
-- Changing authentication mechanisms
-- Changing error response structure
-- Changing URL structure
-- Changing HTTP method semantics
-
-**When you must make breaking changes**: Create a new major version, support both versions during migration, deprecate old version, retire old version.
-
-### Deprecation Process
-
-Deprecating API features safely:
-
-1. **Announce**: Document deprecation in changelog, mark endpoints as deprecated in docs
-2. **Deprecation headers**: Return `Sunset` header indicating when endpoint will be removed
-   ```
-   Sunset: Sat, 31 Dec 2025 23:59:59 GMT
-   ```
-3. **Warning logs**: Log warnings when deprecated endpoints are called
-4. **Client migration**: Work with major clients to migrate
-5. **Monitor usage**: Track calls to deprecated endpoints
-6. **Sunset**: Remove deprecated features after sufficient notice period (6-12 months typical)
-
-**Never surprise clients with breaking changes**. Communication and transition time are critical.
-
-## API Performance Optimization
-
-### Caching Strategies
-
-HTTP caching reduces latency and server load.
-
-**Cache-Control directives**:
-```
-Cache-Control: public, max-age=3600         # Cache for 1 hour
-Cache-Control: private, max-age=300          # User-specific, cache for 5 min
-Cache-Control: no-cache                       # Revalidate every time
-Cache-Control: no-store                       # Never cache
-```
-
-**ETags for conditional requests**:
-```
-# Initial request
-GET /orders/123
-ETag: "v1-abc123"
-
-# Subsequent request
-GET /orders/123
-If-None-Match: "v1-abc123"
-
-# Response if unchanged
-304 Not Modified
-```
-
-**Cache invalidation**: Include cache-busting parameters or version identifiers in URLs when content changes.
-
-### Compression
-
-Enable response compression to reduce bandwidth:
-```
-Accept-Encoding: gzip, deflate
-Content-Encoding: gzip
-```
-
-**Most APIs should compress responses**. The CPU cost is negligible compared to network transfer time.
-
-### Batch Operations
-
-Allow clients to batch multiple operations into a single request to reduce round trips:
-
-```json
-POST /batch
-{
-  "operations": [
-    { "method": "GET", "path": "/orders/123" },
-    { "method": "GET", "path": "/orders/124" },
-    { "method": "POST", "path": "/orders", "body": {...} }
-  ]
-}
-```
-
-**Response**:
-```json
-{
-  "responses": [
-    { "status": 200, "body": {...} },
-    { "status": 200, "body": {...} },
-    { "status": 201, "body": {...} }
-  ]
-}
-```
-
-**Use cases**: Mobile apps with high latency, bulk imports, reducing connection overhead.
-
-### Partial Responses
-
-Let clients request only the fields they need:
-```
-GET /orders/123?fields=id,status,total
-```
-
-Reduces response size and processing time. Particularly valuable for mobile clients.
-
-## API Testing Strategies
-
-### Contract Testing
-
-Verify that API implementation matches the specification and that clients use the API correctly.
-
-**Provider contract tests**: Verify server responses match the API spec.
-**Consumer contract tests**: Verify clients handle responses correctly.
-
-**Tools**: Pact, Spring Cloud Contract, Postman Contract Testing.
-
-### Integration Testing
-
-Test API endpoints end-to-end against a running service.
-
-**Test scenarios**:
-- Happy path requests return expected responses
-- Validation errors return appropriate 400-level codes
-- Authorization is enforced
-- Rate limits are applied
-- Pagination works correctly
-- Error conditions are handled gracefully
-
-### Performance Testing
-
-Validate that the API meets performance requirements under load.
-
-**Test types**:
-- **Load testing**: Sustain expected traffic levels
-- **Stress testing**: Find breaking point
-- **Spike testing**: Handle sudden traffic increases
-- **Soak testing**: Sustain load for extended periods (detect memory leaks)
-
-**Key metrics**:
-- Response time (p50, p95, p99)
-- Throughput (requests/second)
-- Error rate
-- Resource utilization (CPU, memory, connections)
-
-### Security Testing
-
-Validate security controls:
-- Authentication bypass attempts
-- Authorization boundary violations
-- Injection attacks (SQL, NoSQL, command injection)
-- Input validation bypass
-- Rate limit enforcement
-- HTTPS enforcement
-- Sensitive data exposure in logs or error messages
-
-## Common API Antipatterns
-
-### Chatty APIs
-
-**Problem**: Requiring multiple round trips to accomplish simple tasks. Example: Client must call `/user`, then `/user/preferences`, then `/user/orders` separately.
-
-**Solution**: Provide composite endpoints, support field expansion (`/user?expand=preferences,orders`), or use GraphQL.
-
-### Leaking Implementation Details
-
-**Problem**: Exposing database structure, internal service names, or framework details in the API.
-
-**Example**: `GET /orders?join=customers&select=order_id,customer.name`
-
-**Solution**: Design APIs around domain concepts, not database schema. Abstract implementation details behind stable contracts.
-
-### Ignoring HTTP Semantics
-
-**Problem**: Using POST for everything, returning 200 OK for errors, misusing status codes.
-
-**Solution**: Use HTTP methods and status codes according to their defined semantics. REST is built on HTTP; leverage it properly.
-
-### Poor Error Handling
-
-**Problem**: Vague error messages, inconsistent error formats, exposing stack traces.
-
-**Solution**: Return structured errors with machine-readable codes, human-readable messages, and actionable details.
-
-### Versioning Too Frequently
-
-**Problem**: Creating new versions for minor changes, fragmenting the API across many versions.
-
-**Solution**: Make backward-compatible changes whenever possible. Reserve new versions for true breaking changes.
-
-### Lack of Documentation
-
-**Problem**: Incomplete, outdated, or missing documentation.
-
-**Solution**: Generate documentation from API specifications. Include examples for every endpoint. Keep changelog updated.
-
-## Key Takeaways
-
-**APIs are contracts**: Treat them as permanent commitments. Changes are expensive. Design carefully upfront.
-
-**Stability enables evolution**: Backward compatibility allows clients and servers to evolve independently. Breaking changes force coordination.
-
-**REST and GraphQL solve different problems**: REST excels at resource-oriented operations with strong HTTP caching. GraphQL excels at flexible queries across complex graphs. Choose based on your use case.
-
-**Versioning is a governance decision**: Decide once how you'll version APIs and apply it consistently across the organization.
-
-**Security is not optional**: Authentication, authorization, input validation, and rate limiting must be part of every API from day one.
-
-**Documentation quality matters**: Developers evaluate your platform based on documentation quality. Invest in examples, interactive tools, and keeping docs current.
-
-**Monitor API usage**: Track who uses which endpoints, error rates, and performance. This data drives versioning decisions and sunset timelines.
+| Decision | Default | Reach for the alternative when |
+|----------|---------|--------------------------------|
+| **Contract** | Contract-first OpenAPI or GraphQL schema | Never skip it for an API with consumers outside the team |
+| **Style** | Resource-oriented REST, with operations for business actions | Clients need many different shapes of related data, which favors GraphQL |
+| **Errors** | RFC 9457 Problem Details, branching on `type` | Rarely, and a documented equivalent is acceptable only if it is used consistently |
+| **Pagination** | Cursor-based | The collection is small and stable, or clients need page numbers |
+| **Versioning** | Major version in the URI path, rarely incremented | Resources need independent versions, which favors media-type versioning |
+| **Evolution** | Additive changes and tolerant readers | A breaking change is unavoidable, so version and deprecate |
+| **Deprecation** | `Deprecation` and `Sunset` headers, usage tracking, a published date | Never remove without them |

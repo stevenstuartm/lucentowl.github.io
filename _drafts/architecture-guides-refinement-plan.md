@@ -6,7 +6,7 @@ Guides are consumed sequentially in config order. That order encodes the fundame
 
 **The checklist, the Phase 0 method, the process rules, and the cross-domain gotchas live in [`.claude/content/guide-refinement-standard.md`](../.claude/content/guide-refinement-standard.md).** Read it first. This document carries only what is specific to this pass.
 
-**Current position: Phase 1, row 20.**
+**Current position: Phase 1, row 30.**
 
 ---
 
@@ -172,7 +172,16 @@ Verified during earlier rows; applies to every remaining guide that touches the 
 - **Architecture quantum definition** (checked row 5): *Software Architecture: The Hard Parts* (2021) defines it as an independently deployable artifact with high functional cohesion, high static coupling, and synchronous dynamic coupling. Dynamic coupling has three dimensions: communication (sync/async), consistency (atomic/eventual), and coordination (orchestration/choreography). Guides using the older "synchronous connascence" wording should use this one.
 - **Component identification** (checked row 4, developertoarchitect.com lessons 191-193): Richards' two approaches for initial core components are the workflow approach and the actor/action approach, and the entity trap is his named anti-pattern ("manager" CRUD components form a component-relational mapping, not an architecture).
 - **Broker message size limits** (checked for row 17): Amazon SQS raised its maximum message payload from 256 KiB to 1 MiB for standard and FIFO queues on 4 August 2025 (AWS What's New). RabbitMQ's default `max_message_size` is 16 MiB from 4.0 onward, down from 128 MiB in 3.8 through 3.13, with a hard cap of 512 MiB. Kafka's broker default `message.max.bytes` is about 1 MB. Any guide citing SQS at 256 KB or RabbitMQ at 128 MB as current is stale.
+- **Kafka no longer uses ZooKeeper** (Apache Kafka 4.0.0 release announcement, March 2025, checked row 20): 4.0 runs only in KRaft mode, its own Raft-based controller, and ZooKeeper mode is removed. KRaft was production-ready from 3.3. Any guide naming Kafka as a ZooKeeper user, or listing ZooKeeper as a Kafka dependency, is stale.
 - **AWS App Mesh is discontinued on 30 September 2026** (AWS App Mesh documentation and the AWS Containers blog migration post, checked Phase 0). After that date the console and App Mesh resources are inaccessible. New customers have been unable to onboard since 24 September 2024. AWS points ECS workloads to Amazon ECS Service Connect and EKS workloads to Amazon VPC Lattice. Any guide presenting App Mesh as a current option is stale.
+
+- **Service mesh data planes** (istio.io, linkerd.io, Consul docs, checked row 24): Istio's sidecarless ambient mode (ztunnel plus waypoint proxies) is GA since Istio 1.24, November 2024, and sidecars remain supported. Linkerd supports VM workloads since 2.15, and since February 2024 the open source project ships only edge releases, with stable builds from vendors such as Buoyant Enterprise for Linkerd. HashiCorp calls its mesh Consul service mesh, formerly Connect. A guide equating a mesh with sidecars, or calling Linkerd Kubernetes-only, is stale.
+
+- **HTTP API standards** (rfc-editor.org, checked row 27): RFC 9457 (July 2023) obsoletes RFC 7807 for Problem Details, and RFC 9745 (March 2025) standardizes the `Deprecation` response header alongside RFC 8594's `Sunset`. GraphQL Playground is archived in favor of GraphiQL. Any guide citing RFC 7807 as current or recommending GraphQL Playground is stale.
+
+- **Renamed or retired products** (vendor docs, checked rows 26 and 28): Azure AD is Microsoft Entra ID (2023). Google's Traffic Director and Anthos Service Mesh are now Cloud Service Mesh. Apollo Studio is GraphOS Studio. Protobuf files now declare an edition (2023, 2024) rather than `syntax`, and editions have no `required` label.
+
+- **OData delta payloads flow both ways** (OASIS OData 4.01 Protocol, section 11.4.12, checked row 29): clients can PATCH a collection with a delta payload, applied as upserts and deletions, with an optional continue-on-error mode. Also, .NET 10 ASP.NET Core JSON Patch uses System.Text.Json via Microsoft.AspNetCore.JsonPatch.SystemTextJson, and RFC 9110 obsoletes RFC 7232 for conditional requests.
 
 ## Open pre-flags
 
@@ -180,13 +189,6 @@ Leads for rows not yet done. **A pre-flag is a lead, not a finding.** Re-verify 
 
 | Target row | Lead |
 |---|---|
-| 20 coordination_patterns | Confirm distributed-lock guidance doesn't present Redis Redlock as safe for correctness without fencing tokens. |
-| 22 performance_scalability_patterns | Four year-stamped lines need reframing or removal. The "Used by" vendor attributions on rate-limiting algorithms are unsourced. |
-| 23 deployment_infrastructure_patterns | The API Gateway section and its quick-reference rows were assembled in Phase 0; the "When to Avoid" line for API Gateway is new, unverified prose. |
-| 24 service-mesh-architecture | Istio's ambient mode runs without sidecars, so "sidecar pattern is foundational" may no longer hold universally. Check Linkerd's release and licensing model and its "Kubernetes-only" claim. The "fewer than 10-15 services" threshold and sidecar overhead figures (50-100MB, 0.1-0.5 vCPU) are unsourced. |
-| 25 legacy-modernization-strategies | Roadmap phases carry fixed durations (2-4 weeks, 6-24 months). Likely fabricated precision. Blue-green and feature flags are taught at length but owned elsewhere. |
-| 27 api-design-architecture | Check whether error-response guidance cites RFC 7807, which RFC 9457 obsoletes. Two year-stamped lines need reframing or removal. *API Security* and *API Testing Strategies* drop to clauses. |
-| 28 grpc-architecture-design | Now the sole home of the protocol comparison table, since the resource copy was deleted. Verify every cell, including the "Not applicable" and "Limited" cells about the other protocols. |
 | 30 multi-tenant-architecture | New guide. The seed holds only an intro paragraph and a planned outline in an HTML comment; write the guide to that scope. |
 | 31 c4-model | The *Diagramming Discipline* section came in with Phase 0; check "irrational artifact attachment" attribution (Richards & Ford). "Context and Container diagrams provide 80% of the value" is unsourced. |
 | 32 uml-diagrams | Section headings assign usage percentages (Class 80%, Sequence 70%, and so on) with no source. Likely invented. |
@@ -227,17 +229,17 @@ Claims on finished guides that could not be confirmed against a source. Each was
 | 17 | Patterns | messaging_patterns.md | Complete |
 | 18 | Patterns | data_management_patterns.md | Complete |
 | 19 | Patterns | orchestration_choreography.md | Complete |
-| 20 | Patterns | coordination_patterns.md | In progress |
-| 21 | Patterns | reliability_patterns.md | Not started |
-| 22 | Patterns | performance_scalability_patterns.md | Not started |
-| 23 | Patterns | deployment_infrastructure_patterns.md | Not started |
-| 24 | Patterns | service-mesh-architecture.md | Not started |
-| 25 | Patterns | legacy-modernization-strategies.md | Not started |
-| 26 | Design | domain-driven-design.md | Not started |
-| 27 | Design | api-design-architecture.md | Not started |
-| 28 | Design | grpc-architecture-design.md | Not started |
-| 29 | Design | expressing-change-intent-in-api-payloads.md | Not started |
-| 30 | Design | multi-tenant-architecture.md | Not started |
+| 20 | Patterns | coordination_patterns.md | Complete |
+| 21 | Patterns | reliability_patterns.md | Complete |
+| 22 | Patterns | performance_scalability_patterns.md | Complete |
+| 23 | Patterns | deployment_infrastructure_patterns.md | Complete |
+| 24 | Patterns | service-mesh-architecture.md | Complete |
+| 25 | Patterns | legacy-modernization-strategies.md | Complete |
+| 26 | Design | domain-driven-design.md | Complete |
+| 27 | Design | api-design-architecture.md | Complete |
+| 28 | Design | grpc-architecture-design.md | Complete |
+| 29 | Design | expressing-change-intent-in-api-payloads.md | Complete |
+| 30 | Design | multi-tenant-architecture.md | In progress |
 | 31 | Modeling | c4-model.md | Not started |
 | 32 | Modeling | uml-diagrams.md | Not started |
 | 33 | Quality & Risk | architecture-risk-analysis.md | Not started |

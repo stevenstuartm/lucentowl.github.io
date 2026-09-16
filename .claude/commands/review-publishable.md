@@ -50,6 +50,8 @@ Read the relevant guide(s) from `.claude/content/`:
 
 Check compliance and report any format issues, missing front matter fields, or type-specific requirements not met.
 
+**Blog posts — links.** Search the body (below front matter, outside code blocks) for `\]\(`, `href=`, and `https?://`. Every hit is a failure: all URLs, external or internal, belong in the `sources` front matter, per the blog post guide. Fix each one in place: remove the link, reword so the prose names the source specifically enough to find by search, and add its `title`/`url` to `sources` in order of first mention. Then confirm every `sources` entry is named somewhere in the body. Report what moved.
+
 ### Step 4 — The outline test
 
 Extract the complete header tree (all H2 and H3 headings, in order). Write them out as an indented outline.

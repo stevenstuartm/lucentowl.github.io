@@ -3,1012 +3,317 @@ title: "Legacy Modernization Strategies"
 layout: guide
 category: Architecture
 subcategory: Patterns
-description: "Comprehensive guide to modernizing legacy systems including strangler fig pattern, anti-corruption layers, incremental migration techniques, risk mitigation, and decision frameworks for brownfield vs greenfield approaches"
-tags: [architecture, legacy-systems, modernization, migration, risk-management, design-patterns, practical, decision-making]
+description: "Replacing a legacy system while the business keeps running on it: incremental versus rewrite, the strangler fig and its routing layer, anti-corruption layers, seams, branch by abstraction and parallel change, migrating data with change data capture, and verifying with parallel runs."
+tags: [practical, legacy-modernization, strangler-fig, anti-corruption-layer, branch-by-abstraction, change-data-capture, parallel-run]
 ---
 
-## What is Legacy Modernization?
+A legacy system is one the business depends on but can no longer change safely or cheaply. The stack may be out of support, the people who understood it may have left, or every change may break something unexpected. What makes modernizing it hard is not the new technology. The old system has to keep working, handling revenue, serving users, and feeding integrations nobody has fully mapped, for the entire time it is being replaced.
 
-Legacy modernization is the process of evolving existing systems to meet current business needs, leverage modern technologies, improve maintainability, and reduce technical debt. Unlike greenfield development, modernization requires working with existing code, data, integrations, and users who depend on the system functioning continuously.
+The patterns in this guide share one idea. Replace the system in pieces small enough that each piece can be verified and rolled back while the rest keeps running.
 
-<blockquote class="pull-quote">
-<p>Modernize without disrupting the business. You can't shut down production for six months to rebuild.</p>
-</blockquote>
+## Incremental Replacement or Rewrite
 
-**Why systems become legacy**:
-- Technology stack outdated (unsupported frameworks, languages, platforms)
-- Architecture no longer meets scale or performance requirements
-- Expertise scarce (original developers gone, technology knowledge rare)
-- Maintenance costs high (brittle code, tight coupling, poor documentation)
-- Integration difficult (APIs don't exist, protocols outdated)
+The first decision is whether to replace the system incrementally, with old and new running side by side, or to build a replacement separately and switch over.
 
-**Core challenge**: Modernize without disrupting the business. You can't shut down production for six months to rebuild. Revenue must continue flowing, users must remain productive, and existing integrations must keep working.
+| | Incremental replacement | Rewrite and switch |
+|---|------------------------|--------------------|
+| **When it fits** | Large systems, low tolerance for disruption, business logic that works but nobody fully understands | Small systems, a platform that genuinely can't host new code, or a business model the old system no longer matches |
+| **Delivers value** | Continuously, as each piece moves | Only at cutover |
+| **Risk shape** | Many small, reversible changes | One large change, discovered late |
+| **Main cost** | Transitional code that exists only to let old and new coexist, and a long period of running both | Feature parity chasing a moving target, since the legacy system keeps changing while the rewrite catches up |
 
-## Brownfield vs Greenfield Decision Framework
+Rewrites tend to fail in a recognizable way. Years of business rules live in the legacy code's odd conditionals, and they surface one at a time as the rewrite meets production data. Meanwhile the old system keeps gaining features the new one has to match. Fred Brooks described a related trap in *The Mythical Man-Month* (1975) as the second-system effect. A team's second attempt at a system tends to be over-designed, packed with everything left out of the first.
 
-The first decision is whether to modernize incrementally (brownfield) or rebuild from scratch (greenfield).
+Default to incremental replacement unless the system is small enough to rewrite in a period the business can wait through, or the platform can't be extended at all.
 
-<div class="callout callout--tip">
-<p class="callout__title">Default to Brownfield</p>
-<p>Default to brownfield unless you have strong justification for greenfield. Most "we need to rewrite" decisions are wrong.</p>
-</div>
+## Strangler Fig
 
-### Greenfield (Rebuild from Scratch)
+*Named by Martin Fowler after strangler fig vines, which grow around a host tree until they replace it*
 
-**When greenfield makes sense**:
-- Technology stack is completely obsolete (mainframe to cloud-native migration)
-- Business model has changed completely
-- System is small enough to rebuild quickly (3-6 months)
-- Legacy code provides no value (mostly configuration, minimal business logic)
-- Risk of parallel operation is acceptable
-
-**Greenfield risks**:
-- **Underestimating complexity**: "Just rewrite it" ignores years of accumulated business rules
-- **The second system effect**: New system over-engineered, never ships
-- **Tribal knowledge loss**: Subtle behaviors and edge cases not documented
-- **Feature parity trap**: Must replicate every feature before switching
-- **Opportunity cost**: Resources spent rebuilding instead of building new features
-
-**Greenfield best practices**:
-- Start with minimum viable subset, not full feature parity
-- Run old and new systems in parallel with gradual user migration
-- Extract business rules from legacy system before rebuilding
-- Set strict timeline and scope limits
-- Have rollback plan if migration fails
-
-### Brownfield (Incremental Modernization)
-
-**When brownfield makes sense**:
-- System is large and complex
-- Business cannot tolerate service interruption
-- Core business logic is valuable and works
-- Risk tolerance is low
-- Team lacks full understanding of all system behaviors
-
-**Brownfield advantages**:
-- Continuous value delivery (modernize while shipping new features)
-- Lower risk (changes are small and incremental)
-- No big-bang cutover
-- Learn as you go (understand system better through refactoring)
-- Preserve working components
-
-**Brownfield challenges**:
-- Slower progress (incremental changes take time)
-- Mixed architecture (old and new coexist, increasing complexity)
-- Technical debt grows while modernizing
-- Requires discipline (easy to keep adding hacks to legacy code)
-
-
-## The Strangler Fig Pattern
-
-The strangler fig pattern is the core pattern for incremental modernization, named after strangler fig trees that grow around host trees, eventually replacing them entirely.
-
-<blockquote class="pull-quote">
-<p>Run old and new systems in parallel. Migrate capability by capability until the legacy system can be retired.</p>
-</blockquote>
-
-**How it works**:
-
-1. **Identify a capability** to migrate (user authentication, product catalog, order processing)
-2. **Implement new version** of that capability in modern technology
-3. **Route traffic** to new implementation (using facade, proxy, or feature flag)
-4. **Monitor and validate** new implementation works correctly
-5. **Decommission old implementation** once confident
-6. **Repeat** for next capability
-
-**Example: E-commerce order processing**
+New code is built alongside the legacy system and takes over its behavior a piece at a time, with a routing layer deciding which system handles each request. The legacy system shrinks until nothing routes to it, and then it is switched off.
 
 ```
-Phase 1: Legacy system handles everything
-┌────────────────────────────┐
-│   Legacy Monolith          │
-│  - User Management         │
-│  - Product Catalog         │
-│  - Order Processing        │
-│  - Payment                 │
-└────────────────────────────┘
+Stage 1                     Stage 2                                     Stage 3
 
-Phase 2: New order service, legacy still active
-┌────────────────────────────┐     ┌──────────────────┐
-│   Legacy Monolith          │     │ Order Service    │
-│  - User Management         │────▶│ (new)            │
-│  - Product Catalog         │     └──────────────────┘
-│  - Order Processing (old)  │
-│  - Payment                 │
-└────────────────────────────┘
-
-Phase 3: Route to new service, fallback to legacy
-┌────────────────────────────┐     ┌──────────────────┐
-│   Routing Layer            │────▶│ Order Service    │
-│   (sends to new by default)│     │ (primary)        │
-└────────────────────────────┘     └──────────────────┘
-              │                             ▲
-              │ fallback                    │
-              ▼                             │
-┌────────────────────────────┐              │
-│   Legacy Monolith          │──────────────┘
-│  - User Management         │
-│  - Product Catalog         │
-│  - Order Processing (backup)│
-│  - Payment                 │
-└────────────────────────────┘
-
-Phase 4: Legacy order processing removed
-┌────────────────────────────┐     ┌──────────────────┐
-│   Legacy Monolith          │     │ Order Service    │
-│  - User Management         │     │                  │
-│  - Product Catalog         │     │                  │
-│  - Payment                 │     │                  │
-└────────────────────────────┘     └──────────────────┘
+Requests                    Requests                                    Requests
+      │                                   │                                    │
+      ▼                                   ▼                                    ▼
+ ┌─────────┐                   ┌─────────────────────┐                    ┌─────────┐
+ │  Router │                   │        Router       │                    │  Router │
+ └────┬────┘                   └──┬───────────────┬──┘                    └────┬────┘
+      │ all                       │ /orders       │ everything else            │ all
+      ▼                           ▼               ▼                            ▼
+┌────────────┐               ┌─────────┐   ┌─────────────┐              ┌──────────────┐
+│   Legacy   │               │  Orders │   │    Legacy   │              │ New services │
+│  monolith  │               │   (new) │   │   (shrunk)  │              └──────────────┘
+└────────────┘               └─────────┘   └─────────────┘              legacy retired
 ```
 
-**Routing strategies**:
+**How it proceeds**:
+1. Put a routing layer in front of the legacy system that initially sends everything to it, such as a reverse proxy, API gateway, or facade in code
+2. Choose one capability, build it in the new system, and route its traffic there
+3. Verify it under real traffic, with a way to route back
+4. Remove that capability from the legacy system
+5. Repeat until nothing routes to the legacy system
 
-**API Gateway / Facade**:
-```csharp
-public class OrderFacade
-{
-    private readonly IOrderService _newOrderService;
-    private readonly LegacyOrderService _legacyOrderService;
-    private readonly IFeatureFlagService _flags;
+**Choosing what to move first**: Start with a capability that is valuable enough to prove the approach but not so central that a mistake is an outage, and whose boundary is clean enough to route. Slice by business capability, such as orders or pricing, not by technical layer. Moving the whole UI or the whole data layer first leaves both systems half-dependent on each other.
 
-    public async Task<Order> PlaceOrderAsync(PlaceOrderRequest request)
-    {
-        if (await _flags.IsEnabledAsync("new-order-service", request.CustomerId))
-        {
-            try
-            {
-                return await _newOrderService.PlaceOrderAsync(request);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "New order service failed, falling back to legacy");
-                return await _legacyOrderService.PlaceOrderAsync(request);
-            }
-        }
-
-        return await _legacyOrderService.PlaceOrderAsync(request);
-    }
-}
-```
-
-**Reverse Proxy / Load Balancer**:
-Route based on URL patterns, headers, or user segments.
-
-**Database Trigger**:
-Legacy system writes to database, trigger synchronizes to new system.
-
-**Strangler fig best practices**:
-- Start with low-risk, high-value capabilities
-- Maintain feature parity (new system must do everything old system did)
-- Run both systems in parallel with gradual traffic shift
-- Monitor error rates and performance continuously
-- Keep fallback to legacy system for some time
-- Remove legacy code only after confidence is high
-
-**Common mistake**: Strangling too much at once. Migrate one capability at a time, not entire subsystems.
-
-## Anti-Corruption Layer (ACL)
-
-An anti-corruption layer translates between the legacy system's model and the new system's domain model, preventing legacy concepts from polluting the new architecture.
-
-**Why ACLs matter**: Legacy systems have accumulated decades of technical debt, inconsistent terminology, and design compromises. You don't want those problems propagating into your new system.
-
-**ACL responsibilities**:
-- Translate legacy data structures to domain model
-- Convert legacy terminology to ubiquitous language
-- Adapt legacy APIs to modern interfaces
-- Isolate new system from legacy implementation details
-
-**Example: Legacy customer model to modern domain model**
+**The routing layer**: For HTTP traffic, routing by path or header at a proxy or gateway needs no change to the legacy code. Where callers invoke legacy code in-process, a facade in code makes the choice instead.
 
 ```csharp
-// Legacy system returns this structure
-public class LegacyCustomerData
+public class OrderFacade(
+    IFeatureFlags flags,
+    NewOrderService newOrders,
+    LegacyOrderService legacyOrders)
 {
-    public int CustId { get; set; }
-    public string CustName { get; set; }
-    public string Addr1 { get; set; }
-    public string Addr2 { get; set; }
-    public string City { get; set; }
-    public string State { get; set; }
-    public string Zip { get; set; }
-    public decimal CreditLmt { get; set; }
-    public string Status { get; set; } // "A", "I", "S"
+    public Task<Order> GetOrderAsync(OrderId id, CustomerId customer) =>
+        flags.IsEnabled("orders-new-service", customer)
+            ? newOrders.GetOrderAsync(id)
+            : legacyOrders.GetOrderAsync(id);
 }
+```
 
-// Modern domain model
-public class Customer
+Be careful about falling back to the legacy system automatically when the new one throws. For a read that is harmless. For a write, the new system may have partly completed the operation before failing, and retrying it in the legacy system can place the order twice unless both paths are idempotent.
+
+**Trade-offs**: Fowler notes that teams often balk at the transitional architecture this requires, meaning the routing layer, data synchronization, and adapters that exist only so old and new can coexist and will be deleted at the end. That code is the price of incremental safety. The larger risk is stalling. Once the easy, well-bounded capabilities have moved, what remains is the tangled core, and a migration can sit indefinitely at a point where the organization pays to run and understand two systems.
+
+---
+
+## Anti-Corruption Layer
+
+When new code has to talk to the legacy system, and during a strangler migration it constantly does, an anti-corruption layer translates between the two models so that legacy concepts don't leak into the new one. The new code works entirely in its own terms, and the layer is the only place that knows the legacy system's names, codes, and quirks.
+
+```
+New system                 Anti-corruption layer            Legacy system
+┌────────────────┐        ┌─────────────────────┐         ┌──────────────────┐
+│ Domain model   │ ─────▶ │ translate requests  │ ──────▶ │ Legacy API or DB │
+│ in its own     │ ◀───── │ translate responses │ ◀────── │ CUST_ID, STAT='A'│
+│ terms          │        │ map codes and ids   │         │                  │
+└────────────────┘        └─────────────────────┘         └──────────────────┘
+```
+
+**Example**: The legacy customer service returns abbreviated fields and single-letter status codes. The new code only ever sees a `Customer`.
+
+```csharp
+public class LegacyCustomerTranslator(LegacyCustomerClient legacy)
 {
-    public CustomerId Id { get; private set; }
-    public PersonName Name { get; private set; }
-    public Address ShippingAddress { get; private set; }
-    public Money CreditLimit { get; private set; }
-    public CustomerStatus Status { get; private set; }
-}
-
-// Anti-Corruption Layer translates between them
-public class LegacyCustomerAdapter
-{
-    private readonly LegacyCustomerService _legacyService;
-
-    public async Task<Customer> GetCustomerAsync(CustomerId customerId)
+    public async Task<Customer> GetCustomerAsync(CustomerId id)
     {
-        // Call legacy system
-        var legacyData = await _legacyService.GetCustomerAsync(customerId.Value);
+        LegacyCustomerRecord record = await legacy.GetCustomerAsync(id.Value);
 
-        // Translate to domain model
         return new Customer(
-            id: new CustomerId(legacyData.CustId),
-            name: PersonName.Parse(legacyData.CustName),
-            shippingAddress: new Address(
-                street1: legacyData.Addr1,
-                street2: legacyData.Addr2,
-                city: legacyData.City,
-                state: legacyData.State,
-                postalCode: legacyData.Zip
-            ),
-            creditLimit: new Money(legacyData.CreditLmt, "USD"),
-            status: TranslateStatus(legacyData.Status)
-        );
-    }
-
-    private CustomerStatus TranslateStatus(string legacyStatus)
-    {
-        return legacyStatus switch
-        {
-            "A" => CustomerStatus.Active,
-            "I" => CustomerStatus.Inactive,
-            "S" => CustomerStatus.Suspended,
-            _ => throw new ArgumentException($"Unknown status: {legacyStatus}")
-        };
+            Id: new CustomerId(record.CustId),
+            Name: PersonName.Parse(record.CustName),
+            ShippingAddress: new Address(record.Addr1, record.Addr2, record.City, record.State, record.Zip),
+            CreditLimit: new Money(record.CreditLmt, "USD"),   // legacy stores no currency
+            Status: record.Status switch
+            {
+                "A" => CustomerStatus.Active,
+                "I" => CustomerStatus.Inactive,
+                "S" => CustomerStatus.Suspended,
+                _ => throw new UnknownLegacyValueException(nameof(record.Status), record.Status)
+            });
     }
 }
 ```
 
-**ACL patterns**:
+Without the layer, those legacy details spread through the new code: a `StatusCode` string compared against `"A"` in a dozen places, amounts with no currency, and integer ids passed around as bare numbers. Each one is a piece of the legacy system the new system will have to unpick later.
 
-**Adapter Pattern**: Wraps legacy interface, exposes modern interface
-**Facade Pattern**: Simplifies complex legacy API into coherent interface
-**Repository Pattern**: Hides legacy data access behind domain-centric interface
-**Event Translation**: Converts legacy events/messages to domain events
+**Trade-offs**: The layer is code to write, test, and keep in step with both sides, and it adds a translation step to every call. Translation can also fail on legacy data that doesn't fit the new model, so the layer needs a deliberate policy for values it doesn't recognize rather than guessing. In a strangler migration it is transitional, and it should shrink and disappear as the legacy side does.
 
-**ACL placement**:
+---
 
-```
-New System                 ACL                    Legacy System
-┌────────────────┐    ┌──────────────┐       ┌─────────────────┐
-│ Domain Model   │───▶│ Translation  │──────▶│ Legacy Database │
-│ (clean)        │◀───│ Layer        │◀──────│ Legacy API      │
-└────────────────┘    └──────────────┘       └─────────────────┘
-```
+## Changing Code Safely in Place
 
-**ACL vs Direct Integration**:
+Not every modernization routes traffic between systems. Often the legacy codebase itself has to change, and the problem is making large changes without a long-lived branch or a broken build.
 
-**Without ACL** (domain model polluted by legacy):
-```csharp
-public class Order
-{
-    // Legacy concepts leak into domain
-    public string LegacyStatusCode { get; set; } // "PEND", "CONF", "SHIP"
-    public decimal TotalAmt { get; set; } // No currency
-    public int CustId { get; set; } // Primitive obsession
-}
-```
+### Seams
 
-**With ACL** (domain model stays clean):
-```csharp
-public class Order
-{
-    public OrderStatus Status { get; private set; } // Domain enum
-    public Money Total { get; private set; } // Value object with currency
-    public CustomerId CustomerId { get; private set; } // Strongly-typed ID
-}
-```
+*From Michael Feathers, Working Effectively with Legacy Code (2004)*
 
-**ACL best practices**:
-- Place ACL at the boundary (new system doesn't know about legacy)
-- Make translation explicit (don't hide complexity)
-- Handle translation failures gracefully
-- Log translation issues for troubleshooting
-- Consider two-way translation if new system must update legacy
-
-## Data Migration Strategies
-
-<blockquote class="pull-quote">
-<p>Data migration is often the riskiest part of modernization. Data is the only irreplaceable asset.</p>
-</blockquote>
-
-### Phased Data Migration
-
-Migrate data incrementally rather than all at once.
-
-**Phase 1: Dual Writes**
-- New system writes to both old and new databases
-- Read from old database (source of truth)
-- Compare data for consistency
-
-**Phase 2: Backfill**
-- Migrate historical data in batches
-- Verify data integrity after each batch
-- Monitor for inconsistencies
-
-**Phase 3: Dual Reads**
-- Read from new database (source of truth)
-- Continue dual writes for rollback safety
-- Monitor for missing or incorrect data
-
-**Phase 4: Cutover**
-- Stop writing to old database
-- New database is sole source of truth
-- Maintain old database as backup
+Feathers defines a seam as a place where you can alter behavior in a program without editing in that place. Legacy code is hard to change largely because it has so few of them. A class that constructs its own dependencies with `new` can't be tested without those dependencies, and can't have one replaced without editing the class.
 
 ```csharp
-public class DualWriteOrderRepository : IOrderRepository
+// No seam: the email dependency is fixed inside the method
+public class OrderService
 {
-    private readonly IOrderRepository _newRepository;
-    private readonly LegacyOrderRepository _legacyRepository;
-    private readonly IFeatureFlagService _flags;
-
-    public async Task SaveAsync(Order order)
+    public void PlaceOrder(Order order)
     {
-        // Write to new database
-        await _newRepository.SaveAsync(order);
-
-        // Write to legacy database for safety
-        try
-        {
-            await _legacyRepository.SaveAsync(order);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Legacy database write failed for order {OrderId}", order.Id);
-            // Continue - new database is source of truth
-        }
-
-        // Compare for consistency
-        await VerifyConsistencyAsync(order.Id);
+        var email = new SmtpEmailSender();
+        email.SendConfirmation(order);
     }
+}
 
-    public async Task<Order> GetByIdAsync(OrderId orderId)
-    {
-        if (await _flags.IsEnabledAsync("read-from-new-database"))
-        {
-            return await _newRepository.GetByIdAsync(orderId);
-        }
-
-        return await _legacyRepository.GetByIdAsync(orderId);
-    }
-
-    private async Task VerifyConsistencyAsync(OrderId orderId)
-    {
-        var newOrder = await _newRepository.GetByIdAsync(orderId);
-        var legacyOrder = await _legacyRepository.GetByIdAsync(orderId);
-
-        if (!OrdersMatch(newOrder, legacyOrder))
-        {
-            _logger.LogError("Data mismatch for order {OrderId}", orderId);
-            _metrics.RecordDataMismatch();
-        }
-    }
+// Seam introduced: the dependency comes from outside
+public class OrderService(IEmailSender email)
+{
+    public void PlaceOrder(Order order) => email.SendConfirmation(order);
 }
 ```
 
-### Change Data Capture (CDC)
-
-Capture changes from legacy database and replicate to new system in near real-time.
-
-**CDC approaches**:
-- **Database triggers**: Capture INSERT/UPDATE/DELETE, write to change log
-- **Transaction log mining**: Read database transaction log (MySQL binlog, PostgreSQL WAL)
-- **Polling**: Query for changed records based on timestamp
-- **CDC tools**: Debezium, AWS DMS, GoldenGate
-
-**Example: Debezium CDC pipeline**:
-```
-Legacy Database (source of truth)
-       │
-       │ Transaction Log
-       ▼
-   Debezium Connector
-       │
-       │ Change Events
-       ▼
-    Kafka Topic
-       │
-       │ Consume Events
-       ▼
-  New System Database
-```
-
-**CDC best practices**:
-- Monitor replication lag
-- Handle schema changes gracefully
-- Transform data during replication (normalize, enrich)
-- Maintain idempotency (handle duplicate events)
-- Validate data consistency with periodic reconciliation
-
-### Data Transformation
-
-Legacy data often requires cleaning and restructuring.
-
-**Common transformations**:
-- **Normalize denormalized data**: Split flat tables into relational models
-- **Fix data quality issues**: Handle nulls, invalid values, inconsistent formats
-- **Migrate IDs**: Generate new primary keys, maintain mapping
-- **Restructure hierarchies**: Flatten or nest data based on new schema
-- **Enrich data**: Add missing information from other sources
-
-**Transformation pipeline**:
-```csharp
-public class OrderDataTransformer
-{
-    public Order Transform(LegacyOrderRecord legacyOrder)
-    {
-        // Clean data
-        var sanitizedData = SanitizeData(legacyOrder);
-
-        // Validate
-        var validationErrors = ValidateData(sanitizedData);
-        if (validationErrors.Any())
-        {
-            _logger.LogWarning("Data quality issues in order {OrderId}: {Errors}",
-                legacyOrder.OrderId, validationErrors);
-        }
-
-        // Transform structure
-        var order = new Order(
-            id: new OrderId(Guid.NewGuid()), // New ID
-            customerId: new CustomerId(sanitizedData.CustomerId),
-            status: MapStatus(sanitizedData.StatusCode),
-            placedAt: sanitizedData.OrderDate ?? DateTime.UtcNow
-        );
-
-        // Transform line items
-        foreach (var legacyLine in sanitizedData.LineItems)
-        {
-            order.AddLine(
-                productId: new ProductId(legacyLine.ProductId),
-                quantity: legacyLine.Quantity,
-                unitPrice: new Money(legacyLine.UnitPrice, legacyLine.Currency ?? "USD")
-            );
-        }
-
-        return order;
-    }
-}
-```
-
-**Data migration validation**:
-- Compare row counts (source vs target)
-- Validate critical fields (checksums, totals)
-- Sample random records for manual inspection
-- Test with realistic queries
-- Measure performance before and after
-
-## Incremental Refactoring Techniques
-
-Modernize code gradually without big rewrites.
+The second version can receive a test double, a new implementation, or a router that picks between old and new, all without touching `OrderService` again. Introducing seams like this is usually the first step of any in-place change, because it is what makes the code testable enough to change the rest safely.
 
 ### Branch by Abstraction
 
-Introduce abstraction layer, migrate implementations behind it, remove abstraction once complete.
+*Named by Paul Hammant, crediting Stacy Curl with the technique*
 
-**Steps**:
-1. Create abstraction (interface) around code to be replaced
-2. Refactor existing code to use abstraction
-3. Implement new version behind same abstraction
-4. Gradually switch callers to new implementation
-5. Remove old implementation
-6. Remove abstraction if no longer needed
+Replaces a large component in place, on the main branch, while the system keeps building and shipping throughout.
 
-**Example: Migrating payment processing**
+1. Put an abstraction in front of the component being replaced
+2. Move every caller onto the abstraction
+3. Build the new implementation behind the same abstraction
+4. Switch callers to the new implementation, all at once or progressively
+5. Delete the old implementation, and the abstraction too if it no longer earns its place
 
 ```csharp
-// Step 1: Create abstraction
 public interface IPaymentProcessor
 {
-    Task<PaymentResult> ProcessPaymentAsync(PaymentRequest request);
+    Task<PaymentResult> ChargeAsync(PaymentRequest request);
 }
 
-// Step 2: Wrap legacy implementation
-public class LegacyPaymentProcessor : IPaymentProcessor
-{
-    private readonly LegacyPaymentService _legacyService;
+public class LegacyPaymentProcessor(LegacyPaymentGateway gateway) : IPaymentProcessor { /* adapts the old API */ }
+public class ModernPaymentProcessor(PaymentProviderClient client) : IPaymentProcessor { /* new implementation */ }
 
-    public async Task<PaymentResult> ProcessPaymentAsync(PaymentRequest request)
-    {
-        // Adapt to legacy API
-        var legacyRequest = AdaptRequest(request);
-        var legacyResponse = await _legacyService.ProcessPayment(legacyRequest);
-        return AdaptResponse(legacyResponse);
-    }
-}
-
-// Step 3: Implement new version
-public class ModernPaymentProcessor : IPaymentProcessor
-{
-    public async Task<PaymentResult> ProcessPaymentAsync(PaymentRequest request)
-    {
-        // Modern implementation with proper error handling, retries, etc.
-        return await _paymentGateway.ChargeAsync(request);
-    }
-}
-
-// Step 4: Switch implementations via configuration
-public class PaymentProcessorFactory
-{
-    public IPaymentProcessor Create()
-    {
-        if (_config.UseModernPaymentProcessor)
-            return new ModernPaymentProcessor();
-
-        return new LegacyPaymentProcessor();
-    }
-}
-
-// Step 5: Eventually remove legacy, possibly remove abstraction too
+// Composition root chooses the implementation, so switching back is a configuration change
+services.AddScoped<IPaymentProcessor>(sp =>
+    sp.GetRequiredService<IOptions<PaymentOptions>>().Value.UseModernProcessor
+        ? ActivatorUtilities.CreateInstance<ModernPaymentProcessor>(sp)
+        : ActivatorUtilities.CreateInstance<LegacyPaymentProcessor>(sp));
 ```
 
-### Parallel Change (Expand-Contract)
+Branch by abstraction is the in-process counterpart of the strangler fig. The strangler routes requests between systems, and branch by abstraction routes calls between implementations.
 
-Make changes in three phases: expand, migrate, contract.
+### Parallel Change
 
-**Expand**: Add new functionality alongside old
-**Migrate**: Update callers to use new functionality
-**Contract**: Remove old functionality
+*Described by Danilo Sato, and also known as expand and contract*
 
-**Example: Renaming method**
+Makes a backward-incompatible change to an interface in three safe steps, so that callers never break.
 
-```csharp
-// Original
-public class OrderService
-{
-    public Order GetOrder(int orderId) { }
-}
+| Phase | What happens | Example: renaming a column from `cust_name` to `customer_name` |
+|-------|--------------|----------------------------------------------------------------|
+| **Expand** | Add the new form alongside the old | Add `customer_name`, and write to both columns |
+| **Migrate** | Move every caller to the new form | Backfill existing rows, then switch every reader to `customer_name` |
+| **Contract** | Remove the old form once nothing uses it | Stop writing `cust_name`, then drop it |
 
-// Phase 1: Expand - add new method
-public class OrderService
-{
-    [Obsolete("Use GetOrderByIdAsync instead")]
-    public Order GetOrder(int orderId) { }
+It works for method signatures, API fields, message schemas, and database columns alike. The cost is that the change spans several deployments, and the expanded state, where both forms exist, has to be supported for as long as the migration takes.
 
-    public async Task<Order> GetOrderByIdAsync(OrderId orderId) { }
-}
+---
 
-// Phase 2: Migrate - update all callers to use new method
-// (Search codebase, update references, run tests)
+## Moving the Data
 
-// Phase 3: Contract - remove old method
-public class OrderService
-{
-    public async Task<Order> GetOrderByIdAsync(OrderId orderId) { }
-}
+Code can run in two places at once. Data is harder, because at any moment exactly one store has to be the source of truth for a given record, and every other copy has to follow it. Most data migration failures come from losing track of which store that is.
+
+### Keeping the New Store in Step with Change Data Capture
+
+Change data capture reads the legacy database's own transaction log, such as the MySQL binlog or the PostgreSQL write-ahead log, and emits every insert, update, and delete as an event. The new system consumes those events to keep its store current. The legacy application needs no changes at all, which matters when it can't safely be changed.
+
+```
+Legacy application ──writes──▶ Legacy database (source of truth)
+                                      │ transaction log
+                                      ▼
+                               CDC connector (e.g. Debezium)
+                                      │ change events
+                                      ▼
+                               Event stream (e.g. Kafka)
+                                      │
+                                      ▼
+                          Transform to the new model ──▶ New database (follower)
 ```
 
-### Extract Method/Class
+Debezium is the common open source choice, and managed services such as AWS Database Migration Service and Oracle GoldenGate fill the same role. Log-based capture is preferable to database triggers, which add work to every legacy transaction, and to polling on a timestamp column, which misses deletes.
 
-Gradually extract cohesive logic into separate methods or classes.
+The consumer has to be idempotent, since change events can be redelivered, and it needs monitoring for replication lag, because a lagging follower quietly becomes a stale one.
 
-**Before**: 500-line method with multiple responsibilities
-**After**: Well-named methods, each with single responsibility
+### The Migration Sequence
 
-**Example**:
-```csharp
-// Before: God method
-public void ProcessOrder(int orderId)
-{
-    // 50 lines: Validate order
-    // 100 lines: Check inventory
-    // 75 lines: Calculate pricing
-    // 100 lines: Process payment
-    // 75 lines: Update inventory
-    // 100 lines: Send notifications
-}
+1. **Follow**: capture changes from the legacy store into the new store, which receives no direct writes
+2. **Backfill**: copy existing history in batches, reconciling each batch against the source
+3. **Read from the new store**, for one capability or a slice of users at a time, with legacy still the source of truth for writes
+4. **Switch the source of truth**: writes go to the new store, and if the legacy system still has readers, a reverse sync keeps it current for as long as they exist
+5. **Retire**: stop the reverse sync once no legacy reader remains, and archive the legacy data
 
-// After: Extracted methods
-public void ProcessOrder(int orderId)
-{
-    var order = ValidateOrder(orderId);
-    CheckInventoryAvailability(order);
-    var pricing = CalculatePricing(order);
-    ProcessPayment(order, pricing);
-    UpdateInventory(order);
-    SendOrderConfirmation(order);
-}
-```
+Each step can be reversed before the next one starts, and step 4 is the only one where a reversal means moving writes back.
 
-Each extracted method can be tested independently and refactored further.
+### Why Not Dual Writes
 
-### Seam Techniques
+The tempting shortcut is to have application code write every change to both databases. Without a transaction spanning both, one write can succeed while the other fails, and the two stores drift apart in ways nobody notices until reconciliation or a customer does. Logging the failure and carrying on, which is what most dual-write code ends up doing, makes the drift silent. If the application must be the one to publish changes, write to one store and publish the change through a transactional outbox instead, so the second store follows reliably.
 
-A seam is a place where you can alter behavior without editing code in that place. Use seams to inject new behavior.
+### Validating the Migration
 
-**Dependency injection seam**:
-```csharp
-// Legacy: hard-coded dependency
-public class OrderService
-{
-    public void PlaceOrder(Order order)
-    {
-        var emailService = new SmtpEmailService(); // Can't test or replace
-        emailService.SendConfirmation(order);
-    }
-}
+Reconcile continuously, not once at cutover. Compare row counts and aggregate totals per table and per day, checksum critical fields, and sample individual records end to end. Keep a mapping from legacy ids to new ids whenever the new system generates its own, since every reconciliation, support query, and rollback will need it.
 
-// Refactored: dependency injection
-public class OrderService
-{
-    private readonly IEmailService _emailService;
+Legacy data rarely fits the new model cleanly. Expect nulls in required fields, values outside documented ranges, and codes nobody remembers adding. Decide per case whether to fix, default, or quarantine a record, and record which records were changed so the decision can be revisited.
 
-    public OrderService(IEmailService emailService)
-    {
-        _emailService = emailService; // Can inject mock or new implementation
-    }
+---
 
-    public void PlaceOrder(Order order)
-    {
-        _emailService.SendConfirmation(order);
-    }
-}
-```
+## Verifying with a Parallel Run
 
-Now you can inject a modern email service, a test double, or even a facade that routes to legacy or new implementation.
+A parallel run executes both the legacy and the new implementation for the same real input, returns the legacy result to the caller, and compares the two. It finds the behaviors nobody documented, because production traffic exercises cases no test suite anticipated.
 
-## Risk Mitigation Strategies
-
-Modernization is risky, but these strategies reduce risk.
-
-### Feature Flags for Gradual Rollout
-
-Deploy new functionality disabled, enable for progressively larger user groups.
-
-**Rollout phases**:
-1. **Internal users**: Developers and QA
-2. **Beta users**: Volunteers who accept risk
-3. **Canary**: 5% of production traffic
-4. **Gradual rollout**: 25%, 50%, 75%, 100%
-
-**Rollback**: Disable feature flag instantly if issues arise.
+GitHub's Scientist library popularized the technique, and Scientist.NET ports it to .NET. The control's result is always what gets returned, and mismatches are published for analysis.
 
 ```csharp
-public class OrderService
-{
-    public async Task<Order> PlaceOrderAsync(PlaceOrderRequest request)
+public Task<decimal> CalculateShippingAsync(Order order) =>
+    Scientist.ScienceAsync<decimal>(
+        "shipping-calculation",
+        2,                                  // run control and candidate concurrently
+        experiment =>
     {
-        if (await _flags.IsEnabledAsync("new-order-pipeline", request.CustomerId))
-        {
-            return await _newOrderPipeline.ExecuteAsync(request);
-        }
-
-        return await _legacyOrderPipeline.ExecuteAsync(request);
-    }
-}
-```
-
-**Feature flag best practices**:
-- Start with conservative rollout (1%, 5%, 10%)
-- Monitor error rates, latency, business metrics
-- Use user segmentation (by account type, region, opt-in status)
-- Automate rollback triggers (error rate > threshold, latency > SLA)
-- Remove flags after full rollout
-
-### Parallel Runs
-
-Run old and new implementations in parallel, compare results, but only use one result.
-
-**Shadow mode**: New implementation runs but results are discarded. Compare with legacy results.
-
-```csharp
-public async Task<RecommendationResult> GetRecommendationsAsync(UserId userId)
-{
-    // Legacy implementation (source of truth)
-    var legacyResult = await _legacyRecommendationService.GetRecommendationsAsync(userId);
-
-    // New implementation (shadow mode)
-    _ = Task.Run(async () =>
-    {
-        try
-        {
-            var newResult = await _newRecommendationService.GetRecommendationsAsync(userId);
-            CompareResults(userId, legacyResult, newResult);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "New recommendation service failed for user {UserId}", userId);
-        }
+        experiment.Use(() => _legacyShipping.CalculateAsync(order));   // returned to the caller
+        experiment.Try(() => _newShipping.CalculateAsync(order));      // compared, never returned
     });
-
-    return legacyResult; // Only return legacy result
-}
-
-private void CompareResults(UserId userId, RecommendationResult legacy, RecommendationResult modern)
-{
-    var agreement = CalculateAgreement(legacy, modern);
-
-    _metrics.RecordAgreement(agreement);
-
-    if (agreement < 0.8) // Less than 80% agreement
-    {
-        _logger.LogWarning("Recommendation mismatch for user {UserId}: {Agreement}%",
-            userId, agreement * 100);
-    }
-}
 ```
 
-**Parallel run benefits**:
-- Validate new implementation without risk
-- Build confidence before cutover
-- Identify edge cases and discrepancies
-- Performance testing under real load
-
-**Parallel run challenges**:
-- Increased infrastructure cost (running both)
-- Read-only operations only (can't run writes twice)
-- Requires matching inputs (same data, same time)
-
-### Blue-Green Deployment
-
-Maintain two identical production environments. Deploy to inactive environment, switch traffic when ready.
-
-```
-Blue Environment (active)      Green Environment (inactive)
-┌─────────────────────┐       ┌─────────────────────┐
-│ Legacy System v1.0  │       │ Modern System v2.0  │
-└─────────────────────┘       └─────────────────────┘
-          ▲                              │
-          │                              │
-     Production Traffic         Testing Only
-
-     Switch traffic to Green
-          │                              ▲
-          │                              │
-┌─────────────────────┐       ┌─────────────────────┐
-│ Legacy System v1.0  │       │ Modern System v2.0  │
-└─────────────────────┘       └─────────────────────┘
-    (idle, can rollback)         (active)
-```
+**Works best for**: calculations, pricing, eligibility rules, permission checks, and searches, where the result is a value that can be compared.
 
-**Benefits**:
-- Instant rollback (switch traffic back)
-- Zero-downtime deployment
-- Full environment testing before cutover
+**Writes need care**: Scientist's own documentation warns that it is only safe for code that doesn't change data. Running a write twice charges twice or creates two records. To verify writes, point the new implementation at an isolated store and compare the resulting state, or verify at read time after writes have gone through the normal path.
 
-**Challenges**:
-- Database migrations are complex (both environments need compatible schema)
-- Double infrastructure cost
-- Stateful systems difficult (sessions, in-flight transactions)
+**Trade-offs**: Every experimented call runs twice, so it costs extra capacity and, if run synchronously, extra latency. Expect some mismatches to be the legacy system being wrong, which turns each one into a question for the business about which behavior is correct.
 
-### Rollback Plans
+---
 
-Every modernization change must have a rollback plan.
+## Releasing and Rolling Back
 
-**Rollback strategies**:
-- **Feature flags**: Disable new functionality
-- **Blue-green**: Switch traffic back to old environment
-- **Database**: Restore from backup, replay transaction log
-- **Code deployment**: Redeploy previous version
+Each step of a migration should reach users gradually and be reversible. Feature flags scoped to a customer or percentage let a new path go to internal users, then a small share of traffic, then everyone, and route back instantly. Canary and blue-green deployment serve the same purpose at the deployment level.
 
-**Rollback testing**:
-- Practice rollback during deployment
-- Measure rollback time
-- Verify data consistency after rollback
-- Document rollback procedures
+The rollback that gets neglected is data. Switching routing back is a configuration change. Switching back after the new system has accepted writes means those writes have to reach the legacy store, which is only possible if the reverse sync from the migration sequence exists. Test the rollback path for each step before that step goes live, and decide in advance which measurements, such as error rate, latency, or reconciliation mismatches, trigger it.
 
-**When to rollback**:
-- Error rate exceeds threshold (>1% errors)
-- Performance degrades (latency > SLA)
-- Data corruption detected
-- Critical functionality broken
+---
 
-## Measuring Modernization Progress
+## Sequencing a Modernization
 
-Track metrics to validate modernization is working.
+A modernization that goes well usually moves through the same stages, though the time each takes depends entirely on the system.
 
-### Technical Metrics
+1. **Assess**: inventory what the system does and what depends on it, including batch jobs, file exports, database links, and reports that no architecture diagram shows
+2. **Prepare**: add monitoring to the legacy system, establish performance baselines, write characterization tests around critical behavior, and put the routing layer in place
+3. **Pilot**: move one capability end to end, including its data, and adjust the approach from what that reveals
+4. **Migrate**: move the remaining capabilities in priority order, deleting legacy code as each one goes
+5. **Decommission**: archive the data, shut down the infrastructure, and remove the transitional code
 
-| Metric | Measures | Target |
-|--------|----------|--------|
-| **Code coverage** | Percentage of legacy code with tests | Increase over time |
-| **Cyclomatic complexity** | Code complexity | Decrease over time |
-| **Deployment frequency** | How often you deploy | Increase (more frequent) |
-| **Lead time** | Time from commit to production | Decrease (faster) |
-| **MTTR** | Time to recover from incidents | Decrease |
-| **Technical debt ratio** | Debt vs total code | Decrease |
-| **Dependency age** | Age of libraries/frameworks | Decrease (stay current) |
+Measure progress by what has actually left the legacy system: the share of traffic served by new code, the capabilities whose legacy implementation has been deleted, and the data whose source of truth has moved. Code written in the new system while the old one still handles everything is not progress on the migration.
 
-### Business Metrics
+### Common Failures
 
-| Metric | Measures | Target |
-|--------|----------|--------|
-| **Maintenance cost** | Cost to maintain legacy system | Decrease |
-| **Feature velocity** | Features shipped per sprint | Increase |
-| **Incident rate** | Production incidents per week | Decrease |
-| **User satisfaction** | NPS, CSAT scores | Increase |
-| **Onboarding time** | Time for new developers to be productive | Decrease |
+| Failure | What it looks like | What helps |
+|---------|--------------------|------------|
+| Big-bang cutover | A single switchover date carrying every risk at once | Strangler fig, one capability at a time |
+| Feature parity trap | The new system can't launch until it does everything the old one did | Measure which legacy features are used, and retire the rest instead of rebuilding them |
+| Data as an afterthought | Code migrated, data plan improvised at the end | Plan and rehearse the data sequence from the pilot onward |
+| Rewriting without understanding | Odd legacy behavior removed, then rediscovered as a production bug | Characterization tests and parallel runs before replacing logic |
+| Neglecting the legacy system | Security patches and critical fixes stop because it's "going away" | Keep it maintained until the day it is switched off |
+| Hidden integrations | A report or partner feed breaks after cutover | Map every consumer of the legacy data before moving it |
+| Stalled migration | Easy capabilities moved, core untouched, two systems indefinitely | Plan the hard core early, and track what has been removed rather than what has been built |
 
-### Migration Metrics
+---
 
-| Metric | Measures | Target |
-|--------|----------|--------|
-| **Functionality migrated** | % of features in new system | 100% |
-| **Traffic on new system** | % of requests handled by new | 100% |
-| **Data migrated** | % of data in new database | 100% |
-| **Legacy code removed** | Lines of legacy code deleted | Increase |
+## Quick Reference
 
-**Dashboard example**:
-```
-Modernization Progress
-
-Functionality Migrated: ████████░░ 80%
-Traffic on New System:  ██████░░░░ 60%
-Data Migrated:          ███████░░░ 70%
-
-Error Rate (New):       0.3% ✓ (target < 0.5%)
-P95 Latency (New):      240ms ✓ (target < 300ms)
-Deployment Frequency:   3/week ↑ (was 1/month)
-```
-
-## Common Modernization Pitfalls
-
-### Big Bang Migration
-
-**Problem**: Attempt to switch entire system at once.
-
-**Reality**: Big bang migrations rarely succeed. Risk is too high, complexity underestimated, dependencies overlooked.
-
-**Solution**: Incremental migration. Strangler fig pattern. Slice by capability, not by layer.
-
-### Feature Parity Trap
-
-**Problem**: Refuse to launch until new system replicates every feature of legacy.
-
-**Reality**: Some legacy features are unused, broken, or obsolete. Feature parity delays value delivery.
-
-**Solution**: Migrate high-value features first. Deprecate unused features. Use analytics to identify what actually matters.
-
-### Ignoring Data Migration
-
-**Problem**: Focus on code, treat data migration as afterthought.
-
-**Reality**: Data migration is hardest and riskiest part. Data is irreplaceable.
-
-**Solution**: Plan data migration early. Test migration repeatedly. Validate data integrity. Budget more time than you think you need.
-
-### Modernizing Without Understanding
-
-**Problem**: Rewrite legacy code without understanding why it works that way.
-
-**Reality**: "Weird" code often handles edge cases. Rewriting loses tribal knowledge.
-
-**Solution**: Extract business rules before rewriting. Document odd behaviors. Run parallel implementations and compare results.
-
-### Neglecting Legacy During Modernization
-
-**Problem**: Stop maintaining legacy system, let it rot while building new system.
-
-**Reality**: Business still depends on legacy. Neglect causes production issues.
-
-**Solution**: Maintain legacy system until fully migrated. Fix critical bugs, address security vulnerabilities. Don't add major features, but keep it running.
-
-### Underestimating Integration Complexity
-
-**Problem**: Assume integrations are straightforward.
-
-**Reality**: Legacy systems have hundreds of hidden integrations (file exports, database triggers, batch jobs, third-party systems).
-
-**Solution**: Map all integrations before starting. Plan integration migration separately. Test integrations thoroughly.
-
-## Practical Modernization Roadmap
-
-### Phase 1: Assessment (2-4 weeks)
-
-**Goals**: Understand current state, identify risks, estimate effort.
-
-**Activities**:
-- Inventory legacy system components
-- Map dependencies (internal and external)
-- Identify business-critical functionality
-- Assess technical debt
-- Measure current performance and reliability
-- Interview stakeholders and users
-
-**Deliverables**:
-- System architecture diagram
-- Dependency map
-- Risk assessment
-- Modernization business case
-- High-level roadmap
-
-### Phase 2: Preparation (4-8 weeks)
-
-**Goals**: Establish foundation for incremental migration.
-
-**Activities**:
-- Add monitoring and observability to legacy system
-- Improve test coverage for critical paths
-- Document business rules and edge cases
-- Set up CI/CD pipeline
-- Establish performance baselines
-- Create rollback procedures
-
-**Deliverables**:
-- Comprehensive monitoring
-- Test suite for critical functionality
-- Deployment automation
-- Documented business logic
-
-### Phase 3: Pilot Migration (8-12 weeks)
-
-**Goals**: Migrate one capability to validate approach.
-
-**Activities**:
-- Choose low-risk, high-value capability
-- Implement strangler fig pattern
-- Build anti-corruption layer
-- Migrate data for pilot capability
-- Deploy with feature flags
-- Run in parallel with legacy
-
-**Deliverables**:
-- One capability fully migrated
-- Validated migration approach
-- Lessons learned
-- Refined roadmap
-
-### Phase 4: Incremental Migration (6-24 months)
-
-**Goals**: Systematically migrate remaining capabilities.
-
-**Activities**:
-- Migrate capabilities in priority order
-- Expand test coverage continuously
-- Remove legacy code as capabilities migrate
-- Monitor and optimize new system
-- Adjust approach based on learnings
-
-**Deliverables**:
-- Progressively more functionality on new system
-- Decreasing legacy footprint
-- Regular deployments
-- Continuous value delivery
-
-### Phase 5: Decommissioning (4-8 weeks)
-
-**Goals**: Retire legacy system completely.
-
-**Activities**:
-- Migrate final capabilities
-- Redirect all traffic to new system
-- Archive legacy data
-- Shut down legacy infrastructure
-- Remove dead code
-- Celebrate success
-
-**Deliverables**:
-- Legacy system fully retired
-- Infrastructure decommissioned
-- Data archived
-- Documentation updated
-
-## Key Takeaways
-
-**Default to incremental modernization**: Brownfield modernization is lower risk and delivers value continuously. Greenfield rewrites usually fail.
-
-**Strangler fig is the core pattern**: Gradually replace legacy functionality, running old and new in parallel, until legacy can be retired.
-
-**Anti-corruption layers protect new code**: Prevent legacy concepts from polluting modern architecture. Translation is explicit at the boundary.
-
-**Data migration is the hardest part**: Plan data migration early, test thoroughly, validate continuously. Data is irreplaceable.
-
-**Feature flags enable safe rollout**: Deploy disabled, enable gradually, rollback instantly if issues arise.
-
-**Measure progress with metrics**: Track functionality migrated, traffic shifted, error rates, performance. Dashboards keep teams aligned.
-
-**Have rollback plans for everything**: Every change must be reversible. Practice rollback procedures.
-
-**Don't neglect legacy during migration**: Business depends on legacy system working. Maintain it until fully replaced.
-
-**Start with low-risk, high-value capabilities**: Build confidence with early wins. Learn before tackling complex areas.
-
-**Modernization is a marathon, not a sprint**: Expect 6-24 months for significant systems. Incremental progress beats big bang failures.
+| Technique | Solves | Main cost |
+|-----------|--------|-----------|
+| **Strangler fig** | Replacing a system while it keeps serving traffic | Transitional routing and sync code, and the risk of stalling halfway |
+| **Anti-corruption layer** | Legacy models leaking into new code | A translation layer to maintain on both sides |
+| **Seams** | Legacy code too coupled to test or change | Refactoring before any visible progress |
+| **Branch by abstraction** | Replacing a component in place without a long-lived branch | An abstraction that may exist only for the migration |
+| **Parallel change** | Breaking interface or schema changes | Several deployments and a period supporting both forms |
+| **Change data capture** | Keeping a new store in step without changing the legacy app | A pipeline to run, and replication lag to monitor |
+| **Parallel run** | Undocumented behavior the new implementation gets wrong | Double execution, and careful isolation for writes |

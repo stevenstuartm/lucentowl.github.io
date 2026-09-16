@@ -5,6 +5,9 @@ date: 2026-03-11
 description: "Reporting pressure gradually distorts production schemas until they serve two masters and compromise for both. Separating the workloads lets each model evolve for the consumers it was designed to serve."
 tags: [architecture, databases, design-patterns, distributed-systems, data-modeling, event-sourcing, cqrs]
 author: steven-stuart
+sources:
+  - title: "Martin Fowler: CQRS"
+    url: "https://martinfowler.com/bliki/CQRS.html"
 ---
 
 I tend to think of reporting and production as incompatible roommates. They need the same space, they optimize for completely different things, and every accommodation one makes for the other is a debt that gets called in later. The production schema is usually what accumulates the most debt and gets hit the hardest.
@@ -254,7 +257,7 @@ In practice, reporting consumers rarely subscribe to the event stream directly. 
 
 This is a good fit for domains where the complete history of state transitions is genuinely valuable, like financial ledgers, audit-critical workflows, or systems where "undo" and "replay" are first-class requirements. The combination of event sourcing and CQRS provides the most complete separation: full history, arbitrary projections, and independent evolution of read and write models.
 
-Most teams should not reach for this combination. Martin Fowler has [warned consistently](https://martinfowler.com/bliki/CQRS.html){:target="_blank" rel="noopener noreferrer"} that CQRS is misapplied far more often than it's applied well. Many systems fit a CRUD mental model and should stay that way. CQRS should only apply to specific bounded contexts where the read and write access patterns are genuinely different, not across entire applications. Event sourcing compounds the cost: events are immutable and permanent so schema design requires careful thought, aggregate replay gets expensive without snapshotting, and debugging production issues means reasoning about event sequences rather than inspecting current state.
+Most teams should not reach for this combination. Martin Fowler has warned consistently, most directly in his CQRS article, that CQRS is misapplied far more often than it's applied well. Many systems fit a CRUD mental model and should stay that way. CQRS should only apply to specific bounded contexts where the read and write access patterns are genuinely different, not across entire applications. Event sourcing compounds the cost: events are immutable and permanent so schema design requires careful thought, aggregate replay gets expensive without snapshotting, and debugging production issues means reasoning about event sequences rather than inspecting current state.
 
 ## Choosing an Approach
 

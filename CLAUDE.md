@@ -64,7 +64,7 @@ bundle exec jekyll build
   - `blog-listing.html`: Blog listing page template
   - `author.html`: Author page template (avatar, bio, social links, post list)
   - `case-study.html`: Case study template with author byline
-- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html)
+- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html, post-sources.html)
 - **_posts/**: Blog posts in Markdown with YAML front matter (format: YYYY-MM-DD-title.md)
 - **_guides/**: Study guides in Markdown organized by topic
 - **_site/**: Generated static site (excluded from git)
@@ -113,6 +113,8 @@ description: "Concise summary that captures the core thesis and key points of th
 tags: [architecture, design-patterns]
 ---
 ```
+
+**All links go in `sources`, never the body.** Posts name each source in prose and list its URL, external or site-relative, under an optional `sources:` front matter array (`title`, `url`), rendered at the bottom by `_includes/post-sources.html`. This keeps the body link-free for syndication. See [`.claude/content/blog-post-guide.md`](.claude/content/blog-post-guide.md).
 
 **CRITICAL: NEVER rename files**:
 - ❌ NEVER rename blog post files (`_posts/*.md`) or any other content files
@@ -234,7 +236,9 @@ To add/modify radar entries, edit `assets/data/radar-data.json`:
 
 ### Link Behavior
 
-**Links that should open in new tabs must be explicitly marked** using Kramdown's inline attribute syntax:
+**Blog posts are the exception**: they contain no inline links at all, external or internal. Their URLs live in `sources` front matter (see Blog Post Format).
+
+**Everywhere else, links that should open in new tabs must be explicitly marked** using Kramdown's inline attribute syntax:
 
 **For external links** (or any link that should open in a new tab):
 ```markdown

@@ -5,6 +5,17 @@ date: 2026-02-17
 tags: [architecture, web-development, mobile, pwa, cross-platform]
 description: "The web platform already does what most apps do, but Apple's control of the phone screen keeps the industry building native. The 'users prefer native' narrative is circular logic created by the constraint itself."
 author: steven-stuart
+sources:
+  - title: "Open Web Advocacy: Open Letter on Apple's PWA Removal"
+    url: "https://letter.open-web-advocacy.org/"
+  - title: "The Register: Apple Reverses PWA Decision (March 2024)"
+    url: "https://www.theregister.com/2024/03/02/apple_reverses_pwa_decision/"
+  - title: "TechCrunch: Appfigures Data on Apple App Store Commissions (May 2025)"
+    url: "https://techcrunch.com/2025/05/08/appfigures-apple-made-over-10b-from-us-app-store-comissions-last-year/"
+  - title: "eMarketer: The Majority of Americans' Mobile Time Spent Takes Place in Apps"
+    url: "https://www.emarketer.com/content/the-majority-of-americans-mobile-time-spent-takes-place-in-apps"
+  - title: "PWA Stats"
+    url: "https://www.pwastats.com/"
 ---
 
 Frameworks like React Native, Flutter, and MAUI keep promising to end the "write it twice" problem across mobile platforms. One codebase, every platform, native-quality results. Yet every time, the abstraction leaks, and then it floods so fast that bailing water is all you have time to do. I've been working with MAUI recently, and the experience crystallized a question I should have asked sooner: why am I not just building a website?
@@ -88,17 +99,17 @@ On Chrome and Android, web apps can access APIs unavailable on any iOS browser, 
 
 Chrome on Android supported push notifications in 2015. iOS didn't get web push until March 2023, and even then Apple requires users to install the web app to their home screen first. On Android, any website can request push permission.
 
-The EU's Digital Markets Act forced Apple's hand on browser engine choice in 2024, but the response was revealing. Rather than comply, Apple attempted to remove PWA support entirely in the EU, converting installed web apps into simple bookmarks. Their justification was "complex security and privacy concerns." After an [open letter gathered over 4,200 signatures](https://letter.open-web-advocacy.org/){:target="_blank" rel="noopener noreferrer"} and the European Commission sent formal inquiries, Apple [reversed the decision within two weeks](https://www.theregister.com/2024/03/02/apple_reverses_pwa_decision/){:target="_blank" rel="noopener noreferrer"}. Genuine security concerns don't evaporate under public pressure.
+The EU's Digital Markets Act forced Apple's hand on browser engine choice in 2024, but the response was revealing. Rather than comply, Apple attempted to remove PWA support entirely in the EU, converting installed web apps into simple bookmarks. Their justification was "complex security and privacy concerns." After an open letter from Open Web Advocacy gathered over 4,200 signatures and the European Commission sent formal inquiries, Apple reversed the decision within two weeks, as The Register reported. Genuine security concerns don't evaporate under public pressure.
 
 And even after the DMA technically required browser engine choice, as of early 2026 zero browsers have shipped a non-WebKit engine on iOS in the EU. The regulation exists on paper. The monopoly persists in practice.
 
-The financial incentive is straightforward. The App Store generated [approximately $27 billion in global commissions in 2024](https://techcrunch.com/2025/05/08/appfigures-apple-made-over-10b-from-us-app-store-comissions-last-year/){:target="_blank" rel="noopener noreferrer"} on a 30% cut, per Appfigures. Every app that ships as a web app is revenue Apple doesn't collect. The U.S. Department of Justice made this connection explicit in their March 2024 antitrust lawsuit, which specifically cites the WebKit requirement as part of Apple's monopoly maintenance strategy.
+The financial incentive is straightforward. The App Store generated approximately $27 billion in global commissions in 2024 on a 30% cut, per Appfigures data reported by TechCrunch. Every app that ships as a web app is revenue Apple doesn't collect. The U.S. Department of Justice made this connection explicit in their March 2024 antitrust lawsuit, which specifically cites the WebKit requirement as part of Apple's monopoly maintenance strategy.
 
 Android doesn't have these restrictions. Chrome supports the full suite of web APIs and PWAs work as first-class applications. But it doesn't matter. No product leader will ship something that doesn't work on iPhones, and Apple's users represent the highest-value demographic in every Western market. The most constrained major platform sets the ceiling for what anyone builds.
 
 ## The Circular Logic of "Users Prefer Native"
 
-The most common justification for building native apps is market data showing that users spend [88-92% of their mobile time in apps](https://www.emarketer.com/content/the-majority-of-americans-mobile-time-spent-takes-place-in-apps){:target="_blank" rel="noopener noreferrer"} and only 8-12% in browsers. The data seems decisive.
+The most common justification for building native apps is market data, like eMarketer's, showing that users spend 88-92% of their mobile time in apps and only 8-12% in browsers. The data seems decisive.
 
 But this is a post-hoc fallacy dressed up as market research. Of course the native experience retains users better; it received a fraction of the investment. Of course users spend more time in apps; they were never given an equivalent web alternative. Native gets the discovery mechanisms, the design talent, and the push notification support. Web gets a fraction of the budget and is treated as a fallback. You cannot measure user preference when one option was deliberately hobbled by the platform owner and underfunded by the developer.
 
@@ -106,7 +117,7 @@ The developer survey data has the same circularity. Flutter and React Native ado
 
 The counterfactual has never been tested at scale because Apple has prevented it. Equivalent web and native experiences have never existed on iOS. The assumption that native is inherently superior has become so embedded that most teams skip straight to "which framework?" without ever stopping at "does this need to be an app?"
 
-The few times the counterfactual has been tested, the results are telling. The Financial Times left the App Store in 2011 and is still web-first over a decade later. Starbucks [built a PWA 99.84% smaller than their iOS app and doubled daily active users](https://www.pwastats.com/){:target="_blank" rel="noopener noreferrer"}. But Starbucks kept the native app too, which raises an important question I can't answer: did they keep it because native was genuinely better, or because no one was willing to ask "why do we still have this?"
+The few times the counterfactual has been tested, the results are telling. The Financial Times left the App Store in 2011 and is still web-first over a decade later. Starbucks built a PWA 99.84% smaller than their iOS app and doubled daily active users, according to PWA Stats. But Starbucks kept the native app too, which raises an important question I can't answer: did they keep it because native was genuinely better, or because no one was willing to ask "why do we still have this?"
 
 ## The Anxiety That Predates Mobile
 

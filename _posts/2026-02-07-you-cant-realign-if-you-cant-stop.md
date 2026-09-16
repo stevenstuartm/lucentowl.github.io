@@ -5,6 +5,17 @@ date: 2026-02-07
 description: "Every methodology assumes that when discovery arrives, someone will stop and act on it. Plan continuation bias is the pre-rational impulse that prevents exactly that."
 tags: [plan-continuation-bias, decision-making, leadership, cognitive-bias, software-development]
 author: steven-stuart
+sources:
+  - title: "FAA Safety Briefing: CFIT and Plan Continuation Bias"
+    url: "https://www.faa.gov/newsroom/safety-briefing/cfit-and-plan-continuation-bias"
+  - title: "SKYbrary: Continuation Bias (Orasanu et al., 2001)"
+    url: "https://skybrary.aero/articles/continuation-bias"
+  - title: "AOPA Air Safety Institute: VFR into IMC"
+    url: "https://www.aopa.org/training-and-safety/air-safety-institute/accident-analysis/vfr-into-imc/overview"
+  - title: "Escalation of Commitment (Staw, 1976)"
+    url: "https://en.wikipedia.org/wiki/Escalation_of_commitment"
+  - title: "Pomodoro Technique"
+    url: "https://en.wikipedia.org/wiki/Pomodoro_Technique"
 ---
 
 Something is broken in my approach to problem-solving, and I suspect it's broken in yours too.
@@ -17,9 +28,9 @@ It's rarely pride, just a pre-rational impulse to proceed before changing direct
 
 ## A Bias Faster Than Reflection
 
-This pattern has a name. In aviation, it's called [get-there-itis](https://www.faa.gov/newsroom/safety-briefing/cfit-and-plan-continuation-bias){:target="_blank" rel="noopener noreferrer"}. In cognitive science, the broader phenomenon is plan continuation bias. [Research at NASA's Ames Research Center](https://skybrary.aero/articles/continuation-bias){:target="_blank" rel="noopener noreferrer"} found that roughly 75% of tactical decision errors in airline accidents were decisions to continue the original plan despite cues suggesting a different course of action (Orasanu et al., 2001). These weren't errors of skill or knowledge; they were errors of continuation.
+This pattern has a name. In aviation, the FAA calls it get-there-itis. In cognitive science, the broader phenomenon is plan continuation bias. Research at NASA's Ames Research Center found that roughly 75% of tactical decision errors in airline accidents were decisions to continue the original plan despite cues suggesting a different course of action (Orasanu et al., 2001). These weren't errors of skill or knowledge; they were errors of continuation.
 
-When pilots flying under visual rules encounter weather that requires instruments and press on anyway, the [fatality rate is 86%](https://www.aopa.org/training-and-safety/air-safety-institute/accident-analysis/vfr-into-imc/overview){:target="_blank" rel="noopener noreferrer"} (AOPA Air Safety Institute). These aren't reckless or untrained pilots; many are experienced and fully aware of the danger.
+When pilots flying under visual rules encounter weather that requires instruments and press on anyway, the fatality rate is 86% (AOPA Air Safety Institute). These aren't reckless or untrained pilots; many are experienced and fully aware of the danger.
 
 The mechanism explains why awareness alone isn't enough. When the original plan was well-justified, subsequent contradictory signals receive less cognitive weight. The better your reason for starting, the harder it becomes to hear the signal telling you to stop. As workload increases and you get deeper into execution, less mental capacity is available to reconsider. The original plan has inertia, and new information has to fight through it.
 
@@ -31,7 +42,7 @@ The impulse to finish manufactures the very sunk costs that now appear to justif
 
 This is the difference between proving and testing. Proving asks "can I make this work?" and the answer is almost always yes given enough effort. Testing asks "should I be making this work?" and that's the question that actually matters. When someone says "let me just get this working first," they're proving, not testing. They want to see their assumption become real before they'll allow a competing idea to be evaluated. The current assumption gets the full weight of implementation effort while the alternative gets a hypothetical conversation, maybe, later, if there's time.
 
-[Barry Staw's research on escalation of commitment](https://en.wikipedia.org/wiki/Escalation_of_commitment){:target="_blank" rel="noopener noreferrer"} found something uncomfortable: people who feel personally responsible for the initial decision commit more resources to it when it starts failing, not fewer (Staw, 1976). The instinct isn't to cut losses. It's to double down, as though additional effort can retroactively make the original decision correct. In software, this looks like the developer who spends two more days making a questionable approach work rather than spending thirty minutes evaluating whether a different approach would have been simpler from the start.
+Barry Staw's research on escalation of commitment found something uncomfortable: people who feel personally responsible for the initial decision commit more resources to it when it starts failing, not fewer (Staw, 1976). The instinct isn't to cut losses. It's to double down, as though additional effort can retroactively make the original decision correct. In software, this looks like the developer who spends two more days making a questionable approach work rather than spending thirty minutes evaluating whether a different approach would have been simpler from the start.
 
 ## When the Herd Feels Like Validation
 
@@ -95,7 +106,7 @@ Circuit breakers, time boundaries, and explicit checkpoints make "keep going" an
 
 The natural objection is that questioning costs working hours that would otherwise ship something. Context switching is expensive, and developers invoke this constantly. But how much of that argument is genuine, and how much is the bias protecting itself? Four hours of uninterrupted coding on a misunderstood problem doesn't produce the right solution. If you couldn't stop to reconsider in the first place, then your "focused work" wasn't productive flow; it was the bias running unchecked. Context switching away from something you didn't understand and weren't willing to re-examine isn't losing momentum. It's gaining perspective.
 
-The [Pomodoro technique](https://en.wikipedia.org/wiki/Pomodoro_Technique){:target="_blank" rel="noopener noreferrer"} was designed for productivity, but it accidentally created exactly the kind of permission structure this bias requires. Every 25 minutes, you stop. Not because something went wrong, but because the rhythm demands it. That forced pause is a moment where "am I still working on the right thing?" can surface without carrying the social or psychological cost that usually prevents reassessment. The number doesn't matter. What matters is that stopping becomes part of the rhythm rather than an interruption of it.
+The Pomodoro technique was designed for productivity, but it accidentally created exactly the kind of permission structure this bias requires. Every 25 minutes, you stop. Not because something went wrong, but because the rhythm demands it. That forced pause is a moment where "am I still working on the right thing?" can surface without carrying the social or psychological cost that usually prevents reassessment. The number doesn't matter. What matters is that stopping becomes part of the rhythm rather than an interruption of it.
 
 Four countermeasures work against the impulse:
 - Reframe stopping as the cheapest possible action, not a failure or a waste

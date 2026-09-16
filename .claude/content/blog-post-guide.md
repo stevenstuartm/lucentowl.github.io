@@ -25,6 +25,17 @@ tags: [architecture, design-patterns]
 - **description**: A 1-2 sentence summary that captures the core thesis. Used for SEO and post previews. Write it to stand alone — someone should understand what the post argues just from the description.
 - **tags**: Array of tags for discoverability and filtering on the blog page. Use meaningful tags, not generic ones.
 
+**Optional front matter**:
+- **sources**: every URL the post links to, external or internal, in order of first mention. See "All Links Live in `sources`" below.
+
+```yaml
+sources:
+  - title: "RFC 5789: PATCH Method for HTTP"
+    url: "https://datatracker.ietf.org/doc/html/rfc5789"
+  - title: "AAA Cycle: Align-Agree-Apply"
+    url: "/study-guides/sdlc/aaa-cycle.html"
+```
+
 **Standard procedure for creating a new blog post**:
 1. Create the markdown file in `_posts/` with correct date format
 2. Include complete YAML front matter (layout, title, date, description, tags)
@@ -53,6 +64,22 @@ tags: [architecture, design-patterns]
 - If a concept belongs to another post, the current post must either cover enough to be self-contained, or acknowledge the limit in prose without pointing elsewhere
 
 This rule is non-negotiable and applies to all blog post content.
+
+---
+
+## CRITICAL: All Links Live in `sources`, Never in the Body
+
+- ❌ NEVER put a link in a post's Markdown body, external or internal, whether as an inline link, reference link, raw `<a>` tag, bare URL, or footnote
+- ✅ Name every source in the prose itself, specifically enough that a reader could find it by search without a link: "RFC 5789", "Nielsen Norman Group's toggle-switch guidelines", "Stripe's API finalizes invoices"
+- ✅ List each URL in the `sources` front matter, in order of first mention. Internal URLs are site-relative (`/study-guides/...`). `_includes/post-sources.html` renders the list at the bottom of the page, opening external links in a new tab with `rel="noopener noreferrer"` and internal links in the same tab, so posts never write link attributes themselves
+- ❌ Don't rely on link text for attribution. "its own guidelines" or "issue labels" says nothing once the link is gone
+- ❌ Don't use numbered footnote markers. They'd dangle when the sources section is dropped
+
+**Rationale**: Posts are syndicated to sites that penalize or strip outbound links, and an internal link becomes an outbound link the moment the post is copied elsewhere. With every URL in front matter, the body copies over clean and the sources section stays behind, while the prose still attributes each claim. Scholarly integrity comes from naming the source, not from the hyperlink.
+
+**Check**: every `sources` entry is named in the body, and every source named in the body that a reader would want to open has a `sources` entry.
+
+Internal links may point to study guides, resources, and pages. Cross-references to other posts remain banned, above, even through `sources`.
 
 ---
 

@@ -5,6 +5,13 @@ date: 2025-10-29
 description: "Evaluating arguments for Result types versus exceptions for handling expected failures in modern distributed C# systems, examining which claims have measurable backing and which are subjective preference."
 tags: [error-handling, patterns, security, performance]
 author: steven-stuart
+sources:
+  - title: "LanguageExt on GitHub"
+    url: "https://github.com/louthy/language-ext"
+  - title: "FluentResults on GitHub"
+    url: "https://github.com/altmann/FluentResults"
+  - title: "ErrorOr on GitHub"
+    url: "https://github.com/amantinband/error-or"
 ---
 
 I prefer the clean code that is more often produced by throwing exceptions. With the happy path uncluttered by error handling, the implicit propagation of errors to appropriate orchestration layers, and the clean separation of concerns. It's aesthetically cleaner and moves the complexity of error handling to a one or just a few decision points.
@@ -87,7 +94,7 @@ In Rust, this is built-in and enforced. `Result<T, E>` types must be handled (co
 
 In C#, this is now possible through pattern matching (C# 7+) and community Result libraries, but relies on discipline rather than compiler enforcement. Nothing stops you from ignoring a returned Result or using exceptions for expected failures.
 
-Microsoft hasn't adopted Results officially. The Result pattern adoption is **community-driven** through library authors choosing this despite Microsoft's silence. Community libraries exist ([LanguageExt](https://github.com/louthy/language-ext){:target="_blank" rel="noopener noreferrer"} with 26M downloads, [FluentResults](https://github.com/altmann/FluentResults){:target="_blank" rel="noopener noreferrer"} with 3.3M downloads, [ErrorOr](https://github.com/amantinband/error-or){:target="_blank" rel="noopener noreferrer"}), but these aren't mainstream. Popular .NET libraries have hundreds of millions of downloads.
+Microsoft hasn't adopted Results officially. The Result pattern adoption is **community-driven** through library authors choosing this despite Microsoft's silence. Community libraries exist (LanguageExt with 26M downloads, FluentResults with 3.3M downloads, and ErrorOr), but these aren't mainstream. Popular .NET libraries have hundreds of millions of downloads.
 
 Still, when a pragmatic developer community independently moves toward patterns from another ecosystem, that pattern means something.
 

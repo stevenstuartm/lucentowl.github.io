@@ -3,792 +3,367 @@ title: "Domain-Driven Design (DDD)"
 layout: guide
 category: Architecture
 subcategory: Design
-description: "Comprehensive guide to Domain-Driven Design covering strategic design (bounded contexts, context mapping, ubiquitous language) and tactical design (entities, value objects, aggregates, repositories) for modeling complex business domains"
-tags: [architecture, domain-driven-design, modeling, microservices, design-patterns, complexity-management, practical]
+description: "Modeling a complex business domain in code: subdomains, ubiquitous language, bounded contexts and context mapping, EventStorming, and the tactical building blocks of entities, value objects, aggregates, domain events, services, and repositories."
+tags: [practical, domain-driven-design, bounded-context, ubiquitous-language, context-mapping, aggregates, event-storming]
 ---
 
-## What is Domain-Driven Design?
+Domain-Driven Design is an approach to building software for complicated businesses, where the hard part is not the technology but understanding what the business actually does. It puts developers and domain experts in continuous conversation, and it treats the model that emerges from that conversation, expressed directly in code, as the heart of the system.
 
-<blockquote class="pull-quote">
-<p>The most important part of software is understanding and modeling the business domain correctly. Technology choices matter, but getting the domain model wrong makes the best technology irrelevant.</p>
-</blockquote>
+Eric Evans introduced it in *Domain-Driven Design: Tackling Complexity in the Heart of Software* (2003). Vaughn Vernon's *Implementing Domain-Driven Design* (2013) added much of the practical guidance teams now use, particularly on aggregates and on integrating bounded contexts.
 
-Domain-Driven Design (DDD) is an approach to software development that emphasizes collaboration between technical experts and domain experts to create models that reflect deep understanding of the business domain. DDD provides both strategic patterns for organizing large systems and tactical patterns for implementing domain logic.
+DDD has two halves. **Strategic design** decides how a large domain divides into parts, what each part's model means, and how the parts relate. **Tactical design** gives building blocks for implementing the model inside one of those parts. Teams often adopt the tactical patterns alone, because they look like code. The strategic half is where most of the value is.
 
-DDD was introduced by Eric Evans in his 2003 book *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Vaughn Vernon's *Implementing Domain-Driven Design* (2013) provided practical implementation guidance, particularly for distributed systems.
+## When DDD Pays Off
 
-## When to Use DDD
+| DDD tends to pay off when | DDD tends to cost more than it returns when |
+|---------------------------|---------------------------------------------|
+| Business rules are intricate and are the reason the software exists | The application is mostly forms over data, with little logic between them |
+| Domain experts are available and willing to work with the team | Nobody with real domain knowledge can take part |
+| The system will evolve for years as the business changes | The system is short-lived or throwaway |
+| Several teams work in one domain and need clear boundaries between them | The complexity is technical, as in data pipelines or infrastructure tooling |
 
-DDD is valuable when:
-- **Domain complexity is high**: Business rules are intricate, nuanced, and central to the application's value
-- **Domain experts exist**: People who understand the business deeply and can collaborate with developers
-- **Long-term maintenance matters**: The system will evolve over years, not months
-- **Multiple teams work on the system**: Bounded contexts provide clear ownership boundaries
+Within one system, both can be true. DDD's own answer is to spend modeling effort unevenly, which is what subdomains are for.
 
-<div class="callout callout--warning">
-<p class="callout__title">When NOT to Use DDD</p>
-<p>DDD is not needed when:</p>
-<ul>
-<li>Domain is simple CRUD with minimal business logic</li>
-<li>Technical complexity dominates (data pipelines, infrastructure automation)</li>
-<li>No domain experts are available</li>
-<li>The project is short-lived or disposable</li>
-</ul>
-<p><strong>Common mistake:</strong> Applying tactical DDD patterns (aggregates, repositories) without strategic DDD (bounded contexts, ubiquitous language). The strategic patterns are where most of the value comes from.</p>
-</div>
+## Strategic Design
 
-## Strategic Design: Modeling the Domain
+### The Scope Ladder
 
-Strategic design addresses how to organize large, complex domains into manageable parts. This is where DDD provides the most value.
+DDD's terms nest, and much confusion comes from mixing levels. Subdomains describe the business, the problem space. Bounded contexts describe the software, the solution space. Ideally one bounded context serves one subdomain, but legacy systems often have one context spanning several subdomains, or one subdomain split across contexts.
 
-### Ubiquitous Language
-
-A shared language used by both developers and domain experts to describe the domain. This language appears in code, documentation, conversations, and tests.
-
-**Why it matters**: Miscommunication between developers and domain experts causes most domain modeling failures. When a developer says "user" and a domain expert says "customer," they're already talking past each other.
-
-**How to build it**:
-- Listen to how domain experts describe their work
-- Identify key nouns (entities, concepts) and verbs (operations, events)
-- Reject technical jargon that domain experts don't use
-- Reject vague terms ("process," "handle," "manage") in favor of specific domain terms
-- Refine the language iteratively as understanding deepens
-
-**Example**: In an insurance domain, don't say "request processing." Say "underwriting" or "claims adjudication" or "policy renewal," using the specific domain terms that experts use.
-
-**In code**:
-```csharp
-// Bad: Generic technical terms
-public class Request { }
-public void ProcessRequest(Request req) { }
-
-// Good: Ubiquitous language from the domain
-public class PolicyApplication { }
-public void UnderwriteApplication(PolicyApplication application) { }
-```
-
-**Red flag**: If domain experts can't understand a class name or method name, you're not using ubiquitous language.
-
-### Bounded Contexts
-
-A bounded context is an explicit boundary within which a particular domain model applies. Outside this boundary, different models may use the same terms with different meanings.
-
-**Why bounded contexts matter**: The word "customer" means different things to sales (lead, prospect), order fulfillment (shipping address), billing (payment history), and support (ticket history). Trying to create one unified "Customer" entity across all these contexts creates a bloated, incoherent model.
-
-**Bounded context characteristics**:
-- Has its own ubiquitous language
-- Has clear ownership (typically one team)
-- Controls its own data (no shared databases across contexts)
-- Defines explicit contracts with other contexts
-
-**Identifying bounded contexts**:
-- Look for language boundaries (same word, different meanings)
-- Look for organizational boundaries (different teams, departments)
-- Look for autonomy boundaries (parts of the system that change independently)
-- Look for workflow boundaries (different business processes)
-
-**Example bounded contexts in e-commerce**:
-- **Sales Context**: Product catalog, pricing, promotions, shopping cart
-- **Order Fulfillment Context**: Inventory, picking, packing, shipping
-- **Billing Context**: Invoices, payments, refunds, accounts receivable
-- **Customer Service Context**: Tickets, returns, complaints, resolutions
-
-Each context has its own model. A "Product" in the Sales context (description, images, price) is different from a "Product" in Order Fulfillment (SKU, location, quantity on hand).
-
-### Context Mapping
-
-Context mapping defines relationships between bounded contexts. It makes integration strategies explicit.
-
-**Common context relationships**:
-
-| Pattern | Description | Use When |
-|---------|-------------|----------|
-| **Partnership** | Two contexts cooperate, teams coordinate closely | Contexts must succeed or fail together |
-| **Shared Kernel** | Two contexts share a small common model | Teams trust each other, shared model is small and stable |
-| **Customer-Supplier** | Upstream context provides services to downstream | Clear customer relationship, negotiated contracts |
-| **Conformist** | Downstream conforms to upstream model | No leverage to influence upstream |
-| **Anti-Corruption Layer (ACL)** | Downstream translates upstream model to its own | Protect domain model from external system's model |
-| **Open Host Service** | Upstream provides protocol for any downstream to use | Multiple consumers, stable public API |
-| **Published Language** | Well-documented shared language for integration | Industry standards, interoperability matters |
-| **Separate Ways** | No integration; contexts are independent | Integration cost exceeds benefit |
-
-**Example: E-commerce context map**:
-```
-Sales Context (Upstream) ---[Open Host Service]---> Order Fulfillment Context (Downstream)
-Order Fulfillment Context ---[Anti-Corruption Layer]---> Legacy Warehouse System
-Billing Context ---[Customer-Supplier]---> Payment Gateway (External)
-```
-
-**Anti-Corruption Layer in practice**:
-```csharp
-// Legacy warehouse system returns data in its own format
-public class WarehouseAdapter
-{
-    private readonly LegacyWarehouseClient _client;
-
-    public InventoryItem GetInventory(ProductId productId)
-    {
-        // Call legacy system
-        var legacyData = _client.GetStock(productId.ToString());
-
-        // Translate to our domain model
-        return new InventoryItem(
-            productId: new ProductId(legacyData.ItemCode),
-            quantityOnHand: legacyData.QtyAvailable,
-            location: new WarehouseLocation(legacyData.BinNumber)
-        );
-    }
-}
-```
-
-The ACL isolates your domain model from the legacy system's structure and terminology.
+| Level | Describes | Example in insurance |
+|-------|-----------|----------------------|
+| **Domain** | The whole business the software serves | Insurance |
+| **Subdomain** | One area of the business | Underwriting |
+| **Bounded context** | A software boundary within which one model and one language apply | The underwriting service and its model |
+| **Aggregate** | A cluster of objects inside a context that changes together under one set of rules | A policy application with its risk factors |
+| **Entity or value object** | An individual object inside an aggregate | The applicant, a coverage amount |
 
 ### Subdomains
 
-Subdomains are logical divisions of the business domain, not the software model. They represent different areas of business concern.
+Not every part of a business deserves the same investment. Evans distinguishes three kinds of subdomain, and the distinction decides where the careful modeling goes.
 
-<blockquote class="pull-quote">
-<p>Don't apply the same level of DDD rigor to every subdomain. Focus modeling effort on the core domain.</p>
-</blockquote>
+| Type | What it is | Strategy |
+|------|------------|----------|
+| **Core** | What makes this business different from its competitors | Build it, with the strongest team and full DDD modeling |
+| **Supporting** | Necessary and specific to the business, but not a differentiator | Build it simply, or configure a commercial product |
+| **Generic** | A problem every business has, already solved well elsewhere | Buy or integrate, don't build |
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Core Domain</h4>
-<ul>
-<li>Provides competitive advantage</li>
-<li>Differentiates your business from competitors</li>
-<li>Justifies building custom software</li>
-<li>Deserves the most investment and best developers</li>
-<li><strong>Strategy:</strong> Custom development with full DDD</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Supporting & Generic Subdomains</h4>
-<p><strong>Supporting:</strong></p>
-<ul>
-<li>Necessary but not differentiating</li>
-<li>Could be built, bought, or outsourced</li>
-<li><strong>Strategy:</strong> Custom or configure commercial software</li>
-</ul>
-<p><strong>Generic:</strong></p>
-<ul>
-<li>Solved problems (auth, payments, email)</li>
-<li>Strong preference for off-the-shelf solutions</li>
-<li><strong>Strategy:</strong> Buy, don't build</li>
-</ul>
-</div>
-</div>
+| Subdomain in an insurer | Type | Strategy |
+|-------------------------|------|----------|
+| Underwriting and risk pricing | Core | Custom, heavily modeled |
+| Claims adjudication | Core | Custom, heavily modeled |
+| Policy administration | Supporting | Custom but simple, or a configured product |
+| Identity and sign-in | Generic | A product such as Microsoft Entra ID, Okta, or Auth0 |
+| Email delivery | Generic | A service such as Amazon SES or SendGrid |
+| Card payments | Generic | A provider such as Stripe or Adyen |
 
-**Example subdomains for an insurance company**:
+The classification is specific to the business. Payments are generic for an insurer and core for a payments company.
 
-| Subdomain | Type | Strategy |
-|-----------|------|----------|
-| Underwriting (risk assessment) | **Core** | Custom development, best team, DDD modeling |
-| Claims processing | **Core** | Custom development, optimize for business rules |
-| Policy administration | **Supporting** | Custom development or configure commercial software |
-| Authentication | **Generic** | Buy (Okta, Auth0, Azure AD) |
-| Email delivery | **Generic** | Buy (SendGrid, AWS SES) |
-| Payment processing | **Generic** | Integrate (Stripe, PayPal) |
+### Ubiquitous Language
 
-## Tactical Design: Implementing the Domain Model
+A ubiquitous language is the vocabulary developers and domain experts share for one bounded context, and it is used everywhere: in conversation, in documentation, in tests, and in the code itself. When the two groups use different words, every requirement passes through a translation, and meaning gets lost in each one.
 
-Tactical patterns address how to implement domain logic within a bounded context. These are the building blocks of the domain model.
+Build it by listening to how experts describe their work, and by rejecting two kinds of word: technical terms the experts wouldn't use, and vague verbs like "process", "handle", and "manage" that hide what actually happens. An insurance expert doesn't process requests. They underwrite applications, adjudicate claims, and renew policies.
 
-### Entities
-
-An entity is an object with a unique identity that persists over time, even as its attributes change.
-
-**Entity characteristics**:
-- Has a unique identifier (ID)
-- Mutable (attributes can change)
-- Identity remains constant across the lifecycle
-- Equality based on ID, not attributes
-
-**When to use entities**: Model concepts that have continuity and lifecycle. Examples: Customer, Order, Account, Product.
-
-**Example**:
 ```csharp
-public class Order
-{
-    public OrderId Id { get; private set; }
-    public CustomerId CustomerId { get; private set; }
-    public OrderStatus Status { get; private set; }
-    public Money Total { get; private set; }
-    private List<OrderLine> _lines;
+// Generic technical vocabulary: tells a domain expert nothing
+public class Request { }
+public void ProcessRequest(Request request) { }
 
-    public Order(OrderId id, CustomerId customerId)
-    {
-        Id = id ?? throw new ArgumentNullException(nameof(id));
-        CustomerId = customerId ?? throw new ArgumentNullException(nameof(customerId));
-        Status = OrderStatus.Draft;
-        _lines = new List<OrderLine>();
-    }
-
-    // Identity-based equality
-    public override bool Equals(object obj)
-    {
-        if (obj is Order other)
-            return Id.Equals(other.Id);
-        return false;
-    }
-
-    public override int GetHashCode() => Id.GetHashCode();
-}
+// The ubiquitous language: an underwriter can read this
+public class PolicyApplication { }
+public void Underwrite(PolicyApplication application) { }
 ```
 
-**Key point**: The same order with different line items or a different total is still the *same order* because the ID hasn't changed.
+The language changes as understanding improves, and the code changes with it. A term the team has stopped using in conversation but still uses in code is a sign the model has drifted.
 
-### Value Objects
+### Bounded Contexts
 
-A value object is an immutable object defined entirely by its attributes. It has no unique identity.
+A bounded context is an explicit boundary inside which one model applies and every term has one meaning. Outside it, the same word can mean something else, and that is expected.
 
-**Value object characteristics**:
-- No unique identifier
-- Immutable (cannot change after creation)
-- Equality based on all attributes
-- Interchangeable with other instances having the same values
+"Customer" is the standard example. To sales it is a lead with a pipeline stage. To fulfillment it is a delivery address. To billing it is a payment history and a credit limit. To support it is a ticket history. A single `Customer` class serving all four either becomes a bloated compromise that serves none of them well, or couples four teams to every change in it. Four bounded contexts with four models, each small and coherent, is the DDD answer.
 
-**When to use value objects**: Model concepts that describe characteristics or measurements. Examples: Address, Money, DateRange, EmailAddress.
+**Signals that a boundary belongs somewhere**:
+- The same word means different things to different groups
+- Different teams or departments own the work
+- Parts of the system change for different reasons and at different rates
+- A business process hands off from one group to another
 
-**Why value objects matter**: They encapsulate validation, prevent primitive obsession, and make the domain model more expressive.
+Each bounded context has its own ubiquitous language, a clear owning team, and control of its own data, and it interacts with other contexts only through explicit contracts.
 
-**Example**:
+### Context Mapping
+
+A context map records how bounded contexts relate. The relationships are as much about teams as about code: who depends on whom, and who can influence whom. In an **upstream/downstream** relationship, changes upstream affect downstream but not the reverse.
+
+| Pattern | Relationship | Use when |
+|---------|--------------|----------|
+| **Partnership** | Two teams plan together and evolve their interface jointly | The contexts succeed or fail together |
+| **Shared Kernel** | Two contexts share a small, explicitly designated piece of model | The shared part is small and stable, and changes are agreed by both teams |
+| **Customer/Supplier** | Upstream plans with downstream's needs in mind | Downstream has enough influence to negotiate |
+| **Conformist** | Downstream adopts upstream's model as it is | Downstream has no influence, and upstream's model is good enough to use |
+| **Anticorruption Layer** | Downstream translates upstream's model into its own at the boundary | Upstream's model would distort downstream's, as with legacy or third-party systems |
+| **Open Host Service** | Upstream offers a protocol designed for any consumer | Many downstream contexts need the same access |
+| **Published Language** | A documented shared format for exchanging information | Contexts or organizations exchange data through a standard |
+| **Separate Ways** | No integration at all | Integrating costs more than duplicating |
+| **Big Ball of Mud** | A part of the system with no clear model | Draw a boundary around it and keep it from spreading |
+
+```
+                        ┌───────────────────┐
+                        │   Sales context   │
+                        │  (Open Host       │
+                        │   Service)        │
+                        └─────────┬─────────┘
+                               U  │
+                                  │ product and order API
+                               D  ▼
+┌───────────────────┐   ┌───────────────────────┐   ┌────────────────────────┐
+│  Legacy warehouse │ U │  Fulfillment context  │ U │ Payment provider       │
+│  (Big Ball of Mud)│──▶│  ACL toward warehouse │◀──│ (external)             │
+└───────────────────┘ D │  Conformist toward    │ D └────────────────────────┘
+                        │  payment provider     │
+                        └───────────────────────┘
+
+U = upstream, D = downstream
+```
+
+The map above says three things a class diagram can't. Fulfillment consumes Sales through an API Sales designed for general use. Fulfillment protects its model from the warehouse system's with a translation layer. And fulfillment simply adopts the payment provider's model, because a single customer of a large provider has no leverage to negotiate a different one.
+
+### EventStorming
+
+*Created by Alberto Brandolini*
+
+EventStorming is a workshop for discovering a domain collaboratively. Developers and domain experts map out a business process on a long wall of sticky notes, starting from what happens rather than from data or screens. Disagreements about how the business works surface as competing sticky notes, which is much cheaper than surfacing as production bugs.
+
+It runs at three levels of detail. **Big Picture** explores an entire business line with a large group and reveals candidate bounded contexts. **Process Modelling** works through one process in detail. **Software Design** models one bounded context closely enough to implement.
+
+| Sticky note | Conventional color | What it captures |
+|-------------|--------------------|------------------|
+| Domain event | Orange | Something that happened, in past tense, such as `ClaimSubmitted` |
+| Command | Blue | An intention that causes an event, such as `SubmitClaim` |
+| Actor | Small yellow | Who issues the command |
+| Policy | Lilac | A reaction rule, as in "whenever a claim is submitted, assign an adjuster" |
+| Constraint, formerly aggregate | Large yellow | What accepts or rejects a command |
+| System | Wide pink | An external system involved |
+| Read model | Green | Information someone needs to make a decision |
+| Hotspot | Neon pink | A question, conflict, or pain point to come back to |
+
+A session usually starts with everyone writing domain events and placing them on a timeline, then enforces the timeline, then adds commands, actors, policies, and systems, marking hotspots throughout. Clusters of events that share language and ownership become candidates for bounded contexts.
+
+## Tactical Design
+
+The tactical patterns implement the model inside a single bounded context.
+
+### Entities and Value Objects
+
+| | Entity | Value object |
+|---|--------|--------------|
+| **Identity** | Has one that persists as its attributes change | Has none, and is defined entirely by its attributes |
+| **Equality** | Two entities are equal when their ids match | Two value objects are equal when all their attributes match |
+| **Mutability** | Changes over its lifecycle | Immutable, so a change produces a new value |
+| **Examples** | Customer, order, policy, account | Money, address, date range, email address |
+
+The question that decides between them is whether it matters *which one* this is. An order placed yesterday is the same order after its lines change, so it is an entity. A $20 amount is interchangeable with any other $20 amount, so it is a value object.
+
+Value objects are where much of a model's rule enforcement can live, and they replace primitive obsession, meaning bare `decimal` and `string` values that carry no rules. A C# `record` gives value-based equality for free.
+
 ```csharp
-public class Money : IEquatable<Money>
+public sealed record Money
 {
     public decimal Amount { get; }
     public string Currency { get; }
 
     public Money(decimal amount, string currency)
     {
-        if (string.IsNullOrWhiteSpace(currency))
-            throw new ArgumentException("Currency is required");
+        if (string.IsNullOrWhiteSpace(currency) || currency.Length != 3)
+            throw new ArgumentException("Currency must be a three-letter ISO code.", nameof(currency));
 
         Amount = amount;
         Currency = currency.ToUpperInvariant();
     }
 
-    // Value-based equality
-    public bool Equals(Money other)
-    {
-        if (other is null) return false;
-        return Amount == other.Amount && Currency == other.Currency;
-    }
-
-    public override bool Equals(object obj) => Equals(obj as Money);
-    public override int GetHashCode() => HashCode.Combine(Amount, Currency);
-
-    // Domain operations
     public Money Add(Money other)
     {
-        if (Currency != other.Currency)
-            throw new InvalidOperationException("Cannot add different currencies");
-
+        if (other.Currency != Currency)
+            throw new InvalidOperationException($"Cannot add {other.Currency} to {Currency}.");
         return new Money(Amount + other.Amount, Currency);
     }
+
+    public Money Multiply(int factor) => new(Amount * factor, Currency);
 }
+
+// UpdatePrice(decimal amount, string currency) lets any caller pass an invalid currency.
+// UpdatePrice(Money price) makes an invalid price impossible to construct.
 ```
-
-**Key point**: Two `Money` instances with the same amount and currency are completely interchangeable. Unlike entities, identity doesn't matter.
-
-**Primitive obsession vs value objects**:
-```csharp
-// Bad: Primitive obsession
-public void UpdatePrice(decimal amount, string currency) { }
-
-// Good: Value object
-public void UpdatePrice(Money price) { }
-```
-
-The value object version is safer (Money validates currency), more expressive (intent is clear), and easier to extend (can add currency conversion logic to Money).
 
 ### Aggregates
 
-An aggregate is a cluster of entities and value objects treated as a single unit for data consistency. One entity acts as the aggregate root, which is the only entry point for modifications.
+An aggregate is a cluster of entities and value objects that must stay consistent with each other, treated as one unit for changes. One entity is the **aggregate root**, and all changes go through it, so the root can enforce the rules, called invariants, that span the cluster. The aggregate is also the unit of persistence: it is loaded and saved whole, in one transaction.
 
-**Aggregate rules**:
-1. **One aggregate root**: External objects can only reference the root
-2. **Consistency boundary**: Invariants are enforced within the aggregate
-3. **Transactional boundary**: Changes to the aggregate are saved atomically
-4. **Small aggregates**: Keep aggregates as small as possible to reduce contention
+```
+┌───────────────── Order aggregate ─────────────────┐
+│                                                   │
+│   Order (root)  ── enforces: total = sum of lines │
+│     │               no changes once confirmed     │
+│     ├── OrderLine     no confirming an empty order│
+│     ├── OrderLine                                 │
+│     └── OrderLine                                 │
+│                                                   │
+└───────────────────────────────────────────────────┘
+         │ references by id only
+         ▼
+   CustomerId ─ ─ ─ ▶ Customer aggregate (separate)
+```
 
-**Why aggregates matter**: They define consistency boundaries. In distributed systems, you can't maintain consistency across unbounded object graphs. Aggregates limit the scope of transactional consistency.
+Vernon's rules of thumb for designing them:
 
-**Example: Order aggregate**:
+- **Model true invariants in consistency boundaries.** An aggregate's boundary should enclose exactly the objects that a business rule requires to be consistent at the moment of a change, and no more.
+- **Design small aggregates.** Large aggregates are slow to load, and they cause concurrent users to conflict on changes that don't actually interact.
+- **Reference other aggregates by identity.** An order holds a `CustomerId`, not a `Customer`, which keeps each aggregate independently loadable and makes the boundary visible in code.
+- **Use eventual consistency outside the boundary.** Modify one aggregate instance per transaction, and let changes to others follow through domain events.
+
 ```csharp
-public class Order // Aggregate root
+public sealed class Order : AggregateRoot
 {
-    public OrderId Id { get; private set; }
-    public CustomerId CustomerId { get; private set; }
-    public OrderStatus Status { get; private set; }
+    private readonly List<OrderLine> _lines = [];
 
-    private readonly List<OrderLine> _lines;
-    public IReadOnlyCollection<OrderLine> Lines => _lines.AsReadOnly();
+    public OrderId Id { get; }
+    public CustomerId CustomerId { get; }
+    public OrderStatus Status { get; private set; } = OrderStatus.Draft;
+    public Money Total { get; private set; }
+    public IReadOnlyList<OrderLine> Lines => _lines;
 
-    // Invariant: Order total must equal sum of line totals
-    // Invariant: Cannot modify confirmed orders
-    // Invariant: Cannot have empty orders
+    public Order(OrderId id, CustomerId customerId, string currency)
+    {
+        Id = id;
+        CustomerId = customerId;
+        Total = new Money(0, currency);
+    }
 
     public void AddLine(ProductId productId, int quantity, Money unitPrice)
     {
         if (Status != OrderStatus.Draft)
-            throw new InvalidOperationException("Cannot modify confirmed order");
-
+            throw new DomainException("A confirmed order can't be changed.");
         if (quantity <= 0)
-            throw new ArgumentException("Quantity must be positive");
+            throw new DomainException("Quantity must be positive.");
 
-        _lines.Add(new OrderLine(productId, quantity, unitPrice));
-        RecalculateTotal();
+        var line = new OrderLine(productId, quantity, unitPrice);
+        _lines.Add(line);
+        Total = Total.Add(line.LineTotal);
     }
 
     public void Confirm()
     {
         if (Status != OrderStatus.Draft)
-            throw new InvalidOperationException("Order already confirmed");
-
-        if (!_lines.Any())
-            throw new InvalidOperationException("Cannot confirm empty order");
+            throw new DomainException("The order is already confirmed.");
+        if (_lines.Count == 0)
+            throw new DomainException("An empty order can't be confirmed.");
 
         Status = OrderStatus.Confirmed;
-        // Raise domain event
-        AddDomainEvent(new OrderConfirmedEvent(Id, CustomerId, Total));
+        Raise(new OrderConfirmed(Id, CustomerId, Total, DateTimeOffset.UtcNow));
     }
-
-    private void RecalculateTotal() { /* ... */ }
 }
 
-public class OrderLine // Entity within the aggregate
+public sealed record OrderLine(ProductId ProductId, int Quantity, Money UnitPrice)
 {
-    public ProductId ProductId { get; private set; }
-    public int Quantity { get; private set; }
-    public Money UnitPrice { get; private set; }
     public Money LineTotal => UnitPrice.Multiply(Quantity);
-
-    internal OrderLine(ProductId productId, int quantity, Money unitPrice)
-    {
-        ProductId = productId;
-        Quantity = quantity;
-        UnitPrice = unitPrice;
-    }
 }
 ```
 
-**Key design decisions**:
-- `OrderLine` is internal to the aggregate; external code cannot create it directly
-- All modifications go through the `Order` root
-- Invariants (cannot modify confirmed orders, cannot have empty orders) are enforced
-- Changes are atomic (add line and recalculate total happen together)
-
-**Aggregate size**: Keep aggregates small. If you need to load 1000 order lines to validate an order, the aggregate is too large. Consider splitting it.
-
-**Cross-aggregate references**: Use IDs, not object references.
-```csharp
-public class Order
-{
-    public CustomerId CustomerId { get; private set; } // Reference by ID
-    // NOT: public Customer Customer { get; private set; } // Don't hold object reference
-}
-```
-
-This prevents loading entire object graphs and clarifies aggregate boundaries.
-
-### Domain Services
-
-A domain service encapsulates domain logic that doesn't naturally belong to an entity or value object. Domain services are stateless operations that work with domain objects.
-
-**When to use domain services**:
-- Operation involves multiple aggregates
-- Operation doesn't conceptually belong to any single entity
-- Operation represents a significant domain concept
-
-**Example: Funds transfer service**:
-```csharp
-public class FundsTransferService
-{
-    public void Transfer(Account fromAccount, Account toAccount, Money amount)
-    {
-        // Validate
-        if (fromAccount.Currency != toAccount.Currency)
-            throw new InvalidOperationException("Cannot transfer between different currencies");
-
-        if (amount.Amount <= 0)
-            throw new ArgumentException("Transfer amount must be positive");
-
-        // Execute transfer (coordinating two aggregates)
-        fromAccount.Withdraw(amount);
-        toAccount.Deposit(amount);
-
-        // Both accounts must be saved in the same transaction
-    }
-}
-```
-
-**Why not put this on Account?**: Transfer is a concept involving *two* accounts. Putting it on one account (`fromAccount.TransferTo(toAccount, amount)`) is arbitrary; why should the source account own this operation? A domain service makes the concept explicit.
-
-**Domain service vs application service**:
-- **Domain service**: Contains domain logic, uses ubiquitous language, works with domain objects
-- **Application service**: Orchestrates use cases, manages transactions, translates DTOs to domain objects
-
-### Repositories
-
-A repository provides an abstraction for accessing aggregates, hiding persistence details from the domain model.
-
-**Repository responsibilities**:
-- Load aggregates by ID
-- Save aggregates atomically
-- Query for aggregates based on domain criteria
-- Hide database, ORM, and infrastructure details
-
-**Repository interface belongs in the domain layer**:
-```csharp
-public interface IOrderRepository
-{
-    Task<Order> GetByIdAsync(OrderId orderId);
-    Task<IEnumerable<Order>> GetOrdersByCustomerAsync(CustomerId customerId);
-    Task SaveAsync(Order order);
-    Task DeleteAsync(OrderId orderId);
-}
-```
-
-**Implementation lives in infrastructure layer**:
-```csharp
-public class OrderRepository : IOrderRepository
-{
-    private readonly DbContext _context;
-
-    public async Task<Order> GetByIdAsync(OrderId orderId)
-    {
-        var entity = await _context.Orders
-            .Include(o => o.Lines)
-            .FirstOrDefaultAsync(o => o.Id == orderId);
-
-        return entity; // ORM maps to domain object
-    }
-
-    public async Task SaveAsync(Order order)
-    {
-        // Handle new vs existing
-        if (_context.Orders.Any(o => o.Id == order.Id))
-            _context.Orders.Update(order);
-        else
-            _context.Orders.Add(order);
-
-        await _context.SaveChangesAsync();
-    }
-}
-```
-
-**Repository guidelines**:
-- One repository per aggregate root
-- Repositories work with aggregates, not individual entities within aggregates
-- Query methods return domain objects, not DTOs or database entities
-- Keep query methods focused on domain needs ("find overdue orders") not generic SQL ("find by date range")
+Nothing outside the aggregate can add a line to a confirmed order or leave `Total` out of step with the lines, because the only way to change either is through the root.
 
 ### Domain Events
 
-Domain events represent something significant that happened in the domain. They enable loose coupling between aggregates and bounded contexts.
+A domain event records something that happened in the domain that other parts of the system care about. It is named in the past tense in the ubiquitous language, such as `OrderConfirmed` or `ClaimRejected`, and it is immutable. Domain events are how one aggregate's change reaches another under Vernon's eventual consistency rule, and how one bounded context learns what happened in another.
 
-**Domain event characteristics**:
-- Named in past tense (OrderConfirmed, PaymentReceived, AccountClosed)
-- Immutable
-- Contain data relevant to the event
-- Typically include timestamp and aggregate ID
-
-**Example**:
 ```csharp
-public class OrderConfirmedEvent : IDomainEvent
+public abstract class AggregateRoot
 {
-    public OrderId OrderId { get; }
-    public CustomerId CustomerId { get; }
-    public Money Total { get; }
-    public DateTime OccurredAt { get; }
+    private readonly List<IDomainEvent> _events = [];
+    public IReadOnlyList<IDomainEvent> DomainEvents => _events;
 
-    public OrderConfirmedEvent(OrderId orderId, CustomerId customerId, Money total)
+    protected void Raise(IDomainEvent domainEvent) => _events.Add(domainEvent);
+    public void ClearDomainEvents() => _events.Clear();
+}
+
+public sealed record OrderConfirmed(
+    OrderId OrderId, CustomerId CustomerId, Money Total, DateTimeOffset OccurredAt) : IDomainEvent;
+```
+
+Dispatching them reliably is the part that goes wrong. Saving the aggregate and then publishing its events as a second step loses the events whenever the process stops between the two. The usual fix is to write the events to an outbox table in the same transaction as the aggregate and publish them from there, then clear them from the aggregate so a later save doesn't publish them again.
+
+### Domain Services and Application Services
+
+Some domain logic doesn't belong to any one entity or value object. A funds transfer involves two accounts, and putting `TransferTo` on the source account arbitrarily makes one account own an operation that is about both. A **domain service** holds that logic. It is stateless, uses the ubiquitous language, and works with domain objects.
+
+```csharp
+public sealed class FundsTransferService
+{
+    public void Transfer(Account source, Account destination, Money amount)
     {
-        OrderId = orderId;
-        CustomerId = customerId;
-        Total = total;
-        OccurredAt = DateTime.UtcNow;
+        if (amount.Amount <= 0)
+            throw new DomainException("A transfer amount must be positive.");
+
+        source.Withdraw(amount);       // enforces the source account's own rules
+        destination.Deposit(amount);
     }
 }
 ```
 
-**Raising domain events**:
+This example modifies two aggregates, which breaks the one-aggregate-per-transaction rule. That is sometimes the right call, where the business genuinely requires both changes to happen atomically and both aggregates live in one database. Where they don't, the transfer becomes a withdrawal that raises an event, followed by a deposit that reacts to it, with compensation if the deposit fails.
+
+An **application service** is different. It implements a use case: it loads aggregates from repositories, calls domain objects or domain services, saves the results, and manages the transaction. It contains no business rules itself.
+
+### Repositories
+
+A repository gives the domain collection-like access to aggregates while hiding how they are stored. There is one per aggregate root, it loads and saves whole aggregates, and its interface lives with the domain model while its implementation lives in infrastructure.
+
 ```csharp
-public class Order
+public interface IOrderRepository
 {
-    private readonly List<IDomainEvent> _domainEvents = new();
-    public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
-
-    protected void AddDomainEvent(IDomainEvent eventItem)
-    {
-        _domainEvents.Add(eventItem);
-    }
-
-    public void Confirm()
-    {
-        // Business logic
-        Status = OrderStatus.Confirmed;
-
-        // Raise event
-        AddDomainEvent(new OrderConfirmedEvent(Id, CustomerId, Total));
-    }
+    Task<Order?> FindAsync(OrderId id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Order>> FindAwaitingShipmentAsync(CancellationToken cancellationToken = default);
+    void Add(Order order);
 }
 ```
 
-**Dispatching events** (typically in the repository or unit of work):
-```csharp
-public async Task SaveAsync(Order order)
-{
-    _context.Orders.Update(order);
-    await _context.SaveChangesAsync();
-
-    // After successful save, dispatch events
-    foreach (var domainEvent in order.DomainEvents)
-    {
-        await _eventDispatcher.DispatchAsync(domainEvent);
-    }
-}
-```
-
-**Use cases for domain events**:
-- Trigger side effects in other aggregates (OrderConfirmed → UpdateInventory)
-- Notify other bounded contexts (OrderConfirmed → Billing context creates invoice)
-- Build event-sourced systems (store events as the source of truth)
-- Audit trail (record what happened in the domain)
-
-## Advanced Patterns
-
-### Specification Pattern
-
-Encapsulates business rules for querying or validation in reusable, composable objects.
-
-**Example**:
-```csharp
-public interface ISpecification<T>
-{
-    bool IsSatisfiedBy(T candidate);
-}
-
-public class OverdueOrderSpecification : ISpecification<Order>
-{
-    private readonly DateTime _currentDate;
-
-    public OverdueOrderSpecification(DateTime currentDate)
-    {
-        _currentDate = currentDate;
-    }
-
-    public bool IsSatisfiedBy(Order order)
-    {
-        return order.Status == OrderStatus.Confirmed
-            && order.ExpectedDeliveryDate < _currentDate;
-    }
-}
-
-// Usage
-var overdueSpec = new OverdueOrderSpecification(DateTime.UtcNow);
-var overdueOrders = orders.Where(o => overdueSpec.IsSatisfiedBy(o));
-```
-
-**Benefits**: Business rules are explicit, reusable, testable, and composable (can combine with AND/OR logic).
-
-### Factory Pattern
-
-Encapsulates complex aggregate creation logic.
-
-**Example**:
-```csharp
-public class OrderFactory
-{
-    public Order CreateOrder(CustomerId customerId, IEnumerable<OrderLineRequest> lines)
-    {
-        var order = new Order(OrderId.NewId(), customerId);
-
-        foreach (var line in lines)
-        {
-            var product = _productRepository.GetById(line.ProductId);
-            var unitPrice = _pricingService.GetPrice(product, customerId);
-
-            order.AddLine(line.ProductId, line.Quantity, unitPrice);
-        }
-
-        return order;
-    }
-}
-```
-
-**When to use factories**: Aggregate creation requires multiple steps, external dependencies, or complex validation.
-
-### Domain Model Layers
-
-DDD typically uses layered architecture:
-
-| Layer | Responsibilities | Dependencies |
-|-------|------------------|--------------|
-| **Presentation** | UI, API controllers, DTOs | Application layer |
-| **Application** | Use case orchestration, transactions, security | Domain layer |
-| **Domain** | Business logic, entities, value objects, domain services | None (pure domain) |
-| **Infrastructure** | Persistence, messaging, external services | Domain (implements interfaces) |
-
-**Dependency direction**: Always point toward the domain. The domain layer has no dependencies on infrastructure or application layers.
-
-## Event Storming: Discovering the Domain Model
-
-Event storming is a collaborative workshop technique for exploring complex business domains and discovering bounded contexts, aggregates, and domain events.
-
-**Participants**: Developers, domain experts, product owners, anyone with domain knowledge.
-
-**Materials**: Large wall or whiteboard, colored sticky notes, markers.
-
-**Process**:
-
-1. **Domain events (orange)**: Brainstorm everything that happens in the domain (OrderPlaced, PaymentReceived, InventoryReserved). Write in past tense.
-
-2. **Timeline**: Arrange events in approximate chronological order along the wall.
-
-3. **Commands (blue)**: Identify actions that cause events (PlaceOrder → OrderPlaced).
-
-4. **Aggregates (yellow)**: Identify entities that process commands and produce events.
-
-5. **Bounded contexts**: Look for clusters of related events and aggregates. Draw boundaries.
-
-6. **Policies (purple)**: Identify automation rules ("Whenever OrderPlaced, then ReserveInventory").
-
-7. **External systems (pink)**: Identify integrations with other systems.
-
-**Outcomes**:
-- Shared understanding of the domain
-- Identified bounded contexts
-- Discovered aggregates and their responsibilities
-- Found missing concepts and edge cases
-- Surfaced disagreements and ambiguity early
-
-**Event storming is particularly valuable** when starting a new project, entering a new domain, or dealing with complex, poorly understood processes.
-
-## DDD and Microservices
-
-DDD's bounded contexts naturally align with microservices architecture.
-
-**Bounded context → Microservice mapping**:
-- Each bounded context can be a separate microservice
-- Each service owns its data (database per service pattern)
-- Services communicate via well-defined contracts (APIs, events)
-- Teams can be organized around bounded contexts
-
-**However**: Not every bounded context needs to be a separate service. Some contexts can be modules within a monolith. Use organizational boundaries, team autonomy, and deployment independence to decide.
-
-**DDD patterns in microservices**:
-- **Anti-Corruption Layer**: Translate between your context and external services
-- **Open Host Service**: Publish stable APIs for other contexts
-- **Domain Events**: Communicate state changes between services
-- **Saga Pattern**: Coordinate transactions across bounded contexts
-- **CQRS**: Separate read models from write models across services
-
-For detailed patterns, see [Data Management Patterns](data_management_patterns.html), [Messaging Patterns](messaging_patterns.html), and [Orchestration and Choreography](orchestration_choreography.html).
-
-## Common DDD Pitfalls
-
-### Anemic Domain Model
-
-<div class="callout callout--warning">
-<p class="callout__title">Anti-Pattern: Anemic Domain Model</p>
-<p><strong>Problem:</strong> Entities have only getters/setters with no behavior. All logic lives in services.</p>
-
-<p><strong>Why it's a problem:</strong> The domain model doesn't enforce invariants. Any code can violate business rules.</p>
-<p><strong>Solution:</strong> Put behavior on the entities.</p>
-</div>
-
-```csharp
-// ❌ Anemic - just data
-public class Order
-{
-    public OrderId Id { get; set; }
-    public List<OrderLine> Lines { get; set; }
-    public OrderStatus Status { get; set; }
-}
-
-public class OrderService
-{
-    public void AddLine(Order order, OrderLine line)
-    {
-        order.Lines.Add(line);
-    }
-}
-
-// ✅ Rich domain model
-public class Order
-{
-    private readonly List<OrderLine> _lines;
-
-    public void AddLine(ProductId productId, int quantity, Money unitPrice)
-    {
-        if (Status != OrderStatus.Draft)
-            throw new InvalidOperationException("Cannot modify confirmed order");
-
-        _lines.Add(new OrderLine(productId, quantity, unitPrice));
-    }
-}
-```
-
-### Overusing Domain Services
-
-**Problem**: Moving all logic to domain services, leaving entities as data containers.
-
-**Solution**: Domain logic should live in entities and value objects by default. Use domain services only when logic doesn't naturally belong to a single aggregate.
-
-### Aggregates That Are Too Large
-
-**Problem**: Loading 10,000 order lines every time you access an order.
-
-**Solution**: Keep aggregates small. Use eventual consistency between aggregates. Query for read-only data separately from aggregates.
-
-### Ignoring Bounded Contexts
-
-**Problem**: Trying to create one unified model for the entire enterprise.
-
-**Solution**: Accept that different parts of the system need different models. Use bounded contexts and context maps to manage complexity.
-
-### Applying DDD Everywhere
-
-**Problem**: Using full DDD tactical patterns for simple CRUD screens or generic subdomains.
-
-**Solution**: Focus DDD effort on the core domain. Use simpler patterns for supporting and generic subdomains.
-
-## Practical Implementation Strategy
-
-**Starting with DDD**:
-
-1. **Discover bounded contexts**: Run event storming workshop, identify language boundaries
-2. **Pick one core subdomain**: Don't try to model everything at once
-3. **Build ubiquitous language**: Collaborate with domain experts to define key terms
-4. **Model one aggregate**: Start small, validate with domain experts
-5. **Implement walking skeleton**: Prove the architecture works end-to-end
-6. **Iterate and refine**: Modeling is continuous; expect to refactor as understanding deepens
-7. **Expand gradually**: Add aggregates, value objects, and domain services as needed
-
-**Migration strategy for existing systems**:
-
-1. **Identify core domain**: Where is the business value and complexity?
-2. **Add Anti-Corruption Layer**: Isolate new domain model from legacy system
-3. **Implement new features with DDD**: Don't rewrite everything; apply DDD to new work
-4. **Refactor incrementally**: Gradually extract domain logic from legacy code
-5. **Use Strangler Fig pattern**: Slowly replace legacy system with new bounded contexts
-
-## Key Takeaways
-
-**Strategic design is more valuable than tactical patterns**: Bounded contexts, ubiquitous language, and context mapping solve organizational and communication problems. Entities and aggregates solve code organization problems. Fix communication first.
-
-**DDD is about modeling, not architecture**: DDD works with monoliths, microservices, or modular monoliths. The architecture should support the domain model, not dictate it.
-
-**Ubiquitous language is non-negotiable**: If developers and domain experts aren't speaking the same language, everything else fails.
-
-**Keep aggregates small**: Aggregates are consistency boundaries. Large aggregates create contention, performance problems, and coupling. Use eventual consistency between aggregates.
-
-**Not all code is domain code**: Generic subdomains should use off-the-shelf solutions. Supporting subdomains can use simpler patterns. Reserve full DDD for the core domain.
-
-**Event storming accelerates understanding**: Collaborative modeling workshops surface misunderstandings, missing concepts, and bounded context boundaries faster than writing code.
-
-**DDD requires domain expert collaboration**: You cannot build a rich domain model by reading requirements documents. You need ongoing conversation with people who understand the business deeply.
-
-**Domain modeling is iterative**: Your first model will be wrong. Expect to refactor as you learn. Resist the urge to get the model "perfect" before shipping.
+Query methods should speak the domain's language, such as orders awaiting shipment, rather than generic filters. Queries that exist only to feed screens and reports usually belong to a separate read model rather than the repository.
+
+### Factories and Specifications
+
+A **factory** encapsulates creating an aggregate when construction needs more than a constructor can reasonably do, such as looking up prices or applying defaults from several sources. A **specification** is a named, reusable predicate, such as `OverdueOrderSpecification`, that expresses a business rule for validation or selection in one place instead of repeating it as inline conditions.
+
+## Bounded Contexts and Services
+
+Bounded contexts are the most reliable starting point for service boundaries, because a context already has one model, one language, one owning team, and its own data. But the mapping is not one-to-one by necessity.
+
+- One bounded context commonly becomes one service, which gives each team an independently deployable unit aligned with its model.
+- Several bounded contexts can live as modules inside one deployable monolith, with the boundaries enforced in code, which keeps DDD's modeling benefits without the operational cost of distribution.
+- One bounded context split into several services is usually a warning sign, since a single model and a single language shouldn't need network calls between their parts.
+
+The context map then describes the service integrations. Customer/supplier and conformist relationships become API dependencies, open host services become published APIs, and domain events carry changes between contexts asynchronously.
+
+## Common Pitfalls
+
+| Pitfall | What it looks like | What helps |
+|---------|--------------------|------------|
+| Tactical patterns without strategic design | Repositories and aggregates everywhere, but one sprawling model for the whole enterprise | Find the bounded contexts first |
+| Anemic domain model | Entities are getters and setters, and all rules live in service classes that any caller can bypass | Move behavior and invariants onto the entities and aggregate roots |
+| Oversized aggregates | Loading an order loads its customer, product catalog, and shipment history | Reference other aggregates by id, and enclose only what a true invariant needs |
+| One model for everything | A `Customer` class that sales, billing, and support all fight over | Separate bounded contexts with their own models |
+| DDD applied uniformly | Full tactical modeling on a generic subdomain or a CRUD admin screen | Spend modeling effort on the core domain, and keep the rest simple |
+| Modeling without experts | A model built from requirements documents, which encodes the document's misunderstandings | Continuous conversation with people who do the work |
+
+## Quick Reference
+
+| Concept | What it is | Why it matters |
+|---------|------------|----------------|
+| **Subdomain** | An area of the business, classified as core, supporting, or generic | Decides where modeling effort goes |
+| **Ubiquitous language** | The shared vocabulary for one bounded context, used in speech and code | Removes the translation between experts and developers |
+| **Bounded context** | A boundary within which one model and one language apply | Lets different parts of the business have different, coherent models |
+| **Context map** | The relationships between bounded contexts and their teams | Makes integration and dependency choices explicit |
+| **EventStorming** | A collaborative workshop mapping a domain through its events | Surfaces misunderstandings and candidate boundaries early |
+| **Entity / value object** | An object with persistent identity, or an immutable one defined by its attributes | Puts rules where the data is |
+| **Aggregate** | A consistency boundary changed through one root and saved in one transaction | Makes invariants enforceable and concurrency manageable |
+| **Domain event** | An immutable record of something that happened in the domain | Carries changes between aggregates and contexts |
+| **Domain service** | Stateless domain logic that spans objects | Keeps logic in the domain without forcing it onto the wrong entity |
+| **Repository** | Collection-like access to whole aggregates | Hides persistence from the model |

@@ -5,6 +5,9 @@ date: 2025-11-17
 description: "Sprints organize around time intervals. Shaped Kanban organizes around completing features with clear boundaries and circuit breakers to bound risk. Work flows at its natural pace within disciplined constraints."
 tags: [agile, kanban, shapeup, aaa-cycle, sdlc]
 author: steven-stuart
+sources:
+  - title: "AAA Cycle: Align-Agree-Apply"
+    url: "/study-guides/sdlc/aaa-cycle.html"
 ---
 
 As an architect, a core part of my job is assessing viability and risk before committing a team to building something. That means understanding the problem deeply, testing critical assumptions early, and knowing when to change course. Sprint-based development fights me on every one of these. Planning ceremonies reward estimation speed over depth, sprint commitments pressure teams forward regardless of what they discover, and customer needs get filtered through velocity charts that measure team activity rather than delivered value.
@@ -117,7 +120,7 @@ Technical debt framed as engineering work gets deprioritized. Framed as business
 
 ## Shaped Kanban and the AAA Cycle
 
-Shaped Kanban naturally supports the [AAA Cycle](/study-guides/sdlc/aaa-cycle.html){:target="_blank" rel="noopener noreferrer"} discipline: shaping ensures genuine alignment before committing to solutions, betting creates explicit agreement on specific outcomes with understood scope, and Kanban flow supports applying what was agreed without sprint boundaries forcing compromise. When discovery changes understanding mid-work, you can adjust scope, extend the circuit breaker with stakeholder agreement, or stop and reshape. The feature commitment creates accountability to an outcome, not a calendar.
+Shaped Kanban naturally supports the AAA Cycle discipline: shaping ensures genuine alignment before committing to solutions, betting creates explicit agreement on specific outcomes with understood scope, and Kanban flow supports applying what was agreed without sprint boundaries forcing compromise. When discovery changes understanding mid-work, you can adjust scope, extend the circuit breaker with stakeholder agreement, or stop and reshape. The feature commitment creates accountability to an outcome, not a calendar.
 
 ## What About Multi-Team Coordination?
 

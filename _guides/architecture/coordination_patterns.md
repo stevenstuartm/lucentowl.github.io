@@ -3,17 +3,19 @@ layout: guide
 title: "Coordination Patterns"
 category: Architecture
 subcategory: Patterns
-description: "Distributed coordination patterns including leader election, distributed locks, consensus algorithms, and managing shared resources across multiple nodes."
-tags: [architecture, design-patterns, distributed-systems, consensus, coordination, advanced]
+description: "How distributed nodes agree on who acts and what is true: leader election with leases, distributed locks and why they need fencing tokens for correctness, and consensus with Raft and Paxos."
+tags: [advanced, leader-election, distributed-lock, fencing-token, consensus, raft]
 ---
 
-Coordination patterns enable multiple distributed nodes to work together effectively, ensuring consistency, preventing conflicts, and managing shared resources.
+Some work only goes right when exactly one node does it: one scheduler assigning jobs, one writer updating a record, one controller deciding partition ownership. On a single machine a mutex settles that. Across a network, nodes crash without saying so, messages arrive late, clocks disagree, and a process can pause for long enough that the world moves on without it. Coordination patterns are the ways systems still get to "exactly one" under those conditions, and each one depends on the one below it.
+
+- **Leader election** picks a single node to act for the group.
+- **Distributed locks** grant one node exclusive access to one resource for a while.
+- **Consensus** is what makes both of those safe, by getting a majority of nodes to agree on a value even when some of them fail.
 
 ## Leader Election
 
-Selects one node from a group to act as the coordinator. The leader makes decisions, assigns work, or manages shared state on behalf of the group. If the leader fails, the remaining nodes elect a new leader.
-
-**How It Works**:
+One node in a group is chosen to coordinate. It assigns work, makes decisions, or acts as the single writer for some shared state. When it fails, the remaining nodes choose another.
 
 ```
 Initial State:                   Leader Failure:                  New Election:
@@ -22,65 +24,65 @@ Initial State:                   Leader Failure:                  New Election:
 │ Node 2 (Follower)   │    →    │ Node 2 (Follower)   │    →    │ Node 2 (Leader) ★   │
 │ Node 3 (Follower)   │         │ Node 3 (Follower)   │         │ Node 3 (Follower)   │
 └─────────────────────┘         └─────────────────────┘         └─────────────────────┘
-                                 Nodes detect failure            Node 2 elected
-                                 via heartbeat timeout           (highest ID wins)
+                                 Followers detect failure        A new leader is chosen
+                                 via heartbeat timeout
 ```
 
-**Use When**:
-- Need a single coordinator for distributed operations (job scheduling, partition assignment)
-- Preventing duplicate processing (only leader processes certain tasks)
-- Managing distributed state that requires a single writer
+**Use when**:
+- A task such as job scheduling or partition assignment must have one coordinator
+- Some work must happen once, and running it on every node would duplicate it
+- Shared state needs a single writer
 
-**Election Mechanisms**:
+**Election mechanisms**:
 
-| Mechanism | How It Works | Used By |
-|-----------|--------------|---------|
-| Bully algorithm | Highest-ID node wins; nodes challenge higher IDs | Simple systems |
-| Raft leader election | Term-based voting; majority vote wins | etcd, Consul |
-| ZooKeeper ephemeral nodes | First node to create ephemeral node wins | Kafka, HBase |
+| Mechanism | How it works | Safe under network partitions? |
+|-----------|--------------|--------------------------------|
+| Bully algorithm | The highest-ID reachable node claims leadership | No. Two sides of a partition can each elect their own leader |
+| Raft leader election | Nodes vote in numbered terms, and a candidate needs a majority | Yes. Only one side of a partition can hold a majority |
+| Coordination service | Nodes race to create a key or ephemeral node in ZooKeeper, etcd, or Consul, and the winner leads | Yes, because the service itself runs consensus underneath |
+
+Using a coordination service is the common choice in application code, since it hands the hard part to a system built for it. The ZooKeeper form looks like this.
 
 ```
-ZooKeeper Election Example:
-
-1. All nodes try to create ephemeral node /election/leader
+1. Every node tries to create the ephemeral node /election/leader
    Node 1: CREATE /election/leader → SUCCESS (becomes leader)
    Node 2: CREATE /election/leader → FAIL (node exists)
    Node 3: CREATE /election/leader → FAIL (node exists)
 
 2. Followers watch /election/leader for deletion
 
-3. Leader crashes → ZooKeeper deletes ephemeral node
+3. Leader's session expires → ZooKeeper deletes the ephemeral node
 
-4. Followers get notification → Race to create node
+4. Followers are notified and race to create it again
    Node 2: CREATE /election/leader → SUCCESS (new leader)
    Node 3: CREATE /election/leader → FAIL
 ```
 
-**Leader Lease Pattern**:
+Systems that need election internally increasingly embed Raft instead of depending on an external service. Kafka is the prominent example, having replaced ZooKeeper with its own Raft-based KRaft controller and removed ZooKeeper support entirely in Kafka 4.0.
 
-To prevent split-brain (two nodes thinking they're leader), leaders hold a time-limited lease they must periodically renew.
+### Leases Bound How Long a Leader Can Be Wrong
+
+A node that has been voted out doesn't necessarily know it. If it paused or lost connectivity, it may resume still believing it leads, while a new leader is already acting. That is split-brain. A lease limits it: leadership is granted for a fixed period that the leader must keep renewing, and a new leader is only chosen after the old lease has expired.
 
 ```
-Leader lease timeline:
-
 T=0:   Node 1 acquires lease (expires T=10)
 T=5:   Node 1 renews lease (expires T=15)
 T=8:   Node 1 crashes, stops renewing
 T=15:  Lease expires
-T=16:  Node 2 acquires new lease, becomes leader
+T=16:  Node 2 acquires a new lease, becomes leader
 
-During T=8-15: No leader (safer than split-brain)
+T=8 to T=15: no leader, which is safer than two
 ```
 
-**Common Implementations**: ZooKeeper | etcd | Consul | Raft consensus libraries
+A lease only works if the old leader checks it before acting, and even then it relies on clocks and on the leader not pausing between the check and the action. A garbage collection pause that starts right after a successful check leaves the old leader acting on a lease that expired while it was paused. Leases shrink the window, but they don't close it. Fencing tokens, covered under distributed locks below, close it.
+
+**Trade-offs**: Every failover leaves a gap with no leader, at least as long as the heartbeat timeout plus the lease. Short timeouts shorten the gap but trigger elections on ordinary network slowness, and each unnecessary election is its own brief outage. Concentrating work on one node also caps throughput at what that node can do.
 
 ---
 
 ## Distributed Lock
 
-Ensures only one node can access a shared resource at a time, even across a cluster. Unlike local locks, distributed locks must handle network failures, node crashes, and clock skew.
-
-**How It Works**:
+A lock that holds across a cluster, so that only one node at a time works on a given resource. Unlike a local mutex, it has to survive the holder crashing, the network dropping, and the holder pausing without knowing it paused.
 
 ```
 Without Lock:                        With Distributed Lock:
@@ -91,157 +93,120 @@ Without Lock:                        With Distributed Lock:
 │  Write:15 │   │  Write:13 │       │  Add: 5   │   │           │
 └───────────┘   └───────────┘       │  Write:15 │   │           │
      ↓               ↓              │  Release ─┼───┼─→ Acquire │
-Final value: 13 (wrong!)            │           │   │  Read: 15 │
+Final value: 13 (lost update)       │           │   │  Read: 15 │
                                     │           │   │  Add: 3   │
                                     │           │   │  Write:18 │
                                     └───────────┘   └───────────┘
-                                    Final value: 18 (correct!)
+                                    Final value: 18
 ```
 
-**Use When**:
-- Multiple nodes might access same resource concurrently
-- Need to prevent duplicate operations (sending duplicate emails, double-charging)
-- Coordinating updates to shared state that must be atomic
+**Use when**:
+- Several nodes may act on the same resource at the same time
+- An operation should not run twice concurrently, such as sending a batch of emails
+- Shared state is updated through a read-modify-write that the storage can't make atomic itself
 
-**Lock Acquisition Process (Redis Example)**:
+### Every Lock Needs an Expiry
+
+A lock with no expiry is held forever by a node that crashed while holding it. So distributed locks carry a time-to-live, and a single Redis instance shows the basic mechanics.
 
 ```
-Acquiring a lock:
-  1. SET lock:order-123 "node-A" NX PX 30000
-     NX = only if not exists
-     PX 30000 = expires in 30 seconds
+Acquire:
+  SET lock:order-123 "node-A-7f3c" NX PX 30000
+    NX       = only set if the key doesn't exist
+    PX 30000 = expire after 30 seconds
+  OK  → lock acquired
+  nil → someone else holds it; wait or retry
 
-  2. If SET returns OK → Lock acquired
-     If SET returns nil → Lock held by someone else, retry or wait
-
-Releasing a lock:
-  1. Check if we still own the lock (value == "node-A")
-  2. If yes, DELETE lock:order-123
-  3. If no, someone else owns it (we took too long, lock expired)
-
-  // Lua script for atomic check-and-delete
-  if redis.call("get", key) == owner then
-    return redis.call("del", key)
+Release, atomically, only if we still own it:
+  if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
   else
     return 0
   end
 ```
 
-**Why TTL (Time-To-Live) is Critical**:
+The release checks ownership because the lock may already have expired and been taken by someone else. Deleting without checking would release another node's lock.
+
+### Expiry Breaks Mutual Exclusion, and Fencing Restores It
+
+The expiry that saves you from a crashed holder creates a new problem with a slow one. The holder can stall for longer than the TTL, whether from a garbage collection pause, a swapped-out process, or a network delay, then wake and carry on writing, unaware its lock expired and a second node now holds it.
 
 ```
-Without TTL:
-  Node A acquires lock → Node A crashes → Lock never released → Deadlock
-
-With TTL:
-  Node A acquires lock (TTL=30s) → Node A crashes
-  → 30 seconds pass → Lock expires automatically
-  → Node B can acquire lock
-
-Danger: Node A might still think it has the lock after expiration
-  Solution: Check TTL before critical operations, use fencing tokens
+Node A: acquire lock ─── long GC pause ───────────────────── write ✗ (stale)
+                             lock expires
+Node B:                            acquire lock ── write ✓
 ```
 
-<div class="callout callout--warning">
-<p class="callout__title">Distributed Lock Challenges</p>
-<p><strong>Lock holder failure</strong>: Requires timeout/lease mechanism (lock expires automatically)</p>
-<p><strong>Network partitions</strong>: Can cause split-brain scenarios (two nodes think they have lock)</p>
-<p><strong>Clock skew</strong>: Different nodes' clocks may disagree on when lock expires</p>
-<p><strong>Performance impact</strong>: Distributed coordination adds latency (5-50ms per acquire)</p>
+No check inside Node A can prevent this, because the pause can happen after the check. The fix has to live at the resource being protected. A **fencing token** is a number that increases every time the lock is granted. The holder sends its token with every write, and the storage rejects any write carrying a token lower than the highest it has already seen.
+
+```
+Node A: acquire lock (token 33) ── long pause ─────────────── write(token 33) → REJECTED
+Node B:                              acquire lock (token 34) ── write(token 34) → accepted
+                                                                  storage now requires ≥ 34
+```
+
+That requires two things: a lock service that issues monotonically increasing tokens, and a resource that checks them. ZooKeeper's znode version or transaction id and etcd's revision numbers both serve as tokens. A database can enforce the check with a conditional update on a stored token column.
+
+### Efficiency Locks and Correctness Locks
+
+How much of this applies depends on what happens if two nodes do hold the lock at once. Martin Kleppmann's [analysis of distributed locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html){:target="_blank" rel="noopener noreferrer"} draws the line in two places.
+
+| Purpose | What a lock failure costs | What's adequate |
+|---------|---------------------------|-----------------|
+| **Efficiency**: avoid doing the same work twice | Some wasted work, or a duplicate notification | A single Redis instance with a TTL |
+| **Correctness**: stop concurrent writers corrupting state | Lost updates, or permanently inconsistent data | A consensus-backed lock service issuing fencing tokens, with the resource enforcing them |
+
+Redlock, Redis's multi-instance algorithm, takes a lock on a majority of independent Redis nodes. It survives the loss of individual Redis nodes better than a single instance, but it doesn't make the lock suitable for correctness. It generates no fencing tokens, and its safety depends on bounded network delay, bounded process pauses, and bounded clock drift, all of which real systems violate. It sits in the efficiency row, with more operational cost than a single instance for little gain there.
+
+**Common implementations**:
+- **Redis**, single instance or Redlock, for efficiency locks
+- **ZooKeeper**, using ephemeral sequential nodes, which also gives fair queuing among waiters
+- **etcd**, using leases and its lock API
+- **Consul**, using sessions
+
+<div class="callout callout--tip">
+<p class="callout__title">Look for a Way Not to Lock</p>
+<p>A distributed lock is often standing in for something the storage can already do. A unique constraint prevents duplicate inserts, an optimistic concurrency check on a version column prevents lost updates, and a queue with competing consumers hands each message to one worker. Each of these puts the guarantee where the data is, which is where fencing would have had to put it anyway.</p>
 </div>
 
-**Common Implementations**:
-- **Redis (single instance)**: Simple SET NX with TTL (not safe for critical data)
-- **Redis Redlock**: Acquire lock on N/2+1 of N Redis instances (stronger guarantees)
-- **ZooKeeper**: Ephemeral sequential nodes for fair queuing
-- **etcd**: Lease-based locks with TTL
-- **Consul**: Session-based locks
-
-<blockquote class="pull-quote">
-<p>Distributed locks are complex and error-prone. Consider using message queues (only one consumer gets each message) or database constraints (unique indexes, optimistic locking) when possible.</p>
-</blockquote>
+**Trade-offs**: Every acquisition is a network round trip to the lock service, so a lock on a hot path becomes a throughput limit. The lock service is a dependency whose outage blocks every holder. And a lock that is correct needs cooperation from the resource it protects, which makes it a design change to that resource, not a wrapper around existing code.
 
 ---
 
 ## Consensus
 
-Ensures multiple nodes agree on a value or decision, even in the presence of failures. Fundamental building block for distributed systems requiring strong consistency.
+Consensus gets a group of nodes to agree on a value, such as which node leads, whether a write committed, or the order of entries in a log, in a way that stays agreed even when some nodes fail. It is what leader election and correctness locks rest on, and application code rarely implements it directly. It uses a coordination service or a database that has consensus built in.
 
-**Use When**:
-- Need strong consistency guarantees
-- Handling mission-critical decisions
-- Implementing distributed databases (etcd, Consul, CockroachDB)
-- Building fault-tolerant systems with replicated state
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Paxos (1989)</h4>
-<ul>
-<li>Classic consensus algorithm by Leslie Lamport</li>
-<li>Notoriously difficult to understand</li>
-<li>Proven correct, widely studied</li>
-<li>Used in Google Chubby, Apache Cassandra (variant)</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Raft (2013)</h4>
-<ul>
-<li>Designed to be more understandable than Paxos</li>
-<li>Leader-based with strong consistency</li>
-<li>Clear leader election, log replication, safety guarantees</li>
-<li>Used in etcd, Consul, CockroachDB</li>
-<li>Majority (quorum) required for decisions</li>
-</ul>
-</div>
-</div>
-
-<div class="callout callout--note">
-<p class="callout__title">PBFT (Practical Byzantine Fault Tolerance)</p>
-<p>Tolerates Byzantine failures (malicious or arbitrary behavior). Used in blockchain systems. More expensive: 3f+1 nodes needed to tolerate f failures.</p>
-</div>
-
-**Example**: Distributed database using Raft consensus to ensure all replicas agree on transaction ordering and committed state.
+The core rule is a majority quorum. A cluster of 2f+1 nodes keeps working with up to f of them failed, because any two majorities overlap in at least one node, and that node carries forward what was decided. Three nodes tolerate one failure, and five tolerate two.
 
 ```
-Client → Write request → Leader
-Leader → Propose to followers → [Follower 1, Follower 2]
-Majority (2 of 3) agrees → Commit to log → Acknowledge client
+Client → write request → Leader
+Leader → append to log, replicate → [Follower 1, Follower 2]
+Majority (2 of 3) acknowledges → entry committed → reply to client
 ```
 
-<blockquote class="pull-quote">
-<p>Consensus algorithms choose Consistency + Partition Tolerance over Availability during network partitions (CAP Theorem)</p>
-</blockquote>
+**Use when**:
+- A decision must hold even if some of the nodes that made it are lost
+- Replicated state has to be identical across nodes, in the same order
+- Building or operating the coordination layer that other services depend on
 
-**Trade-offs**:
-- **Pros**: Strong consistency, proven correctness, fault tolerance
-- **Cons**: Lower availability during network partitions, performance overhead, requires quorum
+| | Paxos | Raft |
+|---|-------|------|
+| Origin | Leslie Lamport, "The Part-Time Parliament", circulated from 1989 and published in 1998 | Diego Ongaro and John Ousterhout, "In Search of an Understandable Consensus Algorithm", 2014 |
+| Design goal | Correctness, stated minimally | Understandability, with leader election, log replication, and safety as separate parts |
+| Reputation | Notoriously hard to understand and to turn into a working system | Easier to reason about, which is much of why it spread |
+| Found in | Google Chubby, and Cassandra's lightweight transactions | etcd, Consul, CockroachDB, and Kafka's KRaft controller |
+
+Both assume nodes fail by crashing or going silent, not by lying. Tolerating nodes that behave arbitrarily or maliciously is the Byzantine fault tolerance problem, which algorithms such as PBFT address at a higher price: 3f+1 nodes to tolerate f faulty ones. That cost is why BFT shows up in blockchains and systems spanning mutually distrustful parties, and rarely inside one organization's infrastructure.
+
+**Trade-offs**: A consensus group stops accepting writes when it loses its majority, so during a partition the minority side is unavailable by design, choosing consistency over availability. Every write waits for a majority to acknowledge it, so latency is set by the slower members of the quorum, and spreading nodes across regions for resilience makes every write pay cross-region latency. Adding nodes improves fault tolerance but not write throughput, which is why consensus clusters stay small, typically three or five nodes.
 
 ---
 
 ## Quick Reference
 
-### Pattern Comparison
-
-| Pattern | Purpose | Consistency | Complexity |
-|---------|---------|-------------|------------|
-| **Leader Election** | Designate coordinator | Eventual | Medium |
-| **Distributed Lock** | Prevent concurrent access | Strong | Medium |
-| **Consensus** | Agree on values | Strong | High |
-
-### When to Choose
-
-| Question | Pattern |
-|----------|---------|
-| Need coordinator but can tolerate brief periods without one? | Leader Election |
-| Need to prevent concurrent access to critical resources? | Distributed Lock |
-| Need all nodes to agree on critical decisions? | Consensus |
-
-### Implementation Tools
-
-**ZooKeeper**: All three patterns
-**etcd**: All three patterns
-**Redis**: Distributed lock (Redlock)
-**Consul**: Leader election, distributed lock
-**Raft libraries**: Consensus
-
----
+| Pattern | What it guarantees | Depends on | Main cost |
+|---------|-------------------|------------|-----------|
+| **Leader election** | At most one leader at a time, if backed by consensus and leases | Consensus, and fencing for writes the old leader might still make | A leaderless gap on every failover |
+| **Distributed lock** | One holder at a time for efficiency, and for correctness only with fencing | A lock service, and a resource that enforces fencing tokens | A round trip per acquisition, and a dependency every holder shares |
+| **Consensus** | Agreement that survives the failure of a minority of nodes | A majority of nodes being reachable | Unavailability without a majority, and quorum latency on every write |

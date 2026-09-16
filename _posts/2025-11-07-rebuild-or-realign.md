@@ -5,6 +5,9 @@ date: 2025-11-07
 description: "Many celebrated system rebuilds appear successful not because of new technology, but because they force teams to realign with value and best practices. This realignment work could have happened without the rebuild."
 tags: [architecture, leadership, decision-making, aaa-cycle]
 author: steven-stuart
+sources:
+  - title: "AAA Cycle: Align-Agree-Apply"
+    url: "/study-guides/sdlc/aaa-cycle.html"
 ---
 
 Business and technical minded people both tend to credit new technology for the gains seen after a system or tool rebuild. They will also often blame the tech for when a rebuild goes awry. But when you examine what actually changed, the technology rarely drove the gains or caused the failure. The improvements (or lack of) came from alignment with business value and the application of operational discipline. Often, the gains could have been seen without the rebuild or the failure measured long before additional development waste.
@@ -85,7 +88,7 @@ The difference between justified and unjustified rebuilds is honest assessment. 
 
 ## The AAA Discipline: How to Know If You Need a Rebuild
 
-The [AAA Cycle](/study-guides/sdlc/aaa-cycle.html){:target="_blank" rel="noopener noreferrer"} (Align, Agree, Apply) prevents rebuild disasters by forcing honest assessment before action.
+The AAA Cycle (Align, Agree, Apply) prevents rebuild disasters by forcing honest assessment before action.
 
 ### Align: Understand Before You Prescribe
 
