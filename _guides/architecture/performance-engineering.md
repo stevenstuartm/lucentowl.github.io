@@ -3,652 +3,268 @@ title: "Performance Engineering"
 layout: guide
 category: Architecture
 subcategory: Quality & Risk
-description: "Comprehensive guide to performance engineering including requirements definition, profiling and analysis, optimization strategies, capacity planning, performance testing methodology, and architectural patterns for scalable systems"
-tags: [architecture, performance, scalability, optimization, profiling, capacity-planning, design-patterns, practical]
+description: "Meeting performance targets on purpose: writing percentile-based requirements and latency budgets, why tail latency compounds across calls, finding bottlenecks with the RED and USE methods and profiling, choosing the right kind of optimization, load testing with open workload models, and capacity planning with utilization headroom and autoscaling."
+tags: [practical, performance, latency, profiling, load-testing, capacity-planning, autoscaling]
 ---
 
-## What is Performance Engineering?
+Performance engineering is the practice of making a system meet explicit performance targets, and keep meeting them as load and code change. It has four parts that feed each other. Requirements say what fast enough means. Measurement finds where time and resources actually go. Optimization changes the parts that measurement points to. Capacity planning makes sure the system still meets its targets at next year's load.
 
-<blockquote class="pull-quote">
-<p>Performance is a feature, not an afterthought. Systems that address performance requirements early in design avoid costly rewrites later.</p>
-</blockquote>
+The discipline guards against two opposite mistakes. One is ignoring performance until users complain, when the fix may require changing an architecture that's already built. The other is optimizing code by instinct, spending effort on paths that don't matter while the real bottleneck goes unmeasured. Donald Knuth's often-quoted warning that premature optimization is the root of all evil comes with a second half that usually gets dropped. Programmers shouldn't pass up the opportunities in the critical few percent of code where performance does matter. Performance engineering is how a team finds that few percent.
 
-Performance engineering is the systematic practice of ensuring systems meet performance requirements throughout their lifecycle, from design through operation. It encompasses defining performance requirements, measuring current performance, identifying bottlenecks, optimizing critical paths, and planning for future capacity.
+## Performance Requirements
 
-**Performance vs optimization**: Performance engineering focuses on meeting defined requirements. Premature optimization wastes effort on parts of the system that don't matter. Performance engineering identifies what matters, measures it, and optimizes intentionally.
+### What to Specify
 
-## Defining Performance Requirements
+A performance requirement names an operation, a measure, a threshold, and the load under which the threshold must hold. "The API should be fast" is not testable. "Checkout completes within 400 ms at the 95th percentile and 1 s at the 99th, at 300 checkouts per second" is.
 
-Performance requirements must be specific, measurable, and tied to business or user needs.
+| Measure | What it describes | Example target |
+|---|---|---|
+| **Latency** | Time for one operation, from the caller's point of view | p95 under 300 ms for product search |
+| **Throughput** | Operations completed per unit of time | 300 checkouts per second at peak |
+| **Concurrency** | Simultaneous users, connections, or in-flight requests supported | 50,000 open WebSocket connections |
+| **Resource cost** | CPU, memory, or money per unit of work | Under 20 ms of CPU per search request |
+| **Startup and warm-up** | Time until a new instance serves traffic at full speed | Ready within 30 seconds of scheduling |
 
-### Performance Characteristics
+The examples are illustrations. Real targets come from what users and the business need, and they should be set per operation. Search, checkout, and a monthly report export have very different tolerances, and a single system-wide latency target either over-constrains the export or under-constrains search.
 
-| Characteristic | Definition | Example Requirement |
-|----------------|------------|---------------------|
-| **Latency** | Time to complete a single operation | 95% of API requests complete in < 200ms |
-| **Throughput** | Operations per unit time | System handles 10,000 requests/second |
-| **Scalability** | Performance under increasing load | Linear scaling to 100,000 concurrent users |
-| **Resource efficiency** | Resource consumption per operation | < 100MB memory per request |
-| **Startup time** | Time to become ready | Service ready to accept traffic in < 30 seconds |
-| **Time to first byte (TTFB)** | Time until first response byte | < 100ms TTFB for web pages |
+### Percentiles, Not Averages
 
-### The Performance Requirements Framework
+Latency distributions have long tails, so an average hides what many users experience. A service with a 20 ms median can have an average of 50 ms and a 99th percentile of 800 ms, and the average describes almost nobody's actual request. Percentiles describe the distribution directly. The 95th percentile (p95) is the latency that 95% of requests beat.
 
-**Step 1: Identify critical paths**
+The tail matters more than its percentage suggests, because one user action usually involves many requests. Jeffrey Dean and Luiz André Barroso's "The Tail at Scale" gives the canonical example. If a server's p99 latency is one second and a user request fans out to 100 such servers in parallel, waiting for all of them, 63% of user requests take more than a second, since the chance that all 100 calls beat their p99 is 0.99¹⁰⁰, about 37%.
 
-Which user interactions matter most? Focus performance engineering on high-value, high-frequency operations.
-
-**Examples**:
-- E-commerce: Product search, checkout, payment processing
-- Social media: Feed loading, posting, notifications
-- SaaS: Dashboard rendering, report generation, data exports
-
-**Step 2: Define success criteria**
-
-What latency is acceptable? What throughput must be supported? Use percentiles, not averages.
-
-**Why percentiles matter**:
 ```
-Average latency: 50ms (looks great!)
+                        ┌──▶ Server 1    p99 = 1 s
+                        ├──▶ Server 2    p99 = 1 s
+ User request ─▶ Front ─┼──▶  ...
+                  end   ├──▶ Server 99   p99 = 1 s
+                        └──▶ Server 100  p99 = 1 s
 
-Actual distribution:
-p50: 20ms
-p95: 150ms
-p99: 800ms    ← Many users experience this
-p99.9: 5000ms ← Some users see this nightmare
+ Front end waits for all 100. P(all beat 1 s) = 0.99¹⁰⁰ ≈ 0.37
+ So about 63% of user requests take longer than 1 s.
 ```
 
-<div class="callout callout--warning">
-<p class="callout__title">Never Trust Averages</p>
-<p>Average latency hides the user experience for a significant percentage of requests. Always use percentiles (p95, p99) to understand real performance. The worst 1% of requests often indicates systemic problems.</p>
-</div>
+A page that makes 20 sequential backend calls faces the same arithmetic. So does a service whose p99 is acceptable in isolation but sits on a path called many times per user action.
 
-**Percentile selection guidance**:
-- **p50 (median)**: Typical user experience
-- **p95**: Good user experience threshold
-- **p99**: Acceptable worst case for most users
-- **p99.9**: Extreme outliers, often acceptable to exceed SLO
+Percentiles also can't be averaged or added. The average of five instances' p99 values is not the p99 of their combined traffic, and the sum of two services' p95 values is not the p95 of calling both. Aggregating correctly requires the underlying distribution, which is why metrics systems record latency as histograms and compute percentiles from the merged histogram.
 
-**Step 3: Set performance budgets**
+### Latency Budgets
 
-Allocate latency across system components. Each component gets a portion of the total budget.
+A latency budget divides an end-to-end target among the steps of a request, so each team owning a step knows its share. For a 300 ms p95 checkout target, a budget might allot 20 ms to the gateway and authentication, 60 ms to the order service's own logic, 120 ms to its database calls, and 100 ms to the payment provider. When a step exceeds its share, the owning team knows before the end-to-end target fails, and a proposal to add a synchronous call to the path has to find its budget from somewhere.
 
-**Example: 200ms API latency budget**
-```
-Component               Budget
-─────────────────────────────────
-API gateway             20ms
-Authentication          10ms
-Business logic          50ms
-Database query          80ms
-External API call       30ms
-Response serialization  10ms
-─────────────────────────────────
-Total                   200ms
-```
+Budgets are a planning tool, not arithmetic that holds exactly, because per-step percentiles don't add up to an end-to-end percentile. The end-to-end latency is still the one to measure and alert on.
 
-**Budget violations trigger optimization**: If database queries consume 150ms, you've exceeded the budget and must optimize.
+### Trade-offs With Other Characteristics
 
-### Performance vs Other Characteristics
+| Performance against | Tension | Usually favor performance when |
+|---|---|---|
+| **Maintainability** | Optimized code is often harder to read and change | The code is on a hot path that measurement has identified |
+| **Consistency** | Caches, replicas, and async processing return data that may be stale | The operation tolerates stale reads |
+| **Reliability** | Retries, redundancy, and synchronous replication add latency | Rarely, since a fast wrong or lost result is worse than a slow one |
+| **Security** | Encryption, validation, and authorization checks cost time | Almost never, and the costs are usually small once measured |
+| **Cost** | Faster usually means more or bigger infrastructure | Latency affects revenue or user retention measurably |
 
-Performance competes with other architectural characteristics. Tradeoffs are inevitable.
+## Finding the Bottleneck
 
-| Tradeoff | Description | When to Favor Performance |
-|----------|-------------|---------------------------|
-| **Performance vs Maintainability** | Optimized code is often complex | High-frequency code paths, critical user flows |
-| **Performance vs Security** | Encryption and validation add latency | Only when security requirements allow |
-| **Performance vs Reliability** | Retries and redundancy add latency | User-facing operations, real-time systems |
-| **Performance vs Cost** | Faster hardware costs more | Revenue-generating features, competitive advantage |
-| **Performance vs Flexibility** | Generic solutions are often slower | Stable, well-defined requirements |
+### Service and Resource Views
 
-**Guidance**: Optimize intentionally. Don't sacrifice maintainability for marginal performance gains in low-traffic code paths.
+Two complementary methods structure the search. The **RED method**, from Tom Wilkie, looks at each service from the outside by its request **R**ate, **E**rrors, and **D**uration. It shows which service is slow or failing. Brendan Gregg's **USE method** looks at each resource inside a service, such as CPU, memory, disk, network, connection pools, and thread pools, and checks its **U**tilization (how busy it is), **S**aturation (how much work is queued waiting for it), and **E**rrors. It shows why the service is slow.
 
-## Measuring Performance
+Saturation is the easiest of the three to miss. A connection pool at 100% utilization with requests queued behind it looks like database slowness from inside the application, while the database itself sits mostly idle. A thread pool starved by blocking calls makes every endpoint slow while CPU sits at 30%.
 
-You cannot improve what you don't measure. Establish baseline performance before optimizing.
+Distributed tracing connects the two views across services, showing for one slow request which service and which call inside it took the time.
 
-### Performance Profiling
+### Profiling
 
-Profiling identifies where time is spent in your system.
+A profiler shows where time and memory go inside one process. Each kind answers a different question:
 
-**Profiling techniques**:
+- **CPU profiling** shows which methods consume processor time, and finds hot loops and inefficient algorithms.
+- **Allocation and memory profiling** shows which code allocates the most, which in managed runtimes like .NET drives garbage collection pauses and throughput loss, and finds leaks.
+- **Wall-clock and wait analysis** shows time spent blocked on I/O, locks, or thread pool starvation, which CPU profiles don't show at all.
+- **Database query analysis** shows slow queries, missing indexes, and query plans, and finds chatty data access such as N+1 query patterns.
 
-**CPU profiling**: Measure which functions consume CPU time.
-- Identifies compute-bound bottlenecks
-- Shows hot paths (frequently executed code)
-- Reveals inefficient algorithms
+In .NET, `dotnet-counters` shows live runtime metrics such as GC activity, thread pool queue length, and exception rates, and `dotnet-trace` collects CPU and event traces for analysis. Profiles taken against realistic data volumes and load find different problems than profiles on a developer laptop with ten rows in each table, where an unindexed query or a quadratic loop looks instant.
 
-**Memory profiling**: Track memory allocation and usage.
-- Identifies memory leaks
-- Shows allocation hot spots
-- Reveals unnecessary object creation
+## Optimizing
 
-**I/O profiling**: Measure disk and network I/O.
-- Identifies blocking I/O operations
-- Shows unnecessary file reads/writes
-- Reveals network chattiness
+### Kinds of Fix
 
-**Database profiling**: Analyze query performance.
-- Identifies slow queries
-- Shows missing indexes
-- Reveals N+1 query problems
+Once measurement locates the bottleneck, the fix usually falls into one of a few kinds. The earlier kinds tend to give more improvement for less added complexity.
 
-**Profiling best practices**:
-- Profile in production-like environments (not development laptops)
-- Use realistic data volumes
-- Profile under realistic load
-- Focus on representative user journeys
-- Profile both hot paths and outliers
+| Kind | Examples | Adds |
+|---|---|---|
+| **Do less work** | A better algorithm or data structure, eliminating N+1 queries, fetching only needed columns, adding an index | Little, often simplifies |
+| **Do it once** | Caching results, precomputing aggregates, denormalizing read models | Staleness and invalidation to manage |
+| **Do it later** | Moving email, exports, and non-critical side effects to background processing | Eventual consistency, a queue to operate |
+| **Do it in parallel** | Running independent calls concurrently instead of in sequence | Concurrency bugs, and the fan-out tail effect |
+| **Do it closer** | CDNs for static and cacheable content, regional deployments | Distribution and invalidation across locations |
+| **Do it cheaper** | Smaller payloads, compression, efficient serialization, fewer allocations | Code complexity for modest gains |
 
-### Application Performance Monitoring (APM)
+Amdahl's law bounds every optimization. If a step accounts for 20% of a request's time, making that step infinitely fast shortens the request by at most 20%. Speeding up anything other than the dominant step yields little, which is why measurement comes first.
 
-APM tools provide continuous performance visibility in production.
+### Chatty Data Access
 
-**Key APM capabilities**:
-- **Transaction tracing**: Track requests across services
-- **Error tracking**: Correlate errors with performance
-- **Resource monitoring**: CPU, memory, disk, network usage
-- **Database monitoring**: Query performance and connection pools
-- **External service monitoring**: Third-party API latency
+The N+1 query pattern is among the most common database bottlenecks in applications using an ORM. One query loads a list, then one more query per item loads related data:
 
-**APM alerts**:
-- Alert when p95 latency exceeds SLO
-- Alert on error rate spikes
-- Alert on resource exhaustion (memory, connections)
+```csharp
+// N+1: one query for the orders, then one query per order for its lines.
+var orders = await db.Orders.Where(o => o.CustomerId == customerId).ToListAsync();
+var slowTotals = new Dictionary<int, decimal>();
+foreach (var order in orders)
+{
+    var lines = await db.OrderLines.Where(l => l.OrderId == order.Id).ToListAsync();
+    slowTotals[order.Id] = lines.Sum(l => l.Quantity * l.UnitPrice);
+}
 
-### Synthetic Monitoring
-
-Simulate user interactions to measure performance continuously.
-
-**Synthetic transaction types**:
-- **Page load tests**: Measure web page rendering time
-- **API tests**: Call endpoints and measure latency
-- **User journey tests**: Complete multi-step workflows
-
-**Benefits**:
-- Detect performance regressions before users do
-- Measure performance from multiple geographic regions
-- Establish performance baselines over time
-
-### Load Testing
-
-Simulate production traffic to validate performance under stress.
-
-**Load test types**:
-
-| Type | Purpose | Traffic Pattern | Duration |
-|------|---------|----------------|----------|
-| **Smoke test** | Verify system handles minimal load | Low, constant | Minutes |
-| **Load test** | Validate expected production traffic | Realistic, sustained | Hours |
-| **Stress test** | Find breaking point | Gradually increasing | Until failure |
-| **Spike test** | Handle sudden traffic surges | Instant spike | Minutes |
-| **Soak test** | Detect memory leaks, resource exhaustion | Sustained high load | Days |
-
-**Load testing best practices**:
-- Test in production-like environment
-- Use realistic user behavior (think time, navigation patterns)
-- Include realistic data volumes
-- Measure latency percentiles, not just averages
-- Monitor resource utilization during tests
-- Identify bottlenecks before reaching capacity
-
-## Performance Optimization Strategies
-
-### The Optimization Hierarchy
-
-<blockquote class="pull-quote">
-<p>Measure before optimizing. Profile to find actual bottlenecks. Optimizing the wrong thing wastes effort.</p>
-</blockquote>
-
-Optimize in this order for maximum impact:
-
-**1. Algorithmic complexity** (biggest impact)
-- Replace O(n²) algorithm with O(n log n) algorithm
-- Use appropriate data structures (hash map vs list)
-- Eliminate unnecessary computation
-
-**2. Database optimization** (high impact)
-- Add indexes to frequently queried columns
-- Optimize query structure (avoid N+1 queries)
-- Use connection pooling
-- Cache query results
-
-**3. Caching** (high impact, low effort)
-- Cache computed results
-- Cache database queries
-- Cache external API responses
-- Use CDN for static assets
-
-**4. Parallelization** (moderate impact)
-- Process independent tasks concurrently
-- Use asynchronous I/O
-- Parallelize CPU-intensive operations
-
-**5. Micro-optimizations** (low impact, high effort)
-- String concatenation optimizations
-- Reducing object allocations
-- Inline functions
-
-### Caching Strategies
-
-Caching is the highest ROI optimization for most systems.
-
-**What to cache**:
-- Database query results
-- Computed values (aggregations, calculations)
-- External API responses
-- Rendered HTML or JSON
-- Static assets (images, CSS, JavaScript)
-
-**Caching patterns** (see [Performance Scalability Patterns](performance_scalability_patterns.html) for detailed implementations):
-- **Cache-aside**: Application manages cache explicitly
-- **Read-through**: Cache automatically loads missing data
-- **Write-through**: Writes go to cache and database simultaneously
-- **Write-behind**: Writes batched and flushed asynchronously
-
-**Cache invalidation strategies**:
-- **Time-to-live (TTL)**: Expire entries after fixed duration
-- **Event-based**: Invalidate when underlying data changes
-- **Manual**: Application explicitly invalidates entries
-- **Least Recently Used (LRU)**: Evict oldest unused entries when full
-
-**Caching anti-patterns**:
-- Caching everything (wastes memory on rarely-accessed data)
-- Caching mutable data without invalidation (serves stale data)
-- Setting TTL too long (stale data) or too short (cache thrashing)
-- Ignoring cache stampede (many requests simultaneously fetch same missing data)
-
-**Cache stampede mitigation**:
-- Use distributed locks to ensure only one request fetches missing data
-- Serve stale data while refreshing in background
-- Use probabilistic early expiration (refresh before TTL expires)
-
-### Database Optimization
-
-Databases are often the bottleneck. Optimize queries before adding hardware.
-
-**Query optimization techniques**:
-
-**Indexing**:
-- Add indexes to frequently queried columns
-- Use covering indexes (index includes all selected columns)
-- Avoid over-indexing (indexes slow down writes)
-- Monitor index usage, remove unused indexes
-
-**Query structure**:
-- Avoid SELECT * (fetch only needed columns)
-- Use appropriate JOIN types
-- Filter early (WHERE before JOIN when possible)
-- Limit result sets (pagination)
-
-**N+1 query elimination**:
-```
-Problem:
-SELECT * FROM orders WHERE user_id = 123;
-For each order:
-  SELECT * FROM items WHERE order_id = ?;  ← N queries
-
-Solution:
-SELECT * FROM orders WHERE user_id = 123;
-SELECT * FROM items WHERE order_id IN (?, ?, ?);  ← 1 query
+// One query: the database computes each total.
+var totals = await db.Orders
+    .Where(o => o.CustomerId == customerId)
+    .Select(o => new { o.Id, Total = o.Lines.Sum(l => l.Quantity * l.UnitPrice) })
+    .ToDictionaryAsync(o => o.Id, o => o.Total);
 ```
 
-**Connection pooling**:
-- Reuse database connections instead of opening new ones
-- Set appropriate pool size (typically 10-50 connections)
-- Monitor pool utilization, adjust based on load
+With 200 orders the first version makes 201 round trips, each paying network latency, so it can be slow even when every individual query is fast. It also tends to pass unnoticed in development, where a customer has three orders.
 
-**Read replicas**:
-- Route read queries to replicas
-- Reserve primary database for writes
-- Accept eventual consistency for read replicas
+### Micro-Benchmarks
 
-**Database sharding** (for extreme scale):
-- Partition data across multiple databases
-- Shard by tenant, geography, or hash key
-- Increases complexity, only use when necessary
+For code-level changes on a hot path, a micro-benchmark measures the difference reliably. Timing a loop with a stopwatch doesn't, because JIT compilation, tiered compilation, garbage collection, and CPU frequency scaling all distort a naive measurement. [BenchmarkDotNet](https://benchmarkdotnet.org/){:target="_blank" rel="noopener noreferrer"} handles warm-up, repeated iterations, and statistical analysis, and reports allocations alongside time:
 
-### Asynchronous Processing
+```csharp
+[MemoryDiagnoser]
+public class SkuParsingBenchmarks
+{
+    private const string Input = "WH-042|SKU-99812|QTY-3";
 
-Move non-critical work out of the request path.
+    [Benchmark(Baseline = true)]
+    public string SplitAndIndex() => Input.Split('|')[1];
 
-**When to use async processing**:
-- Email sending
-- Report generation
-- Image processing
-- Data exports
-- Batch operations
-- Non-critical third-party API calls
+    [Benchmark]
+    public string SpanSlice()
+    {
+        var span = Input.AsSpan();
+        var start = span.IndexOf('|') + 1;
+        var length = span[start..].IndexOf('|');
+        return span.Slice(start, length).ToString();
+    }
+}
 
-**Async patterns**:
-
-**Message queues**: Decouple request handling from background processing.
-```
-User request → API → Queue → Background worker
-                  ↓
-              Immediate response (202 Accepted)
+// In a Release build: BenchmarkRunner.Run<SkuParsingBenchmarks>();
 ```
 
-**Event-driven architecture**: Emit events, process asynchronously.
+A micro-benchmark proves one method got faster, not that the system did. The change matters only if that method sits on a path where profiling showed it accounts for a meaningful share of the time.
+
+## Load Testing
+
+### Test Types
+
+Load tests differ by the question they answer. The names below follow Grafana k6's documentation, and other tools use similar terms.
+
+| Type | Load shape | Answers |
+|---|---|---|
+| **Smoke** | Minimal load, briefly | Does the test script work, and does the system respond at all? |
+| **Average load** | Expected normal load, sustained | Does the system meet its targets under typical conditions? |
+| **Stress** | Load above the expected average, up to peak and beyond | How does performance degrade near and past the limit? |
+| **Spike** | A sudden, short, large jump in load | Does the system survive and recover from a surge? |
+| **Soak** | Normal load over a long period | Do leaks, growing queues, or fragmentation appear over time? |
+| **Breakpoint** | Load increasing steadily until something fails | Where is the capacity limit, and which resource hits it first? |
+
+### Open and Closed Workloads
+
+How a load generator produces traffic determines whether the results can be trusted near capacity. In a **closed** model, a fixed number of virtual users each send a request, wait for the response, and send the next. When the system slows down, the virtual users wait longer, so they send fewer requests, and the load drops exactly when the system is struggling. The test then under-reports latency, a distortion known as coordinated omission. In an **open** model, requests arrive at a set rate regardless of how fast earlier ones complete, which matches how independent users arrive at a public service.
+
+In k6, arrival-rate executors implement the open model:
+
+```javascript
+export const options = {
+  scenarios: {
+    checkout: {
+      executor: 'ramping-arrival-rate',
+      startRate: 50,
+      timeUnit: '1s',
+      preAllocatedVUs: 200,
+      maxVUs: 1000,
+      stages: [
+        { target: 300, duration: '10m' },   // ramp to peak arrival rate
+        { target: 300, duration: '30m' },   // hold at peak
+      ],
+    },
+  },
+  thresholds: {
+    http_req_duration: ['p(95)<400', 'p(99)<1000'],
+    http_req_failed: ['rate<0.01'],
+  },
+};
 ```
-Order placed → OrderPlacedEvent → [Email worker, Analytics worker, Inventory worker]
-```
 
-**Scheduled jobs**: Batch process data at off-peak times.
-```
-Nightly job aggregates daily metrics
-Hourly job syncs data to warehouse
-```
+Closed models still fit systems where a known, fixed population of clients each waits for its previous response, such as a pool of batch workers.
 
-**Benefits**:
-- Faster response times (no waiting for slow operations)
-- Better resilience (queue buffers traffic spikes)
-- Independent scaling (scale workers separately from API)
+### Environment and Data
 
-**Tradeoffs**:
-- Eventual consistency (work happens later)
-- Increased complexity (distributed system with queues)
-- Debugging difficulty (async failures are harder to trace)
+Load test results transfer to production only as far as the test environment resembles it. The factors that change results most are instance sizes and counts, database size and data distribution, cache warmth, and configuration such as pool sizes and timeouts. A database with a thousand rows behaves nothing like one with fifty million, because queries that scan tables stay fast until the data outgrows memory.
 
-### Compression
+Third-party dependencies need deliberate handling. Load testing a payment provider's sandbox may violate its terms and measures their sandbox rather than your system, so a stub that responds with realistic latency, including a realistic tail, is usually the better choice. A stub that responds instantly makes the system look faster and less concurrent than it will be in production.
 
-Reduce data transfer size.
+### Reading the Results
 
-**What to compress**:
-- API responses (gzip, brotli)
-- Static assets (CSS, JavaScript)
-- Large payloads (file uploads, exports)
-- Log files
-
-**Compression tradeoffs**:
-- **CPU cost**: Compression uses CPU cycles
-- **Latency**: Adds compression/decompression time
-- **Bandwidth savings**: Reduces network transfer time
-
-**When compression wins**:
-- Large payloads (> 1KB)
-- Slow networks (mobile, international)
-- Compressible content (text, JSON, HTML)
-
-**When compression loses**:
-- Small payloads (overhead exceeds savings)
-- Fast networks (compression time > transfer savings)
-- Already compressed content (images, videos)
-
-### Content Delivery Networks (CDN)
-
-Serve static content from edge locations near users.
-
-**What to serve from CDN**:
-- Images, videos, audio
-- CSS, JavaScript
-- Fonts
-- API responses (for cacheable endpoints)
-
-**CDN benefits**:
-- Reduced latency (geographically closer to users)
-- Reduced origin load (CDN handles static content)
-- DDoS protection (CDN absorbs traffic)
-
-**CDN considerations**:
-- Cache invalidation strategy
-- Cache hit rate monitoring
-- Cost (bandwidth, requests)
+Latency typically stays flat as load increases, then rises sharply past a point, the knee of the curve. The knee marks where some resource saturates. At that load, the USE method applied to each resource usually names it: a connection pool with requests queued, a CPU pinned on one node, a lock with growing wait times. Fixing that bottleneck moves the knee to the right until a different resource saturates, so load testing and optimization alternate until the targets hold at the required load with headroom to spare.
 
 ## Capacity Planning
 
-Capacity planning ensures systems handle future growth without performance degradation.
+### Utilization and Latency
 
-### Capacity Planning Methodology
+Latency doesn't grow in proportion to utilization. Queueing theory shows why. In the simplest single-server queueing model, average response time equals service time divided by one minus utilization. At 50% utilization, requests take twice their service time on average. At 80%, five times. At 90%, ten times. Real systems differ in detail, but the shape holds: latency degrades gently at moderate utilization and explodes as a resource approaches full use.
 
-**Step 1: Establish current capacity**
+This is why capacity targets set utilization ceilings well below 100% for any resource on a latency-sensitive path. The right ceiling depends on how variable the load and service times are, and a load test that finds the knee gives a better number than a rule of thumb.
 
-Measure current throughput and resource utilization at normal and peak load.
+### Headroom and Growth
 
-**Metrics to collect**:
-- Requests per second
-- CPU utilization
-- Memory utilization
-- Database connections
-- Network bandwidth
-- Disk I/O
+A capacity plan answers whether the system will meet its targets at the load it will see, including load it hasn't seen yet:
 
-**Step 2: Project growth**
+- **Peak, not average.** Size for the busiest period, such as the daily peak, month-end, or a seasonal event, not the daily mean.
+- **Failure headroom.** With three availability zones, losing one moves its traffic onto the other two, which then need to absorb 50% more load each while still meeting targets.
+- **Growth.** Business projections for users, transactions, and data volume, converted into requests and storage, with a margin for the projection being wrong.
+- **Lead time.** Capacity that takes weeks to add, such as a database migration to a larger tier or a reserved hardware purchase, has to be planned that far ahead of the growth.
+- **The first constraint.** Each tier has a limit, and the tier that reaches its limit first sets the capacity of the whole system. Adding web servers doesn't help when the database is the constraint.
 
-Estimate future traffic based on business projections.
+### Why Scaling Out Isn't Linear
 
-**Growth patterns**:
-- **Linear growth**: Steady user acquisition (10% per quarter)
-- **Seasonal spikes**: Holiday shopping, tax season
-- **Event-driven spikes**: Product launches, viral content
-- **Step changes**: New market entry, major feature launch
-
-**Step 3: Identify constraints**
-
-Which resource will be exhausted first?
-
-**Common constraints**:
-- CPU capacity
-- Memory limits
-- Database connection pool
-- Network bandwidth
-- Storage capacity
-
-**Step 4: Plan capacity increases**
-
-Add capacity before constraints are reached.
-
-**Capacity increase strategies**:
-- **Vertical scaling**: Larger instances (temporary, limited)
-- **Horizontal scaling**: More instances (sustainable, unlimited)
-- **Architectural changes**: Caching, sharding, async processing
-
-**Step 5: Test capacity**
-
-Load test with projected future traffic to validate capacity plan.
+Adding instances rarely multiplies throughput by the number of instances. Neil Gunther's Universal Scalability Law describes two effects that erode it. **Contention** for shared resources, such as a database, a lock, or a queue, puts a ceiling on throughput no matter how many instances are added. **Coherency** costs, the work instances do to stay consistent with each other such as cache synchronization or distributed coordination, grow with instance count and can make throughput fall as instances are added. Measuring throughput at several instance counts shows which effect dominates, and whether more instances will help at all.
 
 ### Autoscaling
 
-Automatically adjust capacity based on demand.
+Autoscaling adds and removes instances automatically in response to load. It handles variation within a day or a week, but it doesn't replace capacity planning, since a scaling policy can only scale tiers that scale horizontally and only up to the limits of the tiers they depend on.
 
-**Autoscaling triggers**:
-- **CPU utilization**: Scale when CPU > 70%
-- **Request queue depth**: Scale when queue > 100 requests
-- **Custom metrics**: Scale based on business metrics (orders/minute)
+Scaling on a **leading** signal responds before users feel the load. Queue depth, request concurrency, and arrival rate rise as load arrives. CPU utilization is a **lagging** signal that rises after requests are already slowing down, and for I/O-bound services it may barely rise at all. New instances also take time to start, and runtimes with JIT compilation and cold caches take longer still to reach full speed, so scale-out has to start before the existing instances saturate. Scheduled or predictive scaling covers load that arrives faster than instances can start, such as a daily opening bell or a marketing email. Scaling in more slowly than scaling out avoids oscillation, and a maximum instance count protects both the budget and downstream dependencies from a scale-out that would overwhelm them.
 
-**Autoscaling considerations**:
-- **Scale-up delay**: Time to provision and start new instances
-- **Scale-down caution**: Don't scale down too aggressively
-- **Warm-up period**: New instances may need time to reach full capacity
-- **Cost implications**: Autoscaling can increase costs unexpectedly
+## Keeping Performance From Regressing
 
-**Autoscaling best practices**:
-- Set minimum and maximum instance counts
-- Use predictive scaling for known traffic patterns
-- Test scale-up and scale-down scenarios
-- Monitor scaling events and costs
+Performance degrades gradually, a few milliseconds per release, and no single change looks responsible. Catching regressions takes the same automation as catching functional defects:
 
-## Performance Testing Methodology
+- **Benchmarks in CI** for hot paths, compared against a stored baseline, with a failure when a change exceeds an agreed tolerance.
+- **Load tests on a schedule** or before significant releases, against the same scenarios and thresholds each time so results are comparable.
+- **Production latency tracked per deployment**, so a regression shows up tied to the release that caused it.
+- **Performance questions in design and code review** for changes to hot paths, such as a new synchronous call, a query inside a loop, or an unbounded result set.
 
-Performance testing validates that systems meet requirements under realistic conditions.
+## Common Pitfalls
 
-### Test Environment Setup
+- **Averages as targets.** An average can look healthy while the tail users experience is not. Specify and alert on percentiles.
+- **Optimizing without measuring.** Effort goes to code that feels slow instead of code that is. Profile first, and check the fix against the same measurement.
+- **Averaging percentiles.** Combining instances' p99 values by averaging produces a number that means nothing. Aggregate histograms.
+- **Closed-model load tests near capacity.** The generator backs off as the system slows, hiding the latency a real surge would cause. Use an arrival-rate model.
+- **Tiny test datasets.** Queries that are fast against a thousand rows can be slow against fifty million. Test with production-scale data.
+- **Scaling on CPU alone.** I/O-bound services saturate connection pools and queues while CPU stays low. Scale on queue depth, concurrency, or latency.
+- **Sizing for average load.** Systems fail at peak and during partial outages. Size for peak with failure headroom.
+- **Adding instances in front of a saturated shared resource.** More application instances put more load on a database that is already the constraint.
 
-**Production parity**:
-- Same instance types and configurations
-- Same database size and schema
-- Same network topology
-- Same third-party integrations (or realistic mocks)
+## Quick Reference
 
-**Data volume**:
-- Use production-scale data
-- Include data distribution (new users, power users)
-- Account for data growth over test duration
-
-**Test isolation**:
-- Dedicated environment (not shared with other testing)
-- Isolated from production (no accidental traffic)
-
-### Test Design
-
-**Define test scenarios**:
-- Identify critical user journeys
-- Model realistic user behavior (think time, navigation)
-- Include representative distribution of operations (reads, writes)
-
-**Set acceptance criteria**:
-- Latency percentiles (p50, p95, p99)
-- Error rate thresholds (< 0.1%)
-- Resource utilization limits (CPU < 80%)
-
-**Ramp-up strategy**:
-- Start with low load
-- Gradually increase to target load
-- Observe system behavior at each step
-- Identify point where performance degrades
-
-### Test Execution
-
-**Monitor during test**:
-- Application latency (all percentiles)
-- Error rates (by type)
-- Resource utilization (CPU, memory, network, disk)
-- Database performance (query times, connection pool)
-- Third-party API latency
-
-**Identify bottlenecks**:
-- CPU-bound: CPU utilization high, adding instances helps
-- Memory-bound: Memory exhausted, larger instances or caching helps
-- I/O-bound: Disk or network saturated, optimize I/O or scale storage
-- Database-bound: Database queries slow, optimize queries or scale database
-
-**Iterate and optimize**:
-- Fix identified bottlenecks
-- Re-run tests to validate improvements
-- Repeat until acceptance criteria met
-
-### Test Analysis
-
-**Performance regression detection**:
-- Compare current test results to baseline
-- Alert on latency increase (p95 > 10% slower)
-- Alert on throughput decrease (handles 10% fewer requests)
-
-**Trend analysis**:
-- Track performance over multiple releases
-- Identify gradual degradation
-- Correlate performance changes with code changes
-
-## Performance Patterns and Anti-Patterns
-
-### Patterns for High Performance
-
-**Request coalescing**: Batch multiple requests into single operation.
-- Combine multiple database queries into one query
-- Batch API calls to external services
-- Use GraphQL to fetch multiple resources in one request
-
-**Lazy loading**: Defer loading data until actually needed.
-- Don't fetch related entities unless accessed
-- Paginate large result sets
-- Load images on scroll (web applications)
-
-**Data denormalization**: Trade storage for query performance.
-- Duplicate frequently accessed data
-- Pre-compute aggregations
-- Store derived data alongside source data
-
-**Connection pooling**: Reuse expensive connections.
-- Database connections
-- HTTP connections to external services
-- Thread pools for async operations
-
-**Bloom filters**: Quickly check for non-existence.
-- Avoid expensive lookups when data doesn't exist
-- Cache negative results (item not found)
-
-### Performance Anti-Patterns
-
-**Premature optimization**: Optimizing before measuring.
-- Solution: Profile first, optimize actual bottlenecks
-
-**Over-fetching**: Retrieving more data than needed.
-- Solution: Fetch only required columns, paginate results
-
-**Blocking I/O on critical path**: Waiting for slow operations.
-- Solution: Use async I/O, move work to background jobs
-
-**Inefficient serialization**: Slow JSON/XML parsing.
-- Solution: Use binary formats (Protocol Buffers, MessagePack) for internal APIs
-
-**Unbounded resource consumption**: No limits on memory, connections.
-- Solution: Set connection pool limits, implement backpressure
-
-**Ignoring caching opportunities**: Repeatedly computing same results.
-- Solution: Cache computed results, use memoization
-
-**Death by a thousand cuts**: Many small inefficiencies compound.
-- Solution: Profile to identify cumulative impact, fix most significant first
-
-## Performance Culture
-
-Performance engineering is most effective when embedded in team culture.
-
-### Performance Budgets in Development
-
-**Set performance budgets for features**:
-- New feature cannot degrade p95 latency by > 10ms
-- Bundle size cannot exceed 200KB (web applications)
-- API response time must stay under 200ms
-
-**Enforce budgets in CI/CD**:
-- Run performance tests in CI pipeline
-- Fail builds that exceed budgets
-- Require performance review for risky changes
-
-### Performance Reviews
-
-**Include performance in code reviews**:
-- Review database queries for efficiency
-- Check for N+1 queries
-- Validate caching strategy
-- Question synchronous calls to external services
-
-**Performance retrospectives**:
-- Review performance incidents
-- Identify systemic performance issues
-- Prioritize performance improvements
-
-### Continuous Performance Monitoring
-
-**Track performance metrics over time**:
-- Dashboard showing latency trends
-- Alert on performance regressions
-- Correlate deployments with performance changes
-
-**Performance goals in planning**:
-- Allocate sprints to performance improvements
-- Balance features with performance work
-- Use error budgets to guide prioritization
-
-## Key Takeaways
-
-**Define performance requirements early**: Specify latency, throughput, and scalability targets before building. Use percentiles, not averages.
-
-**Measure before optimizing**: Profile to identify actual bottlenecks. Don't waste effort optimizing code that doesn't impact performance.
-
-**Optimize in priority order**: Algorithmic improvements and caching provide the highest ROI. Micro-optimizations rarely matter.
-
-**Performance budgets guide decisions**: Allocate latency across components. Exceeding budget triggers optimization work.
-
-**Caching is the highest-impact optimization**: Cache database queries, computed results, and external API responses. Manage cache invalidation carefully.
-
-**Database optimization is critical**: Add indexes, eliminate N+1 queries, use connection pooling. Optimize queries before scaling hardware.
-
-**Async processing improves responsiveness**: Move non-critical work out of request path. Use message queues and background workers.
-
-**Capacity planning prevents outages**: Project growth, identify constraints, add capacity before limits are reached. Test capacity plans with load testing.
-
-**Load testing validates performance**: Test under realistic load in production-like environments. Monitor all layers of the stack during tests.
-
-**Performance engineering is continuous**: Monitor performance in production, detect regressions, iterate on improvements. Embed performance in development culture.
+| Activity | Key technique | Watch for |
+|---|---|---|
+| **Specifying requirements** | Per-operation percentile targets at a stated load, latency budgets per step | Averages, system-wide targets, missing load conditions |
+| **Locating a bottleneck** | RED for services, USE for resources, tracing across services | Saturation hidden behind low utilization |
+| **Profiling** | CPU, allocation, wait analysis, query plans with realistic data | Laptop-scale data and load |
+| **Optimizing** | Do less, do once, do later, do in parallel, do closer, do cheaper | Optimizing a step that isn't dominant (Amdahl) |
+| **Load testing** | Open arrival-rate models, production-like data and dependencies | Coordinated omission, instant stubs |
+| **Capacity planning** | Peak load, failure headroom, utilization ceilings, first constraint | Latency rising non-linearly with utilization |
+| **Autoscaling** | Leading signals, warm-up allowance, slower scale-in, maximum bounds | Scaling a tier whose dependency is the bottleneck |
+| **Preventing regressions** | CI benchmarks, scheduled load tests, per-deployment latency tracking | Gradual drift no single change explains |

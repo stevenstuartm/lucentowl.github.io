@@ -3,453 +3,179 @@ title: "Architecture Governance"
 layout: guide
 category: Architecture
 subcategory: Governance
-description: "Principles, processes, and practices for governing software architecture decisions and ensuring alignment with business objectives"
-tags: [architecture, governance, leadership, decision-making, collaboration, standards]
+description: "How organizations decide who makes which architecture decisions and keep those decisions aligned: governance principles, decision rights at each scope, centralized, federated, community, and advice-process models, must/should/may standards, variance management, routing changes to the right level of review, and signs that governance has become theater or a bottleneck."
+tags: [practical, governance, decision-rights, architecture-review-board, advice-process, variance-management, standards]
 ---
 
-## Prerequisites
+Architecture governance is the set of decision rights, standards, and feedback loops an organization uses to keep architecture decisions aligned with its goals. It answers three questions. Who is allowed to make which decisions? What constraints do those decisions have to respect? How does the organization find out whether decisions are working, and change course when they aren't?
 
-This guide assumes familiarity with Architecture Decision Records (ADRs). If you haven't already, please review the [Architecture Decision-Making](/study-guides/architecture/architecture-decision-making.html) guide which covers ADRs in detail.
+Every organization with more than one team has governance, whether or not it's written down. Without deliberate governance, decision rights default to whoever is most senior, most persistent, or first to commit code, and standards live in the heads of a few people. Deliberate governance makes those things explicit so they can be examined and improved. Done badly, it becomes a queue of approvals that slows every team without preventing the problems it was meant to catch. The difference lies mostly in how it's designed.
 
-## What is Architecture Governance?
+## Principles
 
-<blockquote class="pull-quote">
-<p>Good governance enables teams rather than constraining them. It aligns with objectives, not rigid rules.</p>
-</blockquote>
+### Explain the Reason Behind Every Standard
 
-Architecture governance is the practice of establishing and enforcing processes, standards, and decision-making frameworks to ensure that software architecture aligns with business objectives, manages risk, and enables sustainable system evolution.
+A standard stated without its rationale gets followed where it doesn't fit and ignored where it does, because nobody can judge which case they're in. "Services must not share a database" is a rule. "Services must not share a database, because a shared schema couples their release schedules and hides who owns the data" lets a team recognize both when the rule protects them and when an exception might be justified. Standards with a stated reason are also easier to retire, since it's clear when the reason no longer applies.
 
-**Core purposes:**
-- Ensure architectural decisions support business strategy
-- Manage technical debt and risk
-- Maintain consistency across systems and teams
-- Enable informed trade-off decisions
-- Facilitate knowledge sharing and reusability
-- Protect architectural integrity over time
+### Enable Before Enforcing
 
-<div class="callout callout--warning">
-<p class="callout__title">Governance is NOT</p>
-<ul>
-<li>A bureaucratic approval process that slows down teams</li>
-<li>Command-and-control management</li>
-<li>A way to enforce personal preferences</li>
-<li>A replacement for technical leadership</li>
-</ul>
-</div>
+Teams follow the path that's easiest. When the approved way to build a service is also the fastest way, through templates, shared libraries, reference implementations, and pipelines with the right checks already in them, most teams comply without being asked. This is sometimes called a paved road. Enforcement then matters only for the few cases where the easy path doesn't apply, and automated checks catch many of those without anyone scheduling a review.
 
-## Key Principles
+### Make Decisions Visible
 
-### 1. Alignment Over Compliance
+Decisions recorded where everyone can read them, typically as architecture decision records, let teams learn from each other's reasoning, discover decisions that affect them, and avoid reopening questions that were settled for good reasons. Visibility also makes governance itself accountable, since a pattern of decisions made without consultation or variances granted inconsistently becomes apparent.
 
-Good governance aligns teams with objectives rather than enforcing rigid rules.
+### Scale Rigor to Risk
 
-**In practice:**
-- Define the "why" behind standards (not just the "what")
-- Allow variance with justification
-- Focus on outcomes, not process adherence
-- Regularly revisit and adapt standards
+A change to a payment flow and a change to an internal reporting script don't deserve the same scrutiny. Governance that reviews both the same way either slows low-risk work for nothing or waves high-risk work through. The level of review should follow from how much damage a wrong decision could do, how hard it would be to reverse, and how many teams it affects.
 
-### 2. Enablement Over Enforcement
+### Push Decisions to Where the Knowledge Is
 
-Governance should make teams more effective, not slow them down.
+The people closest to a problem usually understand its constraints best, and the people furthest from it are best placed to see effects across teams. Good governance assigns each decision to the level that holds the knowledge it needs, and keeps central decisions for the questions that genuinely span teams, such as shared platforms, cross-cutting security, and data that several domains depend on.
 
-**In practice:**
-- Provide self-service templates and tooling
-- Document patterns and anti-patterns
-- Offer office hours and consultations
-- Automate compliance checking where possible
+## Decision Rights
 
-### 3. Transparency and Visibility
+Governance becomes concrete when it states who decides what at each scope. The scopes nest, and a decision belongs to the smallest scope that contains all of its consequences.
 
-Decisions and their rationale should be visible to all stakeholders.
+| Scope | Typical decisions | Decides | Consulted |
+|---|---|---|---|
+| **Enterprise** | Cloud providers, identity platform, enterprise-wide security and data standards | Chief architect or architecture leadership, often with executive sponsors | Domain architects, security, finance |
+| **Domain or portfolio** | Integration patterns between systems in a domain, shared data ownership, domain-level technology choices | Domain or enterprise architects | Solution architects and teams in the domain |
+| **Solution** | Architecture style of one system, service boundaries, choice of datastore | Solution architect or lead engineer | Teams building it, owners of systems it integrates with |
+| **Team** | Internal design, libraries, code structure within a service | The team | Anyone whose interfaces are affected |
 
-**In practice:**
-- Publish architecture decisions publicly (within the organization)
-- Maintain accessible documentation
-- Share metrics and compliance status
-- Conduct open architecture reviews
-
-### 4. Proportional Rigor
-
-Not all systems require the same level of governance.
-
-| System Criticality | Governance Level | Review Frequency |
-|--------------------|------------------|------------------|
-| Core business systems | High | Every major change |
-| Customer-facing services | Medium-High | Quarterly + major changes |
-| Internal tools | Medium | Semi-annually |
-| Experimental projects | Low | As needed |
-
-### 5. Federated Decision-Making
-
-Distribute decision-making authority while maintaining alignment.
-
-**Decision levels:**
-- **Strategic**: Technology strategy, platform choices (centralized)
-- **Tactical**: System design, service boundaries (federated)
-- **Operational**: Implementation details, library choices (team autonomy)
+A decision that looks local can reach further than it seems. Choosing a new message broker for one service is a team decision until other services need to consume its events, at which point it has become a domain decision. The consequences decide the scope, not the org chart position of the person proposing the change.
 
 ## Governance Models
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Centralized Governance</h4>
-<p><strong>Structure:</strong> Central architecture team makes and enforces decisions.</p>
-<p><strong>Advantages:</strong></p>
-<ul>
-<li>Consistent standards</li>
-<li>Clear accountability</li>
-<li>Efficient for small organizations</li>
-<li>Strong control over critical systems</li>
-</ul>
-<p><strong>Disadvantages:</strong></p>
-<ul>
-<li>Can become bottleneck</li>
-<li>Limited scalability</li>
-<li>May lack domain context</li>
-<li>Risk of ivory tower syndrome</li>
-</ul>
-<p><strong>Best for:</strong> Small organizations, highly regulated industries</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Federated Governance</h4>
-<p><strong>Structure:</strong> Distributed decision-making with central coordination.</p>
-<p><strong>Advantages:</strong></p>
-<ul>
-<li>Scales with organization growth</li>
-<li>Leverages domain expertise</li>
-<li>Faster local decisions</li>
-<li>Better context awareness</li>
-</ul>
-<p><strong>Disadvantages:</strong></p>
-<ul>
-<li>Requires mature teams</li>
-<li>Risk of inconsistency</li>
-<li>More complex coordination</li>
-<li>Harder to enforce standards</li>
-</ul>
-<p><strong>Best for:</strong> Large organizations, microservices architectures</p>
-</div>
-</div>
+Organizations distribute decision rights in a few recognizable ways. Most real organizations combine them.
 
-### Guild-Based Governance
+| Model | How decisions are made | Strengths | Weaknesses | Fits |
+|---|---|---|---|---|
+| **Centralized** | A central architecture group makes significant decisions and approves others | Consistency, clear accountability | Becomes a bottleneck, loses domain context as the organization grows | Small organizations, early platforms, heavily regulated systems |
+| **Federated** | Domain architects decide within their domains, and a central group coordinates standards that span domains | Scales with the organization, keeps decisions near domain knowledge | Inconsistency between domains, coordination overhead | Large organizations with distinct business domains |
+| **Community-led** | Communities of practice, sometimes called guilds, develop standards and recommendations collaboratively | Strong buy-in, standards grounded in practice | Slow to converge, recommendations may lack authority | Organizations with strong engineering culture and mature teams |
+| **Advice process** | Anyone may make an architecture decision after seeking advice from those affected and those with expertise | Fast, decentralized, and still informed | Depends on people actually seeking and weighing advice, and on trust | Organizations moving away from review boards toward team autonomy |
 
-**Structure:** Communities of practice (guilds) establish and evolve standards collaboratively.
+### The Advice Process
 
-**Advantages:**
-- Bottom-up innovation
-- High buy-in from practitioners
-- Continuous improvement culture
-- Knowledge sharing across teams
+Andrew Harmel-Law's advice process takes decentralization furthest. Anyone can make an architecture decision, provided they first seek advice from two groups, the people meaningfully affected by it and people with relevant expertise. The decision-maker doesn't have to follow the advice, but has to seek it and record it, usually in the decision record alongside the options considered.
 
-**Disadvantages:**
-- Can be slow to decide
-- Requires active participation
-- May lack executive authority
-- Risk of design-by-committee
+Four supporting practices keep it from turning into every team doing as it pleases. Decision records make each decision and the advice behind it visible. A regular architecture advisory forum gives teams a place to present proposed decisions and hear advice, but it has no power to approve or block them. Team-sourced architecture principles give decisions a shared basis. An internal technology radar shows which technologies are being adopted, trialed, or retired.
 
-**Best for:** Organizations with strong engineering culture, Spotify-model companies, cross-functional teams.
+The advice process moves accountability onto the person deciding rather than onto a board that approved the decision. That shift is the point, and also the risk. It works where people take the consultation seriously, and it degrades into unilateral decisions with a paper trail where they don't.
 
-### Hybrid Governance
+### Combining Models
 
-**Structure:** Combines elements of multiple models based on context.
+A common combination keeps a small set of non-negotiable standards centralized, such as security, regulatory compliance, and a handful of platform choices. Communities of practice develop recommendations in their areas, and teams make everything else through an advice process or federated decision rights. Each model covers the decisions it handles best, and the organization states which model applies to which kind of decision.
 
-**Example:**
-- Central team sets strategic direction and non-negotiable standards
-- Guilds develop best practices and recommendations
-- Teams make implementation decisions within guardrails
+## Standards
 
-## Compliance and Standards
+### Must, Should, and May
 
-### Types of Standards
+Standards carry different weights, and blurring them makes all of them weaker. The keywords defined in RFC 2119 for specifications work well here.
 
-**Mandatory Standards (Must):**
-- Security requirements (authentication, encryption)
-- Regulatory compliance (GDPR, HIPAA, SOX)
-- Legal requirements (data residency, audit logging)
-- Non-negotiable business rules
+| Weight | Meaning | Examples |
+|---|---|---|
+| **Must** | Required, with deviation only through a formal variance | Encryption of personal data at rest, authentication through the identity platform, regulatory audit logging |
+| **Should** | The default, and deviating requires a documented reason but not approval | Preferred datastores, standard observability libraries, recommended architecture patterns |
+| **May** | Guidance teams can adopt or ignore | Coding conventions beyond the linter, suggested tools, documentation templates |
 
-**Recommended Standards (Should):**
-- Architectural patterns (microservices, event-driven)
-- Technology preferences (approved tech radar)
-- Design principles (12-factor app, cloud-native)
-- Quality attributes (performance SLAs, availability)
+A long list of musts is a warning sign. Each one needs enforcement, a variance process, and periodic review, and a standard that nobody enforces teaches teams that the whole list is optional. Keeping musts few, and moving everything else to should or may, gives the musts their weight back.
 
-**Guidelines (May):**
-- Coding conventions
-- Library preferences
-- Tool recommendations
-- Documentation templates
+Each standard also needs an owner, a stated scope, and a date for review. Standards without owners outlive the technology and constraints they were written for.
 
-### Compliance Verification
+### Verifying Compliance
 
-**Automated Compliance:**
-- Static code analysis for security vulnerabilities
-- Dependency scanning for license compliance
-- Infrastructure-as-code validation
-- API contract testing
-- Performance regression testing
+Checks that can be automated belong in the delivery pipeline, where they run on every change without anyone scheduling them. Dependency and license scanning, infrastructure policy checks, and rules about which components may depend on which all fall in this group. Manual review remains for what automation can't judge, such as whether a design fits the problem, whether trade-offs were weighed, and whether risks were identified.
 
-**Manual Compliance:**
-- Architecture reviews
-- Security audits
-- Threat modeling sessions
-- Design reviews
-- Compliance attestations
+## Variance Management
 
-### Variance Management
+No standard fits every situation, and a governance model without a way to deviate forces teams to choose between compliance that harms their system and quiet non-compliance. A variance process makes deviation explicit:
 
-Not every standard fits every context. Establish a clear variance process:
+1. **Request.** The team states which standard it wants to deviate from, why the standard doesn't fit, and what it proposes instead.
+2. **Assess.** Reviewers evaluate the risk of the deviation and whether a mitigation reduces it enough.
+3. **Decide.** The variance is granted, granted with conditions, or declined, with the reasoning recorded.
+4. **Record.** The variance is visible to others, so teams in similar situations can find it.
+5. **Expire.** Variances carry an end date or a review date, after which the team either complies or renews the case.
 
-1. **Request Variance:** Team documents why standard doesn't apply
-2. **Risk Assessment:** Architecture team evaluates impact
-3. **Decision:** Approve, deny, or request mitigation plan
-4. **Documentation:** Record variance and rationale
-5. **Review:** Periodic reassessment of approved variances
+Variances are also data about the standards. When many teams request variances from the same standard, the standard is more likely wrong than all of those teams. A governance group that tracks variance requests by standard learns where its standards need revising.
 
-## Roles and Responsibilities
+## Architecture Review
 
-### Chief Architect / Architecture Director
+### Routing Changes to the Right Level
 
-**Responsibilities:**
-- Define architecture strategy and vision
-- Establish governance framework
-- Make final decisions on strategic technology choices
-- Communicate with executive leadership
-- Allocate architecture resources
+Reviewing every change centrally doesn't scale, and reviewing none leaves cross-team risks unseen. Routing each proposed change to a level of review proportional to its risk handles both.
 
-**Success metrics:**
-- Strategic alignment of architecture with business goals
-- Architecture team effectiveness
-- Organization-wide adoption of standards
+```
+                    Proposed architecture change
+                                 │
+                                 ▼
+             Uses approved patterns and technology,
+             and its consequences stay within one team?
+                 │ yes                          │ no
+                 ▼                              ▼
+       ┌───────────────────┐    Crosses team or system boundaries,
+       │ Self-service      │    introduces new technology, or affects
+       │ Automated checks, │    security, compliance, or shared data?
+       │ team records the  │         │ no                    │ yes
+       │ decision          │         ▼                       ▼
+       └───────────────────┘  ┌──────────────────┐  ┌──────────────────────┐
+                              │ Peer review      │  │ Board-level review   │
+                              │ Another team or  │  │ Review board, or     │
+                              │ community of     │  │ broad advice from    │
+                              │ practice reviews │  │ affected teams and   │
+                              │ the design       │  │ experts              │
+                              └──────────────────┘  └──────────────────────┘
+```
 
-### Enterprise Architect
+The routing criteria should be published, so teams can place their own changes and nobody has to ask whether a review is needed. Irreversibility deserves extra weight. A decision that would be expensive to undo, such as a datastore choice or a public API contract, merits more scrutiny than a larger change that could be rolled back in a day.
 
-**Responsibilities:**
-- Define enterprise-wide standards and patterns
-- Ensure cross-system integration
-- Manage technical debt portfolio
-- Facilitate architecture reviews
-- Maintain technology radar
+### The Architecture Review Board
 
-**Success metrics:**
-- Consistency across systems
-- Successful system integrations
-- Reduction in duplicate capabilities
+An architecture review board (ARB) is a standing group that reviews significant decisions, grants variances from mandatory standards, resolves conflicts between teams, and maintains the standards themselves. Its members usually include senior architects from different domains, security, and experienced engineers who still work on delivery teams, since a board made only of people who no longer build systems tends to produce standards that don't work in practice.
 
-### Solution Architect
+The most common complaint about review boards is that they review too late. A design reviewed after it's built can only be approved or sent back for expensive rework. Boards that ask for a short written proposal early, while options are still open, and that read it before meeting rather than hearing it presented for the first time, spend their time on the discussion that improves the decision.
 
-**Responsibilities:**
-- Design solutions for specific business capabilities
-- Ensure alignment with enterprise standards
-- Collaborate with delivery teams
-- Create and maintain ADRs
-- Participate in governance reviews
+### What a Review Examines
 
-**Success metrics:**
-- Solution quality and fitness for purpose
-- Adherence to standards with appropriate variances
-- Delivery team effectiveness
+A review is most useful when it concentrates on what the team proposing the change is least placed to see for itself:
 
-### Team Architects / Tech Leads
+- **Fit with goals and characteristics.** Does the design deliver the architectural characteristics the system needs, and does it support the business outcome that justified the work?
+- **Effects beyond the team.** Which other systems, teams, or shared data does it touch, and have their owners been consulted?
+- **Risk and reversibility.** What could go wrong, how much damage would it do, and how hard would the decision be to undo?
+- **Operability.** Can it be monitored, supported, and recovered when it fails, and by whom?
+- **Consistency.** Does it follow existing standards, and if not, is there a variance with a good reason?
 
-**Responsibilities:**
-- Make tactical architecture decisions
-- Implement governance standards
-- Mentor team members
-- Participate in architecture guilds
-- Provide feedback on standards
+The team usually knows its own design's internals better than any reviewer. Reviews that re-derive internal design choices the team is better placed to make slow the process without adding much.
 
-**Success metrics:**
-- Team delivery velocity
-- Code quality and maintainability
-- Knowledge sharing within team
+## Measuring Whether Governance Works
 
-### Architecture Review Board (ARB)
+Governance costs time, so it needs evidence that it earns that time. Several signals indicate whether it does:
 
-**Composition:** Cross-functional team of architects, senior engineers, and stakeholders.
-
-**Responsibilities:**
-- Review significant architecture decisions
-- Approve variances from standards
-- Resolve architecture conflicts
-- Update governance policies
-
-**Meeting cadence:**
-- Weekly: Quick reviews for time-sensitive decisions
-- Monthly: Detailed reviews and retrospectives
-- Quarterly: Strategic planning and standard updates
-
-## Governance Processes
-
-### Architecture Review Process
-
-**Review levels based on risk and scope:**
-
-**Level 1: Self-Service (Low Risk)**
-- Use approved patterns and technologies
-- No formal review required
-- Automated compliance checks
-- Team architect approval
-
-**Level 2: Peer Review (Medium Risk)**
-- New implementation of known patterns
-- Changes to existing systems
-- Guild or architecture team review
-- 3-5 day turnaround
-
-**Level 3: ARB Review (High Risk)**
-- New technologies or patterns
-- Cross-system changes
-- High business impact
-- Security or compliance concerns
-- 1-2 week turnaround
-
-### Review Checklist
-
-**Business Alignment:**
-- Does this support business objectives?
-- What is the expected ROI?
-- Are there alternative approaches with better value?
-
-**Technical Quality:**
-- Does this follow established patterns?
-- Is it maintainable and testable?
-- Does it manage technical debt appropriately?
-- Are there performance or scalability concerns?
-
-**Risk Management:**
-- What are the technical risks?
-- What are the security implications?
-- What is the blast radius of failure?
-- Is there a rollback plan?
-
-**Operational Readiness:**
-- Is monitoring and observability adequate?
-- Are runbooks and documentation prepared?
-- Is the team trained and ready?
-- Are dependencies identified and managed?
-
-### Change Management
-
-**Architecture change categories:**
-
-| Change Type | Examples | Approval Required |
-|-------------|----------|-------------------|
-| Strategic | Platform migrations, technology strategy | Executive + ARB |
-| Significant | New patterns, cross-team changes | ARB |
-| Standard | Pattern implementation, service creation | Peer review |
-| Minor | Library updates, refactoring | Team approval |
-
-**Change communication:**
-- Announce changes to affected teams
-- Provide migration guides and timelines
-- Offer support and training
-- Monitor adoption and address issues
+- **Time to decision.** How long a change waits between asking for review and getting an answer. Growth here is the first sign of a bottleneck.
+- **Variance rate by standard.** Standards that attract frequent variances need revisiting.
+- **Bypass.** Teams building around governance, through unreviewed services or unapproved technology, signals that the formal path is too slow or too far from their needs.
+- **Issues caught.** Problems identified in review that would otherwise have reached production, such as a missed data ownership conflict or a security gap.
+- **Repeated incidents.** Production incidents whose root cause was a decision governance should have caught point to review criteria that miss something.
 
 ## Common Pitfalls
 
-### 1. Governance Theater
+- **Governance theater.** Reviews that approve everything, standards nobody enforces, and records nobody reads. The process exists and prevents nothing. Cut the reviews that never change an outcome, and put the time into the ones that do.
+- **The bottleneck.** Every change waits for a central group whose backlog keeps growing, and teams start routing around it. Tier the reviews, publish routing criteria, and push decisions outward.
+- **The ivory tower.** Standards written by people who no longer build systems don't survive contact with delivery. Keep reviewers involved in real delivery work, pilot standards before mandating them, and treat variance requests as feedback.
+- **Analysis paralysis.** Reviews that keep requesting more information and reopening settled decisions. Set decision deadlines, use time-boxed spikes for unknowns, and record what's still uncertain rather than waiting for certainty.
+- **Inconsistent enforcement.** Some teams are held to standards and others aren't, often legacy systems or favored projects. Apply standards evenly, record every variance, and give legacy systems a migration plan rather than a permanent exemption.
+- **Too many musts.** Every mandatory standard needs enforcement and a variance path. A long list dilutes all of them.
 
-<div class="callout callout--warning">
-<p class="callout__title">Anti-Pattern: Governance Theater</p>
-<p><strong>Problem:</strong> Process exists but provides no real value, becomes box-checking exercise.</p>
-<p><strong>Signs:</strong> Reviews rubber-stamp every decision | No one reads ADRs after approval | Standards exist but aren't enforced | Teams bypass governance processes</p>
-<p><strong>Solution:</strong> Demonstrate value through examples | Streamline processes | Show metrics on prevented issues | Make governance opt-in for low-risk changes</p>
-</div>
+## Quick Reference
 
-### 2. Bottleneck Governance
-
-**Problem:** Governance team becomes a constraint on delivery velocity.
-
-**Signs:**
-- Review backlog grows continuously
-- Teams wait weeks for approvals
-- Frustrated delivery teams
-- Shadow IT emerges
-
-**Solution:**
-- Implement tiered review process
-- Increase self-service options
-- Distribute decision-making authority
-- Add governance capacity
-
-### 3. Ivory Tower Architecture
-
-**Problem:** Governance team disconnected from implementation reality.
-
-**Signs:**
-- Standards that don't work in practice
-- Decisions made without team input
-- Lack of recent hands-on experience
-- High variance request rate
-
-**Solution:**
-- Architects maintain hands-on involvement
-- Rotate team members through architecture roles
-- Solicit feedback on standards
-- Pilot new standards before mandating
-
-### 4. Analysis Paralysis
-
-**Problem:** Over-analysis delays decisions indefinitely.
-
-**Signs:**
-- Reviews take weeks or months
-- Constant requests for more information
-- Decisions reopened repeatedly
-- Perfect solution sought
-
-**Solution:**
-- Set decision deadlines
-- Use timeboxed spikes for unknowns
-- Accept "good enough" decisions
-- Document what's unknown and plan to learn
-
-### 5. Inconsistent Enforcement
-
-**Problem:** Standards enforced selectively, creating perceived unfairness.
-
-**Signs:**
-- Some teams bypass governance
-- Favoritism accusations
-- Standards apply only to new projects
-- Legacy systems exempt indefinitely
-
-**Solution:**
-- Apply standards consistently
-- Document all variances transparently
-- Create migration plans for legacy systems
-- Regular audits of compliance
-
-## Key Takeaways
-
-**Governance foundations:**
-- Architecture governance ensures alignment between technical decisions and business objectives
-- Effective governance enables teams rather than constraining them
-- Transparency and proportional rigor are essential principles
-- See the Architecture Decisions & Leadership guide for ADR best practices
-
-**Decision-making:**
-- Federate decisions based on scope and impact
-- Balance speed with appropriate oversight
-- Use tiered review processes for different risk levels
-
-**Process design:**
-- Tiered review processes scale better than one-size-fits-all
-- Automate compliance checking wherever possible
-- Make low-risk decisions self-service
-- Establish clear variance management process
-
-**Organizational models:**
-- Choose governance model based on organization size, maturity, and culture
-- Centralized for small/regulated, federated for scale, guild-based for culture
-- Hybrid approaches work well for most organizations
-- Define clear roles and responsibilities
-
-**Avoiding common mistakes:**
-- Don't create governance theater that adds no value
-- Don't become a bottleneck by requiring review of everything
-- Stay connected to implementation reality
-- Make decisions with incomplete information rather than delaying indefinitely
-- Enforce standards consistently and transparently
+| Element | Purpose | Keeps it healthy |
+|---|---|---|
+| **Principles** | Explain reasons, enable before enforcing, make decisions visible, scale rigor to risk, decide near the knowledge | Revisit when decisions keep going against them |
+| **Decision rights** | State who decides at enterprise, domain, solution, and team scope | Assign by the reach of consequences, not by seniority |
+| **Governance model** | Centralized, federated, community-led, advice process, or a stated combination | Say which model applies to which kind of decision |
+| **Standards** | Must, should, and may, each with a reason, owner, scope, and review date | Keep musts few and enforced |
+| **Variances** | A visible, expiring path to deviate from a standard | Track variance rate per standard to find standards that are wrong |
+| **Review routing** | Self-service, peer review, or board-level review by risk and reach | Publish criteria, weight irreversibility, review early |
+| **Measurement** | Time to decision, variance rate, bypass, issues caught | Act on the bottleneck and bypass signals first |

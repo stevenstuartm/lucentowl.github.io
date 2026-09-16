@@ -6,7 +6,7 @@ Guides are consumed sequentially in config order. That order encodes the fundame
 
 **The checklist, the Phase 0 method, the process rules, and the cross-domain gotchas live in [`.claude/content/guide-refinement-standard.md`](../.claude/content/guide-refinement-standard.md).** Read it first. This document carries only what is specific to this pass.
 
-**Current position: Phase 1, row 30.**
+**Current position: Phase 1, row 38.**
 
 ---
 
@@ -116,7 +116,7 @@ Links from in-scope guides to the two out-of-scope guides in the directory are a
 - **Distributed coordination:** the Raft paper (Ongaro & Ousterhout, 2014), Kleppmann's *Designing Data-Intensive Applications*, and Kleppmann's "How to do distributed locking" for Redlock's safety limits. Garcia-Molina & Salem (1987) for saga origin.
 - **Legacy modernization:** Feathers, *Working Effectively with Legacy Code*. Newman, *Monolith to Microservices*.
 - **APIs:** RFC 9110 (HTTP semantics), RFC 9457 (problem details), RFC 6902, RFC 7396, RFC 4511, the GraphQL specification, grpc.io and protobuf.dev, Kubernetes docs for server-side apply, OASIS OData v4.01.
-- **Modeling:** c4model.com, the OMG UML 2.5.1 specification, The Open Group ArchiMate 3.2.
+- **Modeling:** c4model.com, the OMG UML 2.5.1 specification, The Open Group ArchiMate 4 (April 2026).
 - **Governance:** The Open Group TOGAF Standard, zachman.com, the AWS and Azure well-architected docs, ArchUnitNET's repository and docs, Roslyn analyzer docs on Microsoft Learn, SonarQube docs, Open Policy Agent docs.
 - **Service mesh:** istio.io, linkerd.io, HashiCorp Consul docs.
 - **Testing:** Pact docs, Fowler's "The Practical Test Pyramid", Stryker docs for mutation testing, FsCheck or CsCheck docs for property-based testing in C#.
@@ -183,19 +183,16 @@ Verified during earlier rows; applies to every remaining guide that touches the 
 
 - **OData delta payloads flow both ways** (OASIS OData 4.01 Protocol, section 11.4.12, checked row 29): clients can PATCH a collection with a delta payload, applied as upserts and deletions, with an optional continue-on-error mode. Also, .NET 10 ASP.NET Core JSON Patch uses System.Text.Json via Microsoft.AspNetCore.JsonPatch.SystemTextJson, and RFC 9110 obsoletes RFC 7232 for conditional requests.
 
+- **Diagramming standards and tools** (c4model.com, The Open Group, structurizr.com, checked row 31): C4 is notation-independent and has three supplementary diagrams (system landscape, dynamic, deployment), so a guide saying C4 can't show runtime flows or deployment is wrong. ArchiMate 4 was released in April 2026 and replaces 3.2 as current. The Structurizr cloud service shut down on 30 September 2026; the DSL and self-hosted tooling continue. Mermaid's C4 support is still experimental. "Irrational artifact attachment" is Neal Ford's term (2008), repeated in *Fundamentals of Software Architecture*.
+
+- **Framework and standard versions** (opengroup.org, ISACA, PeopleCert, DoD CIO, AWS docs, checked row 37): TOGAF Standard 10th Edition (April 2022) is current, split into Fundamental Content and Series Guides, so TOGAF 9.2 links and references are stale. ITIL (Version 5) launched in 2026 and succeeds ITIL 4. COBIT 2019 is current. DoDAF 2.02 is current, with UAF as its positioned successor. AWS Well-Architected has six pillars including sustainability.
+
 ## Open pre-flags
 
 Leads for rows not yet done. **A pre-flag is a lead, not a finding.** Re-verify before acting. Delete the entry once its row is complete.
 
 | Target row | Lead |
 |---|---|
-| 30 multi-tenant-architecture | New guide. The seed holds only an intro paragraph and a planned outline in an HTML comment; write the guide to that scope. |
-| 31 c4-model | The *Diagramming Discipline* section came in with Phase 0; check "irrational artifact attachment" attribution (Richards & Ford). "Context and Container diagrams provide 80% of the value" is unsourced. |
-| 32 uml-diagrams | Section headings assign usage percentages (Class 80%, Sequence 70%, and so on) with no source. Likely invented. |
-| 33 architecture-risk-analysis | New guide seeded from terse notes. Write the explanation around the matrix and the storming phases, and check the scoring bands and the "unproven technology scores 9" rule against Richards & Ford. |
-| 34 testing-strategy-architecture | Check attribution of the test pyramid and any alternative shapes (trophy, honeycomb). *Performance Testing* and *Security Testing* drop to clauses. |
-| 36 governance | Opens with a *Prerequisites* callout pointing at the ADR guide. Prerequisite framing goes, even though its target is out of scope. |
-| 37 governance-frameworks | Check the current TOGAF Standard edition and the AWS Well-Architected pillar count before the section drops to a clause. |
 | 38 governance-tools | The SonarQube quality gate shown as YAML may not be a real SonarQube configuration format. Check the ArchUnitNET API calls (`ResideInNamespace` signature) and NDepend's "< 50k LOC" threshold. The *Policy as Code for Infrastructure* and *Rolling Out Automation* sections were written in Phase 0 and need item 1 like any new prose. |
 | 39 total-cost-of-ownership, 40 return-on-investment | Worked examples carry dollar figures. Confirm each is framed as illustrative, not as a benchmark. Both repeat "use ranges, not point estimates", "post-implementation reviews", and an observability-investment example; each topic needs one owner per the map. |
 
@@ -239,14 +236,14 @@ Claims on finished guides that could not be confirmed against a source. Each was
 | 27 | Design | api-design-architecture.md | Complete |
 | 28 | Design | grpc-architecture-design.md | Complete |
 | 29 | Design | expressing-change-intent-in-api-payloads.md | Complete |
-| 30 | Design | multi-tenant-architecture.md | In progress |
-| 31 | Modeling | c4-model.md | Not started |
-| 32 | Modeling | uml-diagrams.md | Not started |
-| 33 | Quality & Risk | architecture-risk-analysis.md | Not started |
-| 34 | Quality & Risk | testing-strategy-architecture.md | Not started |
-| 35 | Quality & Risk | performance-engineering.md | Not started |
-| 36 | Governance | governance.md | Not started |
-| 37 | Governance | governance-frameworks.md | Not started |
-| 38 | Governance | governance-tools.md | Not started |
+| 30 | Design | multi-tenant-architecture.md | Complete |
+| 31 | Modeling | c4-model.md | Complete |
+| 32 | Modeling | uml-diagrams.md | Complete |
+| 33 | Quality & Risk | architecture-risk-analysis.md | Complete |
+| 34 | Quality & Risk | testing-strategy-architecture.md | Complete |
+| 35 | Quality & Risk | performance-engineering.md | Complete |
+| 36 | Governance | governance.md | Complete |
+| 37 | Governance | governance-frameworks.md | Complete |
+| 38 | Governance | governance-tools.md | In progress |
 | 39 | Business & Economics | total-cost-of-ownership.md | Not started |
 | 40 | Business & Economics | return-on-investment.md | Not started |

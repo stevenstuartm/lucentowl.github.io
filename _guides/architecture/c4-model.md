@@ -3,170 +3,155 @@ title: "C4 Model"
 layout: guide
 category: Architecture
 subcategory: Modeling
-description: "A pragmatic approach to software architecture diagrams focused on clarity and context"
-tags: [architecture, modeling, documentation, diagrams, practical, fundamentals]
+description: "Diagramming software architecture with the C4 model: its abstractions and what a container really is, the four zoom levels and the landscape, dynamic, and deployment diagrams, notation rules, how many levels to draw, pairing C4 with UML, diagrams as code, and the habits that keep any diagram useful."
+tags: [practical, c4, diagrams, documentation, structurizr, archimate]
 ---
 
-## What is the C4 Model?
+The [C4 model](https://c4model.com/){:target="_blank" rel="noopener noreferrer"} is a way of diagramming software architecture as a set of maps at different zoom levels, created by Simon Brown. It grew out of his software architecture training between 2006 and 2011, drawing on UML and the 4+1 architectural view model. The model separates two things that diagrams usually blur. A small set of abstractions describes what a system is made of, and a set of diagrams each shows those abstractions at one level of detail. Because every diagram shares the same abstractions, a reader can move from a whole-system view down into one part of it without the vocabulary changing underneath them.
 
-The C4 model is a hierarchical approach to software architecture diagramming created by [Simon Brown](https://simonbrown.je/){:target="_blank" rel="noopener noreferrer"}. It provides four levels of abstraction (Context, Containers, Components, and Code) that work like a map zoom function for software systems. Each level reveals appropriate detail for its audience without overwhelming them with implementation specifics that rapidly become outdated.
+## The Abstractions
 
-<blockquote class="pull-quote">
-<p>C4 focuses on what matters when it matters, showing only the information relevant to each level of abstraction.</p>
-</blockquote>
+C4 describes a system with a short hierarchy of building blocks. Each level is made of the one below it, and each diagram shows one level at a time.
 
-The model was created in response to the problems with traditional UML diagrams: they often show too much detail too early, use inconsistent notation across teams, and focus on implementation details that change frequently rather than architectural decisions that remain stable.
+| Abstraction | What it is | Example |
+|---|---|---|
+| **Person** | A human user of the software system, such as a role or persona | Customer, support agent |
+| **Software system** | The highest level of abstraction, something that delivers value to its users, whether yours or someone else's | Online store, external payment provider |
+| **Container** | An application or data store that has to be running for the software system to work | Web app, API, database, serverless function, blob store |
+| **Component** | A grouping of related functionality behind a well-defined interface, inside one container | Order validation, payment gateway client |
+| **Code** | The classes, interfaces, functions, or tables that implement a component | `OrderValidator`, `orders` table |
 
-### The Four Levels
+Two of these names are commonly misread. A C4 **container** is not a Docker container. The term predates containerization's popularity and means any separately running application or data store, so a React single-page app, a PostgreSQL database, and an AWS Lambda function are all containers whether or not Docker is involved. A C4 **component** is not separately deployable. Components run inside their container's process, and the container is the unit of deployment. In a microservices architecture, each service is a container, or a small group of containers such as an API plus its database, and the modules inside it are components.
 
-The C4 model defines four hierarchical diagram types, each serving a different purpose:
+## The Diagrams
 
-**Level 1: System Context**
-Shows the system being built and its relationships with external systems and users. This is the big picture view that answers "What does this system interact with?" It's technology-agnostic and focuses on people (actors, roles, personas) and software systems (external dependencies, other systems).
+### Four Zoom Levels
 
-**Level 2: Container**
-Zooms into the system to show the high-level technology choices: web applications, mobile apps, databases, message brokers, file systems. A container is something that hosts code or data and executes as part of the system. This level answers "What are the major technology building blocks and how do they communicate?"
+The four core diagrams each zoom one step further into the same system.
 
-**Level 3: Component**
-Zooms into an individual container to show the components inside it. A component is a grouping of related functionality encapsulated behind an interface. This level shows the major structural building blocks and their interactions within a single container. It answers "How is this container structured internally?"
+**System context** shows the software system as a single box, the people who use it, and the other software systems it depends on or feeds. It shows what the system is for and what it touches, with no technology detail, which makes it readable by non-technical stakeholders.
 
-**Level 4: Code**
-Optional level showing how a specific component is implemented using classes, interfaces, or database schemas. This level is often skipped because it provides limited value. The code itself is typically more up-to-date than diagrams, and modern IDEs can generate these views automatically.
+**Container** zooms into the system boundary and shows the applications and data stores inside it, the technology of each, and how they communicate. It is the diagram most useful to developers and operations staff, because it shows the major technology decisions and where the network calls are.
 
-### Core Principles
+**Component** zooms into one container and shows the components inside it and their relationships. It helps when a container is large or complex enough that its internal structure isn't obvious from the code layout.
 
-**Abstraction over detail**: Each level hides the complexity of lower levels. A context diagram doesn't show containers; a container diagram doesn't show components. This prevents cognitive overload and keeps diagrams focused.
+**Code** zooms into one component and shows its implementation, typically as a UML class diagram or an entity-relationship diagram. The C4 site recommends it only for the most important or complex components, generated from code where possible, since hand-drawn class diagrams drift from the code quickly.
 
-**Consistency in notation**: C4 uses simple shapes (boxes and lines) with consistent meaning across all diagrams. A person is always shown the same way. A container is always shown the same way. This reduces the learning curve and makes diagrams easier to scan.
+A container diagram for a small online store looks like this:
 
-**Technology labels matter**: C4 explicitly labels technology choices on diagrams (e.g., "React SPA", "PostgreSQL Database", "REST API"). This makes architecture decisions visible and helps readers understand constraints and integration points.
+```
+   ┌──────────────────────┐
+   │ Customer             │
+   │ [Person]             │
+   └──────────┬───────────┘
+              │ Places orders using [HTTPS]
+┌─────────────┼──── Online Store [Software System] ─────────────────────────┐
+│             ▼                                                             │
+│  ┌──────────────────────┐              ┌──────────────────────────┐       │
+│  │ Web App              │  Calls API   │ Orders API               │       │
+│  │ [Container: React]   │─────────────▶│ [Container: ASP.NET Core]│       │
+│  └──────────────────────┘ [JSON/HTTPS] └────────────┬─────────────┘       │
+│                                                     │ Reads and writes    │
+│                                                     │ [SQL/TCP]           │
+│                                                     ▼                     │
+│                                        ┌──────────────────────────┐       │
+│                                        │ Orders Database          │       │
+│                                        │ [Container: PostgreSQL]  │       │
+│                                        └──────────────────────────┘       │
+└───────────────────────────────────────────────────────────────────────────┘
+```
 
-**Audience-appropriate detail**: Different stakeholders need different views. Product managers care about system context. Developers care about container and component structures. C4 provides exactly the right level of detail for each audience.
+Every element names its type and technology, every arrow points one way and says what the relationship is, and the outer boundary makes clear which containers belong to this system.
 
-## Why C4 Over UML?
+### Supplementary Diagrams
 
-UML provides extensive notation for many purposes: class diagrams, sequence diagrams, activity diagrams, state diagrams, deployment diagrams. This flexibility becomes a problem when teams use different diagram types inconsistently, notation varies between tools and individuals, and diagrams often show implementation details that become stale as soon as code changes.
+The four levels show static structure. C4 adds three diagram types for views that static structure can't give.
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>C4 Model Advantages</h4>
-<ul>
-<li><strong>Focused scope</strong>: Specifically targets software architecture diagramming</li>
-<li><strong>Simple notation</strong>: Boxes and lines with labels, no memorization required</li>
-<li><strong>Stable abstractions</strong>: Documents architectural decisions that remain stable over time</li>
-<li><strong>Technology visibility</strong>: Makes technology choices explicit at each level</li>
-<li><strong>Hierarchy prevents chaos</strong>: Enforces discipline through levels (Context → Container → Component)</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>UML Challenges</h4>
-<ul>
-<li><strong>General-purpose</strong>: Many diagram types with inconsistent usage across teams</li>
-<li><strong>Complex notation</strong>: Requires memorizing arrow types, line styles, and symbols</li>
-<li><strong>Implementation focus</strong>: Often shows details that change frequently and become stale</li>
-<li><strong>Disconnected views</strong>: Deployment diagrams often separate from logical views</li>
-<li><strong>Permissive</strong>: Teams can jump to detailed class diagrams prematurely</li>
-</ul>
-</div>
-</div>
+| Diagram | What it shows | Use it when |
+|---|---|---|
+| **System landscape** | Many software systems and people across an organization, without zooming into any one | An organization has more systems than one context diagram can place |
+| **Dynamic** | Elements from a static diagram collaborating at runtime for one use case or feature, with numbered interactions | A flow such as sign-in or checkout crosses several containers or components and the order matters |
+| **Deployment** | How containers map onto infrastructure, such as nodes, clusters, regions, and environments | Where things run affects availability, latency, or security decisions |
 
-## When to Use C4
+A dynamic diagram can be drawn in collaboration style, with numbered arrows on the same boxes as the static diagram, or as a sequence diagram. A deployment diagram reuses the same containers, placed inside deployment nodes that can nest, such as a container inside a Kubernetes pod inside a cluster inside a cloud region.
 
-C4 works best for documenting and communicating software architecture:
+## Notation
 
-**System understanding**: When new team members join, when stakeholders need visibility into technical decisions, or when multiple teams need to understand system boundaries and integration points.
+C4 is deliberately independent of notation and tooling. It doesn't mandate shapes, colors, or line styles, and relies instead on a few rules that make any notation readable:
 
-**Architecture decision records**: C4 diagrams provide visual context for architectural decisions. A container diagram shows why you chose specific technologies. A component diagram shows the modular structure that enables testing or replacement.
+- **Every diagram has a title** naming the diagram type and scope, such as "Container diagram for Online Store".
+- **Every diagram has a key or legend** explaining shapes, colors, line styles, and any acronyms.
+- **Every element states its type** (person, software system, container, component), a short description, and for containers and components, its technology.
+- **Every line is unidirectional and labeled** with a description consistent with its direction, such as "Reads from and writes to" rather than "Uses". Relationships between containers also name the protocol, such as JSON/HTTPS or AMQP.
 
-**API and integration documentation**: Container diagrams clearly show external interfaces and communication patterns. They help teams understand what protocols, data formats, and authentication mechanisms are in use.
+Colors and shapes are free choices, provided they stay consistent across a set of diagrams and remain readable in black and white or by someone with color blindness. Common uses include shading external systems differently from internal ones, or marking parts of the system that are being replaced.
 
-**Planning and design**: Before building, create context and container diagrams to explore system boundaries and technology choices. This surfaces questions early and aligns teams on the big picture.
+## How Many Levels to Draw
 
-**Refactoring and migration planning**: Existing systems benefit from retrospective C4 diagrams. Documenting the current state makes it easier to identify pain points and plan changes. C4's hierarchical approach helps teams see both the forest (system context) and the trees (component structure).
+Not every system needs every diagram. The C4 site's own guidance is that system context and container diagrams are sufficient for most software development teams. Those two diagrams change only when the system gains or loses a dependency, a deployable part, or a communication path, so they stay accurate with modest effort.
 
-## When NOT to Use C4
+Component diagrams earn their upkeep for containers whose internal structure is complex, contested, or about to be reorganized. For most containers the component view changes as often as the code does, and a diagram that isn't generated from the code tends to fall behind it. Code diagrams rarely repay the effort of drawing them by hand at all.
 
-C4 has specific boundaries where other approaches work better:
+A sensible default is to draw the context and container diagrams for every system, add dynamic diagrams for the handful of flows people repeatedly ask about, add a deployment diagram when infrastructure placement drives a decision, and draw component diagrams only where a specific container needs one.
 
-**Detailed behavior and workflows**: C4 shows structure, not behavior. If you need to document complex business processes, decision trees, or state transitions, use UML activity diagrams, state diagrams, or BPMN.
+## C4 and UML
 
-**Runtime interactions and message flows**: C4 container and component diagrams show static relationships, not runtime sequences. For showing how objects collaborate during a specific operation, use UML sequence diagrams or collaboration diagrams.
+C4 doesn't replace UML. The C4 FAQ says plainly that a team for whom UML, SysML, or ArchiMate is working should keep using it. C4 is aimed at teams that found those notations too heavy to use consistently, and it borrows from UML where UML does the job well.
 
-**Data modeling**: C4 shows databases as containers and relationships between components and databases, but it doesn't model entity relationships, schemas, or data flows. Use entity-relationship diagrams (ERDs) or data flow diagrams for data-centric views.
+The two fit together by concern. C4's diagrams show structure at the architecture level, and UML supplies detail C4 leaves out.
 
-**Infrastructure and deployment details**: C4 containers show what needs to be deployed, but not how it's deployed. For showing servers, network zones, load balancers, and infrastructure topology, use deployment diagrams or infrastructure diagrams (often using tools like Cloudcraft or draw.io).
+| Need | C4 diagram | Where UML or another notation adds more |
+|---|---|---|
+| System scope and external dependencies | System context | None needed |
+| Deployable parts and technology choices | Container | None needed |
+| Internal structure of one container | Component | UML component or package diagrams, if the team already uses them |
+| A runtime flow across parts | Dynamic | UML sequence diagram for detailed message ordering, alternatives, and loops |
+| Placement on infrastructure | Deployment | UML deployment diagram, or cloud provider icon diagrams for network detail |
+| Class-level design | Code | UML class diagram |
+| Lifecycle of a stateful entity | None | UML state machine diagram |
+| Business process or workflow logic | None | UML activity diagram or BPMN |
+| Database schema | None | Entity-relationship diagram |
 
-**Class-level design**: C4 deliberately avoids detailed class structures. If you need to show inheritance hierarchies, design patterns, or detailed object interactions, use UML class diagrams, but recognize that these diagrams become outdated quickly.
+Mixing works best when each diagram adds information the others don't. A container diagram that already shows the Orders API reading from PostgreSQL doesn't need a UML deployment diagram restating that dependency. A sequence diagram for the checkout flow, an entity-relationship diagram for the orders schema, and a state diagram for an order's lifecycle each add something the container diagram can't show.
 
-## Mixing C4 and UML
+## Diagrams as Code
 
-C4 and UML complement each other when used appropriately. The goal is to use each approach where it provides the most value.
+Drawing tools produce diagrams quickly, but each diagram is a separate picture, so renaming a container means editing every diagram it appears in. Diagrams as code define elements in text and render views from it. The text lives in version control, changes go through code review, and with a model-based tool every view that includes an element updates when the element changes.
 
-**Use C4 for stable architecture views**:
-- System Context (Level 1) → Shows system boundaries and external dependencies
-- Container (Level 2) → Shows major technology choices and how they communicate
-- Component (Level 3) → Shows internal structure of containers
+- **[Structurizr](https://structurizr.com/){:target="_blank" rel="noopener noreferrer"}**, from Simon Brown, uses a DSL that defines one model and many views of it, which matches C4's separation of abstractions from diagrams. Its hosted cloud service shut down on 30 September 2026, and the tooling continues as self-hosted and local products.
+- **[C4-PlantUML](https://github.com/plantuml-stdlib/C4-PlantUML){:target="_blank" rel="noopener noreferrer"}** adds C4 element and relationship macros to PlantUML. Each diagram is its own file, so it is diagram-centric rather than model-centric.
+- **[Mermaid](https://mermaid.js.org/syntax/c4.html){:target="_blank" rel="noopener noreferrer"}** renders C4 diagrams inline in Markdown on platforms that support Mermaid, though its C4 syntax is still marked experimental.
 
-**Use UML for behavior and interactions**:
-- Sequence diagrams → Show runtime message flows for complex operations
-- State diagrams → Show lifecycle and state transitions for stateful entities
-- Activity diagrams → Show business process flows and decision logic
-
-**Use ERDs for data modeling**:
-- Entity-relationship diagrams → Show database schemas and relationships
-- Data flow diagrams → Show how data moves through the system
-
-**Practical example**: You might have a C4 Container diagram showing an API Gateway, Authentication Service, Order Service, and PostgreSQL database. Then supplement it with:
-- A UML sequence diagram showing the authentication flow across containers
-- An ERD showing the Order Service's database schema
-- A state diagram showing order lifecycle states
-
-**Key principle**: Don't duplicate information. If a C4 diagram already shows that the Order Service depends on PostgreSQL, don't create a UML deployment diagram that shows the same thing. Each diagram should add new information, not repeat what's already documented.
-
-## Creating Effective C4 Diagrams
-
-<div class="callout callout--tip">
-<p class="callout__title">Best Practices for C4 Diagrams</p>
-<p><strong>Start at the top</strong>: Always begin with a System Context diagram. This forces you to define system boundaries and identify external dependencies before diving into implementation details.</p>
-<p><strong>Label everything</strong>: Every box should have a name and a type (Person, Software System, Container, Component). Every line should have a label describing the interaction (e.g., "Makes API calls to", "Reads from and writes to", "Sends events to").</p>
-<p><strong>Show technology explicitly</strong>: On Container and Component diagrams, include technology choices in square brackets (e.g., "Web Application [React]", "Database [PostgreSQL]", "API [ASP.NET Core]"). This makes architecture decisions visible.</p>
-<p><strong>Use color meaningfully</strong>: Differentiate internal vs. external systems, or highlight specific areas of concern (e.g., legacy vs. new systems). But don't overdo it; too many colors create visual noise.</p>
-<p><strong>Keep it current</strong>: Unlike code-level diagrams, C4 diagrams should be maintained as the architecture evolves. When you add a new container or change how containers communicate, update the diagrams. This is feasible because C4 focuses on stable abstractions.</p>
-<p><strong>Stop at the right level</strong>: Not every system needs all four levels. Many teams find that Context and Container diagrams provide 80% of the value. Only create Component diagrams for containers with significant complexity. Skip Code diagrams unless you need them for onboarding or teaching purposes.</p>
-</div>
-
-**Use diagramming-as-code tools**: Tools like [Structurizr](https://structurizr.com/){:target="_blank" rel="noopener noreferrer"}, [PlantUML](https://plantuml.com/){:target="_blank" rel="noopener noreferrer"} with C4 extensions, or [Diagrams](https://diagrams.mingrammer.com/){:target="_blank" rel="noopener noreferrer"} let you define diagrams in code. This makes them versionable, reviewable, and easier to keep in sync with architecture changes.
+A model-based tool keeps many views consistent with each other. A diagram-based tool is lighter to adopt when a team needs only a context and a container diagram.
 
 ## Diagramming Discipline
 
-These habits apply to any architecture diagram, C4 or not.
+These habits apply to any architecture diagram, C4 or not. Richards and Ford describe the first two in *Fundamentals of Software Architecture*.
 
-**Representational consistency**: Show relationships between parts of the architecture before changing views, and show context before details, so readers always know where a diagram sits in the whole.
+**Representational consistency** means showing how a part relates to the whole before changing views, so a reader always knows where a detailed diagram sits. C4's zoom levels are one way to achieve it, and a component diagram that doesn't say which container it zooms into breaks it.
 
-**Avoid irrational artifact attachment**: Attachment to a diagram grows with the time spent on it, which makes it harder to change. Use low-fidelity sketches early, while the design is still moving, so iteration stays cheap.
+**Irrational artifact attachment** is Neal Ford's name for the tendency to defend an artifact in proportion to how long it took to make. A polished diagram built over two days is harder to throw away than a whiteboard sketch, even when the design it shows is wrong. Low-fidelity sketches while a design is still moving keep iteration cheap, and polish belongs to diagrams of decisions that have settled.
 
-**ArchiMate**: An open standard from The Open Group for modeling enterprise ecosystems, designed to be as small as possible. Consider it when diagrams must span business, application, and technology layers across an enterprise rather than a single system.
+**ArchiMate** is an open standard from The Open Group for modeling across an enterprise, spanning business, application, and technology concerns in one language. It was designed around a deliberately small set of concepts, and version 4, released in April 2026, reduced that set further. It fits when diagrams have to connect business capabilities and processes to the applications and infrastructure that support them across many systems, a scope C4's system landscape diagram only touches.
 
 ## Common Pitfalls
 
-**Mixing abstraction levels**: Don't show components on a container diagram or containers on a context diagram. Each level should maintain its focus. If readers need more detail, create a separate diagram at the next level down.
+- **Mixing abstraction levels on one diagram.** Components appearing on a container diagram, or containers on a context diagram, blur which question the diagram answers. Draw the next level as a separate diagram.
+- **Reading "container" as Docker.** A container diagram that shows Docker images but leaves out the database, the single-page app, or the serverless functions misses much of what the level is meant to show.
+- **Diagrams without a legend.** C4's freedom of notation depends on the key. A diagram whose colors and line styles mean something only to its author is the problem C4 set out to fix.
+- **Unlabeled or bidirectional arrows.** A line between two boxes with no label says they are related and nothing about how. "Uses" is barely better.
+- **Starting at the component level.** Detailed internal diagrams drawn before the context and container views are settled describe parts of a system whose boundaries nobody has agreed on.
+- **Forcing runtime behavior onto static diagrams.** Numbered steps added to a container diagram turn it into a confusing dynamic diagram. Draw a dynamic or sequence diagram for the flow.
+- **Hand-drawn diagrams nobody updates.** A diagram that drifts from the system misleads more than a missing one. Keep the diagrams that change rarely, generate the ones that change often, and delete the rest.
 
-**Too much detail too early**: Teams often jump to Component or Code diagrams before establishing context and container boundaries. This leads to confusion about what the system actually does and how it fits into the larger ecosystem.
+## Quick Reference
 
-**Stale diagrams**: C4 diagrams lose value when they drift from reality. If you add a new microservice but don't update the container diagram, the documentation becomes misleading. Treat C4 diagrams as living artifacts that evolve with the architecture.
-
-**Using C4 for runtime behavior**: C4 shows static structure, not runtime behavior. If you find yourself trying to show sequence or order of operations on a C4 diagram, you need a UML sequence diagram instead.
-
-**Inconsistent notation**: Teams sometimes create "hybrid" diagrams mixing C4 boxes with UML notation or custom shapes. This defeats the purpose of C4's simplicity. Stick to the standard notation or supplement with separate UML diagrams.
-
-**Over-documenting stable components**: Not every component needs deep documentation. Focus C4 effort on areas of high complexity, frequent change, or cross-team integration. Stable, well-understood components often don't need detailed diagrams.
-
-## Key Takeaways
-
-C4 provides a pragmatic, hierarchical approach to software architecture diagramming that focuses on what matters: system boundaries, technology choices, and component organization. Unlike UML, which provides extensive notation for many purposes, C4 deliberately constrains scope to maintain simplicity and consistency.
-
-Use C4 for documenting stable architectural decisions. Use UML for behavior, interactions, and data modeling. Use each approach where it provides the most value, and avoid duplicating information across diagrams.
-
-The model's strength lies in its focus on abstraction over detail. By providing exactly the right level of information for each audience (context for stakeholders, containers for cross-team integration, components for within-team understanding), C4 makes architecture visible without overwhelming readers with implementation details that change constantly.
-
-Start with context, zoom into containers, and only create component diagrams where complexity justifies the effort. Keep diagrams current by treating them as living artifacts that evolve with the architecture. And remember that the goal isn't comprehensive documentation; it's effective communication of architectural decisions.
+| Diagram | Scope | Primary audience | Draw it |
+|---|---|---|---|
+| **System context** | One system, its users, and neighboring systems | Everyone, including non-technical stakeholders | For every system |
+| **Container** | Applications and data stores inside one system | Developers, architects, operations | For every system |
+| **Component** | Components inside one container | Developers working in that container | Only where the container's structure is complex |
+| **Code** | Implementation of one component | Developers | Rarely, and generated when possible |
+| **System landscape** | Many systems across an organization | Architects, leadership | When one context diagram can't place everything |
+| **Dynamic** | Runtime collaboration for one flow | Developers | For flows people repeatedly ask about |
+| **Deployment** | Containers mapped onto infrastructure | Operations, architects | When placement drives a decision |

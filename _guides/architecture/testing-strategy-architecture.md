@@ -3,1002 +3,415 @@ title: "Testing Strategy & Architecture"
 layout: guide
 category: Architecture
 subcategory: Quality & Risk
-description: "Comprehensive guide to testing distributed systems including test strategy patterns, contract testing, property-based testing, testing architectural characteristics, and testing in production"
-tags: [architecture, testing, quality, distributed-systems, reliability, practical, design-patterns]
+description: "Deciding what to test at which scope in a system with service boundaries: unit, integration, component, contract, and end-to-end tests, the pyramid versus the trophy and honeycomb shapes, consumer-driven contract testing with Pact, test doubles, property-based and mutation testing, resilience testing with injected faults, and testing in production."
+tags: [practical, testing, test-pyramid, contract-testing, property-based-testing, mutation-testing, chaos-engineering]
 ---
 
-## What is Testing Strategy & Architecture?
+A testing strategy decides what gets tested at which scope, how much of each kind of test to write, and where in the delivery pipeline each one runs. Architecture shapes those decisions more than it might seem. Where the system draws its boundaries decides which tests are cheap and which are expensive, since a call inside one process can be tested in milliseconds, while a call across a network to a service another team deploys needs either that service running or something standing in for it. A strategy that ignores the boundaries tends to end up with slow, brittle end-to-end suites that everyone waits for and nobody trusts.
 
-<blockquote class="pull-quote">
-<p>Testing is architectural: Testing strategy impacts system design, deployment pipelines, team organization, and release velocity.</p>
-</blockquote>
+## Test Scopes
 
-Testing strategy defines what to test, how to test it, and where testing fits in the development lifecycle. Testing architecture addresses how to design systems to be testable, how to organize test suites, and how to test architectural characteristics like performance, security, and resilience.
+Test names vary between teams, and the same word, especially "integration", covers very different tests. The taxonomy Toby Clemson set out for microservice architectures gives each scope a distinct job.
 
-**Testing is architectural**: Testing strategy impacts system design, deployment pipelines, team organization, and release velocity. Poor testing strategy creates bottlenecks, slows delivery, and undermines confidence in releases.
-
-## The Testing Pyramid (and Why It's Insufficient)
-
-The classic testing pyramid suggests a distribution of test types:
-
-```
-         /\
-        /  \  E2E Tests (Few)
-       /----\
-      /      \  Integration Tests (Some)
-     /--------\
-    /          \ Unit Tests (Many)
-   /____________\
-```
-
-**The pyramid's core insight**: Lower-level tests are faster, cheaper, and more reliable. Prefer many fast unit tests over a few slow end-to-end tests.
-
-<div class="callout callout--note">
-<p class="callout__title">Why the Pyramid is Insufficient</p>
-<p>The pyramid doesn't address contract testing (critical for microservices), doesn't cover non-functional testing (performance, security, resilience), assumes all integration tests are equally expensive, and ignores testing in production (monitoring, chaos engineering, synthetic transactions).</p>
-<p><strong>Modern testing strategy requires multiple models:</strong> Use the pyramid for functional testing, but add contract testing, property-based testing, and architectural characteristic testing.</p>
-</div>
-
-## Test Types and Scope
+| Scope | What it exercises | Replaced by test doubles | Typical speed |
+|---|---|---|---|
+| **Unit** | One unit of behavior, a class or a small cluster of classes | Collaborators that do I/O | Milliseconds |
+| **Integration** | Code that talks to one real external dependency, such as a repository against a real database | Nothing on the path under test | Seconds |
+| **Component** | One service as a whole, through its public API | Other services and external systems it calls | Seconds |
+| **Contract** | Whether a consumer's expectations of a provider's API still hold | The provider on the consumer side, the consumer on the provider side | Seconds |
+| **End-to-end** | A user journey across the deployed system | Nothing, or only third-party systems | Minutes |
 
 ### Unit Tests
 
-Test individual components in isolation. Dependencies are mocked or stubbed.
+A unit test checks one piece of behavior with no I/O, so it runs in milliseconds and gives the same result every time. Jay Fields distinguishes **solitary** unit tests, which replace every collaborator with a test double, from **sociable** unit tests, which let the unit use its real in-memory collaborators and replace only what does I/O. Sociable tests break less often when internals are refactored, because they don't encode which class calls which.
 
-**What to test**:
-- Business logic in entities, value objects, and domain services
-- Algorithm correctness
-- Edge cases and error handling
-- Validation rules
-
-**Characteristics**:
-- Fast (milliseconds)
-- Isolated (no I/O, no database, no network)
-- Deterministic (same inputs always produce same outputs)
-- Run on every commit
-
-**Example**:
 ```csharp
 [Fact]
-public void Money_Add_SameCurrency_ReturnsCorrectSum()
+public void Adding_money_in_the_same_currency_sums_the_amounts()
 {
-    // Arrange
-    var money1 = new Money(10.00m, "USD");
-    var money2 = new Money(5.00m, "USD");
+    var total = new Money(10.00m, "USD").Add(new Money(5.00m, "USD"));
 
-    // Act
-    var result = money1.Add(money2);
-
-    // Assert
-    Assert.Equal(15.00m, result.Amount);
-    Assert.Equal("USD", result.Currency);
+    Assert.Equal(new Money(15.00m, "USD"), total);
 }
 
 [Fact]
-public void Money_Add_DifferentCurrencies_ThrowsException()
+public void Adding_money_in_different_currencies_is_rejected()
 {
-    // Arrange
     var usd = new Money(10.00m, "USD");
     var eur = new Money(5.00m, "EUR");
 
-    // Act & Assert
     Assert.Throws<InvalidOperationException>(() => usd.Add(eur));
 }
 ```
 
-**Unit test best practices**:
-- Test behavior, not implementation
-- Use descriptive test names (MethodName_Scenario_ExpectedResult)
-- One assertion per test (or related assertions)
-- Avoid logic in tests (no conditionals, loops)
-- Make tests independent (no shared state)
+Unit tests suit domain logic, calculations, validation rules, and state transitions, anywhere the behavior depends on inputs rather than on infrastructure. Testing observable behavior, such as return values, state, and emitted events, rather than which private methods ran keeps them useful through refactoring.
 
 ### Integration Tests
 
-Test interactions between components, including databases, message queues, and external services.
+An integration test checks that code works against a real dependency, such as a repository against the actual database engine, a message consumer against a real broker, or serialization against a real schema registry. In-memory substitutes such as an in-memory database provider miss the behavior these tests exist to catch, including SQL translation, constraints, transaction isolation, and type mapping.
 
-**What to test**:
-- Repository implementations against real databases
-- Message publishing and consumption
-- API endpoint responses
-- Transaction boundaries
+[Testcontainers](https://dotnet.testcontainers.org/){:target="_blank" rel="noopener noreferrer"} starts a disposable container for the dependency per test class or run, so each run gets a clean, real instance without shared test infrastructure. With xUnit v3:
 
-**Characteristics**:
-- Slower than unit tests (seconds)
-- Require infrastructure (database, message queue)
-- May have side effects
-- Run before merge or in CI pipeline
-
-**Example: Repository integration test**:
 ```csharp
-public class OrderRepositoryTests : IClassFixture<DatabaseFixture>
+public sealed class PostgresFixture : IAsyncLifetime
 {
-    private readonly DbContext _context;
+    public PostgreSqlContainer Container { get; } = new PostgreSqlBuilder("postgres:17").Build();
 
-    public OrderRepositoryTests(DatabaseFixture fixture)
-    {
-        _context = fixture.CreateContext();
-    }
+    public ValueTask InitializeAsync() => new(Container.StartAsync());
 
+    public ValueTask DisposeAsync() => Container.DisposeAsync();
+}
+
+public class OrderRepositoryTests(PostgresFixture postgres) : IClassFixture<PostgresFixture>
+{
     [Fact]
-    public async Task SaveAsync_NewOrder_PersistsToDatabase()
+    public async Task Saved_order_loads_with_its_lines()
     {
-        // Arrange
-        var repository = new OrderRepository(_context);
-        var order = new Order(OrderId.NewId(), new CustomerId(Guid.NewGuid()));
-        order.AddLine(new ProductId(Guid.NewGuid()), 2, new Money(10.00m, "USD"));
+        var options = new DbContextOptionsBuilder<OrdersDbContext>()
+            .UseNpgsql(postgres.Container.GetConnectionString())
+            .Options;
 
-        // Act
-        await repository.SaveAsync(order);
+        var order = new OrderBuilder().WithLine("sku-1", quantity: 2, unitPrice: 10.00m).Build();
 
-        // Assert
-        var retrieved = await repository.GetByIdAsync(order.Id);
-        Assert.NotNull(retrieved);
-        Assert.Single(retrieved.Lines);
+        await using (var db = new OrdersDbContext(options))
+        {
+            await db.Database.EnsureCreatedAsync();
+            db.Orders.Add(order);
+            await db.SaveChangesAsync();
+        }
+
+        // A second context forces a real read from the database, not the change tracker.
+        await using (var db = new OrdersDbContext(options))
+        {
+            var loaded = await db.Orders.Include(o => o.Lines).SingleAsync(o => o.Id == order.Id);
+            Assert.Single(loaded.Lines);
+        }
     }
 }
 ```
 
-**Integration test strategies**:
-- **In-memory databases**: Fast, but don't catch database-specific issues
-- **Containerized databases**: Realistic, use Docker/Testcontainers
-- **Shared test database**: Fast setup, but tests can interfere with each other
-- **Database per test**: Isolated, but slow
-
-**Recommendation**: Use Testcontainers for spinning up real databases in Docker. Tests are isolated and realistic without maintaining shared infrastructure.
-
-### End-to-End (E2E) Tests
-
-Test complete user workflows through the entire system, including UI, APIs, databases, and external services.
-
-**What to test**:
-- Critical user journeys (checkout, registration, payment)
-- Cross-service workflows
-- Integration with external systems
-
-**Characteristics**:
-- Slow (minutes)
-- Fragile (many moving parts)
-- Expensive to maintain
-- Run before release or nightly
-
-**E2E test anti-patterns**:
-- Testing everything end-to-end (slow, brittle test suite)
-- Using E2E tests to catch logic bugs (unit tests are faster and more precise)
-- Ignoring flakiness (intermittent failures erode trust)
-
-**E2E test best practices**:
-- Keep E2E tests focused on critical paths
-- Use lower-level tests for edge cases
-- Implement retry logic for flaky infrastructure
-- Run E2E tests in production-like environments
-- Monitor and fix flaky tests immediately
+Integration tests stay focused when each one covers one dependency. A test that needs the database, the broker, and two other services running is an end-to-end test with a misleading name.
 
 ### Component Tests
 
-Test a service in isolation with dependencies stubbed or mocked. Also called "service tests."
-
-**What to test**:
-- Service API contracts
-- Business logic across multiple classes
-- Error handling and edge cases
-
-**How it works**: Run the service in a test harness with fake implementations of dependencies.
+A component test exercises one service through its public API, with the service's own code and infrastructure real and every other service replaced by a test double. It answers whether the service behaves correctly as a unit of deployment, without needing the rest of the system. In ASP.NET Core, `WebApplicationFactory` hosts the service in memory and lets the test swap the clients it uses to call other services:
 
 ```csharp
-public class OrderServiceComponentTests
+public class PlaceOrderTests(WebApplicationFactory<Program> factory)
+    : IClassFixture<WebApplicationFactory<Program>>
 {
     [Fact]
-    public async Task PlaceOrder_ValidRequest_ReturnsOrderId()
+    public async Task Order_for_out_of_stock_item_is_rejected()
     {
-        // Arrange
-        var fakeInventory = new FakeInventoryService();
-        var fakePayment = new FakePaymentService();
-        var orderService = new OrderService(fakeInventory, fakePayment);
+        var client = factory
+            .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                services.AddSingleton<IInventoryClient>(new FakeInventoryClient { InStock = false })))
+            .CreateClient();
 
-        var request = new PlaceOrderRequest
-        {
-            CustomerId = Guid.NewGuid(),
-            Items = new[] { new OrderItem { ProductId = Guid.NewGuid(), Quantity = 1 } }
-        };
+        var response = await client.PostAsJsonAsync("/orders", new { productId = "sku-1", quantity = 1 });
 
-        // Act
-        var result = await orderService.PlaceOrderAsync(request);
-
-        // Assert
-        Assert.NotNull(result.OrderId);
-        Assert.True(fakeInventory.ReservationCalled);
-        Assert.True(fakePayment.ChargeCalled);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 }
 ```
 
-**Component tests vs integration tests**: Component tests stub external dependencies. Integration tests use real dependencies. Both are valuable.
+The service's database can be real, started with Testcontainers as above, or replaced when the component tests focus on API behavior. Component tests cover what unit tests can't see, such as routing, serialization, validation, middleware, and error mapping, and they run without deploying anything.
+
+### End-to-End Tests
+
+An end-to-end test drives a user journey through the deployed system, such as signing up, placing an order, and seeing it in order history. It is the only scope that proves the pieces work together as deployed, with real configuration, networking, and identity. It is also the slowest scope, the hardest to diagnose when it fails, and the most prone to intermittent failures, because every component and every network hop is a chance for something unrelated to the change to go wrong.
+
+End-to-end tests earn their cost for a handful of journeys the business can't afford to break. Edge cases and error handling belong at lower scopes, where a failure points directly at the cause. When an end-to-end test fails intermittently, retrying it until it passes hides whatever is intermittent, which might be a real race in the system.
+
+## Choosing a Test Shape
+
+The shapes below describe how many tests to write at each scope. Each one reflects an assumption about where a system's defects tend to be.
+
+| Shape | Origin | Emphasis | Fits |
+|---|---|---|---|
+| **Pyramid** | Mike Cohn, *Succeeding with Agile* (2009) | Many unit tests, fewer service-level tests, few UI or end-to-end tests | Systems with substantial domain logic inside each deployable |
+| **Ice cream cone** | A widely used name for the inverted pyramid | Mostly manual and end-to-end tests, few unit tests | Nothing, it's the antipattern the others avoid |
+| **Trophy** | Kent C. Dodds (2018) | Static analysis at the base, then mostly integration tests, fewer unit and end-to-end tests | JavaScript front ends, where components are thin and integration is where bugs appear |
+| **Honeycomb** | Spotify Engineering (2018) | Mostly integration tests of each service, few tests of implementation detail, fewest integrated tests across services | Microservices whose complexity is in how they interact rather than inside them |
+
+The pyramid's lasting advice, as Ham Vocke's "The Practical Test Pyramid" summarizes it, is to write tests at different granularities and fewer of them the higher the level. The trophy and honeycomb don't contradict that. They move the bulk of the tests to wherever the risk actually is. A service that mostly validates a request, calls two others, and stores the result has little logic for unit tests to find, and its defects sit in serialization, queries, and calls to other services. A pricing engine is the opposite case.
+
+Two warning signs apply to any shape. If a change to internal structure breaks many tests while behavior stays the same, tests are too tied to implementation. If defects keep reaching production through paths that each test scope assumed another scope covered, the gaps between scopes are the problem, not the ratio.
 
 ## Contract Testing
 
-Contract testing verifies that services can communicate correctly without requiring end-to-end tests.
+In a system of independently deployed services, the riskiest change is one a provider makes to an API that a consumer depends on. End-to-end tests catch it only if both services are deployed together into a shared environment with the right versions, and only after the change is already built. Contract tests catch it earlier and without a shared environment, by checking each side of the relationship separately against a written record of what the consumer expects.
 
-**The problem**: In microservices, each service has many dependencies. Testing all combinations end-to-end is slow and brittle. Contract testing verifies each relationship independently.
+### Consumer-Driven Contracts
 
-### Consumer-Driven Contract Testing
+In consumer-driven contract testing, each consumer records the requests it makes and the parts of the response it relies on. The provider then verifies that it satisfies every consumer's recorded expectations. [Pact](https://docs.pact.io/){:target="_blank" rel="noopener noreferrer"} is a widely used tool for it, and a contract it produces is called a pact.
 
-The consumer defines the contract it expects from the provider. The provider validates it can meet that contract.
+```
+  Consumer build                                         Provider build
+ ┌───────────────────────┐                          ┌──────────────────────────┐
+ │ Consumer tests run    │                          │ Provider starts on a     │
+ │ against a Pact mock   │                          │ real port                │
+ │ provider              │                          │                          │
+ │         │             │                          │ Pact replays each        │
+ │         ▼             │   publish   ┌─────────┐  │ recorded request, checks │
+ │ Pact file: requests   │────────────▶│  Pact   │─▶│ responses match          │
+ │ made, response fields │             │ Broker  │  └────────────┬─────────────┘
+ │ relied on             │             │         │◀──────────────┘
+ └───────────────────────┘             └────┬────┘   publish verification result
+                                            │
+                                            ▼
+                                   can-i-deploy check before either
+                                   side releases a version
+```
 
-**How it works**:
+The consumer test defines the interaction and exercises the real client code against Pact's mock server. Matching on types rather than exact values keeps the contract from over-specifying data the consumer doesn't care about:
 
-1. **Consumer writes contract**: Defines expected request/response for the API calls it makes
-2. **Consumer tests against contract**: Mock provider using the contract
-3. **Provider validates contract**: Verifies it can satisfy the consumer's expectations
-4. **Contract stored centrally**: Published to contract repository (Pact Broker)
-
-**Example with Pact**:
-
-**Consumer side**:
 ```csharp
-[Fact]
-public async Task GetOrder_ExistingOrder_ReturnsOrder()
+public class OrderClientContractTests
 {
-    // Define contract
-    _mockProviderService
-        .Given("Order 123 exists")
-        .UponReceiving("A request for order 123")
-        .With(new ProviderServiceRequest
+    private readonly IPactBuilderV4 pact =
+        Pact.V4("CheckoutWeb", "OrderService", new PactConfig()).WithHttpInteractions();
+
+    [Fact]
+    public async Task Gets_an_existing_order()
+    {
+        pact.UponReceiving("a request for an existing order")
+                .Given("order 123 exists")
+                .WithRequest(HttpMethod.Get, "/orders/123")
+                .WithHeader("Accept", "application/json")
+            .WillRespond()
+                .WithStatus(HttpStatusCode.OK)
+                .WithJsonBody(new
+                {
+                    orderId = Match.Type("123"),
+                    status = Match.Type("confirmed")
+                });
+
+        await pact.VerifyAsync(async ctx =>
         {
-            Method = HttpVerb.Get,
-            Path = "/orders/123",
-            Headers = new Dictionary<string, object>
-            {
-                { "Accept", "application/json" }
-            }
-        })
-        .WillRespondWith(new ProviderServiceResponse
-        {
-            Status = 200,
-            Headers = new Dictionary<string, object>
-            {
-                { "Content-Type", "application/json" }
-            },
-            Body = new
-            {
-                orderId = "123",
-                status = "confirmed",
-                total = 99.99
-            }
+            var client = new OrderClient(new HttpClient { BaseAddress = ctx.MockServerUri });
+
+            var order = await client.GetOrderAsync("123");
+
+            Assert.Equal("123", order.OrderId);
         });
-
-    // Test consumer using contract
-    var client = new OrderClient(_mockProviderServiceBaseUri);
-    var order = await client.GetOrderAsync("123");
-
-    Assert.Equal("123", order.OrderId);
-    Assert.Equal("confirmed", order.Status);
-
-    // Verify contract was used
-    _mockProviderService.VerifyInteractions();
+    }
 }
 ```
 
-**Provider side**:
+The provider test replays every recorded interaction against the running provider. Pact requires the provider to listen on a real TCP port rather than an in-memory test server, and a provider-state endpoint lets the test set up data such as "order 123 exists" before each interaction:
+
 ```csharp
 [Fact]
-public void EnsureOrderServiceHonorsConsumerContract()
+public void Honours_its_consumers_contracts()
 {
-    // Configure provider
-    var config = new PactVerifierConfig
-    {
-        ProviderVersion = "1.0.0",
-        PactUri = "http://pact-broker/pacts/provider/OrderService/consumer/OrderClient"
-    };
+    using var verifier = new PactVerifier("OrderService", new PactVerifierConfig());
 
-    // Verify provider meets contract
-    IPactVerifier verifier = new PactVerifier(config);
     verifier
-        .ServiceProvider("OrderService", _serviceUri)
-        .HonoursPactWith("OrderClient")
-        .PactUri("http://pact-broker/pacts/provider/OrderService/consumer/OrderClient")
+        .WithHttpEndpoint(_fixture.ServerUri)
+        .WithFileSource(new FileInfo(_pactPath))
+        .WithProviderStateUrl(new Uri(_fixture.ServerUri, "/provider-states"))
         .Verify();
 }
 ```
 
-**Benefits**:
-- Fast (no need for end-to-end environment)
-- Detects breaking changes before deployment
-- Documents service dependencies
-- Enables independent deployment
+In a pipeline, the pact file comes from a Pact Broker rather than a local path, the provider publishes its verification results back, and each side runs the broker's `can-i-deploy` check before releasing a version. That check is what turns contract tests into deployment safety, since it answers whether this exact version of one service is compatible with the versions of its counterparts already in production.
 
-**Contract testing vs API schema validation**:
-- **Schema validation**: Ensures response matches OpenAPI spec
-- **Contract testing**: Ensures consumer and provider agree on behavior
+### Trade-offs and Alternatives
 
-Both are valuable. Schema validation catches schema drift. Contract testing catches behavioral incompatibilities.
+Consumer-driven contracts work best when consumers and providers are in the same organization and the provider can see and act on consumer expectations. They add a broker to run, provider-state setup to maintain for every interaction, and a verification step in the provider's pipeline. They check the shape of interactions, not whether the provider's business logic is right, which still needs the provider's own tests.
 
-## Property-Based Testing
+For a public API with unknown consumers, consumer-driven contracts don't apply, and schema-based checks take their place. Comparing each OpenAPI or protobuf schema change against the previous version for breaking changes catches removed fields and changed types, though not behavioral changes that keep the schema intact. Pact also supports message contracts, which apply the same approach to events published to a broker, where the publisher is the provider and each subscriber is a consumer.
 
-Property-based testing generates random inputs and verifies that certain properties always hold true.
+## Test Doubles
 
-**Traditional example-based test**:
+A test double stands in for a real dependency in a test. Gerard Meszaros's *xUnit Test Patterns* names five kinds, and the differences decide what a test actually proves.
+
+| Double | What it does | Test verifies |
+|---|---|---|
+| **Dummy** | Fills a parameter that the code path never uses | Nothing about it |
+| **Stub** | Returns canned answers to calls | The outcome, given those answers |
+| **Spy** | A stub that also records how it was called | Calls, inspected after the fact |
+| **Mock** | Pre-programmed with expected calls, fails if they don't happen | That specific interactions took place |
+| **Fake** | A working, simplified implementation, such as an in-memory repository | The outcome, against realistic behavior |
+
+A fake is often the most durable choice for a dependency the team owns, because tests written against it check outcomes and keep working when the code under test changes how it calls the dependency:
+
 ```csharp
-[Fact]
-public void Reverse_TwoElementList_ReversesOrder()
+public class InMemoryOrderRepository : IOrderRepository
 {
-    var input = new List<int> { 1, 2 };
-    var result = input.Reverse();
-    Assert.Equal(new List<int> { 2, 1 }, result);
-}
-```
+    private readonly Dictionary<OrderId, Order> orders = new();
 
-**Property-based test**:
-```csharp
-[Property]
-public Property Reverse_TwiceReturnsOriginal(List<int> input)
-{
-    var reversed = input.Reverse().ToList();
-    var reversedTwice = reversed.Reverse().ToList();
-
-    return (input.SequenceEqual(reversedTwice))
-        .ToProperty();
-}
-```
-
-The framework (FsCheck, Hedgehog) generates hundreds of random lists and verifies the property holds for all of them.
-
-**Good properties to test**:
-- **Inverse operations**: `Reverse(Reverse(x)) == x`
-- **Idempotence**: `Sort(Sort(x)) == Sort(x)`
-- **Invariants**: `Sum(Split(x)) == x`
-- **Commutativity**: `Add(a, b) == Add(b, a)`
-- **Error conditions**: Invalid inputs always throw exceptions
-
-**Example: Money addition properties**:
-```csharp
-[Property]
-public Property Money_Add_IsCommutative(decimal a, decimal b)
-{
-    var money1 = new Money(a, "USD");
-    var money2 = new Money(b, "USD");
-
-    return (money1.Add(money2).Equals(money2.Add(money1)))
-        .ToProperty();
-}
-
-[Property]
-public Property Money_Add_IsAssociative(decimal a, decimal b, decimal c)
-{
-    var m1 = new Money(a, "USD");
-    var m2 = new Money(b, "USD");
-    var m3 = new Money(c, "USD");
-
-    var result1 = m1.Add(m2).Add(m3);
-    var result2 = m1.Add(m2.Add(m3));
-
-    return result1.Equals(result2).ToProperty();
-}
-```
-
-**When to use property-based testing**:
-- Algorithms with well-defined properties
-- Serialization/deserialization round-trips
-- Parsers and formatters
-- Stateful systems (generate sequences of operations, verify invariants)
-
-**Property-based testing finds edge cases** you wouldn't think to test manually (empty lists, negative numbers, maximum values, special characters).
-
-## Testing Architectural Characteristics
-
-Architectural characteristics (performance, scalability, security, resilience) require specialized testing strategies.
-
-### Performance Testing
-
-Validate that the system meets performance requirements under expected load.
-
-**Performance test types**:
-
-| Type | Purpose | Duration | Load Pattern |
-|------|---------|----------|--------------|
-| **Load test** | Verify performance under expected load | Hours | Steady traffic at expected levels |
-| **Stress test** | Find breaking point | Until failure | Gradually increase load until failure |
-| **Spike test** | Handle sudden traffic surges | Minutes | Sudden spike in traffic |
-| **Soak test** | Detect memory leaks, resource exhaustion | Days | Sustained load over extended period |
-
-**Key metrics**:
-- **Latency**: Response time (p50, p95, p99, p99.9)
-- **Throughput**: Requests per second
-- **Error rate**: Percentage of failed requests
-- **Resource utilization**: CPU, memory, disk I/O, network I/O
-
-**Example performance test with k6**:
-```javascript
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-
-export let options = {
-  stages: [
-    { duration: '2m', target: 100 },  // Ramp up to 100 users
-    { duration: '5m', target: 100 },  // Stay at 100 users
-    { duration: '2m', target: 200 },  // Ramp up to 200 users
-    { duration: '5m', target: 200 },  // Stay at 200 users
-    { duration: '2m', target: 0 },    // Ramp down
-  ],
-  thresholds: {
-    http_req_duration: ['p(95)<500'],  // 95% of requests < 500ms
-    http_req_failed: ['rate<0.01'],    // Error rate < 1%
-  },
-};
-
-export default function () {
-  let response = http.get('https://api.example.com/orders');
-
-  check(response, {
-    'status is 200': (r) => r.status === 200,
-    'response time < 500ms': (r) => r.timings.duration < 500,
-  });
-
-  sleep(1);
-}
-```
-
-**Performance testing best practices**:
-- Test in production-like environments (same infrastructure, same data volumes)
-- Use realistic user behavior (think time, navigation patterns)
-- Monitor system metrics during tests (CPU, memory, database connections)
-- Establish performance baselines and track regression
-- Test performance continuously (not just before release)
-
-### Security Testing
-
-Validate that security controls are effective.
-
-**Security test types**:
-- **Static analysis (SAST)**: Scan code for vulnerabilities (SQL injection, XSS, hardcoded secrets)
-- **Dynamic analysis (DAST)**: Test running application for vulnerabilities
-- **Dependency scanning**: Check for vulnerable dependencies
-- **Penetration testing**: Simulated attacks by security professionals
-- **Compliance testing**: Verify adherence to security standards (OWASP, PCI-DSS)
-
-**Automated security testing in CI/CD**:
-```yaml
-security-tests:
-  stage: test
-  script:
-    # SAST - static code analysis
-    - sonarqube-scan
-
-    # Dependency scanning
-    - npm audit
-    - dotnet list package --vulnerable
-
-    # DAST - running application
-    - zap-baseline.py -t https://staging.example.com
-
-    # Container scanning
-    - trivy image myapp:latest
-```
-
-**Security testing best practices**:
-- Automate security scans in CI/CD pipeline
-- Fail builds on high-severity vulnerabilities
-- Test authentication and authorization boundaries
-- Validate input handling (injection attacks, buffer overflows)
-- Test encryption and data protection
-- Verify secrets are not exposed in logs or error messages
-
-### Resilience Testing
-
-Validate that the system handles failures gracefully.
-
-**Resilience test types**:
-- **Chaos engineering**: Inject failures to test recovery (kill services, introduce latency)
-- **Failure mode testing**: Test specific failure scenarios (database down, dependency timeout)
-- **Capacity testing**: Verify graceful degradation under overload
-- **Disaster recovery testing**: Verify backup and restore procedures
-
-**Example chaos test with Simmy (Polly chaos library)**:
-```csharp
-// Inject random faults into HTTP calls
-var chaosPolicy = MonkeyPolicy.InjectFault(
-    fault: new Exception("Simulated fault"),
-    injectionRate: 0.1,  // 10% of requests fail
-    enabled: () => _chaosEnabled
-);
-
-// Combine with resilience policy
-var resiliencePolicy = Policy
-    .Handle<Exception>()
-    .WaitAndRetryAsync(3, retryAttempt =>
-        TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-
-var combinedPolicy = Policy.WrapAsync(resiliencePolicy, chaosPolicy);
-
-// Execute with chaos and resilience
-await combinedPolicy.ExecuteAsync(async () =>
-{
-    return await _httpClient.GetAsync("https://api.example.com/data");
-});
-```
-
-**Chaos engineering in production**:
-- Start with gameday exercises (controlled experiments)
-- Gradually increase blast radius (single service → cluster → region)
-- Monitor blast radius and halt experiments if impact exceeds thresholds
-- Use feature flags to enable chaos in production safely
-
-**Resilience testing validates**:
-- Circuit breakers open when dependencies fail
-- Retries don't overwhelm failing services
-- Timeouts prevent cascading failures
-- Graceful degradation maintains core functionality
-- System recovers automatically when failures resolve
-
-## Test Doubles: Mocks, Stubs, Fakes, Spies
-
-Test doubles replace real dependencies in tests. Each type serves a different purpose.
-
-| Type | Purpose | Verification | Example |
-|------|---------|--------------|---------|
-| **Stub** | Provides predetermined responses | None | Returns fixed product catalog |
-| **Mock** | Verifies interactions | Asserts methods were called | Verifies email was sent |
-| **Fake** | Working implementation (simplified) | Optional | In-memory database |
-| **Spy** | Records interactions for later verification | Asserts on recorded calls | Logs all service calls |
-
-**Stub example**:
-```csharp
-public class StubInventoryService : IInventoryService
-{
-    public Task<bool> IsInStockAsync(ProductId productId)
-    {
-        return Task.FromResult(true); // Always in stock
-    }
-}
-```
-
-**Mock example**:
-```csharp
-[Fact]
-public async Task PlaceOrder_CallsInventoryService()
-{
-    // Arrange
-    var mockInventory = new Mock<IInventoryService>();
-    var orderService = new OrderService(mockInventory.Object);
-
-    // Act
-    await orderService.PlaceOrderAsync(orderId);
-
-    // Assert
-    mockInventory.Verify(i => i.ReserveAsync(It.IsAny<ProductId>(), It.IsAny<int>()),
-        Times.Once);
-}
-```
-
-**Fake example**:
-```csharp
-public class FakeOrderRepository : IOrderRepository
-{
-    private readonly Dictionary<OrderId, Order> _orders = new();
-
-    public Task<Order> GetByIdAsync(OrderId orderId)
-    {
-        _orders.TryGetValue(orderId, out var order);
-        return Task.FromResult(order);
-    }
+    public Task<Order?> FindAsync(OrderId id) =>
+        Task.FromResult(orders.GetValueOrDefault(id));
 
     public Task SaveAsync(Order order)
     {
-        _orders[order.Id] = order;
+        orders[order.Id] = order;
         return Task.CompletedTask;
     }
 }
 ```
 
-**When to use each**:
-- **Stubs**: Provide data for tests (repositories, external services)
-- **Mocks**: Verify interactions (email service, event publisher)
-- **Fakes**: Replace infrastructure in integration tests (in-memory database)
-- **Spies**: Debug tests or verify optional behavior
+A fake that drifts from the real implementation gives false confidence, so fakes are best paired with a shared set of tests that runs against both the fake and the real implementation. Mocks fit when the interaction is itself the behavior being specified, such as a payment being charged exactly once or an event being published. Used for everything, mocks produce tests that restate the implementation line by line and fail on every refactoring. Mocking types the team doesn't own, such as an HTTP client or a cloud SDK, tends to encode assumptions about how those types behave that are never checked. Wrapping them in a small interface the team owns, and covering the wrapper with integration tests, keeps those assumptions honest.
 
-**Mock overuse anti-pattern**: Tests that mock everything become brittle and test implementation instead of behavior. Prefer fakes and real collaborators when practical.
+## Property-Based Testing
 
-## Testing in Production
+An example-based test checks one input the author thought of. A property-based test states something that should hold for all inputs, and the framework generates many inputs to try to break it. When it finds a failing input, it shrinks the input to the smallest case that still fails, so the report shows a minimal counterexample rather than a random one. In C#, [FsCheck](https://fscheck.github.io/FsCheck/){:target="_blank" rel="noopener noreferrer"} integrates with xUnit through a `[Property]` attribute, and [CsCheck](https://github.com/AnthonyLloyd/CsCheck){:target="_blank" rel="noopener noreferrer"} is a C#-first alternative.
 
-Testing doesn't stop at deployment. Production is where real usage patterns, traffic volumes, and failure modes emerge.
-
-### Synthetic Monitoring
-
-Continuously run automated tests against production to detect issues before users do.
-
-**What to test**:
-- Critical user journeys (login, checkout, search)
-- API endpoints
-- Third-party integrations
-
-**Example synthetic monitor**:
 ```csharp
-public class CheckoutSyntheticMonitor
+[Property]
+public bool Adding_money_is_commutative(decimal a, decimal b)
 {
-    public async Task<HealthCheckResult> CheckAsync()
-    {
-        try
-        {
-            // Simulate checkout flow
-            var client = new ApiClient(_productionUrl);
+    var x = new Money(a, "USD");
+    var y = new Money(b, "USD");
 
-            var cart = await client.CreateCartAsync();
-            await client.AddItemAsync(cart.Id, _testProductId, quantity: 1);
-            var order = await client.CheckoutAsync(cart.Id, _testPaymentMethod);
+    return x.Add(y) == y.Add(x);
+}
 
-            // Verify order created
-            if (order.Status != "confirmed")
-                return HealthCheckResult.Degraded("Checkout returned unexpected status");
+[Property]
+public bool Money_survives_a_json_round_trip(decimal amount, bool inDollars)
+{
+    var original = new Money(amount, inDollars ? "USD" : "EUR");
 
-            // Clean up test data
-            await client.CancelOrderAsync(order.Id);
+    var json = JsonSerializer.Serialize(original);
 
-            return HealthCheckResult.Healthy("Checkout flow successful");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy("Checkout flow failed", ex);
-        }
-    }
+    return JsonSerializer.Deserialize<Money>(json) == original;
 }
 ```
 
-**Synthetic monitoring best practices**:
-- Use dedicated test accounts and data
-- Run frequently (every 1-5 minutes)
-- Alert immediately on failures
-- Clean up test data to avoid pollution
-- Monitor from multiple regions
+Generated inputs include zero, negative numbers, values with many decimal places, empty collections, and extreme values, which are the cases example-based tests tend to skip. If `Money` should reject negative amounts but the constructor accepts them, a property like these surfaces the gap quickly.
 
-### Canary Deployments
+Properties that recur across domains make good starting points:
 
-Deploy changes to a small subset of users before rolling out to everyone.
+- **Round trips**: serialize then deserialize, encode then decode, and get the original back
+- **Invariants**: an operation preserves something, such as a sort keeping the same elements or a transfer keeping the total balance
+- **Idempotence**: applying an operation twice gives the same result as once, as for message handlers that may see redelivered messages
+- **Equivalence**: a new implementation gives the same results as an old or simpler one, which suits rewrites and optimizations
+- **Model-based sequences**: random sequences of operations against a stateful component match a simple model, such as a cache behaving like a dictionary
 
-**How it works**:
-1. Deploy new version to canary servers (5-10% of traffic)
-2. Monitor error rates, latency, business metrics
-3. If metrics are healthy, gradually increase canary percentage
-4. If metrics degrade, roll back immediately
-
-**Canary success criteria**:
-- Error rate within 5% of baseline
-- p95 latency within 10% of baseline
-- Business metrics (conversions, revenue) stable
-- No increase in support tickets
-
-### Feature Flags for Testing in Production
-
-Feature flags enable deploying code without enabling features, allowing gradual rollout and easy rollback.
-
-**Testing use cases**:
-- **Dark launches**: Deploy feature disabled, enable for internal users first
-- **A/B testing**: Compare new feature vs old behavior
-- **Ring deployments**: Enable for progressively larger user groups
-- **Kill switches**: Disable feature instantly if issues arise
-
-**Example**:
-```csharp
-public class OrderService
-{
-    private readonly IFeatureFlagService _flags;
-
-    public async Task<Order> PlaceOrderAsync(PlaceOrderRequest request)
-    {
-        if (await _flags.IsEnabledAsync("new-inventory-system", request.UserId))
-        {
-            return await PlaceOrderWithNewInventoryAsync(request);
-        }
-        else
-        {
-            return await PlaceOrderWithLegacyInventoryAsync(request);
-        }
-    }
-}
-```
-
-**Feature flag best practices**:
-- Remove flags once feature is fully rolled out
-- Monitor flag evaluation performance (caching, fallbacks)
-- Use flags for risky changes, not every feature
-- Distinguish long-lived flags (permissions) from short-lived flags (rollout)
-
-## Test Data Management
-
-Test data quality impacts test reliability and coverage.
-
-**Test data strategies**:
-
-**Generated test data**: Create data programmatically
-- **Pros**: Controlled, isolated, fast
-- **Cons**: May not represent production complexity
-
-**Anonymized production data**: Copy and anonymize production database
-- **Pros**: Realistic, exposes edge cases
-- **Cons**: Privacy concerns, data size, maintenance
-
-**Synthetic data**: Algorithmically generated realistic data
-- **Pros**: Realistic patterns, no privacy issues, unlimited volume
-- **Cons**: May miss real edge cases
-
-**Test data best practices**:
-- **Isolate test data**: Each test creates its own data or uses unique identifiers
-- **Clean up after tests**: Delete test data to avoid pollution
-- **Use data builders**: Encapsulate test data creation
-- **Avoid hardcoded data**: Use factory methods or fixture files
-
-**Test data builder example**:
-```csharp
-public class OrderBuilder
-{
-    private OrderId _id = OrderId.NewId();
-    private CustomerId _customerId = new CustomerId(Guid.NewGuid());
-    private List<OrderLine> _lines = new();
-
-    public OrderBuilder WithId(OrderId id)
-    {
-        _id = id;
-        return this;
-    }
-
-    public OrderBuilder WithCustomer(CustomerId customerId)
-    {
-        _customerId = customerId;
-        return this;
-    }
-
-    public OrderBuilder WithLine(ProductId productId, int quantity, Money price)
-    {
-        _lines.Add(new OrderLine(productId, quantity, price));
-        return this;
-    }
-
-    public Order Build()
-    {
-        var order = new Order(_id, _customerId);
-        foreach (var line in _lines)
-        {
-            order.AddLine(line.ProductId, line.Quantity, line.UnitPrice);
-        }
-        return order;
-    }
-}
-
-// Usage
-var order = new OrderBuilder()
-    .WithCustomer(customerId)
-    .WithLine(productId, quantity: 2, new Money(10.00m, "USD"))
-    .Build();
-```
-
-## Test Organization and Naming
-
-Well-organized tests are easier to maintain and debug.
-
-### Test Naming Conventions
-
-**Pattern**: `MethodName_Scenario_ExpectedResult`
-
-Examples:
-- `Money_Add_SameCurrency_ReturnsCorrectSum`
-- `Order_Confirm_EmptyOrder_ThrowsException`
-- `OrderRepository_GetById_OrderNotFound_ReturnsNull`
-
-**Alternative**: `GivenWhenThen` format
-- `GivenEmptyOrder_WhenConfirm_ThenThrowsException`
-
-### Test Organization
-
-**Option 1: Co-locate with source**:
-```
-src/
-  Domain/
-    Order.cs
-    Order.Tests.cs
-```
-
-**Option 2: Separate test project**:
-```
-src/
-  Domain/
-    Order.cs
-tests/
-  Domain.Tests/
-    OrderTests.cs
-```
-
-**Recommendation**: Use separate test projects. Keeps production binaries free of test dependencies.
-
-### Test Categories and Traits
-
-Tag tests to run subsets selectively:
-
-```csharp
-[Trait("Category", "Unit")]
-public class OrderTests { }
-
-[Trait("Category", "Integration")]
-[Trait("Category", "Database")]
-public class OrderRepositoryTests { }
-```
-
-Run specific categories:
-```bash
-dotnet test --filter "Category=Unit"
-dotnet test --filter "Category=Integration"
-```
+Property-based tests cost more thought to write than examples, and a property that is weaker than the real requirement passes while the code is wrong. They pay off most in parsers, serializers, financial calculations, and any code with a clear rule and a large input space.
 
 ## Mutation Testing
 
-Mutation testing validates test quality by introducing small changes (mutations) to code and verifying tests catch them.
+Code coverage shows which lines ran during tests, not whether any test would notice those lines being wrong. A test that calls a method and asserts nothing reaches full coverage of it. Mutation testing measures the second thing. A tool such as [Stryker.NET](https://stryker-mutator.io/docs/stryker-net/introduction/){:target="_blank" rel="noopener noreferrer"} makes small changes to the code, called mutants, such as turning `>` into `>=` or removing a condition, and reruns the tests against each one. A mutant that makes a test fail is killed. A mutant that survives marks behavior no test checks.
 
-**How it works**:
-1. Tool mutates code (change `>` to `>=`, `&&` to `||`, remove condition)
-2. Run tests against mutated code
-3. If tests still pass, mutation "survived" (tests didn't catch the bug)
-4. High mutation kill rate = high test quality
-
-**Example mutation**:
 ```csharp
 // Original
 if (quantity > 0)
     return true;
 
-// Mutated
-if (quantity >= 0)  // Boundary condition changed
+// Mutant: boundary changed
+if (quantity >= 0)
     return true;
 ```
 
-If tests pass with this mutation, you're missing a test for `quantity == 0`.
+If every test still passes against this mutant, nothing tests a quantity of zero. The mutation score, the share of mutants killed, is a better signal of test effectiveness than coverage. Running every mutant repeats the test suite many times, so mutation testing is usually run on critical modules, on changed code in pull requests, or on a schedule rather than on every build. Some surviving mutants are equivalent, meaning they don't change behavior, and those need to be ignored rather than chased.
 
-**Mutation testing tools**:
-- **Stryker.NET**: For .NET applications
-- **PIT**: For Java
-- **Mutmut**: For Python
+## Testing Architectural Characteristics
 
-**When to use mutation testing**:
-- Critical business logic
-- Security-sensitive code
-- Complex algorithms
+Functional tests check what the system does. Architectural characteristics such as performance, scalability, security, and resilience need their own checks, and those checks work best as automated fitness functions that run in the pipeline instead of one-off reviews. Performance and load testing verify latency and throughput against targets under realistic load. Security testing combines static analysis of code, dynamic scanning of running applications, dependency scanning, and penetration testing. Structural rules, such as which layers may reference which, can be enforced as tests over compiled code.
 
-Mutation testing is computationally expensive. Use selectively on high-value code.
+Resilience needs a different approach from the others, because the conditions it guards against are rare and hard to trigger on demand. Fault injection makes them happen deliberately. In .NET, Polly v8 includes chaos strategies that inject exceptions, latency, or failed results into a resilience pipeline, which lets a test confirm that the retry, timeout, and fallback configured around a call actually handle those faults:
 
-## Testing Anti-Patterns
-
-### Ice Cream Cone (Inverted Pyramid)
-
-More E2E tests than unit tests. Results in slow, brittle test suite.
-
-**Solution**: Shift testing left. Push tests down to unit and integration levels.
-
-### Test Duplication
-
-Testing the same logic at multiple levels (unit, integration, E2E).
-
-**Solution**: Test each behavior once at the appropriate level. Unit test logic, integration test persistence, E2E test critical workflows.
-
-### Flaky Tests
-
-Tests that pass or fail non-deterministically.
-
-**Common causes**:
-- Race conditions and timing issues
-- Shared state between tests
-- Dependency on external services
-- Environment-specific assumptions
-
-**Solution**: Fix flaky tests immediately. Flaky tests erode confidence and waste developer time.
-
-### Testing Implementation Details
-
-Tests that break when refactoring internals without changing behavior.
-
-**Problem**:
 ```csharp
-// Test knows about internal cache
-[Fact]
-public void GetProduct_CachesResult()
-{
-    var service = new ProductService();
-    service.GetProduct(productId);
+var pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
+    .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+    {
+        ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+            .Handle<TimeoutRejectedException>()
+            .HandleResult(r => r.StatusCode == HttpStatusCode.ServiceUnavailable),
+        MaxRetryAttempts = 3,
+        BackoffType = DelayBackoffType.Exponential,
+        UseJitter = true
+    })
+    .AddTimeout(TimeSpan.FromSeconds(2))
+    // Chaos strategies go last, so injected faults pass through the real resilience strategies.
+    .AddChaosLatency(0.10, TimeSpan.FromSeconds(5))
+    .AddChaosOutcome(0.05, () => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))
+    .Build();
 
-    Assert.True(service.Cache.Contains(productId)); // Brittle!
+var response = await pipeline.ExecuteAsync(
+    async ct => await httpClient.GetAsync("/inventory/sku-1", ct),
+    cancellationToken);
+```
+
+Chaos strategies can be switched on per environment through their enabled settings, so the same pipeline can run with injected faults in a test environment and without them elsewhere. Resilience tests say more when they also assert on the caller's experience, such as the checkout still completing with a cached price when the pricing service is slow, not only about the strategy firing.
+
+## Testing in Production
+
+Pre-production environments differ from production in traffic, data, configuration, and scale, so some defects only appear there. Testing in production doesn't replace earlier testing. It adds checks that run where those differences disappear.
+
+### Synthetic Monitoring
+
+A synthetic monitor runs a scripted journey against production on a schedule, such as signing in, searching, and adding an item to a cart, and alerts when it fails or slows down. It detects outages on paths real users might not exercise for hours, such as a nightly signup flow in a low-traffic region. Synthetic journeys need dedicated test accounts, data that is marked and excluded from business reporting, and cleanup of anything they create. Running them from several regions separates a regional network problem from an application failure.
+
+### Progressive Delivery and Feature Flags
+
+A canary release sends a small share of traffic to a new version and compares its error rates, latency, and business metrics with the current version before widening the rollout. The comparison is the test, and it runs against real traffic that no staging environment reproduces.
+
+Feature flags separate deploying code from releasing behavior. A dark launch deploys a feature switched off, then enables it for internal users first. A kill switch turns off a misbehaving feature without a redeployment. Both let a change be tested against production data with a small, controllable audience. Flags used for rollout need removing once the rollout finishes, since each one left behind doubles the code paths that need testing.
+
+### Chaos Engineering
+
+Chaos engineering runs controlled experiments that inject real failures into production, such as terminating instances, adding network latency, or failing a dependency, to find weaknesses before an incident does. Netflix popularized it with Chaos Monkey, and the [Principles of Chaos Engineering](https://principlesofchaos.org/){:target="_blank" rel="noopener noreferrer"} describe the discipline. An experiment starts from a hypothesis about steady-state behavior, such as orders per minute staying within normal range, introduces a real-world event, and looks for a difference between a control group and the experimental group. Keeping the blast radius small, starting with one instance or a small share of traffic, and being able to stop an experiment immediately keep the experiment from becoming the incident.
+
+## Test Data
+
+Tests that share data interfere with each other, and tests that depend on data someone set up by hand break when that data changes. Each test creating the data it needs, with unique identifiers, keeps tests independent and runnable in parallel. Test data builders make that cheap by supplying valid defaults, so each test states only the values it cares about:
+
+```csharp
+public class OrderBuilder
+{
+    private readonly CustomerId customerId = CustomerId.New();
+    private readonly List<(string Sku, int Quantity, decimal UnitPrice)> lines = [];
+
+    public OrderBuilder WithLine(string sku, int quantity, decimal unitPrice)
+    {
+        lines.Add((sku, quantity, unitPrice));
+        return this;
+    }
+
+    public Order Build()
+    {
+        var order = new Order(OrderId.New(), customerId);
+        foreach (var (sku, quantity, unitPrice) in lines)
+            order.AddLine(sku, quantity, new Money(unitPrice, "USD"));
+        return order;
+    }
 }
 ```
 
-**Solution**: Test observable behavior, not implementation.
-```csharp
-[Fact]
-public void GetProduct_CalledTwice_QueriesDatabaseOnce()
-{
-    var mockRepo = new Mock<IProductRepository>();
-    var service = new ProductService(mockRepo.Object);
+Production data copied into test environments is realistic but carries personal data that privacy regulations restrict, so it needs masking or anonymization before use, and the masking itself needs to preserve the distributions and edge cases that made the data useful in the first place. Generated synthetic data avoids the privacy problem and can be produced in any volume, at the cost of missing the oddities found in production data.
 
-    service.GetProduct(productId);
-    service.GetProduct(productId);
+## Running Tests in the Pipeline
 
-    mockRepo.Verify(r => r.GetById(productId), Times.Once);
-}
-```
+The order tests run in decides how quickly a broken change is reported. Unit tests run first because they fail fastest, followed by integration and component tests, then contract verification, with end-to-end tests and longer performance or mutation runs gated to the main branch or a schedule. Tagging tests by scope, for example with xUnit traits such as `[Trait("Category", "Integration")]`, lets each pipeline stage select only the tests it runs.
 
-### 100% Code Coverage Fallacy
+Flaky tests deserve the same urgency as failing ones. A test that fails intermittently teaches the team to rerun and ignore failures, and once that habit forms, real failures get ignored too. Quarantining a flaky test, so it runs and reports without blocking merges while someone fixes it, keeps the suite trusted without deleting the coverage.
 
-Code coverage measures lines executed, not quality of tests.
+## Common Pitfalls
 
-**Reality**: 100% coverage doesn't guarantee correct behavior. You can have high coverage with meaningless assertions.
+- **The ice cream cone.** Most confidence comes from slow end-to-end or manual tests, so feedback takes hours and failures are hard to locate. Move checks for logic and edge cases down to scopes where they run fast and fail precisely.
+- **"Integration test" meaning everything between unit and end-to-end.** Without agreed scope definitions, suites grow tests that need half the system running. Name scopes by what they replace.
+- **In-memory database providers standing in for integration tests.** They pass tests that the real database would fail. Use a real engine in a container.
+- **Mocking everything.** Tests restate the implementation and break on every refactoring while catching few defects. Prefer sociable tests and fakes, and reserve mocks for interactions that are the behavior.
+- **End-to-end tests as the only check between services.** Contract tests catch breaking API changes before deployment, without a shared environment.
+- **Retrying flaky tests until they pass.** The retry hides whatever is intermittent, which may be a real concurrency defect.
+- **Coverage targets as a quality goal.** Coverage measures what ran, not what was checked. Mutation score measures what the tests would catch.
+- **Testing the same behavior at every scope.** Each duplicate slows the suite and multiplies the tests to update when behavior changes. Test each behavior at the lowest scope that can observe it.
 
-**Better metric**: Mutation test score (percentage of mutations killed).
+## Quick Reference
 
-## Test Automation Strategy
-
-### Continuous Integration (CI)
-
-Run tests on every commit to detect issues early.
-
-**CI test stages**:
-```yaml
-stages:
-  - build
-  - test
-  - integration-test
-  - deploy
-
-unit-tests:
-  stage: test
-  script:
-    - dotnet test --filter "Category=Unit"
-  artifacts:
-    reports:
-      junit: test-results.xml
-
-integration-tests:
-  stage: integration-test
-  services:
-    - postgres:14
-  script:
-    - dotnet test --filter "Category=Integration"
-
-performance-tests:
-  stage: integration-test
-  script:
-    - k6 run load-test.js
-  only:
-    - main
-```
-
-**CI best practices**:
-- Fast feedback (fail fast on unit tests before running slow integration tests)
-- Parallel execution where possible
-- Cache dependencies to speed up builds
-- Report test results and coverage
-- Block merges on test failures
-
-### Test Environments
-
-**Development**: Local machine, fast feedback, isolated
-**CI**: Automated pipeline, every commit, containerized dependencies
-**Staging**: Production-like, integration testing, manual QA
-**Production**: Real users, synthetic monitoring, canary deployments
-
-**Environment parity**: Staging should match production (same infrastructure, configurations, data volumes) to catch environment-specific issues.
-
-## Key Takeaways
-
-**Testing is architectural**: Test strategy impacts system design. Design for testability from the start (dependency injection, interfaces, small aggregates).
-
-**Use the right test for the job**: Unit tests for logic, integration tests for persistence, contract tests for service boundaries, E2E tests for critical workflows.
-
-**Contract testing prevents integration failures**: In microservices, contract testing catches breaking changes faster and cheaper than E2E tests.
-
-**Test architectural characteristics**: Performance, security, and resilience testing are as important as functional testing.
-
-**Testing doesn't stop at deployment**: Use synthetic monitoring, canary deployments, and feature flags to test in production safely.
-
-**Avoid flaky tests**: Flaky tests waste time and erode trust. Fix them immediately or delete them.
-
-**Test behavior, not implementation**: Tests should validate what the system does, not how it does it.
-
-**Property-based testing finds edge cases**: Generating random inputs exposes bugs you wouldn't think to test manually.
-
-**Mutation testing validates test quality**: High code coverage doesn't mean good tests. Mutation testing measures whether tests actually catch bugs.
-
-**Automate everything**: Manual testing doesn't scale. Invest in automated testing at all levels and run tests continuously in CI/CD pipelines.
+| Technique | Answers | Cost | Use for |
+|---|---|---|---|
+| **Unit test** | Is this logic right? | Lowest | Domain rules, calculations, state transitions |
+| **Integration test** | Does this code work against the real dependency? | Moderate, needs a container | Repositories, message consumers, serialization |
+| **Component test** | Does this service behave correctly through its API? | Moderate | Routing, validation, error mapping, service behavior |
+| **Contract test** | Do consumer and provider still agree? | Moderate, plus a broker | APIs and events between independently deployed services |
+| **End-to-end test** | Does this journey work in the deployed system? | Highest, slow and flaky | A few business-critical journeys |
+| **Property-based test** | Does this rule hold for all inputs? | Thought to find good properties | Parsers, serializers, calculations, stateful components |
+| **Mutation testing** | Would the tests catch a defect here? | Many test-suite runs | Critical modules, changed code |
+| **Fault injection** | Do the resilience strategies handle failures? | Low in tests, higher in production | Retries, timeouts, fallbacks, degradation |
+| **Synthetic monitoring** | Is this journey working in production right now? | Test accounts and data hygiene | Critical and low-traffic journeys |
+| **Chaos engineering** | Does the system hold steady state under real failures? | Operational maturity and safeguards | Systems with established observability and recovery |

@@ -3,304 +3,154 @@ title: "Architecture Governance Frameworks"
 layout: guide
 category: Architecture
 subcategory: Governance
-description: "Enterprise architecture frameworks and governance approaches - when to use them and why"
-tags: [architecture, governance, frameworks, leadership, compliance, standards]
+description: "What enterprise architecture frameworks actually provide and when they fit: methods, taxonomies, review frameworks, and IT management frameworks compared, TOGAF's Architecture Development Method and content, the Zachman Framework as a classification scheme, COBIT, ITIL, and DoDAF in context, and how to adopt a framework without creating bureaucracy."
+tags: [practical, togaf, zachman-framework, enterprise-architecture, cobit, governance]
 ---
 
-## Choosing a Governance Approach
+An architecture framework is a published body of practice for describing, developing, or governing architecture across an organization. Frameworks promise a shared vocabulary, a repeatable process, and the assurance that nothing important was forgotten. They also have a reputation for producing documents nobody reads. Both reputations are earned, and which one a framework lives up to depends mostly on whether the organization adopted it to solve a specific problem or to appear thorough.
 
-<blockquote class="pull-quote">
-<p>Choose based on organization size, complexity, and regulatory requirements, not on what seems comprehensive or impressive.</p>
-</blockquote>
+## Kinds of Framework
 
-Before selecting a framework, understand your governance needs based on organization characteristics.
+Frameworks that get compared as alternatives often do different jobs. Choosing between them starts with knowing which job each does.
 
-### Decision Matrix
+| Kind | Answers | Examples |
+|---|---|---|
+| **Architecture method** | How do we develop and govern architecture, step by step? | TOGAF's Architecture Development Method |
+| **Taxonomy** | What descriptions of the enterprise exist, and how are they organized? | Zachman Framework |
+| **Architecture review framework** | Is this workload designed well for a given platform? | AWS Well-Architected, Azure Well-Architected |
+| **IT governance and management** | How is IT governed, controlled, and audited as a whole? | COBIT |
+| **Service management** | How are IT services and products delivered and supported? | ITIL |
+| **Domain-specific** | What must architecture descriptions contain in this sector? | DoDAF for US defense |
 
-| Organization Size | Complexity | Regulatory Requirements | Recommended Framework |
-|-------------------|------------|-------------------------|-----------------------|
-| < 50 engineers | Single product | Low | Lightweight: AWS Well-Architected Framework |
-| 50-200 engineers | Multiple products | Medium | Moderate: Well-Architected + ADR process |
-| 200+ engineers | Many products/platforms | High | Comprehensive: TOGAF or enterprise framework |
-| Any size | Simple apps | High (regulated) | Compliance-focused: Industry-specific framework |
+These combine more often than they compete. An organization might use TOGAF's method to run its architecture practice, ArchiMate to model, cloud well-architected reviews for individual workloads, and COBIT because its auditors expect it.
 
-### Key Questions to Ask
+## TOGAF
 
-**1. What problem are we trying to solve?**
+[The TOGAF Standard](https://www.opengroup.org/togaf){:target="_blank" rel="noopener noreferrer"}, from The Open Group, is the enterprise architecture framework its publisher describes as the most widely used. Its current version, the 10th Edition, was released in April 2022. It is split into Fundamental Content, which holds the core concepts and method, and Series Guides, which advise on applying them in particular settings such as agile delivery, digital transformation, or security architecture. The split reflects that the framework is meant to be configured for each organization rather than followed whole.
 
-| Problem | Solution |
-|---------|----------|
-| Inconsistent architecture across teams | Framework with architecture principles and review processes |
-| Slow decision-making | Lightweight decision-making framework (ADRs, Well-Architected) |
-| Enterprise transformation | Comprehensive framework like TOGAF |
-| Multi-cloud strategy | Cloud-agnostic framework or hybrid approach |
+### The Architecture Development Method
 
-**2. What's our current maturity level?**
-- **Ad-hoc (Level 1):** Start with AWS Well-Architected Framework and basic review processes
-- **Managed (Level 2):** Add formal architecture review boards and decision records
-- **Defined (Level 3):** Implement comprehensive framework with defined processes
-- **Optimized (Level 4):** Fine-tune framework to organizational needs
+TOGAF's core is the Architecture Development Method (ADM), an iterative cycle for developing and changing an enterprise's architecture. A Preliminary phase establishes the architecture capability itself. Eight phases, labeled A through H, then form the cycle, and Requirements Management sits at the center, feeding requirements into every phase and capturing new ones from each.
 
-<div class="callout callout--tip">
-<p class="callout__title">Key Question: What Can We Maintain?</p>
-<p>Frameworks require ongoing commitment and cultural adoption. Start small and expand based on demonstrated value. Heavy frameworks like TOGAF need dedicated enterprise architects.</p>
-</div>
+```
+                         Preliminary
+                              │
+                              ▼
+                      A. Architecture Vision
+                 ┌──────────────────────────────┐
+     H. Architecture                         B. Business
+        Change Management                       Architecture
+                 │                              │
+                 │     ┌──────────────────┐     │
+  G. Implementation    │   Requirements   │   C. Information Systems
+     Governance        │   Management     │      Architectures
+                 │     └──────────────────┘     │     (data, application)
+                 │                              │
+     F. Migration                            D. Technology
+        Planning                                Architecture
+                 └──────────────────────────────┘
+                     E. Opportunities and Solutions
 
-## Enterprise Architecture Frameworks
+   Requirements Management exchanges requirements with every phase.
+```
 
-### AWS Well-Architected Framework
+| Phase | Purpose |
+|---|---|
+| **Preliminary** | Set up the architecture capability, including principles, tools, and governance |
+| **A. Architecture Vision** | Define scope, stakeholders, and the target vision, and get approval to proceed |
+| **B. Business Architecture** | Describe the baseline and target business architecture, and the gaps |
+| **C. Information Systems Architectures** | Do the same for data and application architecture |
+| **D. Technology Architecture** | Do the same for the technology platform |
+| **E. Opportunities and Solutions** | Group the gaps into work packages and transition architectures |
+| **F. Migration Planning** | Sequence and cost the transition into an implementation roadmap |
+| **G. Implementation Governance** | Oversee implementation projects for conformance with the architecture |
+| **H. Architecture Change Management** | Monitor changes in business and technology, and decide when a new cycle is needed |
+| **Requirements Management** | Maintain requirements continuously across every phase |
 
-**What it is:**
+The cycle doesn't have to run end to end for every initiative. TOGAF expects phases to be iterated and scoped to the problem, so a single initiative might iterate through B to D several times before moving on, and an organization with a stable architecture practice may spend most of its time in G and H.
 
-AWS Well-Architected Framework is a cloud architecture review methodology built around six foundational pillars:
+### Beyond the Method
 
-1. **Operational Excellence:** Running and monitoring systems to deliver business value, continuously improving processes
-2. **Security:** Protecting information, systems, and assets through risk assessments and mitigation strategies
-3. **Reliability:** Ensuring workloads perform intended functions correctly and consistently, recovering from failures
-4. **Performance Efficiency:** Using computing resources efficiently to meet requirements and maintain efficiency as demand changes
-5. **Cost Optimization:** Running systems to deliver business value at the lowest price point
-6. **Sustainability:** Minimizing environmental impact of cloud workloads
+TOGAF also defines what an architecture practice produces and where it keeps it. The **Architecture Content Framework** describes the work products, such as catalogs, matrices, and diagrams, and a metamodel relating the elements they describe. The **Enterprise Continuum** classifies architecture assets from generic reference models down to organization-specific architectures, which helps teams reuse rather than re-create. The **Architecture Repository** is where those assets, standards, and governance records live. TOGAF's guidance on **architecture governance** covers an Architecture Board, compliance reviews against the architecture during implementation, and dispensations for justified deviations.
 
-Each pillar contains design principles, best practices, and specific questions to evaluate architectures. The framework includes:
-- **Well-Architected Review Tool:** Interactive questionnaire that produces risk assessments and improvement plans
-- **Lenses:** Specialized guidance for specific workloads (SaaS, Serverless, Machine Learning, etc.)
-- **Pillars Whitepaper:** Detailed documentation of best practices and implementation patterns
+### When TOGAF Fits
 
-The framework operates through iterative review cycles where teams assess current state, identify high-risk areas, and create improvement plans prioritized by business impact.
+TOGAF fits organizations that have to coordinate architecture across many business units, systems, and years, particularly during a large transformation such as a merger, a move off a legacy estate, or a restructuring of how the business operates. Its common vocabulary helps when architects across a large organization, or across partner firms, need to work from the same concepts. Certification also means many enterprise architects already know it.
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>When to Use AWS Well-Architected</h4>
-<ul>
-<li>Building on AWS (any organization size)</li>
-<li>Need objective architecture review criteria</li>
-<li>Want lightweight process without heavy docs</li>
-<li>Conducting quarterly architecture reviews</li>
-<li>Starting governance journey</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>When NOT to Use</h4>
-<ul>
-<li>Need enterprise-wide governance across multiple clouds</li>
-<li>Require formal methodology like TOGAF for regulatory compliance</li>
-<li>Systems are primarily on-premises</li>
-<li>Non-AWS cloud providers</li>
-</ul>
-</div>
-</div>
+It fits poorly where no dedicated enterprise architecture function exists to run it, or where the problem is local to a few teams. Running the full ADM for a product organization of a few teams produces documentation overhead far out of proportion to the coordination it saves.
 
-**Why it works:**
-- Free and AWS-supported with extensive documentation
-- Built-in review tool provides actionable recommendations
-- Custom lenses available for specific workloads (SaaS, serverless, etc.)
-- Practical and focused on real issues, not abstract principles
+## The Zachman Framework
 
-**How to implement:**
-1. Conduct initial Well-Architected Review using AWS tool
-2. Use pillars as ARB review checklist
-3. Create quarterly review cadence
-4. Track improvement over time
+John Zachman introduced his framework in the *IBM Systems Journal* in 1987, and its current version is 3.0. It is an ontology, a classification scheme for the descriptions of an enterprise, not a method for producing them. It arranges those descriptions in a six-by-six grid.
 
-**Example decision:** Use Well-Architected Review scores to prioritize technical debt remediation. Systems below 70% compliance get mandatory improvement plans.
+The **columns** are six interrogatives, each a different aspect of the enterprise:
 
-**Resources:**
-- [AWS Well-Architected Framework Homepage](https://aws.amazon.com/architecture/well-architected/){:target="_blank" rel="noopener noreferrer"}
-- [Well-Architected Tool (AWS Console)](https://console.aws.amazon.com/wellarchitected/){:target="_blank" rel="noopener noreferrer"}
-- [Framework Whitepapers (All Pillars)](https://aws.amazon.com/architecture/well-architected/#Whitepapers){:target="_blank" rel="noopener noreferrer"}
-- [Well-Architected Lenses](https://aws.amazon.com/architecture/well-architected/#AWS_Well-Architected_Lenses){:target="_blank" rel="noopener noreferrer"}
-- [AWS Architecture Center](https://aws.amazon.com/architecture/){:target="_blank" rel="noopener noreferrer"}
+| Interrogative | Aspect in version 3.0 | Describes |
+|---|---|---|
+| **What** | Inventory sets | Things the enterprise holds information about |
+| **How** | Process flows | Transformations the enterprise performs |
+| **Where** | Distribution networks | Locations and the connections between them |
+| **Who** | Responsibility assignments | Roles and the work assigned to them |
+| **When** | Timing cycles | Events and schedules |
+| **Why** | Motivation intentions | Goals, strategies, and the means to reach them |
 
-### TOGAF
+The **rows** are six perspectives, from the most abstract to the running enterprise: executive, business management, architect, engineer, technician, and the enterprise itself. Each cell is the description of one aspect from one perspective. The intersection of What and the executive perspective is a list of the things that matter to the business. The intersection of What and the engineer perspective is a physical data model.
 
-**What it is:**
+The grid's value is in the gaps it reveals. Mapping an organization's existing documentation onto it shows, for example, detailed physical data models with no business-level description of what the data means, or process descriptions with no statement of why the processes exist. It says nothing about how to fill the gaps, in what order, or how to govern changes, which is why organizations using Zachman usually pair it with a method. Trying to fill every cell for the whole enterprise is a well-known way to spend years producing documents that are out of date before they're finished.
 
-The Open Group Architecture Framework (TOGAF) is a comprehensive enterprise architecture framework centered on the Architecture Development Method (ADM), an eight-phase iterative process:
+## Other Frameworks
 
-**ADM Phases:**
-1. **Preliminary Phase:** Establish architecture capability, define principles, and secure stakeholder buy-in
-2. **Phase A (Architecture Vision):** Define scope, identify stakeholders, create high-level vision
-3. **Phase B (Business Architecture):** Document business strategy, governance, organization, and key business processes
-4. **Phase C (Information Systems Architecture):** Define data architecture and application architecture
-5. **Phase D (Technology Architecture):** Define technology infrastructure supporting applications and data
-6. **Phase E (Opportunities & Solutions):** Identify delivery vehicles, transition architectures, and implementation approach
-7. **Phase F (Migration Planning):** Finalize detailed implementation and migration plan with priorities and costs
-8. **Phase G (Implementation Governance):** Provide architectural oversight during implementation
-9. **Phase H (Architecture Change Management):** Establish procedures for managing changes to the architecture
+**COBIT**, from ISACA, is a framework for governance and management of enterprise IT as a whole. Its current version, COBIT 2019, defines governance and management objectives and design factors for tailoring them to an organization. It is oriented toward control, risk, and audit, which makes it common in regulated industries and in organizations whose auditors assess IT against it. It governs IT broadly rather than prescribing how to develop an architecture.
 
-**Key TOGAF Components:**
+**ITIL**, now owned by PeopleCert, is a body of practice for IT service and product management, covering how services are designed, delivered, supported, and improved. ITIL (Version 5), released in 2026, succeeds ITIL 4 and brings product and service management into one scheme. Architecture work touches ITIL where services are handed to operations, through change enablement, service levels, and incident and problem management.
 
-- **Enterprise Continuum:** Classification system ranging from generic Foundation Architectures to organization-specific architectures
-- **Architecture Repository:** Structured approach for storing architecture assets including reference models, standards, and governance logs
-- **Architecture Content Framework:** Detailed metamodel defining architecture artifacts (catalogs, matrices, diagrams)
-- **Architecture Capability Framework:** Guidance on establishing and operating an architecture function
+**DoDAF**, the US Department of Defense Architecture Framework, prescribes the viewpoints and models that defense architecture descriptions must contain. Version 2.02 remains the current version. The Unified Architecture Framework (UAF), an Object Management Group standard, includes a crosswalk from DoDAF views and is positioned as its eventual successor.
 
-TOGAF emphasizes stakeholder management, requirements management (continuous throughout all phases), and aligning IT architecture with business strategy. It's methodology-heavy, document-intensive, and designed for large-scale enterprise transformation initiatives.
+**Cloud well-architected frameworks** from AWS, Microsoft, and Google are review frameworks for individual workloads on their platforms, organized as pillars such as reliability, security, cost, operational excellence, and performance efficiency. AWS's framework adds sustainability as a sixth pillar. They answer whether one workload follows a provider's guidance, not how an enterprise governs architecture across workloads, so they sit alongside the frameworks above rather than in place of them.
 
-**When to use:**
-- Large enterprise (500+ engineers) undergoing transformation
-- Regulated industry requiring formal documentation
-- Multi-year initiatives needing stakeholder alignment
-- Need to align IT strategy with business strategy
+## Choosing and Adopting a Framework
 
-**When NOT to use:**
-- Small/medium organizations (too heavy)
-- Agile teams moving quickly (process overhead)
-- Primarily tactical governance needs
-- Organization lacks dedicated enterprise architects
+### Start From the Problem
 
-**Why it works (when appropriate):**
-- Provides common language across large organizations
-- Comprehensive coverage of enterprise concerns
-- Well-established with training and certifications
-- Addresses both technical and business architecture
+The most useful selection criterion is the problem the organization is trying to solve, not its size or the framework's reputation.
 
-<div class="callout callout--warning">
-<p class="callout__title">Common Mistake</p>
-<p>Implementing TOGAF by-the-book creates bureaucracy. Adapt it to your culture and needs. Don't try to use all phases; focus on phases B-D (architecture definition) and H (change management) for governance.</p>
-</div>
+| Problem | What tends to help |
+|---|---|
+| Teams make inconsistent technology and design choices | A lightweight governance model with published principles and standards, before any framework |
+| A large transformation spans many business units and years | TOGAF's ADM, tailored to the transformation's scope |
+| Nobody can tell what architecture documentation exists or what's missing | Zachman as a classification of what exists, used to find gaps |
+| Auditors and regulators assess IT controls | COBIT, often alongside an architecture method |
+| Workloads on one cloud have recurring reliability, security, or cost problems | That provider's well-architected reviews |
+| Defense or government contracts require specific architecture descriptions | The mandated framework, such as DoDAF |
 
-**How to implement:**
-1. Train enterprise architecture team on TOGAF
-2. Adapt ADM phases to organization needs (don't follow blindly)
-3. Focus on phases B-D (architecture definition) and H (change management) for governance
-4. Use TOGAF artifacts as templates, not mandates
+Several of these problems don't need a framework at all. A small organization with inconsistent designs usually gets more from a clear set of principles, decision records, and a lightweight review process than from adopting TOGAF.
 
-**Resources:**
-- [The Open Group - TOGAF Standard](https://www.opengroup.org/togaf){:target="_blank" rel="noopener noreferrer"}
-- [TOGAF 9.2 Documentation](https://pubs.opengroup.org/architecture/togaf9-doc/arch/){:target="_blank" rel="noopener noreferrer"}
-- [TOGAF Certification Program](https://www.opengroup.org/certifications/togaf){:target="_blank" rel="noopener noreferrer"}
-- [ArchiMate Modeling Language](https://www.opengroup.org/archimate-forum/archimate-overview){:target="_blank" rel="noopener noreferrer"} (commonly used with TOGAF)
-- [TOGAF Library (Members)](https://www.opengroup.org/togaf-library){:target="_blank" rel="noopener noreferrer"}
+### Tailor Rather Than Install
 
-### Zachman Framework
+Frameworks are written to cover every organization that might use them, so no single organization needs all of one. Adoption goes better when it starts from the parts that address the problem at hand and grows only as those parts prove useful:
 
-**What it is:**
+- **Adopt vocabulary first.** Shared terms for phases, artifacts, and viewpoints help even before any process changes.
+- **Produce only artifacts someone uses.** Each document the framework describes should have a reader and a decision it informs, or it doesn't get written.
+- **Fit the cadence to delivery.** Architecture work that runs on a separate, slower cycle from the teams building systems ends up describing systems that have already changed.
+- **Assign an owner.** A framework without people who maintain its repository, standards, and reviews decays into outdated templates.
+- **Measure the outcome.** Track whether the problem that justified adoption is improving, such as fewer conflicting designs, faster integration, or audit findings closed, rather than counting artifacts produced.
 
-The Zachman Framework is an enterprise architecture ontology, a classification scheme for organizing architecture artifacts into a structured taxonomy. It's represented as a 6x6 matrix (36 cells) defining the intersection of:
+## Common Pitfalls
 
-**Interrogatives (Columns):**
-1. **What (Data):** What data/information the enterprise uses
-2. **How (Function):** How the enterprise operates (processes, functions)
-3. **Where (Network):** Where the enterprise operates (locations, connectivity)
-4. **Who (People):** Who operates the enterprise (roles, organizations)
-5. **When (Time):** When operations occur (schedules, events, cycles)
-6. **Why (Motivation):** Why the enterprise operates (goals, strategies, rules)
+- **Adopting a framework to look mature.** Without a specific problem to solve, adoption tends to produce artifacts instead of better decisions.
+- **Running TOGAF by the book.** The full ADM applied to every initiative creates overhead that teams route around. Scope each cycle to its problem.
+- **Treating Zachman as a method.** It classifies descriptions and says nothing about producing them. Pair it with a method, or use it only to find gaps.
+- **Filling every cell.** Complete coverage of an enterprise in any framework takes longer than the enterprise stays still.
+- **Architecture on a separate cycle from delivery.** Documents describe a target the delivered systems have already diverged from.
+- **Confusing review frameworks with governance.** A well-architected review assesses one workload. It doesn't decide who owns cross-system decisions.
 
-**Perspectives (Rows):**
-1. **Executive Perspective (Contextual):** Scope and context, business concepts
-2. **Business Management Perspective (Conceptual):** Business model, semantic models
-3. **Architect Perspective (Logical):** System logic, architectural representations
-4. **Engineer Perspective (Physical):** Technology models, detailed specifications
-5. **Technician Perspective (Component):** Component assemblies, out-of-context specifications
-6. **User Perspective (Operations):** Functioning enterprise, operational instances
+## Quick Reference
 
-**Key Characteristics:**
-
-- **Not a methodology:** Zachman provides no guidance on *how* to create architecture—only *what* architecture artifacts should exist
-- **Framework-agnostic:** Can be used alongside TOGAF, Agile, or any other methodology
-- **Comprehensive taxonomy:** Every aspect of enterprise architecture has a defined place in the matrix
-- **Cell independence:** Each cell represents a unique, atomic view with specific deliverables (though cells are related)
-
-Example cell: "What (Data) × Executive (Contextual)" = list of important business entities; "What (Data) × Engineer (Physical)" = physical data model with tables and relationships.
-
-The framework helps identify gaps in enterprise documentation, ensures comprehensive coverage, and provides common vocabulary across stakeholder groups.
-
-**When to use:**
-- Need comprehensive enterprise taxonomy
-- Multiple frameworks in use and need integration model
-- Large enterprise requiring common vocabulary
-- Documentation-heavy regulated environments
-
-**When NOT to use:**
-- Need implementation guidance (Zachman is taxonomy, not methodology)
-- Small to medium organizations (too comprehensive)
-- Agile environments needing rapid adaptation
-- Organizations without dedicated EA team
-
-**Why it works (when appropriate):**
-- Provides complete enterprise view across all perspectives
-- Framework-agnostic (can integrate with TOGAF, Agile, etc.)
-- Helps identify gaps in enterprise architecture documentation
-- Common language across stakeholders
-
-<div class="callout callout--warning">
-<p class="callout__title">Common Mistake</p>
-<p>Treating Zachman as implementation methodology. It's a taxonomy for organizing architecture artifacts, not a process for creating them. Use it to classify and organize, not to guide development.</p>
-</div>
-
-**How to implement:**
-- Use as classification system for existing artifacts
-- Don't try to fill every cell in the matrix
-- Focus on perspectives relevant to your organization
-- Combine with methodologies like TOGAF for process guidance
-
-**Resources:**
-- [Zachman International - Official Site](https://www.zachman.com/){:target="_blank" rel="noopener noreferrer"}
-- [Zachman Framework Overview](https://www.zachman.com/about-the-zachman-framework){:target="_blank" rel="noopener noreferrer"}
-- [Enterprise Architecture Body of Knowledge (EABOK)](https://www.zachman.com/ea-books-by-john-zachman){:target="_blank" rel="noopener noreferrer"} - John Zachman's books
-- [Zachman Framework Evolution (PDF)](https://www.zachman.com/images/ZI_PIcs/ZF3.0.pdf){:target="_blank" rel="noopener noreferrer"}
-
-### Other Notable Frameworks
-
-**COBIT (Control Objectives for Information and Related Technology):**
-- Focus: IT governance and management
-- Best for: Audit, compliance, and IT risk management
-- Use when: Need to align IT with business objectives and manage IT risk
-- Resources: [ISACA COBIT Framework](https://www.isaca.org/resources/cobit){:target="_blank" rel="noopener noreferrer"}
-
-**ITIL (Information Technology Infrastructure Library):**
-- Focus: IT service management
-- Best for: Operations and service delivery
-- Use when: Need to improve IT service quality and efficiency
-- Resources: [Axelos ITIL](https://www.axelos.com/certifications/itil-service-management){:target="_blank" rel="noopener noreferrer"}
-
-**DoDAF (Department of Defense Architecture Framework):**
-- Focus: Military and government systems
-- Best for: Complex system-of-systems architectures
-- Use when: Working on defense or government projects
-- Resources: [DoD Architecture Framework](https://dodcio.defense.gov/Library/DoD-Architecture-Framework/){:target="_blank" rel="noopener noreferrer"}
-
-## Key Takeaways
-
-**Framework selection principles:**
-- Choose based on organization size, complexity, and regulatory requirements
-- Lightweight frameworks (AWS Well-Architected) work for most organizations
-- Comprehensive frameworks (TOGAF, Zachman) require dedicated EA teams
-- Don't implement frameworks by-the-book - adapt to your needs
-
-**AWS Well-Architected Framework:**
-- Best starting point for AWS-based organizations
-- Free, practical, and widely adopted
-- Six pillars provide comprehensive review criteria
-- Use for quarterly architecture reviews and ARB processes
-- Custom lenses available for specialized workloads
-
-**TOGAF:**
-- Comprehensive methodology for large enterprises
-- 8-phase ADM provides structured approach
-- Requires significant commitment and training
-- Adapt to organizational culture, don't follow rigidly
-- Focus on architecture definition and change management phases
-
-**Zachman Framework:**
-- Taxonomy for organizing architecture artifacts, not a methodology
-- 6x6 matrix provides comprehensive enterprise view
-- Framework-agnostic - can integrate with other approaches
-- Use to identify gaps and create common vocabulary
-- Don't try to fill every cell - focus on relevant perspectives
-
-**Common mistakes to avoid:**
-- Implementing heavy frameworks in small/medium organizations
-- Following frameworks rigidly without adaptation
-- Treating taxonomies (Zachman) as methodologies
-- Choosing frameworks before understanding problems
-- Lacking dedicated resources to maintain framework adoption
-
-**Success factors:**
-- Start with lightweight frameworks and expand as needed
-- Secure executive sponsorship and dedicated resources
-- Adapt frameworks to organizational culture and maturity
-- Focus on providing value, not achieving compliance
-- Integrate framework reviews into existing processes
-- Track improvements over time to demonstrate ROI
+| Framework | Kind | Current version | Best used for |
+|---|---|---|---|
+| **TOGAF** | Architecture method and content framework | 10th Edition (2022) | Coordinating architecture across a large enterprise or transformation |
+| **Zachman** | Taxonomy of enterprise descriptions | 3.0 | Classifying existing documentation and finding gaps |
+| **COBIT** | IT governance and management | COBIT 2019 | Control, risk, and audit of enterprise IT |
+| **ITIL** | Service and product management | Version 5 (2026) | Delivering and supporting IT services |
+| **DoDAF** | Domain-specific architecture framework | 2.02, with UAF as its successor | US defense architecture descriptions |
+| **Cloud well-architected** | Workload review framework | Maintained continuously by each provider | Reviewing individual workloads on one cloud |
