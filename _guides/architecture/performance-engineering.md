@@ -212,7 +212,7 @@ Latency typically stays flat as load increases, then rises sharply past a point,
 
 ### Utilization and Latency
 
-Latency doesn't grow in proportion to utilization. Queueing theory shows why. In the simplest single-server queueing model, average response time equals service time divided by one minus utilization. At 50% utilization, requests take twice their service time on average. At 80%, five times. At 90%, ten times. Real systems differ in detail, but the shape holds: latency degrades gently at moderate utilization and explodes as a resource approaches full use.
+Latency doesn't grow in proportion to utilization. Queueing theory shows why. In the simplest single-server queueing model, average response time equals service time divided by one minus utilization. At 50% utilization, requests take twice their service time on average. At 80%, five times. At 90%, ten times. Real systems differ in detail, but the shape holds. Latency degrades gently at moderate utilization and climbs steeply as a resource approaches full use.
 
 This is why capacity targets set utilization ceilings well below 100% for any resource on a latency-sensitive path. The right ceiling depends on how variable the load and service times are, and a load test that finds the knee gives a better number than a rule of thumb.
 
