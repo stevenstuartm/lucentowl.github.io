@@ -286,7 +286,7 @@ body.home-layout .site-title a:hover .site-name {
         z-index: auto; /* the mobile-dropdown z-index (1000) otherwise carries
                            over here; grid items apply z-index even at
                            position:static, so it would sit above and
-                           swallow clicks meant for .shelf-indicator */
+                           swallow clicks meant for .header-actions */
     }
 
     .site-nav {
@@ -3329,16 +3329,33 @@ body.home-layout .site-title a:hover .site-name {
     }
 }
 
-/* Header shelf indicator. Deliberately position: absolute — it must stay
-   completely out of .header-content's flex/grid flow so it can never
-   shrink the nav's column or add width the hamburger row has to
-   accommodate, regardless of screen size. */
-.shelf-indicator {
+/* Header action icons (What's New, shelf). Deliberately position: absolute —
+   the group stays out of .header-content's flex/grid flow so it can never
+   shrink the nav's column or add width the hamburger row has to accommodate. */
+.header-actions {
     position: absolute;
     top: 50%;
-    right: calc(30px + var(--spacing-sm)); /* clears the 30px hamburger + a gap */
+    right: calc(30px + var(--spacing-md)); /* clears the 30px hamburger + a gap wide enough for the shelf badge overhang */
     transform: translateY(-50%);
     display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    z-index: 10;
+}
+
+@media (min-width: 1024px) {
+    /* Hamburger is gone, so the group moves to the header's top-right corner,
+       above the vertically centered nav. The nav keeps its full width. */
+    .header-actions {
+        top: 0.25rem;
+        right: 0;
+        transform: none;
+    }
+}
+
+.shelf-indicator {
+    position: relative;
+    display: none;
     align-items: center;
     justify-content: center;
     width: 30px;
@@ -3348,12 +3365,10 @@ body.home-layout .site-title a:hover .site-name {
     cursor: pointer;
     color: var(--color-text);
     padding: 0;
-    visibility: hidden;
-    z-index: 10;
 }
 
 .shelf-indicator.visible {
-    visibility: visible;
+    display: flex;
 }
 
 .shelf-indicator:hover {
@@ -3385,10 +3400,228 @@ body.home-layout .site-title a:hover .site-name {
     text-align: center;
 }
 
-@media (min-width: 1024px) {
-    .shelf-indicator {
-        /* hamburger is display:none here, so it no longer needs clearing */
-        right: var(--spacing-sm);
+.whats-new-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text);
+    padding: 0;
+}
+
+.whats-new-indicator-icon {
+    width: 24px;
+    height: 24px;
+    fill: var(--color-gold);
+    stroke: #8A6D12; /* darker gold outline keeps the icon legible on white */
+    stroke-width: 1.25;
+    overflow: visible;
+    pointer-events: none;
+    filter: drop-shadow(0 0 3px rgba(201, 162, 39, 0.55));
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.whats-new-indicator:hover .whats-new-indicator-icon,
+.whats-new-indicator:focus-visible .whats-new-indicator-icon {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 6px rgba(201, 162, 39, 0.85));
+}
+
+/* A short twinkle on page load: plays three times, then rests. */
+.whats-new-star-main,
+.whats-new-star-small {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+.whats-new-star-main {
+    animation: whatsNewTwinkle 1.6s ease-in-out 0.6s 3;
+}
+
+.whats-new-star-small {
+    animation: whatsNewTwinkle 1.6s ease-in-out 1s 3;
+}
+
+@keyframes whatsNewTwinkle {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    40% { transform: scale(1.25) rotate(15deg); }
+    70% { transform: scale(0.9) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .whats-new-star-main,
+    .whats-new-star-small {
+        animation: none;
+    }
+
+    .whats-new-indicator-icon {
+        transition: none;
+    }
+}
+
+/* What's New panel — shelf panel shell, case-study-style cards inside */
+.whats-new-panel {
+    max-width: 560px;
+}
+
+.whats-new-subtitle {
+    margin: 0.15rem 0 0;
+    font-size: 0.85rem;
+    color: var(--color-text-light);
+}
+
+.whats-new-list {
+    list-style: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    background: var(--color-bg);
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+.whats-new-card {
+    --whats-new-kind-color: var(--color-secondary);
+    flex-shrink: 0; /* the list scrolls; cards keep their full height */
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-top: 4px solid var(--whats-new-kind-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.whats-new-card--new { --whats-new-kind-color: var(--color-gold); }
+.whats-new-card--revised { --whats-new-kind-color: var(--color-secondary); }
+.whats-new-card--post { --whats-new-kind-color: var(--color-accent); }
+
+.whats-new-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    border-color: var(--color-primary);
+    border-top-color: var(--whats-new-kind-color);
+}
+
+.whats-new-card-main {
+    display: block;
+    padding: var(--spacing-sm);
+    color: inherit;
+    text-decoration: none;
+}
+
+a.whats-new-card-main:hover {
+    color: inherit;
+}
+
+.whats-new-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-bottom: var(--spacing-xs);
+}
+
+.whats-new-badge--new { background: rgba(201, 162, 39, 0.15); color: #7A5F0E; }
+.whats-new-badge--revised { background: rgba(45, 90, 133, 0.1); color: var(--color-secondary); }
+.whats-new-badge--post { background: rgba(165, 72, 110, 0.1); color: var(--color-accent); }
+
+.whats-new-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.05rem;
+    line-height: 1.35;
+    color: var(--color-text);
+    transition: color 0.2s ease;
+}
+
+a.whats-new-card-main:hover .whats-new-title {
+    color: var(--color-primary);
+}
+
+.whats-new-note {
+    margin: 0 0 var(--spacing-xs);
+    font-size: 0.88rem;
+    color: var(--color-text-light);
+    line-height: 1.5;
+}
+
+.whats-new-card .read-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    transition: gap 0.2s ease;
+}
+
+a.whats-new-card-main:hover .read-more {
+    gap: 8px;
+}
+
+.whats-new-sublinks {
+    list-style: none;
+    margin: 0;
+    padding: 0 var(--spacing-sm) var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.whats-new-sublinks a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-xs);
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-bg);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.whats-new-sublinks a:hover {
+    border-color: var(--color-primary);
+    background: var(--color-card-bg);
+}
+
+.whats-new-sublinks .arrow {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.whats-new-sublinks a:hover .arrow {
+    transform: translateX(3px);
+}
+
+@media (max-width: 768px) {
+    /* The panel fills the screen here, so let the list use all of it */
+    .whats-new-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .shelf-panel-body.whats-new-list { /* outranks .shelf-panel-body's 60vh cap, which comes later */
+        flex: 1;
+        max-height: none;
+        border-radius: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .whats-new-card,
+    .whats-new-card:hover {
+        transform: none;
     }
 }
 

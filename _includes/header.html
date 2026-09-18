@@ -7,12 +7,20 @@
                     <span class="site-name">Lucent Owl</span>
                 </a>
             </h1>
-            <button class="shelf-indicator" id="shelfIndicator" aria-label="Open shelf" aria-haspopup="dialog" aria-expanded="false">
-                <svg class="shelf-indicator-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"></path>
-                </svg>
-                <span class="shelf-badge" id="shelfBadge">0</span>
-            </button>
+            <div class="header-actions">
+                <button class="whats-new-indicator" id="whatsNewIndicator" aria-label="What's new" aria-haspopup="dialog" aria-expanded="false">
+                    <svg class="whats-new-indicator-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path class="whats-new-star-main" d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path>
+                        <path class="whats-new-star-small" d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"></path>
+                    </svg>
+                </button>
+                <button class="shelf-indicator" id="shelfIndicator" aria-label="Open shelf" aria-haspopup="dialog" aria-expanded="false">
+                    <svg class="shelf-indicator-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"></path>
+                    </svg>
+                    <span class="shelf-badge" id="shelfBadge">0</span>
+                </button>
+            </div>
             <button class="hamburger" aria-label="Toggle menu" aria-expanded="false">
                 <span></span>
                 <span></span>
@@ -33,6 +41,7 @@
 </header>
 
 {% include shelf-panel.html %}
+{% include whats-new-panel.html %}
 
 <script>
     (function() {

@@ -52,7 +52,7 @@ bundle exec jekyll build
 ## Architecture
 
 ### Jekyll Structure
-- **_config.yml**: Site configuration, author info, social links, and build settings
+- **_config.yml**: Site configuration, author info, social links, and build settings. Sets `data_dir: assets/data`, so `site.data` reads from `assets/data/`, not `_data/`
 - **_layouts/**: HTML templates that wrap content
   - `default.html`: Base template with header/footer includes
   - `home.html`: Homepage layout (extends default) with recent posts section
@@ -84,10 +84,10 @@ bundle exec jekyll build
 - **pages/authors/steven-stuart.md**: Author page (layout: author)
 
 ### Author System
-- **`_data/authors.yml`**: Author records (name, bio, avatar, social links)
+- **`assets/data/authors.yml`**: Author records (name, bio, avatar, social links)
 - **`_layouts/author.html`**: Author page template — avatar, bio, social links, post list
 - **`_includes/author-byline.html`**: Compact byline for post/case-study headers
-- **`_includes/social-links.html`**: Author-scoped; requires `author` param, reads from `_data/authors.yml`
+- **`_includes/social-links.html`**: Author-scoped; requires `author` param, reads from `assets/data/authors.yml`
 - Social links appear **only on author pages** — never in the global header or footer
 - All posts and case studies are auto-attributed via `_config.yml` defaults (`author: steven-stuart`)
 
@@ -208,6 +208,15 @@ related_posts:
 The `related_*` fields are declared on the resource, never on the guide, case study, or post being linked to — adding a resource never requires editing existing content files. Both directions render from that one declaration — see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
 
 For the Lookup Test (deciding whether content qualifies as a resource), quality standards, and organization guidance, see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
+
+## What's New Stack
+
+A header button (sparkle icon, next to the shelf bookmark) opens a panel listing the latest additions and revisions. Data lives in `assets/data/whats_new.yml` and renders through `_includes/whats-new-panel.html`.
+
+- **No dates, order only.** Newest first, capped at 10. When you add an entry at the top, delete the bottom one.
+- **Add an entry when you publish something a returning reader should know about:** a new post, guide, or resource, or a substantive refinement pass over a block of guides (one entry per pass, not per file). Skip mechanical changes like link moves or front-matter fixes.
+- **No reader tracking.** The panel is static: no badge, no seen/unseen state, nothing written to the reader's browser. Keep it that way.
+- A revision pass links to the filtered listing, e.g. `/study-guides.html?category=<slugified category>`.
 
 ## Tech Radar
 
