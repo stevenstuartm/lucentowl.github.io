@@ -10,10 +10,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | --- | --- |
 | [`writing-standards.md`](.claude/skills/refine-prose/writing-standards.md) | **Always** — universal linter rules, voice, flow, punctuation, bullet point usage |
 | [`blog-post-guide.md`](.claude/content/blog-post-guide.md) | Writing or editing blog posts, creating social media summaries |
-| [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, quality standards |
+| [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, the new-guide workflow (scope gate, independent subagent review, definition of done), and the Quality Checklist shared with refinement |
 | [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
-| [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Running a review-and-refine pass over an existing block of study guides — the checklist, process, and the structure of the accompanying plan doc in `_drafts/` |
+| [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Running a review-and-refine pass over an existing block of study guides — consolidation (Phase 0), batch process, and the structure of the accompanying plan doc in `_drafts/` |
 
 ### Content pipeline
 
@@ -277,9 +277,8 @@ To audit, search content for `{{` and `{%` outside `pages/` (where Liquid *is* i
 ### Content Discovery Features
 
 **Tagging system** (implemented):
-- All 105+ study guides have been tagged with 4-8 tags each
 - Tags enable cross-category discovery (e.g., find all "decision-making" content regardless of category)
-- Tag vocabulary is standardized — see [`.claude/content/study-guide-guide.md`](.claude/content/study-guide-guide.md) for the full vocabulary
+- Tag policy (5-7 tags, one skill level, specific nouns over category filler) and the cross-cutting vocabulary are in [`.claude/content/study-guide-guide.md`](.claude/content/study-guide-guide.md)
 - Blog posts already have tags in place
 
 **Filtering UI** (planned):

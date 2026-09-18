@@ -2,7 +2,7 @@
 
 The reusable half of every study-guide refinement pass: what gets checked, in what order, and how to work through a batch. Domain specifics live in the plan document that accompanies each pass — see **The plan document** at the bottom for what belongs there instead of here.
 
-Standards in force for every edit made under this document: [`.claude/skills/refine-prose/writing-standards.md`](../skills/refine-prose/writing-standards.md) (always) and [`.claude/content/study-guide-guide.md`](study-guide-guide.md) (format, tagging, content philosophy).
+Standards in force for every edit made under this document: [`.claude/skills/refine-prose/writing-standards.md`](../skills/refine-prose/writing-standards.md) (always) and [`.claude/content/study-guide-guide.md`](study-guide-guide.md) (format, tagging, content philosophy, and the shared Quality Checklist and Standing Gotchas).
 
 ---
 
@@ -10,9 +10,9 @@ Standards in force for every edit made under this document: [`.claude/skills/ref
 
 | This document | The plan document |
 | --- | --- |
-| The checklist and its order of operations | Which guides are in scope, and their order |
+| Phase 0 and how a pass runs the shared checklist | Which guides are in scope, and their order |
 | Process rules and the never-record-what-changed rule | The authoritative sources for the domain |
-| Cross-domain gotchas learned from earlier passes | Domain-specific gotchas (source quirks, fetch failures, vocabulary traps) |
+| Gotchas specific to running a pass | Domain-specific gotchas (source quirks, fetch failures, vocabulary traps) |
 | The shape of the tracking sections | The contents of those sections, and the progress table |
 
 One plan document per pass. A pass covers whatever block of guides was scoped when the plan was made — a whole category, a subcategory, or a single large guide.
@@ -32,14 +32,7 @@ The checklist below refines guides one at a time. It assumes the set of guides i
 
 ### What earns a guide its place
 
-Apply these tests to every existing guide and every candidate gap. A guide that fails one gets a disposition other than **Keep**.
-
-1. **One reader question.** State in one sentence what a reader comes to this guide to learn. If two guides give the same answer, merge them. If one guide needs two unrelated sentences, split it.
-2. **Learning content, not lookup.** Apply the Lookup Test from [`resource-guide.md`](resource-guide.md). Material a reader consults rather than learns from, such as templates, worked pipelines, and selection tables, moves to `_resources/`.
-3. **Durable substance.** A guide whose core is a list of products, tools, model names, versions, or specs goes stale faster than anyone updates it. Keep its durable reasoning and fold that into a concept guide. Drop the list.
-4. **Right category.** A topic another category already owns stays there. Guides may link to guides outside the pass's scope, but they don't re-teach them.
-5. **Gap test.** A candidate new guide qualifies only if a practitioner in the domain would expect the category to cover it, no existing guide owns it, and folding it into an existing guide would break that guide's one-reader-question test. Judge at study-guide altitude, not doc-completeness.
-6. **Subcategory shape.** Avoid single-guide subcategories. The subcategory split should follow a real difference in reader intent, not just group guides into topic buckets.
+Apply the six tests in [What Earns a Guide Its Place](study-guide-guide.md#what-earns-a-guide-its-place) to every existing guide and every candidate gap. A guide that fails one gets a disposition other than **Keep**.
 
 ### Disposition vocabulary
 
@@ -81,29 +74,10 @@ The map stays in the plan for the life of the pass, and Phase 1 checklist item 2
 
 ## Review checklist (apply to every guide)
 
-**Order of operations:** run item 1 (correctness and completeness) **first** — it is the only pass that adds or rewrites content, and every later check has to operate on the corrected text, not the original. Items 2-7 then refine that content. The two front-matter items (8 and 9) run last so they confirm tags and description against the final content.
+The checklist is the [Quality Checklist](study-guide-guide.md#quality-checklist) in `study-guide-guide.md`, shared with new-guide authoring so both hold guides to the same bar. Item numbers there are the ones plans and pre-flags refer to. Two refinement-specific additions:
 
-1. **Factual correctness and completeness (verify against authoritative sources) — do this first.** Distinct from item 3's *pedagogical* gaps: this checks whether the guide's technical claims are actually true and current, and whether a materially important part of the topic is missing — not treating the prose as given. Web-research the guide's falsifiable claims against the authoritative sources named in the plan: service limits, naming and character constraints, defaults, support matrices, feature availability and release/preview status, tier and pricing boundaries, and any hard number or absolute ("max 24 characters", "not supported", "always inherits", "only in the same region"). Prioritize claims that are (a) falsifiable, (b) consequential if a reader acts on them, or (c) prone to drift as the product evolves — don't spend the pass rubber-stamping prose that merely reads plausibly, and don't try to re-verify inherently stable conceptual framing. Correct stale or wrong content in place. Where a claim can't be confirmed against a source, soften it to what's verifiable and record it under **Unverified, left standing** rather than leaving an unverified absolute in place. **Completeness is judged at study-guide altitude, not doc-completeness** — flag only a missing piece a practitioner would reasonably expect given the guide's stated scope and description, not every edge case. Because this pass can add or modify content, run the remaining checks over whatever it produces. The corrections themselves are in the diff, so don't write them down anywhere (see Process below).
-2. **Redundancy** — same fact, table, or explanation repeated across sections; consolidate or cross-reference within the same file.
-3. **Gaps** — missing explanation of a concept before it's prescribed; missing trade-offs; missing "why would I not use this." (Pedagogical completeness — whether concepts are introduced in a learnable order — as opposed to item 1's factual completeness.)
-4. **Clarity** — dense prose that a comparison table or list would serve better; inconsistent structure vs. the guide's own sections.
-5. **ASCII diagrams** — reserve for genuinely technical relationships and flows: network topology, request or traffic flow, data flow between components, reconciliation loops, hub-and-spoke topologies, auth and token exchange sequences. The bar is whether it depicts actual structure (branching, parallel components, directional flow between distinct systems) that prose or a table can't already convey cleanly. Do **not** use a diagram to dress up a linear conceptual hierarchy, a scope or abstraction ladder, or anything that's really just a sequential list with arrows between prose labels — that's not practical output, it's decoration. If a sentence already says it clearly, don't diagram it. Skip where a table already conveys the comparison clearly.
-6. **Decision trees** — where a guide has 2+ comparison tables that all feed into "which option do I pick," consider consolidating into one ASCII decision tree.
-7. **Hierarchy and scope clarity.** When a guide introduces a resource or concept whose behavior or constraints depend on where it sits in the domain's containment hierarchy, state that scope explicitly and early rather than leaving the reader to infer it from a buried constraint bullet. The tell is a constraint bullet that only makes sense if you already know the scope — a line like "all members must be in the same VNet" tells a reader who already knows the answer, and tells nobody else. Apply this only where scope is genuinely ambiguous or consequential for how the reader would design or deploy something, not as boilerplate on every resource mentioned.
-8. Confirm front matter (tags, description) still matches content after edits.
-9. **Front matter tag audit.** Tags are free-form (`content-filter.js` and `guides-browser.js` read them straight off front matter, no fixed enum), so there is no technical constraint keeping them generic — and the default failure mode is a set of tags so common within the category that none of them discriminate. Policy:
-   - **Drop any tag that restates the category.** It carries zero discriminating value against the category filter that already exists.
-   - **Treat the category's high-frequency vocabulary tags as filler** and replace them with real content signal, unless a guide genuinely has nothing more specific to offer. The plan document records which tags those are for its category — that measurement is domain-specific and belongs there.
-   - **Keep exactly one skill-level tag** (`fundamentals` / `practical` / `advanced`). That is a genuine navigation axis, not filler.
-   - **Fill the remaining slots with the specific nouns a reader would type** if they remember *what* but not *where* — the actual services, patterns, products, or algorithms the guide covers, not the vocabulary-table generics. Cross-check against the guide's own description; if the description names something specific the tags don't, the tags are under-specified.
-   - **Target 5-7 tags total** — replace low-value generic tags rather than appending specific ones on top.
-   - **Review the description too**: confirm it still accurately reflects content after edits and isn't just a restatement of the title.
-
-### Explicitly out of scope
-
-Prerequisite callouts, "where this fits" framing, and inline links to sibling guides **within the same pass's scope**. The order in `assets/data/study_guides_config.json` already encodes the fundamentals-to-advanced reading path, so a guide should not add its own.
-
-This applies retroactively: if a guide already has an inline link to a sibling in scope, remove it during this pass — keep the surrounding prose, drop the link or parenthetical. It does not apply to external links (vendor docs, third-party tools), which stay per normal inline-linking standards.
+- **Item 1 records what it can't verify.** A claim softened because no source confirms it goes under **Unverified, left standing** in the plan. The corrections themselves are in the diff, so don't write them down anywhere (see Process below).
+- **Out-of-scope sibling links are judged against the pass's scope**, not just the subcategory: remove inline links to any guide the pass covers.
 
 ---
 
@@ -117,35 +91,16 @@ This applies retroactively: if a guide already has an inline link to a sibling i
   - a claim left unverified on a finished guide goes in **Unverified, left standing**.
 
   Nothing else. Prune each entry when the row it targets is done.
-- **Promote a gotcha when it stops being about one domain.** A lesson learned mid-pass starts in the plan's own gotchas section. When a second pass in a different domain would hit the same trap, move it here.
+- **Promote a gotcha when it stops being about one domain.** A lesson learned mid-pass starts in the plan's own gotchas section. When a second pass in a different domain would hit the same trap, move it to [Standing Gotchas](study-guide-guide.md#standing-gotchas) in `study-guide-guide.md`, or to this document's own standing gotchas if it is about running a pass rather than about content.
 
 ---
 
 ## Standing gotchas
 
-Learned from completed passes. These hold regardless of domain.
-
-### On the factual pass
+The domain-neutral gotchas that apply to writing and refining alike live in [Standing Gotchas](study-guide-guide.md#standing-gotchas) in `study-guide-guide.md`; read them before starting a pass. These are the ones specific to running a pass:
 
 - **The factual pass leaves no trace in a diff.** A guide whose tags, links, and diagrams look done has not necessarily had item 1 run on it. Status in the progress table, not the diff, is the record of whether item 1 ran.
-- **A guide can document a feature that does not exist.** Most findings are stale numbers, wrong limits, or reversed claims — all of which start from something real. Some are pure invention: an entire subsection, with a config block and a characteristics list, for a capability the product has never had. The tell is that the docs never *mention* it, not that they contradict it. When verification returns *nothing* about a named feature rather than something different from what the guide says, that absence is the finding. Search for the setting or feature name itself before assuming the docs just cover it elsewhere.
-- **Read every load-bearing hard number off the primary limits table.** A number can be invented rather than stale, and an invented one has no ancestor — so looking up the current value returns the right answer without ever signalling that the old one was fiction. Don't rely on "this looks like it drifted" as your trigger to check.
-- **An archive redirect is the retirement notice.** Content retired by a vendor rarely announces its status in the prose of the page that replaced it; it announces it in the URL. When a fetch of a current-looking doc path comes back with a canonical URL under an archive or previous-versions prefix, the feature is retired regardless of how complete the content looks. The same goes for a *cross-product* redirect: a feature that moved from product A to product B usually moved to a different billing model and permission surface too, so a guide teaching it as a feature of A is wrong even where the mechanics still read correctly. **Check the canonical URL on every doc fetched for a feature the guide presents as current.**
-- **Check which doc variant a claim came from.** Vendor docs are frequently pivoted — by version, by tier, by SKU, by deployment model — and two zones of the same page can describe architecturally different products. Confirm which pivot the claim came from. An FAQ often states a transition that the concept pages don't.
-- **Verify code samples as claims, not as illustration.** Prose assertions are the obvious target of item 1, but the worst errors hide in code: a method overload that doesn't exist, a wrong entity API, a non-generic call assigned to a variable, a return-type mismatch. A sample that reads plausibly can still be uncompilable, and readers copy samples more literally than they follow prose. For any guide with code, check attribute names, method names, overload signatures, and return types against the current API reference.
 - **A pre-flag is a lead, not a finding.** Re-verify every pre-flag against a source before acting on it. A pre-flag raised from a guide's own uncorrected prose propagates that guide's error into a second guide. When one turns out wrong, fix the guide that raised it too.
-
-### On tables
-
-- **A two-option comparison is a claim about how many options exist.** A "Standard vs Premium" table reads as complete because two-column tables look finished — even when the product now has three tiers, or the tiers have been renamed. Before refining any "X vs Y" table, confirm against the current tier or feature comparison page that the product still has exactly those options and that they are still called that.
-- **A merged cell hides a fact.** When a table cell reads `X/Y` or names a category rather than a metric, check whether the vendor's own table splits it. Merging two SKUs into one row conceals that one half is retiring; merging two independent limits into one column conceals that they differ by an order of magnitude. The merge is usually where the stale or wrong number is hiding.
-- **Verify the unmatched cells in a comparison table, not just the ones about your own subject.** A cell naming a competitor's capability with no counterpart on your side asserts an absence, whether or not the author meant it to. Item 1 hunts for missing depth on a covered topic; this is the opposite shape — a topic the table rules out before the body can reach it.
-
-### On the refinement passes
-
-- **Item 5 is a two-way check, not a filter.** The easy reading is to judge the diagrams already present, drop the decorative ones, and add nothing. That is half the check, and it lets a guide pass while every relationship it teaches stays in prose-and-table form. Ask both questions on every guide: does each existing diagram clear the bar, **and** does the guide explain a structure with no diagram? The second finds more than the first. Structures that qualify and are easy to miss: a control that enforces at two levels, two options whose traffic paths differ in shape rather than in attributes, and a topology whose behavior comes from routing rather than from the links drawn.
-- **Sibling links hide in two forms.** Grepping `](/study-guides/` finds only markdown links; links inside HTML callout blocks use `<a href="/study-guides/...">` and will be missed. Check both. Some cross-references are also unlinked prose ("covered in the X guide") — those are "where this fits" framing and go too.
-- **Run the linter even when the edit felt clean.** Heavy prose additions reliably introduce em-dashes and mis-ordered sections that are invisible while writing.
 
 ---
 
@@ -187,7 +142,7 @@ How the domain-neutral checklist items land in this specific domain. Two items a
 
 ### Domain gotchas
 
-The plan's own version of the standing gotchas above: source quirks, endpoints that time out and their working substitutes, figures that are known not to be published anywhere citable, vocabulary traps. Anything here that a pass in a different domain would also hit should be promoted into this document instead.
+The plan's own version of the standing gotchas above: source quirks, endpoints that time out and their working substitutes, figures that are known not to be published anywhere citable, vocabulary traps. Anything here that a pass in a different domain would also hit should be promoted into the standing gotchas instead.
 
 ### Cross-guide facts in force
 
@@ -214,7 +169,7 @@ Copy this into the new plan file and fill in the bracketed parts.
 
 Tracks the review-and-refine pass over all guides in `_guides/[path]/`. Guides are consumed sequentially, in the order they appear in `assets/data/study_guides_config.json` (the "[Category]" category) — that order already encodes the fundamentals-to-advanced learning path, so no guide should add its own prerequisite framing or cross-links to siblings in scope; the config ordering handles that.
 
-**The checklist, the process rules, and the cross-domain gotchas live in [`.claude/content/guide-refinement-standard.md`](../.claude/content/guide-refinement-standard.md).** Read it first. This document carries only what is specific to this pass.
+**The process rules live in [`.claude/content/guide-refinement-standard.md`](../.claude/content/guide-refinement-standard.md); the checklist and cross-domain gotchas live in [`.claude/content/study-guide-guide.md`](../.claude/content/study-guide-guide.md).** Read both first. This document carries only what is specific to this pass.
 
 ## Sources
 

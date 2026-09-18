@@ -753,6 +753,8 @@
           "guides": [
             "ai/ai-assisted-development.md",
             "ai/scaling-ai-workflows.md",
+            "ai/beads.md",
+            "ai/gas-city.md",
             "ai/ai-security-for-organizations.md"
           ]
         }
