@@ -3,7 +3,7 @@ title: Lucent Owl
 description: Practical insights on building software that serve real needs and deliver genuine value.
 baseurl: ""
 url: "https://lucentowl.com"
-version: 1.0.16
+version: 1.0.20
 
 # Author information (used by the author system — not displayed as site identity)
 author:
@@ -48,6 +48,10 @@ collections:
   resources:
     output: true
     permalink: /resources/:path.html
+  # Figures are building blocks, never pages: composed into guides and resources
+  # through _includes/figure.html. See .claude/content/figure-guide.md.
+  figures:
+    output: false
 
 # Defaults
 defaults:
@@ -73,6 +77,11 @@ defaults:
     values:
       layout: "resource"
       author: "lucent"
+  - scope:
+      path: ""
+      type: "figures"
+    values:
+      layout: null
   - scope:
       path: ""
     values:

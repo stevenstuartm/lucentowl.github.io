@@ -56,6 +56,10 @@ layout: default
     <div class="resource-content">
         {{ content }}
 
+        {% for figure_id in page.figures %}
+        {% include figure.html id=figure_id mode="section" %}
+        {% endfor %}
+
         <div class="guide-share">
             <p>Found this useful? Share it:</p>
             {% include share-linkedin.html %}

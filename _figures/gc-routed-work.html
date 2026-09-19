@@ -1,0 +1,105 @@
+---
+title: "How Routed Work Finds a Session"
+kind: dynamic
+system: gas-city
+summary: "A numbered trace from sling to close across the sender, the bead store, the controller, and a pool session."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 596" role="img" aria-labelledby="gc4-title gc4-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc4-title">How slung work reaches a pool session in Gas City</title>
+<desc id="gc4-desc">A numbered sequence across the sender, the bead store, the controller, and a pool session. The sender slings work, which creates a bead stamped with gc.routed_to. On its tick the controller's scale_check counts routed demand and starts a session. The session's hook runs its work_query, claims one bead with a compare-and-swap, works in the rig, and closes the bead. The close is recorded as a bead.closed event and releases dependents. When the next hook finds nothing, the session exits.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc4-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc4-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc4-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc4-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc4-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-person" x="20" y="24" width="180" height="52" rx="10"/>
+<text class="gc-n" x="32" y="46">sender</text>
+<text class="gc-k" x="32" y="64">[Person, agent, or order]</text>
+<rect class="gc-store" x="250" y="24" width="180" height="52" rx="6"/>
+<text class="gc-n" x="262" y="46">bead store</text>
+<text class="gc-k" x="262" y="64">[Dolt via bd]</text>
+<rect class="gc-box" x="480" y="24" width="180" height="52" rx="6"/>
+<text class="gc-n" x="492" y="46">controller</text>
+<text class="gc-k" x="492" y="64">[Tick loop]</text>
+<rect class="gc-box" x="706" y="24" width="180" height="52" rx="6"/>
+<text class="gc-n" x="718" y="46">pool session</text>
+<text class="gc-k" x="718" y="64">[Harness + hook]</text>
+
+<path class="gc-life" d="M 110,76 V 540"/>
+<path class="gc-life" d="M 340,76 V 540"/>
+<path class="gc-life" d="M 570,76 V 540"/>
+<path class="gc-life" d="M 796,76 V 540"/>
+
+<path class="gc-flow" d="M 110,112 H 334" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="118" y="104">1 sling: create + gc.routed_to</text>
+<path class="gc-flow" d="M 570,160 H 346" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="352" y="152">2 scale_check counts demand</text>
+<path class="gc-flow" d="M 570,208 H 790" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="578" y="200">3 start a session</text>
+<path class="gc-flow" d="M 796,256 H 346" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="352" y="248">4 gc hook: work_query tiers</text>
+<path class="gc-flow" d="M 796,304 H 346" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="352" y="296">5 bd update --claim (CAS)</text>
+<rect class="gc-act" x="790" y="320" width="12" height="76" rx="2"/>
+<text class="gc-el" x="782" y="362" text-anchor="end">6 works in the rig</text>
+<path class="gc-flow" d="M 796,420 H 346" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="352" y="412">7 bd close</text>
+<path class="gc-ctx" d="M 340,468 H 564" marker-end="url(#gc4-c)"/>
+<text class="gc-el" x="348" y="460">8 bead.closed: dependents ready</text>
+<path class="gc-flow" d="M 796,516 H 346" marker-end="url(#gc4-a)"/>
+<text class="gc-el" x="352" y="508">9 next hook: nothing ready</text>
+<text class="gc-s" x="806" y="544">exits cleanly</text>
+
+<path class="gc-flow" d="M 20,576 H 56"/>
+<text class="gc-el" x="64" y="580">command or query</text>
+<path class="gc-ctx" d="M 200,576 H 236"/>
+<text class="gc-el" x="244" y="580">event on the bus</text>
+<rect class="gc-act" x="380" y="569" width="12" height="14" rx="2"/>
+<text class="gc-el" x="400" y="580">agent at work</text>
+
+</g>
+</svg>

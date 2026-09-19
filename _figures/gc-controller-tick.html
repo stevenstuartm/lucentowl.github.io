@@ -1,0 +1,144 @@
+---
+title: "One Controller Tick"
+kind: component
+system: gas-city
+summary: "The five steps every tick runs in order, and which state lives only in memory."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="gc3-title gc3-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc3-title">The five steps of one Gas City controller tick</title>
+<desc id="gc3-desc">A ticker every 30 seconds starts each tick, and an fsnotify watcher on the config and pack directories sets a dirty flag. Each tick runs five steps in order: reload the config if dirty, keeping the old one on error; build the desired agent set, running pool checks in parallel; reconcile session beads against live sessions; garbage-collect closed wisps past their TTL; and dispatch due orders, writing a tracking bead before each run. The crash tracker, idle tracker, and order dispatcher state live only in memory and reset when the controller restarts, following Erlang/OTP supervisor semantics.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc3-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc3-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc3-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc3-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc3-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-box" x="48" y="40" width="144" height="48" rx="6"/>
+<text class="gc-n" x="60" y="60">ticker</text>
+<text class="gc-s" x="60" y="78">patrol_interval 30s</text>
+<rect class="gc-box" x="218" y="40" width="200" height="48" rx="6"/>
+<text class="gc-n" x="230" y="60">fsnotify watcher</text>
+<text class="gc-s" x="230" y="78">config and pack dirs</text>
+<path class="gc-flow" d="M 120,88 V 144" marker-end="url(#gc3-a)"/>
+<path class="gc-ctx" d="M 260,88 L 186,144" marker-end="url(#gc3-c)"/>
+<text class="gc-el" x="252" y="116">sets dirty flag</text>
+
+<rect class="gc-bound" x="36" y="124" width="848" height="166" rx="8"/>
+<text class="gc-hd" x="690" y="142">EVERY TICK, IN ORDER</text>
+
+<rect class="gc-box" x="48" y="150" width="144" height="124" rx="6"/>
+<text class="gc-n" x="60" y="172">1 · reload</text>
+<text class="gc-s" x="60" y="192">only if dirty</text>
+<text class="gc-s" x="60" y="210">bad config: keep</text>
+<text class="gc-s" x="60" y="228">the old one</text>
+<text class="gc-s" x="60" y="246">rebuild trackers</text>
+
+<rect class="gc-box" x="218" y="150" width="144" height="124" rx="6"/>
+<text class="gc-n" x="230" y="172">2 · build agents</text>
+<text class="gc-s" x="230" y="192">desired set from</text>
+<text class="gc-s" x="230" y="210">config; pool checks</text>
+<text class="gc-s" x="230" y="228">run in parallel</text>
+<text class="gc-s" x="230" y="246">a hung check stalls</text>
+<text class="gc-s" x="230" y="264">the whole tick</text>
+
+<rect class="gc-box" x="388" y="150" width="144" height="124" rx="6"/>
+<text class="gc-n" x="400" y="172">3 · reconcile</text>
+<text class="gc-s" x="400" y="192">session beads vs</text>
+<text class="gc-s" x="400" y="210">live sessions:</text>
+<text class="gc-s" x="400" y="228">start, drain, stop,</text>
+<text class="gc-s" x="400" y="246">restart on drift</text>
+
+<rect class="gc-box" x="558" y="150" width="144" height="124" rx="6"/>
+<text class="gc-n" x="570" y="172">4 · wisp GC</text>
+<text class="gc-s" x="570" y="192">delete closed</text>
+<text class="gc-s" x="570" y="210">wisps past</text>
+<text class="gc-s" x="570" y="228">wisp_ttl</text>
+<text class="gc-s" x="570" y="246">(off if unset)</text>
+
+<rect class="gc-box" x="728" y="150" width="144" height="124" rx="6"/>
+<text class="gc-n" x="740" y="172">5 · orders</text>
+<text class="gc-s" x="740" y="192">check triggers,</text>
+<text class="gc-s" x="740" y="210">write tracking</text>
+<text class="gc-s" x="740" y="228">bead, then run</text>
+<text class="gc-s" x="740" y="246">in a goroutine</text>
+
+<path class="gc-flow" d="M 192,212 H 212" marker-end="url(#gc3-a)"/>
+<path class="gc-flow" d="M 362,212 H 382" marker-end="url(#gc3-a)"/>
+<path class="gc-flow" d="M 532,212 H 552" marker-end="url(#gc3-a)"/>
+<path class="gc-flow" d="M 702,212 H 722" marker-end="url(#gc3-a)"/>
+
+<rect class="gc-memband" x="280" y="318" width="604" height="108" rx="8"/>
+<text class="gc-hd" x="294" y="338">IN MEMORY · RESET WHEN THE CONTROLLER RESTARTS</text>
+<rect class="gc-mem" x="300" y="352" width="160" height="60" rx="6"/>
+<text class="gc-n" x="312" y="374">crash tracker</text>
+<text class="gc-s" x="312" y="394">starts per window</text>
+<rect class="gc-mem" x="476" y="352" width="160" height="60" rx="6"/>
+<text class="gc-n" x="488" y="374">idle tracker</text>
+<text class="gc-s" x="488" y="394">last I/O per agent</text>
+<rect class="gc-mem" x="708" y="352" width="160" height="60" rx="6"/>
+<text class="gc-n" x="720" y="374">order dispatcher</text>
+<text class="gc-s" x="720" y="394">in-flight runs</text>
+<path class="gc-ctx" d="M 380,352 L 436,282" marker-end="url(#gc3-c)"/>
+<path class="gc-ctx" d="M 556,352 L 486,282" marker-end="url(#gc3-c)"/>
+<path class="gc-ctx" d="M 788,352 V 282" marker-end="url(#gc3-c)"/>
+
+<text class="gc-s" x="48" y="346">Erlang/OTP semantics:</text>
+<text class="gc-s" x="48" y="364">a supervisor restart</text>
+<text class="gc-s" x="48" y="382">clears its children's</text>
+<text class="gc-s" x="48" y="400">restart counts</text>
+
+<text class="gc-note" x="48" y="466">Reconciliation is idempotent: a live session whose config hash matches is skipped.</text>
+<text class="gc-note" x="48" y="488">The tracking bead is written before the order runs, so a slow run cannot re-fire on the next tick.</text>
+
+<path class="gc-flow" d="M 48,520 H 84"/>
+<text class="gc-el" x="92" y="524">runs next</text>
+<path class="gc-ctx" d="M 200,520 H 236"/>
+<text class="gc-el" x="244" y="524">sets or feeds</text>
+<rect class="gc-mem" x="360" y="513" width="22" height="14" rx="3"/>
+<text class="gc-el" x="390" y="524">in-memory state</text>
+
+</g>
+</svg>

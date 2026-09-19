@@ -1,0 +1,45 @@
+{%- comment -%}
+  Renders one figure from the _figures collection.
+
+  {% include figure.html id="gc-controller-tick" %}   embeds the full diagram in place (guides)
+  mode="section" is used by the resource layout to render a composite's figures with an
+  anchored h2 in place of the title line. A figure never links to the pages that use it.
+
+  Output starts at column 0 with no indentation so kramdown passes it through as one raw HTML block.
+{%- endcomment -%}
+{%- assign fig_id = include.id -%}
+{%- assign fig = site.figures | where_exp: "f", "f.slug == fig_id" | first -%}
+{%- if fig == nil -%}
+<p class="lo-figure-missing">Missing figure: {{ fig_id }}</p>
+{%- else -%}
+{%- case fig.kind -%}
+{%- when "context" -%}{%- assign fig_kind = "C4 · Context" -%}
+{%- when "container" -%}{%- assign fig_kind = "C4 · Container" -%}
+{%- when "component" -%}{%- assign fig_kind = "C4 · Component" -%}
+{%- when "dynamic" -%}{%- assign fig_kind = "C4 · Dynamic" -%}
+{%- when "deployment" -%}{%- assign fig_kind = "C4 · Deployment" -%}
+{%- when "state" -%}{%- assign fig_kind = "State machine" -%}
+{%- when "graph" -%}{%- assign fig_kind = "Dependency graph" -%}
+{%- when "flow" -%}{%- assign fig_kind = "Flow" -%}
+{%- when "structure" -%}{%- assign fig_kind = "Structure" -%}
+{%- when "layering" -%}{%- assign fig_kind = "Layering" -%}
+{%- when "boundary" -%}{%- assign fig_kind = "Trust boundary" -%}
+{%- when "rules" -%}{%- assign fig_kind = "Rules" -%}
+{%- else -%}{%- assign fig_kind = "Diagram" -%}
+{%- endcase -%}
+{%- if include.mode == "section" -%}
+<div class="lo-figure lo-figure--section" data-figure="{{ fig_id }}">
+<h2 class="lo-figure-heading" id="fig-{{ fig_id }}">{{ fig.title }}</h2>
+<span class="lo-figure-kind">{{ fig_kind }}</span>
+<p class="lo-figure-summary">{{ fig.summary }}</p>
+<div class="lo-figure-body">{{ fig.content | strip }}</div>
+</div>
+{%- else -%}
+<div class="lo-figure" data-figure="{{ fig_id }}">
+<span class="lo-figure-kind">{{ fig_kind }}</span>
+<p class="lo-figure-title">{{ fig.title }}</p>
+<p class="lo-figure-summary">{{ fig.summary }}</p>
+<div class="lo-figure-body">{{ fig.content | strip }}</div>
+</div>
+{%- endif -%}
+{%- endif -%}

@@ -4,20 +4,27 @@
         <div class="shelf-panel-header">
             <div>
                 <h2 id="whatsNewPanelTitle">What's New</h2>
-                <p class="whats-new-subtitle">Recent additions and revisions, newest first.</p>
             </div>
             <button class="shelf-panel-close" id="whatsNewPanelClose" aria-label="Close what's new">&times;</button>
         </div>
         <ol class="shelf-panel-body whats-new-list" id="whatsNewList">
             {% for entry in site.data.whats_new limit: 10 %}
-            {% case entry.kind %}
-                {% when 'new' %}{% assign kind_label = 'New' %}{% assign default_cta = 'Read' %}
-                {% when 'revised' %}{% assign kind_label = 'Revised' %}{% assign default_cta = 'Browse' %}
-                {% when 'post' %}{% assign kind_label = 'Blog post' %}{% assign default_cta = 'Read post' %}
+            {% assign change_label = nil %}{% assign type_label = nil %}{% assign default_cta = 'Read' %}
+            {% case entry.change %}
+                {% when 'new' %}{% assign change_label = 'New' %}
+                {% when 'revised' %}{% assign change_label = 'Revised' %}{% assign default_cta = 'Browse' %}
             {% endcase %}
-            <li class="whats-new-card whats-new-card--{{ entry.kind }}">
+            {% case entry.type %}
+                {% when 'guide' %}{% assign type_label = 'Study guides' %}
+                {% when 'post' %}{% assign type_label = 'Blog' %}
+                {% when 'resource' %}{% assign type_label = 'Resources' %}
+            {% endcase %}
+            <li class="whats-new-card whats-new-card--{{ entry.change }}">
                 {% if entry.url %}<a class="whats-new-card-main" href="{{ entry.url | relative_url }}">{% else %}<div class="whats-new-card-main">{% endif %}
-                    <span class="whats-new-badge whats-new-badge--{{ entry.kind }}">{{ kind_label }}</span>
+                    <div class="whats-new-meta">
+                        {% if change_label %}<span class="whats-new-badge whats-new-badge--{{ entry.change }}">{{ change_label }}</span>{% endif %}
+                        {% if type_label %}<span class="whats-new-type">{{ type_label }}</span>{% endif %}
+                    </div>
                     <h3 class="whats-new-title">{{ entry.title }}</h3>
                     {% if entry.note %}<p class="whats-new-note">{{ entry.note }}</p>{% endif %}
                     {% if entry.url %}<span class="read-more">{{ entry.cta | default: default_cta }} <span class="arrow">→</span></span>{% endif %}

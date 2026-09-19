@@ -1,0 +1,103 @@
+---
+title: "Where a Beads Claim Is Atomic"
+kind: deployment
+system: beads
+summary: "Embedded clones versus one shared server: why a claim is a lock in one layout and a merge-time surprise in the other."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="bd2-title bd2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="bd2-title">Beads deployment topologies and the reach of an atomic claim</title>
+<desc id="bd2-desc">Two panels. Across clones in embedded mode, each clone has its own local Dolt database and a claim is atomic only inside that database, so two agents can both claim the same bead before either pushes and the collision surfaces only at merge time. On one machine in server mode, every agent writes through one dolt sql-server to one database, so the first claim wins. Inside Gas City, one server serves the whole city and each rig is an issue prefix on it.</desc>
+<style>
+.bd-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.bd-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.bd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bd-claim { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.bd-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bd-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.bd-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.bd-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bd-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.bd-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.bd-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.bd-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bd-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="bd2-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="bd-band" x="16" y="30" width="424" height="440" rx="8"/>
+<text class="bd-hd" x="30" y="54">ACROSS CLONES · EMBEDDED MODE</text>
+
+<rect class="bd-ext" x="118" y="76" width="220" height="56" rx="6"/>
+<text class="bd-n-mute" x="130" y="98">git origin</text>
+<text class="bd-s" x="130" y="118">refs/dolt/data</text>
+
+<rect class="bd-box" x="36" y="196" width="180" height="140" rx="6"/>
+<text class="bd-n" x="48" y="218">Clone A</text>
+<rect class="bd-claim" x="48" y="230" width="156" height="94" rx="5"/>
+<text class="bd-s" x="60" y="252">local Dolt database</text>
+<text class="bd-s" x="60" y="272">agent 1 claims here</text>
+<text class="bd-req" x="60" y="304">claim is atomic</text>
+
+<rect class="bd-box" x="240" y="196" width="180" height="140" rx="6"/>
+<text class="bd-n" x="252" y="218">Clone B</text>
+<rect class="bd-claim" x="252" y="230" width="156" height="94" rx="5"/>
+<text class="bd-s" x="264" y="252">local Dolt database</text>
+<text class="bd-s" x="264" y="272">agent 2 claims here</text>
+<text class="bd-req" x="264" y="304">claim is atomic</text>
+
+<path class="bd-flow" d="M 126,196 L 180,138" marker-start="url(#bd2-a)" marker-end="url(#bd2-a)"/>
+<path class="bd-flow" d="M 330,196 L 276,138" marker-start="url(#bd2-a)" marker-end="url(#bd2-a)"/>
+<text class="bd-el" x="228" y="170" text-anchor="middle">bd dolt push / pull</text>
+
+<text class="bd-bad" x="30" y="368">✗ both claim bd-a1b2 before either pushes</text>
+<text class="bd-note" x="30" y="392">Dolt merges cell by cell, so the collision</text>
+<text class="bd-note" x="30" y="410">surfaces only at merge: as a conflict, or</text>
+<text class="bd-note" x="30" y="428">as a silent merge of two identical claims.</text>
+<text class="bd-req" x="30" y="454">A change stays local until it is pushed.</text>
+
+<rect class="bd-band" x="460" y="30" width="424" height="440" rx="8"/>
+<text class="bd-hd" x="474" y="54">ONE MACHINE · SERVER MODE</text>
+
+<rect class="bd-box" x="480" y="90" width="110" height="40" rx="6"/>
+<text class="bd-n" x="492" y="115">agent 1</text>
+<rect class="bd-box" x="480" y="150" width="110" height="40" rx="6"/>
+<text class="bd-n" x="492" y="175">agent 2</text>
+<rect class="bd-box" x="480" y="210" width="110" height="40" rx="6"/>
+<text class="bd-n" x="492" y="235">agent 3</text>
+
+<rect class="bd-claim" x="636" y="76" width="232" height="210" rx="6"/>
+<rect class="bd-box" x="652" y="92" width="200" height="64" rx="6"/>
+<text class="bd-n" x="664" y="116">dolt sql-server</text>
+<text class="bd-k" x="664" y="136">[Process: many writers]</text>
+<rect class="bd-store" x="652" y="186" width="200" height="64" rx="6"/>
+<text class="bd-n" x="664" y="210">one database</text>
+<text class="bd-s" x="664" y="230">one shared ready frontier</text>
+<path class="bd-flow" d="M 752,156 V 180" marker-end="url(#bd2-a)"/>
+<text class="bd-req" x="652" y="274">first claim wins</text>
+
+<path class="bd-flow" d="M 590,110 L 646,116" marker-end="url(#bd2-a)"/>
+<path class="bd-flow" d="M 590,170 L 646,128" marker-end="url(#bd2-a)"/>
+<path class="bd-flow" d="M 590,230 L 646,140" marker-end="url(#bd2-a)"/>
+
+<text class="bd-note" x="474" y="318">Every claim runs against the same database,</text>
+<text class="bd-note" x="474" y="336">so claiming is a true lock.</text>
+<text class="bd-req" x="474" y="362">Parallel agents on one backlog belong here.</text>
+<text class="bd-n-mute" x="474" y="400">Inside Gas City</text>
+<text class="bd-s" x="474" y="420">one server serves the whole city, and each</text>
+<text class="bd-s" x="474" y="438">rig is an issue prefix on it, not a database</text>
+
+<path class="bd-flow" d="M 16,500 H 52"/>
+<text class="bd-el" x="60" y="504">sync or SQL</text>
+<rect class="bd-claim" x="170" y="493" width="22" height="14" rx="3"/>
+<text class="bd-el" x="200" y="504">where a claim is atomic</text>
+
+</g>
+</svg>

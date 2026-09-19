@@ -1,0 +1,122 @@
+---
+title: "Gas City in Its Environment"
+kind: context
+system: gas-city
+summary: "Who drives Gas City, what it runs as sessions, and the systems it depends on."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="gc1-title gc1-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc1-title">Gas City system context</title>
+<desc id="gc1-desc">Gas City sits at the center. An operator drives it through the gc CLI, the dashboard, and the API. Gas City starts sessions on a runtime host such as tmux or Kubernetes, runs coding-agent harnesses as those sessions, and each harness calls its model provider. Every piece of state is kept as beads in Beads, which polls GitHub for gate checks. Sessions do their work inside registered rig repositories.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc1-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc1-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc1-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc1-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc1-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-person" x="24" y="40" width="220" height="80" rx="10"/>
+<text class="gc-t" x="36" y="64">Operator</text>
+<text class="gc-k" x="36" y="82">[Person]</text>
+<text class="gc-s" x="36" y="102">writes packs, slings work</text>
+
+<rect class="gc-sys" x="330" y="180" width="240" height="90" rx="8"/>
+<text class="gc-t-inv" x="346" y="206">Gas City</text>
+<text class="gc-k-inv" x="346" y="224">[Software system: gc]</text>
+<text class="gc-s-inv" x="346" y="246">runs fleets of coding agents</text>
+
+<rect class="gc-ext" x="24" y="195" width="220" height="80" rx="6"/>
+<text class="gc-t-ext" x="36" y="219">Runtime host</text>
+<text class="gc-k" x="36" y="237">[External: tmux, k8s, SSH, …]</text>
+<text class="gc-s" x="36" y="257">where sessions live</text>
+
+<rect class="gc-ext" x="24" y="350" width="220" height="80" rx="6"/>
+<text class="gc-t-ext" x="36" y="374">Rig repositories</text>
+<text class="gc-k" x="36" y="392">[External: git repos]</text>
+<text class="gc-s" x="36" y="412">where agents change code</text>
+
+<rect class="gc-ext" x="656" y="40" width="220" height="80" rx="6"/>
+<text class="gc-t-ext" x="668" y="64">Agent harnesses</text>
+<text class="gc-k" x="668" y="82">[External: 16 built in]</text>
+<text class="gc-s" x="668" y="102">Claude Code, Codex, Gemini</text>
+
+<rect class="gc-ext" x="656" y="195" width="220" height="80" rx="6"/>
+<text class="gc-t-ext" x="668" y="219">Model providers</text>
+<text class="gc-k" x="668" y="237">[External: LLM APIs]</text>
+<text class="gc-s" x="668" y="257">called by each harness</text>
+
+<rect class="gc-box" x="330" y="350" width="240" height="80" rx="6"/>
+<text class="gc-t" x="346" y="374">Beads</text>
+<text class="gc-k" x="346" y="392">[Software system: bd + Dolt]</text>
+<text class="gc-s" x="346" y="412">the store every bead lives in</text>
+
+<rect class="gc-ext" x="656" y="350" width="220" height="80" rx="6"/>
+<text class="gc-t-ext" x="668" y="374">GitHub</text>
+<text class="gc-k" x="668" y="392">[External: PRs and CI]</text>
+<text class="gc-s" x="668" y="412">polled by gate checks</text>
+
+<path class="gc-flow" d="M 244,90 L 324,192" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="262" y="86">gc CLI · dashboard · API</text>
+<path class="gc-flow" d="M 330,225 H 250" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="287" y="217" text-anchor="middle">starts</text>
+<path class="gc-flow" d="M 570,196 L 650,98" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="612" y="152">runs as sessions</text>
+<path class="gc-flow" d="M 766,120 V 189" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="774" y="160">prompts</text>
+<path class="gc-flow" d="M 450,270 V 344" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="458" y="312">all state as beads</text>
+<path class="gc-flow" d="M 330,250 L 250,370" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="292" y="330">work in</text>
+<path class="gc-flow" d="M 570,390 H 650" marker-end="url(#gc1-a)"/>
+<text class="gc-el" x="610" y="382" text-anchor="middle">gate checks</text>
+
+<rect class="gc-sys" x="24" y="449" width="22" height="14" rx="3"/>
+<text class="gc-el" x="54" y="460">system in focus</text>
+<rect class="gc-box" x="180" y="449" width="22" height="14" rx="3"/>
+<text class="gc-el" x="210" y="460">related system</text>
+<rect class="gc-ext" x="330" y="449" width="22" height="14" rx="3"/>
+<text class="gc-el" x="360" y="460">external system</text>
+
+</g>
+</svg>

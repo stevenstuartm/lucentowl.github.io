@@ -1,0 +1,122 @@
+---
+title: "Health Patrol States"
+kind: state
+system: gas-city
+summary: "How a session moves between running, crashed, restarted, and quarantined, and what each tick checks first."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="gc5-title gc5-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc5-title">Gas City health patrol session states</title>
+<desc id="gc5-desc">A desired session that is not running is started and becomes running and healthy. Each tick checks a running session in order for a requested restart after context exhaustion, an idle timeout, and config drift, and acts on the first that applies. A session whose process has gone is recorded as crashed, with its pane captured. The crash tracker then decides: if starts inside the restart window are below max_restarts, the session restarts; otherwise it is quarantined and skipped silently until the window ages out. Sessions not in the desired set, such as orphans, suspended agents, and pool excess, are drained or stopped.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc5-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc5-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc5-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc5-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc5-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-box" x="40" y="70" width="200" height="64" rx="6"/>
+<text class="gc-n" x="52" y="94">not running</text>
+<text class="gc-s" x="52" y="114">desired, should wake</text>
+
+<rect class="gc-okbox" x="350" y="70" width="200" height="64" rx="6"/>
+<text class="gc-n" x="362" y="94">running, healthy</text>
+<text class="gc-s" x="362" y="114">alive, hash matches</text>
+
+<path class="gc-flow" d="M 240,102 H 344" marker-end="url(#gc5-a)"/>
+<text class="gc-el" x="292" y="94" text-anchor="middle">start</text>
+<text class="gc-k" x="292" y="122" text-anchor="middle">session.woke</text>
+
+<text class="gc-hd" x="620" y="50">CHECKED EACH TICK, IN ORDER</text>
+<rect class="gc-box" x="620" y="62" width="260" height="56" rx="6"/>
+<text class="gc-n" x="632" y="84">1 restart requested</text>
+<text class="gc-s" x="632" y="104">context exhausted → stop + start</text>
+<rect class="gc-box" x="620" y="132" width="260" height="56" rx="6"/>
+<text class="gc-n" x="632" y="154">2 idle past idle_timeout</text>
+<text class="gc-s" x="632" y="174">opt-in per agent → stop</text>
+<rect class="gc-box" x="620" y="202" width="260" height="56" rx="6"/>
+<text class="gc-n" x="632" y="224">3 config drift</text>
+<text class="gc-s" x="632" y="244">fingerprint differs → drain + restart</text>
+
+<path class="gc-ctx" d="M 550,90 H 614" marker-end="url(#gc5-c)"/>
+<path class="gc-ctx" d="M 550,112 L 614,160" marker-end="url(#gc5-c)"/>
+<path class="gc-ctx" d="M 550,128 L 614,228" marker-end="url(#gc5-c)"/>
+
+<rect class="gc-badbox" x="350" y="200" width="200" height="64" rx="6"/>
+<text class="gc-n-bad" x="362" y="224">crashed</text>
+<text class="gc-s" x="362" y="244">process gone: capture pane</text>
+<path class="gc-badl" d="M 450,134 V 194" marker-end="url(#gc5-x)"/>
+<text class="gc-k" x="458" y="170">session.crashed</text>
+
+<rect class="gc-ctl" x="350" y="320" width="200" height="76" rx="6"/>
+<text class="gc-n-ctl" x="362" y="342">crash tracker</text>
+<text class="gc-s" x="362" y="362">starts in the window</text>
+<text class="gc-s" x="362" y="380">below max_restarts?</text>
+<path class="gc-flow" d="M 450,264 V 314" marker-end="url(#gc5-a)"/>
+
+<path class="gc-flow" d="M 350,340 H 140 V 140" marker-end="url(#gc5-a)"/>
+<text class="gc-el" x="245" y="332" text-anchor="middle">yes: restart</text>
+
+<rect class="gc-mem" x="40" y="430" width="260" height="70" rx="6"/>
+<text class="gc-n-mute" x="52" y="454">quarantined</text>
+<text class="gc-s" x="52" y="474">skipped silently until the</text>
+<text class="gc-s" x="52" y="492">window ages out</text>
+<path class="gc-flow" d="M 450,396 V 465 H 306" marker-end="url(#gc5-a)"/>
+<text class="gc-el" x="458" y="430">no</text>
+<path class="gc-ctx" d="M 100,430 V 140" marker-end="url(#gc5-c)"/>
+<text class="gc-el" x="108" y="380">window passes</text>
+
+<text class="gc-hd" x="620" y="316">NOT IN THE DESIRED SET</text>
+<rect class="gc-box" x="620" y="328" width="260" height="68" rx="6"/>
+<text class="gc-n" x="632" y="350">orphan, suspended, excess</text>
+<text class="gc-s" x="632" y="370">pool excess: drain gracefully</text>
+<text class="gc-s" x="632" y="388">true orphan: stop now</text>
+
+<text class="gc-s" x="620" y="440">defaults: max_restarts 5,</text>
+<text class="gc-s" x="620" y="458">restart_window 1h, tick 30s</text>
+<text class="gc-req" x="620" y="484">quarantine lives in memory, so a</text>
+<text class="gc-req" x="620" y="502">controller restart clears it</text>
+
+</g>
+</svg>

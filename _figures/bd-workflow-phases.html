@@ -1,0 +1,115 @@
+---
+title: "Workflow Phases: Formula to Molecule"
+kind: flow
+system: beads
+summary: "From formula to proto to molecule or wisp, and what a molecule is underneath."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="bd4-title bd4-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="bd4-title">The Beads workflow phases from formula to molecule or wisp</title>
+<desc id="bd4-desc">A formula file is cooked into a proto, a template epic that is the solid phase. Pouring the proto produces a molecule, persistent beads in the liquid phase that sync like any bead. Wisping it produces a wisp, ephemeral beads in the vapor phase that are not federated and are purged after closing. A wisp that found something worth keeping is squashed into a permanent digest; otherwise it is burned. Below, a molecule is shown as what it is underneath: an epic whose child steps are wired by the formula's needs, run in parallel unless a dependency or a gate holds them back.</desc>
+<style>
+.bd-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.bd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-done { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.bd-gate { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.bd-vapor { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.bd-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bd-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.bd-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.bd-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bd-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bd-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.bd-gl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 8 5; }
+.bd-pc { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+</style>
+<defs>
+<marker id="bd4-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="bd4-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="bd-hd" x="24" y="44">SOURCE</text>
+<text class="bd-hd" x="264" y="44">SOLID · TEMPLATE</text>
+<text class="bd-hd" x="524" y="44">LIQUID · PERSISTENT</text>
+<text class="bd-hd" x="524" y="216">VAPOR · EPHEMERAL</text>
+
+<rect class="bd-box" x="24" y="110" width="170" height="76" rx="6"/>
+<text class="bd-t" x="36" y="134">formula</text>
+<text class="bd-k" x="36" y="152">[TOML or JSON file]</text>
+<text class="bd-s" x="36" y="172">steps, needs, variables</text>
+
+<rect class="bd-box" x="264" y="110" width="170" height="76" rx="6"/>
+<text class="bd-t" x="276" y="134">proto</text>
+<text class="bd-k" x="276" y="152">[Epic, template label]</text>
+<text class="bd-s" x="276" y="172">variables unfilled</text>
+
+<rect class="bd-store" x="524" y="60" width="180" height="76" rx="6"/>
+<text class="bd-t" x="536" y="84">molecule</text>
+<text class="bd-k" x="536" y="102">[Epic + child beads]</text>
+<text class="bd-s" x="536" y="122">synced like any bead</text>
+<text class="bd-s" x="724" y="82">steps flow through</text>
+<text class="bd-s" x="724" y="100">bd ready like any</text>
+<text class="bd-s" x="724" y="118">other work</text>
+
+<rect class="bd-vapor" x="524" y="226" width="180" height="76" rx="6"/>
+<text class="bd-t" x="536" y="250">wisp</text>
+<text class="bd-k" x="536" y="268">[Ephemeral beads]</text>
+<text class="bd-s" x="536" y="288">not federated, purgeable</text>
+<text class="bd-s" x="524" y="324">closed: bd purge or wisp GC</text>
+
+<rect class="bd-store" x="774" y="196" width="110" height="48" rx="6"/>
+<text class="bd-n" x="786" y="216">digest</text>
+<text class="bd-s" x="786" y="234">permanent</text>
+<rect class="bd-done" x="774" y="282" width="110" height="48" rx="6"/>
+<text class="bd-n-mute" x="786" y="302">deleted</text>
+<text class="bd-s" x="786" y="320">no record</text>
+
+<path class="bd-flow" d="M 194,148 H 258" marker-end="url(#bd4-a)"/>
+<text class="bd-el" x="229" y="140" text-anchor="middle">bd cook</text>
+<path class="bd-flow" d="M 434,148 H 474 V 98 H 518" marker-end="url(#bd4-a)"/>
+<text class="bd-el" x="466" y="92" text-anchor="end">bd mol pour</text>
+<path class="bd-flow" d="M 474,148 V 264 H 518" marker-end="url(#bd4-a)"/>
+<text class="bd-el" x="466" y="276" text-anchor="end">bd mol wisp</text>
+<path class="bd-flow" d="M 704,250 L 768,222" marker-end="url(#bd4-a)"/>
+<text class="bd-el" x="726" y="214">squash</text>
+<path class="bd-flow" d="M 704,282 L 768,304" marker-end="url(#bd4-a)"/>
+<text class="bd-el" x="722" y="318">burn</text>
+
+<text class="bd-hd" x="24" y="384">A MOLECULE IS AN EPIC WHOSE CHILDREN ARE WIRED BY NEEDS</text>
+<rect class="bd-store" x="24" y="404" width="150" height="44" rx="6"/>
+<text class="bd-n" x="36" y="431">root epic</text>
+<text class="bd-s" x="24" y="472">children run in</text>
+<text class="bd-s" x="24" y="490">parallel unless a</text>
+<text class="bd-s" x="24" y="508">need holds them</text>
+
+<rect class="bd-bound" x="204" y="396" width="620" height="120" rx="8"/>
+<path class="bd-pc" d="M 174,426 H 204"/>
+
+<rect class="bd-box" x="234" y="404" width="150" height="44" rx="6"/>
+<text class="bd-n" x="246" y="431">step .1 design</text>
+<rect class="bd-box" x="234" y="462" width="150" height="44" rx="6"/>
+<text class="bd-n" x="246" y="489">step .2 docs</text>
+<rect class="bd-box" x="444" y="404" width="150" height="44" rx="6"/>
+<text class="bd-n" x="456" y="431">step .3 build</text>
+<rect class="bd-gate" x="444" y="462" width="150" height="44" rx="6"/>
+<text class="bd-n-mute" x="456" y="489">gate: human ok</text>
+<rect class="bd-box" x="654" y="433" width="150" height="44" rx="6"/>
+<text class="bd-n" x="666" y="460">step .4 release</text>
+
+<path class="bd-flow" d="M 384,426 H 438" marker-end="url(#bd4-a)"/>
+<path class="bd-flow" d="M 594,426 L 648,448" marker-end="url(#bd4-a)"/>
+<path class="bd-gl" d="M 594,484 L 648,462" marker-end="url(#bd4-g)"/>
+
+<path class="bd-flow" d="M 24,544 H 54"/>
+<text class="bd-el" x="62" y="548">command or blocks edge</text>
+<path class="bd-gl" d="M 230,544 H 260"/>
+<text class="bd-el" x="268" y="548">gate</text>
+<rect class="bd-bound" x="320" y="537" width="22" height="14" rx="3"/>
+<text class="bd-el" x="350" y="548">children of the root epic</text>
+
+</g>
+</svg>

@@ -1,0 +1,104 @@
+---
+title: "Agent Coordination Channels"
+kind: flow
+system: gas-city
+summary: "How agents reach each other only through the store, and the one channel that bypasses it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" role="img" aria-labelledby="gc9-title gc9-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc9-title">How Gas City agents coordinate without referencing each other</title>
+<desc id="gc9-desc">The mayor session reaches other agents only through the bead store. Mail is a bead of type message, injected into the recipient's context by a hook on its next turn. Slung work is a bead routed to a pool, claimed by a worker's hook. Both survive a crash. A nudge is the one channel that bypasses the store: it types text straight into the recipient's terminal and is lost if that session is down. A strip below shows where the harness hooks fire: at session start, on each turn, and before compaction.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc9-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc9-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc9-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc9-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc9-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-box" x="40" y="150" width="180" height="80" rx="6"/>
+<text class="gc-t" x="52" y="174">mayor</text>
+<text class="gc-k" x="52" y="192">[Session]</text>
+<text class="gc-s" x="52" y="212">decides and delegates</text>
+
+<rect class="gc-store" x="360" y="130" width="200" height="120" rx="6"/>
+<text class="gc-t" x="372" y="154">bead store</text>
+<text class="gc-s" x="372" y="178">mail = bead, type message</text>
+<text class="gc-s" x="372" y="198">work = bead, routed to pool</text>
+<text class="gc-req" x="372" y="226">both survive a crash</text>
+
+<rect class="gc-box" x="700" y="60" width="180" height="80" rx="6"/>
+<text class="gc-t" x="712" y="84">reviewer</text>
+<text class="gc-k" x="712" y="102">[Session]</text>
+<text class="gc-s" x="712" y="122">reads mail next turn</text>
+
+<rect class="gc-box" x="700" y="240" width="180" height="80" rx="6"/>
+<text class="gc-t" x="712" y="264">worker pool</text>
+<text class="gc-k" x="712" y="282">[Sessions]</text>
+<text class="gc-s" x="712" y="302">claims via its hook</text>
+
+<path class="gc-flow" d="M 220,172 H 354" marker-end="url(#gc9-a)"/>
+<text class="gc-el" x="287" y="164" text-anchor="middle">gc mail send</text>
+<path class="gc-flow" d="M 220,208 H 354" marker-end="url(#gc9-a)"/>
+<text class="gc-el" x="287" y="226" text-anchor="middle">gc sling</text>
+<path class="gc-flow" d="M 560,160 L 694,110" marker-end="url(#gc9-a)"/>
+<text class="gc-el" x="600" y="160">injected next turn</text>
+<path class="gc-flow" d="M 560,220 L 694,270" marker-end="url(#gc9-a)"/>
+<text class="gc-el" x="590" y="290">claimed by hook</text>
+
+<path class="gc-badl" d="M 130,150 V 40 H 790 V 54" marker-end="url(#gc9-x)"/>
+<text class="gc-bad" x="150" y="32">nudge: typed into the terminal, lost if the session is down</text>
+
+<text class="gc-hd" x="40" y="356">WHERE THE HARNESS HOOKS FIRE</text>
+<rect class="gc-box" x="40" y="370" width="260" height="50" rx="6"/>
+<text class="gc-n" x="52" y="390">session start</text>
+<text class="gc-s" x="52" y="408">prime, then claim routed work</text>
+<rect class="gc-box" x="320" y="370" width="260" height="50" rx="6"/>
+<text class="gc-n" x="332" y="390">each turn</text>
+<text class="gc-s" x="332" y="408">inject unread mail, drain nudges</text>
+<rect class="gc-box" x="600" y="370" width="260" height="50" rx="6"/>
+<text class="gc-n" x="612" y="390">before compaction</text>
+<text class="gc-s" x="612" y="408">save a handoff</text>
+
+</g>
+</svg>

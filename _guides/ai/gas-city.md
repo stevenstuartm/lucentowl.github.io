@@ -7,7 +7,7 @@ description: "What it takes to run many coding agents reliably and how Gas City 
 tags: [gas-city, gas-town, multi-agent, orchestration, health-patrol, advanced]
 ---
 
-[Gas City](https://github.com/gastownhall/gascity){:target="_blank" rel="noopener noreferrer"} is an open-source toolkit for building systems that run many coding agents at once on long-lived engineering work. It does not supply a fixed team of agents. It supplies the machinery underneath one: durable work tracking, a supervisor that keeps agents running, a way to express multi-step methods that fan out across agents, and a configuration format for describing the team. Its [documentation](https://docs.gascity.com/){:target="_blank" rel="noopener noreferrer"} is the primary reference for everything below. By default, Gas City stores its work in [Beads](https://github.com/gastownhall/beads){:target="_blank" rel="noopener noreferrer"}, a dependency-aware issue tracker for agents.
+[Gas City](https://github.com/gastownhall/gascity){:target="_blank" rel="noopener noreferrer"} is an open-source toolkit for building systems that run many coding agents at once on long-lived engineering work. It does not supply a fixed team of agents. It supplies the machinery underneath one: durable work tracking, a supervisor that keeps agents running, a way to express multi-step methods that fan out across agents, and a configuration format for describing the team. Its [documentation](https://docs.gascity.com/){:target="_blank" rel="noopener noreferrer"} is the primary reference for everything below, and its [architecture notes](https://github.com/gastownhall/gascity/tree/main/engdocs/architecture){:target="_blank" rel="noopener noreferrer"} describe how each subsystem works in the code. By default, Gas City stores its work in [Beads](https://github.com/gastownhall/beads){:target="_blank" rel="noopener noreferrer"}, a dependency-aware issue tracker for agents.
 
 The general trade-offs of multi-agent systems, what parallel agents buy and what they cost, are covered in [AI Agents](/study-guides/ai/ai-agents.html).
 
@@ -68,53 +68,49 @@ Everything in Gas City is built from six user-facing primitives.
 
 **Beads are the universal store.** Tasks, mail between agents, session records, and convoys (batches of related work) are all beads that differ only by type. Because every piece of state lives in one durable store, anything that crashes can be rebuilt from what the store holds.
 
-**A rig scopes work and agents.** Each registered project gets its own bead namespace and its own agent scope, so rig-scoped agents working on one repository do not pick up work belonging to another. Each rig has its own bead store, by default a prefix-scoped namespace on the city's shared Dolt server, and only city-scoped agents serve work across stores.
+**A rig scopes work and agents.** Each registered project gets its own bead namespace and its own agent scope, so rig-scoped agents working on one repository do not pick up work belonging to another. Each rig has its own bead store, by default a prefix-scoped namespace on the city's shared Dolt server, and only city-scoped agents serve work across stores. The city runs one Dolt server, and each rig's `.beads/` configuration points at it with its own issue prefix, which `bd` applies as a filter on every read and write. Running `bd list` inside one rig does not show another rig's beads, even though both sit in the same database.
 
-**The city is itself a pack.** A pack is a directory whose `pack.toml` declares agents, prompt templates, formulas, orders, and supporting files. The city directory is the root pack, and it imports shared packs by name, so a team definition can be versioned, reviewed, and reused like code. Imported definitions read the same as local ones, and later layers override earlier ones in a fixed order, so a city can adopt a published pack and adjust only what it needs.
+{% include figure.html id="bd-claim-topology" %}
+
+**The city is itself a pack.** A pack is a directory whose `pack.toml` declares agents, prompt templates, formulas, orders, and supporting files. The city directory is the root pack, and it imports shared packs by name, so a team definition can be versioned, reviewed, and reused like code. Imported definitions read the same as local ones, and later layers override earlier ones in a fixed order, so a city can adopt a published pack and adjust only what it needs. For formulas, the layers run from system formulas embedded in the `gc` binary, through imported packs, to the city's own formulas, and a rig adds its own imports and local formulas on top of the city's. The winning file for each name is staged as a symlink in that scope's `.beads/formulas/` directory, where `bd` finds it.
+
+{% include figure.html id="gc-pack-layering" %}
 
 ---
 
 ## The Orchestrator
 
+### One Supervisor Hosts Every City
+
+A machine runs one `gc supervisor` process. It hosts an orchestrator for each registered city, which the code calls the controller, along with a typed HTTP and Server-Sent Events API that the `gc` CLI and the built-in dashboard both use. The API listens on the loopback address by default. A lock file in the city's `.gc/` directory keeps a second controller from running against the same city.
+
+{% include figure.html id="gc-containers" %}
+
 ### Reconciling Desired State Against Running Sessions
 
 The orchestrator is a control loop. On each tick, 30 seconds by default, it reloads configuration if it has changed, works out which agents and how many sessions should be running, compares that against what is running, and starts, stops, or restarts sessions to close the gap. It then evaluates orders and dispatches any whose trigger has fired. This is the same reconciliation pattern that Kubernetes applies to containers, applied to agent sessions.
 
-```
-   city + packs                           runtime provider
-   (desired agents and pools)             (tmux, subprocess, k8s, ...)
-          │                                  ▲          │
-          │ reload on change   start / stop /│          │ alive? active?
-          ▼                    restart       │          ▼
-   ┌─────────────────────────────────────────┴──────────┴─┐
-   │ orchestrator tick                                    │
-   │  desired vs running sessions → act on sessions       │
-   │  evaluate orders → dispatch formulas or exec scripts │
-   └──────┬───────────────────────▲──────────────▲────────┘
-          │ materialize and       │ read         │ read
-          │ route work            │ progress     │ events
-          ▼                       │              │
-   ┌──────────────────────────────┴──┐  fires  ┌─┴────────────┐
-   │ bead store                      │───────► │ event bus    │
-   └──────────────▲──────────────────┘         └──────────────┘
-                  │ claim, close, mail
-   ┌──────────────┴──────────────────┐
-   │ agent sessions (live inside the │
-   │ runtime provider)               │
-   └─────────────────────────────────┘
-```
+The steps run in a fixed order. A file watcher marks the configuration dirty between ticks, and a reload that fails validation keeps the previous configuration instead of stopping the city. Pool sizes come from each pool's `scale_check` command, and the checks run in parallel, though a check that hangs holds up the whole tick. Sessions are themselves tracked as session beads, so reconciliation compares three things: the session beads, the live processes the runtime provider reports, and the configuration. Between reconciling sessions and dispatching orders, the tick also deletes closed wisps older than a configured time-to-live.
+
+{% include figure.html id="gc-controller-tick" %}
 
 ### State Lives in the Store, Not in Callbacks
 
 The orchestrator acts on sessions but never waits for sessions to report back to it. It reads progress from the bead store and the event bus. This is what makes the system survive crashes on both sides. When an agent dies, its work stays in the store, still in progress. When the orchestrator itself restarts, it adopts the sessions it finds still running rather than respawning them, and it resumes from the ground truth in the store.
 
+The event bus is separate from the bead store. By default it is an append-only JSON Lines file in the city's `.gc/` directory, and every event carries an increasing sequence number, so a watcher can replay the stream from any point. Bead, session, convoy, and order activity all record events there, and event-triggered orders read the same stream people watch.
+
+{% include figure.html id="gc-crash-recovery" %}
+
 Sessions are disposable by design. An agent with on-demand sessions spins them up when work arrives and lets them go when idle. An always-on named session stays available for a person to attach to and talk with. A pool of identical sessions scales between a configured minimum and maximum against one shared queue of work.
 
 ### Health Patrol Supervises Like Erlang
 
-Health patrol is the orchestrator's supervision logic, modeled on the Erlang/OTP supervisor. On every tick it looks for conditions including these. A session whose process is gone has crashed. A session with no activity past its idle timeout, which each agent opts into, is stalled. A session whose command or environment no longer matches configuration has drifted. An agent that has exhausted its context can also ask to be restarted. Each one is corrected by restarting or replacing the session, and sessions that no longer belong to the configuration are stopped.
+Health patrol is the orchestrator's supervision logic, modeled on the Erlang/OTP supervisor. On every tick it looks for conditions including these. A session whose process is gone has crashed, and health patrol captures its terminal output for diagnosis before restarting it. A session with no activity past its idle timeout, which each agent opts into, is stalled. A session whose command or environment no longer matches configuration has drifted, which health patrol detects by comparing a hash of the session's command and environment with the current configuration. An agent that has exhausted its context can also ask to be restarted. Each one is corrected by restarting or replacing the session. Sessions that no longer belong to the configuration are drained gracefully when they are surplus pool members and stopped outright when they are true orphans.
 
-The model is "let it crash." Agents are not expected to recover themselves. They die and are replaced. To stop a broken agent from restarting forever, health patrol counts restarts in a sliding window and quarantines an agent that reaches the limit (five restarts within an hour, by default) until the window passes. Quarantine is held in memory, so it resets if the orchestrator itself restarts.
+The model is "let it crash." Agents are not expected to recover themselves. They die and are replaced. Restarts are one-for-one, in OTP terms: only the failed session restarts, with no cascade to agents that work alongside it. To stop a broken agent from restarting forever, health patrol counts restarts in a sliding window and quarantines an agent that reaches the limit (five restarts within an hour, by default) until the window passes. The crash counts, idle timers, and in-flight order state are all held in memory, following OTP's rule that a restarted supervisor starts its children's counts from zero, so quarantine resets if the orchestrator itself restarts.
+
+{% include figure.html id="gc-health-patrol" %}
 
 ---
 
@@ -135,13 +131,17 @@ Gas City has two formula contracts. A formula uses the first unless it declares 
 
 Under v2, the orchestrator drives the run, fanning ready steps out to agents and pools and holding each downstream step until its dependencies close. Under v1, the agent the run was sent to works through every step itself.
 
+A v2 formula compiles into three kinds of bead. The workflow root represents the run. Step beads are ordinary work, and each can be routed to a different agent or pool. Control beads hold the method's control flow, such as a drain that fans work out, a check, a retry, and a final workflow-finalize step. No model executes a control bead. The control dispatcher does, a deterministic `gc` process that the built-in core pack declares as an agent with no prompt. It runs as a session like any other, one for each bead store, and it claims routed control beads through the store the same way agents claim work. The root depends on the finalize step, so it becomes ready only when the whole workflow has finished.
+
+{% include figure.html id="gc-formula-contracts" %}
+
 ### Sling Creates and Routes in One Step
 
 Applying a formula has three verbs. **Cook** compiles it and writes the beads without routing them. **Sling** cooks and routes in one motion, naming a target agent or pool and letting Gas City resolve the rest. **Orders** apply a formula automatically each time a trigger fires. Sling is the everyday dispatch verb, used by people and by agents alike when they hand work onward.
 
 ### Routed Work Finds Its Session
 
-Dispatch does not hand work to a particular session. It stamps each bead with the agent or pool it is routed to and leaves it in the store. On each tick, the orchestrator counts ready, unassigned work routed to each pool and starts sessions to meet the demand, up to the pool's maximum.
+Dispatch does not hand work to a particular session. It stamps each bead with the agent or pool it is routed to and leaves it in the store. Work for a pool gets a `gc.routed_to` metadata field naming the pool, and work for a named agent gets that agent as its assignee. On each tick, the orchestrator counts ready, unassigned work routed to each pool and starts sessions to meet the demand, up to the pool's maximum.
 
 When a session starts, its hook looks for work in three tiers and takes the first it finds:
 
@@ -152,6 +152,16 @@ When a session starts, its hook looks for work in three tiers and takes the firs
 A session that finds nothing exits cleanly.
 
 This ordering is what makes "let it crash" work in practice. When a session dies mid-task, its bead stays in the store, still in progress and still assigned. When the agent comes back, the first thing its hook finds is that unfinished bead, so it resumes rather than starting something new. Work belongs to the store, not to the session that happened to be running it.
+
+The claim itself is a `bd update --claim` that the agent's prompt tells it to run, and `bd` performs it as an atomic compare-and-swap. Gas City's own code does not enforce the claim. It makes the work visible and routes it, and the prompt tells the agent to run whatever it finds.
+
+{% include figure.html id="gc-routed-work" %}
+
+### Spawning and Claiming Must Agree
+
+Two readers ask the store the same question. The orchestrator's `scale_check` counts ready, unassigned work routed to a pool to decide whether the pool needs another session, and a new session's third hook tier claims the first bead of that same set. Gas City builds both queries from one shared predicate. When an earlier version let them drift apart, the orchestrator counted beads that sessions would never claim, so sessions started, found nothing, exited, and were started again on the next tick, in a loop the project calls a spawn storm. A team that overrides `scale_check` or `work_query` for a pool steps outside that shared predicate and inherits the job of keeping the two in agreement. Configuration validation covers only the write side, rejecting a pool that customizes `sling_query` without also customizing `work_query`.
+
+{% include figure.html id="gc-claim-rules" %}
 
 ### Orders Decide When Work Happens
 
@@ -177,7 +187,9 @@ Agents never reference each other directly. They coordinate through two indirect
 | Slung work | Beads routed to an agent or pool | Yes | Delegating a task |
 | Nudge | Input typed into the session's terminal | No | Waking a session or redirecting it right away |
 
-A hook in each agent's harness checks for unread mail on every turn and injects it into the agent's context, so messages arrive without the agent polling for them. Mail does not wake a sleeping recipient, though. It waits for that agent's next turn unless the sender asks for a notification or follows up with a nudge.
+Gas City wires these channels into each agent through hooks in the agent's harness. It installs them automatically for Claude Code, and for other harnesses when the agent lists them in its `install_agent_hooks` setting. The hooks fire at session start, before each turn, and just before the harness compacts its context. They prime the agent, deliver unread mail into its context, drain queued nudges, and save a handoff before a context cycle, so messages arrive without the agent polling for them. Mail does not wake a sleeping recipient, though. It waits for that agent's next turn unless the sender asks for a notification or follows up with a nudge.
+
+{% include figure.html id="gc-coordination" %}
 
 ### Reliability Comes From the Method
 
@@ -198,6 +210,8 @@ The **runtime provider** decides where sessions live, and it is set once for the
 Gas City runs shell commands in many places, like exec orders, session providers, and dispatch, and its documentation is explicit that "those commands are a feature, not a sandbox." They can do anything their execution context can do.
 
 The trust model separates three main kinds of input. City configuration is trusted operator code and deserves review like any code that runs commands. Imported packs are trusted dependency code, so they should be pinned to a version and reviewed before use, the same care owed to any third-party script. Bead titles, pull request text, and other user-controlled content are untrusted data and must never be concatenated into a shell command, because an agent that files a bead titled with a shell payload has just written a command for the orchestrator to run. The orchestrator strips environment variables with names like `TOKEN` and `API_KEY` from the shell commands it runs itself, like order checks and exec orders, but values placed explicitly in configuration pass through by design.
+
+{% include figure.html id="gc-trust-boundaries" %}
 
 ---
 

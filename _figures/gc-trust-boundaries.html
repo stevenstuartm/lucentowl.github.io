@@ -1,0 +1,123 @@
+---
+title: "Gas City Trust Boundaries"
+kind: boundary
+system: gas-city
+summary: "Which inputs are trusted code, which are untrusted data, and the only safe ways data may reach a shell."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="gc10-title gc10-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc10-title">Gas City command trust boundaries</title>
+<desc id="gc10-desc">City config is trusted operator code and imported packs are trusted dependency code; both define the shell commands Gas City runs, on the orchestrator side (work_query, scale_check, order checks and exec, sling_query, on_boot and on_death) and inside sessions (the agent command, pre_start, and session setup). Work content such as bead titles, mail, formula variables, PR text, and API fields is untrusted data: it may reach those commands only as environment variables, JSON, stdin, or argv, never concatenated into sh -c. The ambient environment passes through a filter that strips secret-looking keys before orchestrator-side shells run, while values placed explicitly in configuration pass through by design.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc10-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc10-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc10-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc10-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc10-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-box" x="24" y="60" width="250" height="100" rx="6"/>
+<text class="gc-t" x="36" y="84">City config</text>
+<text class="gc-k" x="36" y="102">[Trusted operator code]</text>
+<text class="gc-s" x="36" y="122">city.toml, pack.toml, exec</text>
+<text class="gc-s" x="36" y="140">scripts: review like code</text>
+
+<rect class="gc-box" x="24" y="180" width="250" height="100" rx="6"/>
+<text class="gc-t" x="36" y="204">Imported packs</text>
+<text class="gc-k" x="36" y="222">[Trusted dependency code]</text>
+<text class="gc-s" x="36" y="242">pin a version and review</text>
+<text class="gc-s" x="36" y="260">before importing</text>
+
+<rect class="gc-badbox" x="24" y="330" width="250" height="100" rx="6"/>
+<text class="gc-t-bad" x="36" y="354">Work content</text>
+<text class="gc-k" x="36" y="372">[Untrusted data]</text>
+<text class="gc-s" x="36" y="392">bead titles and descriptions,</text>
+<text class="gc-s" x="36" y="410">mail, formula vars, PR text</text>
+
+<rect class="gc-box" x="360" y="60" width="260" height="300" rx="6"/>
+<text class="gc-t" x="376" y="84">Shell execution surfaces</text>
+<text class="gc-k" x="376" y="102">[Commands, not a sandbox]</text>
+<text class="gc-n-mute" x="376" y="132">orchestrator side</text>
+<text class="gc-s" x="376" y="152">work_query, scale_check</text>
+<text class="gc-s" x="376" y="170">order checks and exec</text>
+<text class="gc-s" x="376" y="188">sling_query</text>
+<text class="gc-s" x="376" y="206">on_boot, on_death</text>
+<text class="gc-n-mute" x="376" y="240">session side</text>
+<text class="gc-s" x="376" y="260">agent command, pre_start</text>
+<text class="gc-s" x="376" y="278">session_setup scripts</text>
+
+<path class="gc-flow" d="M 274,110 H 354" marker-end="url(#gc10-a)"/>
+<text class="gc-el" x="314" y="102" text-anchor="middle">defines</text>
+<path class="gc-flow" d="M 274,230 H 354" marker-end="url(#gc10-a)"/>
+<text class="gc-el" x="314" y="222" text-anchor="middle">defines</text>
+
+<path class="gc-okl" d="M 274,372 H 440 V 366" marker-end="url(#gc10-g)"/>
+<text class="gc-ok" x="290" y="392">✓ as env, JSON, stdin, or argv</text>
+<path class="gc-badl" d="M 274,418 H 540 V 366" marker-end="url(#gc10-x)"/>
+<text class="gc-bad" x="290" y="440">✗ never concatenated into sh -c</text>
+
+<rect class="gc-ext" x="680" y="60" width="200" height="80" rx="6"/>
+<text class="gc-t-ext" x="692" y="84">Ambient env</text>
+<text class="gc-k" x="692" y="102">[CI or maintainer shell]</text>
+<text class="gc-s" x="692" y="122">may carry secrets</text>
+
+<rect class="gc-ctl" x="680" y="180" width="200" height="110" rx="6"/>
+<text class="gc-n-ctl" x="692" y="202">secret filter</text>
+<text class="gc-s" x="692" y="222">strips inherited keys</text>
+<text class="gc-s" x="692" y="240">named like TOKEN,</text>
+<text class="gc-s" x="692" y="258">SECRET, API_KEY, …</text>
+<text class="gc-s" x="692" y="276">(orchestrator side)</text>
+
+<rect class="gc-box" x="680" y="320" width="200" height="70" rx="6"/>
+<text class="gc-n" x="692" y="344">explicit config values</text>
+<text class="gc-s" x="692" y="364">pass through by design</text>
+
+<path class="gc-flow" d="M 780,140 V 174" marker-end="url(#gc10-a)"/>
+<path class="gc-flow" d="M 680,235 H 626" marker-end="url(#gc10-a)"/>
+<path class="gc-flow" d="M 680,350 L 626,330" marker-end="url(#gc10-a)"/>
+
+<text class="gc-req" x="24" y="484">Commands are a feature, not a sandbox: whoever writes the config writes code the orchestrator runs.</text>
+<text class="gc-s" x="24" y="504">An agent that files a bead titled with a shell payload has written a command if that title reaches sh -c.</text>
+
+</g>
+</svg>

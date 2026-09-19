@@ -1,0 +1,133 @@
+---
+title: "Beads Containers in One Repository"
+kind: container
+system: beads
+summary: "What lives in a clone, what Git tracks, and how bead history syncs on its own ref beside the code."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-labelledby="bd1-title bd1-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="bd1-title">Beads container diagram for one repository</title>
+<desc id="bd1-desc">A C4 container view of one clone. The coding agent runs the bd CLI and receives context from bd prime. bd reads its config and writes to a Dolt database that auto-commits every write. The Dolt database pushes and pulls bead history to its own ref, refs/dolt/data, on the same git origin that holds the source branches. The optional JSONL export is refreshed by the pre-commit hook and is not a sync path.</desc>
+<style>
+.bd-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.bd-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.bd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bd-claim { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.bd-ready { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.bd-prog { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.bd-done { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.bd-blocked { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
+.bd-gate { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.bd-vapor { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.bd-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bd-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bd-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.bd-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.bd-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bd-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.bd-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.bd-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.bd-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bd-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.bd-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.bd-gl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 8 5; }
+.bd-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.bd-pc { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+</style>
+<defs>
+<marker id="bd1-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="bd1-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="bd1-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="bd-bound" x="16" y="34" width="566" height="512" rx="8"/>
+<text class="bd-hd" x="30" y="56">ONE CLONE OF THE REPOSITORY</text>
+
+<rect class="bd-box" x="32" y="70" width="230" height="76" rx="6"/>
+<text class="bd-t" x="44" y="94">Coding agent</text>
+<text class="bd-k" x="44" y="112">[Container: Claude Code, Codex, …]</text>
+<text class="bd-s" x="44" y="132">runs bd in its own shell</text>
+
+<rect class="bd-box" x="336" y="70" width="230" height="76" rx="6"/>
+<text class="bd-t" x="348" y="94">AGENTS.md or CLAUDE.md</text>
+<text class="bd-k" x="348" y="112">[File: written by bd setup]</text>
+<text class="bd-s" x="348" y="132">the start-work-end discipline</text>
+
+<rect class="bd-box" x="32" y="196" width="230" height="76" rx="6"/>
+<text class="bd-t" x="44" y="220">bd</text>
+<text class="bd-k" x="44" y="238">[Container: Go CLI]</text>
+<text class="bd-s" x="44" y="258">ready · claim · close · prime</text>
+
+<rect class="bd-store" x="336" y="196" width="230" height="76" rx="6"/>
+<text class="bd-t" x="348" y="220">Dolt database</text>
+<text class="bd-k" x="348" y="238">[Store: version-controlled SQL]</text>
+<text class="bd-s" x="348" y="258">every write auto-commits</text>
+
+<rect class="bd-box" x="32" y="322" width="230" height="76" rx="6"/>
+<text class="bd-t" x="44" y="346">.beads/config.yaml</text>
+<text class="bd-k" x="44" y="364">[Config: tracked in git]</text>
+<text class="bd-s" x="44" y="384">mode, prefix, sync.remote</text>
+
+<rect class="bd-box" x="336" y="322" width="230" height="76" rx="6"/>
+<text class="bd-t" x="348" y="346">.beads/issues.jsonl</text>
+<text class="bd-k" x="348" y="364">[Export: optional, passive]</text>
+<text class="bd-s" x="348" y="384">refreshed by the pre-commit hook</text>
+
+<rect class="bd-box" x="32" y="448" width="230" height="76" rx="6"/>
+<text class="bd-t" x="44" y="472">Git hooks</text>
+<text class="bd-k" x="44" y="490">[Shims: bd hooks run]</text>
+<text class="bd-s" x="44" y="510">pre-commit, post-merge, pre-push</text>
+
+<rect class="bd-box" x="336" y="448" width="230" height="76" rx="6"/>
+<text class="bd-t" x="348" y="472">Source code</text>
+<text class="bd-k" x="348" y="490">[Git working tree]</text>
+<text class="bd-s" x="348" y="510">commits go to refs/heads/*</text>
+
+<rect class="bd-ext" x="636" y="140" width="248" height="400" rx="8"/>
+<text class="bd-t-ext" x="650" y="164">git origin</text>
+<text class="bd-k" x="650" y="182">[External: GitHub, GitLab, …]</text>
+<rect class="bd-store" x="650" y="196" width="220" height="76" rx="6"/>
+<text class="bd-n" x="662" y="218">refs/dolt/data</text>
+<text class="bd-s" x="662" y="238">bead history, its own ref</text>
+<text class="bd-s" x="662" y="258">bd dolt push / pull</text>
+<text class="bd-n-mute" x="650" y="312">Two refs, one remote</text>
+<text class="bd-s" x="650" y="334">a plain git clone skips</text>
+<text class="bd-s" x="650" y="352">refs/dolt/data, so a new</text>
+<text class="bd-s" x="650" y="370">clone runs bd bootstrap</text>
+<rect class="bd-box" x="650" y="448" width="220" height="76" rx="6"/>
+<text class="bd-n" x="662" y="470">refs/heads/*</text>
+<text class="bd-s" x="662" y="490">source branches</text>
+<text class="bd-s" x="662" y="510">git push / pull</text>
+
+<path class="bd-flow" d="M 100,146 V 190" marker-end="url(#bd1-a)"/>
+<text class="bd-el" x="108" y="176">runs</text>
+<path class="bd-ctx" d="M 200,196 V 152" marker-end="url(#bd1-c)"/>
+<text class="bd-el" x="208" y="176">bd prime</text>
+<path class="bd-ctx" d="M 336,112 H 268" marker-end="url(#bd1-c)"/>
+<text class="bd-el" x="299" y="102" text-anchor="middle">reads</text>
+<path class="bd-flow" d="M 262,234 H 330" marker-end="url(#bd1-a)"/>
+<text class="bd-el" x="299" y="226" text-anchor="middle">SQL</text>
+<path class="bd-ctx" d="M 100,272 V 316" marker-end="url(#bd1-c)"/>
+<text class="bd-el" x="108" y="300">reads</text>
+<path class="bd-ctx" d="M 262,470 L 330,392" marker-end="url(#bd1-c)"/>
+<path class="bd-badl" d="M 451,322 V 278" marker-end="url(#bd1-x)"/>
+<text class="bd-bad" x="459" y="306">✗ not a sync path</text>
+<path class="bd-flow" d="M 572,234 H 644" marker-start="url(#bd1-a)" marker-end="url(#bd1-a)"/>
+<path class="bd-flow" d="M 572,486 H 644" marker-start="url(#bd1-a)" marker-end="url(#bd1-a)"/>
+
+<path class="bd-flow" d="M 16,571 H 52"/>
+<text class="bd-el" x="60" y="575">calls, reads and writes</text>
+<path class="bd-ctx" d="M 230,571 H 266"/>
+<text class="bd-el" x="274" y="575">context or config read</text>
+<path class="bd-badl" d="M 440,571 H 476"/>
+<text class="bd-el" x="484" y="575">anti-pattern</text>
+<rect class="bd-ext" x="600" y="564" width="22" height="14" rx="3"/>
+<text class="bd-el" x="630" y="575">external system</text>
+
+</g>
+</svg>

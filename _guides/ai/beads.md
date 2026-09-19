@@ -49,25 +49,9 @@ Beads are connected by typed edges, and the type determines whether an edge affe
 
 A bead is **ready** when it is open and every blocking dependency is closed, and when it is not deferred or waiting on a gate. The set of ready beads is the frontier of the graph. It holds everything an agent could pick up right now without stepping on unfinished prerequisites.
 
-```
-            ┌──────────────┐
-            │ A: schema    │  closed
-            └──────┬───────┘
-          blocks   │   blocks
-         ┌─────────┴─────────┐
-         ▼                   ▼
-  ┌──────────────┐    ┌──────────────┐
-  │ B: API       │    │ C: migration │   both READY
-  └──────┬───────┘    └──────┬───────┘
-         │ blocks            │ blocks
-         └─────────┬─────────┘
-                   ▼
-            ┌──────────────┐
-            │ D: rollout   │  blocked until B and C close
-            └──────────────┘
-```
+{% include figure.html id="bd-ready-frontier" %}
 
-Closing A released B and C at once, so two agents can take them in parallel. D stays off the frontier until both close. The agent never reasons about this ordering itself. It asks for ready work and gets back exactly B and C.
+Closing the schema bead released the API and migration beads at once, so two agents could take them in parallel, and one already has. The rollout stays off the frontier until both close and its gate clears. The flaky-test bead filed mid-task is ready too, because a provenance edge never blocks. The agent never reasons about this ordering itself. It asks for ready work and gets back exactly the API bead and the flaky test.
 
 Beads checks for cycles when a dependency is added and rejects one that would close a loop. The check can be skipped, and the documentation includes a recovery procedure for cycles that get in anyway, so the check keeps the graph sound in normal use rather than guaranteeing it.
 
@@ -98,35 +82,19 @@ Dolt runs in one of two main modes, and the choice turns on how many processes w
 | Embedded (default) | One process at a time, enforced by a file lock | A single agent, scripts, CI, containers |
 | Server | Many concurrent writers through a `dolt sql-server` process | Several agents writing to the same database |
 
+Only configuration lands in Git. `bd init` writes a `.gitignore` that keeps the database directory (`.beads/embeddeddolt/` in embedded mode, `.beads/dolt/` in server mode) and the server's runtime files out of commits. `.beads/config.yaml` and `.beads/metadata.json` are tracked, so every clone agrees on the storage mode, the issue prefix, and the sync remote.
+
+{% include figure.html id="bd-containers" %}
+
 ### Sync Rides Alongside the Code
 
 To share beads across machines, `bd` pushes and pulls Dolt history through a remote. That remote can be the same Git origin as the code, because Dolt stores its data under a separate ref (`refs/dolt/data`) that never appears in a source branch. A plain `git clone` does not fetch that ref, so a new clone runs Beads' bootstrap step to pull the issue history down before its first use.
 
-```
-                        git origin
-          ┌────────────────────────────────────┐
-          │ refs/heads/*     source branches   │
-          │ refs/dolt/data   bead history      │
-          └──────▲──────────────────────▲──────┘
-       push/pull │                      │ push/pull
-    ┌────────────┴─────────┐   ┌────────┴─────────────┐
-    │ Clone A              │   │ Clone B              │
-    │ local Dolt database  │   │ local Dolt database  │
-    │ agent 1              │   │ agent 2              │
-    └──────────────────────┘   └──────────────────────┘
-    Claims are atomic inside each box, not across them.
+{% include figure.html id="bd-claim-topology" %}
 
+The two layouts behave differently under contention. In server mode every agent claims against one database, so claiming is a true lock. Across clones, each agent claims against its own local copy, and two agents can both claim the same bead before either pushes. Dolt merges at the level of individual cells, so most concurrent changes to different beads or different fields merge cleanly, but a double claim is only discovered at merge time, as a conflict or as a silent merge of two agents' identical claims. The Beads documentation advises against concurrent modification from multiple clones without a Dolt server for this reason. Parallel agents that need to draw from the same backlog belong on one shared database. Gas City takes this route. It runs one Dolt server for each city and gives every registered project an issue prefix on that server instead of a database of its own.
 
-    One machine, server mode:
-      agent 1 ──┐
-      agent 2 ──┼──►  dolt sql-server  ──►  one database
-      agent 3 ──┘
-    All claims hit the same database, so first claim wins.
-```
-
-The two layouts behave differently under contention. In server mode every agent claims against one database, so claiming is a true lock. Across clones, each agent claims against its own local copy, and two agents can both claim the same bead before either pushes. Dolt merges at the level of individual cells, so most concurrent changes to different beads or different fields merge cleanly, but a double claim is only discovered at merge time, as a conflict or as a silent merge of two agents' identical claims. The Beads documentation advises against concurrent modification from multiple clones without a Dolt server for this reason. Parallel agents that need to draw from the same backlog belong on one shared database.
-
-Sync is also explicit. A change is local until it is pushed, so an agent that closes three beads and ends its session without pushing leaves every other agent working from a stale graph.
+Sync is also explicit. A change is local until it is pushed, so an agent that closes three beads and ends its session without pushing leaves every other agent working from a stale graph. The Git hooks Beads installs do not change this. They are thin shims that call `bd hooks run`, the pre-commit hook refreshes the JSONL export when export is enabled, and none of them push Dolt history.
 
 ### Bead State Is Separate From Code State
 
@@ -138,7 +106,9 @@ Because bead history lives on its own ref, closing a bead does not mean its code
 
 ### Formulas, Protos, and Molecules
 
-Some work has the same shape every time, like a release, a dependency upgrade, or a security review. Beads captures that shape as a **formula**, a TOML or JSON file that declares steps, the steps each one needs before it can start, and variables such as a version number. Compiling a formula produces a **proto**, a template epic. Instantiating the proto produces a **molecule**, an epic whose children are ordinary beads wired with the formula's dependencies.
+Some work has the same shape every time, like a release, a dependency upgrade, or a security review. Beads captures that shape as a **formula**, a TOML or JSON file that declares steps, the steps each one needs before it can start, and variables such as a version number. Compiling a formula with `bd cook` produces a **proto**, a template epic. Pouring the proto with `bd mol pour` produces a **molecule**, an epic whose children are ordinary beads wired with the formula's dependencies. The CLI names these phases after states of matter. The proto is the solid phase, a reusable template carrying a `template` label that is not yet live work. The molecule is the liquid phase, persistent and synced like any other bead. Wisps, covered below, are the vapor phase.
+
+{% include figure.html id="bd-workflow-phases" %}
 
 Because a molecule's steps are just beads, they flow through the same ready computation as everything else. Steps with no dependency between them are ready at the same time and can run in parallel. The formula expresses the method once, and each run of it becomes durable, queryable work. Molecules can also be bonded to build a larger workflow out of smaller ones, most often by making one depend on another.
 
@@ -160,7 +130,7 @@ Gate checks do not run by themselves. The documentation recommends running them 
 
 ### Wisps Keep Operational Runs Out of the Record
 
-A **wisp** is an ephemeral molecule. Its beads are flagged as ephemeral, hidden from the ready query unless explicitly included, excluded by default from federation (which shares beads between separate databases), and deletable in bulk afterward. Wisps suit routine operational runs, like a diagnostic sweep or a pre-release checklist, whose individual steps have no value once the run is over. If a wisp turns up something the project should keep, squashing it leaves a permanent digest. Burning it deletes it outright.
+A **wisp** is an ephemeral molecule, instantiated from a proto with `bd mol wisp` instead of `bd mol pour`. Its beads are flagged as ephemeral, hidden from the ready query unless explicitly included, excluded by default from federation (which shares beads between separate databases), and deletable in bulk afterward. Wisps suit routine operational runs, like a diagnostic sweep or a pre-release checklist, whose individual steps have no value once the run is over. If a wisp turns up something the project should keep, squashing it leaves a permanent digest. Burning it deletes it outright.
 
 ---
 

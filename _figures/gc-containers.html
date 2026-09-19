@@ -1,0 +1,149 @@
+---
+title: "Gas City Containers on One Machine"
+kind: container
+system: gas-city
+summary: "One supervisor per machine, one controller per city, and a loop that closes through the store instead of callbacks."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 740" role="img" aria-labelledby="gc2-title gc2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc2-title">Gas City containers on one machine</title>
+<desc id="gc2-desc">One gc supervisor process per machine hosts the HTTP and SSE API with the dashboard, and one city controller per registered city. The controller reloads the city and pack config when it changes, reads and writes session beads, pool demand, and order tracking beads in the city's single Dolt server, records to and reads from the append-only event log, and starts, stops, interrupts, and peeks sessions through the runtime provider. The sessions are worker pools, an always-on named session, and a deterministic control-dispatcher that runs v2 control beads. Every session claims, closes, and mails through the bead store. No edge runs from a session back to the controller: the loop closes through the store.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc2-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc2-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc2-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc2-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc2-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-person" x="24" y="16" width="200" height="60" rx="10"/>
+<text class="gc-t" x="36" y="40">Operator</text>
+<text class="gc-k" x="36" y="58">[Person]</text>
+
+<rect class="gc-bound" x="16" y="96" width="868" height="610" rx="8"/>
+<text class="gc-hd" x="30" y="116">ONE MACHINE</text>
+
+<rect class="gc-box" x="36" y="128" width="828" height="172" rx="8"/>
+<text class="gc-t" x="52" y="152">gc supervisor</text>
+<text class="gc-k" x="180" y="152">[Container: Go process, one per machine]</text>
+
+<rect class="gc-store" x="52" y="168" width="220" height="116" rx="6"/>
+<text class="gc-n" x="64" y="190">API + dashboard</text>
+<text class="gc-k" x="64" y="208">[Component]</text>
+<text class="gc-s" x="64" y="228">typed HTTP + SSE</text>
+<text class="gc-s" x="64" y="246">on 127.0.0.1:8372</text>
+<text class="gc-s" x="64" y="264">CLI and UI share it</text>
+
+<rect class="gc-store" x="292" y="168" width="556" height="116" rx="6"/>
+<text class="gc-n" x="304" y="190">city controller</text>
+<text class="gc-k" x="304" y="208">[Component: CityRuntime, one per registered city]</text>
+<text class="gc-s" x="304" y="228">each tick: reload · build agents · reconcile · wisp GC · orders</text>
+<text class="gc-s" x="304" y="246">holds .gc/controller.lock, so one controller per city</text>
+<text class="gc-s" x="304" y="264">crash, idle, and order state live only in memory</text>
+
+<path class="gc-flow" d="M 168,76 V 162" marker-end="url(#gc2-a)"/>
+<text class="gc-el" x="176" y="112">gc CLI · dashboard</text>
+
+<rect class="gc-box" x="36" y="350" width="230" height="90" rx="6"/>
+<text class="gc-t" x="48" y="374">city.toml · pack.toml</text>
+<text class="gc-k" x="48" y="392">[Config: city pack + imports]</text>
+<text class="gc-s" x="48" y="412">agents, formulas, orders</text>
+<text class="gc-s" x="48" y="430">watched by fsnotify</text>
+
+<rect class="gc-store" x="335" y="350" width="230" height="90" rx="6"/>
+<text class="gc-t" x="347" y="374">Dolt sql-server</text>
+<text class="gc-k" x="347" y="392">[Store: one per city]</text>
+<text class="gc-s" x="347" y="412">all beads: work, mail, sessions</text>
+<text class="gc-s" x="347" y="430">rigs by prefix: riga-*, rigb-*</text>
+
+<rect class="gc-store" x="634" y="350" width="230" height="90" rx="6"/>
+<text class="gc-t" x="646" y="374">.gc/events.jsonl</text>
+<text class="gc-k" x="646" y="392">[Store: append-only log]</text>
+<text class="gc-s" x="646" y="412">seq-numbered, replayable</text>
+<text class="gc-s" x="646" y="430">feeds event-triggered orders</text>
+
+<path class="gc-ctx" d="M 330,284 L 212,344" marker-end="url(#gc2-c)"/>
+<text class="gc-el" x="244" y="322" text-anchor="end">reload on change</text>
+<path class="gc-flow" d="M 450,290 V 344" marker-start="url(#gc2-a)" marker-end="url(#gc2-a)"/>
+<text class="gc-el" x="458" y="322">session beads · demand</text>
+<path class="gc-ctx" d="M 749,290 V 344" marker-start="url(#gc2-c)" marker-end="url(#gc2-c)"/>
+<text class="gc-el" x="757" y="322">records, reads</text>
+<path class="gc-flow" d="M 600,284 V 484" marker-end="url(#gc2-a)"/>
+<text class="gc-el" x="608" y="470">start · stop · interrupt · peek</text>
+
+<rect class="gc-band" x="36" y="490" width="828" height="200" rx="8"/>
+<text class="gc-hd" x="50" y="510">RUNTIME PROVIDER · TMUX BY DEFAULT · ALSO SUBPROCESS, K8S, EXEC</text>
+
+<rect class="gc-box" x="56" y="524" width="240" height="100" rx="6"/>
+<text class="gc-t" x="68" y="548">worker sessions</text>
+<text class="gc-k" x="68" y="566">[Container: harness CLI, pool 1–3]</text>
+<text class="gc-s" x="68" y="586">hooks: prime, mail, nudges</text>
+<text class="gc-s" x="68" y="606">claim routed pool work</text>
+
+<rect class="gc-box" x="330" y="524" width="240" height="100" rx="6"/>
+<text class="gc-t" x="342" y="548">mayor session</text>
+<text class="gc-k" x="342" y="566">[Container: named, always-on]</text>
+<text class="gc-s" x="342" y="586">a person can attach to it</text>
+<text class="gc-s" x="342" y="606">plans and slings onward</text>
+
+<rect class="gc-ctl" x="604" y="524" width="240" height="100" rx="6"/>
+<text class="gc-t" x="616" y="548">control-dispatcher</text>
+<text class="gc-k" x="616" y="566">[Container: gc process, no LLM]</text>
+<text class="gc-s" x="616" y="586">claims v2 control beads</text>
+<text class="gc-s" x="616" y="606">one per store, like any agent</text>
+
+<path class="gc-flow" d="M 450,490 V 446" marker-end="url(#gc2-a)"/>
+<text class="gc-el" x="442" y="474" text-anchor="end">every session: bd claim · close · mail</text>
+
+<text class="gc-s" x="50" y="652">sessions run in rig directories (repo-a/, repo-b/), and each rig's .beads/ points at the city's server</text>
+<text class="gc-req" x="50" y="674">Nothing runs from a session back to the controller: the loop closes through the store.</text>
+
+<path class="gc-flow" d="M 16,724 H 52"/>
+<text class="gc-el" x="60" y="728">acts on, reads and writes</text>
+<path class="gc-ctx" d="M 240,724 H 276"/>
+<text class="gc-el" x="284" y="728">watches or records</text>
+<rect class="gc-ctl" x="440" y="717" width="22" height="14" rx="3"/>
+<text class="gc-el" x="470" y="728">deterministic, not a model</text>
+
+</g>
+</svg>

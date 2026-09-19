@@ -1,0 +1,101 @@
+---
+title: "The Ready Frontier"
+kind: graph
+system: beads
+summary: "How each edge type decides which beads bd ready returns."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="bd3-title bd3-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="bd3-title">How edge types decide the ready frontier of a Beads work graph</title>
+<desc id="bd3-desc">An epic contains five child beads. The closed schema bead blocks the API and migration beads; the API bead is ready and the migration bead is claimed. The rollout bead is blocked by the API, the migration, and a gate waiting on a pull request. A rollback bead is linked by conditional-blocks and runs only if the rollout fails. A flaky-test bead, filed during the migration with a discovered-from edge, sits outside the epic and is ready, because discovered-from never blocks. bd ready returns exactly the API bead and the flaky-test bead.</desc>
+<style>
+.bd-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.bd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bd-ready { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.bd-prog { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.bd-done { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.bd-blocked { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
+.bd-gate { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.bd-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bd-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.bd-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bd-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bd-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.bd-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.bd-gl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 8 5; }
+.bd-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+</style>
+<defs>
+<marker id="bd3-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="bd3-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="bd3-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="bd3-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="bd-bound" x="24" y="40" width="852" height="310" rx="8"/>
+<text class="bd-hd" x="40" y="64">EPIC BD-A3F8 · CONTAINMENT IS THE PARENT-CHILD EDGE</text>
+
+<rect class="bd-done" x="44" y="170" width="160" height="58" rx="6"/>
+<text class="bd-n-mute" x="56" y="193">bd-a3f8.1 schema</text>
+<text class="bd-s" x="56" y="212">closed</text>
+
+<rect class="bd-ready" x="264" y="96" width="160" height="58" rx="6"/>
+<text class="bd-n" x="276" y="119">bd-a3f8.2 API</text>
+<text class="bd-s" x="276" y="138">blockers all closed</text>
+
+<rect class="bd-prog" x="264" y="244" width="160" height="58" rx="6"/>
+<text class="bd-n" x="276" y="267">bd-a3f8.3 migrate</text>
+<text class="bd-s" x="276" y="286">claimed by agent-2</text>
+
+<rect class="bd-blocked" x="484" y="170" width="160" height="58" rx="6"/>
+<text class="bd-n-mute" x="496" y="193">bd-a3f8.4 rollout</text>
+<text class="bd-s" x="496" y="212">waits on .2, .3, gate</text>
+
+<rect class="bd-gate" x="484" y="272" width="160" height="58" rx="6"/>
+<text class="bd-n-mute" x="496" y="295">gate: PR #412</text>
+<text class="bd-s" x="496" y="314">clears when it merges</text>
+
+<rect class="bd-blocked" x="704" y="170" width="160" height="58" rx="6"/>
+<text class="bd-n-mute" x="716" y="193">bd-a3f8.5 rollback</text>
+<text class="bd-s" x="716" y="212">only if rollout fails</text>
+
+<rect class="bd-ready" x="264" y="400" width="160" height="58" rx="6"/>
+<text class="bd-n" x="276" y="423">bd-7c1e flaky test</text>
+<text class="bd-s" x="276" y="442">filed mid-task</text>
+
+<path class="bd-flow" d="M 204,190 L 258,130" marker-end="url(#bd3-a)"/>
+<path class="bd-flow" d="M 204,208 L 258,268" marker-end="url(#bd3-a)"/>
+<path class="bd-flow" d="M 424,125 L 478,190" marker-end="url(#bd3-a)"/>
+<path class="bd-flow" d="M 424,273 L 478,208" marker-end="url(#bd3-a)"/>
+<path class="bd-gl" d="M 564,272 V 234" marker-end="url(#bd3-g)"/>
+<path class="bd-badl" d="M 644,199 H 698" marker-end="url(#bd3-x)"/>
+<path class="bd-ctx" d="M 344,302 V 394" marker-end="url(#bd3-c)"/>
+<text class="bd-el" x="352" y="382">discovered-from</text>
+
+<rect class="bd-box" x="484" y="392" width="392" height="96" rx="6"/>
+<text class="bd-n" x="500" y="416">bd ready</text>
+<text class="bd-s" x="500" y="436">returns bd-a3f8.2 and bd-7c1e: the frontier</text>
+<text class="bd-s" x="500" y="456">.3 is claimed, .4 waits on three blockers,</text>
+<text class="bd-s" x="500" y="476">and .5 becomes ready only if .4 fails</text>
+
+<path class="bd-flow" d="M 24,514 H 54"/>
+<text class="bd-el" x="62" y="518">blocks</text>
+<path class="bd-gl" d="M 124,514 H 154"/>
+<text class="bd-el" x="162" y="518">gate check</text>
+<path class="bd-badl" d="M 250,514 H 280"/>
+<text class="bd-el" x="288" y="518">conditional-blocks: runs on failure</text>
+<path class="bd-ctx" d="M 530,514 H 560"/>
+<text class="bd-el" x="568" y="518">discovered-from: provenance only</text>
+<rect class="bd-ready" x="24" y="534" width="16" height="12" rx="2"/>
+<text class="bd-el" x="48" y="544">ready frontier</text>
+<rect class="bd-prog" x="160" y="534" width="16" height="12" rx="2"/>
+<text class="bd-el" x="184" y="544">in progress</text>
+<rect class="bd-done" x="280" y="534" width="16" height="12" rx="2"/>
+<text class="bd-el" x="304" y="544">closed</text>
+<rect class="bd-blocked" x="370" y="534" width="16" height="12" rx="2"/>
+<text class="bd-el" x="394" y="544">blocked</text>
+
+</g>
+</svg>

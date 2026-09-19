@@ -19,7 +19,7 @@
     --spacing-lg: 2rem;
     --spacing-xl: 3rem;
 
-    --header-height: 112px; /* .site-header rendered height: 100px logo + 8px vertical padding + 2px border-bottom, rounded up */
+    --header-height: 75px; /* .site-header rendered height, taken at its tallest (desktop); 64px logo + 8px vertical padding + 2px border-bottom, plus a pixel from the nav row */
 
     --max-width: 1200px;
     --border-radius: 8px;
@@ -146,14 +146,14 @@ main {
 }
 
 .site-icon {
-    width: 100px;
-    height: 100px;
+    width: 64px;
+    height: 64px;
     display: inline-block;
 }
 
 .site-name {
     font-family: var(--font-brand);
-    font-size: 1.3rem;
+    font-size: 21px; /* px, not rem: the 768px root font-size drop must not shrink the brand */
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -162,6 +162,13 @@ main {
 
 .site-title a:hover .site-name {
     color: var(--color-primary);
+}
+
+/* Phones: at full size the name runs under .header-actions. */
+@media (max-width: 480px) {
+    .site-name {
+        font-size: 15px;
+    }
 }
 
 /* Home page: site title defaults to primary color, darkens on hover */
@@ -259,7 +266,7 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 /* Desktop Navigation Styles */
-@media (min-width: 1024px) {
+@media (min-width: 1200px) {
     .hamburger {
         display: none;
     }
@@ -1890,9 +1897,13 @@ body.home-layout .site-title a:hover .site-name {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.toc-toggle:hover {
-    background: var(--color-hover);
-    transform: translateY(-3px);
+/* Hover lift gated to real hover devices: touch browsers keep :hover stuck
+   after a tap, which left the tapped button raised into the one above it. */
+@media (hover: hover) {
+    .toc-toggle:hover {
+        background: var(--color-hover);
+        transform: translateY(-3px);
+    }
 }
 
 .toc-toggle-icon {
@@ -2248,9 +2259,11 @@ body.home-layout .site-title a:hover .site-name {
     visibility: visible;
 }
 
-.scroll-to-top:hover {
-    background-color: var(--color-hover);
-    transform: translateY(-3px);
+@media (hover: hover) {
+    .scroll-to-top:hover {
+        background-color: var(--color-hover);
+        transform: translateY(-3px);
+    }
 }
 
 .scroll-to-top:active {
@@ -2259,7 +2272,7 @@ body.home-layout .site-title a:hover .site-name {
 
 @media (max-width: 768px) {
     .scroll-to-top {
-        bottom: 8rem;
+        bottom: calc(1.5rem + 2 * (45px + 1rem)); /* two buttons + 1rem gaps above the shelf button */
         right: 1.5rem;
         width: 45px;
         height: 45px;
@@ -3286,9 +3299,11 @@ body.home-layout .site-title a:hover .site-name {
     pointer-events: none;
 }
 
-.shelf-button:hover {
-    background-color: var(--color-hover);
-    transform: translateY(-3px);
+@media (hover: hover) {
+    .shelf-button:hover {
+        background-color: var(--color-hover);
+        transform: translateY(-3px);
+    }
 }
 
 .shelf-button:active {
@@ -3317,7 +3332,7 @@ body.home-layout .site-title a:hover .site-name {
     }
 
     .toc-toggle {
-        bottom: 4.75rem;
+        bottom: calc(1.5rem + 45px + 1rem); /* shelf button + 1rem gap */
         right: 1.5rem;
         width: 45px;
         height: 45px;
@@ -3330,8 +3345,8 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 /* Header action icons (What's New, shelf). Deliberately position: absolute —
-   the group stays out of .header-content's flex/grid flow so it can never
-   shrink the nav's column or add width the hamburger row has to accommodate. */
+   the group stays out of .header-content's flex/grid flow so it adds no width
+   the hamburger row has to accommodate. Desktop reserves its space explicitly. */
 .header-actions {
     position: absolute;
     top: 50%;
@@ -3339,17 +3354,27 @@ body.home-layout .site-title a:hover .site-name {
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: 0.25rem; /* the 30px buttons already pad their icons, so the visible space is wider than this */
     z-index: 10;
 }
 
-@media (min-width: 1024px) {
-    /* Hamburger is gone, so the group moves to the header's top-right corner,
-       above the vertically centered nav. The nav keeps its full width. */
+@media (max-width: 480px) {
     .header-actions {
-        top: 0.25rem;
+        right: calc(30px + var(--spacing-sm)); /* still clears the badge's 6px overhang */
+    }
+}
+
+@media (min-width: 1200px) {
+    /* Hamburger is gone, so the group takes its place at the right edge, level
+       with the nav. The header is too short to stack them, so .header-content
+       reserves the group's width and the nav centers in what is left. */
+    .header-content {
+        padding-right: 80px; /* two 30px buttons + 8px gap + the badge's 6px overhang, rounded up */
+    }
+
+    .header-actions {
+        gap: var(--spacing-xs);
         right: 0;
-        transform: none;
     }
 }
 
@@ -3406,16 +3431,23 @@ body.home-layout .site-title a:hover .site-name {
     justify-content: center;
     width: 30px;
     height: 30px;
-    background: transparent;
+    background: rgba(201, 162, 39, 0.15); /* same tint as the panel's "New" badge, so the button reads as a control */
     border: none;
+    border-radius: 50%;
     cursor: pointer;
     color: var(--color-text);
     padding: 0;
+    transition: background-color 0.2s ease;
+}
+
+.whats-new-indicator:hover,
+.whats-new-indicator:focus-visible {
+    background: rgba(201, 162, 39, 0.28);
 }
 
 .whats-new-indicator-icon {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     fill: var(--color-gold);
     stroke: #8A6D12; /* darker gold outline keeps the icon legible on white */
     stroke-width: 1.25;
@@ -3464,16 +3496,6 @@ body.home-layout .site-title a:hover .site-name {
 }
 
 /* What's New panel — shelf panel shell, case-study-style cards inside */
-.whats-new-panel {
-    max-width: 560px;
-}
-
-.whats-new-subtitle {
-    margin: 0.15rem 0 0;
-    font-size: 0.85rem;
-    color: var(--color-text-light);
-}
-
 .whats-new-list {
     list-style: none;
     margin: 0;
@@ -3497,7 +3519,6 @@ body.home-layout .site-title a:hover .site-name {
 
 .whats-new-card--new { --whats-new-kind-color: var(--color-gold); }
 .whats-new-card--revised { --whats-new-kind-color: var(--color-secondary); }
-.whats-new-card--post { --whats-new-kind-color: var(--color-accent); }
 
 .whats-new-card:hover {
     transform: translateY(-2px);
@@ -3525,12 +3546,27 @@ a.whats-new-card-main:hover {
     letter-spacing: 0.08em;
     padding: 3px 10px;
     border-radius: 20px;
-    margin-bottom: var(--spacing-xs);
 }
 
 .whats-new-badge--new { background: rgba(201, 162, 39, 0.15); color: #7A5F0E; }
 .whats-new-badge--revised { background: rgba(45, 90, 133, 0.1); color: var(--color-secondary); }
-.whats-new-badge--post { background: rgba(165, 72, 110, 0.1); color: var(--color-accent); }
+
+/* The badge says what happened; the type label beside it says which section it happened in. */
+.whats-new-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: var(--spacing-xs);
+}
+
+.whats-new-type {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-light);
+}
 
 .whats-new-title {
     margin: 0 0 0.25rem;
@@ -3649,6 +3685,11 @@ a.whats-new-card-main:hover .read-more {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     animation: shelfPanelFadeIn 0.3s ease;
     position: relative;
+}
+
+/* Must follow .shelf-panel to win on desktop, and precede the mobile full-screen rule so it still loses there. */
+.whats-new-panel {
+    max-width: 576px;
 }
 
 @keyframes shelfPanelFadeIn {

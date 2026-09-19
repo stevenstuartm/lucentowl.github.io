@@ -1,0 +1,108 @@
+---
+title: "Pack Layering and Scope"
+kind: layering
+system: gas-city
+summary: "Which formula wins by name in each scope, and how agent scope sets how many instances run."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="gc8-title gc8-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc8-title">How Gas City layers packs and scopes formulas and agents</title>
+<desc id="gc8-desc">Two stacks of formula layers, highest priority on top. The city scope stacks city-local formulas over the packs the city imports over the system formulas embedded in the gc binary. A rig scope stacks rig-local formulas over the packs the rig imports over the whole city stack as its base. For each scope, the winning formula per name is staged as a symlink in that scope's .beads/formulas directory. Agents scoped to the city get one instance for the city; agents scoped to a rig get one instance per rig.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc8-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc8-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc8-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc8-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc8-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="gc-hd" x="40" y="44">CITY SCOPE · TOP LAYER WINS</text>
+<text class="gc-hd" x="480" y="44">RIG SCOPE · REPO-A</text>
+
+<rect class="gc-box" x="40" y="60" width="380" height="52" rx="6"/>
+<text class="gc-n" x="56" y="82">city-local formulas</text>
+<text class="gc-s" x="56" y="100">the city's own formulas/ directory</text>
+<rect class="gc-box" x="40" y="122" width="380" height="52" rx="6"/>
+<text class="gc-n" x="56" y="144">packs the city imports</text>
+<text class="gc-s" x="56" y="162">pinned, lower priority than local</text>
+<rect class="gc-box" x="40" y="184" width="380" height="52" rx="6"/>
+<text class="gc-n" x="56" y="206">system formulas</text>
+<text class="gc-s" x="56" y="224">embedded in the gc binary, layer 0</text>
+
+<rect class="gc-box" x="480" y="60" width="380" height="52" rx="6"/>
+<text class="gc-n" x="496" y="82">rig-local formulas</text>
+<text class="gc-s" x="496" y="100">when the rig configures one</text>
+<rect class="gc-box" x="480" y="122" width="380" height="52" rx="6"/>
+<text class="gc-n" x="496" y="144">packs the rig imports</text>
+<text class="gc-s" x="496" y="162">apply to this rig only</text>
+<rect class="gc-store" x="480" y="184" width="380" height="52" rx="6"/>
+<text class="gc-n" x="496" y="206">city formula layers</text>
+<text class="gc-s" x="496" y="224">the whole city stack, as a base</text>
+
+<path class="gc-ctx" d="M 420,148 L 474,206" marker-end="url(#gc8-c)"/>
+
+<path class="gc-flow" d="M 230,236 V 284" marker-end="url(#gc8-a)"/>
+<text class="gc-el" x="238" y="266">winner per name</text>
+<path class="gc-flow" d="M 670,236 V 284" marker-end="url(#gc8-a)"/>
+<text class="gc-el" x="678" y="266">winner per name</text>
+
+<rect class="gc-store" x="40" y="290" width="380" height="60" rx="6"/>
+<text class="gc-n" x="56" y="314">.beads/formulas/ in the city</text>
+<text class="gc-s" x="56" y="334">one symlink per name, pointing at the winner</text>
+<rect class="gc-store" x="480" y="290" width="380" height="60" rx="6"/>
+<text class="gc-n" x="496" y="314">.beads/formulas/ in repo-a</text>
+<text class="gc-s" x="496" y="334">one symlink per name, pointing at the winner</text>
+
+<text class="gc-hd" x="40" y="384">AGENT SCOPE</text>
+<rect class="gc-box" x="40" y="396" width="380" height="52" rx="6"/>
+<text class="gc-n" x="56" y="418">scope = city</text>
+<text class="gc-s" x="56" y="436">one instance for the whole city</text>
+<rect class="gc-box" x="480" y="396" width="380" height="52" rx="6"/>
+<text class="gc-n" x="496" y="418">scope = rig</text>
+<text class="gc-s" x="496" y="436">one instance per rig, such as repo-a/reviewer</text>
+
+<text class="gc-note" x="40" y="482">Imported definitions read exactly like local ones, so a city adopts a published pack</text>
+<text class="gc-note" x="40" y="500">and overrides only what it needs. The city directory is itself the root pack.</text>
+
+</g>
+</svg>

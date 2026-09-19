@@ -8,16 +8,29 @@
 #
 # Fields:
 #   id      stable unique slug
-#   kind    new | revised | post
+#   change  new | revised — what happened; drives the badge and card color
+#   type    guide | post | resource — what kind of content changed; shown as the
+#           section label beside the badge ("Study guides", "Blog", "Resources")
 #   title   what the reader sees
 #   url     where the card links; omit it when `links` should be the only way in
-#   cta     optional call-to-action text (defaults: new "Read", revised "Browse",
-#           post "Read post")
+#   cta     optional call-to-action text (defaults: new "Read", revised "Browse")
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: beads-gas-city-diagrams
+  change: new
+  type: resource
+  title: "Beads and Gas City architecture diagrams"
+  note: "C4-style diagrams of both systems, from the whole city down to how one claim, one tick, and one crash play out."
+  links:
+    - title: "Gas City Architecture Diagrams"
+      url: /resources/gas-city-architecture-diagrams.html
+    - title: "Beads Architecture Diagrams"
+      url: /resources/beads-architecture-diagrams.html
+
 - id: beads-gas-city
-  kind: new
+  change: new
+  type: guide
   title: "Beads and Gas City"
   note: "Two guides on coding agents: Beads keeps their work from getting lost between sessions, and Gas City runs many of them reliably."
   links:
@@ -27,7 +40,8 @@
       url: /study-guides/ai/gas-city.html
 
 - id: architecture-guides-revised-1
-  kind: revised
+  change: revised
+  type: guide
   title: "Architecture guides revised"
   url: /study-guides.html?category=architecture
   cta: "Browse architecture guides"
@@ -37,13 +51,15 @@
       url: /study-guides/architecture/architecture-risk-analysis.html
 
 - id: reads-should-not-design-writes
-  kind: post
+  change: new
+  type: post
   title: "Your Reads Should Not Design Your Writes"
   url: /blog/2026/09/14/your-reads-should-not-design-your-writes.html
   note: "Why wide update bodies can't tell an omitted field from a cleared one, and how small, replaceable write resources avoid the problem."
 
 - id: ai-guides-revised-1
-  kind: revised
+  change: revised
+  type: guide
   title: "AI & Machine Learning guides reorganized"
   url: /study-guides.html?category=ai-machine-learning
   cta: "Browse AI & ML guides"
@@ -55,27 +71,31 @@
       url: /study-guides/ai/tool-calling.html
 
 - id: azure-guides-revised-1
-  kind: revised
+  change: revised
+  type: guide
   title: "Azure guides revised"
   url: /study-guides.html?category=azure
   cta: "Browse Azure guides"
   note: "A refinement pass across the Azure guides."
 
 - id: azure-component-maps
-  kind: new
+  change: new
+  type: resource
   title: "Azure component maps"
   url: /resources.html?category=azure
   cta: "See the maps"
   note: "Four reference maps showing how the parts of Azure governance, messaging, networking, and observability fit together."
 
 - id: plan-task-skill
-  kind: new
+  change: new
+  type: resource
   title: "Assumptions-First Task Planning Skill"
   url: /resources/plan-task-skill.html
   note: "A Claude Code skill that turns a ticket into a self-contained plan, tags every assumption with its source, and proves them before any code is written."
 
 - id: claude-prose-linter
-  kind: new
+  change: new
+  type: resource
   title: "Claude Prose Linter"
   url: /resources/refine-prose-skill.html
   note: "A portable Claude skill that lints prose for AI tells and filler, then runs a self-review for what a grep can't catch."

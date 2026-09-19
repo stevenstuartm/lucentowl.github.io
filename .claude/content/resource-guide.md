@@ -16,6 +16,10 @@ A resource is a self-contained visual or reference artifact — not prose, not a
 
 If content requires sustained reading to understand — narrative explanation, reasoning through trade-offs, building up a concept step by step — it belongs in a study guide or blog post, not a resource.
 
+### Composite Resources
+
+Diagrams are smaller than a page, so they are not authored as resources directly. Each diagram is a **figure** in `_figures/`, and a **composite resource** lists figure ids under `figures:` and renders them in order. The composite is the destination a reader visits; the figures are building blocks that guides also embed. A composite still needs a `type` (usually `reference`), a category, and a place in `resources_config.json`. See [figure-guide.md](figure-guide.md) for the figure format, the composite, and embedding.
+
 ### The Lookup Test
 
 Well-organized content is not automatically a resource candidate. A three-item quoted list ("The Core Laws of Software Architecture") can be memorable and well-formatted without being something anyone looks up independent of the guide it lives in. Before flagging something as a candidate, apply both filters:

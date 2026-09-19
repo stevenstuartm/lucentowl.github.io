@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, the new-guide workflow (scope gate, independent subagent review, definition of done), and the Quality Checklist shared with refinement |
 | [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
+| [`figure-guide.md`](.claude/content/figure-guide.md) | Drawing a diagram as a figure, composing figures into a composite resource, or embedding one in a guide |
 | [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Running a review-and-refine pass over an existing block of study guides — consolidation (Phase 0), batch process, and the structure of the accompanying plan doc in `_drafts/` |
 
 ### Content pipeline
@@ -49,6 +50,8 @@ bundle exec jekyll serve
 bundle exec jekyll build
 ```
 
+`jekyll serve` does not reload `_config.yml`. Restart it after changing collections, defaults, or any other config, or pages that depend on the change render as if it never happened.
+
 ## Architecture
 
 ### Jekyll Structure
@@ -64,9 +67,10 @@ bundle exec jekyll build
   - `blog-listing.html`: Blog listing page template
   - `author.html`: Author page template (avatar, bio, social links, post list)
   - `case-study.html`: Case study template with author byline
-- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html, post-sources.html)
+- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html, post-sources.html, figure.html)
 - **_posts/**: Blog posts in Markdown with YAML front matter (format: YYYY-MM-DD-title.md)
 - **_guides/**: Study guides in Markdown organized by topic
+- **_figures/**: Diagram building blocks (`output: false`, no pages of their own), composed into guides and composite resources by `_includes/figure.html`
 - **_site/**: Generated static site (excluded from git)
 - **pages/**: Site pages (blog, about, tech-radar, study-guides, authors/)
 - **assets/**: Static assets
@@ -206,6 +210,10 @@ related_posts:
 **NEVER rename resource files** — same rule as posts and guides.
 
 The `related_*` fields are declared on the resource, never on the guide, case study, or post being linked to — adding a resource never requires editing existing content files. Both directions render from that one declaration — see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
+
+### Figures and Composite Resources
+
+Diagrams are authored as **figures**, one per file in `_figures/<id>.html` (front matter `title`, `kind`, `system`, `summary`, then one `<svg>`). A **composite resource** lists figure ids under `figures:` and the resource layout renders them, each anchored as `#fig-<id>`. Figures never link to the pages that use them. Guides embed a figure in full with `{% include figure.html id="<id>" %}`. There is one embed mode, with no buttons, modal, or script. Never copy a figure's SVG into a page. Run `python .figcheck.py` after adding or embedding a figure. Full rules: [`.claude/content/figure-guide.md`](.claude/content/figure-guide.md).
 
 For the Lookup Test (deciding whether content qualifies as a resource), quality standards, and organization guidance, see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
 

@@ -1,0 +1,126 @@
+---
+title: "A Crash on Either Side"
+kind: dynamic
+system: gas-city
+summary: "What survives when a session dies mid-task, and what happens when the controller itself restarts."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" role="img" aria-labelledby="gc6-title gc6-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="gc6-title">How Gas City recovers when a session or the controller crashes</title>
+<desc id="gc6-desc">Two lanes. When a session dies mid-task, its claimed bead stays in progress and assigned in the store; the next tick sees the dead process and restarts the agent, and hook tier 1 finds the unfinished bead first, so the agent resumes. When the controller restarts, sessions keep running in tmux; the new controller takes the lock, adopts the live sessions by creating session beads rather than respawning them, starts with empty crash and quarantine state, and resumes from the store as ground truth.</desc>
+<style>
+.gc-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.gc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.gc-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.gc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.gc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gc-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.gc-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gc-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.gc-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.gc-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.gc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.gc-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.gc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.gc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.gc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.gc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.gc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.gc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.gc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.gc-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.gc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.gc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.gc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.gc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.gc-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.gc-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.gc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.gc-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.gc-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="gc6-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="gc6-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="gc6-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="gc6-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="gc6-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="gc-band" x="16" y="30" width="868" height="170" rx="8"/>
+<text class="gc-hd" x="30" y="52">A SESSION DIES MID-TASK</text>
+
+<rect class="gc-box" x="36" y="68" width="150" height="110" rx="6"/>
+<text class="gc-n" x="48" y="90">claimed</text>
+<text class="gc-s" x="48" y="110">bd-42 in_progress,</text>
+<text class="gc-s" x="48" y="128">assignee worker-1,</text>
+<text class="gc-s" x="48" y="146">work underway</text>
+<rect class="gc-badbox" x="206" y="68" width="150" height="110" rx="6"/>
+<text class="gc-n-bad" x="218" y="90">✗ process dies</text>
+<text class="gc-s" x="218" y="110">crash, rate limit,</text>
+<text class="gc-s" x="218" y="128">or context gone</text>
+<rect class="gc-store" x="376" y="68" width="150" height="110" rx="6"/>
+<text class="gc-n" x="388" y="90">store unchanged</text>
+<text class="gc-s" x="388" y="110">bd-42 still</text>
+<text class="gc-s" x="388" y="128">in_progress and</text>
+<text class="gc-s" x="388" y="146">assigned</text>
+<rect class="gc-box" x="546" y="68" width="150" height="110" rx="6"/>
+<text class="gc-n" x="558" y="90">next tick</text>
+<text class="gc-s" x="558" y="110">patrol sees the</text>
+<text class="gc-s" x="558" y="128">dead process and</text>
+<text class="gc-s" x="558" y="146">restarts the agent</text>
+<rect class="gc-okbox" x="716" y="68" width="150" height="110" rx="6"/>
+<text class="gc-n" x="728" y="90">resume</text>
+<text class="gc-s" x="728" y="110">hook tier 1 finds</text>
+<text class="gc-s" x="728" y="128">bd-42 first, so it</text>
+<text class="gc-s" x="728" y="146">carries on</text>
+<path class="gc-flow" d="M 186,123 H 200" marker-end="url(#gc6-a)"/>
+<path class="gc-flow" d="M 356,123 H 370" marker-end="url(#gc6-a)"/>
+<path class="gc-flow" d="M 526,123 H 540" marker-end="url(#gc6-a)"/>
+<path class="gc-flow" d="M 696,123 H 710" marker-end="url(#gc6-a)"/>
+
+<rect class="gc-band" x="16" y="220" width="868" height="170" rx="8"/>
+<text class="gc-hd" x="30" y="242">THE CONTROLLER RESTARTS</text>
+
+<rect class="gc-badbox" x="36" y="258" width="150" height="110" rx="6"/>
+<text class="gc-n-bad" x="48" y="280">controller down</text>
+<text class="gc-s" x="48" y="300">sessions keep</text>
+<text class="gc-s" x="48" y="318">running in tmux</text>
+<text class="gc-s" x="48" y="336">with their work</text>
+<rect class="gc-box" x="206" y="258" width="150" height="110" rx="6"/>
+<text class="gc-n" x="218" y="280">new controller</text>
+<text class="gc-s" x="218" y="300">takes the flock,</text>
+<text class="gc-s" x="218" y="318">reloads config</text>
+<rect class="gc-box" x="376" y="258" width="150" height="110" rx="6"/>
+<text class="gc-n" x="388" y="280">adopt, not respawn</text>
+<text class="gc-s" x="388" y="300">live sessions get</text>
+<text class="gc-s" x="388" y="318">session beads;</text>
+<text class="gc-s" x="388" y="336">none restarted</text>
+<rect class="gc-mem" x="546" y="258" width="150" height="110" rx="6"/>
+<text class="gc-n-mute" x="558" y="280">trackers empty</text>
+<text class="gc-s" x="558" y="300">crash counts and</text>
+<text class="gc-s" x="558" y="318">quarantines reset,</text>
+<text class="gc-s" x="558" y="336">like an OTP restart</text>
+<rect class="gc-okbox" x="716" y="258" width="150" height="110" rx="6"/>
+<text class="gc-n" x="728" y="280">carry on</text>
+<text class="gc-s" x="728" y="300">the store is ground</text>
+<text class="gc-s" x="728" y="318">truth; the next</text>
+<text class="gc-s" x="728" y="336">tick reconciles</text>
+<path class="gc-flow" d="M 186,313 H 200" marker-end="url(#gc6-a)"/>
+<path class="gc-flow" d="M 356,313 H 370" marker-end="url(#gc6-a)"/>
+<path class="gc-flow" d="M 526,313 H 540" marker-end="url(#gc6-a)"/>
+<path class="gc-flow" d="M 696,313 H 710" marker-end="url(#gc6-a)"/>
+
+<text class="gc-req" x="16" y="414">Work belongs to the store, not to the session that happened to be running it.</text>
+
+</g>
+</svg>
