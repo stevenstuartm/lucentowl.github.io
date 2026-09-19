@@ -17,17 +17,6 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
-- id: beads-gas-city-diagrams
-  change: new
-  type: resource
-  title: "Beads and Gas City architecture diagrams"
-  note: "C4-style diagrams of both systems, from the whole city down to how one claim, one tick, and one crash play out."
-  links:
-    - title: "Gas City Architecture Diagrams"
-      url: /resources/gas-city-architecture-diagrams.html
-    - title: "Beads Architecture Diagrams"
-      url: /resources/beads-architecture-diagrams.html
-
 - id: beads-gas-city
   change: new
   type: guide

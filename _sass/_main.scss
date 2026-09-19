@@ -19,7 +19,7 @@
     --spacing-lg: 2rem;
     --spacing-xl: 3rem;
 
-    --header-height: 75px; /* .site-header rendered height, taken at its tallest (desktop); 64px logo + 8px vertical padding + 2px border-bottom, plus a pixel from the nav row */
+    --header-height: 90px; /* .site-header rendered height: 80px logo + 8px vertical padding + 2px border-bottom */
 
     --max-width: 1200px;
     --border-radius: 8px;
@@ -146,8 +146,8 @@ main {
 }
 
 .site-icon {
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
     display: inline-block;
 }
 
@@ -164,8 +164,17 @@ main {
     color: var(--color-primary);
 }
 
-/* Phones: at full size the name runs under .header-actions. */
+/* Phones: at full size the logo and name run under .header-actions. */
 @media (max-width: 480px) {
+    :root {
+        --header-height: 74px; /* 64px logo + 8px vertical padding + 2px border-bottom */
+    }
+
+    .site-icon {
+        width: 64px;
+        height: 64px;
+    }
+
     .site-name {
         font-size: 15px;
     }
