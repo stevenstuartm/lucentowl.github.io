@@ -1,0 +1,91 @@
+---
+title: "C4 Notation Rules"
+kind: rules
+system: c4
+summary: "What a correctly formed C4 element and relationship carry, and why an unlabelled bidirectional line tells a reader nothing."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="c4e-title c4e-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="c4e-title">C4 Notation Rules</title>
+<desc id="c4e-desc">What a correctly formed C4 element and relationship carry, and why an unlabelled bidirectional line tells a reader nothing.</desc>
+<style>
+.c4-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.c4-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.c4-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.c4-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.c4-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.c4-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.c4-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.c4-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.c4-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.c4-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.c4-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.c4-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.c4-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.c4-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.c4-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.c4-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.c4-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.c4-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.c4-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.c4-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.c4-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.c4-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.c4-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.c4-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+</style>
+<defs>
+<marker id="c4e-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="c4e-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="c4e-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="c4e-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="c4e-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="c4-hd" x="24" y="44">EVERY ELEMENT</text>
+<rect class="c4-box" x="24" y="60" width="300" height="112" rx="6"/>
+<text class="c4-t" x="38" y="92">Orders API</text>
+<text class="c4-k" x="38" y="114">[Container: ASP.NET Core]</text>
+<text class="c4-s" x="38" y="142">Places and retrieves orders</text>
+<path class="c4-thin" d="M 324,86 H 360"/>
+<text class="c4-cap" x="368" y="90">the name of the element</text>
+<path class="c4-thin" d="M 324,114 H 360"/>
+<text class="c4-cap" x="368" y="118">its type, plus technology for containers and components</text>
+<path class="c4-thin" d="M 324,142 H 360"/>
+<text class="c4-cap" x="368" y="146">one line on what it does</text>
+<text class="c4-hd" x="24" y="216">EVERY RELATIONSHIP</text>
+<rect class="c4-box" x="24" y="232" width="200" height="62" rx="6"/>
+<text class="c4-n" x="38" y="258">Orders API</text>
+<text class="c4-k" x="38" y="278">[Container]</text>
+<rect class="c4-store" x="440" y="232" width="200" height="62" rx="6"/>
+<text class="c4-n" x="454" y="258">Orders Database</text>
+<text class="c4-k" x="454" y="278">[Container]</text>
+<path class="c4-line" d="M 224,263 H 434" marker-end="url(#c4e-a)"/>
+<text class="c4-el" x="329" y="251" text-anchor="middle">Reads from and writes to</text>
+<text class="c4-el" x="329" y="287" text-anchor="middle">[SQL/TCP]</text>
+<text class="c4-cap" x="676" y="250">one direction,</text>
+<text class="c4-cap" x="676" y="268">a verb phrase,</text>
+<text class="c4-cap" x="676" y="286">and the protocol</text>
+<text class="c4-hd" x="24" y="346">NOT THIS</text>
+<rect class="c4-box" x="24" y="362" width="200" height="52" rx="6"/>
+<text class="c4-n-mute" x="38" y="392">Orders API</text>
+<rect class="c4-box" x="440" y="362" width="200" height="52" rx="6"/>
+<text class="c4-n-mute" x="454" y="392">Orders Database</text>
+<path class="c4-aline" d="M 224,388 H 434" marker-start="url(#c4e-x)" marker-end="url(#c4e-x)"/>
+<text class="c4-warn" x="329" y="376" text-anchor="middle">Uses</text>
+<text class="c4-cap" x="676" y="382">a line with no direction</text>
+<text class="c4-cap" x="676" y="400">and no verb says nothing</text>
+<text class="c4-cap" x="24" y="448">Every diagram also carries a title naming its type and scope, and a key explaining its shapes, colours, and line styles.</text>
+
+</g>
+</svg>

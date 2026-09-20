@@ -1,0 +1,131 @@
+---
+title: "Sequence Diagram for Checkout"
+kind: dynamic
+system: uml
+summary: "One checkout scenario in message order, with activations, a self message, loop and alt fragments, and a lifeline created and destroyed."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" role="img" aria-labelledby="um8-title um8-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="um8-title">Sequence Diagram for Checkout</title>
+<desc id="um8-desc">One checkout scenario in message order, with activations, a self message, loop and alt fragments, and a lifeline created and destroyed.</desc>
+<style>
+.um-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.um-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.um-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.um-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.um-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.um-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.um-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.um-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.um-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.um-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.um-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.um-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.um-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.um-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.um-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.um-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.um-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.um-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.um-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.um-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.um-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.um-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.um-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.um-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.um-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.um-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.um-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.um-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.um-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.um-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+.um-cls { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-act { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.um-frag { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.um-tab { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.um-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 5; }
+.um-sep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.um-fill { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.um-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.um-mdash { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; stroke-dasharray: 7 5; }
+.um-lane { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.um-lanehd { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.um-m { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.um-t-it { font-size: 14px; font-weight: 700; font-style: italic; fill: var(--color-primary, #1A5F8A); }
+
+</style>
+<defs>
+<marker id="um8-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="um8-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="um8-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="um8-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="um8-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+
+<marker id="um8-tri" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto"><path d="M0.8,0.8 L12,6 L0.8,11.2 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.4"/></marker>
+<marker id="um8-dia" markerWidth="20" markerHeight="12" refX="18" refY="6" orient="auto"><path d="M0.8,6 L9,1.2 L17.2,6 L9,10.8 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.4"/></marker>
+<marker id="um8-diaf" markerWidth="20" markerHeight="12" refX="18" refY="6" orient="auto"><path d="M0.8,6 L9,1.2 L17.2,6 L9,10.8 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="um8-sync" markerWidth="10" markerHeight="10" refX="9" refY="3.6" orient="auto"><path d="M0,0 L9,3.6 L0,7.2 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="um-cls" x="20" y="40" width="140" height="40" rx="4"/>
+<text class="um-n" x="90" y="65" text-anchor="middle">:Customer</text>
+<path class="um-life" d="M 90,80 V 560"/>
+<rect class="um-cls" x="180" y="40" width="140" height="40" rx="4"/>
+<text class="um-n" x="250" y="65" text-anchor="middle">:Checkout</text>
+<path class="um-life" d="M 250,80 V 560"/>
+<rect class="um-cls" x="360" y="40" width="140" height="40" rx="4"/>
+<text class="um-n" x="430" y="65" text-anchor="middle">:OrdersApi</text>
+<path class="um-life" d="M 430,80 V 560"/>
+<rect class="um-cls" x="550" y="40" width="140" height="40" rx="4"/>
+<text class="um-n" x="620" y="65" text-anchor="middle">:PaymentGw</text>
+<path class="um-life" d="M 620,80 V 560"/>
+<rect class="um-cls" x="720" y="214" width="140" height="40" rx="4"/>
+<text class="um-n" x="790" y="239" text-anchor="middle">:Order</text>
+<path class="um-life" d="M 790,254 V 560"/>
+<rect class="um-act" x="84" y="100" width="12" height="446" rx="1"/>
+<rect class="um-act" x="244" y="118" width="12" height="428" rx="1"/>
+<rect class="um-act" x="424" y="136" width="12" height="386" rx="1"/>
+<rect class="um-act" x="614" y="378" width="12" height="34" rx="1"/>
+<rect class="um-act" x="784" y="246" width="12" height="236" rx="1"/>
+<path class="um-line" d="M 96,110 H 238" marker-end="url(#um8-sync)"/>
+<text class="um-el" x="104" y="102">checkout()</text>
+<path class="um-line" d="M 256,142 H 418" marker-end="url(#um8-sync)"/>
+<text class="um-el" x="264" y="134">POST /orders</text>
+<path class="um-line" d="M 436,172 H 470 V 198 H 442" marker-end="url(#um8-sync)"/>
+<text class="um-el" x="478" y="182">validate()</text>
+<path class="um-mdash" d="M 436,234 H 714" marker-end="url(#um8-o)"/>
+<text class="um-el" x="575" y="226" text-anchor="middle">&#171;create&#187;</text>
+<rect class="um-frag" x="340" y="262" width="486" height="64" rx="2"/>
+<rect class="um-tab" x="340" y="262" width="54" height="18" rx="2"/>
+<text class="um-hd" x="348" y="276">loop</text>
+<text class="um-el" x="444" y="276">[each order line]</text>
+<path class="um-line" d="M 436,304 H 778" marker-end="url(#um8-sync)"/>
+<text class="um-el" x="444" y="296">addLine(item, qty)</text>
+<rect class="um-frag" x="340" y="344" width="486" height="152" rx="2"/>
+<rect class="um-tab" x="340" y="344" width="48" height="18" rx="2"/>
+<text class="um-hd" x="348" y="358">alt</text>
+<text class="um-el" x="444" y="358">[funds available]</text>
+<path class="um-line" d="M 436,384 H 608" marker-end="url(#um8-sync)"/>
+<text class="um-el" x="444" y="376">authorize(total)</text>
+<path class="um-mdash" d="M 608,406 H 442" marker-end="url(#um8-o)"/>
+<text class="um-el" x="516" y="398">approved</text>
+<path class="um-life" d="M 340,424 H 826"/>
+<text class="um-el" x="444" y="438">[declined]</text>
+<path class="um-line" d="M 436,464 H 778" marker-end="url(#um8-sync)"/>
+<text class="um-el" x="444" y="456">&#171;destroy&#187;</text>
+<path class="um-line" d="M 780,468 L 800,488"/>
+<path class="um-line" d="M 800,468 L 780,488"/>
+<path class="um-mdash" d="M 418,516 H 250" marker-end="url(#um8-o)"/>
+<text class="um-el" x="300" y="508">201 Created</text>
+<path class="um-mdash" d="M 238,540 H 100" marker-end="url(#um8-o)"/>
+<text class="um-el" x="140" y="532">confirmation page</text>
+<text class="um-cap" x="24" y="584">A filled arrowhead is a synchronous call, a dashed line a reply, a dashed line to a new head a creation, and an X the end of a lifeline.</text>
+<text class="um-cap" x="24" y="604">One scenario per diagram, including the error path that prompted it.</text>
+
+</g>
+</svg>

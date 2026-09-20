@@ -1,0 +1,106 @@
+---
+title: "Deployment Diagram for Online Store"
+kind: deployment
+system: c4
+summary: "Where each container actually runs, with deployment nodes nested from cloud region down to the process that hosts a container."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="c4p-title c4p-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="c4p-title">Deployment Diagram for Online Store</title>
+<desc id="c4p-desc">Where each container actually runs, with deployment nodes nested from cloud region down to the process that hosts a container.</desc>
+<style>
+.c4-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.c4-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.c4-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.c4-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.c4-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.c4-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.c4-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.c4-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.c4-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.c4-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.c4-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.c4-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.c4-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.c4-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.c4-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.c4-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.c4-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.c4-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.c4-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.c4-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.c4-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.c4-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.c4-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.c4-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+</style>
+<defs>
+<marker id="c4p-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="c4p-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="c4p-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="c4p-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="c4p-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="c4-node" x="24" y="40" width="200" height="150" rx="8"/>
+<text class="c4-n-pur" x="38" y="64">Customer&#8217;s device</text>
+<text class="c4-k" x="38" y="82">[Deployment node: browser]</text>
+<rect class="c4-node" x="310" y="40" width="566" height="430" rx="8"/>
+<text class="c4-n-pur" x="324" y="64">AWS us-east-1</text>
+<text class="c4-k" x="324" y="82">[Deployment node: cloud region]</text>
+<rect class="c4-node" x="324" y="96" width="538" height="152" rx="8"/>
+<text class="c4-n-pur" x="338" y="120">ECS cluster</text>
+<text class="c4-k" x="338" y="138">[Deployment node: Fargate, 3 tasks]</text>
+<rect class="c4-node" x="324" y="268" width="256" height="182" rx="8"/>
+<text class="c4-n-pur" x="338" y="292">Amazon RDS</text>
+<text class="c4-k" x="338" y="310">[Deployment node: Multi-AZ]</text>
+<rect class="c4-node" x="606" y="268" width="256" height="182" rx="8"/>
+<text class="c4-n-pur" x="620" y="292">Amazon MQ</text>
+<text class="c4-k" x="620" y="310">[Deployment node]</text>
+<rect class="c4-box" x="38" y="94" width="172" height="82" rx="6"/>
+<text class="c4-t" x="52" y="124">Web App</text>
+<text class="c4-k" x="52" y="142">[Container: React SPA]</text>
+<text class="c4-s" x="52" y="162">served from a CDN</text>
+<rect class="c4-box" x="338" y="152" width="248" height="82" rx="6"/>
+<text class="c4-t" x="352" y="182">Orders API</text>
+<text class="c4-k" x="352" y="200">[Container: ASP.NET Core]</text>
+<text class="c4-s" x="352" y="220">places and reads orders</text>
+<rect class="c4-box" x="604" y="152" width="248" height="82" rx="6"/>
+<text class="c4-t" x="618" y="182">Notification Worker</text>
+<text class="c4-k" x="618" y="200">[Container: .NET worker]</text>
+<text class="c4-s" x="618" y="220">sends receipts</text>
+<rect class="c4-store" x="338" y="324" width="228" height="82" rx="6"/>
+<text class="c4-t" x="352" y="354">Orders Database</text>
+<text class="c4-k" x="352" y="372">[Container: PostgreSQL 16]</text>
+<text class="c4-s" x="352" y="392">orders and line items</text>
+<rect class="c4-store" x="620" y="324" width="228" height="82" rx="6"/>
+<text class="c4-t" x="634" y="354">Message Queue</text>
+<text class="c4-k" x="634" y="372">[Container: RabbitMQ]</text>
+<text class="c4-s" x="634" y="392">order events</text>
+<path class="c4-line" d="M 224,115 H 304" marker-end="url(#c4p-a)"/>
+<text class="c4-el" x="228" y="100">Calls the API</text>
+<text class="c4-el" x="228" y="140">[JSON/HTTPS]</text>
+<path class="c4-line" d="M 556,234 V 318" marker-end="url(#c4p-a)"/>
+<text class="c4-el" x="370" y="262">Reads and writes [SQL/TCP]</text>
+<path class="c4-line" d="M 740,234 V 318" marker-end="url(#c4p-a)"/>
+<text class="c4-el" x="620" y="262">Consumes [AMQP]</text>
+<rect class="c4-node" x="24" y="488" width="22" height="14" rx="3"/>
+<text class="c4-el" x="54" y="499">deployment node</text>
+<rect class="c4-box" x="176" y="488" width="22" height="14" rx="3"/>
+<text class="c4-el" x="206" y="499">container</text>
+<rect class="c4-store" x="292" y="488" width="22" height="14" rx="3"/>
+<text class="c4-el" x="322" y="499">data store</text>
+<text class="c4-el" x="414" y="499">nodes nest: a region holds a cluster holds a task</text>
+
+</g>
+</svg>

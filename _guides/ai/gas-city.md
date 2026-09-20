@@ -221,9 +221,9 @@ Gas City solves the problems of many long-running agents working a shared, evolv
 
 | Situation | Fit |
 | --- | --- |
-| One agent, one session at a time | No orchestration needed |
+| One agent at a time, however many sessions the work takes | No orchestration needed |
 | A batch of independent, similar tasks | A fresh session per task, launched by a script, is simpler and cheaper |
-| One agent on multi-day work | Beads alone gives durable memory without an orchestrator |
+| One agent on a long-running project | Beads alone gives durable memory without an orchestrator |
 | Several agents on a shared backlog, occasionally | Beads on a shared database, with agents started by hand |
 | A standing team of agents with recurring workflows, reviews, and automation that must run unattended | Gas City |
 

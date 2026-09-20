@@ -17,6 +17,17 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: uml-c4-figures
+  change: new
+  type: resource
+  title: "UML and C4 Diagram References"
+  note: "Every diagram in the UML and C4 guides is now a drawn SVG figure, gathered into two references: the notation of the seven UML diagrams worth knowing, and every C4 view of one worked system."
+  links:
+    - title: "UML Diagram Notation"
+      url: /resources/uml-diagram-notation.html
+    - title: "C4 Model Diagrams"
+      url: /resources/c4-model-diagrams.html
+
 - id: beads-gas-city
   change: new
   type: guide

@@ -1,0 +1,131 @@
+---
+title: "The C4 Abstractions"
+kind: structure
+system: c4
+summary: "Each level is made of the one below it: a system holds containers, a container holds components, a component holds code."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-labelledby="c4a-title c4a-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="c4a-title">The C4 Abstractions</title>
+<desc id="c4a-desc">Each level is made of the one below it: a system holds containers, a container holds components, a component holds code.</desc>
+<style>
+.c4-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.c4-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.c4-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.c4-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.c4-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.c4-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.c4-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.c4-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.c4-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.c4-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.c4-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.c4-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.c4-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.c4-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.c4-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.c4-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.c4-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.c4-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.c4-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.c4-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.c4-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.c4-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.c4-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.c4-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+</style>
+<defs>
+<marker id="c4a-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="c4a-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="c4a-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="c4a-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="c4a-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="c4-band" x="164" y="40" width="716" height="110" rx="8"/>
+<text class="c4-hd" x="24" y="78">1 &#183; CONTEXT</text>
+<text class="c4-s" x="24" y="98">people, systems</text>
+<rect class="c4-band" x="164" y="168" width="716" height="140" rx="8"/>
+<text class="c4-hd" x="24" y="206">2 &#183; CONTAINER</text>
+<text class="c4-s" x="24" y="226">apps, data stores</text>
+<rect class="c4-band" x="164" y="326" width="716" height="140" rx="8"/>
+<text class="c4-hd" x="24" y="364">3 &#183; COMPONENT</text>
+<text class="c4-s" x="24" y="384">parts inside one</text>
+<rect class="c4-band" x="164" y="484" width="716" height="110" rx="8"/>
+<text class="c4-hd" x="24" y="522">4 &#183; CODE</text>
+<text class="c4-s" x="24" y="542">classes, tables</text>
+<path class="c4-line" d="M 140,152 V 164" marker-end="url(#c4a-a)"/>
+<path class="c4-line" d="M 140,310 V 322" marker-end="url(#c4a-a)"/>
+<path class="c4-line" d="M 140,468 V 480" marker-end="url(#c4a-a)"/>
+<rect class="c4-person" x="182" y="60" width="206" height="74" rx="6"/>
+<text class="c4-t" x="196" y="90">Customer</text>
+<text class="c4-k" x="196" y="108">[Person]</text>
+<text class="c4-s" x="196" y="128">browses and buys</text>
+<rect class="c4-sys" x="410" y="60" width="206" height="74" rx="6"/>
+<text class="c4-t-inv" x="424" y="90">Online Store</text>
+<text class="c4-k-inv" x="424" y="108">[Software system]</text>
+<text class="c4-s-inv" x="424" y="128">delivers value to users</text>
+<rect class="c4-ext" x="638" y="60" width="206" height="74" rx="6"/>
+<text class="c4-t-ext" x="652" y="90">Payment Gateway</text>
+<text class="c4-k" x="652" y="108">[External system]</text>
+<text class="c4-s" x="652" y="128">someone else&#8217;s system</text>
+<rect class="c4-bound" x="182" y="182" width="682" height="112" rx="8"/>
+<text class="c4-hd" x="196" y="202">ONLINE STORE &#8212; SYSTEM BOUNDARY</text>
+<rect class="c4-box" x="196" y="212" width="206" height="74" rx="6"/>
+<text class="c4-t" x="210" y="242">Web App</text>
+<text class="c4-k" x="210" y="260">[Container: React SPA]</text>
+<text class="c4-s" x="210" y="280">runs in the browser</text>
+<rect class="c4-box" x="422" y="212" width="206" height="74" rx="6"/>
+<text class="c4-t" x="436" y="242">Orders API</text>
+<text class="c4-k" x="436" y="260">[Container: ASP.NET Core]</text>
+<text class="c4-s" x="436" y="280">order logic over HTTP</text>
+<rect class="c4-store" x="648" y="212" width="206" height="74" rx="6"/>
+<text class="c4-t" x="662" y="242">Orders Database</text>
+<text class="c4-k" x="662" y="260">[Container: PostgreSQL]</text>
+<text class="c4-s" x="662" y="280">orders and line items</text>
+<rect class="c4-bound" x="182" y="340" width="682" height="112" rx="8"/>
+<text class="c4-hd" x="196" y="360">ORDERS API &#8212; CONTAINER BOUNDARY</text>
+<rect class="c4-box" x="196" y="370" width="206" height="74" rx="6"/>
+<text class="c4-t" x="210" y="400">Order Validator</text>
+<text class="c4-k" x="210" y="418">[Component]</text>
+<text class="c4-s" x="210" y="438">checks stock and price</text>
+<rect class="c4-box" x="422" y="370" width="206" height="74" rx="6"/>
+<text class="c4-t" x="436" y="400">Payment Client</text>
+<text class="c4-k" x="436" y="418">[Component]</text>
+<text class="c4-s" x="436" y="438">calls the gateway</text>
+<rect class="c4-box" x="648" y="370" width="206" height="74" rx="6"/>
+<text class="c4-t" x="662" y="400">Order Repository</text>
+<text class="c4-k" x="662" y="418">[Component]</text>
+<text class="c4-s" x="662" y="438">reads and writes orders</text>
+<rect class="c4-bound" x="182" y="498" width="682" height="82" rx="8"/>
+<text class="c4-hd" x="196" y="518">ORDER VALIDATOR &#8212; COMPONENT</text>
+<rect class="c4-box" x="196" y="528" width="206" height="44" rx="6"/>
+<text class="c4-n" x="210" y="548">OrderValidator</text>
+<text class="c4-k" x="210" y="566">[Class]</text>
+<rect class="c4-box" x="422" y="528" width="206" height="44" rx="6"/>
+<text class="c4-n" x="436" y="548">IStockService</text>
+<text class="c4-k" x="436" y="566">[Interface]</text>
+<rect class="c4-box" x="648" y="528" width="206" height="44" rx="6"/>
+<text class="c4-n" x="662" y="548">PriceRule</text>
+<text class="c4-k" x="662" y="566">[Class]</text>
+<rect class="c4-sys" x="24" y="612" width="22" height="14" rx="3"/>
+<text class="c4-el" x="54" y="623">system in focus</text>
+<rect class="c4-box" x="176" y="612" width="22" height="14" rx="3"/>
+<text class="c4-el" x="206" y="623">internal element</text>
+<rect class="c4-ext" x="334" y="612" width="22" height="14" rx="3"/>
+<text class="c4-el" x="364" y="623">external system</text>
+<rect class="c4-bound" x="486" y="612" width="22" height="14" rx="3"/>
+<text class="c4-el" x="516" y="623">scope boundary</text>
+
+</g>
+</svg>

@@ -15,7 +15,7 @@ tags: [beads, dolt, agent-memory, task-tracking, dependency-graph, practical]
 
 ### Every Session Starts Blank
 
-A coding agent knows only what is in its context window. When a session ends, or when the context is compacted to make room, the agent's understanding of what it finished, what it deferred, and what it found along the way goes with it. On a task that fits in one session this costs nothing. On work that spans days, the agent either re-derives the state of the project from the code or trusts whatever notes survived.
+A coding agent knows only what is in its context window. When a session ends, or when the context is compacted to make room, the agent's understanding of what it finished, what it deferred, and what it found along the way goes with it. Crossing a session boundary is routine and cheap on its own. Agents are started fresh all the time, to keep context small or to run an expensive phase of work separately, and re-priming a new session costs little when the task can be restated in a paragraph. The cost lands on projects that have been running long enough to accumulate their own history of decisions, deferrals, and findings, where no such paragraph exists. There the agent either re-derives the state of the project from the code or trusts whatever notes survived.
 
 ### Markdown Plans Decay
 
@@ -160,12 +160,14 @@ A graph that only grows eventually costs space and query time, since every write
 
 ## When Beads Is the Right Tool
 
-Beads earns its setup cost when work outlives a session or is shared between agents. It adds overhead without benefit when neither is true.
+Beads earns its setup cost on a long-running body of work whose full scope is not known at the start, and on any backlog that several agents draw from. It adds overhead without benefit when the work is something you could write down completely before beginning it.
+
+The number of sessions is a weak signal on its own. Splitting one task across several sessions is ordinary practice, whether to keep context small or to run costly phases separately, and a plan file carries a task like that well enough, because the list of steps does not move while you work through it. The list moving is what a tracker is for. On a project with open-ended scope, closing one item reveals two more, a bug found in passing has to go somewhere, and the ordering between items keeps shifting as the work teaches you what it actually involves. Maintaining that graph by hand in prose is where plan files come apart.
 
 | Situation | Fit |
 | --- | --- |
-| A task that one agent finishes in one session | No tracker needed. The session is the record |
-| Multi-day work by one agent, with context compaction or restarts | Beads. This is the core case |
+| A task whose steps you could write down before starting, however many sessions it takes | A plan file holds it. The steps do not move while you work |
+| A long-running project with open-ended scope, where finished work keeps producing new work | Beads. This is the core case |
 | Several agents drawing from the same backlog | Beads on one shared server-mode database |
 | A human team planning in a web UI with dashboards and cross-repo reporting | GitHub Issues, Jira, or Linear. Beads can sync with these in both directions when agents also need the work |
 | Repeatable multi-step processes such as releases | Beads formulas and molecules |

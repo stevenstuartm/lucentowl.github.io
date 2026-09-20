@@ -1,0 +1,117 @@
+---
+title: "Activity Diagram for Order Fulfilment"
+kind: flow
+system: uml
+summary: "One business workflow with a decision, a parallel fork and join, and every path reaching an end."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 590" role="img" aria-labelledby="um10-title um10-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="um10-title">Activity Diagram for Order Fulfilment</title>
+<desc id="um10-desc">One business workflow with a decision, a parallel fork and join, and every path reaching an end.</desc>
+<style>
+.um-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.um-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.um-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.um-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.um-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.um-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.um-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.um-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.um-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.um-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.um-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.um-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.um-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.um-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.um-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.um-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.um-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.um-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.um-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.um-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.um-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.um-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.um-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.um-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.um-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.um-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.um-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.um-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.um-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.um-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+.um-cls { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-act { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.um-frag { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.um-tab { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.um-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 5; }
+.um-sep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.um-fill { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.um-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.um-mdash { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; stroke-dasharray: 7 5; }
+.um-lane { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.um-lanehd { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.um-m { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.um-t-it { font-size: 14px; font-weight: 700; font-style: italic; fill: var(--color-primary, #1A5F8A); }
+
+</style>
+<defs>
+<marker id="um10-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="um10-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="um10-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="um10-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="um10-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+
+<marker id="um10-tri" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto"><path d="M0.8,0.8 L12,6 L0.8,11.2 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.4"/></marker>
+<marker id="um10-dia" markerWidth="20" markerHeight="12" refX="18" refY="6" orient="auto"><path d="M0.8,6 L9,1.2 L17.2,6 L9,10.8 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.4"/></marker>
+<marker id="um10-diaf" markerWidth="20" markerHeight="12" refX="18" refY="6" orient="auto"><path d="M0.8,6 L9,1.2 L17.2,6 L9,10.8 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="um10-sync" markerWidth="10" markerHeight="10" refX="9" refY="3.6" orient="auto"><path d="M0,0 L9,3.6 L0,7.2 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<circle class="um-fill" cx="110" cy="50" r="9"/>
+<path class="um-line" d="M 110,59 V 74" marker-end="url(#um10-a)"/>
+<rect class="um-cls" x="40" y="80" width="160" height="48" rx="14"/>
+<text class="um-n" x="120.0" y="109.0" text-anchor="middle">Receive order</text>
+<path class="um-line" d="M 120,128 V 162" marker-end="url(#um10-a)"/>
+<rect class="um-cls" x="40" y="168" width="160" height="48" rx="14"/>
+<text class="um-n" x="120.0" y="197.0" text-anchor="middle">Check stock</text>
+<path class="um-line" d="M 120,216 V 224" marker-end="url(#um10-a)"/>
+<path class="um-cls" d="M 120,228 L 154,258 L 120,288 L 86,258 z"/>
+<text class="um-el" x="162" y="252">[else]</text>
+<path class="um-line" d="M 154,258 H 234" marker-end="url(#um10-a)"/>
+<rect class="um-cls" x="240" y="234" width="200" height="48" rx="14"/>
+<text class="um-n" x="340.0" y="263.0" text-anchor="middle">Backorder and notify</text>
+<text class="um-el" x="128" y="308">[in stock]</text>
+<path class="um-line" d="M 120,288 V 326" marker-end="url(#um10-a)"/>
+<rect class="um-fill" x="44" y="330" width="152" height="10" rx="2"/>
+<path class="um-line" d="M 90,340 V 370" marker-end="url(#um10-a)"/>
+<path class="um-line" d="M 160,340 L 320,370" marker-end="url(#um10-a)"/>
+<rect class="um-cls" x="24" y="376" width="180" height="48" rx="14"/>
+<text class="um-n" x="114.0" y="405.0" text-anchor="middle">Reserve stock</text>
+<rect class="um-cls" x="244" y="376" width="180" height="48" rx="14"/>
+<text class="um-n" x="334.0" y="405.0" text-anchor="middle">Charge card</text>
+<path class="um-line" d="M 114,424 V 456" marker-end="url(#um10-a)"/>
+<path class="um-line" d="M 334,424 V 456" marker-end="url(#um10-a)"/>
+<rect class="um-fill" x="44" y="460" width="380" height="10" rx="2"/>
+<path class="um-line" d="M 234,470 V 496" marker-end="url(#um10-a)"/>
+<rect class="um-cls" x="140" y="500" width="180" height="48" rx="14"/>
+<text class="um-n" x="230.0" y="529.0" text-anchor="middle">Pack and ship</text>
+<path class="um-cls" d="M 540,506 L 566,524 L 540,542 L 514,524 z"/>
+<path class="um-line" d="M 320,524 H 508" marker-end="url(#um10-a)"/>
+<path class="um-line" d="M 440,258 H 620 V 524 H 572" marker-end="url(#um10-a)"/>
+<path class="um-line" d="M 566,524 H 634" marker-end="url(#um10-a)"/>
+<circle class="um-hollow" cx="650" cy="524" r="12"/>
+<circle class="um-fill" cx="650" cy="524" r="6"/>
+<rect class="um-note" x="600" y="80" width="276" height="140" rx="4"/>
+<text class="um-cap" x="616" y="110">Every action names what is done,</text>
+<text class="um-cap" x="616" y="132">not who does it. The partitioned</text>
+<text class="um-cap" x="616" y="154">version of this same flow adds</text>
+<text class="um-cap" x="616" y="176">the roles to it.</text>
+<text class="um-cap" x="24" y="572">A merge passes along whichever branch arrives; a join waits for all of its parallel inputs.</text>
+
+</g>
+</svg>

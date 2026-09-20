@@ -1,0 +1,130 @@
+---
+title: "Container Diagram for Online Store"
+kind: container
+system: c4
+summary: "The separately running applications and data stores inside the Online Store, the technology of each, and where the network calls are."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="c4n-title c4n-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="c4n-title">Container Diagram for Online Store</title>
+<desc id="c4n-desc">The separately running applications and data stores inside the Online Store, the technology of each, and where the network calls are.</desc>
+<style>
+.c4-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.c4-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.c4-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.c4-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.c4-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.c4-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.c4-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.c4-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.c4-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.c4-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.c4-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.c4-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.c4-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.c4-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.c4-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.c4-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.c4-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.c4-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.c4-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.c4-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.c4-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.c4-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.c4-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.c4-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+</style>
+<defs>
+<marker id="c4n-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="c4n-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="c4n-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="c4n-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="c4n-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="c4-bound" x="24" y="140" width="580" height="380" rx="8"/>
+<text class="c4-hd" x="40" y="512">ONLINE STORE &#8212; SOFTWARE SYSTEM</text>
+<rect class="c4-person" x="44" y="24" width="236" height="76" rx="6"/>
+<text class="c4-t" x="58" y="54">Customer</text>
+<text class="c4-k" x="58" y="72">[Person]</text>
+<text class="c4-s" x="58" y="92">browses and buys</text>
+<rect class="c4-person" x="700" y="24" width="176" height="76" rx="6"/>
+<text class="c4-t" x="714" y="54">Support agent</text>
+<text class="c4-k" x="714" y="72">[Person]</text>
+<text class="c4-s" x="714" y="92">handles queries</text>
+<rect class="c4-box" x="44" y="180" width="236" height="78" rx="6"/>
+<text class="c4-t" x="58" y="210">Web App</text>
+<text class="c4-k" x="58" y="228">[Container: React SPA]</text>
+<text class="c4-s" x="58" y="248">customer storefront</text>
+<rect class="c4-box" x="348" y="180" width="236" height="78" rx="6"/>
+<text class="c4-t" x="362" y="210">Admin Portal</text>
+<text class="c4-k" x="362" y="228">[Container: Blazor]</text>
+<text class="c4-s" x="362" y="248">internal back office</text>
+<rect class="c4-box" x="196" y="300" width="236" height="78" rx="6"/>
+<text class="c4-t" x="210" y="330">Orders API</text>
+<text class="c4-k" x="210" y="348">[Container: ASP.NET Core]</text>
+<text class="c4-s" x="210" y="368">places and reads orders</text>
+<rect class="c4-store" x="44" y="420" width="236" height="78" rx="6"/>
+<text class="c4-t" x="58" y="450">Orders Database</text>
+<text class="c4-k" x="58" y="468">[Container: PostgreSQL]</text>
+<text class="c4-s" x="58" y="488">orders and line items</text>
+<rect class="c4-store" x="348" y="420" width="236" height="78" rx="6"/>
+<text class="c4-t" x="362" y="450">Message Queue</text>
+<text class="c4-k" x="362" y="468">[Container: RabbitMQ]</text>
+<text class="c4-s" x="362" y="488">order events</text>
+<rect class="c4-ext" x="700" y="300" width="176" height="78" rx="6"/>
+<text class="c4-t-ext" x="714" y="330">Payment Gateway</text>
+<text class="c4-k" x="714" y="348">[External system]</text>
+<text class="c4-s" x="714" y="368">cards and refunds</text>
+<rect class="c4-ext" x="700" y="420" width="176" height="78" rx="6"/>
+<text class="c4-t-ext" x="714" y="450">Email system</text>
+<text class="c4-k" x="714" y="468">[External system]</text>
+<text class="c4-s" x="714" y="488">transactional mail</text>
+<path class="c4-line" d="M 150,100 V 174" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="158" y="118">Browses, orders</text>
+<text class="c4-el" x="158" y="134">[HTTPS]</text>
+<path class="c4-line" d="M 720,100 L 520,174" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="560" y="118">Manages orders</text>
+<text class="c4-el" x="560" y="134">[HTTPS]</text>
+<path class="c4-line" d="M 220,258 V 294" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="232" y="274">Calls API</text>
+<text class="c4-el" x="232" y="290">[JSON/HTTPS]</text>
+<path class="c4-line" d="M 440,258 L 390,294" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="448" y="274">Calls API</text>
+<text class="c4-el" x="448" y="290">[JSON/HTTPS]</text>
+<path class="c4-line" d="M 240,378 L 190,414" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="60" y="394">Reads and writes</text>
+<text class="c4-el" x="60" y="410">[SQL/TCP]</text>
+<path class="c4-line" d="M 390,378 L 440,414" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="452" y="394">Publishes events</text>
+<text class="c4-el" x="452" y="410">[AMQP]</text>
+<path class="c4-line" d="M 432,320 L 694,240" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="460" y="330">Takes payment</text>
+<text class="c4-el" x="460" y="346">[REST/HTTPS]</text>
+<path class="c4-line" d="M 584,459 H 694" marker-end="url(#c4n-a)"/>
+<text class="c4-el" x="612" y="444">Queues email</text>
+<text class="c4-el" x="612" y="476">[SMTP]</text>
+<rect class="c4-box" x="24" y="536" width="22" height="14" rx="3"/>
+<text class="c4-el" x="54" y="547">container</text>
+<rect class="c4-store" x="140" y="536" width="22" height="14" rx="3"/>
+<text class="c4-el" x="170" y="547">data store</text>
+<rect class="c4-ext" x="262" y="536" width="22" height="14" rx="3"/>
+<text class="c4-el" x="292" y="547">external system</text>
+<rect class="c4-person" x="414" y="536" width="22" height="14" rx="3"/>
+<text class="c4-el" x="444" y="547">person</text>
+<rect class="c4-bound" x="513" y="536" width="22" height="14" rx="3"/>
+<text class="c4-el" x="543" y="547">system boundary</text>
+<text class="c4-el" x="665" y="547">lines are one-way and labeled</text>
+
+</g>
+</svg>

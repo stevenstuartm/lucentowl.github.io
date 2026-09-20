@@ -1,0 +1,142 @@
+---
+title: "Class Diagram for the Order Domain"
+kind: structure
+system: uml
+summary: "One subsystem drawn with all six relationship kinds, showing only the members that matter to the point the diagram makes."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" role="img" aria-labelledby="um4-title um4-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="um4-title">Class Diagram for the Order Domain</title>
+<desc id="um4-desc">One subsystem drawn with all six relationship kinds, showing only the members that matter to the point the diagram makes.</desc>
+<style>
+.um-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.um-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.um-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.um-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.um-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.um-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.um-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.um-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.um-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.um-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.um-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.um-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.um-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.um-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.um-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.um-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.um-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.um-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.um-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.um-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.um-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.um-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.um-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.um-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.um-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.um-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.um-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.um-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.um-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.um-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+.um-cls { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.um-act { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.um-frag { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.um-tab { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.um-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 5; }
+.um-sep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.um-fill { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.um-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.um-mdash { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; stroke-dasharray: 7 5; }
+.um-lane { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.um-lanehd { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.um-m { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.um-t-it { font-size: 14px; font-weight: 700; font-style: italic; fill: var(--color-primary, #1A5F8A); }
+
+</style>
+<defs>
+<marker id="um4-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="um4-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="um4-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="um4-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="um4-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+
+<marker id="um4-tri" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto"><path d="M0.8,0.8 L12,6 L0.8,11.2 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.4"/></marker>
+<marker id="um4-dia" markerWidth="20" markerHeight="12" refX="18" refY="6" orient="auto"><path d="M0.8,6 L9,1.2 L17.2,6 L9,10.8 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.4"/></marker>
+<marker id="um4-diaf" markerWidth="20" markerHeight="12" refX="18" refY="6" orient="auto"><path d="M0.8,6 L9,1.2 L17.2,6 L9,10.8 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="um4-sync" markerWidth="10" markerHeight="10" refX="9" refY="3.6" orient="auto"><path d="M0,0 L9,3.6 L0,7.2 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="um-cls" x="24" y="56" width="226" height="98" rx="4"/>
+<path class="um-sep" d="M 24,118 H 250"/>
+<text class="um-k" x="137.0" y="78" text-anchor="middle">&#171;interface&#187;</text>
+<text class="um-t" x="137.0" y="100" text-anchor="middle">IPayable</text>
+<text class="um-m" x="38" y="140">+ Authorize(Money) : bool</text>
+<rect class="um-cls" x="24" y="198" width="226" height="128" rx="4"/>
+<path class="um-sep" d="M 24,258 H 250"/>
+<path class="um-sep" d="M 24,290 H 250"/>
+<text class="um-t-it" x="137.0" y="222" text-anchor="middle">Payment</text>
+<text class="um-k" x="137.0" y="250" text-anchor="middle">{abstract}</text>
+<text class="um-m" x="38" y="280">+ Amount : Money</text>
+<text class="um-m" x="38" y="312">+ Authorize(Money) : bool</text>
+<rect class="um-cls" x="24" y="364" width="226" height="78" rx="4"/>
+<path class="um-sep" d="M 24,406 H 250"/>
+<text class="um-t" x="137.0" y="388" text-anchor="middle">CardPayment</text>
+<text class="um-m" x="38" y="428">+ Last4 : string</text>
+<rect class="um-cls" x="326" y="56" width="246" height="120" rx="4"/>
+<path class="um-sep" d="M 326,118 H 572"/>
+<text class="um-k" x="449.0" y="78" text-anchor="middle">&#171;entity&#187;</text>
+<text class="um-t" x="449.0" y="100" text-anchor="middle">Customer</text>
+<text class="um-m" x="340" y="140">+ Id : Guid</text>
+<text class="um-m" x="340" y="162">+ Name : string</text>
+<rect class="um-cls" x="326" y="230" width="246" height="152" rx="4"/>
+<path class="um-sep" d="M 326,292 H 572"/>
+<path class="um-sep" d="M 326,346 H 572"/>
+<text class="um-k" x="449.0" y="252" text-anchor="middle">&#171;entity&#187;</text>
+<text class="um-t" x="449.0" y="274" text-anchor="middle">Order</text>
+<text class="um-m" x="340" y="314">+ PlacedOn : DateTime</text>
+<text class="um-m" x="340" y="336">+ Status : OrderStatus</text>
+<text class="um-m" x="340" y="368">+ Total() : Money</text>
+<rect class="um-cls" x="326" y="424" width="246" height="120" rx="4"/>
+<path class="um-sep" d="M 326,486 H 572"/>
+<text class="um-k" x="449.0" y="446" text-anchor="middle">&#171;entity&#187;</text>
+<text class="um-t" x="449.0" y="468" text-anchor="middle">OrderLine</text>
+<text class="um-m" x="340" y="508">+ Quantity : int</text>
+<text class="um-m" x="340" y="530">+ UnitPrice : Money</text>
+<rect class="um-cls" x="648" y="424" width="228" height="100" rx="4"/>
+<path class="um-sep" d="M 648,466 H 876"/>
+<text class="um-t" x="762.0" y="448" text-anchor="middle">CatalogItem</text>
+<text class="um-m" x="662" y="488">+ Sku : string</text>
+<text class="um-m" x="662" y="510">+ Price : Money</text>
+<rect class="um-cls" x="648" y="56" width="228" height="78" rx="4"/>
+<path class="um-sep" d="M 648,98 H 876"/>
+<text class="um-t" x="762.0" y="80" text-anchor="middle">Basket</text>
+<text class="um-m" x="662" y="120">+ AddedOn : DateTime</text>
+<path class="um-mdash" d="M 137,198 V 162" marker-end="url(#um4-tri)"/>
+<path class="um-line" d="M 137,364 V 334" marker-end="url(#um4-tri)"/>
+<path class="um-mdash" d="M 326,262 H 258" marker-end="url(#um4-o)"/>
+<text class="um-el" x="264" y="254">&#171;uses&#187;</text>
+<path class="um-line" d="M 449,176 V 222" marker-end="url(#um4-o)"/>
+<text class="um-el" x="455" y="192">1</text>
+<text class="um-el" x="455" y="216">0..*</text>
+<path class="um-line" d="M 449,418 V 390" marker-end="url(#um4-diaf)"/>
+<text class="um-el" x="455" y="398">1</text>
+<text class="um-el" x="455" y="414">1..*</text>
+<path class="um-line" d="M 572,472 H 642" marker-end="url(#um4-o)"/>
+<text class="um-el" x="578" y="462">0..*</text>
+<text class="um-el" x="628" y="462">1</text>
+<path class="um-line" d="M 762,418 V 142" marker-end="url(#um4-dia)"/>
+<text class="um-el" x="768" y="180">1</text>
+<text class="um-el" x="768" y="400">0..*</text>
+<path class="um-line" d="M 572,100 H 642" marker-end="url(#um4-o)"/>
+<text class="um-el" x="578" y="90">1</text>
+<text class="um-el" x="610" y="90">0..1</text>
+<text class="um-cap" x="24" y="556">Stereotypes such as &#171;entity&#187; and &#171;interface&#187; mark the role a class plays, and an italic name marks an abstract class.</text>
+
+</g>
+</svg>

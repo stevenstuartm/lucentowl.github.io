@@ -17,6 +17,8 @@
     "azure-governance-component-map.md",
     "azure-messaging-component-map.md",
     "gas-city-architecture-diagrams.md",
-    "beads-architecture-diagrams.md"
+    "beads-architecture-diagrams.md",
+    "c4-model-diagrams.md",
+    "uml-diagram-notation.md"
   ]
 }

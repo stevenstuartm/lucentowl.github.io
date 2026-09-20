@@ -23,6 +23,8 @@ C4 describes a system with a short hierarchy of building blocks. Each level is m
 
 Two of these names are commonly misread. A C4 **container** is not a Docker container. The term predates containerization's popularity and means any separately running application or data store, so a React single-page app, a PostgreSQL database, and an AWS Lambda function are all containers whether or not Docker is involved. A C4 **component** is not separately deployable. Components run inside their container's process, and the container is the unit of deployment. In a microservices architecture, each service is a container, or a small group of containers such as an API plus its database, and the modules inside it are components.
 
+{% include figure.html id="c4-abstractions" %}
+
 ## The Diagrams
 
 ### Four Zoom Levels
@@ -31,37 +33,19 @@ The four core diagrams each zoom one step further into the same system.
 
 **System context** shows the software system as a single box, the people who use it, and the other software systems it depends on or feeds. It shows what the system is for and what it touches, with no technology detail, which makes it readable by non-technical stakeholders.
 
+{% include figure.html id="c4-context" %}
+
 **Container** zooms into the system boundary and shows the applications and data stores inside it, the technology of each, and how they communicate. It is the diagram most useful to developers and operations staff, because it shows the major technology decisions and where the network calls are.
+
+{% include figure.html id="c4-containers" %}
+
+Every element names its type and technology, every arrow points one way and says what the relationship is, and the outer boundary makes clear which containers belong to this system.
 
 **Component** zooms into one container and shows the components inside it and their relationships. It helps when a container is large or complex enough that its internal structure isn't obvious from the code layout.
 
+{% include figure.html id="c4-components" %}
+
 **Code** zooms into one component and shows its implementation, typically as a UML class diagram or an entity-relationship diagram. The C4 site recommends it only for the most important or complex components, generated from code where possible, since hand-drawn class diagrams drift from the code quickly.
-
-A container diagram for a small online store looks like this:
-
-```
-   ┌──────────────────────┐
-   │ Customer             │
-   │ [Person]             │
-   └──────────┬───────────┘
-              │ Places orders using [HTTPS]
-┌─────────────┼──── Online Store [Software System] ─────────────────────────┐
-│             ▼                                                             │
-│  ┌──────────────────────┐              ┌──────────────────────────┐       │
-│  │ Web App              │  Calls API   │ Orders API               │       │
-│  │ [Container: React]   │─────────────▶│ [Container: ASP.NET Core]│       │
-│  └──────────────────────┘ [JSON/HTTPS] └────────────┬─────────────┘       │
-│                                                     │ Reads and writes    │
-│                                                     │ [SQL/TCP]           │
-│                                                     ▼                     │
-│                                        ┌──────────────────────────┐       │
-│                                        │ Orders Database          │       │
-│                                        │ [Container: PostgreSQL]  │       │
-│                                        └──────────────────────────┘       │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-Every element names its type and technology, every arrow points one way and says what the relationship is, and the outer boundary makes clear which containers belong to this system.
 
 ### Supplementary Diagrams
 
@@ -75,6 +59,12 @@ The four levels show static structure. C4 adds three diagram types for views tha
 
 A dynamic diagram can be drawn in collaboration style, with numbered arrows on the same boxes as the static diagram, or as a sequence diagram. A deployment diagram reuses the same containers, placed inside deployment nodes that can nest, such as a container inside a Kubernetes pod inside a cluster inside a cloud region.
 
+{% include figure.html id="c4-landscape" %}
+
+{% include figure.html id="c4-dynamic" %}
+
+{% include figure.html id="c4-deployment" %}
+
 ## Notation
 
 C4 is deliberately independent of notation and tooling. It doesn't mandate shapes, colors, or line styles, and relies instead on a few rules that make any notation readable:
@@ -83,6 +73,8 @@ C4 is deliberately independent of notation and tooling. It doesn't mandate shape
 - **Every diagram has a key or legend** explaining shapes, colors, line styles, and any acronyms.
 - **Every element states its type** (person, software system, container, component), a short description, and for containers and components, its technology.
 - **Every line is unidirectional and labeled** with a description consistent with its direction, such as "Reads from and writes to" rather than "Uses". Relationships between containers also name the protocol, such as JSON/HTTPS or AMQP.
+
+{% include figure.html id="c4-element-notation" %}
 
 Colors and shapes are free choices, provided they stay consistent across a set of diagrams and remain readable in black and white or by someone with color blindness. Common uses include shading external systems differently from internal ones, or marking parts of the system that are being replaced.
 

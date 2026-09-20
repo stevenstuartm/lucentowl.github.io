@@ -1,0 +1,103 @@
+---
+title: "System Context for Online Store"
+kind: context
+system: c4
+summary: "What the Online Store is for, who uses it, and which outside systems it depends on, with no technology detail."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="c4c-title c4c-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="c4c-title">System Context for Online Store</title>
+<desc id="c4c-desc">What the Online Store is for, who uses it, and which outside systems it depends on, with no technology detail.</desc>
+<style>
+.c4-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.c4-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.c4-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.c4-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.c4-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.c4-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.c4-node { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.c4-note { fill: #FCF8E8; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; }
+.c4-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.c4-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.c4-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.c4-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.c4-n-pur { font-size: 12.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.c4-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.c4-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.c4-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.c4-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.c4-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.c4-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.c4-cap { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.c4-warn { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.c4-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.c4-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.c4-dline { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.c4-pline { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+.c4-aline { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.c4-gline { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.c4-thin { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+
+</style>
+<defs>
+<marker id="c4c-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="c4c-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="c4c-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="c4c-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="c4c-o" markerWidth="12" markerHeight="12" refX="10" refY="4.2" orient="auto"><path d="M0.5,0.5 L10,4.2 L0.5,7.9" fill="none" stroke="var(--color-primary, #1A5F8A)" stroke-width="1.5"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="c4-person" x="24" y="46" width="212" height="80" rx="6"/>
+<text class="c4-t" x="38" y="76">Customer</text>
+<text class="c4-k" x="38" y="94">[Person]</text>
+<text class="c4-s" x="38" y="114">buys from the store</text>
+<rect class="c4-person" x="24" y="320" width="212" height="80" rx="6"/>
+<text class="c4-t" x="38" y="350">Support agent</text>
+<text class="c4-k" x="38" y="368">[Person]</text>
+<text class="c4-s" x="38" y="388">handles order queries</text>
+<rect class="c4-sys" x="336" y="186" width="228" height="92" rx="6"/>
+<text class="c4-t-inv" x="350" y="216">Online Store</text>
+<text class="c4-k-inv" x="350" y="234">[Software system]</text>
+<text class="c4-s-inv" x="350" y="254">sells goods online</text>
+<rect class="c4-ext" x="664" y="46" width="212" height="80" rx="6"/>
+<text class="c4-t-ext" x="678" y="76">Payment Gateway</text>
+<text class="c4-k" x="678" y="94">[External system]</text>
+<text class="c4-s" x="678" y="114">cards and refunds</text>
+<rect class="c4-ext" x="664" y="186" width="212" height="80" rx="6"/>
+<text class="c4-t-ext" x="678" y="216">Email system</text>
+<text class="c4-k" x="678" y="234">[External system]</text>
+<text class="c4-s" x="678" y="254">transactional email</text>
+<rect class="c4-ext" x="664" y="320" width="212" height="80" rx="6"/>
+<text class="c4-t-ext" x="678" y="350">Shipping Provider</text>
+<text class="c4-k" x="678" y="368">[External system]</text>
+<text class="c4-s" x="678" y="388">labels and tracking</text>
+<path class="c4-line" d="M 236,100 L 330,192" marker-end="url(#c4c-a)"/>
+<text class="c4-el" x="300" y="140">Browses, places orders</text>
+<text class="c4-el" x="312" y="158">[HTTPS]</text>
+<path class="c4-line" d="M 246,354 L 330,272" marker-end="url(#c4c-a)"/>
+<text class="c4-el" x="200" y="298">Answers tickets</text>
+<text class="c4-el" x="200" y="316">[HTTPS]</text>
+<path class="c4-line" d="M 564,216 L 658,100" marker-end="url(#c4c-a)"/>
+<text class="c4-el" x="626" y="150">Takes payment</text>
+<text class="c4-el" x="626" y="168">[REST/HTTPS]</text>
+<path class="c4-line" d="M 564,226 H 658" marker-end="url(#c4c-a)"/>
+<text class="c4-el" x="618" y="214" text-anchor="middle">Sends receipts</text>
+<text class="c4-el" x="611" y="250" text-anchor="middle">[SMTP]</text>
+<path class="c4-line" d="M 564,252 L 658,350" marker-end="url(#c4c-a)"/>
+<text class="c4-el" x="500" y="300">Books delivery</text>
+<text class="c4-el" x="500" y="318">[REST/HTTPS]</text>
+<rect class="c4-sys" x="24" y="440" width="22" height="14" rx="3"/>
+<text class="c4-el" x="54" y="451">system in focus</text>
+<rect class="c4-person" x="176" y="440" width="22" height="14" rx="3"/>
+<text class="c4-el" x="206" y="451">person</text>
+<rect class="c4-ext" x="275" y="440" width="22" height="14" rx="3"/>
+<text class="c4-el" x="305" y="451">external system</text>
+<text class="c4-el" x="427" y="451">every line is one-way and labeled</text>
+
+</g>
+</svg>

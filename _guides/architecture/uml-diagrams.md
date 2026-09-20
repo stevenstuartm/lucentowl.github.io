@@ -52,17 +52,17 @@ Interaction diagrams are a subgroup of behavior diagrams. The rest of this guide
 
 A class diagram shows types, what each holds and can do, and how they relate. The same diagram can be drawn from three perspectives, and the perspective decides how much detail belongs on it.
 
-![The same Cell class drawn at conceptual, specification, and implementation perspectives, with detail added at each step](/assets/img/ClassDiagram_perspectives.png)
+{% include figure.html id="uml-class-perspectives" %}
 
 A **conceptual** class diagram names domain concepts and their relationships, with little or no attribute detail. It suits early discussion of a domain with people who don't read code. A **specification** diagram adds types and operation signatures, describing interfaces without committing to an implementation. An **implementation** diagram mirrors the code, including defaults and every accessor. Implementation diagrams go stale fastest, and when needed they are usually better generated from the code than drawn.
 
 Each class is a box with up to three compartments for name, attributes, and operations. Members carry a visibility marker, which is `+` for public, `-` for private, `#` for protected, and `~` for package. Operation parameters can state a direction, `in`, `out`, or `inout`, which matters when a sketch documents an API whose parameters are modified in place.
 
-![Class notation showing attribute visibility and in, inout, and out parameter directions](/assets/img/ClassDiagram_Parameters.png)
+{% include figure.html id="uml-class-notation" %}
 
 Six relationship lines carry most of a class diagram's meaning:
 
-![Line and arrowhead notation for association, inheritance, realization, dependency, aggregation, and composition](/assets/img/ClassDiagram_Relationships.png)
+{% include figure.html id="uml-class-relationships" %}
 
 | Relationship | Notation | Meaning |
 |---|---|---|
@@ -75,9 +75,9 @@ Six relationship lines carry most of a class diagram's meaning:
 
 Associations also carry **multiplicity** at each end, such as `1`, `0..1`, `*`, or `1..*`, which states how many instances take part. The UML specification itself notes that the precise meaning of aggregation varies by application area and modeler, so teams often skip it and use a plain association, reserving the diamond for composition, where the lifetime rule is unambiguous.
 
-A fuller diagram combines these, and can also use stereotypes such as `«entity»`, `«boundary»`, and `«control»` to mark the role each class plays:
+A fuller diagram combines these, and can also use stereotypes such as `«entity»` and `«interface»` to mark the role each class plays, and an italic name to mark an abstract class:
 
-![Class diagram of a drawing application showing dependency, aggregation, generalization, composition, an abstract class, and stereotyped classes](/assets/img/ClassDiagram_Full.png)
+{% include figure.html id="uml-class-example" %}
 
 A class diagram earns its place for a core domain model whose relationships and multiplicities are the design, or for an unfamiliar area of code that a newcomer needs mapped. Keeping it focused on one subsystem, and showing only the members that matter to the point being made, keeps it readable.
 
@@ -85,9 +85,9 @@ A class diagram earns its place for a core domain model whose relationships and 
 
 A component diagram shows replaceable parts of a system and the interfaces that connect them. A **provided interface** is drawn as a circle, or lollipop, and a **required interface** as a half-circle socket. Where one component's socket meets another's lollipop, the dependency is satisfied. **Ports** are small squares on a component's boundary where interfaces attach, which lets a component expose an interface that is implemented by a part inside it.
 
-![Terminal component containing SafetyInspection, Staff, Defect, and Map components, with ports and provided and required interfaces](/assets/img/ComponentDiagram_Summary.png)
+{% include figure.html id="uml-component-notation" %}
 
-![OnlineStore subsystem with StoreFront, Catalogue, and OrderSystem components wired through interfaces](/assets/img/ComponentDiagram_Full.png)
+{% include figure.html id="uml-component-example" %}
 
 Component diagrams are most useful when the interfaces between parts are the design decision, such as a plugin system, a set of modules with enforced boundaries, or a replacement plan for one part of a larger system. For showing how a system's applications, services, and data stores communicate, many teams now draw architecture-level structure views such as C4 container diagrams instead, which carry technology and protocol labels that UML component diagrams leave out.
 
@@ -95,7 +95,7 @@ Component diagrams are most useful when the interfaces between parts are the des
 
 A deployment diagram shows **nodes**, drawn as three-dimensional boxes, which represent hardware devices or execution environments such as a server, a virtual machine, a container runtime, or a database server. **Artifacts**, such as an executable, a container image, or a configuration file, are deployed onto nodes. **Communication paths** between nodes show which can talk to which.
 
-![Deployment topology of caching servers and application servers on a local network behind an internet connection](/assets/img/DeploymentDiagram_Summary.png)
+{% include figure.html id="uml-deployment-example" %}
 
 The diagram helps when placement is what's being decided, such as which tier sits in which network zone, where a cache lives relative to the servers that read it, or which environments exist. It stops helping once it tries to capture everything a cloud infrastructure-as-code template already records. Labeling paths with protocols and marking security boundaries tends to add more than drawing every node.
 
@@ -105,7 +105,7 @@ The diagram helps when placement is what's being decided, such as which tier sit
 
 A sequence diagram shows participants as **lifelines**, vertical dashed lines headed by a name, with messages as horizontal arrows ordered top to bottom in time. A thin bar on a lifeline, the **activation**, shows when that participant is executing.
 
-![Hotel reservation sequence diagram showing lifelines, messages, activations, a self message, a loop, an alt combined fragment, create messages, and a destroyed lifeline](/assets/img/SequenceDiagram_Full.png)
+{% include figure.html id="uml-sequence-example" %}
 
 The arrow style carries meaning:
 
@@ -125,15 +125,15 @@ Sequence diagrams suit flows where the order of messages is the question, such a
 
 An activity diagram shows a flow of actions, closer to a flowchart than any other UML diagram but able to show parallel work. It starts at a filled **initial node** and ends at a bullseye **activity final node**. Rounded rectangles are **actions**. A diamond is a **decision** when one flow enters and guarded flows leave, and a **merge** when several alternative flows rejoin. A thick bar is a **fork** when it splits one flow into parallel flows, and a **join** when it waits for parallel flows to finish.
 
-![Activity diagram notation showing initial node, actions, a decision with yes and no branches, a merge, a fork into parallel actions, a join, and the final node](/assets/img/ActivityDiagram_Summary.png)
+{% include figure.html id="uml-activity-notation" %}
 
 The distinction between a merge and a join has consequences. A merge passes along whichever single branch arrives, while a join waits for all of its parallel inputs. Using a join where branches are alternatives describes a process that never completes.
 
-![Activity diagram for arranging a client meeting and sending a proposal, with decisions on meeting location and whether a problem statement exists](/assets/img/ActivityDiagram_Full.png)
+{% include figure.html id="uml-activity-example" %}
 
 **Partitions**, commonly called swimlanes, assign each action to the role or system that performs it. Handoffs between partitions are where delays and errors often concentrate in a business process, so swimlanes make them visible.
 
-![The same client meeting process divided into Sales Person, Consultant, and Corporate Technician swimlanes](/assets/img/ActivityDiagram_Swimlane_Full.png)
+{% include figure.html id="uml-activity-swimlanes" %}
 
 Activity diagrams fit business workflows, multi-step jobs with parallel branches, and approval processes, especially when non-developers need to validate the flow. Teams modeling business processes alone often use BPMN instead, which covers similar ground with notation that business analysts more commonly know.
 
@@ -141,26 +141,7 @@ Activity diagrams fit business workflows, multi-step jobs with parallel branches
 
 A state machine diagram shows the states one object moves through and the events that move it. Each transition is labeled `trigger [guard] / effect`, where the trigger is the event, the guard is a condition that must hold, and the effect is what happens during the transition. A filled circle marks the initial state and a bullseye a final state.
 
-```
-          ●
-          │ place order
-          ▼
-   ┌──────────────┐        cancel        ┌──────────────┐
-   │   Pending    │─────────────────────▶│  Cancelled   │───▶ ◉
-   └──────┬───────┘                      └──────────────┘
-          │ paymentReceived                     ▲
-          │ [stock available]                   │
-          │ / reserveStock                      │
-          ▼                                     │
-   ┌──────────────┐    cancel / refundPayment   │
-   │     Paid     │─────────────────────────────┘
-   └──────┬───────┘
-          │ dispatched / notifyCustomer
-          ▼
-   ┌──────────────┐       delivered      ┌──────────────┐
-   │   Shipped    │─────────────────────▶│  Delivered   │───▶ ◉
-   └──────────────┘                      └──────────────┘
-```
+{% include figure.html id="uml-state-machine" %}
 
 The diagram shows as much by what's missing as by what's drawn. There is no `cancel` transition from `Shipped`, so an order can't be cancelled after dispatch, and a `paymentReceived` event while stock is unavailable leaves the order in `Pending`. States can also declare `entry`, `exit`, and `do` behaviors, and a composite state can contain its own nested state machine.
 
@@ -170,11 +151,11 @@ State machine diagrams tend to stay accurate longer than most UML diagrams, beca
 
 A use case diagram shows **actors**, the people or external systems that interact with the system, drawn as stick figures, and **use cases**, the goals the system fulfills for them, drawn as ovals inside a **system boundary**. Lines associate actors with the use cases they take part in.
 
-![Use case diagram with Cellular Phone, Customer, and External Phone Company actors associated with Handle Message, Handle Call, and Manage Bill use cases](/assets/img/UseCase_Summary.png)
+{% include figure.html id="uml-use-case-notation" %}
 
 Three relationships connect use cases and actors. **Include** is a dashed arrow from a base use case to behavior it always performs, factored out because several use cases share it. **Extend** is a dashed arrow from an optional use case to the base use case it can add behavior to, at a named extension point, under some condition. **Generalization** makes one actor or use case a specialized kind of another. The arrows point in opposite directions for include and extend, which is the most common error on these diagrams.
 
-![Vehicle sales use case diagram showing extend relationships with extension points, include relationships, and generalization between customer actors and between offer use cases](/assets/img/UseCase_Full.png)
+{% include figure.html id="uml-use-case-relationships" %}
 
 The diagram is a table of contents. The requirements live in the written use case behind each oval, with its main success scenario, alternatives, and failure handling. A use case diagram helps scope a system with stakeholders, and it adds little once that scope is agreed, which fits Petre's finding that practitioners rarely find it useful on its own.
 
