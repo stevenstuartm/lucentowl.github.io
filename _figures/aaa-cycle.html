@@ -1,0 +1,82 @@
+---
+title: "The AAA Cycle"
+kind: flow
+system: aaa
+summary: "Each phase ends at a gate, and a problem found later sends work back to Agree or all the way to Align."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-labelledby="aaa1-title aaa1-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aaa1-title">The AAA cycle's return paths and what triggers each one</title>
+<desc id="aaa1-desc">Align, Agree and Apply run left to right, each forward arrow crossing a gate: a signed charter and alignment that holds up before Agree, real agreement and team ownership before Apply, ending in delivery. Three backward paths run underneath, drawn at increasing depth because a longer return reopens more. A Pivot loops over Align itself, re-scoping or proving out novelty before re-estimating. A circuit breaker trip or a failed assumption returns work from Apply to Agree, reshaping the solution while the problem still holds. Failure to reach agreement, or an appetite nothing fits, returns Agree to Align to re-examine the problem rather than the design. Deepest, a dependency failure or a gap that changes cost, timeline or scope returns Apply all the way to Align, where the agreement itself is renegotiated.</desc>
+<style>
+.aaa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aaa-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aaa-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aaa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aaa-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aaa-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.aaa-fwd { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aaa-r-agree { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.aaa-r-align { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 5; }
+</style>
+<defs>
+<marker id="aaa1-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="aaa1-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="aaa1-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="aaa-hd" x="32" y="40">FORWARD &#183; EACH ARROW CROSSES A GATE</text>
+
+<path class="aaa-r-align" d="M 72,96 V 66 H 182 V 90" marker-end="url(#aaa1-c)"/>
+<text class="aaa-el" x="192" y="70">Pivot: re-scope or POC, then re-estimate</text>
+
+<rect class="aaa-box" x="32" y="96" width="190" height="92" rx="6"/>
+<text class="aaa-t" x="48" y="126">Align</text>
+<text class="aaa-k" x="48" y="146">[understand the need]</text>
+<text class="aaa-s" x="48" y="170">produces: signed charter</text>
+
+<rect class="aaa-box" x="352" y="96" width="190" height="92" rx="6"/>
+<text class="aaa-t" x="368" y="126">Agree</text>
+<text class="aaa-k" x="368" y="146">[commit to how]</text>
+<text class="aaa-s" x="368" y="170">produces: agreed plan</text>
+
+<rect class="aaa-box" x="672" y="96" width="190" height="92" rx="6"/>
+<text class="aaa-t" x="688" y="126">Apply</text>
+<text class="aaa-k" x="688" y="146">[honor the agreement]</text>
+<text class="aaa-s" x="688" y="170">produces: working software</text>
+
+<path class="aaa-fwd" d="M 222,120 H 346" marker-end="url(#aaa1-a)"/>
+<text class="aaa-s" x="287" y="150" text-anchor="middle">charter signed</text>
+<text class="aaa-s" x="287" y="168" text-anchor="middle">alignment holds up</text>
+
+<path class="aaa-fwd" d="M 542,120 H 666" marker-end="url(#aaa1-a)"/>
+<text class="aaa-s" x="607" y="150" text-anchor="middle">real agreement</text>
+<text class="aaa-s" x="607" y="168" text-anchor="middle">team owns the plan</text>
+
+<path class="aaa-fwd" d="M 862,120 H 902" marker-end="url(#aaa1-a)"/>
+<text class="aaa-el" x="896" y="108" text-anchor="middle">delivered</text>
+
+<path class="aaa-r-agree" d="M 767,188 V 262 H 447 V 194" marker-end="url(#aaa1-p)"/>
+<text class="aaa-s" x="607" y="284" text-anchor="middle">circuit breaker trips, or an assumption fails</text>
+<text class="aaa-s" x="607" y="300" text-anchor="middle">reshape the solution, the problem still holds</text>
+
+<path class="aaa-r-align" d="M 397,188 V 340 H 127 V 194" marker-end="url(#aaa1-c)"/>
+<text class="aaa-s" x="262" y="362" text-anchor="middle">no agreement is reachable, or nothing fits the appetite</text>
+<text class="aaa-s" x="262" y="378" text-anchor="middle">the problem needs re-examining, not the design</text>
+
+<path class="aaa-r-align" d="M 827,188 V 440 H 62 V 194" marker-end="url(#aaa1-c)"/>
+<text class="aaa-s" x="445" y="462" text-anchor="middle">a dependency fails, or the gap changes cost, timeline, or scope</text>
+<text class="aaa-s" x="445" y="478" text-anchor="middle">the agreement itself is renegotiated</text>
+
+<text class="aaa-hd" x="32" y="512">BACKWARD &#183; HOW FAR BACK A PATH RUNS IS HOW MUCH IT REOPENS</text>
+
+<path class="aaa-fwd" d="M 32,536 H 62"/>
+<text class="aaa-el" x="70" y="540">forward, through a gate</text>
+<path class="aaa-r-agree" d="M 236,536 H 266"/>
+<text class="aaa-el" x="274" y="540">back to Agree, reshape the solution</text>
+<path class="aaa-r-align" d="M 512,536 H 542"/>
+<text class="aaa-el" x="550" y="540">back to Align, the problem itself moved</text>
+
+</g>
+</svg>

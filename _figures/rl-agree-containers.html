@@ -1,0 +1,98 @@
+---
+title: "Ridgeline Portal: The Agreed Containers"
+kind: container
+system: ridgeline
+summary: "The same portal after Agree, split into three parts, with every open question answered."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 490" role="img" aria-labelledby="rl2-title rl2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rl2-title">Ridgeline Mutual's policyholder portal containers as agreed</title>
+<desc id="rl2-desc">The same layout as the Align sketch, after Agree. The undecided portal is now three containers: a React single-page Web App for pages and the sign-in flow, an ASP.NET Core Portal API that aggregates the CRM and documents, caches profile reads and loads documents after the page renders, and an Azure SQL Portal DB for preferences and the audit trail. Each open question is closed. Sign-in uses a separate customer identity service on Entra External ID over OIDC, recorded in ADR-001, kept apart from agent single sign-on. The CRM is read live over REST behind a 5-minute cache. Policy documents come from the on-premises Policy Admin System's document API, proved by a proof of concept. Billing remains out of scope.</desc>
+<style>
+.rl-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rl-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.rl-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.rl-out { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.rl-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rl-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.rl-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rl-t-out { font-size: 13px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rl-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rl-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rl-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rl-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.rl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rl-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.rl-none { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+</style>
+<defs>
+<marker id="rl2-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rl2-q" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="rl-hd" x="24" y="40">END OF AGREE &#183; SAME BOXES, QUESTIONS ANSWERED</text>
+<rect class="rl-bound" x="240" y="60" width="320" height="372" rx="8"/>
+<text class="rl-hd" x="254" y="82">POLICYHOLDER PORTAL</text>
+<rect class="rl-ext" x="24" y="196" width="160" height="80" rx="6"/>
+<text class="rl-t-ext" x="38" y="218">Policyholder</text>
+<text class="rl-k" x="38" y="234">[Person]</text>
+<text class="rl-s" x="38" y="252">self-serves online</text>
+<rect class="rl-box" x="270" y="96" width="260" height="72" rx="6"/>
+<text class="rl-t" x="284" y="118">Web App</text>
+<text class="rl-k" x="284" y="134">[Container: React SPA]</text>
+<text class="rl-s" x="284" y="152">pages and sign-in flow</text>
+<rect class="rl-box" x="270" y="208" width="260" height="120" rx="6"/>
+<text class="rl-t" x="284" y="230">Portal API</text>
+<text class="rl-k" x="284" y="246">[Container: ASP.NET Core]</text>
+<text class="rl-s" x="284" y="264">aggregates CRM and documents</text>
+<text class="rl-s" x="284" y="280">caches profile reads</text>
+<text class="rl-s" x="284" y="296">loads documents after the page</text>
+<rect class="rl-box" x="270" y="356" width="260" height="60" rx="6"/>
+<text class="rl-t" x="284" y="378">Portal DB</text>
+<text class="rl-k" x="284" y="394">[Container: Azure SQL]</text>
+<text class="rl-s" x="284" y="412">preferences, audit trail</text>
+<rect class="rl-ext" x="700" y="96" width="236" height="72" rx="6"/>
+<text class="rl-t-ext" x="714" y="118">Customer Identity</text>
+<text class="rl-k" x="714" y="134">[System: Entra External ID]</text>
+<text class="rl-s" x="714" y="152">kept apart from agent SSO</text>
+<rect class="rl-ext" x="700" y="204" width="236" height="64" rx="6"/>
+<text class="rl-t-ext" x="714" y="226">CRM</text>
+<text class="rl-k" x="714" y="242">[System: existing SaaS]</text>
+<text class="rl-s" x="714" y="260">profile, claim cases</text>
+<rect class="rl-ext" x="700" y="280" width="236" height="64" rx="6"/>
+<text class="rl-t-ext" x="714" y="302">Policy Admin System</text>
+<text class="rl-k" x="714" y="318">[System: on-premises]</text>
+<text class="rl-s" x="714" y="336">document API, proved by POC</text>
+<rect class="rl-out" x="700" y="364" width="236" height="64" rx="6"/>
+<text class="rl-t-out" x="714" y="386">Billing</text>
+<text class="rl-k" x="714" y="402">[legacy]</text>
+<text class="rl-s" x="714" y="420">separate project</text>
+<path class="rl-flow" d="M 184,236 H 220 V 132 H 264" marker-end="url(#rl2-a)"/>
+<text class="rl-el" x="192" y="258">HTTPS</text>
+<path class="rl-flow" d="M 400,168 V 202" marker-end="url(#rl2-a)"/>
+<text class="rl-el" x="410" y="190">JSON/HTTPS</text>
+<path class="rl-flow" d="M 400,328 V 350" marker-end="url(#rl2-a)"/>
+<text class="rl-el" x="410" y="343">SQL</text>
+<path class="rl-flow" d="M 530,132 H 694" marker-end="url(#rl2-a)"/>
+<text class="rl-el" x="572" y="124">OIDC (ADR-001)</text>
+<path class="rl-flow" d="M 530,236 H 694" marker-end="url(#rl2-a)"/>
+<text class="rl-el" x="572" y="228">REST, 5-min cache</text>
+<path class="rl-flow" d="M 530,312 H 694" marker-end="url(#rl2-a)"/>
+<text class="rl-el" x="572" y="304">document API</text>
+<path class="rl-none" d="M 574,396 H 694"/>
+<path class="rl-none" d="M 664,390 L 676,402 M 676,390 L 664,402"/>
+<text class="rl-el" x="574" y="386">out of scope</text>
+<path class="rl-flow" d="M 24,466 H 54"/>
+<text class="rl-el" x="62" y="470">agreed interface</text>
+<rect class="rl-box" x="200" y="459" width="22" height="14" rx="3"/>
+<text class="rl-el" x="234" y="470">built by the team</text>
+<rect class="rl-ext" x="378" y="459" width="22" height="14" rx="3"/>
+<text class="rl-el" x="412" y="470">existing or bought</text>
+<rect class="rl-out" x="561" y="459" width="22" height="14" rx="3"/>
+<text class="rl-el" x="595" y="470">out of scope</text>
+
+</g>
+</svg>

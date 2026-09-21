@@ -71,28 +71,6 @@ Execute the agreed plan with discipline while maintaining continuous alignment. 
 
 ## Visual Journey
 
-```
-                     ┌─────────────────────────────────────┐
-                     │         FEEDBACK LOOPS              │
-                     │  Discovery triggers realignment     │
-                     └─────────────────────────────────────┘
-                                       │
-        ┌──────────────────────────────┼──────────────────────────────┐
-        │                              │                              │
-        ▼                              ▼                              │
- ╔═══════════════╗            ╔═══════════════╗            ╔═══════════════╗
- ║     ALIGN     ║            ║     AGREE     ║            ║     APPLY     ║
- ║───────────────║            ║───────────────║            ║───────────────║
- ║    Human      ║    ───►    ║    Shared     ║    ───►    ║   Honored     ║
- ║  Connection   ║            ║  Commitment   ║            ║  Agreement    ║
- ╚═══════════════╝            ╚═══════════════╝            ╚═══════════════╝
-        │                              │                              │
-        ▼                              ▼                              ▼
- ✓ CONNECTED                   ✓ COMMITTED                    ✓ VALUE REALIZED
-        │                              │                              │
-        └──────────────────────────────┴──────────────────────────────┘
-                                       │
-                              Cycle repeats at every level
-```
-
 Each phase builds on the previous one. You can't genuinely agree without first aligning, and you can't honor agreements that were never truly made. When new information breaks alignment, go back and re-align. When the plan proves infeasible, go back and re-agree. This isn't failure; it's the discipline of maintaining integrity.
+
+{% include figure.html id="aaa-cycle" %}

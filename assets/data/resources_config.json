@@ -4,6 +4,9 @@
     "refine-prose-skill.md",
     "big-o-complexity-quick-reference.md",
     "adr-template.md",
+    "project-charter-template.md",
+    "aaa-gate-readiness.md",
+    "aaa-worked-example.md",
     "http-methods-status-codes.md",
     "design-patterns-quick-reference.md",
     "architecture-style-comparison.md",
@@ -19,6 +22,7 @@
     "gas-city-architecture-diagrams.md",
     "beads-architecture-diagrams.md",
     "c4-model-diagrams.md",
-    "uml-diagram-notation.md"
+    "uml-diagram-notation.md",
+    "aaa-cycle-diagrams.md"
   ]
 }

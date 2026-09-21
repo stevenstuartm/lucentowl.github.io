@@ -195,6 +195,8 @@ Check the effort estimate against your actual constraints (timeline, budget, sta
 
 The recommendation is a starting position for the conversation with stakeholders, not a substitute for it. A Go they don't actually believe in is worse than an honest No-Go.
 
+{% include figure.html id="aaa-risk-tier" %}
+
 <div class="callout callout--warning">
 <p class="callout__title">Red Flags</p>
 <ul>

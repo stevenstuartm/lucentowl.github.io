@@ -1641,6 +1641,121 @@ body.home-layout .site-title a:hover .site-name {
     gap: var(--spacing-xs);
 }
 
+/* Task lists - markdown "- [ ]" checklists */
+ul.task-list {
+    list-style: none;
+    padding-left: 0;
+    margin: var(--spacing-md) 0;
+}
+
+.task-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--color-border);
+    line-height: 1.5;
+}
+
+.task-list-item:last-child {
+    border-bottom: none;
+}
+
+.task-list-item-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin: 0.2rem 0 0;
+    border: 2px solid var(--color-primary);
+    border-radius: 4px;
+    background: var(--color-card-bg);
+}
+
+/* Gate card - one checklist gate on a checklist resource */
+.gate-card {
+    margin: var(--spacing-lg) 0;
+    padding: var(--spacing-lg);
+}
+
+.gate-card h2 {
+    margin-top: 0;
+}
+
+.gate-card .callout {
+    margin: var(--spacing-md) 0;
+}
+
+.gate-card:first-child {
+    margin-top: 0;
+}
+
+.gate-card > :last-child {
+    margin-bottom: 0;
+}
+
+/* Phase header - opens one phase of a worked example */
+.phase-header {
+    margin: var(--spacing-xl) 0 var(--spacing-md);
+    padding-top: var(--spacing-lg);
+    border-top: 3px solid var(--color-primary);
+}
+
+.phase-header__label {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--color-text-light);
+}
+
+.phase-header h2 {
+    margin: 0.25rem 0 0.5rem;
+}
+
+.phase-header > :last-child {
+    margin-bottom: 0;
+}
+
+/* Artifact card - one deliverable in a worked example */
+.artifact-card {
+    margin: var(--spacing-md) 0;
+    padding: var(--spacing-lg);
+}
+
+.artifact-card h3 {
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+}
+
+.artifact-card__lead {
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-md);
+}
+
+.artifact-card .callout {
+    margin: var(--spacing-md) 0 0;
+}
+
+.artifact-card > :last-child {
+    margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+    .resource-content .artifact-card table {
+        display: table;
+        font-size: 0.95rem;
+    }
+
+    .resource-content .artifact-card th,
+    .resource-content .artifact-card td {
+        max-width: none;
+        padding: 0.45rem 0.75rem;
+    }
+}
+
 /* Key Takeaways Box */
 .key-takeaways {
     background: linear-gradient(135deg, rgba(31, 107, 67, 0.05) 0%, rgba(45, 90, 133, 0.05) 100%);

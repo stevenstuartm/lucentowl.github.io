@@ -1,0 +1,87 @@
+---
+title: "Ridgeline Portal: The Align Sketch"
+kind: context
+system: ridgeline
+summary: "The portal as understood during Align, with unanswered questions drawn as dashed boxes and lines."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 490" role="img" aria-labelledby="rl1-title rl1-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rl1-title">Ridgeline Mutual's policyholder portal as sketched during Align</title>
+<desc id="rl1-desc">A fictional regional insurer, Ridgeline Mutual, wants a policyholder portal so customers stop calling to ask about their policies. On day 10 of Align the sketch shows the portal as one undecided box offering policy and document viewing, contact detail updates and claim status, as mobile-friendly web with no native app. The existing SaaS CRM, holding profiles and claim cases, is known, but whether the portal reads it live or from a nightly export is open. Who owns customer sign-in is open, since agents already use single sign-on. The system that holds policy documents is not yet identified. The legacy billing system is out of scope as a separate project.</desc>
+<style>
+.rl-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rl-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.rl-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.rl-out { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.rl-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rl-t-ext { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.rl-t-q { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rl-t-out { font-size: 13px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rl-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rl-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rl-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rl-el-q { font-size: 11px; fill: var(--color-accent, #A5486E); }
+.rl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rl-open { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.rl-none { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+</style>
+<defs>
+<marker id="rl1-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rl1-q" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="rl-hd" x="24" y="40">DAY 10 OF ALIGN &#183; OPEN QUESTIONS DRAWN AS OPEN</text>
+<rect class="rl-bound" x="240" y="60" width="320" height="372" rx="8"/>
+<text class="rl-hd" x="254" y="82">POLICYHOLDER PORTAL</text>
+<rect class="rl-ext" x="24" y="196" width="160" height="80" rx="6"/>
+<text class="rl-t-ext" x="38" y="218">Policyholder</text>
+<text class="rl-k" x="38" y="234">[Person]</text>
+<text class="rl-s" x="38" y="252">calls today to ask</text>
+<rect class="rl-q" x="270" y="96" width="260" height="320" rx="6"/>
+<text class="rl-t-q" x="284" y="118">The portal</text>
+<text class="rl-k" x="284" y="134">[internals not decided]</text>
+<text class="rl-s" x="284" y="152">view policies and documents</text>
+<text class="rl-s" x="284" y="168">update contact details</text>
+<text class="rl-s" x="284" y="184">check claim status</text>
+<text class="rl-s" x="284" y="216">mobile-friendly web, no app</text>
+<rect class="rl-q" x="700" y="96" width="236" height="72" rx="6"/>
+<text class="rl-t-q" x="714" y="118">Sign-in ?</text>
+<text class="rl-k" x="714" y="134">[no owner for customer login]</text>
+<text class="rl-s" x="714" y="152">agents already use SSO</text>
+<rect class="rl-ext" x="700" y="204" width="236" height="64" rx="6"/>
+<text class="rl-t-ext" x="714" y="226">CRM</text>
+<text class="rl-k" x="714" y="242">[existing SaaS]</text>
+<text class="rl-s" x="714" y="260">profile, claim cases</text>
+<rect class="rl-q" x="700" y="280" width="236" height="64" rx="6"/>
+<text class="rl-t-q" x="714" y="302">Policy documents ?</text>
+<text class="rl-k" x="714" y="318">[source system unknown]</text>
+<text class="rl-s" x="714" y="336">the PDFs people call about</text>
+<rect class="rl-out" x="700" y="364" width="236" height="64" rx="6"/>
+<text class="rl-t-out" x="714" y="386">Billing</text>
+<text class="rl-k" x="714" y="402">[legacy]</text>
+<text class="rl-s" x="714" y="420">separate project</text>
+<path class="rl-flow" d="M 184,236 H 264" marker-end="url(#rl1-a)"/>
+<text class="rl-el" x="192" y="228">browser</text>
+<path class="rl-open" d="M 530,132 H 694" marker-end="url(#rl1-q)"/>
+<text class="rl-el-q" x="572" y="124">agent SSO, or new?</text>
+<path class="rl-open" d="M 530,236 H 694" marker-end="url(#rl1-q)"/>
+<text class="rl-el-q" x="572" y="228">live, or nightly?</text>
+<path class="rl-open" d="M 530,312 H 694" marker-end="url(#rl1-q)"/>
+<text class="rl-el-q" x="572" y="304">where do they live?</text>
+<path class="rl-none" d="M 574,396 H 694"/>
+<path class="rl-none" d="M 664,390 L 676,402 M 676,390 L 664,402"/>
+<text class="rl-el" x="574" y="386">out of scope</text>
+<path class="rl-flow" d="M 24,466 H 54"/>
+<text class="rl-el" x="62" y="470">known</text>
+<path class="rl-open" d="M 131,466 H 161"/>
+<text class="rl-el" x="169" y="470">open question</text>
+<rect class="rl-q" x="289" y="459" width="22" height="14" rx="3"/>
+<text class="rl-el" x="323" y="470">not yet identified</text>
+<rect class="rl-out" x="472" y="459" width="22" height="14" rx="3"/>
+<text class="rl-el" x="506" y="470">out of scope</text>
+
+</g>
+</svg>

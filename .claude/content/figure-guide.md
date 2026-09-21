@@ -70,6 +70,8 @@ The resource layout renders each figure in `section` mode: an `h2` anchored as `
 
 Every figure belongs to exactly one composite. `.figcheck.py` flags a figure that a guide embeds but no composite lists.
 
+A composite whose body tells a story, such as a worked example, can place its figures itself: set `figures_inline: true`, embed each listed figure in the body with the include, and the layout skips the list at the bottom. The `figures:` list still records ownership.
+
 ---
 
 ## Embedding in a Guide
@@ -83,6 +85,7 @@ This renders the full diagram in a bordered container with its kind badge, title
 - **Place the include after the paragraph that introduces the structure**, on its own line with a blank line before and after, starting at column 0.
 - **The prose still carries the argument.** Don't narrate the figure box by box. When prose refers to what the figure shows, use the labels the figure uses, not letters or names that exist only in the prose.
 - **Guides wrapped in `{% raw %}`** (see CLAUDE.md, Liquid and Code Samples) must close the raw block around each include and reopen it after.
+- **Guides never embed a fictional worked system's figures.** A mock company or system appears only in the worked example that introduces it, never unannounced in a guide or a general composite.
 - **Blog posts never embed figures.** Posts are syndicated and link-free, and an embedded figure would not survive syndication.
 - **Embedding adds no link.** The guide reaches the composite through the composite's `related_guides`, the same as any resource, so the `related_*` rule is unchanged. List every guide that embeds a figure in its composite's `related_guides`.
 

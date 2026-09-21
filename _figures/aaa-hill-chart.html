@@ -1,0 +1,60 @@
+---
+title: "Hill Chart"
+kind: flow
+system: aaa
+summary: "Work climbs while unknowns are open, waits at the peak once it's ready to build, and goes downhill as it's built, and an item that stays in one uphill spot is stuck."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" role="img" aria-labelledby="aaa4-title aaa4-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aaa4-title">A hill chart with uphill, peak, and downhill stages</title>
+<desc id="aaa4-desc">A hill chart has three stages. Uphill, the team is figuring the work out and unknowns are still open. At the peak, the unknowns are resolved and the work is ready to build, and it can wait there before building starts. Downhill, the work is known and being built. An integration sits partway uphill, still uncertain. A claims item sits higher uphill and has been in the same spot for three updates in a row, which means it is stuck on an unknown and should be raised now. An export sits at the peak, ready but not started. The UI sits downhill, being built.</desc>
+<style>
+.aaa-hill { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.aaa-base { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
+.aaa-peak { fill: var(--color-gold, #C9A227); fill-opacity: 0.12; stroke: var(--color-gold, #C9A227); stroke-width: 1.25; stroke-dasharray: 4 4; }
+.aaa-dot { fill: var(--color-primary, #1A5F8A); }
+.aaa-dot-stuck { fill: var(--color-accent, #A5486E); }
+.aaa-ring { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.aaa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aaa-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aaa-el { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.aaa-warn { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="aaa-peak" x="400" y="56" width="160" height="244" rx="4"/>
+<text class="aaa-hd" x="480" y="78" text-anchor="middle">READY TO BUILD</text>
+
+<path class="aaa-base" d="M 40,300 H 920"/>
+<path class="aaa-hill" d="M 40,300 C 220,300 280,110 400,100 H 560 C 680,110 740,300 920,300"/>
+
+<circle class="aaa-dot" cx="243" cy="204" r="7"/>
+<text class="aaa-el" x="230" y="176" text-anchor="end">integration</text>
+<text class="aaa-s" x="230" y="192" text-anchor="end">still uncertain</text>
+
+<circle class="aaa-ring" cx="318" cy="136" r="13"/>
+<circle class="aaa-dot-stuck" cx="318" cy="136" r="7"/>
+<text class="aaa-warn" x="296" y="96" text-anchor="end">claims: stuck</text>
+<text class="aaa-s" x="296" y="112" text-anchor="end">same spot for 3 updates</text>
+<text class="aaa-s" x="296" y="128" text-anchor="end">raise it now</text>
+
+<circle class="aaa-dot" cx="480" cy="100" r="7"/>
+<text class="aaa-el" x="480" y="130" text-anchor="middle">export</text>
+<text class="aaa-s" x="480" y="146" text-anchor="middle">ready, not started</text>
+
+<circle class="aaa-dot" cx="718" cy="204" r="7"/>
+<text class="aaa-el" x="732" y="176">UI</text>
+<text class="aaa-s" x="732" y="192">being built</text>
+
+<text class="aaa-hd" x="40" y="326">UPHILL &#183; FIGURING IT OUT</text>
+<text class="aaa-s" x="40" y="344">unknowns still open</text>
+
+<text class="aaa-hd" x="480" y="326" text-anchor="middle">PEAK</text>
+<text class="aaa-s" x="480" y="344" text-anchor="middle">unknowns resolved,</text>
+<text class="aaa-s" x="480" y="360" text-anchor="middle">work can wait here</text>
+
+<text class="aaa-hd" x="920" y="326" text-anchor="end">DOWNHILL &#183; BUILDING IT</text>
+<text class="aaa-s" x="920" y="344" text-anchor="end">known work, being built</text>
+
+</g>
+</svg>

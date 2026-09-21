@@ -1,0 +1,103 @@
+---
+title: "Go, Pivot, or No-Go"
+kind: flow
+system: aaa
+summary: "Align ends in a Go, Pivot, or No-Go, decided by the risk tier and whether the estimate fits your constraints."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 510" role="img" aria-labelledby="aaa2-title aaa2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aaa2-title">How Align sizing produces a Go, Pivot, or No-Go recommendation</title>
+<desc id="aaa2-desc">Scope size and novelty are rated separately, each entering the risk tier on its own path, so a strong scope rating cannot hide a disqualifying novelty rating. Scope rates each domain as simple, average or complex and sums to small, medium or large. Novelty rates the problem for this team as well-understood, unfamiliar or novel. Together they give a tier of Low, Medium, High or Extreme. Separately, the effort estimate, a range with 20 to 30 percent contingency validated by the team, is checked against timeline, budget, staffing and dependencies. The tier and the fit check meet in one recommendation, a starting position for the stakeholder conversation. Go when the tier is Low or Medium and the estimate fits. Pivot when the tier is High or the estimate does not fit, by re-scoping, extending, adding resources or running a proof of concept, then re-estimating. No-Go when the tier is Extreme or no adjustment fits, by cancelling or funding a discovery spike.</desc>
+<style>
+.aaa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aaa-hub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aaa-stop { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.aaa-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aaa-t-stop { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.aaa-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aaa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aaa-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aaa-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.aaa-fwd { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aaa-r-align { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 5; }
+</style>
+<defs>
+<marker id="aaa2-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="aaa2-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="aaa-hd" x="24" y="36">INPUTS, RATED SEPARATELY</text>
+<text class="aaa-hd" x="284" y="36">COMBINED</text>
+<text class="aaa-hd" x="520" y="36">ONE RECOMMENDATION</text>
+
+<rect class="aaa-box" x="24" y="56" width="200" height="92" rx="6"/>
+<text class="aaa-t" x="38" y="80">Scope size</text>
+<text class="aaa-k" x="38" y="98">[each domain rated, then summed]</text>
+<text class="aaa-s" x="38" y="118">simple, average, complex</text>
+<text class="aaa-s" x="38" y="136">sums to small, medium, large</text>
+
+<rect class="aaa-box" x="24" y="168" width="200" height="92" rx="6"/>
+<text class="aaa-t" x="38" y="192">Novelty</text>
+<text class="aaa-k" x="38" y="210">[for this team, not in general]</text>
+<text class="aaa-s" x="38" y="230">well-understood,</text>
+<text class="aaa-s" x="38" y="248">unfamiliar, or novel</text>
+
+<rect class="aaa-box" x="24" y="316" width="200" height="92" rx="6"/>
+<text class="aaa-t" x="38" y="340">Effort estimate</text>
+<text class="aaa-k" x="38" y="358">[a range, not a point]</text>
+<text class="aaa-s" x="38" y="378">plus 20-30% contingency</text>
+<text class="aaa-s" x="38" y="396">validated by the team</text>
+
+<rect class="aaa-box" x="284" y="112" width="180" height="92" rx="6"/>
+<text class="aaa-t" x="298" y="136">Risk tier</text>
+<text class="aaa-k" x="298" y="154">[scope &#215; novelty grid]</text>
+<text class="aaa-s" x="298" y="174">Low, Medium,</text>
+<text class="aaa-s" x="298" y="192">High, or Extreme</text>
+
+<rect class="aaa-box" x="284" y="316" width="180" height="92" rx="6"/>
+<text class="aaa-t" x="298" y="340">Fits constraints?</text>
+<text class="aaa-k" x="298" y="358">[checked against]</text>
+<text class="aaa-s" x="298" y="378">timeline, budget,</text>
+<text class="aaa-s" x="298" y="396">staffing, dependencies</text>
+
+<rect class="aaa-hub" x="520" y="214" width="150" height="92" rx="6"/>
+<text class="aaa-t" x="534" y="238">Recommend</text>
+<text class="aaa-k" x="534" y="256">[one call, not two]</text>
+<text class="aaa-s" x="534" y="276">a starting position</text>
+<text class="aaa-s" x="534" y="294">for the conversation</text>
+
+<rect class="aaa-box" x="730" y="96" width="206" height="76" rx="6"/>
+<text class="aaa-t" x="744" y="120">Go</text>
+<text class="aaa-s" x="744" y="142">tier Low or Medium,</text>
+<text class="aaa-s" x="744" y="160">and the estimate fits</text>
+
+<rect class="aaa-box" x="730" y="222" width="206" height="76" rx="6"/>
+<text class="aaa-t" x="744" y="246">Pivot</text>
+<text class="aaa-s" x="744" y="268">tier High, or it doesn't fit:</text>
+<text class="aaa-s" x="744" y="286">re-scope, extend, add, or POC</text>
+
+<rect class="aaa-stop" x="730" y="348" width="206" height="76" rx="6"/>
+<text class="aaa-t-stop" x="744" y="372">No-Go</text>
+<text class="aaa-s" x="744" y="394">Extreme, or nothing fits:</text>
+<text class="aaa-s" x="744" y="412">cancel, or fund a spike</text>
+
+<path class="aaa-fwd" d="M 224,102 H 254 V 140 H 278" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 224,214 H 254 V 176 H 278" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 224,362 H 278" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 464,158 H 492 V 244 H 514" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 464,362 H 492 V 276 H 514" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 670,260 H 700 V 134 H 724" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 670,260 H 724" marker-end="url(#aaa2-a)"/>
+<path class="aaa-fwd" d="M 700,260 V 386 H 724" marker-end="url(#aaa2-a)"/>
+
+<path class="aaa-r-align" d="M 936,260 H 950 V 444 H 124 V 414" marker-end="url(#aaa2-c)"/>
+<text class="aaa-s" x="540" y="462" text-anchor="middle">after the change, estimate again</text>
+
+<path class="aaa-fwd" d="M 24,494 H 54"/>
+<text class="aaa-el" x="62" y="498">feeds the recommendation</text>
+<path class="aaa-r-align" d="M 260,494 H 290"/>
+<text class="aaa-el" x="298" y="498">Pivot loops back to the estimate</text>
+
+</g>
+</svg>

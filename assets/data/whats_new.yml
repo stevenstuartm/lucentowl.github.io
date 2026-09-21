@@ -17,17 +17,6 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
-- id: uml-c4-figures
-  change: new
-  type: resource
-  title: "UML and C4 Diagram References"
-  note: "Every diagram in the UML and C4 guides is now a drawn SVG figure, gathered into two references: the notation of the seven UML diagrams worth knowing, and every C4 view of one worked system."
-  links:
-    - title: "UML Diagram Notation"
-      url: /resources/uml-diagram-notation.html
-    - title: "C4 Model Diagrams"
-      url: /resources/c4-model-diagrams.html
-
 - id: beads-gas-city
   change: new
   type: guide
@@ -77,14 +66,6 @@
   url: /study-guides.html?category=azure
   cta: "Browse Azure guides"
   note: "A refinement pass across the Azure guides."
-
-- id: azure-component-maps
-  change: new
-  type: resource
-  title: "Azure component maps"
-  url: /resources.html?category=azure
-  cta: "See the maps"
-  note: "Four reference maps showing how the parts of Azure governance, messaging, networking, and observability fit together."
 
 - id: plan-task-skill
   change: new

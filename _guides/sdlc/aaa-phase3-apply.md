@@ -74,6 +74,8 @@ The guidance above describes *how* to handle discovery, but *when* to trigger re
 
 For more on circuit breakers, see [Shaped Kanban](/blog/2025/11/17/shaped-kanban.html){:target="_blank" rel="noopener noreferrer"}.
 
+{% include figure.html id="aaa-circuit-breakers" %}
+
 ---
 
 ## Managing External Dependencies
@@ -197,15 +199,20 @@ See [Governance](/study-guides/architecture/governance.html){:target="_blank" re
 
 Traditional progress tracking ("we're 80% done") hides more than it reveals. Teams can be "80% done" for weeks because they're stuck on the hard part.
 
-**Hill charts** provide more honest visibility by distinguishing two phases:
+**Hill charts** provide more honest visibility by distinguishing three stages:
 
 **Uphill (figuring it out)**: The team is still discovering unknowns, solving novel problems. Progress feels slow because you're learning, not just executing.
 
-**Downhill (making it happen)**: The unknowns are resolved. The team knows what to build and is executing.
+**The peak (ready to build)**: The unknowns are resolved, but building hasn't started. Work can wait here for capacity or a dependency, and that is a legitimate state, not a stall.
+
+**Downhill (making it happen)**: Building is under way. The team knows what to build and is executing.
 
 This distinction matters for stakeholder communication:
 - "We're uphill on the integration" signals uncertainty
 - "We're downhill on the UI" signals confidence
+- An item in the same uphill spot for several updates is stuck on an unknown, and should be raised now rather than reported as nearly done
+
+{% include figure.html id="aaa-hill-chart" %}
 
 <div class="callout callout--warning">
 <p class="callout__title">Red Flags</p>

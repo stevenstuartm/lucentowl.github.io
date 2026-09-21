@@ -1,0 +1,88 @@
+---
+title: "Circuit Breakers"
+kind: state
+system: aaa
+summary: "Work in Apply stops when its time limit runs out or an assumption proves false, then gets extended, cut, reshaped, or dropped."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 372" role="img" aria-labelledby="aaa3-title aaa3-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aaa3-title">How a circuit breaker trips in Apply and the four responses</title>
+<desc id="aaa3-desc">Every feature in Apply carries a time limit and a set of written assumptions, both set during Agree. Two breakers watch it. A temporal breaker trips when the time limit is reached, such as 3 days for a CRUD screen or 6 weeks for an integration. An assumption breaker trips when a documented assumption proves false, such as a vendor API turning out to have no bulk operations. Either one stops the work for reassessment with stakeholders rather than pushing through. There are four responses. Extend, when the work is close to done and stakeholders agree, and Reduce scope, cutting features to fit the limit, both return the work to Apply under the new agreement. Reshape returns the work to Agree. Drop stops investing in work that proved unviable.</desc>
+<style>
+.aaa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aaa-hub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aaa-agree { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.aaa-stop { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.aaa-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aaa-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aaa-n-agree { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.aaa-n-stop { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.aaa-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aaa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aaa-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aaa-fwd { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="aaa3-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="aaa-s" x="540" y="18" text-anchor="middle">the work continues in Apply under the new agreement</text>
+<path class="aaa-fwd" d="M 940,176 H 952 V 26 H 200 V 160" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 940,104 H 952"/>
+
+<text class="aaa-hd" x="24" y="58">IN APPLY</text>
+<text class="aaa-hd" x="300" y="58">TWO KINDS OF BREAKER</text>
+<text class="aaa-hd" x="770" y="58">FOUR RESPONSES</text>
+
+<rect class="aaa-box" x="24" y="166" width="210" height="92" rx="6"/>
+<text class="aaa-t" x="38" y="190">Feature in progress</text>
+<text class="aaa-k" x="38" y="208">[limits set during Agree]</text>
+<text class="aaa-s" x="38" y="228">a time limit per feature</text>
+<text class="aaa-s" x="38" y="246">assumptions written down</text>
+
+<rect class="aaa-box" x="300" y="76" width="220" height="92" rx="6"/>
+<text class="aaa-t" x="314" y="100">Temporal breaker</text>
+<text class="aaa-k" x="314" y="118">[the time limit is reached]</text>
+<text class="aaa-s" x="314" y="138">e.g. 3 days for a CRUD screen,</text>
+<text class="aaa-s" x="314" y="156">6 weeks for an integration</text>
+
+<rect class="aaa-box" x="300" y="256" width="220" height="92" rx="6"/>
+<text class="aaa-t" x="314" y="280">Assumption breaker</text>
+<text class="aaa-k" x="314" y="298">[an assumption proves false]</text>
+<text class="aaa-s" x="314" y="318">e.g. the vendor API has</text>
+<text class="aaa-s" x="314" y="336">no bulk operations</text>
+
+<rect class="aaa-hub" x="580" y="166" width="140" height="92" rx="6"/>
+<text class="aaa-t" x="594" y="190">Tripped</text>
+<text class="aaa-k" x="594" y="208">[stop, don't push on]</text>
+<text class="aaa-s" x="594" y="228">reassess with</text>
+<text class="aaa-s" x="594" y="246">stakeholders</text>
+
+<rect class="aaa-box" x="770" y="76" width="170" height="56" rx="6"/>
+<text class="aaa-n" x="784" y="98">Extend</text>
+<text class="aaa-s" x="784" y="118">close to done, agreed</text>
+
+<rect class="aaa-box" x="770" y="148" width="170" height="56" rx="6"/>
+<text class="aaa-n" x="784" y="170">Reduce scope</text>
+<text class="aaa-s" x="784" y="190">cut to fit the limit</text>
+
+<rect class="aaa-agree" x="770" y="220" width="170" height="56" rx="6"/>
+<text class="aaa-n-agree" x="784" y="242">Reshape</text>
+<text class="aaa-s" x="784" y="262">return to Agree</text>
+
+<rect class="aaa-stop" x="770" y="292" width="170" height="56" rx="6"/>
+<text class="aaa-n-stop" x="784" y="314">Drop</text>
+<text class="aaa-s" x="784" y="334">stop investing</text>
+
+<path class="aaa-fwd" d="M 234,196 H 266 V 122 H 294" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 234,228 H 266 V 302 H 294" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 520,122 H 550 V 196 H 574" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 520,302 H 550 V 228 H 574" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 720,212 H 745 V 104 H 764" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 745,176 H 764" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 745,212 V 320 H 764" marker-end="url(#aaa3-a)"/>
+<path class="aaa-fwd" d="M 745,248 H 764" marker-end="url(#aaa3-a)"/>
+
+</g>
+</svg>
