@@ -4,7 +4,7 @@ layout: resource
 type: code
 category: "AI"
 description: "A Claude Code skill that structures ticket intake around assumption clarity. Writes a self-contained ticket MD file, tags every assumption with its source, proves assumptions before writing implementation code, and gates on human review."
-last_updated: 2026-07-07
+last_updated: 2026-09-22
 tags: [workflow, planning, ai-agents, assumptions, sdlc, productivity]
 related_posts:
   - /blog/2025/11/17/shaped-kanban.html
@@ -18,6 +18,9 @@ This skill forces assumption clarity before a single line of implementation is w
 Install it by saving the file below to `.claude/commands/plan-task.md` in any project, or `~/.claude/commands/plan-task.md` for global availability.
 
 ---
+
+<details markdown="1" open>
+<summary><code>.claude/commands/plan-task.md</code></summary>
 
 ```markdown
 ---
@@ -444,3 +447,5 @@ Do not re-ask answered questions. Do not re-run this skill.
 **Multiple tickets open**
 Each gets its own MD. Track independently. Do not cross-contaminate.
 ```
+
+</details>

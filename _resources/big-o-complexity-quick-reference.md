@@ -4,14 +4,19 @@ layout: resource
 type: reference
 category: "DSA"
 description: "Time complexity growth rates, practical input limits, and complexity of common algorithms, for fast lookup during algorithm analysis."
-last_updated: 2026-07-02
+last_updated: 2026-09-22
 tags: [algorithms, complexity-analysis, data-structures, performance]
 related_guides:
   - /study-guides/dsa/big-o-basics.html
   - /study-guides/dsa/asymptotic-notation.html
 ---
 
-**Complexity hierarchy:** O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(n³) < O(2ⁿ) < O(n!)
+<div class="callout callout--tip" markdown="1">
+<p class="callout__title">Complexity hierarchy</p>
+
+O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(n³) < O(2ⁿ) < O(n!)
+
+</div>
 
 ## Growth Rates and Practical Limits
 

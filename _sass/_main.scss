@@ -1989,16 +1989,19 @@ ul.task-list {
 /* Extra breathing room around dense content elements */
 
 .guide-content pre,
+.resource-content pre,
 .post-content pre {
     margin: var(--spacing-lg) 0;
 }
 
 .guide-content table,
+.resource-content table,
 .post-content table {
     margin: var(--spacing-lg) 0;
 }
 
 .guide-content blockquote,
+.resource-content blockquote,
 .post-content blockquote {
     margin: var(--spacing-lg) 0;
     padding: var(--spacing-md) var(--spacing-lg);
@@ -2007,6 +2010,8 @@ ul.task-list {
 /* Extra space after lists that precede paragraphs */
 .guide-content ul + p,
 .guide-content ol + p,
+.resource-content ul + p,
+.resource-content ol + p,
 .post-content ul + p,
 .post-content ol + p {
     margin-top: var(--spacing-lg);
@@ -2014,12 +2019,14 @@ ul.task-list {
 
 /* Extra space after code blocks that precede paragraphs */
 .guide-content pre + p,
+.resource-content pre + p,
 .post-content pre + p {
     margin-top: var(--spacing-lg);
 }
 
 /* Extra space after tables that precede paragraphs */
 .guide-content table + p,
+.resource-content table + p,
 .post-content table + p {
     margin-top: var(--spacing-lg);
 }
@@ -2027,6 +2034,8 @@ ul.task-list {
 /* Tighter spacing for consecutive list items within same context */
 .guide-content li > ul,
 .guide-content li > ol,
+.resource-content li > ul,
+.resource-content li > ol,
 .post-content li > ul,
 .post-content li > ol {
     margin-top: var(--spacing-xs);
@@ -2035,6 +2044,7 @@ ul.task-list {
 
 /* Space between H3 sections for visual grouping */
 .guide-content h3 + p,
+.resource-content h3 + p,
 .post-content h3 + p {
     margin-top: var(--spacing-sm);
 }
@@ -2043,6 +2053,9 @@ ul.task-list {
 .guide-content h2 + p,
 .guide-content h2 + ul,
 .guide-content h2 + ol,
+.resource-content h2 + p,
+.resource-content h2 + ul,
+.resource-content h2 + ol,
 .post-content h2 + p,
 .post-content h2 + ul,
 .post-content h2 + ol {
@@ -2239,7 +2252,8 @@ ul.task-list {
     display: none;
 }
 
-.guide-content h2 {
+.guide-content h2,
+.resource-content h2 {
     color: var(--color-text);
     margin-top: var(--spacing-xl);
     margin-bottom: var(--spacing-md);
@@ -2249,33 +2263,40 @@ ul.task-list {
     background: linear-gradient(90deg, rgba(31, 107, 67, 0.05) 0%, transparent 100%);
 }
 
-.guide-content h3 {
+.guide-content h3,
+.resource-content h3 {
     color: var(--color-secondary);
     margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-sm);
 }
 
-.guide-content h4 {
+.guide-content h4,
+.resource-content h4 {
     color: var(--color-text);
     margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-sm);
 }
 
-.guide-content p {
+.guide-content p,
+.resource-content p {
     margin-bottom: var(--spacing-md);
 }
 
 .guide-content ul,
-.guide-content ol {
+.guide-content ol,
+.resource-content ul,
+.resource-content ol {
     margin-bottom: var(--spacing-md);
     margin-left: var(--spacing-lg);
 }
 
-.guide-content li {
+.guide-content li,
+.resource-content li {
     margin-bottom: var(--spacing-xs);
 }
 
-.guide-content code {
+.guide-content code,
+.resource-content code {
     background: var(--color-bg);
     padding: 0.2em 0.4em;
     border-radius: 4px;
@@ -2349,16 +2370,20 @@ ul.task-list {
 }
 
 .guide-content blockquote ul,
-.guide-content blockquote ol {
+.guide-content blockquote ol,
+.resource-content blockquote ul,
+.resource-content blockquote ol {
     margin-bottom: var(--spacing-sm);
     margin-left: var(--spacing-lg);
 }
 
-.guide-content blockquote li {
+.guide-content blockquote li,
+.resource-content blockquote li {
     margin-bottom: var(--spacing-sm);
 }
 
-.guide-content img {
+.guide-content img,
+.resource-content img {
     max-width: 100%;
     height: auto;
     display: block;
@@ -2450,18 +2475,22 @@ ul.task-list {
         word-wrap: break-word;
     }
 
-    .guide-content table {
+    .guide-content table,
+    .resource-content table {
         font-size: 0.85rem;
     }
 
     .guide-content th,
-    .guide-content td {
+    .guide-content td,
+    .resource-content th,
+    .resource-content td {
         padding: var(--spacing-xs);
         white-space: normal;
         min-width: 100px;
     }
 
-    .guide-content pre {
+    .guide-content pre,
+    .resource-content pre {
         font-size: 0.85rem;
     }
 }
@@ -5076,6 +5105,91 @@ a.whats-new-card-main:hover .read-more {
 
 .resource-content a:not(.guide-tag):hover {
     text-decoration-color: var(--color-hover);
+}
+
+/* The first heading sits flush with the card's own padding */
+.resource-content > *:first-child {
+    margin-top: 0;
+}
+
+/* Thematic break between sections of a reference artifact */
+.guide-content hr,
+.resource-content hr {
+    height: 1px;
+    border: none;
+    background: var(--color-border);
+    margin: var(--spacing-lg) 0;
+}
+
+/* Cards carry their own accent and spacing, so headings inside them drop the
+   bar and the section margin the bare .resource-content rules above add. */
+.phase-header h2,
+.gate-card h2,
+.artifact-card h2,
+.content-card h2 {
+    padding: 0;
+    border-left: none;
+    background: none;
+}
+
+.gate-card h2,
+.artifact-card h2,
+.content-card > h2,
+.content-card > h3,
+.artifact-card h3 {
+    margin-top: 0;
+}
+
+.phase-header h2 {
+    margin: 0.25rem 0 0.5rem;
+}
+
+/* Components whose own spacing the .resource-content element rules above
+   would otherwise win against on equal specificity. */
+.content-card h4 {
+    margin-top: 0;
+}
+
+.callout__title {
+    margin-bottom: var(--spacing-xs);
+}
+
+.phase-header__label {
+    margin: 0;
+}
+
+ul.task-list {
+    margin-left: 0;
+}
+
+.task-list-item {
+    margin-bottom: 0;
+}
+
+.key-takeaways ul {
+    margin-bottom: 0;
+}
+
+.key-takeaways li:last-child {
+    margin-bottom: 0;
+}
+
+/* A list inside a card-group tile reads as a compact answer list, not prose */
+.card-group .content-card ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.card-group .content-card li {
+    margin: 0;
+    padding: 0.4rem 0;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.card-group .content-card li + li {
+    border-top: 1px solid var(--color-border);
 }
 
 /* ===== Header Badge Row (reading time, meta, related-content pills) ===== */

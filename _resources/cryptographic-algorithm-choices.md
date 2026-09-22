@@ -21,9 +21,9 @@ Use these through a well-reviewed library's high-level API. Parameters are minim
 | **Hash** | SHA-256, SHA-512, or SHA-3 | | MD5, SHA-1 |
 | **Authenticate with a shared key** | HMAC-SHA256 | 256-bit key; compare in constant time | A plain hash of secret plus message |
 | **Store passwords** | Argon2id | 19 MiB memory, 2 iterations, parallelism 1 | Any fast hash, even salted |
-| | scrypt | N=2^17, r=8, p=1 | |
-| | bcrypt | Cost 10 or higher; input truncated at 72 bytes | |
-| | PBKDF2 (when FIPS-140 is required) | 600,000 iterations with HMAC-SHA256, or 220,000 with HMAC-SHA512 | |
+| ↳ | scrypt | N=2^17, r=8, p=1 | |
+| ↳ | bcrypt | Cost 10 or higher; input truncated at 72 bytes | |
+| ↳ | PBKDF2 (when FIPS-140 is required) | 600,000 iterations with HMAC-SHA256, or 220,000 with HMAC-SHA512 | |
 | **Agree on a key** | ECDH over X25519 or P-256, ephemeral | Hybrid X25519 + ML-KEM-768 where supported | Static RSA key transport, finite-field DH below 2048 bits |
 | **Sign** | Ed25519, ECDSA P-256, or RSA-PSS | RSA 2048 through 2030; 3072 for protection beyond 2030 | RSA below 2048, SHA-1 in signatures |
 | **Encrypt to a public key** | HPKE (RFC 9180), or RSA-OAEP to wrap a symmetric key | RSA 2048 or larger | RSA PKCS#1 v1.5 encryption padding |

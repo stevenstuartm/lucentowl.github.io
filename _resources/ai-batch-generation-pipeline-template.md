@@ -4,7 +4,7 @@ layout: resource
 type: code
 category: "AI"
 description: "A copy-paste plan file and orchestrator prompt for running parallel AI agents through a batch content-generation pipeline, with model tiering and validation built in."
-last_updated: 2026-09-14
+last_updated: 2026-09-22
 tags: [ai, generative-ai, llm, agents, automation, workflow]
 related_guides:
   - /study-guides/ai/scaling-ai-workflows.html
@@ -14,7 +14,7 @@ Three artifacts, used together: a format reference (one hand-written output ever
 
 The example below batches nine entries for a distributed systems glossary: six single-term definitions and three comparisons that require reasoning across multiple terms. Swap in your own domain, section names, and fields; the mechanics don't change.
 
-### Format Reference
+## Format Reference
 
 `output/idempotency.md` is a real, finished output written by hand. Every write agent reads this file for structure, style, and front matter instead of receiving formatting instructions directly.
 
@@ -42,7 +42,7 @@ An operation is idempotent if performing it more than once produces the same eff
 Exactly-once delivery tries to guarantee an operation happens once at the transport level; idempotency reaches the same practical outcome by making repeats harmless instead of preventing them.
 ```
 
-### Plan File
+## Plan File
 
 `<plan-file-path>` is the file the orchestrator reads and updates for the life of the batch. Every task already has a model assigned, so the orchestrator never classifies a task at launch time. Task 1 is `complete` because it's the format reference above, not something the pipeline produced.
 
@@ -90,7 +90,7 @@ output/
 - Use sonnet for any task that compares or synthesizes across multiple terms
 ```
 
-### Orchestrator Prompt
+## Orchestrator Prompt
 
 Paste this into your session to run a phase, swapping in the real paths and phase number.
 
@@ -121,9 +121,19 @@ RECORD: Update the plan so each finished task's Status reads complete,
 register each output in <tracking-file>, and note any issues found.
 ```
 
-> **Note:** On a phase's first run, every row is already pending, so ENUMERATE has nothing to filter out yet. Its value shows up on a rerun, when some rows already carry Status = complete and only the leftovers should be dispatched again.
+<div class="callout callout--note" markdown="1">
+<p class="callout__title">Why ENUMERATE exists</p>
 
-> **Note:** The agent never opens the plan file. DISPATCH resolves the title, filename, and content rules into the prompt text itself, so the only file the agent reads is the format reference. A batch of fifty tasks costs each agent nothing extra over a batch of five, because none of them ever see the other forty-nine rows.
+On a phase's first run, every row is already pending, so ENUMERATE has nothing to filter out yet. Its value shows up on a rerun, when some rows already carry Status = complete and only the leftovers should be dispatched again.
+
+</div>
+
+<div class="callout callout--note" markdown="1">
+<p class="callout__title">What the agent reads</p>
+
+The agent never opens the plan file. DISPATCH resolves the title, filename, and content rules into the prompt text itself, so the only file the agent reads is the format reference. A batch of fifty tasks costs each agent nothing extra over a batch of five, because none of them ever see the other forty-nine rows.
+
+</div>
 
 Resolved against Task 2, the DISPATCH prompt the orchestrator actually sends looks like this:
 
@@ -136,9 +146,14 @@ sections in that order; leave a blank line before markdown tables. Write
 the output to output/quorum.md.
 ```
 
-> **Note:** This version has the orchestrator validate every output itself. Resuming each agent to check its own output first costs less, since the output is already in that agent's context, and cuts the orchestrator's work down to the mechanical checks above. The trade-off is that the orchestrator is no longer the one catching problems.
+<div class="callout callout--note" markdown="1">
+<p class="callout__title">Who does the validating</p>
 
-### Resulting Output
+This version has the orchestrator validate every output itself. Resuming each agent to check its own output first costs less, since the output is already in that agent's context, and cuts the orchestrator's work down to the mechanical checks above. The trade-off is that the orchestrator is no longer the one catching problems.
+
+</div>
+
+## Resulting Output
 
 `output/quorum.md`, once the agent above finishes:
 
@@ -166,7 +181,12 @@ A quorum is the minimum number of nodes in a distributed system that must agree 
 Vector clocks and last-write-wins are two ways to resolve the conflicting versions a poorly tuned quorum can produce.
 ```
 
-> **Note:** Validation here catches a real category of mistake, not just formatting. If the agent had written `category: "Consistent"` instead of the exact value `Consistency`, the front matter spot-check would fail immediately, since that string isn't one of the four values Content Rules allows, and the row would stay `pending` for a retry instead of getting marked complete.
+<div class="callout callout--note" markdown="1">
+<p class="callout__title">What validation actually catches</p>
+
+Validation here catches a real category of mistake, not just formatting. If the agent had written `category: "Consistent"` instead of the exact value `Consistency`, the front matter spot-check would fail immediately, since that string isn't one of the four values Content Rules allows, and the row would stay `pending` for a retry instead of getting marked complete.
+
+</div>
 
 The plan file's Phase 1 table now reads:
 

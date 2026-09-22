@@ -4,7 +4,7 @@ layout: resource
 type: cheatsheet
 category: "Networking"
 description: "HTTP method semantics (safe/idempotent) and a categorized status code reference for designing and debugging REST APIs."
-last_updated: 2026-07-02
+last_updated: 2026-09-22
 tags: [networking, api-design, rest, http, web-development]
 related_guides:
   - /study-guides/architecture/api-design-architecture.html
@@ -13,7 +13,14 @@ related_guides:
 
 ## HTTP Methods
 
-**Safe**: no side effects on the server (read-only). **Idempotent**: repeating the request produces the same result as a single request, so it's safe to retry after a network failure.
+<div class="callout callout--note" markdown="1">
+<p class="callout__title">Safe and idempotent</p>
+
+**Safe**: no side effects on the server (read-only).
+
+**Idempotent**: repeating the request produces the same result as a single request, so it's safe to retry after a network failure.
+
+</div>
 
 | Method | Semantics | Safe? | Idempotent? | Use For |
 | --- | --- | --- | --- | --- |
