@@ -3,18 +3,12 @@
     "Leadership & Team Management": {
       "subcategories": [
         {
-          "name": "Team Leadership",
-          "description": "Practical leadership for dev team leads and managers",
+          "name": "Engineering Leadership",
+          "description": "Leading development teams as a lead or architect, and making the decisions that shape their work",
           "guides": [
-            "leadership/dev-team-leadership-foundations.md"
-          ]
-        },
-        {
-          "name": "Architecture Leadership",
-          "description": "Leadership skills specific to software architects",
-          "guides": [
+            "leadership/dev-team-leadership-foundations.md",
             "leadership/architecture-leadership-foundations.md",
-            "architecture/architecture-decision-making.md"
+            "leadership/architecture-decision-making.md"
           ]
         }
       ]

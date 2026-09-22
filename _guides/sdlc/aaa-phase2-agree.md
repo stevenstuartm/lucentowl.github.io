@@ -65,7 +65,7 @@ Regardless of project size or methodology, agreement follows these steps:
 - Architecture Decision Records (ADRs): Context → Decision → Consequences
 - Document WHY, not just WHAT
 - Record alternatives considered and why they were rejected
-- See [Architecture Decisions & Leadership](/study-guides/architecture/architecture-decision-making.html){:target="_blank" rel="noopener noreferrer"}
+- See [Architecture Decisions & Leadership](/study-guides/leadership/architecture-decision-making.html){:target="_blank" rel="noopener noreferrer"}
 
 **How to Do This Well**:
 - Evaluate multiple options before deciding

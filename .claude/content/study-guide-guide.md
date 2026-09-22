@@ -311,6 +311,7 @@ When writing about software architecture, use correct terminology:
 | Networking | Network Fundamentals |
 | Web Development | SEO & Web |
 | IoT | Foundations, Architecture & Data, Security & Firmware, Fleet Operations, Industrial IoT |
+| Leadership & Team Management | Engineering Leadership |
 
 **File organization conventions**:
 - Architecture guides: `_guides/architecture/`
@@ -320,6 +321,7 @@ When writing about software architecture, use correct terminology:
 - SDLC guides: `_guides/sdlc/`
 - AI & ML guides: `_guides/ai/`
 - IoT guides: `_guides/iot/` (vendor-neutral; Azure IoT product guides live under `_guides/infrastructure/azure/`)
+- Leadership guides: `_guides/leadership/` (including architecture decision-making, which is a leadership topic rather than an architecture one)
 - Top-level guides (observability, networking, etc.): `_guides/`
 
 **When to create new subcategories**:
