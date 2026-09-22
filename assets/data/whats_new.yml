@@ -17,6 +17,19 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: iot-guides-revised-1
+  change: revised
+  type: guide
+  title: "IoT guides revised"
+  url: /study-guides.html?category=iot
+  cta: "Browse IoT guides"
+  note: "A full consolidation and refinement pass over the IoT guides, now vendor-neutral, with a new guide on predictive maintenance and a page of IoT architecture diagrams."
+  links:
+    - title: "Industrial Predictive Maintenance and Condition Monitoring"
+      url: /study-guides/iot/iiot-predictive-maintenance.html
+    - title: "IoT Architecture Diagrams"
+      url: /resources/iot-architecture-diagrams.html
+
 - id: beads-gas-city
   change: new
   type: guide

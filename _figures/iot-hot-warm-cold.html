@@ -1,0 +1,115 @@
+---
+title: "Hot, Warm, and Cold Paths"
+kind: flow
+system: iot
+summary: "How one ingested stream fans out to three paths that differ in how fast they answer and how long they keep data, and how the archive lets results be rebuilt."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" role="img" aria-labelledby="ihw-title ihw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ihw-title">One telemetry stream feeding hot, warm, and cold paths</title>
+<desc id="ihw-desc">Devices and gateways send events to a broker or event log. Each path reads the same stream through its own consumer group. The hot path runs a stream processor that drives alerts and a live cache within seconds. The warm path loads a time-series store that serves dashboards over days to weeks. The cold path writes a raw archive in object storage that batch jobs and ML training scan, and the archive can be replayed through the pipeline to rebuild results.</desc>
+<style>
+.it-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.it-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.it-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.it-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.it-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.it-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.it-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.it-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.it-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.it-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.it-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.it-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.it-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.it-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.it-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.it-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.it-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.it-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.it-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.it-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.it-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.it-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.it-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="ihw-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ihw-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="ihw-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="ihw-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="ihw-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="it-box" x="36" y="160" width="150" height="80" rx="6"/>
+<text class="it-n" x="48" y="186">Devices</text>
+<text class="it-s" x="48" y="206">and gateways</text>
+<path class="it-flow" d="M 186,200 H 230" marker-end="url(#ihw-a)"/>
+<rect class="it-store" x="236" y="130" width="170" height="140" rx="6"/>
+<text class="it-n" x="248" y="154">Broker or event log</text>
+<text class="it-s" x="248" y="176">one stream, one</text>
+<text class="it-s" x="248" y="194">consumer group</text>
+<text class="it-s" x="248" y="212">per path, so a slow</text>
+<text class="it-s" x="248" y="230">path never blocks</text>
+<text class="it-s" x="248" y="248">a fast one</text>
+<rect class="it-band" x="440" y="20" width="444" height="108" rx="8"/>
+<text class="it-hd" x="454" y="38">HOT PATH</text>
+<rect class="it-box" x="470" y="50" width="180" height="68" rx="6"/>
+<text class="it-n" x="482" y="70">Stream processor</text>
+<text class="it-s" x="482" y="88">windows, thresholds,</text>
+<text class="it-s" x="482" y="105">per-device state</text>
+<rect class="it-box" x="690" y="50" width="180" height="68" rx="6"/>
+<text class="it-n" x="702" y="70">Alerts, live cache</text>
+<text class="it-s" x="702" y="88">act within seconds</text>
+<path class="it-flow" d="M 650,84 H 684" marker-end="url(#ihw-a)"/>
+<rect class="it-band" x="440" y="146" width="444" height="108" rx="8"/>
+<text class="it-hd" x="454" y="164">WARM PATH</text>
+<rect class="it-box" x="470" y="176" width="180" height="68" rx="6"/>
+<text class="it-n" x="482" y="196">Time-series store</text>
+<text class="it-s" x="482" y="214">queryable in seconds,</text>
+<text class="it-s" x="482" y="231">keeps days to weeks</text>
+<rect class="it-box" x="690" y="176" width="180" height="68" rx="6"/>
+<text class="it-n" x="702" y="196">Dashboards</text>
+<text class="it-s" x="702" y="214">trends and ad hoc</text>
+<text class="it-s" x="702" y="231">queries</text>
+<path class="it-flow" d="M 650,210 H 684" marker-end="url(#ihw-a)"/>
+<rect class="it-band" x="440" y="272" width="444" height="108" rx="8"/>
+<text class="it-hd" x="454" y="290">COLD PATH</text>
+<rect class="it-box" x="470" y="302" width="180" height="68" rx="6"/>
+<text class="it-n" x="482" y="322">Raw archive</text>
+<text class="it-s" x="482" y="340">object storage in</text>
+<text class="it-s" x="482" y="357">Parquet, kept for years</text>
+<rect class="it-box" x="690" y="302" width="180" height="68" rx="6"/>
+<text class="it-n" x="702" y="322">Batch jobs and ML</text>
+<text class="it-s" x="702" y="340">full scans, training,</text>
+<text class="it-s" x="702" y="357">compliance</text>
+<path class="it-flow" d="M 650,336 H 684" marker-end="url(#ihw-a)"/>
+
+<path class="it-flow" d="M 406,160 H 428 V 84 H 464" marker-end="url(#ihw-a)"/>
+<path class="it-flow" d="M 406,210 H 464" marker-end="url(#ihw-a)"/>
+<path class="it-flow" d="M 406,240 H 428 V 336 H 464" marker-end="url(#ihw-a)"/>
+<path class="it-exec" d="M 560,370 V 402 H 321 V 276" marker-end="url(#ihw-p)"/>
+<text class="it-num" x="330" y="396">replay the archive to rebuild results</text>
+
+<path class="it-flow" d="M 30,432 H 64"/>
+<text class="it-el" x="72" y="436">event flow</text>
+<path class="it-exec" d="M 170,432 H 204"/>
+<text class="it-el" x="212" y="436">reprocessing</text>
+</g>
+</svg>

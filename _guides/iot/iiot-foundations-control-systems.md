@@ -3,183 +3,165 @@ title: "IIoT Foundations and Control Systems"
 layout: guide
 category: IoT
 subcategory: Industrial IoT
-description: "How industrial IoT differs from consumer IoT, with deep coverage of OPC-UA, SCADA systems, PLCs, and the Purdue Model for network segmentation in industrial environments."
-tags: [iot, iiot, architecture, reliability, networking, fundamentals]
+description: "How industrial IoT differs from consumer IoT, and the systems it connects to: PLCs, DCS, SCADA, and historians with swinging-door compression; OPC UA's information model, security, and PubSub; Modbus, PROFINET, EtherNet/IP, DNP3, and BACnet; and the Purdue model with its industrial DMZ and data diodes."
+tags: [fundamentals, opc-ua, scada, plc, modbus, purdue-model, industrial-protocols]
 ---
 
-## Industrial IoT and How It Differs from Consumer IoT
+## How Industrial IoT Differs
 
-Consumer IoT encompasses smart speakers, fitness trackers, connected appliances, and similar devices where the cost of a failure is inconvenience. Industrial IoT operates in a different world entirely. A sensor failure on a factory floor can halt a production line that generates millions of dollars per day. A misconfigured firmware update on a power grid controller can black out a city. A security breach on a water treatment system can contaminate a municipal supply.
+A failed smart speaker is an inconvenience. A failed sensor on a production line can stop output worth a great deal per hour, a bad change to a grid controller can cut power to a region, and a breach of a water treatment system can put a municipal supply at risk. Those stakes shape every decision in industrial IoT (IIoT).
 
-These stakes shape every architectural decision in IIoT. Safety requirements dominate. Uptime expectations are measured in nines that consumer products rarely aspire to reach. Legacy equipment that has been running reliably for twenty or thirty years sits alongside new cloud-connected sensors, and the integration must not disrupt existing operations while it is being built. Protocol diversity is the norm rather than the exception because industrial environments accumulated standards across decades before interoperability was a design priority.
-
-### The Core Differences
-
-Consumer IoT devices are typically purpose-built for connectivity from the start. They run standard TCP/IP stacks over Wi-Fi or cellular and operate on update cycles measured in months. Industrial equipment uses protocols like Modbus, PROFINET, EtherNet/IP, and DNP3 that predate modern networking by decades in some cases. These protocols were designed for determinism and reliability, not internet connectivity.
-
-Safety is formalized in IIoT through functional safety standards like IEC 61508 and its derivatives. Devices rated for safety-critical applications go through certification processes that can take years. You cannot simply push an over-the-air update to a safety-rated PLC the way you might update a smart thermostat, because every change potentially requires re-certification or at least formal change management review.
-
-Uptime expectations in industrial environments routinely demand that planned maintenance windows occur only during scheduled shutdowns that happen annually or less frequently. Equipment must run continuously between those windows. This means updates, configuration changes, and new deployments must accommodate live systems without interruption, which is a different operating model than anything in consumer or enterprise software.
-
-The physical environment itself adds complexity. Industrial sensors may operate in extreme temperatures, high-vibration environments, chemically corrosive atmospheres, or areas with electromagnetic interference that would disrupt consumer-grade hardware. Industrial equipment is ruggedized to these conditions and selected for long service life, often ten to twenty-five years, which means the hardware you integrate with today will still be there long after the cloud platform you connect it to has been through several generations of change.
-
-### Comparing Consumer IoT to IIoT
-
-The differences between consumer and industrial IoT are not just a matter of degree; they reflect genuinely different design philosophies with different priorities at every layer.
+Industrial equipment also lives far longer than anything in consumer or enterprise IT. Controllers installed decades ago run alongside new sensors, speak protocols designed before anyone expected them to reach a network, and cannot be taken offline for an integration project. Safety is formalized through functional safety standards like IEC 61508, so a safety-rated controller cannot simply receive an over-the-air update. Every change goes through formal change management, and some need recertification. Maintenance windows may come only at scheduled shutdowns, sometimes a year or more apart.
 
 | Dimension | Consumer IoT | Industrial IoT |
 |-----------|-------------|----------------|
-| **Failure consequence** | Inconvenience | Safety incidents, production loss, regulatory exposure |
-| **Uptime requirement** | Best-effort | 99.9% or higher, often with no unplanned downtime tolerance |
-| **Update model** | Frequent OTA, automatic | Controlled, validated, often requires maintenance windows |
-| **Security model** | Cloud-managed, auto-patched | Zoned, air-gapped, change-controlled |
-| **Protocol world** | Wi-Fi, Bluetooth, Zigbee, Z-Wave | Modbus, PROFINET, EtherNet/IP, DNP3, OPC-UA |
-| **Equipment lifespan** | 3-7 years | 15-30 years |
-| **Environment** | Domestic or office | Extreme temperatures, vibration, EMI, corrosive atmospheres |
-| **Regulatory oversight** | Minimal | Functional safety standards, industry-specific regulations |
-| **Latency tolerance** | Seconds to minutes acceptable | Some control loops require sub-millisecond determinism |
+| Failure consequence | Inconvenience | Safety incidents, lost production, regulatory exposure |
+| Availability | Best effort | Continuous operation between planned shutdowns |
+| Update model | Frequent, automatic | Controlled, validated, scheduled into maintenance windows |
+| Security model | Cloud-managed, patched automatically | Segmented networks, change control, patching constrained by availability |
+| Protocols | Wi-Fi, Bluetooth, Zigbee, Thread | Modbus, PROFINET, EtherNet/IP, DNP3, OPC UA, BACnet |
+| Equipment lifespan | Often a few years | Often 15 to 30 years |
+| Environment | Homes and offices | Heat, vibration, electrical noise, corrosive atmospheres |
+| Timing | Seconds are usually fine | Some control loops need deterministic millisecond or sub-millisecond timing |
+
+The practical consequence for anyone arriving from cloud or consumer IoT is that IIoT connects to existing control systems rather than replacing them. The rest of this guide describes those systems.
 
 ---
 
-## OPC-UA: The Industrial Automation Standard
+## Controllers: PLCs and DCS
 
-[OPC Unified Architecture](https://opcfoundation.org/about/opc-technologies/opc-ua/){:target="_blank" rel="noopener noreferrer"} is the dominant standard for industrial automation communication and data modeling. It emerged from the OPC Foundation as a successor to the original OPC standards, which were tightly coupled to Microsoft's COM/DCOM technology. OPC-UA removed that dependency, making it platform-independent, and extended the original focus on real-time data access into a comprehensive framework covering information modeling, security, and transport.
+### Programmable Logic Controllers
 
-The original OPC standards from the late 1990s solved a real problem: they gave SCADA systems and HMIs a common interface to read data from PLCs without requiring a custom driver for every PLC vendor. However, they ran on Windows only and depended on DCOM, a remote procedure call technology that was notoriously difficult to configure securely and reliably across network boundaries. OPC-UA replaced this foundation with standard TCP/IP transport and an open, extensible binary protocol that runs on anything from embedded microcontrollers to cloud servers.
+A programmable logic controller (PLC) is a hardened computer that runs control logic. It works in a repeating **scan cycle**, reading all inputs, executing the control program, and writing all outputs. Cycle times typically run from a few milliseconds to around a hundred, and the design guarantees the cycle completes on time under all conditions.
 
-OPC-UA adoption has grown steadily as industrial equipment vendors implement the standard in their products. Most modern PLCs from major vendors support OPC-UA server capability either natively or through firmware add-ons. The [OPC Foundation](https://opcfoundation.org/){:target="_blank" rel="noopener noreferrer"} maintains a list of certified products, and certification against the OPC-UA interoperability specification provides assurance that implementations from different vendors will interoperate correctly, which is important because an OPC-UA server that passes its own vendor's tests but fails to connect to standard client software provides limited practical value.
+That determinism is a safety property, not a performance feature. A press controller must see a guard door open within its scan, and a batch controller must time valve openings precisely. The control logic was validated against those timing assumptions, so anything that disturbs them creates risk. Integration traffic therefore goes to interfaces the PLC provides for it, at rates it was designed for, and never at the expense of the scan.
 
-### Information Modeling
-
-The most powerful aspect of OPC-UA is its information model. Rather than simply exposing raw tag values, an OPC-UA server organizes its data into a structured address space. Nodes represent objects, variables, methods, and data types. References between nodes define relationships. This means a connected system does not just see a stream of numeric values; it sees a model of the equipment, where sensors belong to specific machines, machines belong to production cells, and production cells belong to a plant.
-
-A temperature sensor node, for example, does not just expose a current value. It exposes engineering units, acceptable range, instrument tag name, uncertainty characteristics, and historical access alongside the real-time reading. The consumer of that data can understand what the value means, not just what the value is.
-
-OPC-UA information models can be standardized by industry consortia through companion specifications. The [OPC UA Companion Specification for CNC Systems](https://opcfoundation.org/markets-collaboration/cnc/){:target="_blank" rel="noopener noreferrer"} defines a standard model for computer numeric controlled machine tools. The [PackML companion specification](https://opcfoundation.org/markets-collaboration/packml/){:target="_blank" rel="noopener noreferrer"} covers packaging machinery. When equipment manufacturers implement these specifications, interoperability between systems from different vendors becomes dramatically simpler because both the structure and the semantics of the data are standardized, not just the transport.
-
-### Security Model
-
-OPC-UA has a layered security model built in from the protocol design, which distinguishes it from many legacy industrial protocols that have no security at all. Security operates at three levels.
-
-Transport security uses TLS to encrypt and authenticate the communication channel between client and server. Application authentication uses X.509 certificates to establish that the client application is what it claims to be, separate from whether the user operating it has appropriate permissions. User authentication handles individual user identity and access rights within an established application session.
-
-Security policies define which combinations of algorithms and key lengths are acceptable. Older implementations may still support the "None" security policy, which disables transport security entirely. In production industrial environments, "None" should be disabled on any equipment that exposes an OPC-UA server to a network, even a private one. The [OPC Foundation's security guidance](https://opcfoundation.org/security/){:target="_blank" rel="noopener noreferrer"} provides recommendations for certificate lifecycle management and policy selection.
-
-Certificate management is often where security implementations struggle in practice. Unlike web PKI, where certificates are managed by well-established infrastructure, industrial OPC-UA deployments require a certificate authority accessible to all servers and clients. Organizations that deploy OPC-UA without planning certificate management end up with self-signed certificates that require individual manual trust decisions on every new connection, which creates both operational burden and security gaps when certificate renewal is not tracked systematically.
-
-### Pub/Sub Extensions
-
-The original OPC-UA model used a client-server architecture where clients poll servers for current values or subscribe to change notifications through an established session. This works well for control systems and local HMI applications but does not scale well for cloud integration scenarios where many thousands of tags need to flow toward central analytics platforms. Each session has overhead, and a cloud platform that needs to collect data from hundreds of OPC-UA servers would require maintaining hundreds of concurrent sessions.
-
-The OPC-UA Pub/Sub extension adds a publish/subscribe transport model where servers publish data to a message broker like MQTT or AMQP without requiring individual client sessions. The [OPC-UA PubSub specification](https://opcfoundation.org/developer-tools/specifications-unified-architecture/part-14-pubsub/){:target="_blank" rel="noopener noreferrer"} defines a standard data encoding so that consumers of published data can parse messages without custom implementation for each data source. The encoding includes the node identifiers from the information model alongside the values, so a consumer that has never connected to the source server can still understand the semantic meaning of a received message.
-
-This makes OPC-UA Pub/Sub the preferred integration point for IIoT platforms that need to collect data from many machines simultaneously. Devices implementing Pub/Sub can publish to standard MQTT brokers like [EMQX](https://www.emqx.io/){:target="_blank" rel="noopener noreferrer"} or [HiveMQ](https://www.hivemq.com/){:target="_blank" rel="noopener noreferrer"}, which then distribute the data to whatever subscribers need it, whether those are cloud platforms, on-premises analytics engines, or local edge processing systems.
-
----
-
-## SCADA Systems
-
-[Supervisory Control and Data Acquisition](https://www.automation.com/en-us/articles/2019/scada-systems-fundamentals-and-applications){:target="_blank" rel="noopener noreferrer"} systems are the software layer that operators use to monitor and control industrial processes. A SCADA system aggregates data from PLCs, sensors, and other field devices into a central platform, displays it on operator workstations, handles alarm management, and provides historical data storage through historian databases.
-
-Traditional SCADA systems were isolated. They ran on dedicated proprietary hardware, used private communication networks, and were physically separated from corporate IT systems and the internet. This isolation was the primary security model, commonly called "air-gapping," and it worked reasonably well when integration with external systems was unnecessary. The shift toward IIoT has been, in large part, a shift away from that isolation, which creates both capability and risk simultaneously.
-
-### Historian Databases
-
-The historian is a specialized database component within SCADA environments designed for high-frequency time-series data from industrial processes. General-purpose relational databases are poorly suited to storing millions of tag values sampled at rates from once per second down to several times per second across hundreds or thousands of tags over years of operation. Historians use compression algorithms optimized for process data, typically variants of swinging door trending or similar algorithms that retain the shape of a signal while discarding redundant samples.
-
-Major historian products like [OSIsoft PI System](https://www.aveva.com/en/products/aveva-pi-system/){:target="_blank" rel="noopener noreferrer"} (now AVEVA PI) have been deployed in refineries, power plants, and water utilities for decades. These systems often hold the authoritative historical record for a plant, making them critical data sources for any IIoT initiative. Modern IIoT architectures frequently bridge historian data to cloud platforms rather than replacing the historians, both because the historians contain irreplaceable historical context and because field operators depend on them for day-to-day operations.
-
-Historian data has a specific access pattern that differs from most other databases. The most common query is not a lookup by key but rather a time-range retrieval: "give me all values of these fifty tags from midnight to six AM." Historians are optimized for this pattern, pre-indexing data by time and tag, storing values in contiguous time-ordered blocks that can be read efficiently with a single sequential scan. Relational databases, which optimize for indexed key lookups and joins, perform this access pattern orders of magnitude slower on the same hardware.
-
-### What SCADA Systems Do Not Do
-
-A common misconception when approaching IIoT from an IT background is that SCADA systems are sophisticated analytics and reporting platforms. They are not. SCADA systems are real-time monitoring and control platforms. Their screens are designed for operator awareness and intervention, not for business intelligence. Their alarm systems are designed to alert operators to abnormal conditions that require action now, not for trend analysis or machine learning.
-
-The analytics and business intelligence that industrial organizations need from their process data require tools beyond what SCADA provides. This is precisely the gap that IIoT platforms address: bridging the real-time control data in SCADA to the analytics infrastructure needed for predictive maintenance, efficiency analysis, energy management, and quality optimization.
-
-A related misconception is that SCADA systems can be easily upgraded to cloud-connected platforms by swapping in a modern alternative. SCADA replacements are extremely high-risk projects because the systems they replace have accumulated years of control logic, alarm configurations, historian data, and operator familiarity. A partial or failed SCADA replacement can leave a plant without its primary operating interface during the transition. Organizations that have attempted "rip and replace" approaches to SCADA modernization frequently find that the scope expands to encompass changes across every level of the plant network, turning a software project into a multi-year operational technology program. The IIoT integration approach, which connects to existing SCADA without replacing it, avoids this risk entirely.
-
-### Integrating SCADA with Modern IoT
-
-The integration challenge between legacy SCADA systems and modern cloud IoT platforms is primarily a protocol and connectivity problem. SCADA systems communicate with field devices over industrial protocols like Modbus TCP, DNP3, or proprietary vendor protocols. They expose their data through OPC-DA or OPC-UA servers. Getting that data to cloud platforms requires bridging layers that translate between industrial and internet-native protocols.
-
-OPC-UA plays a central role here as a common intermediate layer. Many modern SCADA products support OPC-UA server interfaces. Gateway software running at the edge can connect to those OPC-UA servers and forward data to MQTT brokers or cloud IoT hubs. This pattern preserves the SCADA system's role as the control and monitoring layer for operators while making the same data available to cloud analytics without requiring changes to field device configuration.
-
-The most important constraint to respect in this integration is the SCADA system's availability requirement. Any integration that introduces risk to the availability of the SCADA system itself is unacceptable. This means the integration must be read-only from the SCADA perspective, adding zero additional write operations or configuration changes, and must fail safe so that a failure in the IIoT integration path has zero impact on SCADA operation.
-
-Different SCADA vendors provide different integration pathways. Older SCADA systems may only support OPC-DA (the Windows COM-based predecessor to OPC-UA), which requires a bridging component to convert OPC-DA to OPC-UA before the data can reach modern cloud platforms. Some SCADA systems expose REST APIs for data access, though these are typically limited to recent data and do not support the high-frequency subscriptions that real-time IIoT integration requires. The richest integration path, where available, is a dedicated OPC-UA server built into the SCADA platform or provided as an add-on module.
-
----
-
-## PLCs and Industrial Controllers
-
-A [Programmable Logic Controller](https://www.plcacademy.com/what-is-a-plc/){:target="_blank" rel="noopener noreferrer"} is a hardened computing device designed to execute control logic reliably in industrial environments. PLCs read inputs from sensors and field devices, execute a scan cycle that runs the control program, and write outputs to actuators and other devices. The scan cycle runs deterministically, typically between one and one hundred milliseconds depending on the application, and the entire system is designed to guarantee this timing even under adverse conditions.
-
-The scan cycle determinism is not just a performance characteristic; it is a safety requirement. Control systems that lose scan cycle consistency can miss input changes, output incorrect values, or violate timing constraints that physical processes depend on. A PLC controlling a chemical mixing process must apply precise valve timing. A PLC managing an industrial press must detect guard door status changes within its scan cycle. The control logic is tested and validated against specific timing assumptions, and anything that disrupts those assumptions creates risk.
-
-PLCs communicate with higher-level systems using a range of protocols. Older PLCs predominantly use Modbus, which is simple and widely implemented but provides no security, limited data types, and no information modeling beyond raw register values. Newer PLCs increasingly support EtherNet/IP, PROFINET, or even direct OPC-UA server capability. The protocol a PLC supports is determined at manufacturing time and cannot usually be changed, which means industrial environments often contain equipment supporting many different protocols simultaneously.
+The protocols a PLC speaks are fixed by its hardware and firmware. Older units speak Modbus. Newer ones speak EtherNet/IP or PROFINET, and many now include an OPC UA server. A plant of any age runs several protocol families at once.
 
 ### Distributed Control Systems
 
-Distributed Control Systems (DCS) serve a similar function to PLCs but are designed for different applications. Where PLCs excel at discrete control (on/off outputs, sequence control, motion control), DCS platforms are designed for continuous process control in industries like oil refining, chemical processing, and power generation. DCS architectures distribute control logic across multiple controllers coordinated by a central configuration and monitoring layer, rather than concentrating logic in individual PLCs.
+A distributed control system (DCS) does the same job for continuous processes like refining, chemicals, and power generation, where hundreds of interacting loops run constantly rather than in discrete sequences. Control logic is spread across many controllers under one engineering and operator environment from a single vendor. Most current DCS platforms offer OPC UA interfaces for integration, subject to the same availability and security constraints as any control system.
 
-Modern DCS platforms from vendors like [Honeywell](https://www.honeywellprocess.com/){:target="_blank" rel="noopener noreferrer"}, [Emerson](https://www.emerson.com/en-us/automation){:target="_blank" rel="noopener noreferrer"}, and [Yokogawa](https://www.yokogawa.com/){:target="_blank" rel="noopener noreferrer"} increasingly support OPC-UA server interfaces and provide pathways for connecting to cloud platforms, though the integration must still navigate the same security and availability constraints that apply to any OT system.
+---
 
-### Protocol Bridging to Cloud
+## SCADA and Historians
 
-Connecting PLC data to cloud platforms requires bridging between the PLC's native protocol and the internet-native protocols that cloud services understand. This bridging happens in edge computing devices or protocol gateway hardware sitting between the plant network and the cloud connection.
+### SCADA
 
-A protocol bridge translates Modbus register reads from a PLC into structured JSON messages sent over MQTT to an IoT hub. The bridge must handle the polling cycle, map register addresses to meaningful tag names, apply scaling and engineering unit conversions, handle communication errors gracefully without disrupting the PLC's control operation, and manage the cloud connectivity including reconnection logic and message buffering during connectivity loss.
+Supervisory control and data acquisition (SCADA) systems are what operators use to watch and steer a process. A SCADA system gathers data from PLCs, remote terminal units (RTUs), and other field devices, shows it on operator displays (HMIs), raises alarms, and lets operators issue commands. In utilities it often spans huge areas, collecting from substations or pumping stations over radio and leased lines.
 
-The critical constraint is that the bridging process must not interfere with the PLC's control responsibilities. PLCs use communication protocols that operate on a master-slave model where the PLC is typically the slave, responding to poll requests from a master. The bridge polls the PLC for data but must not overwhelm the PLC's communication capacity, which may be quite limited on older hardware. Polling intervals and concurrent connection limits must be carefully configured to stay within the PLC's capabilities.
+SCADA is a real-time monitoring and control platform, not an analytics one. Its screens are built for operator awareness and its alarms for conditions that need action now. The trend analysis, cross-site comparison, and machine learning that organizations want from their process data happen elsewhere, which is the gap IIoT integration fills.
 
-Dedicated protocol gateway hardware from vendors like [Moxa](https://www.moxa.com/){:target="_blank" rel="noopener noreferrer"}, [HMS Networks](https://www.hms-networks.com/){:target="_blank" rel="noopener noreferrer"}, and [Kepware](https://www.ptc.com/en/products/kepware){:target="_blank" rel="noopener noreferrer"} handles the translation and typically supports dozens of industrial protocols simultaneously. These gateways expose a unified OPC-UA or MQTT interface to the cloud side while managing the diversity of PLC protocols on the plant side, reducing the integration burden on the cloud platform.
+Replacing a SCADA system is one of the riskiest projects a plant can take on. It holds years of accumulated logic, alarm configuration, and operator familiarity, and a failed cutover can leave a plant without its main operating interface. IIoT integration reads from SCADA and its historian and leaves them in place.
 
-Protocol gateway configuration management becomes significant at scale. A facility with two hundred PLCs across six different protocol families requires a gateway configuration that maps thousands of register addresses to meaningful tag names, applies scaling and unit conversions, and defines appropriate polling intervals for each device. This configuration is a critical operational document that must be version-controlled, backed up, and maintained as equipment changes over the life of the plant. Organizations that treat gateway configuration as a one-time commissioning task rather than a managed artifact consistently lose that configuration knowledge during staff turnover.
+Traditional SCADA relied on isolation. It ran on dedicated hardware and private networks with no connection to corporate IT, a model often called air-gapping. Connecting it for IIoT removes that isolation, which is why segmentation (covered below) matters so much.
+
+### Historians
+
+A **historian** is a time-series database built for process data, holding thousands of tags, each sampled anywhere from once a minute to many times a second, for years. Products like the [AVEVA PI System](https://www.aveva.com/en/products/aveva-pi-system/){:target="_blank" rel="noopener noreferrer"} (formerly OSIsoft PI) have run in refineries, power plants, and utilities for decades, and a plant's historian often holds its authoritative operating record. IIoT architectures usually bridge historian data to the cloud rather than replacing the historian, because operators depend on it daily and its history cannot be recreated.
+
+Historians are optimized for time-range retrieval of many tags, such as "every value of these fifty tags from midnight to six," which they store in time-ordered blocks per tag.
+
+They also compress aggressively, because most process variables change slowly relative to how often they are sampled. **Swinging-door trending**, published by E. H. Bristol of Foxboro in 1990 and used in variants by several historians, keeps only the points needed to reconstruct the signal within a set error band. It pivots two lines ("doors") from the last stored point, one at the upper tolerance and one at the lower, and narrows them as each new sample arrives. When the doors would cross, no straight line from the last stored point can represent every sample within tolerance, so the previous sample is stored and the process restarts from it. A tank level that rises steadily for ten minutes might be stored as two points instead of six hundred, while a sudden step is kept exactly. The tolerance is a per-tag setting that decides the tradeoff, and a band set too wide silently discards detail that later analysis might need.
+
+---
+
+## OPC UA
+
+[OPC Unified Architecture](https://opcfoundation.org/about/opc-technologies/opc-ua/){:target="_blank" rel="noopener noreferrer"} is the main cross-vendor standard for industrial data exchange and modeling. The original OPC standards of the 1990s gave SCADA and HMI software one interface to read from any vendor's PLC, but they depended on Microsoft's COM/DCOM, which tied them to Windows and was hard to secure across networks. OPC UA replaced that with a platform-independent design that runs on everything from embedded devices to cloud services, and added information modeling and built-in security.
+
+### Information Modeling
+
+An OPC UA server exposes an **address space** of nodes (objects, variables, methods, and types) connected by references. A client does not just see numbered values. It sees equipment, with a temperature variable belonging to a pump, the pump to a production line, and the line to a site, and each variable carries its engineering units, range, and other metadata. A consumer can tell what a value means, not just what it is.
+
+**Companion specifications** standardize models for whole industries, such as the [CNC systems specification](https://opcfoundation.org/markets-collaboration/cnc/){:target="_blank" rel="noopener noreferrer"} for machine tools and [PackML](https://opcfoundation.org/markets-collaboration/packml/){:target="_blank" rel="noopener noreferrer"} for packaging machinery. When two vendors implement the same companion specification, their equipment presents the same structure and meaning, not just the same transport.
+
+### Security
+
+OPC UA builds security into the protocol, which sets it apart from most older industrial protocols. It works at two levels, described in [Part 2 of the specification](https://reference.opcfoundation.org/Core/Part2/v105/docs/){:target="_blank" rel="noopener noreferrer"}.
+
+- **Application authentication and channel security.** Every client and server application has its own X.509 application instance certificate. They exchange certificates when opening a secure channel, and each decides whether to trust the other. On the native binary protocol (`opc.tcp`), the channel is secured by OPC UA's own secure conversation layer, not by TLS. The security mode is None, Sign, or SignAndEncrypt, and a security policy names the algorithms. The HTTPS and WebSocket transports use TLS instead.
+- **User authentication.** Inside a session, the user is identified separately, anonymously, by username and password, by user certificate, or by a token from an identity provider. The server authorizes actions based on that identity.
+
+The "None" security mode disables channel protection, and older equipment often ships with it enabled. It should be turned off on anything reachable over a network. Certificate management is where deployments usually struggle. Without a plan, teams end up with self-signed certificates that someone trusts by hand for each new connection, and nobody tracks their expiry. OPC UA defines a Global Discovery Server that can act as a certificate manager, pushing certificates and trust lists to servers.
+
+### Client-Server and PubSub
+
+OPC UA's original model is client-server. A client opens a session to a server, browses its address space, and subscribes to value changes. That suits HMIs and local applications, but collecting from hundreds of servers means hundreds of sessions, each with state and overhead.
+
+[OPC UA PubSub (Part 14)](https://reference.opcfoundation.org/Core/Part14/v105/docs/){:target="_blank" rel="noopener noreferrer"} adds a publish-subscribe model. Publishers send datasets either through a broker over MQTT or AMQP, or brokerless over UDP multicast for low-latency traffic on a local network. Messages use a compact binary encoding (UADP) or JSON, and publishers can send dataset metadata describing the fields, so subscribers can decode the data without opening a session to each source. Broker-based PubSub over MQTT is the usual integration point when many machines need to feed the same edge or cloud platform.
+
+---
+
+## Industrial Protocols
+
+The protocols below evolved separately, each tuned for the determinism, reliability, and simplicity its industry needed. Integration work usually means bridging them to something modern.
+
+### Modbus
+
+Modicon published Modbus in 1979, and its simplicity has kept it everywhere since. A client polls a server (the specification's older terms were master and slave) using a handful of function codes to read and write four tables: coils, discrete inputs, input registers, and holding registers. **Modbus RTU** runs over serial links like RS-485, and **Modbus TCP** carries the same model over Ethernet.
+
+The data model is just numbered addresses. There are no names, no types, no units, and no meaning in the protocol. Whether holding register 40012 is a temperature in tenths of a degree or a fault code lives in documentation or in someone's memory. A bridge to the cloud has to supply all of it, including the tag name, data type, scaling to engineering units, and valid range for every register, and building that mapping for a plant with hundreds of devices is a large part of any brownfield project. Classic Modbus has no authentication or encryption. Modbus.org's [Modbus/TCP Security](https://modbus.org/specs.php){:target="_blank" rel="noopener noreferrer"} adds TLS, but little installed equipment supports it.
+
+### PROFINET
+
+PROFINET, maintained by PROFIBUS & PROFINET International (PI), is industrial Ethernet widely used with Siemens and many other vendors' equipment. Configuration and diagnostics use ordinary TCP/IP. Cyclic process data uses **real-time (RT)** frames that bypass the IP stack, for cycle times in the low milliseconds, and **isochronous real-time (IRT)** reserves bandwidth in hardware-scheduled time slots for sub-millisecond motion control. Integration usually reads through the controller or a gateway rather than joining the real-time traffic.
+
+### EtherNet/IP
+
+EtherNet/IP, from ODVA and most associated with Rockwell Automation, carries the Common Industrial Protocol (CIP) over standard TCP and UDP, so it runs on ordinary switched Ethernet. Configuration uses TCP, and cyclic I/O uses UDP. CIP's object model carries more structure than Modbus's registers but far less than an OPC UA information model. ODVA's CIP Security extension adds TLS and DTLS, and newer controllers increasingly support it.
+
+### DNP3
+
+DNP3 was designed for electric utility SCADA and spread to water and oil and gas. It was built for slow, unreliable links like radio and leased lines, so it includes link-layer confirmation, retries, and time-stamped events. Its **unsolicited reporting** lets an outstation report changes as they happen instead of waiting to be polled, which suits event-driven integration better than polling protocols. [IEEE 1815](https://standards.ieee.org/ieee/1815/5414/){:target="_blank" rel="noopener noreferrer"} defines Secure Authentication, which adds challenge-response authentication of critical messages. Adoption is uneven because retrofitting it to older RTUs is hard.
+
+### BACnet
+
+BACnet (ASHRAE Standard 135) is the building-automation protocol for HVAC, lighting, access control, and fire systems. It models devices as objects with standard properties, closer in spirit to OPC UA than to Modbus. Classic BACnet over IP has no security. [BACnet Secure Connect (BACnet/SC)](https://bacnetinternational.org/bacnetsc/){:target="_blank" rel="noopener noreferrer"} adds a datalink where each device authenticates with an X.509 certificate and connects outbound over TLS-protected WebSockets to a hub.
+
+| Protocol | Transport | Security | Data model | Where it dominates |
+|----------|-----------|----------|------------|-----------------|
+| Modbus | Serial or TCP | None in classic form; TLS variant rarely deployed | Numbered registers and coils | General manufacturing, utilities, instruments |
+| PROFINET | Ethernet (RT/IRT frames plus TCP/IP) | Security classes defined recently; limited in installed base | Device and module model | Factory automation, Siemens ecosystems |
+| EtherNet/IP | TCP and UDP | CIP Security (optional) | CIP objects | Factory automation, Rockwell ecosystems |
+| DNP3 | Serial or TCP/UDP | Secure Authentication (optional) | Points and time-stamped events | Electric, water, oil and gas SCADA |
+| OPC UA | `opc.tcp`, HTTPS, WebSockets, or PubSub over MQTT, AMQP, or UDP | Built in: application certificates, signing, encryption, user tokens | Full information model | Cross-industry integration |
+| BACnet | IP, MS/TP serial, or BACnet/SC | None classic; TLS with BACnet/SC | Objects and properties | Building automation |
 
 ---
 
 ## The Purdue Model
 
-The [Purdue Enterprise Reference Architecture](https://www.isa.org/products/isa-95-enterprise-control-system-integration-part-1){:target="_blank" rel="noopener noreferrer"} defines a hierarchical model for network segmentation in industrial environments. Originally developed by Theodore Williams at Purdue University in the 1990s, it became the foundational reference for how to organize and isolate network traffic in industrial control system environments. Most industrial cybersecurity frameworks, including IEC 62443, assume familiarity with Purdue Model concepts.
+The [Purdue Enterprise Reference Architecture](https://www.pera.net/Pera/Wha_PERA_Ref_Model.html){:target="_blank" rel="noopener noreferrer"} (PERA) was developed by Theodore J. Williams and an industry consortium at Purdue University in the early 1990s to describe how data flows through a computer-integrated manufacturing enterprise. It was not a security model. Its levels later became the standard reference for segmenting industrial networks, adopted by ISA-95 for enterprise-control integration and referenced throughout IEC 62443 and other industrial security guidance.
 
 ### The Levels
 
-The model organizes industrial systems into six levels, with additional adaptations in modern interpretations to accommodate cloud connectivity.
+The security form of the model has six levels, 0 through 5, plus an industrial DMZ inserted between levels 3 and 4 and numbered 3.5.
 
 | Level | Name | Systems |
 |-------|------|---------|
-| Level 0 | Physical Process | Sensors, actuators, motors, physical equipment |
-| Level 1 | Basic Control | PLCs, DCS controllers executing control logic |
-| Level 2 | Supervisory Control | HMIs, SCADA servers, operator workstations |
-| Level 3 | Manufacturing Operations | Historians, MES, quality management systems |
-| Level 3.5 | Industrial DMZ | Demilitarized zone separating OT and IT networks |
-| Level 4 | Business Planning | ERP, business intelligence, corporate IT systems |
-| Level 5 | Enterprise/Cloud | Cloud platforms, internet connectivity |
+| 0 | Physical process | Sensors, actuators, motors, the process itself |
+| 1 | Basic control | PLCs, DCS controllers, safety controllers |
+| 2 | Supervisory control | SCADA servers, HMIs, engineering workstations |
+| 3 | Site operations | Plant historian, manufacturing execution systems (MES), site operations servers |
+| 3.5 | Industrial DMZ | Historian replicas, patch and antivirus staging, remote access jump hosts, edge gateways |
+| 4 | Site business | Site ERP, email, corporate IT services |
+| 5 | Enterprise | Corporate network, internet access, and in practice the cloud |
 
-The critical security principle in the Purdue Model is that communication flows between adjacent levels, not across multiple levels. Data from Level 1 devices reaches Level 4 enterprise systems by passing through Level 2 and Level 3 intermediaries, not by connecting directly. Each boundary represents an opportunity to apply security controls, filtering, and monitoring.
+Levels 0 to 3 are operational technology (OT), and levels 4 and 5 are IT. The model's segmentation rule is that traffic crosses one boundary at a time through controlled points, and nothing connects directly from IT to the control levels. Each boundary is a place to filter, inspect, and log.
 
-This adjacency principle matters because each level has significantly different security exposure and criticality. A Level 1 PLC controlling a chemical reactor must not be reachable from the same network segment as a Level 4 ERP system that hosts business applications accessible to office workers across the corporate network. The consequences of a compromise propagating from Level 4 down to Level 1 could be catastrophic, so the architecture prevents that path entirely.
+### The Industrial DMZ and Data Diodes
 
-Auditing for compliance with the adjacency principle in real industrial networks requires active effort. Over years of operation, shortcuts accumulate: a maintenance laptop with both OT and IT network adapters connected simultaneously, a remote access path for a vendor that bypasses the industrial DMZ, an IoT sensor connected directly to the cloud from within the OT network. Each of these creates a path that violates the Purdue Model's intent and potentially creates a bridge between network zones that were supposed to be isolated. Regular network architecture audits using discovery tools designed for OT environments identify these accumulated violations before an attacker exploits them.
+The DMZ is where IT and OT meet without touching. Systems in it accept data from OT and serve it to IT, so no connection ever runs straight through. A historian replica in the DMZ receives data from the plant historian, and enterprise users query the replica, never the plant historian. Remote vendor access terminates on a jump host in the DMZ, not on a controller.
 
-### The Industrial DMZ
+A **data diode** enforces one-way flow in hardware, typically with a transmit-only fiber link and no return path. Data can leave OT, and nothing can come back, whatever software on either side is compromised. Because the protocols crossing it cannot rely on acknowledgments, diodes are paired with proxies on each side that replicate historians or forward files and messages one way. Where the risk of any inbound path is unacceptable, such as at nuclear plants or other critical infrastructure, diodes replace firewalls at the OT boundary.
 
-The Level 3.5 Industrial DMZ is the most architecturally significant addition to the original Purdue Model in the IIoT era. As organizations started needing to bridge operational technology networks (Levels 0-3) with information technology networks (Levels 4-5), the DMZ provides a controlled transit zone.
+{% include figure.html id="iot-purdue-dmz" %}
 
-Historian replication servers, data diodes, protocol gateways, and file transfer servers sit in the DMZ. They accept connections from the OT side on OT protocols and expose data to the IT side on IT-native protocols, without allowing direct connectivity between the two networks. A data historian replica in the DMZ receives data from the plant historian (Level 3) and makes it queryable by the enterprise network (Level 4) without giving the enterprise network any path to reach Level 3 systems directly.
+### Where the Model Strains
 
-Data diodes deserve particular attention for safety-critical contexts. A hardware data diode is a physical device that enforces one-way data flow at the hardware level, making bidirectional communication physically impossible regardless of software configuration or compromise. Data from OT flows into the data diode and exits on the IT side; no signal can travel in the reverse direction. For environments where even the possibility of a network path from IT to OT is unacceptable, data diodes provide a hardware-enforced guarantee that no software vulnerability can undermine.
+Purdue assumed data moves up level by level and control moves down. IIoT adds devices that want to publish straight to the cloud and cloud services that want to reach the plant. The common adaptation keeps the model's intent. Edge gateways sit in the DMZ or at level 3, collect from OT, and make outbound-only connections to the cloud, so nothing on the internet initiates a connection into the plant. A sensor that connects to the cloud directly from level 1 bypasses every boundary the model depends on.
 
-### Limitations and Modern Adaptations
+Real networks also drift from the model. Laptops end up with one adapter on the OT network and one on IT, vendors get remote access paths that skip the DMZ, and cellular modems appear inside control cabinets. Passive OT network discovery tools find these paths before attackers do, but only if someone runs them regularly.
 
-The Purdue Model was designed for a world where cloud connectivity did not exist. Its hierarchical structure assumed data flows upward through levels and control signals flow downward, which does not naturally accommodate bidirectional cloud connectivity or the direct internet access that edge devices in modern IIoT architectures require.
-
-Modern IIoT architecture adapts the Purdue Model by treating cloud connectivity as an extension above Level 5 and routing that connectivity through the industrial DMZ. Edge computing devices that connect to cloud IoT hubs are placed in or adjacent to the DMZ rather than being connected directly from plant floor networks, preserving the segmentation intent of the original model while accommodating cloud integration.
-
-Some organizations have moved away from strict Purdue Model layering in favor of more modern zero-trust network approaches, where access decisions are based on identity and context rather than network position. Zero-trust architectures can provide equivalent or stronger security guarantees while accommodating modern connectivity patterns better than rigid Purdue segmentation, but they require more sophisticated identity infrastructure and are harder to retrofit onto legacy equipment that was never designed to participate in identity-based access control.
-
-The practical reality in most industrial organizations is that the Purdue Model remains the relevant reference framework even when it is imperfectly implemented. IT and OT security teams share a common vocabulary around Purdue levels, zone boundaries, and the industrial DMZ, and that shared vocabulary facilitates productive conversations about where boundaries should be, what traffic should be permitted across them, and who is responsible for each zone's security. Organizations that abandon the Purdue Model conceptually without having a replacement framework that everyone understands typically end up with network architectures that no one can fully describe, which is a worse security posture than an imperfect but understood Purdue implementation.
-
----
-
+Some organizations layer zero-trust controls, where access depends on identity rather than network position, on top of or in place of strict Purdue segmentation. That can be stronger, but it needs every participant to hold and present an identity, and much installed control equipment never will. The Purdue levels also remain the shared vocabulary between IT and OT security teams, and an imperfect segmentation that everyone understands is safer than a newer one that nobody can fully describe.

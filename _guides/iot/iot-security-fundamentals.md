@@ -3,281 +3,220 @@ title: "IoT Security Fundamentals"
 layout: guide
 category: IoT
 subcategory: Security & Firmware
-description: "Device identity and authentication methods, communication security with TLS and mTLS, constrained device challenges, network segmentation, and common IoT attack vectors."
-tags: [iot, security, fundamentals, networking, reliability, embedded, firmware]
+description: "Securing connected devices: per-device identity with X.509 certificates or symmetric keys, where keys live (flash, secure elements, TPMs), TLS, DTLS, mTLS, and pinning, constrained-device tradeoffs, network segmentation, monitoring and response, common attack vectors, and the baseline standards and regulations that now apply."
+tags: [fundamentals, security, x509, mtls, dtls, network-segmentation, secure-element]
 ---
 
 ## Why IoT Security Is Different
 
-Securing an IoT deployment is not the same as securing a typical web application or enterprise server. The differences are structural. Web servers have abundant compute, stable network connections, and professional administrators managing them. IoT devices often have none of these advantages: they run on microcontrollers with kilobytes of RAM, connect over unreliable wireless channels, and may sit unattended in a field, factory floor, or public space for years.
+Web servers have abundant compute, stable network connections, and administrators watching them. IoT devices often have none of these. They run on microcontrollers with kilobytes of RAM, connect over unreliable wireless links, and sit unattended in fields, factories, or public spaces for years, where anyone can pick them up.
 
-These constraints do not reduce the security requirements; they make them harder to meet. A compromised web server can be patched and restarted in minutes. A compromised fleet of ten thousand sensors distributed across an industrial facility presents a recovery challenge of an entirely different magnitude. The goal of IoT security is to prevent that compromise in the first place, limit its blast radius when it does occur, and maintain the operational integrity of systems that humans and critical infrastructure may depend on.
+These constraints make the security requirements harder to meet, not smaller. A compromised web server can be patched and restarted in minutes. A compromised fleet of ten thousand sensors spread across a facility may need firmware updates that some devices cannot receive, or site visits to devices nobody can reach. IoT security therefore puts more weight on preventing compromise in the first place and on limiting how far one compromised device can reach.
 
 ---
 
 ## Device Identity and Authentication
 
-Every device in an IoT deployment needs a unique, verifiable identity. Without that, a security system cannot distinguish legitimate devices from imposters, revoke a single compromised device, or produce meaningful audit logs. Shared credentials across a device fleet mean that capturing the credential from one device exposes every other device using the same key. This is one of the most common and most damaging mistakes in IoT deployments.
+Every device needs its own verifiable identity. Without one, a service cannot tell a legitimate device from an impostor, revoke a single compromised device, or produce a meaningful audit trail. Shared credentials across a fleet are the most damaging mistake here, because extracting the credential from one device unlocks every device that uses it. Whatever mechanism a fleet uses, each device gets its own key material.
+
+Two questions define a device's identity scheme. The first is what kind of credential it holds, asymmetric or symmetric. The second is where the secret part of that credential is stored. The two are independent, and conflating them is a common source of confusion.
 
 ### X.509 Certificates
 
-X.509 certificates represent the strongest authentication option available for IoT devices. A certificate binds a public key to a device identity and is signed by a certificate authority (CA) that the service trusts. When a device presents its certificate during a TLS handshake, the server can verify the signature chain back to a trusted root and confirm the device is who it claims to be.
+An X.509 certificate binds a public key to a device identity and is signed by a certificate authority (CA) the service trusts. During the TLS handshake the device presents its certificate and proves it holds the matching private key. The server verifies the signature chain back to a trusted root and accepts the device.
 
-The strength comes from public key cryptography. The device holds a private key that never leaves the hardware. The certificate, which contains only the public key, can be distributed freely. Even if an attacker intercepts the certificate in transit, they cannot use it to impersonate the device because they do not have the private key.
+The strength comes from asymmetry. The private key never has to leave the device, and the certificate holds only the public key, so a stolen certificate is useless without the key. The service stores no secret for the device at all, which means a breach of the service's device registry exposes no device credentials.
 
-Certificate chains add another layer of structure. A root CA signs an intermediate CA, and the intermediate CA signs individual device certificates. This hierarchy means organizations can issue certificates from an intermediate CA without exposing the root, and can revoke an entire intermediate if it becomes compromised.
+Certificate chains add structure. A root CA signs an intermediate CA, and the intermediate signs device certificates. The root stays offline, a product line or factory can have its own intermediate, and a compromised intermediate can be revoked without re-rooting the whole fleet.
 
-The challenges with X.509 are operational rather than cryptographic. Certificates expire. A device with an expired certificate cannot authenticate, which means certificate renewal must be designed into the system from the start. Devices need a mechanism to request new certificates, and the provisioning infrastructure needs to handle that at scale. Certificate revocation is another operational concern: if a device is compromised, the certificate must be revoked, and other services must check revocation status before trusting it.
+The costs are operational. Certificates expire, and a device with an expired certificate cannot authenticate, so renewal has to be designed in from the start. Revocation needs the service to check a revocation list or disable the identity in its registry. Parsing certificates and running asymmetric cryptography also needs more code and compute than symmetric schemes, which matters on the smallest microcontrollers.
 
-### SAS Tokens
+### Symmetric Keys and Signed Tokens
 
-Shared Access Signature (SAS) tokens are a simpler authentication mechanism used heavily in platforms like Azure IoT Hub. A SAS token is a signed string that grants access to a resource for a specific time window. The device generates the token using a symmetric key it shares with the service. When the service receives the token, it verifies the signature using its copy of the same key.
+With symmetric authentication, the device and the service share a secret key. The device proves possession of it, typically by computing an HMAC over a token that names the device and an expiry time. The service recomputes the HMAC with its copy of the key and compares. Azure IoT Hub's shared access signature (SAS) tokens work this way.
 
-SAS tokens are easier to implement and work well on constrained devices that lack the processing power for public key operations. Time-limiting the tokens reduces the damage window if a token is intercepted; an attacker who captures a SAS token can only use it until it expires. Rotating the underlying key periodically limits the exposure further.
+Symmetric schemes are cheap. An HMAC costs almost nothing even on a small microcontroller, and there is no certificate lifecycle to run. Short token lifetimes limit how long a captured token stays useful.
 
-The weakness is that symmetric key authentication requires both sides to hold the same secret. If the service is breached and the keys are exposed, every device using those keys is compromised. For this reason, each device should have its own unique SAS key rather than sharing a key across a fleet. Individual key issuance means a compromised device can be isolated by revoking only its key without affecting others.
+The weakness is that both sides hold the same secret. A breach of the service's key store exposes every device key in it, and an attacker who reads a key from a device can impersonate it indefinitely until the key is rotated. Unique per-device keys contain the damage to one device. A common way to issue them at scale is to derive each device key from a group master key and the device ID, which keeps the master key only in the provisioning service and the factory.
 
-### TPM (Trusted Platform Module)
+### Where Keys Live: Flash, Secure Elements, and TPMs
 
-A Trusted Platform Module is a dedicated hardware chip that provides cryptographic functions and secure key storage. The private keys stored in a TPM cannot be extracted by software, even if an attacker gains full control of the operating system. This hardware-backed isolation is the defining characteristic of TPM security.
+A private key or symmetric key stored in ordinary flash can be read by anyone who can dump the flash, through an enabled debug port or by desoldering the chip. Hardware key storage prevents that.
 
-Beyond key storage, TPMs support attestation: the ability to prove that a device is running expected, unmodified software. Remote attestation works by asking the TPM to produce a measurement of the system state, signed by a key that only the genuine TPM can use. A provisioning service can verify this measurement and refuse to issue credentials to a device running tampered firmware.
+A **secure element** is a small, dedicated chip (or an isolated block inside the main processor) that generates and stores keys and performs cryptographic operations internally. The key never appears on the bus or in main memory, so dumping the processor's flash yields nothing. Secure elements are sized for microcontroller-class devices and cost little in the bill of materials.
 
-Tamper resistance is another property of TPMs. Physical attacks on the chip trigger protective mechanisms, making it difficult to extract secrets even with direct hardware access. This matters for devices deployed in locations where physical security cannot be guaranteed.
+A **Trusted Platform Module (TPM)** is a standardized form of the same idea, defined by the [Trusted Computing Group's TPM 2.0 specification](https://trustedcomputinggroup.org/resource/tpm-library-specification/){:target="_blank" rel="noopener noreferrer"} and common on gateways, industrial PCs, and Linux-class devices. Besides key storage, a TPM records measurements of the software that booted, and can sign those measurements with a key only the genuine TPM holds. That supports **remote attestation**, where a provisioning service checks which firmware a device booted before issuing it credentials. Firmware TPMs implemented inside a processor's trusted execution environment offer the same interface with weaker resistance to physical attack than a discrete chip.
 
-The tradeoff is cost and complexity. TPMs add cost to the device bill of materials, and integrating TPM-based attestation into a provisioning pipeline requires meaningful engineering investment. For high-value devices or deployments where firmware integrity is critical, that investment is justified.
+Hardware-backed keys work with either credential type. A device can hold an X.509 private key in a secure element, or a symmetric key in a TPM.
 
-### Comparing Authentication Methods
+| Key storage | Resists flash dump | Resists physical probing | Firmware attestation | Typical device |
+|---|---|---|---|---|
+| Plain flash | No | No | No | Low-cost sensors |
+| Flash with on-chip encryption | Yes, if the encryption key is protected | Partially | No | Modern microcontrollers |
+| Secure element | Yes | Yes, to the level it is certified for | Some support it | Microcontroller-class devices |
+| Discrete TPM | Yes | Yes, to the level it is certified for | Yes | Gateways, industrial PCs, Linux-class devices |
 
-Choosing between authentication methods depends on the device capabilities, security requirements, and operational context of the deployment.
+### Choosing a Scheme
 
-| Factor | X.509 Certificates | SAS Tokens | TPM-backed Keys |
-|---|---|---|---|
-| **Cryptographic strength** | High (asymmetric) | Medium (symmetric) | High (hardware-isolated asymmetric) |
-| **Hardware requirements** | Moderate (needs storage, some compute) | Low (symmetric HMAC is cheap) | Requires TPM chip |
-| **Key exposure risk** | Low (private key never leaves device) | Medium (symmetric key on both sides) | Very low (hardware prevents extraction) |
-| **Revocation** | Certificate revocation lists or OCSP | Revoke key in service | Revoke credential in service |
-| **Renewal complexity** | High (certificate lifecycle management) | Low (generate new token from key) | Medium (key rotation with attestation) |
-| **Physical tamper resistance** | None (key in flash storage) | None (key in flash storage) | High (TPM actively resists extraction) |
-| **Firmware attestation** | No | No | Yes |
-| **Best fit** | High-security, capable devices | Constrained devices, simpler deployments | Critical infrastructure, high-value assets |
-
-Never use shared credentials across devices regardless of which mechanism you choose. Each device gets its own identity and its own key material. This is not negotiable from a security standpoint.
+| Factor | X.509 certificates | Symmetric keys |
+|---|---|---|
+| Secret held by the service | None, only trust anchors | Every device's key, or a master key |
+| Device compute | Asymmetric operations and certificate parsing | An HMAC |
+| Lifecycle work | Issuance, renewal, and revocation | Key rotation |
+| Blast radius of a service breach | No device credentials exposed | Every device key exposed |
+| Best fit | Devices that can run TLS with certificates, especially with a secure element | Very constrained devices, or fleets bootstrapping toward certificates |
 
 ---
 
 ## Communication Security
 
-Authentication establishes who a device is. Communication security determines whether the data a device sends can be read or tampered with by anyone other than the intended recipient. For IoT devices, this means encrypting data in transit and verifying that both endpoints are legitimate.
+Authentication establishes who a device is. Communication security keeps what it sends from being read or altered in transit and confirms both ends are who they claim to be.
 
 ### TLS and DTLS
 
-Transport Layer Security (TLS) encrypts the connection between a device and a cloud service or gateway. It provides both confidentiality (data cannot be read by eavesdroppers) and integrity (data cannot be modified in transit without detection). Any IoT device with sufficient resources should use TLS for all communications.
+Transport Layer Security (TLS) gives a connection confidentiality and integrity. Every device that can run it should use it for everything it sends. TLS 1.0 and 1.1 are deprecated and should not be used. TLS 1.2 is widely supported and acceptable with modern cipher suites, and TLS 1.3 is preferred where the device's library supports it, since its full handshake takes one round trip instead of two, which saves time and radio power.
 
-Datagram TLS (DTLS) serves the same purpose for devices that communicate over UDP rather than TCP. Many IoT protocols, including CoAP, run over UDP because it has lower overhead and is better suited to lossy wireless networks. DTLS adapts TLS concepts to work with the connectionless nature of UDP, providing equivalent security guarantees without requiring a persistent TCP session.
+Datagram TLS (DTLS) provides the same protection over UDP, which CoAP and other lossy-network protocols use. It adds the retransmission and reordering handling UDP lacks. The current version is [DTLS 1.3 (RFC 9147)](https://www.rfc-editor.org/rfc/rfc9147){:target="_blank" rel="noopener noreferrer"}.
 
-TLS version matters, and older versions like TLS 1.0 and 1.1 have known vulnerabilities that make them unsuitable for production use. TLS 1.2 is widely supported and acceptable; TLS 1.3 is preferred where device libraries support it, as it reduces handshake round trips (which saves both time and battery).
-
-### Certificate Pinning
-
-Certificate pinning is a technique where a device is configured to accept only a specific certificate or certificate authority, rather than trusting any certificate signed by a well-known root CA. This prevents man-in-the-middle attacks where an attacker presents a fraudulent but technically valid certificate to intercept traffic.
-
-Without pinning, an attacker who controls the network between a device and the cloud could present a certificate from a CA that the device trusts, decrypt the traffic, re-encrypt it, and forward it to the real endpoint. The device sees a valid TLS connection and has no way to detect the interception. With pinning, the device compares the presented certificate against its pinned expectation and rejects anything that does not match.
-
-The operational challenge is that pinned certificates expire. When the service rotates its certificate, devices must be updated to pin the new certificate before the old one expires. This creates a firmware update dependency that must be managed carefully. Pinning to a public key rather than a full certificate reduces this burden because the key can remain stable across certificate renewals.
+TLS and DTLS protect a hop. When a message passes through a gateway or proxy that terminates the connection, the proxy sees plaintext. [OSCORE (RFC 8613)](https://www.rfc-editor.org/rfc/rfc8613){:target="_blank" rel="noopener noreferrer"} protects CoAP messages themselves, end to end, so they stay protected through proxies that forward them.
 
 ### Mutual TLS
 
-Standard TLS authenticates only the server; the client verifies that it is talking to the right server, but the server does not verify the client's identity through the TLS layer. Mutual TLS (mTLS) extends this by requiring both sides to present certificates. The server presents its certificate as normal, and the device also presents a certificate that the server verifies.
+In standard TLS only the server presents a certificate. Mutual TLS (mTLS) has the device present one too, and the server verifies it during the handshake. A client without a valid device certificate cannot complete the handshake at all, so unauthenticated traffic never reaches application code. With X.509 device identities, the device certificate serves as both its identity and its TLS client credential.
 
-mTLS is particularly valuable in IoT because it binds transport-level authentication to the TLS handshake itself, rather than relying on application-layer authentication after the connection is established. An attacker who lacks a valid device certificate cannot even complete the TLS handshake with a service that requires mTLS, which reduces the attack surface significantly.
+### Certificate Pinning
 
-mTLS works naturally in conjunction with X.509 device certificates. Each device's certificate serves both as its identity credential and as the authentication material for the TLS handshake.
+By default a device trusts any server certificate that chains to a root in its trust store. An attacker who can obtain a certificate for the service's name from any trusted CA, or who can add a root to the trust store, can intercept traffic without the device noticing. Pinning restricts what the device accepts, to the service's own CA, its intermediate, or its public key.
 
-### DTLS with Pre-Shared Keys
+Pinning has a cost. If the service changes CA or rotates the pinned key, devices that pin the old one stop connecting, and fixing them requires a firmware or configuration update that reaches them over the connection that just broke. Pinning to a CA or a public key the operator controls, and shipping a backup pin, keeps rotation possible.
 
-For devices too constrained to perform certificate-based TLS operations, DTLS with Pre-Shared Keys (PSK) offers a middle ground. Instead of exchanging and verifying certificates during the handshake, both sides start with a shared secret that was provisioned at manufacture or deployment time. The handshake uses this secret to derive session keys, which are then used to encrypt the session.
+### Pre-Shared Keys for the Most Constrained Devices
 
-PSK mode is significantly cheaper computationally because it eliminates the asymmetric cryptography operations required for certificate validation. A device that cannot afford the CPU cycles or battery drain of a full TLS handshake may still be able to use DTLS-PSK to encrypt its communications.
+TLS and DTLS both support pre-shared key (PSK) modes, where the handshake authenticates both sides by proving they hold a shared symmetric key instead of exchanging certificates. PSK skips the asymmetric cryptography, which makes it feasible on devices that cannot afford a certificate handshake.
 
-The security tradeoff is that pre-shared keys have the same weakness as any symmetric key: both sides must hold the secret, and compromising either side exposes it. PSK also lacks the mutual authentication properties of certificate-based mTLS. It should be considered a pragmatic choice for constrained devices, not a preferred approach.
+PSK does authenticate both ends, but it inherits the weaknesses of symmetric keys. The service holds every device's key, and the keys have to be provisioned and rotated. It fits the most constrained devices, with unique per-device keys, rather than serving as a default.
 
 ---
 
-## Constrained Device Challenges
+## Constrained Device Tradeoffs
 
-Many of the security problems unique to IoT stem from the physical characteristics of the devices themselves. Security assumptions that hold in data centers break down when applied to a battery-powered sensor with 256 KB of flash storage.
+### Compute, Memory, and Power
 
-### Limited Compute, Memory, and Storage
+Compact TLS libraries like Mbed TLS and wolfSSL run a TLS handshake in tens of kilobytes of RAM, which fits most connected microcontrollers but not the smallest ones. The larger cost is often time and energy. An asymmetric handshake can take seconds on a slow core, and every handshake keeps the radio on.
 
-Standard security libraries designed for servers or desktop systems often cannot run on microcontrollers. A full TLS stack with certificate parsing, asymmetric cryptography, and hash operations can require megabytes of RAM that a constrained device simply does not have. Even when a compact TLS library exists that fits in available memory, the CPU time required for cryptographic operations may be prohibitive.
+Three techniques reduce the cost. **Session resumption** lets a reconnecting device skip the full handshake. **Elliptic-curve cryptography** gets equivalent strength from much smaller keys and faster operations than RSA. **Hardware crypto accelerators**, including secure elements, move the expensive math off the main core.
 
-This limitation forces design choices. Some deployments use protocol gateways that terminate TLS at a nearby gateway device and forward data to the cloud over a more capable connection. The device-to-gateway link might use a simpler protocol with lighter encryption or rely on physical security of a short-range wireless link. The gateway-to-cloud link then uses full TLS with strong authentication. This approach concentrates the cryptographic complexity in a single capable device while allowing constrained devices to operate within their limits.
+When a device cannot secure its own connection to the cloud, a gateway can terminate the device link and run full TLS upstream. That makes the device-to-gateway link the weak point, so it needs its own protection, such as link-layer encryption in the radio protocol or a PSK mode, rather than relying on the link being short-range.
 
-Battery-powered devices add another dimension. Cryptographic operations consume power. Establishing a TLS connection requires a handshake with multiple round trips, and each round trip involves computation on both sides. For a device running on two AA batteries that must last three years in the field, every milliamp-hour matters. Designers often need to evaluate whether session resumption (which skips the full handshake for reconnections), connection pooling, or lower-security alternatives are acceptable given the deployment's risk profile.
+### Default and Hard-Coded Credentials
 
-### Default Passwords and Hard-Coded Credentials
+Devices shipped with a known default password, such as `admin`/`admin`, give an attacker every unconfigured unit through a single lookup. Hard-coded credentials are worse, because they are embedded in firmware and the owner cannot change them. When one is found, every device running that firmware is exposed until patched.
 
-One of the most widespread and persistent problems in the IoT industry is manufacturers shipping devices with default credentials. A router configured at the factory with the username "admin" and password "admin" is not secure; it is a vulnerability waiting to be exploited. When devices with identical default credentials are deployed at scale, a single credential lookup gives an attacker access to every device on the network that was never reconfigured.
-
-Hard-coded credentials are even worse. Unlike default passwords, which a user can theoretically change, hard-coded credentials are embedded in the firmware and cannot be changed without a firmware update. When researchers discover a hard-coded backdoor password, every device running that firmware version is permanently exposed until patched.
-
-Correct practice is for each device to receive a unique credential during manufacturing or provisioning, derived from the device's unique identity rather than shared across the product line. Devices should also enforce credential changes during initial setup, and modern platforms like Azure IoT Hub support per-device key management that makes unique credential provisioning operationally straightforward.
+The fix is a unique credential per device, injected during manufacturing or provisioning, and setup that forces the owner to set their own password where a human login exists at all. This is now law in some markets (see Baseline Standards and Regulation below).
 
 ### Supply Chain Risk
 
-A device's firmware typically contains components from multiple sources: the manufacturer's own code, an RTOS from one vendor, a communication stack from another, cryptography libraries from a third. Each of these components is a potential source of vulnerabilities, and the manufacturer may not have visibility into all of them.
+Device firmware combines the manufacturer's code with an RTOS, a network stack, cryptography libraries, and vendor drivers, and a vulnerability in any of them ships in the device. A **software bill of materials (SBOM)** for each firmware version lets a team identify affected devices when a component vulnerability is published. Secure boot and signed firmware updates, which make a device refuse firmware not signed by the manufacturer's key, limit what an attacker can do with a compromised distribution path.
 
-Supply chain attacks can introduce vulnerabilities at any of these layers. A compromised library distributed through a legitimate package repository, a vendor with poor security practices, or a targeted attack on a firmware signing key can all result in devices shipping with security flaws that were never present in the original design.
+### Physical Access
 
-Mitigations include maintaining a software bill of materials (SBOM) for firmware, so that when a vulnerability is discovered in a component, affected devices can be identified quickly. Secure boot ensures that devices will only run firmware signed by a trusted key, making it harder to deploy malicious firmware. Code signing for firmware updates means that even if an attacker can push an update through an OTA channel, the device rejects it if the signature is invalid.
-
-### Physical Access Threats
-
-Devices deployed in uncontrolled environments are physically accessible to adversaries. An attacker with physical access can attempt to extract credentials from flash storage using JTAG debugging interfaces left enabled in production firmware, read memory contents through side-channel analysis, or extract the device entirely and perform analysis in a lab environment.
-
-JTAG and serial debug interfaces, which are essential during development, should be disabled or removed before production deployment. Flash encryption, available on many modern microcontrollers, ensures that even if an attacker reads the raw flash contents, they cannot interpret the data without the encryption key. Hardware security elements, separate from the main processor, can store cryptographic keys in a way that resists physical extraction.
-
-Physical tamper detection, where a device detects that it is being opened or probed and deletes sensitive key material, provides another layer of defense. This is common in point-of-sale terminals and payment hardware, and the same concept applies wherever IoT devices store sensitive credentials in accessible locations.
+An attacker holding a device can read flash through a JTAG or SWD debug port left enabled, desolder the flash chip, or probe internal buses. Production devices should have debug ports disabled or locked, flash encryption enabled where the microcontroller supports it, and keys in a secure element. Tamper detection, which erases keys when an enclosure is opened, is standard in payment terminals and fits high-value IoT devices too.
 
 ---
 
 ## Network Security
 
-Securing individual devices is necessary but not sufficient. The network environment in which devices operate shapes their overall security posture and limits the damage a compromised device can cause.
-
 ### Network Segmentation
 
-Placing IoT devices on the same network as corporate workstations, file servers, and databases creates unnecessary risk. If a compromised IoT device can freely communicate with a file server, an attacker who controls the device can use it as a pivot point to attack the rest of the network. Network segmentation addresses this by isolating IoT devices into their own network segment with controlled communication paths to everything else.
+A compromised device on the same network as workstations and file servers becomes a pivot point for attacking them. Segmentation puts IoT devices in their own VLAN or subnet behind a firewall that allows only the flows they need. Typically that means outbound connections to specific cloud endpoints on specific ports, and nothing inbound from the IoT segment to the corporate LAN.
 
-A common pattern is to place IoT devices on a dedicated VLAN or subnet, with firewall rules that permit only the specific communication flows those devices need. Outbound connections to the cloud endpoint on specific ports are permitted; all other outbound traffic is blocked. Inbound connections from IoT devices to the corporate LAN are blocked entirely. This containment means that a compromised device cannot reach internal resources, even if the attacker is actively trying to use it as a foothold.
+Device traffic is predictable, which makes allowlisting practical. A temperature sensor talks to one endpoint on one port, so the firewall can allow exactly that and deny everything else. An allowlist stops a compromised device from reaching an attacker's command server, because that server was never on the list. A blocklist cannot keep up with attackers' changing infrastructure.
 
-In industrial environments, the Purdue Model provides a well-established framework for network segmentation. IoT and operational technology (OT) devices sit at lower levels of the model, separated from IT systems by demilitarized zones (DMZ) with strict controls on what traffic can pass between levels.
+{% include figure.html id="iot-network-segmentation" %}
 
-### Firewall Rules for IoT Traffic
+Industrial sites apply the same idea through a layered model of network levels, where operational technology sits in lower levels separated from IT networks by a DMZ that no traffic crosses directly.
 
-IoT devices typically have predictable communication patterns. A temperature sensor sends data to one endpoint on one port at regular intervals. It does not need to initiate connections to arbitrary internet addresses, communicate with other devices on the local network, or accept incoming connections from anywhere. Firewall rules should reflect this predictability, permitting only the specific flows the device requires and blocking everything else.
+### Least Privilege for Device Identities
 
-Allowlisting destination endpoints, rather than just blocking known-bad destinations, is a stronger approach. An allowlist means that a compromised device trying to communicate with an attacker's command-and-control server will be blocked, because that server is not on the approved list. A blocklist approach, by contrast, cannot keep up with the constantly changing infrastructure attackers use.
+Each device identity should be allowed to do only what the device does. A sensor that publishes telemetry needs permission to publish to its own topic and receive its own commands, and nothing more. It should not be able to read other devices' topics, modify the device registry, or call management APIs. Platforms express this differently. AWS IoT Core uses per-device policies that can scope topic access to the device's own client ID, and Azure IoT Hub separates device permissions from service permissions. Designing permissions this way at the start is straightforward, and retrofitting them onto a fleet in production is not.
 
-### Data Encryption at Rest
+### Data at Rest
 
-Data generated by IoT devices eventually lands in cloud storage, databases, or data lakes. Encrypting this data at rest means that a breach of the storage system does not automatically expose the device data. Cloud platforms provide built-in encryption at rest for most storage services, often with options for customer-managed keys.
-
-The sensitivity of the data should drive the encryption strategy. Telemetry from an asset-tracking device may reveal the location and movement patterns of high-value equipment. Health data from a medical device is subject to regulatory requirements. Understanding what the data represents and what its exposure would mean is a prerequisite to designing appropriate controls.
-
-### Principle of Least Privilege
-
-Every device should have exactly the permissions it needs to function and no more. A device that reads sensor data and sends it to a cloud endpoint does not need permission to delete messages, modify device registry entries, or invoke management APIs. Granting only the minimum necessary permissions limits the damage a compromised device can cause.
-
-Cloud IoT platforms support this through role-based access control and fine-grained permission models. Azure IoT Hub, for example, allows a device to be granted only "Device Connect" permission, which lets it send telemetry and receive commands but prevents it from accessing any other hub resources. Designing permissions this way is straightforward when done at deployment time and significantly harder to retrofit once a fleet is in production.
+Telemetry ends up in storage, databases, and data lakes. Cloud storage services encrypt at rest by default, often with an option for customer-managed keys. The sensitivity of the data decides how much further to go. Location traces from asset trackers reveal movement patterns, and data from medical devices carries regulatory obligations.
 
 ---
 
-## Security Monitoring and Response
+## Monitoring and Response
 
-Prevention controls reduce the likelihood of a compromise, but no prevention strategy is perfect. Detection and response capabilities determine how quickly an organization can identify that something is wrong and contain the damage.
+### Behavioral Anomaly Detection
 
-### Anomaly Detection on Device Behavior
-
-IoT devices are predictable by design. A manufacturing sensor reports temperature readings every thirty seconds. A connected meter uploads daily usage data at midnight. Deviations from expected behavior are a signal worth investigating. An anomaly detection system that understands normal patterns can flag behavior that falls outside them, such as a sensor that suddenly starts sending data at high frequency, attempts to connect to an unexpected endpoint, or goes silent unexpectedly.
-
-Effective anomaly detection requires a baseline. Without knowing what normal looks like for a device or device class, it is impossible to recognize abnormal. Building this baseline requires observing devices in normal operation, understanding their communication patterns, and encoding those patterns as rules or training an ML model to recognize them.
-
-Behavioral anomalies to watch for include unexpected protocol usage, communication with IP addresses not in the allowlist, unusual data volumes either unusually high or unusually low, connections at unexpected times, and changes in message frequency or size that do not correlate with known operational events.
+Devices behave predictably, which makes deviations visible. Useful signals include a device connecting to an endpoint outside its allowlist, a sudden change in message rate or size, connections at unusual times, repeated authentication failures, and a device going silent. Detecting them needs a baseline of normal behavior per device class, encoded as rules or learned by a model.
 
 ### Security Audit Logging
 
-Security-relevant events in the device lifecycle should be logged and retained. These events include device provisioning and deprovisioning, authentication successes and failures, certificate or key changes, firmware updates, configuration changes, and connection events including disconnections that might indicate a network disruption or device failure.
+Log provisioning and deprovisioning, authentication successes and failures, credential changes, firmware updates, configuration changes, and connections and disconnections. During an incident these logs provide the timeline, and over time patterns in authentication failures surface devices under attack. Retention depends on regulatory requirements and on how long an intrusion could go unnoticed, so set it from those rather than from storage cost.
 
-These logs serve multiple purposes. During incident response, they provide a timeline of events that helps reconstruct what happened and when. During forensic analysis, they can establish whether a device was behaving abnormally before an incident was detected. Over time, patterns in authentication failures or connection anomalies can surface devices that are under attack or malfunctioning.
+### Responding to a Compromised Device
 
-Log retention should be long enough to be useful for post-incident analysis. The right retention period depends on regulatory requirements and the operational tempo of the deployment, but six months to a year is a common minimum for security audit logs.
+Nobody can walk over and unplug a device in a field, so response mechanisms have to exist before the incident. **Remote quarantine** disables the device's identity in the service so it can no longer authenticate, and can add a network rule that blocks its traffic. The device may keep running locally, but it cannot send data or receive commands. A **remote disable command** goes further where the device supports it. Devices with neither need a site visit.
 
-### Incident Response for Compromised Devices
-
-When a device is suspected to be compromised, the response options differ from those available in a traditional IT environment. You cannot simply walk over to the device and pull the ethernet cable. In an IoT deployment, the correct response mechanisms must be designed into the system before an incident occurs.
-
-Remote quarantine means isolating the device from the network without physically touching it. For devices connected through a managed IoT platform, this typically means revoking the device's credentials so it can no longer authenticate, and pushing a policy change to the network that blocks communication from the device's identifier. The device may continue operating locally, but it cannot exfiltrate data or receive commands.
-
-If remote quarantine is not sufficient, a remote shutdown command, where the device supports it, can disable operation until physical intervention is possible. For devices that do not support remote management, the response may require physically retrieving the device.
-
-After quarantine, the investigation should determine the scope of the compromise. Were other devices affected? Was any data exfiltrated? What vulnerability was exploited? The firmware of affected devices should be forensically analyzed if possible before being wiped and reprovisioned.
-
-### Azure Defender for IoT
-
-[Azure Defender for IoT](https://learn.microsoft.com/en-us/azure/defender-for-iot/organizations/overview){:target="_blank" rel="noopener noreferrer"} is an agentless security monitoring solution designed for IoT and Operational Technology (OT) networks. Unlike agent-based security tools that require software installation on each device, Defender for IoT works by passively analyzing network traffic using sensors placed on the network.
-
-Because many OT devices run proprietary operating systems that cannot host agents, the agentless approach is essential in industrial environments. The sensor learns what devices are on the network, what protocols they use, and what their normal communication patterns look like. It then alerts on deviations, known attack patterns, and protocol anomalies.
-
-Defender for IoT supports integration with Microsoft Sentinel for SIEM-based analysis, and with Azure IoT Hub for environments that use managed device connectivity. For organizations operating mixed IT/OT environments, it provides unified visibility across domains that are often managed by separate teams with limited collaboration.
+After containment, determine the scope. Check whether other devices share the exploited weakness, whether data left, and which vulnerability was used. Where possible, image the firmware for analysis before wiping and reprovisioning the device.
 
 ---
 
 ## Common IoT Attack Vectors
 
-Understanding how attacks unfold in practice helps architects design controls that address real threats rather than theoretical ones.
+### Firmware Extraction and Modification
 
-### Firmware Extraction and Reverse Engineering
+An attacker who dumps unencrypted flash can reverse engineer the firmware for hard-coded credentials, API keys, and protocol details. With that understanding they can build a modified firmware with a backdoor that keeps normal behavior, and push it to devices that do not verify update signatures. Encrypted flash, locked debug ports, secure boot, and signature checks on updates close this path.
 
-Attackers who want to understand a device's internals often start by extracting the firmware. If flash storage is not encrypted, connecting to a debugging port or desoldering the flash chip and reading it directly yields a copy of the firmware binary. Reverse engineering that binary can reveal hard-coded credentials, API keys, cryptographic keys, authentication logic, or proprietary communication protocols.
+### Interception on Unencrypted Protocols
 
-Once an attacker understands the firmware, they can modify it to create a malicious variant, host it as a fake firmware update, and distribute it to devices that lack signature verification on updates. The modified firmware might add a backdoor while maintaining all normal device functionality, making detection difficult.
+Devices that send plaintext can be read and manipulated by anyone on the same network or controlling a wireless access point in range. The attacker can alter data, inject commands, or replay messages. TLS or DTLS on every link prevents it, and mTLS or pinning stops an attacker who can present a certificate the device would otherwise trust.
 
-Defenses include encrypted flash storage, disabled debug interfaces on production hardware, secure boot with signature verification, and firmware update mechanisms that validate signatures before applying updates.
+### Replay Attacks
 
-### Man-in-the-Middle on Unencrypted Protocols
+A replay captures a legitimate message and resends it later, such as a "system normal" status to mask a fault or a valid command to trigger an action again. TLS rejects replayed records within a connection. It does not stop an application-level replay, where an attacker who can submit messages (a compromised gateway, or a message stored and forwarded) resends a captured payload. TLS 1.3's optional 0-RTT early data is also replayable by design, so commands should never be sent as early data.
 
-Some IoT devices use older or simpler protocols that transmit data in plaintext. An attacker on the same network, or controlling a wireless access point the device connects to, can intercept all traffic. Beyond passive eavesdropping, the attacker can modify data in transit, inject commands, or replay captured messages.
+Application-level defenses include timestamps with a short validity window, monotonic sequence numbers per device, and nonces the service tracks to reject repeats. Commands that change physical state deserve all of them.
 
-This attack is straightforward to execute and straightforward to prevent. Using TLS or DTLS for all communications eliminates passive eavesdropping and makes tampering detectable. Certificate pinning or mTLS prevents interception even when the attacker can present a valid certificate from a trusted CA.
+### Side-Channel and Physical Tampering
 
-### Replay Attacks on Telemetry Data
-
-A replay attack captures a legitimate message sent by a device and retransmits it later. For telemetry data, this might mean replaying a "system normal" status message to mask a real fault condition. For command-and-control channels, replaying a legitimate command can trigger unintended actions.
-
-TLS prevents replay attacks within a session because session keys are unique to each connection. However, if an attacker can replay messages at the application layer (for example, if message authentication does not include timestamps or sequence numbers), replays can succeed even over encrypted channels.
-
-Defenses include message timestamps with short validity windows (reject any message with a timestamp more than a few minutes old), monotonic sequence numbers (reject any message whose sequence number is not higher than the last received), and nonce-based authentication where each message includes a unique value that the service verifies has not been seen before.
-
-### Physical Tampering and Side-Channel Attacks
-
-An attacker with physical access to a device has options that purely network-based attackers do not. Side-channel attacks analyze power consumption, electromagnetic emissions, or timing variations in cryptographic operations to extract key material without directly reading memory. These attacks require specialized equipment and expertise but are practical against devices that implement cryptography in software without countermeasures.
-
-Physical tampering can install hardware implants, replace firmware, intercept internal buses, or modify sensor outputs. A tampered device might report falsified readings while appearing to operate normally.
-
-Hardware security modules and TPMs provide countermeasures by performing cryptographic operations in hardware with built-in side-channel protections. Physical security measures like tamper-evident enclosures, resin potting of circuit boards, and tamper-detection switches that trigger key deletion provide additional defense layers. For high-security deployments, regular physical inspection of deployed devices is also a necessary control.
+With physical access, an attacker can recover keys by measuring power consumption, electromagnetic emissions, or timing during cryptographic operations, without reading memory directly. These attacks need equipment and expertise, but they work against software cryptography without countermeasures. Secure elements and certified TPMs include side-channel protections. Tamper-evident enclosures, potted circuit boards, and tamper switches that erase keys raise the cost further, and high-security deployments add periodic physical inspection.
 
 ### Botnet Recruitment
 
-Mirai-style attacks demonstrated the scale of damage that can result from compromised IoT devices. In 2016, the Mirai botnet infected hundreds of thousands of devices by scanning the internet for IoT devices with default credentials, logging in using a list of common username-and-password combinations, and enrolling them as botnet agents. The resulting DDoS attacks reached 1.2 terabits per second (Source: [Cloudflare, Mirai Botnet](https://www.cloudflare.com/learning/ddos/glossary/mirai-botnet/){:target="_blank" rel="noopener noreferrer"}), overwhelming some of the largest internet infrastructure providers.
+Mirai showed what weak device credentials cost everyone else. In 2016 it scanned the internet for devices exposing Telnet, logged in with a short list of default username-and-password pairs, and enrolled them. It peaked at roughly 600,000 infected devices and launched attacks of hundreds of gigabits per second, including one on the DNS provider Dyn that disrupted access to major websites (Source: [Antonakakis et al., "Understanding the Mirai Botnet," USENIX Security 2017](https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/antonakakis){:target="_blank" rel="noopener noreferrer"}).
 
-Botnet recruitment exploits weak authentication, unpatched vulnerabilities, and devices with internet-accessible management interfaces. The device owner often has no awareness that their devices have been compromised; the device continues normal operation while also participating in attacks against third parties.
-
-Prevention focuses on eliminating the conditions that allow initial access: unique per-device credentials, no default passwords, network segmentation that prevents devices from initiating arbitrary internet connections, and timely firmware updates to address known vulnerabilities. Devices that are not designed to be internet-accessible should not be exposed to the internet, even if doing so seems convenient for management purposes.
-
-### DDoS Using Compromised IoT Fleets
-
-Once an attacker controls a large fleet of IoT devices, those devices can be directed to generate traffic toward a target. Individual devices may have limited bandwidth, but a fleet of one hundred thousand devices, each generating ten megabits per second of traffic, produces terabit-scale attacks that can overwhelm even well-provisioned targets.
-
-The traffic generated by an IoT DDoS fleet is difficult to filter because it originates from legitimate IP addresses spread across many geographic locations and internet service providers. Traditional source-blocking strategies are ineffective at this scale.
-
-Organizations operating large device fleets share responsibility for not contributing to DDoS attacks. A manufacturer whose devices are recruited into a botnet may face regulatory scrutiny, reputational damage, and potentially liability in some jurisdictions. Security controls that prevent initial compromise protect not just the device owner but also the broader internet ecosystem.
+Recruitment exploits default credentials, unpatched vulnerabilities, and management interfaces exposed to the internet. The owner usually notices nothing, because the device keeps working while it attacks third parties. Unique credentials, no internet-exposed management interfaces, egress allowlists, and timely updates remove the conditions Mirai relied on. The attack traffic is hard to filter because it comes from many legitimate addresses across many networks, which is why prevention has to happen at the device.
 
 ---
 
-## Building Security Into the Device Lifecycle
+## Baseline Standards and Regulation
 
-Security in IoT is not a feature added at the end of development; it must be integrated throughout the device lifecycle from design through decommissioning.
+Several baselines now define minimum device security, and some are law.
 
-During design, threat modeling identifies the attack surfaces specific to the device and deployment context. What data does the device handle, and how sensitive is it? Where will devices be physically located? Who might want to attack them and why? What would a successful attack enable? Answers to these questions drive architecture decisions about authentication mechanisms, encryption requirements, and physical security measures.
+| Baseline | What it is | Examples of what it requires |
+|---|---|---|
+| [ETSI EN 303 645](https://www.etsi.org/deliver/etsi_en/303600_303699/303645/){:target="_blank" rel="noopener noreferrer"} | European standard for consumer IoT security | No universal default passwords, a vulnerability disclosure policy, secure software updates, secure storage of security parameters |
+| [NIST IR 8259A](https://csrc.nist.gov/pubs/ir/8259/a/final){:target="_blank" rel="noopener noreferrer"} | US core baseline of device cybersecurity capabilities | Device identification, device configuration, data protection, logical access to interfaces, software update, cybersecurity state awareness |
+| [UK PSTI regime](https://www.gov.uk/government/publications/the-uk-product-security-and-telecommunications-infrastructure-product-security-regime){:target="_blank" rel="noopener noreferrer"} | UK law for consumer connectable products, in force since April 2024 | No guessable default passwords, a published way to report vulnerabilities, a stated minimum period of security updates |
+| [EU Cyber Resilience Act](https://digital-strategy.ec.europa.eu/en/policies/cyber-resilience-act){:target="_blank" rel="noopener noreferrer"} | EU regulation for products with digital elements | Reporting actively exploited vulnerabilities from September 2026, then security-by-design requirements and support periods from December 2027 |
 
-During manufacturing, the secure provisioning of device credentials ensures that each device enters the field with a unique identity and no shared secrets. This requires investment in a secure manufacturing process that injects keys in a controlled environment. Attempting to retrofit unique credentials after manufacturing is expensive and error-prone.
+These baselines converge on the same short list: unique credentials, a way to report vulnerabilities, secure updates for a stated period, and protected storage of keys. A design that follows this guide covers most of it.
 
-During deployment, secure configuration means disabling unnecessary features, changing any remaining default settings, placing devices in appropriate network segments, and verifying that firmware is current before deployment.
+---
 
-During operation, ongoing security means receiving firmware updates from the manufacturer and applying them, monitoring device behavior for anomalies, rotating credentials on a defined schedule, and maintaining visibility into what devices exist on the network and what software version each is running.
+## Security Across the Device Lifecycle
 
-During decommissioning, devices must have their stored credentials and sensitive data wiped before disposal or redeployment. A device discarded with its credentials intact is a source of leaked secrets. Hardware security modules that support key deletion make this straightforward; devices without this capability may need to be physically destroyed if they stored high-sensitivity credentials.
+Each stage of a device's life has a security action that later stages cannot make up for.
 
-Security is the cumulative result of decisions made at each stage. Neglecting any stage creates gaps that can be exploited long after the initial oversight. Organizations that treat IoT security as a continuous operational discipline, rather than a one-time checklist, build deployments that remain defensible as threats evolve.
+| Stage | Security action |
+|---|---|
+| Design | Threat-model the device and its deployment: what data it handles, where it sits physically, who would attack it, and what a compromise enables |
+| Manufacturing | Inject a unique identity and key material in a controlled environment, ideally generated inside a secure element |
+| Deployment | Disable unused interfaces and debug ports, place the device in its network segment, and confirm its firmware is current |
+| Operation | Apply updates, monitor behavior, rotate credentials, and keep an inventory of devices and firmware versions |
+| Decommissioning | Revoke the identity in the service and erase keys and data before disposal or reuse; destroy devices that cannot erase their keys |
+
+A gap at any stage stays exploitable long after the stage has passed. A shared key injected at manufacturing cannot be fixed by monitoring, and a device discarded with its keys intact leaks them no matter how well it was run.

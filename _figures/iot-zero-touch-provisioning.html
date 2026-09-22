@@ -1,0 +1,103 @@
+---
+title: "Zero-Touch Provisioning"
+kind: dynamic
+system: iot
+summary: "How a device that knows only the provisioning service's address ends up registered on the right hub, and why it never goes back to the provisioning service afterwards."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" role="img" aria-labelledby="izt-title izt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="izt-title">Zero-touch provisioning through a provisioning service</title>
+<desc id="izt-desc">The factory injects a unique identity into each device and records a batch manifest, and its CA or manifest is loaded into the provisioning service's enrollments, which hold the group CA or group key and the allocation policy. The device, which knows only the provisioning address, attests its identity to the provisioning service. The service matches the device to an enrollment, applies the allocation policy to choose among candidate hubs in region A, region B, and tenant C, registers the device on the chosen hub in region B, and returns the endpoint address to the device. From then on the device connects directly to that hub.</desc>
+<style>
+.it-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.it-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.it-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.it-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.it-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.it-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.it-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.it-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.it-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.it-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.it-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.it-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.it-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.it-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.it-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.it-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.it-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.it-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.it-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.it-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.it-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.it-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.it-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="izt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="izt-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="it-box" x="20" y="40" width="170" height="70" rx="6"/>
+<text class="it-n" x="32" y="64">Factory</text>
+<text class="it-s" x="32" y="84">injects unique identity,</text>
+<text class="it-s" x="32" y="101">records batch manifest</text>
+<rect class="it-sys" x="20" y="250" width="170" height="80" rx="6"/>
+<text class="it-t-inv" x="32" y="274">Device</text>
+<text class="it-s-inv" x="32" y="294">knows only the</text>
+<text class="it-s-inv" x="32" y="311">provisioning address</text>
+<rect class="it-store" x="340" y="40" width="200" height="70" rx="6"/>
+<text class="it-n" x="352" y="64">Enrollments</text>
+<text class="it-s" x="352" y="84">group CA or group key,</text>
+<text class="it-s" x="352" y="101">allocation policy</text>
+<rect class="it-box" x="340" y="200" width="200" height="120" rx="6"/>
+<text class="it-n" x="352" y="224">Provisioning service</text>
+<text class="it-s" x="352" y="244">checks attestation,</text>
+<text class="it-s" x="352" y="261">picks an endpoint,</text>
+<text class="it-s" x="352" y="278">registers the device</text>
+<rect class="it-box" x="680" y="110" width="200" height="62" rx="6"/>
+<text class="it-n" x="692" y="134">Hub, region A</text>
+<text class="it-s" x="692" y="154">candidate endpoint</text>
+<rect class="it-okbox" x="680" y="229" width="200" height="62" rx="6"/>
+<text class="it-n" x="692" y="253">Hub, region B</text>
+<text class="it-s" x="692" y="273">chosen for this device</text>
+<rect class="it-box" x="680" y="348" width="200" height="62" rx="6"/>
+<text class="it-n" x="692" y="372">Hub, tenant C</text>
+<text class="it-s" x="692" y="392">candidate endpoint</text>
+<path class="it-exec" d="M 190,75 H 334" marker-end="url(#izt-p)"/>
+<text class="it-num" x="200" y="67">CA or manifest</text>
+<path class="it-flow" d="M 105,110 V 244" marker-end="url(#izt-a)"/>
+<text class="it-num" x="115" y="176">1 flashed</text>
+<path class="it-flow" d="M 190,272 H 334" marker-end="url(#izt-a)"/>
+<text class="it-num" x="200" y="264">2 attest identity</text>
+<path class="it-flow" d="M 340,305 H 196" marker-end="url(#izt-a)"/>
+<text class="it-num" x="200" y="322">4 endpoint address</text>
+<path class="it-exec" d="M 440,110 V 194" marker-end="url(#izt-p)"/>
+<text class="it-num" x="452" y="150">3 match</text>
+<text class="it-num" x="452" y="166">enrollment</text>
+<path class="it-flow" d="M 540,260 H 674" marker-end="url(#izt-a)"/>
+<text class="it-num" x="552" y="252">4 register</text>
+<path class="it-flow" d="M 105,330 V 432 H 640 V 280 H 674" marker-end="url(#izt-a)"/>
+<text class="it-num" x="300" y="424">5 connect directly from now on</text>
+<path class="it-flow" d="M 30,462 H 64"/>
+<text class="it-el" x="72" y="466">device provisioning flow</text>
+<path class="it-exec" d="M 250,462 H 284"/>
+<text class="it-el" x="292" y="466">setup the device never sees</text>
+</g>
+</svg>

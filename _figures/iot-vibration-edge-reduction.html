@@ -1,0 +1,98 @@
+---
+title: "Reducing Vibration Data at the Edge"
+kind: flow
+system: iot
+summary: "How a 51 KB-per-second vibration stream becomes features, spectra, and occasional raw captures, so analysts keep full detail only around the events that matter."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="ivr-title ivr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ivr-title">Edge data reduction for high-frequency vibration monitoring</title>
+<desc id="ivr-desc">An accelerometer on the machine is sampled at 25.6 kHz, about 51 KB per second. On the edge device or smart sensor, the stream feeds a raw ring buffer holding the last few minutes, and an FFT and envelope stage that computes spectra and features for each capture. Features go to a lightweight anomaly check on the device, against the asset's baseline, which sends features and alerts upstream every few seconds. Spectra go upstream every few minutes. When the anomaly check fires, it triggers the ring buffer to upload raw waveforms, so full-resolution data is sent only around events.</desc>
+<style>
+.it-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.it-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.it-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.it-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.it-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.it-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.it-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.it-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.it-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.it-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.it-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.it-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.it-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.it-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.it-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.it-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.it-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.it-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.it-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.it-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.it-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.it-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.it-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="ivr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ivr-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="it-band" x="20" y="20" width="160" height="340" rx="8"/>
+<text class="it-hd" x="34" y="40">MACHINE</text>
+<rect class="it-band" x="200" y="20" width="400" height="340" rx="8"/>
+<text class="it-hd" x="214" y="40">EDGE DEVICE OR SENSOR</text>
+<rect class="it-band" x="620" y="20" width="260" height="340" rx="8"/>
+<text class="it-hd" x="634" y="40">SENT UPSTREAM</text>
+<rect class="it-box" x="40" y="120" width="120" height="80" rx="6"/>
+<text class="it-n" x="52" y="142">Accelerometer</text>
+<text class="it-s" x="52" y="161">25.6 kHz samples,</text>
+<text class="it-s" x="52" y="178">about 51 KB/s</text>
+<rect class="it-store" x="410" y="60" width="170" height="60" rx="6"/>
+<text class="it-n" x="422" y="82">Raw ring buffer</text>
+<text class="it-s" x="422" y="101">last few minutes</text>
+<rect class="it-sys" x="220" y="170" width="170" height="60" rx="6"/>
+<text class="it-t-inv" x="232" y="192">FFT and envelope</text>
+<text class="it-s-inv" x="232" y="211">features per capture</text>
+<rect class="it-box" x="410" y="170" width="170" height="60" rx="6"/>
+<text class="it-n" x="422" y="192">Anomaly check</text>
+<text class="it-s" x="422" y="211">against the baseline</text>
+<rect class="it-ctl" x="640" y="60" width="220" height="60" rx="6"/>
+<text class="it-n-ctl" x="652" y="82">Raw waveforms</text>
+<text class="it-s" x="652" y="101">only on a trigger</text>
+<rect class="it-box" x="640" y="170" width="220" height="60" rx="6"/>
+<text class="it-n" x="652" y="192">Features and alerts</text>
+<text class="it-s" x="652" y="211">every few seconds</text>
+<rect class="it-box" x="640" y="280" width="220" height="60" rx="6"/>
+<text class="it-n" x="652" y="302">Spectra</text>
+<text class="it-s" x="652" y="321">every few minutes</text>
+<path class="it-flow" d="M 160,140 H 190 V 90 H 404" marker-end="url(#ivr-a)"/>
+<path class="it-flow" d="M 160,180 H 190 V 200 H 214" marker-end="url(#ivr-a)"/>
+<path class="it-flow" d="M 390,200 H 404" marker-end="url(#ivr-a)"/>
+<path class="it-flow" d="M 580,200 H 634" marker-end="url(#ivr-a)"/>
+<path class="it-flow" d="M 305,230 V 310 H 634" marker-end="url(#ivr-a)"/>
+<path class="it-exec" d="M 495,170 V 126" marker-end="url(#ivr-p)"/>
+<text class="it-num" x="505" y="152">trigger</text>
+<path class="it-exec" d="M 580,90 H 634" marker-end="url(#ivr-p)"/>
+<path class="it-flow" d="M 30,385 H 64"/>
+<text class="it-el" x="72" y="389">continuous data reduction</text>
+<path class="it-exec" d="M 260,385 H 294"/>
+<text class="it-el" x="302" y="389">event-triggered raw upload</text>
+</g>
+</svg>

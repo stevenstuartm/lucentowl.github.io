@@ -991,11 +991,12 @@
         },
         {
           "name": "Industrial IoT",
-          "description": "Control systems, OT/IT convergence, and the safety and reliability demands of industrial environments",
+          "description": "Control systems, OT/IT convergence, industrial security and functional safety, and predictive maintenance",
           "guides": [
             "iot/iiot-foundations-control-systems.md",
+            "iot/iiot-security-maintenance-safety.md",
             "iot/iiot-architecture-implementation.md",
-            "iot/iiot-security-maintenance-safety.md"
+            "iot/iiot-predictive-maintenance.md"
           ]
         }
       ]

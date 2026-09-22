@@ -240,6 +240,7 @@ Learned from completed passes. These hold regardless of domain, and they apply a
 - **Read every load-bearing hard number off the primary limits table.** A number can be invented rather than stale, and an invented one has no ancestor — so looking up the current value returns the right answer without ever signalling that the old one was fiction. Don't rely on "this looks like it drifted" as your trigger to check.
 - **An archive redirect is the retirement notice.** Content retired by a vendor rarely announces its status in the prose of the page that replaced it; it announces it in the URL. When a fetch of a current-looking doc path comes back with a canonical URL under an archive or previous-versions prefix, the feature is retired regardless of how complete the content looks. The same goes for a *cross-product* redirect: a feature that moved from product A to product B usually moved to a different billing model and permission surface too, so a guide teaching it as a feature of A is wrong even where the mechanics still read correctly. **Check the canonical URL on every doc fetched for a feature the guide presents as current.**
 - **Check which doc variant a claim came from.** Vendor docs are frequently pivoted — by version, by tier, by SKU, by deployment model — and two zones of the same page can describe architecturally different products. Confirm which pivot the claim came from. An FAQ often states a transition that the concept pages don't.
+- **A 403 from a standards body is bot-blocking, not a dead link.** ISO, IEC, IEEE, the OPC Foundation, Modbus.org, and some vendors refuse scripted fetches. Confirm the URL through search before dropping or replacing it. The reverse also holds: a plausible deep link on one of those domains may never have existed, so a 403 alone does not prove it does.
 - **Verify code samples as claims, not as illustration.** Prose assertions are the obvious target of item 1, but the worst errors hide in code: a method overload that doesn't exist, a wrong entity API, a non-generic call assigned to a variable, a return-type mismatch. A sample that reads plausibly can still be uncompilable, and readers copy samples more literally than they follow prose. For any guide with code, check attribute names, method names, overload signatures, and return types against the current API reference.
 
 ### On tables
@@ -252,6 +253,7 @@ Learned from completed passes. These hold regardless of domain, and they apply a
 
 - **Item 5 is a two-way check, not a filter.** The easy reading is to judge the diagrams already present, drop the decorative ones, and add nothing. That is half the check, and it lets a guide pass while every relationship it teaches stays in prose-and-table form. Ask both questions on every guide: does each existing diagram clear the bar, **and** does the guide explain a structure with no diagram? The second finds more than the first. Structures that qualify and are easy to miss: a control that enforces at two levels, two options whose traffic paths differ in shape rather than in attributes, and a topology whose behavior comes from routing rather than from the links drawn.
 - **Sibling links hide in two forms.** Grepping `](/study-guides/` finds only markdown links; links inside HTML callout blocks use `<a href="/study-guides/...">` and will be missed. Check both. Some cross-references are also unlinked prose ("covered in the X guide") — those are "where this fits" framing and go too.
+- **Some linter hits are ordinary technical phrases.** "In real time" trips the "real" pattern, and "failure mode" trips the AI-tell list even in a reliability guide, including in section titles like "Common Failure Modes". Rephrase ("continuously", "as it happens", "Where X Breaks", "each way an asset fails") rather than arguing with the linter.
 - **Run the linter even when the edit felt clean.** Heavy prose additions reliably introduce em-dashes and mis-ordered sections that are invisible while writing.
 
 ---
@@ -308,6 +310,7 @@ When writing about software architecture, use correct terminology:
 | Observability | Monitoring & Observability |
 | Networking | Network Fundamentals |
 | Web Development | SEO & Web |
+| IoT | Foundations, Architecture & Data, Security & Firmware, Fleet Operations, Industrial IoT |
 
 **File organization conventions**:
 - Architecture guides: `_guides/architecture/`
@@ -316,6 +319,7 @@ When writing about software architecture, use correct terminology:
 - Security guides: `_guides/security/`
 - SDLC guides: `_guides/sdlc/`
 - AI & ML guides: `_guides/ai/`
+- IoT guides: `_guides/iot/` (vendor-neutral; Azure IoT product guides live under `_guides/infrastructure/azure/`)
 - Top-level guides (observability, networking, etc.): `_guides/`
 
 **When to create new subcategories**:

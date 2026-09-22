@@ -1,0 +1,109 @@
+---
+title: "The Purdue Levels and the Industrial DMZ"
+kind: boundary
+system: iot
+summary: "How plant data reaches business systems and the cloud through the DMZ without IT ever gaining a path down to the controllers."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 645" role="img" aria-labelledby="ipd-title ipd-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ipd-title">Purdue model levels with an industrial DMZ and data diode</title>
+<desc id="ipd-desc">Seven horizontal bands, from level 0 physical process at the bottom through level 1 basic control, level 2 supervisory, level 3 site operations, level 3.5 industrial DMZ, level 4 site business, to level 5 enterprise and cloud at the top. Data flows upward from sensors and actuators to PLCs and DCS controllers, to SCADA servers and HMIs, to the plant historian and MES. From level 3 it crosses a hardware data diode in the DMZ into a historian replica, which ERP and business systems at level 4 read. Separately, an edge gateway in the DMZ collects from level 3 and connects outbound only to a cloud IoT platform at level 5. There is no path from IT at level 4 down into the control levels; that path is blocked at the DMZ.</desc>
+<style>
+.it-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.it-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.it-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.it-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.it-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.it-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.it-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.it-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.it-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.it-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.it-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.it-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.it-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.it-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.it-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.it-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.it-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.it-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.it-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.it-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.it-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.it-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.it-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="ipd-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ipd-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="it-band" x="20" y="20" width="860" height="70" rx="8"/>
+<text class="it-hd" x="34" y="44">LEVEL 5  ENTERPRISE, CLOUD</text>
+<rect class="it-band" x="20" y="100" width="860" height="70" rx="8"/>
+<text class="it-hd" x="34" y="124">LEVEL 4  SITE BUSINESS</text>
+<rect class="it-band" x="20" y="180" width="860" height="100" rx="8"/>
+<rect class="it-bound" x="20" y="180" width="860" height="100" rx="8"/>
+<text class="it-hd" x="34" y="204">LEVEL 3.5  INDUSTRIAL DMZ</text>
+<rect class="it-band" x="20" y="290" width="860" height="70" rx="8"/>
+<text class="it-hd" x="34" y="314">LEVEL 3  SITE OPERATIONS</text>
+<rect class="it-band" x="20" y="370" width="860" height="70" rx="8"/>
+<text class="it-hd" x="34" y="394">LEVEL 2  SUPERVISORY</text>
+<rect class="it-band" x="20" y="450" width="860" height="70" rx="8"/>
+<text class="it-hd" x="34" y="474">LEVEL 1  BASIC CONTROL</text>
+<rect class="it-band" x="20" y="530" width="860" height="70" rx="8"/>
+<text class="it-hd" x="34" y="554">LEVEL 0  PROCESS</text>
+<rect class="it-box" x="720" y="32" width="160" height="46" rx="6"/>
+<text class="it-n" x="732" y="60">Cloud IoT platform</text>
+<rect class="it-box" x="500" y="112" width="200" height="46" rx="6"/>
+<text class="it-n" x="512" y="140">ERP, business systems</text>
+<rect class="it-ctl" x="260" y="204" width="200" height="56" rx="6"/>
+<text class="it-n-ctl" x="272" y="226">Data diode</text>
+<text class="it-s" x="272" y="246">one-way, in hardware</text>
+<rect class="it-store" x="500" y="204" width="200" height="56" rx="6"/>
+<text class="it-n" x="512" y="226">Historian replica</text>
+<text class="it-s" x="512" y="246">what IT is allowed to read</text>
+<rect class="it-box" x="720" y="204" width="160" height="56" rx="6"/>
+<text class="it-n" x="732" y="226">Edge gateway</text>
+<text class="it-s" x="732" y="246">outbound only</text>
+<rect class="it-store" x="260" y="302" width="200" height="46" rx="6"/>
+<text class="it-n" x="272" y="330">Plant historian, MES</text>
+<rect class="it-box" x="260" y="382" width="200" height="46" rx="6"/>
+<text class="it-n" x="272" y="410">SCADA servers, HMIs</text>
+<rect class="it-sys" x="260" y="462" width="200" height="46" rx="6"/>
+<text class="it-t-inv" x="272" y="490">PLCs, DCS controllers</text>
+<rect class="it-box" x="260" y="542" width="200" height="46" rx="6"/>
+<text class="it-n" x="272" y="570">Sensors, actuators</text>
+<path class="it-flow" d="M 360,542 V 514" marker-end="url(#ipd-a)"/>
+<path class="it-flow" d="M 360,462 V 434" marker-end="url(#ipd-a)"/>
+<path class="it-flow" d="M 360,382 V 354" marker-end="url(#ipd-a)"/>
+<path class="it-flow" d="M 360,302 V 266" marker-end="url(#ipd-a)"/>
+<path class="it-flow" d="M 460,232 H 494" marker-end="url(#ipd-a)"/>
+<path class="it-flow" d="M 600,204 V 164" marker-end="url(#ipd-a)"/>
+<path class="it-flow" d="M 460,325 H 800 V 266" marker-end="url(#ipd-a)"/>
+<text class="it-note" x="560" y="317">collects from level 3</text>
+<path class="it-flow" d="M 800,204 V 84" marker-end="url(#ipd-a)"/>
+<path class="it-badl" d="M 500,135 H 240 V 174" marker-end="url(#ipd-x)"/>
+<text class="it-bad" x="252" y="127">no path from IT down to control</text>
+<path class="it-flow" d="M 30,625 H 64"/>
+<text class="it-el" x="72" y="629">data flow</text>
+<path class="it-badl" d="M 170,625 H 204"/>
+<text class="it-el" x="212" y="629">blocked at the DMZ</text>
+</g>
+</svg>

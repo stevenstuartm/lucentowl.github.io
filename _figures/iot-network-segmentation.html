@@ -1,0 +1,106 @@
+---
+title: "Segmenting IoT Devices"
+kind: boundary
+system: iot
+summary: "Why a compromised device on its own segment can reach only the cloud endpoints on the allowlist, and neither the corporate LAN nor an attacker's server."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" role="img" aria-labelledby="ins-title ins-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ins-title">IoT network segmentation with an allowlisting firewall</title>
+<desc id="ins-desc">IoT devices sit in their own VLAN. A firewall between that segment and everything else allows only named cloud hosts and ports. Legitimate sensors and gateways reach the cloud IoT endpoint through the firewall. A compromised device in the same segment is denied at the firewall both when it tries to reach workstations and file servers on the corporate LAN and when it tries to reach an attacker's command-and-control (C2) server on the internet, because neither is on the allowlist.</desc>
+<style>
+.it-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.it-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.it-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.it-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.it-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.it-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.it-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.it-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.it-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.it-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.it-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.it-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.it-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.it-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.it-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.it-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.it-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.it-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.it-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.it-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.it-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.it-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.it-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="ins-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+<marker id="ins-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="it-band" x="20" y="20" width="325" height="380" rx="8"/>
+<text class="it-hd" x="34" y="40">IOT SEGMENT (VLAN)</text>
+<rect class="it-box" x="40" y="90" width="200" height="70" rx="6"/>
+<text class="it-n" x="52" y="114">Sensors and gateways</text>
+<text class="it-s" x="52" y="134">each talks to one endpoint</text>
+<text class="it-s" x="52" y="151">on one port</text>
+<rect class="it-badbox" x="40" y="250" width="200" height="70" rx="6"/>
+<text class="it-n-bad" x="52" y="274">Compromised device</text>
+<text class="it-s" x="52" y="294">attacker's foothold</text>
+
+<rect class="it-sys" x="360" y="60" width="130" height="320" rx="6"/>
+<text class="it-t-inv" x="372" y="88">Firewall</text>
+<text class="it-s-inv" x="372" y="112">allowlist only:</text>
+<text class="it-s-inv" x="372" y="130">named cloud hosts</text>
+<text class="it-s-inv" x="372" y="148">and ports</text>
+<text class="it-s-inv" x="372" y="172">deny everything</text>
+<text class="it-s-inv" x="372" y="190">else, including</text>
+<text class="it-s-inv" x="372" y="208">IoT to LAN</text>
+
+<rect class="it-band" x="540" y="20" width="340" height="170" rx="8"/>
+<text class="it-hd" x="554" y="40">CORPORATE LAN</text>
+<rect class="it-box" x="560" y="70" width="300" height="80" rx="6"/>
+<text class="it-n" x="572" y="96">Workstations, file servers</text>
+<text class="it-s" x="572" y="116">no path in from the IoT segment,</text>
+<text class="it-s" x="572" y="133">so a device cannot be a pivot</text>
+
+<rect class="it-band" x="540" y="210" width="340" height="190" rx="8"/>
+<text class="it-hd" x="554" y="230">INTERNET</text>
+<rect class="it-okbox" x="560" y="250" width="300" height="56" rx="6"/>
+<text class="it-n" x="572" y="273">Cloud IoT endpoint</text>
+<text class="it-s" x="572" y="292">on the allowlist</text>
+<rect class="it-ext" x="560" y="326" width="300" height="56" rx="6"/>
+<text class="it-t-ext" x="572" y="349">Attacker C2 server</text>
+<text class="it-s" x="572" y="368">command and control, never allowlisted</text>
+
+<path class="it-okl" d="M 240,125 H 354" marker-end="url(#ins-g)"/>
+<text class="it-ok" x="252" y="117">allowed</text>
+<path class="it-okl" d="M 490,278 H 554" marker-end="url(#ins-g)"/>
+
+<path class="it-badl" d="M 240,270 H 354" marker-end="url(#ins-x)"/>
+<text class="it-bad" x="248" y="262">to LAN: denied</text>
+<path class="it-badl" d="M 240,302 H 354" marker-end="url(#ins-x)"/>
+<text class="it-bad" x="248" y="294">to C2: denied</text>
+
+<path class="it-okl" d="M 30,430 H 64"/>
+<text class="it-el" x="72" y="434">allowed flow</text>
+<path class="it-badl" d="M 180,430 H 214"/>
+<text class="it-el" x="222" y="434">denied at the firewall</text>
+</g>
+</svg>

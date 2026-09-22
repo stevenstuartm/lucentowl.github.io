@@ -1,0 +1,105 @@
+---
+title: "A Dual-Slot Update With Test and Confirm"
+kind: flow
+system: iot
+summary: "Why a failed download, a bad signature, or a new image that crashes on first boot all leave the device running its old firmware."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="iab-title iab-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="iab-title">A dual-slot firmware update with test-and-confirm rollback</title>
+<desc id="iab-desc">The device runs its image from slot A while it downloads the new image into spare slot B, resuming after interruptions. It verifies the signature over the whole image and manifest. If verification fails, the staged image is discarded and A never stopped running. If it passes, the device marks B pending and reboots into it on probation, where B runs a self-test. If the self-test passes and B confirms itself, B becomes permanent. If B crashes, hangs, or reboots without confirming, the bootloader reverts to A on the next boot and the old image runs again.</desc>
+<style>
+.it-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.it-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.it-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.it-person { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.it-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.it-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-mem { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-memband { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.it-ctl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.it-act { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.it-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.it-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.it-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.it-n-ctl { font-size: 12px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.it-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.it-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.it-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.it-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.it-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.it-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.it-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.it-req { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.it-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.it-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.it-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.it-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.it-ctx { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.it-exec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.it-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 8 5; }
+.it-okl { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.it-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.it-num { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="iab-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="iab-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+<marker id="iab-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="it-box" x="20" y="60" width="150" height="70" rx="6"/>
+<text class="it-n" x="32" y="84">Running image</text>
+<text class="it-s" x="32" y="104">slot A active,</text>
+<text class="it-s" x="32" y="121">slot B spare</text>
+<rect class="it-box" x="200" y="60" width="150" height="70" rx="6"/>
+<text class="it-n" x="212" y="84">Download</text>
+<text class="it-s" x="212" y="104">into slot B, resume</text>
+<text class="it-s" x="212" y="121">after interruptions</text>
+<rect class="it-box" x="380" y="60" width="150" height="70" rx="6"/>
+<text class="it-n" x="392" y="84">Verify signature</text>
+<text class="it-s" x="392" y="104">whole image and</text>
+<text class="it-s" x="392" y="121">manifest</text>
+<rect class="it-box" x="560" y="60" width="150" height="70" rx="6"/>
+<text class="it-n" x="572" y="84">Mark pending</text>
+<text class="it-s" x="572" y="104">then reboot</text>
+<text class="it-s" x="572" y="121">into slot B</text>
+<rect class="it-sys" x="740" y="60" width="140" height="70" rx="6"/>
+<text class="it-t-inv" x="752" y="84">Probation boot</text>
+<text class="it-s-inv" x="752" y="104">B runs self-test</text>
+<path class="it-flow" d="M 170,95 H 194" marker-end="url(#iab-a)"/>
+<path class="it-flow" d="M 350,95 H 374" marker-end="url(#iab-a)"/>
+<path class="it-flow" d="M 530,95 H 554" marker-end="url(#iab-a)"/>
+<path class="it-flow" d="M 710,95 H 734" marker-end="url(#iab-a)"/>
+<rect class="it-okbox" x="740" y="260" width="140" height="62" rx="6"/>
+<text class="it-n" x="752" y="284">Confirmed</text>
+<text class="it-s" x="752" y="304">B is permanent</text>
+<path class="it-okl" d="M 800,130 V 254" marker-end="url(#iab-g)"/>
+<text class="it-ok" x="812" y="200">passes,</text>
+<text class="it-ok" x="812" y="216">confirms</text>
+<rect class="it-badbox" x="470" y="260" width="180" height="62" rx="6"/>
+<text class="it-n-bad" x="482" y="284">Revert</text>
+<text class="it-s" x="482" y="304">bootloader boots A</text>
+<path class="it-badl" d="M 760,130 V 200 H 560 V 254" marker-end="url(#iab-x)"/>
+<text class="it-bad" x="572" y="192">crash, hang, or no confirm</text>
+<rect class="it-badbox" x="270" y="260" width="170" height="62" rx="6"/>
+<text class="it-n-bad" x="282" y="284">Discard staged image</text>
+<text class="it-s" x="282" y="304">A never stopped</text>
+<path class="it-badl" d="M 420,130 V 254" marker-end="url(#iab-x)"/>
+<text class="it-bad" x="428" y="192">fails</text>
+<path class="it-badl" d="M 270,291 H 140 V 136" marker-end="url(#iab-x)"/>
+<path class="it-badl" d="M 560,322 V 370 H 95 V 136" marker-end="url(#iab-x)"/>
+<text class="it-bad" x="200" y="362">old image runs again</text>
+<path class="it-okl" d="M 30,405 H 64"/>
+<text class="it-el" x="72" y="409">update succeeds</text>
+<path class="it-badl" d="M 200,405 H 234"/>
+<text class="it-el" x="242" y="409">failure path, old image kept</text>
+</g>
+</svg>

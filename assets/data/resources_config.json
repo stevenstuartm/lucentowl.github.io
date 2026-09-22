@@ -23,6 +23,8 @@
     "beads-architecture-diagrams.md",
     "c4-model-diagrams.md",
     "uml-diagram-notation.md",
-    "aaa-cycle-diagrams.md"
+    "aaa-cycle-diagrams.md",
+    "onnx-edge-inference-csharp.md",
+    "iot-architecture-diagrams.md"
   ]
 }
