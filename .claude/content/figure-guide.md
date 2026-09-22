@@ -27,7 +27,7 @@ Nothing is ever copied. Editing a figure file updates every guide and composite 
 title: "One Controller Tick"
 kind: component
 system: gas-city
-summary: "The five steps every tick runs in order, and which state lives only in memory."
+summary: "The five steps of one tick, in order."
 ---
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" ...>...</svg>
 ```
@@ -36,7 +36,7 @@ summary: "The five steps every tick runs in order, and which state lives only in
 - **`title`**: the name shown above the embedded figure and as the composite's heading.
 - **`kind`**: drives the badge. One of `context`, `container`, `component`, `dynamic`, `deployment` (the C4 levels and supplementary views), or `state`, `graph`, `flow`, `structure`, `layering`, `boundary`, `rules`. Add a kind in both `_includes/figure.html` and `.figcheck.py` before using it.
 - **`system`**: the system the figure belongs to. Used for grouping, not rendering.
-- **`summary`**: one sentence saying what the reader will learn from the figure, not what it contains.
+- **`summary`**: a short phrase naming what the diagram shows, about **6 to 12 words**. The guide's prose carries the explanation, so the summary is a label beside the picture, not a substitute for the paragraph. Say the subject and the one thing that distinguishes it ("The five steps of one tick, in order.", "An order API's trust boundaries, with a threat on each crossing."). **Never open with "Why"**, never phrase it as the reason something is true, and don't stack clauses: a summary long enough to need the guide's context to parse leaves the reader worse off than a plain label. `title` is the plain name of the thing, not a clever phrase.
 - **Body**: exactly one `<svg>`, with no wrapper `<div>`. The include supplies the container and the horizontal scrolling.
 
 ### Drawing Rules

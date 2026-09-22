@@ -1,0 +1,87 @@
+---
+title: "Envelope Encryption"
+kind: flow
+system: security
+summary: "A data key wrapped by a KMS key, stored with the ciphertext."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" role="img" aria-labelledby="see-title see-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="see-title">Envelope encryption with a key management service</title>
+<desc id="see-desc">An application asks the key management service for a new data encryption key and receives it twice: in plaintext and wrapped under a key encryption key that never leaves the service. The application encrypts the data locally with the plaintext data key, discards it, and stores the ciphertext together with the wrapped data key. To decrypt, the application sends only the small wrapped key to the service, which unwraps it if the caller is authorized. A stolen database therefore holds only ciphertext and wrapped keys, and revoking the application's permission on the key encryption key makes every data key unusable.</desc>
+<style>
+.ee-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.ee-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ee-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ee-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ee-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.ee-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.ee-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ee-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.ee-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.ee-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.ee-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ee-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.ee-labp { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.ee-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.ee-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ee-dec { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="see-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="see-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ee-sys" x="40" y="50" width="290" height="160" rx="6"/>
+<text class="ee-t-inv" x="54" y="78">Application</text>
+<text class="ee-s-inv" x="54" y="104">encrypts data locally with the</text>
+<text class="ee-s-inv" x="54" y="122">plaintext DEK (AES-GCM)</text>
+<text class="ee-s-inv" x="54" y="148">discards the plaintext DEK</text>
+<text class="ee-s-inv" x="54" y="166">once the data is encrypted</text>
+<text class="ee-s-inv" x="54" y="192">holds no long-lived key</text>
+
+<rect class="ee-band" x="560" y="20" width="320" height="210" rx="8"/>
+<text class="ee-hd" x="574" y="40">KEY MANAGEMENT SERVICE</text>
+<rect class="ee-box" x="580" y="60" width="280" height="150" rx="6"/>
+<text class="ee-n" x="594" y="84">Key encryption key (KEK)</text>
+<text class="ee-s" x="594" y="106">HSM-backed, never leaves</text>
+<text class="ee-s" x="594" y="124">the service</text>
+<text class="ee-s" x="594" y="148">wraps and unwraps DEKs</text>
+<text class="ee-s" x="594" y="172">every use authorized by</text>
+<text class="ee-s" x="594" y="190">identity and logged</text>
+
+<path class="ee-flow" d="M 330,90 H 574" marker-end="url(#see-a)"/>
+<text class="ee-lab" x="344" y="82">1  request a new DEK</text>
+<path class="ee-flow" d="M 580,130 H 336" marker-end="url(#see-a)"/>
+<text class="ee-lab" x="344" y="122">2  plaintext + wrapped DEK</text>
+<path class="ee-dec" d="M 330,180 H 574" marker-end="url(#see-p)"/>
+<text class="ee-labp" x="344" y="172">decrypt: send wrapped DEK</text>
+<path class="ee-dec" d="M 580,198 H 336" marker-end="url(#see-p)"/>
+<text class="ee-labp" x="400" y="215">plaintext DEK back</text>
+
+<rect class="ee-band" x="20" y="260" width="520" height="150" rx="8"/>
+<text class="ee-hd" x="34" y="280">STORAGE</text>
+<rect class="ee-store" x="40" y="300" width="480" height="90" rx="6"/>
+<text class="ee-n" x="54" y="324">Stored record</text>
+<text class="ee-s" x="54" y="346">ciphertext, nonce, and tag</text>
+<text class="ee-s" x="54" y="366">wrapped DEK and KEK identifier</text>
+<text class="ee-s" x="290" y="346">unreadable without</text>
+<text class="ee-s" x="290" y="366">a call to the KMS</text>
+
+<path class="ee-flow" d="M 120,210 V 294" marker-end="url(#see-a)"/>
+<text class="ee-lab" x="130" y="248">3  store ciphertext + wrapped DEK</text>
+
+<rect class="ee-okbox" x="560" y="260" width="320" height="150" rx="6"/>
+<text class="ee-n-ok" x="574" y="284">What each theft yields</text>
+<text class="ee-s" x="574" y="308">database backup: ciphertext and</text>
+<text class="ee-s" x="574" y="326">wrapped DEKs only</text>
+<text class="ee-s" x="574" y="350">application config: no key to steal</text>
+<text class="ee-s" x="574" y="374">KMS permission revoked: every</text>
+<text class="ee-s" x="574" y="392">DEK it protects is unusable</text>
+
+<path class="ee-flow" d="M 30,434 H 64"/>
+<text class="ee-el" x="72" y="438">encrypt path</text>
+<path class="ee-dec" d="M 180,434 H 214"/>
+<text class="ee-el" x="222" y="438">decrypt path</text>
+</g>
+</svg>

@@ -154,39 +154,39 @@
       "subcategories": [
         {
           "name": "Security Fundamentals",
-          "description": "Core security concepts and principles",
+          "description": "Principles, the adversary, cryptography, and identity",
           "guides": [
             "security/security-foundations.md",
-            "security/frameworks-standards.md",
-            "security/security-best-practices.md"
-          ]
-        },
-        {
-          "name": "Threats & Defense",
-          "description": "Understanding and defending against security threats",
-          "guides": [
-            "security/threats-and-vulnerabilities.md",
             "security/modern-attack-vectors.md",
-            "security/security-controls-defense.md"
+            "security/cryptography.md",
+            "security/identity-access-management.md"
           ]
         },
         {
           "name": "Application Security",
-          "description": "Securing applications and data",
+          "description": "Designing, building, and testing software that resists attack",
           "guides": [
+            "security/threat-modeling.md",
             "security/application-security.md",
             "security/data-protection.md",
             "security/security-testing.md"
           ]
         },
         {
-          "name": "Governance & Response",
-          "description": "Compliance, incident response, and governance",
+          "name": "Security Operations",
+          "description": "Controls, detection, vulnerability management, and incident response",
+          "guides": [
+            "security/security-controls-defense.md",
+            "security/threats-and-vulnerabilities.md",
+            "security/incident-response-recovery.md"
+          ]
+        },
+        {
+          "name": "Governance & Risk",
+          "description": "Risk management, compliance, and security frameworks",
           "guides": [
             "security/compliance-governance.md",
-            "security/incident-response-recovery.md",
-            "security/emerging-technologies.md",
-            "security/security-tools-resources.md"
+            "security/frameworks-standards.md"
           ]
         }
       ]

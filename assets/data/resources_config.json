@@ -25,6 +25,8 @@
     "uml-diagram-notation.md",
     "aaa-cycle-diagrams.md",
     "onnx-edge-inference-csharp.md",
-    "iot-architecture-diagrams.md"
+    "iot-architecture-diagrams.md",
+    "cryptographic-algorithm-choices.md",
+    "security-diagrams.md"
   ]
 }

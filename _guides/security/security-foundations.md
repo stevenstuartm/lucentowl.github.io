@@ -3,400 +3,126 @@ title: "Security Foundations"
 layout: guide
 category: Security
 subcategory: Security Fundamentals
-description: "Master fundamental security concepts including the CIA triad, defense-in-depth principles, trust models, and security-by-design practices for building secure systems."
-tags: [security, fundamentals, cia-triad, defense-in-depth, zero-trust, practical]
+description: "The goals security protects (confidentiality, integrity, availability, and accountability) and the design principles that guide every control decision: least privilege, fail-safe defaults, complete mediation, economy of mechanism, open design, separation of privilege, least common mechanism, psychological acceptability, work factor, and defense in depth."
+tags: [fundamentals, cia-triad, least-privilege, defense-in-depth, saltzer-schroeder, fail-safe-defaults]
 ---
 
-## CIA Triad
+## What Security Protects
 
-The foundational framework for information security:
+Security work starts from a question about loss. What could go wrong with this data or this system, and who would be hurt? The classic answer groups the losses into three properties, known together as the **CIA triad**. Every control a team adds protects one or more of them, and naming which one keeps a team from buying a control that protects the wrong thing.
 
-### Confidentiality
-Data accessible only to authorized parties.
+| Property | The loss it prevents | Typical controls |
+|---|---|---|
+| **Confidentiality** | Someone reads data they should not | Encryption, access control, data classification |
+| **Integrity** | Data or behavior changes without authorization, or without anyone noticing | Hashes and signatures, access control on writes, input validation, audit trails |
+| **Availability** | Authorized users cannot use the system when they need it | Redundancy, capacity headroom, DDoS mitigation, tested backups |
 
-**Implementation:**
-- Encryption (at rest and in transit)
-- Access controls and authentication
-- Data classification policies
+The three properties pull against each other. Encrypting everything and requiring re-authentication on every action raises confidentiality and integrity while making the system slower and easier to lock people out of. A hospital record system that is perfectly confidential but unreachable during an emergency has failed its users. Deciding which property dominates for a given asset is the first real design decision, and it is a business decision as much as a technical one.
 
-**Example:** Patient medical records encrypted and accessible only to authorized healthcare providers.
+### Accountability
 
-### Integrity
-Data remains accurate, complete, and unaltered.
+A fourth goal sits beside the triad: knowing who did what. It rests on three activities that are often grouped as AAA.
 
-**Implementation:**
-- Cryptographic hashing
-- Digital signatures
-- Version control and audit logs
-- Input validation
+- **Authentication** establishes who is acting.
+- **Authorization** decides what that identity may do.
+- **Accounting** (auditing) records what it actually did.
 
-**Example:** Financial transaction records with checksums preventing unauthorized modifications.
-
-### Availability
-Systems and data accessible when needed by authorized users.
-
-**Implementation:**
-- Redundancy and failover systems
-- DDoS protection
-- Disaster recovery plans
-- Load balancing
-
-**Example:** Banking systems with 99.99% uptime through multi-region deployment.
-
-### Extended Framework (NAAA)
-
-**Non-repudiation:** Proof of action that cannot be denied (digital signatures, audit logs)
-
-**Authentication:** Identity verification (passwords, biometrics, certificates)
-
-**Authorization:** Permission determination (RBAC, ABAC, ACLs)
-
-**Accounting/Audit:** Activity tracking and compliance monitoring
+**Non-repudiation** is the strongest form of accountability, where the evidence is good enough that the actor cannot credibly deny the action. A log entry written by the same server the actor controls does not achieve it. A digital signature made with a key only the actor holds does.
 
 ---
 
-## Security Principles
+## Design Principles
+
+In 1975, Jerome Saltzer and Michael Schroeder published [The Protection of Information in Computer Systems](https://www.cs.virginia.edu/~evans/cs551/saltzer/){:target="_blank" rel="noopener noreferrer"}, which set out eight design principles for protection mechanisms and two more they considered only partly applicable to computers. Nearly fifty years later the list still describes most of what goes wrong in real breaches. Each principle below is stated, then shown as the mistake it prevents.
 
 ### Least Privilege
 
-<div class="callout callout--warning">
-<p class="callout__title">Over-Privileged Accounts Are Security Time Bombs</p>
-<p>When every service runs as admin and every user has more permissions than needed, a single compromise can cascade into complete system takeover. Grant minimum necessary access for each job function.</p>
-</div>
+Every program and every user should operate with the smallest set of privileges the job requires, for the shortest time it requires them. Least privilege limits the damage from an accident or a compromise to what the compromised identity could already do.
 
-Grant minimum necessary access for job function.
+The common violation is convenience. An application connects to its database as an administrator because that was the account that worked during development. When the application is compromised through an injection flaw, the attacker inherits the right to drop tables, read every schema, and create new logins. Had the application connected as an account with `SELECT`, `INSERT`, and `UPDATE` on its own tables, the same flaw would expose far less.
 
-**Application:**
-```csharp
-// Bad: Over-privileged service account
-connectionString = "Server=db;User=sa;Password=pass;";
-
-// Good: Scoped permissions
-connectionString = "Server=db;User=app_reader;Password=pass;";
-// app_reader has SELECT only on specific tables
-```
-
-**Modern Implementation:**
-- Just-in-time (JIT) access elevation
-- Role-based access control (RBAC)
-- Attribute-based access control (ABAC)
-- Periodic access reviews
-
-### Separation of Privilege
-Require multiple conditions for critical actions.
-
-**Examples:**
-- Multi-factor authentication (knowledge + possession + biometric)
-- Dual approval for financial transactions
-- Segregation of duties (developer ≠ deployer)
-
-### Defense in Depth
-Layer multiple security controls so failure of one doesn't compromise the system.
-
-**Layers:**
-1. **Perimeter:** Firewalls, VPN
-2. **Network:** IDS/IPS, network segmentation
-3. **Endpoint:** Antivirus, EDR
-4. **Application:** Input validation, WAF
-5. **Data:** Encryption, DLP
-6. **User:** Training, access controls
+Least privilege applies to time as well as scope. Standing administrator rights are exposed every hour of every day, while rights granted for one approved task and revoked afterward are exposed only during that task. The trade-off is operational friction, since every narrowed permission is a request someone may have to make later.
 
 ### Fail-Safe Defaults
-Default to secure state when errors occur.
 
-**Implementation:**
-```python
-def authorize_user(user, resource):
-    try:
-        permissions = get_permissions(user, resource)
-        return "admin" in permissions
-    except Exception:
-        return False  # Deny access on error, don't fail open
+Base access decisions on permission rather than exclusion. The default answer is "no", and access is granted only when an explicit rule allows it. A deny-by-default system that forgets a rule blocks a legitimate user, who complains and gets it fixed. An allow-by-default system that forgets a rule admits an attacker, who does not complain.
+
+The principle also governs error paths. When an authorization check throws, times out, or cannot reach its policy store, the code has to decide what happens next, and it should deny.
+
+```csharp
+public async Task<bool> CanAccessAsync(User user, Resource resource)
+{
+    try
+    {
+        var permissions = await _policyStore.GetPermissionsAsync(user.Id, resource.Id);
+        return permissions.Contains(Permission.Read);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Authorization check failed for {UserId}", user.Id);
+        return false; // fail closed: an error is never a grant
+    }
+}
 ```
 
-**Examples:**
-- Firewall default-deny rules
-- Session timeouts requiring re-authentication
-- Database connections with least privilege
+Fail closed is not always right for availability. A physical door lock that fails closed during a fire traps people, which is why building codes often require the opposite. Software faces the same trade-off in places like a rate limiter whose backing store is down. Decide which way each control fails on purpose, and write the decision down.
 
 ### Complete Mediation
-Validate every access request, every time.
 
-**Anti-pattern:**
-```javascript
-// Bad: Check once, cache forever
-if (isAuthorized(user, resource)) {
-    cache.set(user, "authorized");
-}
-// Later: assume still authorized
-if (cache.get(user) === "authorized") { /* allow access */ }
-```
+Check every access to every object for authority, every time. A system that checks once and remembers the result is vulnerable to anything that changes afterward: a revoked role, a disabled account, or a resource that moved to a different owner.
 
-**Correct:**
-```javascript
-// Good: Check every request
-async function accessResource(user, resource) {
-    if (await isAuthorized(user, resource)) {
-        return resource;
-    }
-    throw new UnauthorizedException();
-}
-```
-
-**Modern Application:** Zero Trust Architecture
-
-### Open Design (Kerckhoffs's Principle)
-Security depends on secret keys, not secret algorithms.
-
-**Application:**
-- Use proven cryptographic standards (AES, RSA)
-- Assume attackers know your architecture
-- Security through design, not obscurity
-
-**Bad:** Custom encryption algorithm
-**Good:** AES-256 with secure key management
+The usual violation is a cached authorization decision with no expiry, or an authorization check made in the user interface and never repeated on the server. Caching is sometimes necessary for performance, and when it is, the cache lifetime becomes the window during which a revocation has no effect. That window should be short and known. Zero trust architectures apply this principle to network access, verifying each request rather than trusting anything inside a network perimeter.
 
 ### Economy of Mechanism
-Keep security controls simple and understandable.
 
-**Why:**
-- Complex systems have more vulnerabilities
-- Simpler code is easier to audit
-- Reduces maintenance overhead
+Keep the design as small and simple as possible. Security mechanisms have to be inspected to be trusted, and small mechanisms can be inspected thoroughly while large ones cannot. Errors in security code rarely show up in normal use, because normal use does not exercise the path an attacker takes.
 
-**Example:** Prefer built-in framework authentication over custom implementation.
+This is the principle behind preferring a framework's authentication middleware over a hand-built one, and a single authorization layer over checks scattered through every controller. Each additional place where a security decision is made is another place where it can be made differently.
+
+### Open Design
+
+The security of a mechanism should not depend on the secrecy of its design. Assume attackers know the algorithm, the architecture, and the source code, and keep only keys and credentials secret. The same idea appears in Auguste Kerckhoffs's 1883 principles of military cryptography.
+
+The reason is practical. A design is hard to change and easy to leak, since it lives in binaries, documentation, and former employees' heads. A key is easy to change. A system whose security survives disclosure of everything except the key can recover from a leak by rotating the key. A system that relied on an undisclosed algorithm has to be redesigned. This is why custom cryptography is a mistake even when written by capable engineers. Obscurity can still add cost for an attacker as one layer among several. It cannot be the layer that holds.
+
+### Separation of Privilege
+
+Where feasible, require more than one condition to grant access, so that no single stolen credential or single insider can complete a sensitive action alone. Multi-factor authentication applies it to identity: a password and a device. Two-person approval for production deployments or large payments applies it to actions. Segregation of duties, where the person who writes code is not the only person who can ship it, applies it to roles.
+
+The cost is speed. Every second condition is a second party who has to be available, which is why teams reserve it for actions whose damage would be severe or hard to undo.
+
+### Least Common Mechanism
+
+Minimize the mechanisms shared between users and depended on by all of them. Every shared component is a path by which information can leak from one user to another and a single point whose compromise affects everyone.
+
+In modern systems this principle is about multi-tenancy. A shared cache keyed only by URL can serve one customer's personalized page to another. A shared database connection pool that sets tenant context per session can leak that context when a connection is reused. Shared infrastructure is often the right economic choice. The principle asks that its isolation be designed deliberately rather than assumed.
 
 ### Psychological Acceptability
-Security must be usable or users will bypass it.
 
-**Balance:**
-- Passwordless authentication (WebAuthn, passkeys)
-- Single sign-on (SSO)
-- Clear security policies
-- User education
+Security mechanisms must be easy enough to use correctly that people use them routinely. When the secure path is harder than the insecure one, people route around it, and the control protects nothing while appearing to work.
 
-**Anti-pattern:** 90-day password rotation leading to "Password1", "Password2", "Password3"
+Password policy is the standard example. Forced periodic rotation and composition rules produced passwords like `Summer2024!` followed by `Autumn2024!`, which are predictable and often written down. [NIST SP 800-63B](https://pages.nist.gov/800-63-4/sp800-63b.html){:target="_blank" rel="noopener noreferrer"} now says verifiers shall not require periodic changes or impose composition rules, and emphasizes length, breached-password screening, and phishing-resistant authenticators such as passkeys instead. Single sign-on applies the same idea by reducing the number of passwords a person must manage.
 
-### Work Factor
-Make attacks economically infeasible.
+### Work Factor and Compromise Recording
 
-**Implementation:**
-- Password hashing with high iteration counts (bcrypt, Argon2)
-- Rate limiting and account lockouts
-- Computational puzzles (CAPTCHA, proof-of-work)
+Saltzer and Schroeder listed two further principles as only partly applicable to computers.
 
-**Example:** Argon2 configured so password hash takes 500ms, making brute force impractical.
+**Work factor** compares the cost of defeating a mechanism with the resources of the likely attacker. It is the reasoning behind slow password hashing algorithms, which make each guess expensive, and behind rate limits on login endpoints. Work factor estimates erode over time as hardware gets cheaper, so they need revisiting.
 
----
+**Compromise recording** holds that reliably detecting a breach can sometimes substitute for preventing it. Tamper-evident audit logs, file integrity monitoring, and alerts on unusual access all apply it. Detection does not undo a data disclosure, so it complements prevention for confidentiality rather than replacing it. It fits better where the damage can be reversed once discovered.
 
-## Defense in Depth
+### Defense in Depth
 
-Layered security strategy where multiple controls protect assets.
+Defense in depth is not on Saltzer and Schroeder's list, but it follows from accepting that any single control can fail. Layer independent controls so that an attacker who defeats one still faces others, and so that the failure of one is noticed before the next falls.
 
-### Network Layer
-```
-Internet → Firewall → DMZ → Internal Firewall → Application Servers → Database
-```
-
-**Controls:**
-- Perimeter firewalls
-- Network segmentation (VLANs)
-- Intrusion detection/prevention (IDS/IPS)
-- Web application firewall (WAF)
-
-### Application Layer
-- Input validation and sanitization
-- Output encoding
-- Secure session management
-- Error handling without information disclosure
-
-### Data Layer
-- Encryption at rest (AES-256)
-- Encryption in transit (TLS 1.3)
-- Database access controls
-- Data masking and tokenization
-
-### Why Layered Security Matters
-If an attacker bypasses the firewall, they still face:
-- Network segmentation
-- Application authentication
-- Database permissions
-- Audit logging
+The word that matters is *independent*. Three controls that all trust the same identity provider are one control with three names, because compromising the identity provider defeats all three. Useful layers differ in what they depend on: a network restriction, an authentication requirement, an authorization check in the application, encryption with separately managed keys, and monitoring that watches all of them. Each layer also adds cost and complexity, which pulls against economy of mechanism. The balance is to add a layer where a single failure would be severe, not everywhere.
 
 ---
 
-## Trust Models
+## Common Pitfalls
 
-### Traditional Perimeter Security
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Traditional Perimeter Model</h4>
-<ul>
-<li><strong>Assumption</strong>: Internal network is trusted</li>
-<li><strong>Security</strong>: Hard exterior, soft interior</li>
-<li><strong>Problem</strong>: Insider threats, lateral movement after breach</li>
-<li><strong>Status</strong>: Outdated for modern environments</li>
-</ul>
-<p><strong>Analogy</strong>: Castle with walls (breach the wall, access everything)</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Zero Trust Architecture</h4>
-<ul>
-<li><strong>Principle</strong>: "Never trust, always verify"</li>
-<li><strong>Security</strong>: Verify every request, every time</li>
-<li><strong>Benefit</strong>: Limits lateral movement, contains breaches</li>
-<li><strong>Status</strong>: Modern standard for secure architectures</li>
-</ul>
-<p><strong>Analogy</strong>: Airport checkpoints (verify at every gate)</p>
-</div>
-</div>
-
-### Zero Trust Architecture
-**Core Principle:** "Never trust, always verify"
-
-**Implementation:**
-1. **Verify explicitly:** Authenticate and authorize every request
-2. **Least privilege access:** Minimize permissions and scope
-3. **Assume breach:** Segment access, monitor all activity
-
-**Example:**
-```yaml
-# Traditional: Trust internal network
-if source_ip in internal_network:
-    allow_access()
-
-# Zero Trust: Verify every request
-if authenticate(user) AND authorize(user, resource) AND validate_device():
-    allow_access()
-```
-
-**Technologies:**
-- Identity and access management (IAM)
-- Micro-segmentation
-- Software-defined perimeter (SDP)
-- Continuous verification
-
----
-
-## Security by Design
-
-Build security into the development lifecycle, not bolt it on later.
-
-### Threat Modeling
-Identify threats early in design phase.
-
-**Framework: STRIDE**
-- **S**poofing identity
-- **T**ampering with data
-- **R**epudiation
-- **I**nformation disclosure
-- **D**enial of service
-- **E**levation of privilege
-
-### Secure Coding Practices
-```csharp
-// Vulnerable to SQL injection
-string query = $"SELECT * FROM users WHERE id = {userId}";
-
-// Parameterized query prevents injection
-string query = "SELECT * FROM users WHERE id = @userId";
-command.Parameters.AddWithValue("@userId", userId);
-```
-
-**Key Practices:**
-- Input validation (whitelist, not blacklist)
-- Output encoding (prevent XSS)
-- Parameterized queries (prevent SQL injection)
-- Secure defaults
-- Error handling without information leakage
-
-### Security Testing
-- **Static Analysis (SAST):** Analyze source code for vulnerabilities
-- **Dynamic Analysis (DAST):** Test running application
-- **Dependency Scanning:** Identify vulnerable libraries
-- **Penetration Testing:** Simulate real-world attacks
-
----
-
-## Quick Reference
-
-### Security Checklist
-
-**Authentication & Authorization**
-- [ ] Multi-factor authentication enabled
-- [ ] Least privilege access enforced
-- [ ] Session management secure (timeouts, secure cookies)
-- [ ] Password policy enforces strong passwords
-- [ ] Service accounts have minimal permissions
-
-**Data Protection**
-- [ ] Encryption at rest (AES-256)
-- [ ] Encryption in transit (TLS 1.3)
-- [ ] Sensitive data not logged
-- [ ] PII properly handled (GDPR, CCPA)
-- [ ] Secure key management
-
-**Application Security**
-- [ ] Input validation on all user input
-- [ ] Output encoding prevents XSS
-- [ ] Parameterized queries prevent SQL injection
-- [ ] CSRF protection enabled
-- [ ] Security headers configured (CSP, HSTS, X-Frame-Options)
-
-**Infrastructure**
-- [ ] Firewall rules follow default-deny
-- [ ] Network segmentation implemented
-- [ ] Systems patched and updated
-- [ ] Least privilege for system accounts
-- [ ] Monitoring and alerting configured
-
-**Incident Response**
-- [ ] Logging captures security events
-- [ ] Audit trails immutable
-- [ ] Incident response plan documented
-- [ ] Regular security drills conducted
-- [ ] Backup and recovery tested
-
-### Common Vulnerabilities (OWASP Top 10 2025)
-
-| Vulnerability | Description | Mitigation |
-|---------------|-------------|------------|
-| **Broken Access Control** | Users access unauthorized resources | Enforce least privilege, validate on server |
-| **Cryptographic Failures** | Sensitive data exposed | Encrypt data, use proven algorithms |
-| **Injection** | Malicious data in commands/queries | Parameterized queries, input validation |
-| **Insecure Design** | Security not considered in design | Threat modeling, security requirements |
-| **Security Misconfiguration** | Improper security settings | Secure defaults, configuration management |
-| **Vulnerable Components** | Using libraries with known vulnerabilities | Dependency scanning, regular updates |
-| **Authentication Failures** | Weak authentication mechanisms | MFA, secure session management |
-| **Data Integrity Failures** | Unverified software updates | Code signing, integrity checks |
-| **Logging Failures** | Insufficient logging/monitoring | Comprehensive logging, SIEM integration |
-| **SSRF** | Server-side request forgery | Whitelist external connections, validate URLs |
-
-### Encryption Standards (2025)
-
-| Use Case | Algorithm | Key Size |
-|----------|-----------|----------|
-| **Symmetric Encryption** | AES-GCM | 256-bit |
-| **Asymmetric Encryption** | RSA | 4096-bit |
-| **Key Exchange** | ECDH | P-384 |
-| **Digital Signatures** | EdDSA | Curve25519 |
-| **Hashing** | SHA-3 | 256-bit |
-| **Password Hashing** | Argon2id | Memory: 64MB, Iterations: 3 |
-| **TLS** | TLS 1.3 | - |
-
-### Decision Framework
-
-**When to use symmetric vs asymmetric encryption:**
-- **Symmetric (AES):** Large data volumes, known parties sharing key
-- **Asymmetric (RSA):** Key exchange, digital signatures, unknown parties
-
-**When to implement rate limiting:**
-- Authentication endpoints (prevent brute force)
-- API endpoints (prevent abuse)
-- Resource-intensive operations
-
-**When to apply defense in depth:**
-- Always. Security in layers is fundamental.
-
----
+- **Securing the wrong property.** Encrypting a public dataset while leaving its integrity unprotected, or spending on availability for data nobody needs quickly. Name the loss before choosing the control.
+- **Principles applied only at design time.** Least privilege decays as permissions are added for one-off tasks and never removed. Periodic access review is how the principle survives contact with operations.
+- **Failing open by accident.** Exception handlers, timeouts, and feature flags that default to "allow" are the most common way a correct authorization design becomes an incorrect implementation.
+- **Obscurity treated as a control.** Hidden admin URLs, undocumented ports, and custom encoding schemes delay an attacker briefly. They are not a substitute for authentication.
+- **Layers that share a dependency.** Counting controls instead of asking what each one depends on produces confidence without depth.

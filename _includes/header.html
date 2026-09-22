@@ -28,11 +28,57 @@
             </button>
             <div class="header-right">
                 <nav class="site-nav">
-                    <a href="{{ '/blog.html' | relative_url }}">Blog</a>
-                    <a href="{{ '/case-studies.html' | relative_url }}">Case Studies</a>
-                    <a href="{{ '/study-guides.html' | relative_url }}">Study Guides</a>
-                    <a href="{{ '/resources.html' | relative_url }}">Resources</a>
-                    <a href="{{ '/tech-radar.html' | relative_url }}">Tech Radar</a>
+                    <div class="nav-group">
+                        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="navMenuArticles">
+                            <span>Articles</span>
+                            <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="nav-group-menu" id="navMenuArticles">
+                            <a href="{{ '/blog.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Blog</span>
+                                    <span class="nav-menu-count">{{ site.posts.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Essays on architecture and practice</span>
+                            </a>
+                            <a href="{{ '/case-studies.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Case Studies</span>
+                                    <span class="nav-menu-count">{{ site.case_studies.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Production systems, decisions and outcomes</span>
+                            </a>
+                        </div>
+                    </div>
+
+                     <a href="{{ '/study-guides.html' | relative_url }}">Study Guides</a>
+
+                    <div class="nav-group">
+                        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="navMenuReference">
+                            <span>Reference</span>
+                            <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="nav-group-menu" id="navMenuReference">
+                            <a href="{{ '/resources.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Resources</span>
+                                    <span class="nav-menu-count">{{ site.resources.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Cheatsheets and quick reference</span>
+                            </a>
+                            <a href="{{ '/tech-radar.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Tech Radar</span>
+                                </span>
+                                <span class="nav-menu-desc">What we adopt, trial, assess, and hold</span>
+                            </a>
+                        </div>
+                    </div>
+
                     <a href="{{ '/about.html' | relative_url }}">About</a>
                 </nav>
             </div>
@@ -47,31 +93,91 @@
     (function() {
         const hamburger = document.querySelector('.hamburger');
         const headerRight = document.querySelector('.header-right');
+        const groups = Array.from(document.querySelectorAll('.nav-group'));
+
+        function closeGroups(except) {
+            groups.forEach(group => {
+                if (group === except) return;
+                group.classList.remove('open');
+                group.querySelector('.nav-group-toggle').setAttribute('aria-expanded', 'false');
+            });
+        }
+
+        function closePanel() {
+            hamburger.classList.remove('active');
+            headerRight.classList.remove('active');
+            hamburger.setAttribute('aria-expanded', 'false');
+            closeGroups(null);
+        }
 
         hamburger.addEventListener('click', function() {
             const isExpanded = this.getAttribute('aria-expanded') === 'true';
             this.setAttribute('aria-expanded', !isExpanded);
             this.classList.toggle('active');
             headerRight.classList.toggle('active');
+            if (isExpanded) closeGroups(null);
         });
 
-        // Close menu when clicking a nav link
-        const navLinks = document.querySelectorAll('.site-nav a');
-        navLinks.forEach(link => {
-            link.addEventListener('click', function() {
-                hamburger.classList.remove('active');
-                headerRight.classList.remove('active');
-                hamburger.setAttribute('aria-expanded', 'false');
+        // Submenu toggles: click to open, one open at a time
+        groups.forEach(group => {
+            const toggle = group.querySelector('.nav-group-toggle');
+            const items = Array.from(group.querySelectorAll('.nav-group-menu a'));
+
+            toggle.addEventListener('click', function(event) {
+                event.stopPropagation();
+                const willOpen = !group.classList.contains('open');
+                closeGroups(group);
+                group.classList.toggle('open', willOpen);
+                toggle.setAttribute('aria-expanded', String(willOpen));
+            });
+
+            toggle.addEventListener('keydown', function(event) {
+                if (event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                closeGroups(group);
+                group.classList.add('open');
+                toggle.setAttribute('aria-expanded', 'true');
+                if (items[0]) items[0].focus();
+            });
+
+            items.forEach((item, index) => {
+                item.addEventListener('keydown', function(event) {
+                    if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        (items[index + 1] || items[0]).focus();
+                    } else if (event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        if (index === 0) {
+                            toggle.focus();
+                        } else {
+                            items[index - 1].focus();
+                        }
+                    }
+                });
             });
         });
 
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.header-content')) {
-                hamburger.classList.remove('active');
-                headerRight.classList.remove('active');
-                hamburger.setAttribute('aria-expanded', 'false');
+        // Escape closes the open submenu first, then the mobile panel
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') return;
+            const open = groups.find(group => group.classList.contains('open'));
+            if (open) {
+                closeGroups(null);
+                open.querySelector('.nav-group-toggle').focus();
+            } else if (headerRight.classList.contains('active')) {
+                closePanel();
+                hamburger.focus();
             }
+        });
+
+        // Close everything when following a nav link
+        document.querySelectorAll('.site-nav a').forEach(link => {
+            link.addEventListener('click', closePanel);
+        });
+
+        // Close when clicking outside the header
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.header-content')) closePanel();
         });
     })();
 </script>

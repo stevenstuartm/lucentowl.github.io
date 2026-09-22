@@ -1,0 +1,90 @@
+---
+title: "Zero Trust Policy Decision and Enforcement"
+kind: flow
+system: security
+summary: "One request decided in the control plane, enforced in the data plane."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" role="img" aria-labelledby="ztp-title ztp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ztp-title">Zero trust policy decision and enforcement points</title>
+<desc id="ztp-desc">A user and device make a request that reaches a policy enforcement point in the data plane. The enforcement point asks the control plane, where a policy engine evaluates identity, device posture, resource sensitivity, and risk signals, and a policy administrator turns that verdict into a session instruction sent back to the enforcement point. Only then does traffic reach the one resource that was requested. The session grants no path to any other resource, and the next request is evaluated again from scratch.</desc>
+<style>
+.zt-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.zt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.zt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.zt-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.zt-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.zt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.zt-t-ext { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.zt-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.zt-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.zt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.zt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.zt-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.zt-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.zt-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.zt-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.zt-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+</style>
+
+<defs>
+<marker id="ztp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ztp-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="zt-band" x="20" y="20" width="250" height="190" rx="8"/>
+<text class="zt-hd" x="34" y="40">SIGNALS</text>
+<text class="zt-s" x="34" y="66">identity and authentication</text>
+<text class="zt-s" x="34" y="90">device posture and compliance</text>
+<text class="zt-s" x="34" y="114">resource sensitivity</text>
+<text class="zt-s" x="34" y="138">behavior and threat intelligence</text>
+<text class="zt-s" x="34" y="162">time, location, and network</text>
+
+<rect class="zt-band" x="300" y="20" width="580" height="190" rx="8"/>
+<text class="zt-hd" x="314" y="40">CONTROL PLANE</text>
+<rect class="zt-box" x="330" y="55" width="210" height="125" rx="6"/>
+<text class="zt-n" x="344" y="80">Policy engine</text>
+<text class="zt-s" x="344" y="104">evaluates policy against</text>
+<text class="zt-s" x="344" y="122">the signals and returns</text>
+<text class="zt-s" x="344" y="140">grant, deny, or revoke</text>
+<rect class="zt-box" x="590" y="55" width="210" height="125" rx="6"/>
+<text class="zt-n" x="604" y="80">Policy administrator</text>
+<text class="zt-s" x="604" y="104">turns the verdict into</text>
+<text class="zt-s" x="604" y="122">a session instruction,</text>
+<text class="zt-s" x="604" y="140">and can end the session</text>
+
+<rect class="zt-ext" x="20" y="255" width="250" height="90" rx="6"/>
+<text class="zt-t-ext" x="34" y="282">User and device</text>
+<text class="zt-s" x="34" y="306">untrusted wherever they</text>
+<text class="zt-s" x="34" y="324">connect from</text>
+
+<rect class="zt-band" x="300" y="230" width="580" height="140" rx="8"/>
+<text class="zt-hd" x="314" y="250">DATA PLANE</text>
+<rect class="zt-sys" x="330" y="275" width="200" height="80" rx="6"/>
+<text class="zt-t-inv" x="344" y="302">Enforcement point</text>
+<text class="zt-s-inv" x="344" y="325">in the path of every</text>
+<text class="zt-s-inv" x="344" y="343">single request</text>
+<rect class="zt-box" x="600" y="275" width="250" height="80" rx="6"/>
+<text class="zt-n" x="614" y="302">Resource</text>
+<text class="zt-s" x="614" y="325">one application, API,</text>
+<text class="zt-s" x="614" y="343">or dataset</text>
+
+<path class="zt-ctl" d="M 270,115 H 324" marker-end="url(#ztp-c)"/>
+<path class="zt-flow" d="M 270,300 H 324" marker-end="url(#ztp-a)"/>
+<text class="zt-lab" x="228" y="364">1  request</text>
+<path class="zt-ctl" d="M 380,275 V 186" marker-end="url(#ztp-c)"/>
+<text class="zt-labc" x="392" y="238">2  evaluate this request</text>
+<path class="zt-ctl" d="M 620,186 V 250 H 400 V 269" marker-end="url(#ztp-c)"/>
+<text class="zt-labc" x="440" y="264">3  allow this one session</text>
+<path class="zt-flow" d="M 530,315 H 594" marker-end="url(#ztp-a)"/>
+<text class="zt-lab" x="536" y="307">4</text>
+
+<text class="zt-note" x="20" y="410">The session reaches this resource only. Anything else the user asks for goes back through step 2, and a</text>
+<text class="zt-note" x="20" y="430">change in posture or risk lets the policy administrator end a session that is already running.</text>
+
+<path class="zt-flow" d="M 30,466 H 64"/>
+<text class="zt-el" x="72" y="470">traffic</text>
+<path class="zt-ctl" d="M 150,466 H 184"/>
+<text class="zt-el" x="192" y="470">policy decision</text>
+</g>
+</svg>

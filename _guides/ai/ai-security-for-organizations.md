@@ -9,7 +9,7 @@ tags: [security, governance, dlp, data-classification, shadow-ai, risk-managemen
 
 Developers already use AI tools every day for writing code, debugging, reviewing, and documenting. For a security team, prohibition is rarely a live option, and attempting it mostly moves usage somewhere unmonitored. The work that remains is managing the data flow those tools create.
 
-This guide covers the operational side, meaning the policies, controls, and architectural decisions that protect an organization when AI tools are part of the daily workflow. It is written for security administrators and engineering leadership. Attacks against models themselves, such as data poisoning, model inversion, and adversarial examples, are covered in [Emerging Technologies Security](/study-guides/security/emerging-technologies.html).
+This guide covers the operational side, meaning the policies, controls, and architectural decisions that protect an organization when AI tools are part of the daily workflow. It is written for security administrators and engineering leadership. Attacks against an LLM application you build, including prompt injection and data and model poisoning, are covered in [LLM Application Security](/study-guides/ai/llm-application-security.html).
 
 ## Start with What Data May Go Where
 
