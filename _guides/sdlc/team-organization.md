@@ -3,31 +3,29 @@ title: "Team Architecture & Organization"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Fundamentals
-description: "Modern team structures and collaboration patterns for software development, including domain-driven design, feature teams, and architectural governance."
-tags: [sdlc, leadership, team-organization, collaboration, structure]
+description: "How team boundaries shape system boundaries, the four Team Topologies team types and the three interaction modes between them, cognitive load as the sizing constraint, aligning teams to bounded contexts, and the structures that reliably slow delivery down."
+tags: [fundamentals, team-topologies, conways-law, cognitive-load, platform-teams, bounded-contexts]
 ---
 
-## Overview
+## Why Team Structure Is an Architecture Decision
 
-**Team architecture** refers to how development teams are structured, how they interact, and how architectural decisions are made and governed across the organization. Effective team architecture aligns team boundaries with system boundaries, promotes autonomy while maintaining consistency, and enables teams to deliver value independently.
+Melvin Conway's 1968 paper "How Do Committees Invent?" made a claim that has survived every change in technology since: organizations that design systems are constrained to produce designs that copy the communication structures of those organizations. Three teams that rarely speak will produce three components with awkward interfaces between them, whatever the architecture diagram says.
 
 <blockquote class="pull-quote">
-<p>Conway's Law: Organizations design systems that mirror their communication structure.</p>
+<p>Conway's Law is not a warning. It is a lever, and it points the other way from how most organizations use it.</p>
 </blockquote>
 
-### Why Team Architecture Matters
+Most teams meet Conway's Law as a complaint, an explanation for why the architecture ended up the way it did. The useful reading runs the other direction. If communication structure determines system structure, then choosing the communication structure is a way of choosing the system structure. That deliberate use has a name, the **inverse Conway maneuver**: decide what architecture you want, then organize teams so that architecture is the one that naturally emerges.
 
-- **Conway's Law**: Organizations design systems that mirror their communication structure
-- **Autonomy**: Well-structured teams can make decisions and deliver without excessive coordination
-- **Consistency**: Clear architectural roles ensure consistency across teams
-- **Scalability**: Good team architecture enables organizations to scale development efforts
-- **Quality**: Clear ownership leads to better system design and code quality
+This works because it removes a fight rather than winning one. An architecture that cuts across team boundaries has to be defended continuously against the path of least resistance, and it loses slowly. An architecture that matches team boundaries is what happens when nobody is paying attention.
 
 ---
 
 ## Team Structure Patterns
 
-### Feature Teams vs. Component Teams
+### Feature Teams and Component Teams
+
+The first structural choice is whether a team owns a slice of user-visible value or a technical layer.
 
 <div class="comparison">
 <div class="content-card content-card--accent">
@@ -46,348 +44,106 @@ tags: [sdlc, leadership, team-organization, collaboration, structure]
 </div>
 </div>
 
-### Hybrid Models
+The decisive difference is how many teams a typical piece of work has to pass through. Component teams optimize for depth of expertise within a layer and pay for it at every boundary crossing, because almost nothing users want lives entirely inside one layer. A change to checkout touches the interface, the service and the data, so with component teams it becomes three pieces of work in three backlogs with three sets of priorities.
 
-**Practical Reality:**
-Most organizations use a hybrid approach:
-- Feature teams for product development
-- Platform/component teams for shared infrastructure (authentication, data platform, CI/CD)
-- Architecture team for governance and standards
+Component teams remain defensible where the component genuinely is the unit of work, which is most often true for platform and infrastructure, and in legacy systems where the specialist knowledge to change a subsystem safely sits with a few people.
+
+Most organizations end up with a mixture: feature teams for product work, platform teams for shared capability, and occasionally a specialist team for a part that resists being spread around.
 
 ### Team Topologies
 
-*Framework by Matthew Skelton and Manuel Pais from "Team Topologies" (2019)*
+Matthew Skelton and Manuel Pais's *Team Topologies* (2019) sharpened this into a model with only four team types, on the argument that most organizational complexity is accidental. The four types matter less than the second half of the model, which is that only three kinds of interaction are allowed between them, and that every team should know which mode it is in with every other team it touches.
 
-Team organization directly affects architecture through Conway's Law, but not all team structures are equal. Matthew Skelton and Manuel Pais identified four fundamental team types that optimize software delivery:
+{% include figure.html id="sdlc-team-topologies" %}
 
-<div class="card-group">
-<div class="content-card content-card--accent">
-<h4>Stream-Aligned Teams</h4>
-<p>Align to a flow of work from a business domain. They focus on a single business domain, moving quickly to deliver discrete value. This is the primary team type in most organizations.</p>
-<p><em>Examples: checkout team, inventory team, customer service team</em></p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Enabling Teams</h4>
-<p>Bridge capability gaps across stream-aligned teams. They provide research, learning, and specialized knowledge to help teams overcome obstacles.</p>
-<p>These teams offer temporary assistance rather than creating permanent dependencies.</p>
-</div>
-<div class="content-card content-card--accent-warning">
-<h4>Complicated-Subsystem Teams</h4>
-<p>Build and maintain systems requiring specialized knowledge that would overwhelm stream-aligned teams.</p>
-<p><em>Examples: video processing engines, mathematical algorithm libraries, real-time trading systems</em></p>
-</div>
-<div class="content-card content-card--accent">
-<h4>Platform Teams</h4>
-<p>Provide internal products that accelerate stream-aligned teams. They build self-service APIs, tools, and services that form the foundation other teams build upon.</p>
-<p>They treat other teams as customers, providing product experiences that make stream-aligned teams more productive.</p>
-</div>
-</div>
+**Stream-aligned teams** own a continuous flow of work for one slice of the business and deliver it end to end. This is meant to be the default, and most teams in a healthy organization should be one. The other three types exist to make stream-aligned teams viable.
 
----
+**Platform teams** provide internal products that stream-aligned teams consume for themselves. The test of a platform team is whether adoption is voluntary. A platform other teams choose because it is easier than the alternative is a platform; a platform teams must route through is a gate, and it will behave like one.
 
-## Domain-Driven Team Organization
+**Enabling teams** close a capability gap in another team, then leave. Their output is the other team's improved ability rather than any artifact of their own, and an enabling team that becomes permanent has quietly turned into either a platform team or a bottleneck.
 
-### Bounded Contexts and Team Boundaries
+**Complicated-subsystem teams** own a part that needs deep specialist knowledge, such as a pricing engine or a video codec. This is the type to be most sceptical about, because "this is too complicated for a normal team" is also what an unnecessary silo says about itself.
 
-**Bounded Context:** A logical boundary within which a particular domain model is defined and applicable.
+### The Three Interaction Modes
 
-**Aligning teams with bounded contexts:**
-- Each team owns one or more bounded contexts
-- Context boundaries define team boundaries
-- Clear interfaces between contexts minimize coordination
-- Teams can evolve their context independently
+The interaction modes are the part most often skipped when Team Topologies gets summarized, and they carry most of the model's practical value.
 
-### Domain APIs Within Monoliths
+| Mode | What it means | Expected duration |
+| --- | --- | --- |
+| **Collaboration** | Two teams work closely, with high communication, while something is still being discovered | Temporary, and its end is the goal |
+| **X-as-a-Service** | One team consumes something the other provides, with minimal conversation | Long-running and stable |
+| **Facilitating** | One team helps another become capable of something, without doing it for them | Temporary |
 
-Even in monolithic applications, domain-driven organization provides benefits:
+Collaboration is expensive, and naming it as a mode makes that visible. Two teams in permanent collaboration are not collaborating, they are one team with a reporting line through the middle, and the usual fix is to redraw the boundary or to turn the relationship into a service.
 
-**Internal Domain APIs:**
-- Each domain exposes clear API boundaries
-- Other domains interact through these APIs, not direct database access
-- Enables future extraction to microservices
-- Maintains encapsulation and reduces coupling
+The failure this model is built to catch is a team that is in an undeclared mode. A platform team that believes it is providing X-as-a-Service while its consumers believe they are in collaboration will be permanently disappointed in each other, because one side has staffed for occasional support questions and the other expects a partner.
 
-**Example in a Monolithic E-Commerce System:**
-- **Catalog Domain**: Product information, categories, search
-- **Order Domain**: Order management, order history
-- **Payment Domain**: Payment processing, billing
-- **Shipping Domain**: Shipping calculation, fulfillment tracking
+### Cognitive Load Is the Sizing Constraint
 
-Each domain has clear APIs, even though all code is in one codebase.
+Underneath the team types sits the idea that does most of the work: a team can only hold so much in its head, and that limit, not headcount, is what determines how much of a system a team can own.
 
-### Team Ownership
+Cognitive load comes in three kinds, and only one of them earns its place. The load of the problem domain itself is what you want the team spending its capacity on. The load of the tools and mechanics of doing the work is waste to be removed, and it is exactly what a platform team exists to absorb. The load of holding an unfamiliar or badly-structured system in mind is what accumulates when a team owns more than it can model.
 
-**Clear Responsibility:**
-- Each team owns their domain's code, data, and services
-- Teams responsible for quality, performance, and reliability of their domain
-- Teams handle operational support for their domain
-
-**Benefits:**
-- Reduced cognitive load (teams focus on their domain)
-- Faster decision-making within domain boundaries
-- Clear accountability
-- Domain expertise develops naturally
+This reframes several common questions. "Can this team take on one more service?" is really "does this team already have more than it can hold?" A team that owns eight services none of its members can explain has a cognitive load problem that adding a ninth will not improve and hiring a tenth member may not either.
 
 ---
 
-## Architectural Roles & Responsibilities
+## Aligning Teams to Domain Boundaries
 
-### Optimal Team Structure
+If team boundaries are going to determine system boundaries, the question becomes where to draw them. Domain-driven design's **bounded context**, a boundary within which one domain model applies consistently, is the most useful answer, because it is defined by where the language changes rather than by the org chart.
 
-For organizations with significant architectural complexity, consider this structure:
+A "customer" means something different to billing than it does to support, and the point at which the word changes meaning is a natural seam. Teams drawn along those seams coordinate rarely, because the things that change together are inside one boundary.
 
-#### System Architect
+### This Applies Inside a Monolith
 
-**Responsibilities:**
-- Define overall technical vision and strategy
-- Establish architectural standards and patterns
-- Review and approve significant architectural decisions
-- Ensure system-wide quality attributes (performance, security, scalability)
-- Facilitate architecture reviews across teams
-- Mentor layer architects and senior engineers
+Aligning teams to domains does not require distributed services, and treating it as a microservices practice is a common and expensive mistake.
 
-**Skills:**
-- Broad technical expertise across all layers
-- Strong communication and leadership
-- Strategic thinking and business alignment
-- Experience with multiple architectural styles
+Inside a single codebase, each domain can expose an internal interface that other domains call, rather than reaching into its tables. An e-commerce monolith can have catalogue, order, payment and shipping domains, each with an owning team, each reachable only through its own interface. Nothing is deployed separately and the boundaries are as strong as the team discipline that maintains them.
 
-#### Layer Architects / Technical Leads
+The benefit is immediate rather than deferred. Teams can change their own domain without coordinating, because callers depend on an interface rather than on a schema. That these boundaries also make later extraction possible is a bonus, not the reason to do it.
 
-**UI Architect:**
-- Define frontend architecture and standards
-- Ensure consistent user experience across features
-- Select and govern frontend frameworks and libraries
-- Lead UI technology decisions
-- Coordinate feature team frontend work
+### What Ownership Has to Include
 
-**Service/API Architect:**
-- Define service architecture and API standards
-- Ensure API consistency and quality
-- Govern service communication patterns
-- Lead backend technology decisions
-- Design integration patterns
+Ownership only produces the benefits above when it covers the whole lifecycle. A team that owns a domain's code but not its operation will optimize for shipping rather than for running, because nothing in its experience connects the two.
 
-**Data Architect:**
-- Define data architecture and storage strategies
-- Ensure data consistency and integrity
-- Govern database technologies and patterns
-- Design data access layers
-- Plan data migration and evolution strategies
-
-**Responsibilities shared across layer architects:**
-- Lead technical design in their domain
-- Review and approve designs in their layer
-- Provide technical guidance to feature teams
-- Maintain and evolve layer-specific standards
-- Coordinate with other layer architects
-
-#### Feature Team Leads
-
-**Responsibilities:**
-- Lead feature team delivery and execution
-- Participate in architectural discussions
-- Ensure team follows architectural standards
-- Escalate architectural concerns
-- Facilitate team collaboration and decision-making
-
-**Skills:**
-- Technical leadership within domain
-- Good understanding of system architecture
-- Collaboration and communication
-- Domain/business knowledge
-
-### Architecture Review Process
-
-**Regular Architecture Reviews:**
-- Scheduled design review sessions (weekly or bi-weekly)
-- Teams present significant design decisions
-- System architect and relevant layer architects review
-- Identify cross-team impacts and dependencies
-- Ensure alignment with architectural principles
-
-**When to Require Architecture Review:**
-- New services or major components
-- Changes to APIs or interfaces
-- New technology introductions
-- Significant refactoring efforts
-- Cross-team dependencies
-
----
-
-## Collaboration Patterns
-
-### Cross-Team Coordination
-
-**UI Architect Leadership:**
-When feature teams need to coordinate on user-facing functionality:
-- UI Architect leads design sessions
-- Ensure consistent user experience
-- Define shared UI components and patterns
-- Coordinate frontend technology decisions
-- Resolve conflicts between team preferences
-
-**Service Architect Leadership:**
-When teams need to integrate services or APIs:
-- Service Architect facilitates integration design
-- Define API contracts and integration patterns
-- Ensure service autonomy and loose coupling
-- Review performance and scalability implications
-
-**Data Architect Leadership:**
-When teams share data or need data integration:
-- Data Architect designs data sharing strategies
-- Define data ownership and access patterns
-- Plan for data consistency and synchronization
-- Review data model changes for cross-team impact
-
-### Communication Structures
-
-**Preventing Silos:**
-- Regular cross-team technical discussions
-- Architectural guild meetings
-- Internal tech talks and knowledge sharing
-- Rotation programs between teams
-- Shared documentation and decision records
-
-**Ensuring Alignment:**
-- Clear architectural principles and standards
-- Architecture Decision Records (ADRs)
-- Regular architecture review meetings
-- Cross-team retrospectives
-- Technical roadmap visibility
-
-### Inner Source Practices
-
-**Enabling Cross-Team Contributions:**
-- Well-documented codebases with contribution guides
-- Code ownership files (CODEOWNERS)
-- Open pull requests visible to all teams
-- Cross-team code reviews encouraged
-- Shared coding standards and tools
-
-**Benefits:**
-- Reduces duplication through code reuse
-- Spreads knowledge across teams
-- Faster resolution of cross-cutting issues
-- Builds collaborative culture
+Meaningful ownership means the team owns the code, the data, the deployment, and the pager. It means the team decides how its domain works internally without asking. And it means the team carries the consequences of its own decisions, which is the mechanism that makes the other two safe to grant.
 
 ---
 
 ## Scaling Team Structures
 
-### Small Organizations (1-3 Teams)
+What changes with organizational size is not the principles but which problem is dominant.
 
-**Structure:**
-- Lightweight architectural governance
-- Shared system architect role (may be senior engineer)
-- Feature teams with cross-functional skills
-- Frequent informal coordination
+**One to three teams.** Coordination is cheap and mostly happens by people talking. The structure to invest in is ownership, so that it is clear who decides what. Formal process at this size costs more than it returns.
 
-**Focus:**
-- Establish architectural principles early
-- Build foundation for scaling
-- Maintain high communication frequency
-- Document key decisions
+**Four to ten teams.** Nobody can hold the whole system in mind any more, and interfaces between teams stop being obvious. This is where platform teams start to earn their keep, because the same infrastructure work is now being done several times in parallel. It is also where architectural decisions need a home, since "whoever is in the room" stops producing consistent answers.
 
-### Medium Organizations (4-10 Teams)
+**Ten or more teams.** Dependencies between teams become the main constraint on delivery, ahead of anything happening inside a team. The work shifts to reducing the need for coordination rather than managing it better, through self-service platforms, clear domain boundaries, and decision rights explicit enough that teams do not have to ask.
 
-**Structure:**
-- Dedicated system architect
-- Layer architects or technical leads
-- Mix of feature teams and platform teams
-- Regular architecture review meetings
+### Team Size
 
-**Focus:**
-- Formalize architectural governance
-- Establish clear team boundaries
-- Define inter-team interfaces
-- Balance autonomy with consistency
+Amazon's two-pizza rule, that a team should be small enough to feed with two pizzas, is the best-known heuristic and usually cited as around six to ten people. The number matters less than the reason behind it, which is that communication paths grow quadratically with team size. Five people have ten pairs to keep in sync, and ten people have forty-five.
 
-### Large Organizations (10+ Teams)
-
-**Structure:**
-- Architecture team with system and layer architects
-- Multiple product-focused feature teams
-- Dedicated platform and infrastructure teams
-- Formal architecture review boards
-- Communities of practice by technology or domain
-
-**Focus:**
-- Maintain architectural consistency at scale
-- Enable team autonomy through clear standards
-- Platform teams provide self-service capabilities
-- Strong documentation and decision-making processes
-
-### Two-Pizza Team Rule
-
-**Amazon's guideline:** Teams should be small enough to feed with two pizzas (typically 6-10 people).
-
-**Why it works:**
-- Smaller teams have better communication
-- Reduced coordination overhead
-- Faster decision-making
-- Clearer accountability
-
-**When teams grow beyond 10:**
-- Consider splitting by domain or feature area
-- Ensure clear boundaries and interfaces
-- May require additional coordination mechanisms
+When a team outgrows that, splitting it along a domain boundary preserves the property that made it work. Splitting it by technical layer replaces one team's internal communication with two teams' coordination overhead, which is the more expensive kind.
 
 ---
 
-## Team Anti-Patterns to Avoid
+## Structures That Slow Delivery
 
-### The Knowledge Silo
+Four patterns recur, and each looks locally reasonable to the people inside it.
 
-**Problem:** Critical knowledge concentrated in single individuals or small groups.
+**The knowledge silo.** Critical knowledge sits with one person or a small group, so work queues behind their availability and their absence is an outage. The forces that produce it are efficiency arguments, since the person who knows the area is genuinely the fastest at changing it. Pairing, rotation and review spread the knowledge at a short-term cost that is smaller than the queue.
 
-**Solution:**
-- Pair programming and mob programming
-- Code review requirements
-- Documentation of key decisions and systems
-- Knowledge sharing sessions
-- Rotation through different areas
+**The bottleneck team.** Every other team waits on one team, usually a central platform, database or security group that must approve or perform something. Adding capacity to the bottleneck rarely fixes it, because demand grows to meet supply. What fixes it is removing the team from the path, by turning approvals into self-service with automated policy, or by delegating the decision along with the standard for making it.
 
-### The Bottleneck Team
+**The ivory tower.** Architects decide without building, and the decisions degrade in quality because the feedback that would correct them never reaches them. What breaks this is architects spending time in the code, reviewing changes, and building proofs of concept, so that a decision that does not survive contact with the implementation is discovered by the person who made it.
 
-**Problem:** A team that all other teams depend on, slowing everyone down.
-
-**Solution:**
-- Build self-service platforms
-- Delegate decision-making authority
-- Increase team capacity
-- Reduce dependencies through better boundaries
-
-### The Ivory Tower Architects
-
-**Problem:** Architects disconnected from implementation, making impractical decisions.
-
-**Solution:**
-- Architects stay close to code
-- Regular involvement in code reviews
-- Time spent on hands-on technical work
-- Proof-of-concept implementations
-- Close collaboration with development teams
-
-### The Competitive Teams
-
-**Problem:** Teams competing rather than collaborating, duplicating work or working at cross purposes.
-
-**Solution:**
-- Align incentives around shared goals
-- Encourage cross-team collaboration
-- Celebrate collective wins
-- Clear domain boundaries
-- Regular cross-team communication
+**Competing teams.** Teams optimize for their own metrics at the expense of the system, duplicating work or working at cross purposes. This is nearly always an incentive problem rather than an attitude problem. Teams measured on their own throughput will protect their own throughput, and the correction is at the level of what gets measured and rewarded rather than at the level of asking people to collaborate more.
 
 ---
 
-## Keys to Successful Team Architecture
+## What Holds
 
-1. **Align Team Structure with System Architecture**: Use Conway's Law to your advantage
-2. **Balance Autonomy and Alignment**: Teams need freedom to move fast, but consistency is important
-3. **Clear Ownership**: Every piece of code, service, and domain should have a clear owner
-4. **Invest in Platforms**: Platform teams enable feature team autonomy
-5. **Communication Over Process**: Good communication reduces the need for heavy coordination processes
-6. **Evolve Continuously**: Team structure should adapt as the organization and system evolve
+Team structure is a design decision with the same weight as any architectural one, and it should be revisited on the same terms.
+
+Team boundaries become system boundaries whether or not anyone chose them, so choose them. Size teams by how much they can hold rather than by headcount, and move work off them rather than adding people when they are full. Make every team's interaction with every other team one of three named modes, and treat a permanent collaboration as a boundary in the wrong place. Give ownership that includes operation, because ownership without consequences produces different decisions. And expect the right structure to change, since an arrangement that fits four teams will not fit fourteen.

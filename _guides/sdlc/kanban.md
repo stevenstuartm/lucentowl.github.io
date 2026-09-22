@@ -3,8 +3,8 @@ title: "Kanban Methodology"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Frameworks
-description: "Comprehensive guide to Kanban - visualizing workflow, limiting WIP, optimizing flow, and continuous delivery through pull-based systems."
-tags: [sdlc, methodology, kanban, workflow, continuous-delivery, lean, practical]
+description: "Kanban as an overlay on the process you already have: its change-management and service-delivery principles, the six practices, WIP limits and why they are the whole mechanism, the flow metrics and the terminology fight around them, and the eight ways a board ends up meaning nothing."
+tags: [practical, kanban, wip-limits, flow-metrics, cycle-time, pull-systems, littles-law]
 ---
 
 ## What is Kanban
@@ -73,9 +73,9 @@ David J. Anderson applied these principles to software development at Microsoft 
 <h4>Scrum</h4>
 <ul>
 <li>Replaces current process</li>
-<li>Prescribed roles (PO, SM, Dev Team)</li>
-<li>Fixed sprints (1-4 weeks)</li>
-<li>Sprint commitment required</li>
+<li>Prescribed accountabilities (Product Owner, Scrum Master, Developers)</li>
+<li>Fixed-length Sprints of a month or less</li>
+<li>Commitment to a Sprint Goal</li>
 <li>Metrics: Velocity (story points)</li>
 <li>Low change tolerance mid-sprint</li>
 </ul>
@@ -125,55 +125,23 @@ David J. Anderson applied these principles to software development at Microsoft 
 - Data-driven decisions (not hierarchy-driven)
 - Collaborative experimentation
 
-### Core Principles
+### Principles and Practices Are Different Things
 
-**1. Visualize the workflow:**
+Kanban separates its principles from its practices, and guides that merge them lose the part that explains why the practices are shaped as they are. The six practices are covered in detail further down. The principles come in two groups of three.
 
-Making work visible reveals problems:
-- Where is work stuck?
-- What's in progress vs. waiting?
-- Where are bottlenecks forming?
-- How much WIP do we actually have?
+**Change management principles** govern how Kanban is adopted, and they are the reason it can be introduced without reorganizing anything.
 
-**2. Limit Work in Progress (WIP):**
+- **Start with what you do now.** Kanban does not replace a process. It makes the existing one visible, including the parts nobody designed.
+- **Agree to pursue improvement through evolutionary change.** Change happens in small increments the team can evaluate, rather than in a transition.
+- **Encourage acts of leadership at all levels.** Improvement comes from whoever can see the problem, which is usually not the person with the title.
 
-Explicit limits prevent overload:
-- Focus on finishing, not starting
-- Make capacity constraints visible
-- Force prioritization decisions
-- Reduce context switching
+**Service delivery principles** govern how the work is understood once it is visible.
 
-**3. Manage flow:**
+- **Understand and focus on the customer's needs.** The unit of value is what the customer receives, not what the team produces.
+- **Manage the work, not the people.** People self-organize around work that has been made visible and given explicit policies. What gets managed is the flow.
+- **Review the network of services regularly.** Policies that were right for last quarter's demand are not automatically right for this quarter's.
 
-Optimize the movement of work through the system:
-- Measure cycle time and lead time
-- Identify and remove bottlenecks
-- Reduce variation in flow
-- Create predictable delivery
-
-**4. Make policies explicit:**
-
-Document how work flows:
-- Definition of ready (when work can start)
-- Definition of done (when work is complete)
-- Transition criteria between stages
-- How to handle blocked work, expedited items
-
-**5. Implement feedback loops:**
-
-Regular reviews drive improvement:
-- Daily standup (coordinate and unblock)
-- Replenishment meeting (prioritize and pull new work)
-- Service delivery review (analyze metrics)
-- Operations review (identify improvements)
-
-**6. Improve collaboratively, evolve experimentally:**
-
-Continuous improvement through:
-- Data-driven decisions (measure impact)
-- Small experiments (reduce risk)
-- Collaborative problem-solving (team ownership)
-- Evolutionary change (incremental improvements)
+The first principle is what distinguishes Kanban from every framework in this category. Because it overlays rather than replaces, a team can start on Monday without anyone changing role, and the initial board is allowed to be an honest picture of a bad process. That honesty is the point, since a board drawn to show how work is supposed to flow hides exactly what the method is meant to find.
 
 ### What Kanban Is NOT
 
@@ -1202,6 +1170,10 @@ Kanban relies on data-driven improvement. Track these key metrics to understand 
 
 ### Core Flow Metrics
 
+**A warning about the words.** Kanban's two main lineages use these terms differently, and neither is wrong. Kanban University's guide measures *lead time* from the commitment point to completion and reports a *delivery rate*. The Vacanti lineage, which most tooling follows, distinguishes *cycle time* from when work starts from *lead time* from when it was requested, and adds *throughput* and *work item age*. Teams argue about these definitions constantly and pointlessly. Pick a convention, write it into your explicit policies, and make sure everyone reading a chart knows which clock started when.
+
+This guide uses the second set, because it is the one most boards and reports implement.
+
 **1. Cycle Time**
 
 **Definition:** Time from starting work to completion
@@ -1261,6 +1233,23 @@ Outliers skew averages, while median represents a typical item. The 85th percent
 - Average throughput: 10 items/week
 
 **Target:** Stable or increasing over time
+
+---
+
+**4. Work Item Age**
+
+**Definition:** Elapsed time since work started on an item that is still in progress
+
+**How to measure:**
+- Start: when the card entered the first in-progress column
+- End: now, because the item is not finished
+- Read per item, not as an average
+
+Work item age is the only one of these metrics that describes work you can still do something about. Cycle time, lead time and throughput all describe items that are already finished, so they tell you how the system behaved last month. Age tells you which card on the board is in trouble today.
+
+Used against the cycle time distribution, it becomes an alarm. If the 85th percentile cycle time is ten days, an item aged nine days that is not nearly done is about to become an outlier, and the standup has something specific to act on instead of a round of status.
+
+**Target:** No item aging past the cycle time percentile the team forecasts with
 
 ---
 
@@ -1642,537 +1631,88 @@ Kanban is designed for evolutionary change. Start where you are and improve incr
 
 ---
 
-## Alignment with AAA Cycle
-
-Kanban's emphasis on flow, transparency, and continuous improvement naturally supports the AAA Cycle.
-
-### How Kanban Supports AAA
-
-**Align Phase: Visualization + Explicit Policies**
-
-Kanban's visualization and policies support alignment:
-
-**Visualization:**
-- Make work visible to all stakeholders
-- Transparency prevents misunderstandings
-- Board shows what's actually happening (not idealized)
-- Alignment emerges from shared visibility
-
-**Explicit Policies:**
-- "Definition of Ready" ensures alignment before starting
-- Clear acceptance criteria prevent misunderstandings
-- Transition criteria make expectations explicit
-
-**Example:**
-Product Owner and team review "Ready" column in replenishment meeting. Work not meeting "Definition of Ready" stays in backlog until aligned.
-
----
-
-**Agree Phase: WIP Limits + Pull-Based System**
-
-Kanban's constraints support genuine agreement:
-
-**WIP Limits:**
-- Force honest conversation about capacity
-- Prevent over-commitment
-- Team agrees on sustainable pace
-- Limits make agreement explicit
-
-**Pull-Based System:**
-- Team pulls work when capacity exists
-- No pushing more work than team can handle
-- Agreement on priorities (replenishment meeting)
-- Sustainable commitments, not coerced
-
-**Example:**
-Replenishment meeting: "We have capacity for 3 items this week. Which are highest priority?" Team and PO agree on what to pull.
-
----
-
-**Apply Phase: Flow Management + Continuous Delivery**
-
-Kanban's focus on flow supports honoring agreements:
-
-**Flow Management:**
-- Track cycle time (measure delivery speed)
-- Identify bottlenecks (remove impediments)
-- Optimize throughput (deliver more value)
-- Predictable delivery through stable flow
-
-**Continuous Delivery:**
-- Deploy when ready (not batched)
-- Fast feedback validates agreements
-- Course correction when needed
-
-**Example:**
-Team commits to 5-day cycle time average. Metrics show cycle time increasing to 7 days. Team investigates bottleneck, improves, honors commitment.
-
----
-
-### Where Kanban Can Conflict with AAA
-
-**Potential conflict: Continuous flow without continuous alignment**
-
-**Problem:**
-Team delivers continuously but stakeholders aren't involved in steering. Work flows but may not be aligned with current needs.
-
-**Solution:**
-Regular replenishment meetings ensure continuous alignment. Pull work based on current priorities, not stale backlog.
-
-**Potential conflict: Focusing on flow efficiency at expense of outcome validation**
-
-**Problem:**
-Optimizing cycle time and throughput without validating customer value.
-
-**Solution:**
-Service delivery reviews include outcome metrics (usage, satisfaction), not just flow metrics.
-
-**Potential conflict: No explicit agreements (just continuous flow)**
-
-**Problem:**
-Work pulled continuously without clear success criteria or outcomes.
-
-**Solution:**
-Explicit policies include acceptance criteria. Definition of Done ensures agreements are clear before work starts.
-
----
-
-### Using Kanban to Strengthen AAA
-
-**Make alignment visible:**
-- Board shows what's in progress (transparency)
-- Replenishment meetings align on priorities
-- Definition of Ready ensures alignment before starting
-
-**Make agreements explicit:**
-- WIP limits = capacity agreement
-- Definition of Done = outcome agreement
-- Policies document expectations
-
-**Honor commitments through flow:**
-- Track cycle time (measure delivery speed)
-- Predictable delivery through stable flow
-- Continuous improvement honors commitment to quality
-
-**AAA + Kanban in practice:**
-
-**Align:** Replenishment meetings, explicit policies, visual transparency
-**Agree:** WIP limits (capacity), Definition of Done (outcomes), prioritization
-**Apply:** Flow optimization, continuous delivery, predictable cycle times
-
----
-
 ## When to Use Kanban
 
-### Kanban Works Well For:
+Kanban's fit is decided mostly by how work arrives. When work arrives unpredictably, in varied types and sizes, with priorities that change between one week and the next, a planned iteration is a container that keeps breaking. Continuous flow does not have to be broken, because it was never a promise about a fixed period.
 
-**Maintenance and support work:**
-- Unpredictable arrival of work
-- Varied request types
-- Need to respond quickly
-- Continuous flow better than batching
+That makes it the natural fit for maintenance, support, platform and operations work, where interruptions are the job rather than an exception to it, and where the mix of planned improvement and reactive response has to be balanced continuously rather than negotiated at a boundary.
 
-**Operations teams:**
-- DevOps, SRE, platform teams
-- Mix of planned work and interruptions
-- Need to balance reactive and proactive work
-- Expedite lane for incidents
+Kanban also has the lowest adoption cost of anything in this category, because of its first principle. Nobody changes role, nothing is renamed, and the first board is a description of what already happens. A team that cannot get organizational permission for a process change can almost always get permission to draw its current process on a wall, which is why Kanban is often the only available starting point in a resistant organization.
 
-**Teams handling varied request types:**
-- Features, bugs, tech debt, support requests
-- Different priorities and urgencies
-- Need visual prioritization
-- Swimlanes categorize work
+The last strong fit is continuous delivery, where releasing on a cadence has already stopped making sense. A team deploying several times a day has no use for an iteration boundary, and flow metrics describe what it does better than velocity does.
 
-**Teams wanting continuous delivery:**
-- Deploy multiple times per day
-- No sprint boundaries needed
-- Fast feedback and iteration
-- Cloud-native architectures
+### Where Kanban Fits Badly
 
-**Teams wanting to improve existing process:**
-- Start with current state (no disruption)
-- Overlay Kanban on existing workflow
-- Evolve incrementally
-- Low-risk change management approach
+**Teams new to iterative work.** Kanban demands more discipline than it appears to, because almost nothing is prescribed. A team without the habit of finishing work, limiting what it starts, or acting on its own metrics will get a board and no change in behavior. Scrum's structure is easier to adopt precisely because it tells you what to do.
 
-**Mature, self-organizing teams:**
-- Don't need prescriptive structure
-- Value autonomy and flexibility
-- Focus on flow and outcomes
-- Continuous improvement mindset
+**Work that needs a coordinated release.** When a set of changes has to land together and be announced, something has to batch them. Flow does not prevent this, but it provides no mechanism for it either, so the coordination has to be added.
 
-**Projects with changing priorities:**
-- Priorities shift frequently
-- Need flexibility to reprioritize
-- Sprint commitments too rigid
-- Pull-based system adapts quickly
+**Organizations that want date commitments for scope.** Kanban forecasts probabilistically from cycle time distributions, which is more honest and less comfortable than a date. Stakeholders who want a committed scope on a committed date will not find the answer satisfying, whatever its accuracy.
+
+**Teams that will not enforce the limits.** Everything Kanban produces follows from limiting work in progress. A team that sets limits and routinely exceeds them has a visualization and nothing else.
 
 ---
 
-### Kanban May Not Fit:
+## Where Kanban Goes Wrong
 
-**Teams new to Agile:**
-- May benefit from Scrum's explicit structure initially
-- Kanban assumes self-organization capability
-- Lack of prescribed roles and ceremonies can feel unstructured
+Almost every Kanban failure is a board that has been adopted without the constraint that makes a board mean anything.
 
-**Projects requiring fixed-scope commitments:**
-- Client contracts with defined deliverables
-- Fixed-bid projects
-- Regulatory requirements for specific scope
-- Kanban's flexibility may conflict with contracts
+### No WIP Limits, or Limits That Are Ignored
 
-**Teams needing explicit time-boxing:**
-- Benefit from sprint boundaries (forcing function)
-- Need regular demo cadence
-- Stakeholders expect sprint reviews
-- Time-boxed iterations provide structure
+The board goes up, the columns fill, and everything is in progress at once. Without a limit, a Kanban board is a to-do list arranged horizontally.
 
-**Large programs requiring coordination:**
-- Multiple teams with dependencies
-- Need structured planning events (PI planning)
-- May need SAFe or LeSS for scaling
-- Kanban better for single-team workflows
+The limit is the entire mechanism. It is what converts a push system into a pull system, what forces the conversation about what to stop rather than what to start, and what makes a bottleneck visible as work piling up in front of it. Little's Law makes the arithmetic unavoidable: with a fixed throughput, average cycle time rises in direct proportion to work in progress. A team with twice as much work started takes twice as long to finish any of it.
 
-**Teams requiring extensive planning:**
-- Complex, long-running projects
-- Need upfront architectural design
-- Hardware-software integration
-- May need hybrid (plan upfront, then Kanban)
+**Warning signs:** columns with no numbers on them, limits exceeded routinely with no discussion, and every team member working on several items.
 
----
+### A Board That Does Not Match Reality
 
-### Hybrid Approaches
+The board shows the process someone designed rather than the one the team runs. Work moves in batches when someone remembers to update it, a card sits in "In Progress" while its author waits on a review nobody has requested, and the queues where time is actually spent do not appear as columns at all.
 
-**Kanban + Scrum (Scrumban):**
-- Use Scrum roles (PO, SM) with Kanban board
-- Keep retrospectives, remove sprint planning
-- Continuous flow instead of sprints
-- Pull work when capacity exists
+Waiting states are the usual omission, and they are usually where most of the elapsed time is. A board with "Development" and "Testing" but no "Waiting for review" or "Waiting for deploy" hides the part of the process that most needs fixing.
 
-**Kanban + DevOps:**
-- Visualize deployment pipeline
-- WIP limits for each stage (build, test, deploy)
-- Continuous delivery through Kanban flow
-- Track deployment metrics
+**Warning signs:** cards updated in a batch before a meeting, blocked work indistinguishable from active work, and a cycle time that nobody believes.
 
-**Kanban + Lean:**
-- Natural combination
-- Kanban operationalizes Lean principles
-- Visual management = Lean transparency
-- WIP limits = Lean waste elimination
+### No Metrics
 
-**Kanban for features, Scrum for sprints:**
-- Some teams use Scrum for planning cadence
-- Kanban for workflow visualization within sprint
-- Get benefits of both approaches
+A team that visualizes and limits but never measures cannot tell whether any change helped. Kanban's improvement loop is empirical, and without cycle time, throughput and the age of in-flight work, evolutionary change becomes a series of adjustments justified by how things feel.
 
----
+**Warning signs:** no cycle time distribution, forecasts given as single dates, and improvements assessed by opinion.
 
-## Common Pitfalls and Red Flags
+### Treating Kanban as Just a Board
 
-### Pitfall 1: No WIP Limits or Ignored Limits
+The visualization is one of six practices, and it is the only one that is visible to someone walking past. Teams stop there, and Kanban becomes a status display.
 
-**Problem:**
+The other five are where the change happens. Limits create the pull system, flow management finds the bottlenecks, explicit policies remove the ambiguity about what "done" means at each step, feedback loops create the rhythm that iterations otherwise supply, and the improvement practice is what turns any of it into a change.
 
-Team creates Kanban board but doesn't set or enforce WIP limits.
+**Warning signs:** the process is described as "we use a Kanban board", no explicit policies exist, and no regular review of the system happens.
 
-**Why it's wrong:**
+### Policies Left Implicit
 
-Without WIP limits, Kanban is just a visual board. You lose the constraint that forces prioritization and finishing work.
+Without written transition criteria, every column boundary becomes a judgement call, and different people make it differently. Work moves into testing in different states of readiness, and the resulting variation shows up as unpredictable cycle time with no identifiable cause.
 
-**What actually happens:**
-- Work piles up in progress
-- Context switching continues
-- Cycle time doesn't improve
-- Team doesn't experience benefits
+Explicit policies are also what make the board safe to self-manage against. A team can pull work without asking permission only when the conditions for pulling it are written down.
 
-**How to avoid:**
-- Set explicit WIP limits from day one
-- Enforce limits (no exceptions)
-- When limit reached, help finish existing work
-- Review and adjust limits based on data
+**Warning signs:** arguments about whether something is ready, cards moving backwards regularly, and different answers from different people about what a column means.
 
-**Red flags:**
-- "In Progress" column has 20 items for 5-person team
-- WIP limits exist but are routinely ignored
-- Starting new work instead of finishing existing
-- No improvement in cycle time
+### Limits Set Once and Never Lowered
 
----
+Initial WIP limits are a guess, usually a generous one so the team can adopt the board without pain. Left there, they never bind, and a limit that never binds teaches nothing.
 
-### Pitfall 2: Board Doesn't Reflect Reality
+Lowering the limit is how Kanban surfaces problems deliberately. A tighter limit forces idle time somewhere, and where the idle time appears is the constraint. That is uncomfortable by design, and the discomfort is the information.
 
-**Problem:**
+**Warning signs:** limits unchanged since the board was created, limits above the team's actual concurrent capacity, and no blocked items ever appearing.
 
-Board is idealized or not updated in real-time.
+### No Feedback Loops
 
-**Why it's wrong:**
+Kanban replaces iteration boundaries with explicit cadences, and a team that drops the boundaries without adding the cadences has removed its only scheduled opportunities to inspect anything. Replenishment, delivery review and operations review each exist to answer a different question, and continuous flow without them becomes continuous work.
 
-Kanban's power comes from visualization. If board doesn't reflect reality, you lose visibility and transparency.
+**Warning signs:** no regular review of metrics, backlog replenished ad hoc, and no forum where the process itself gets discussed.
 
-**What actually happens:**
-- Team stops trusting the board
-- Metrics are inaccurate
-- Can't identify real bottlenecks
-- Board becomes theater (not useful)
+### Optimizing Speed Alone
 
-**How to avoid:**
-- Update board in real-time (as work happens)
-- Walk the board daily (validate accuracy)
-- Make updating board part of workflow
-- Keep board simple (easier to maintain)
+Cycle time is easy to improve by cutting quality, skipping review, and declaring things done early. It improves, defects rise, rework arrives back on the board, and throughput of genuinely finished work falls while the metric looks better.
 
-**Red flags:**
-- Cards sitting in "Done" for days before being cleared
-- Work happening that's not on board
-- Board updated once per week (batch update)
-- Team refers to external tools (not board)
+Flow metrics need a quality counterweight, whether that is escaped defect rate, rework rate, or the proportion of items that return. Optimizing one number is how a team makes itself measurably faster and actually slower.
 
----
-
-### Pitfall 3: No Metrics Tracked
-
-**Problem:**
-
-Team uses Kanban board but doesn't track cycle time, lead time, or throughput.
-
-**Why it's wrong:**
-
-Can't improve what you don't measure. Without metrics, improvements are guesses.
-
-**What actually happens:**
-- No data to identify bottlenecks
-- Can't demonstrate improvement
-- Can't forecast delivery
-- Process stagnates
-
-**How to avoid:**
-- Track cycle time from day one
-- Review metrics in service delivery reviews
-- Use data to identify improvements
-- Celebrate improvements with data
-
-**Red flags:**
-- "We're doing Kanban" but no metrics tracked
-- Can't answer "what's our average cycle time?"
-- Decisions based on opinions, not data
-- No service delivery reviews
-
----
-
-### Pitfall 4: Treating Kanban as Just a Visual Board
-
-**Problem:**
-
-Team thinks Kanban is just moving sticky notes, misses deeper practices.
-
-**Why it's wrong:**
-
-Visualization is just the first practice. WIP limits, flow management, explicit policies, feedback loops, and improvement are essential.
-
-**What actually happens:**
-- Board exists but flow doesn't improve
-- No WIP limits or policies
-- No regular meetings or metrics
-- Kanban perceived as ineffective
-
-**How to avoid:**
-- Learn all six Kanban practices
-- Implement WIP limits and explicit policies
-- Establish feedback loops (meetings)
-- Focus on continuous improvement
-
-**Red flags:**
-- "We do Kanban—we have a board"
-- No WIP limits, policies, or metrics
-- No regular cadences (standups, reviews)
-- Board is static (not evolving)
-
----
-
-### Pitfall 5: No Explicit Policies
-
-**Problem:**
-
-Team uses Kanban board but doesn't document policies (Definition of Ready, Definition of Done, transition criteria).
-
-**Why it's wrong:**
-
-Without explicit policies, everyone interprets rules differently. Inconsistent behavior and confusion result.
-
-**What actually happens:**
-- Work pulled that's not ready (rework)
-- "Done" means different things to different people
-- Inconsistent quality
-- Finger-pointing when expectations differ
-
-**How to avoid:**
-- Document "Definition of Ready" and "Definition of Done"
-- Write transition criteria for each column
-- Post policies visibly on/near board
-- Review and enforce policies
-
-**Red flags:**
-- "When is work ready to start?" gets different answers
-- "Done" work requires rework
-- Frequent misunderstandings about status
-- Policies not documented or visible
-
----
-
-### Pitfall 6: Not Reducing WIP Limits Over Time
-
-**Problem:**
-
-Team sets initial WIP limits but never reduces them.
-
-**Why it's wrong:**
-
-Initial WIP limits are conservative. Reducing limits incrementally forces better flow and uncovers bottlenecks.
-
-**What actually happens:**
-- Limits too high to constrain behavior
-- No improvement in cycle time
-- Benefits of WIP limits not realized
-
-**How to avoid:**
-- Review WIP limits monthly
-- Reduce by 1-2 items incrementally
-- Measure impact on cycle time
-- Find optimal limits through experimentation
-
-**Red flags:**
-- WIP limits haven't changed in months
-- Limits rarely reached (too high)
-- Cycle time not improving
-- No experimentation with limits
-
----
-
-### Pitfall 7: No Feedback Loops (Meetings)
-
-**Problem:**
-
-Team uses Kanban board but doesn't hold regular standup, replenishment, or review meetings.
-
-**Why it's wrong:**
-
-Feedback loops are where coordination, prioritization, and improvement happen. Without them, team works in silos and process stagnates.
-
-**What actually happens:**
-- No coordination (work gets blocked)
-- No reprioritization (stale priorities)
-- No improvement (process stagnates)
-- Kanban feels ineffective
-
-**How to avoid:**
-- Schedule daily standup (15 minutes)
-- Schedule weekly replenishment meeting
-- Schedule bi-weekly service delivery review
-- Track action items and follow through
-
-**Red flags:**
-- "We don't need meetings, we have a board"
-- Standups canceled or skipped
-- No metrics reviewed
-- No improvement discussions
-
----
-
-### Pitfall 8: Focusing Only on Speed
-
-**Problem:**
-
-Team optimizes cycle time without validating outcomes or quality.
-
-**Why it's wrong:**
-
-Fast delivery of the wrong thing or poor quality is waste. Balance speed with value and quality.
-
-**What actually happens:**
-- Cycle time improves but customer satisfaction drops
-- Quality issues emerge (defects in production)
-- Technical debt accumulates
-- Short-term speed, long-term slowdown
-
-**How to avoid:**
-- Track outcome metrics (usage, satisfaction, quality)
-- Include "Definition of Done" quality criteria
-- Reserve capacity for tech debt
-- Balance speed with sustainability
-
-**Red flags:**
-- Cycle time improving but quality declining
-- Customers complaining about bugs
-- Technical debt growing
-- Team burning out from unsustainable pace
-
----
-
-### Red Flags Summary
-
-**Process red flags:**
-- Board doesn't reflect reality
-- No WIP limits or limits ignored
-- No metrics tracked
-- No regular meetings
-
-**Policy red flags:**
-- Policies not documented or explicit
-- "Definition of Done" differs by person
-- Inconsistent behavior across team
-
-**Improvement red flags:**
-- WIP limits never change
-- No experiments or process changes
-- Metrics don't improve over time
-- No retrospectives or reviews
-
-**Focus red flags:**
-- Optimizing speed without validating outcomes
-- Quality declining
-- Team burnout from unsustainable pace
-
----
-
-## Key Takeaways
-
-**Kanban is an evolutionary change management approach:**
-- Start with current process (don't disrupt)
-- Visualize to identify problems
-- Improve incrementally through experiments
-
-**The six practices work together:**
-- Visualize workflow (make problems visible)
-- Limit WIP (force focus on finishing)
-- Manage flow (optimize cycle time and throughput)
-- Make policies explicit (shared understanding)
-- Implement feedback loops (coordination and improvement)
-- Improve collaboratively (team ownership, data-driven)
-
-**WIP limits are the key constraint:**
-- Force prioritization
-- Prevent context switching
-- Make bottlenecks visible
-- Enable faster flow
-
-**Metrics drive improvement:**
-- Cycle time and lead time measure flow
-- Throughput measures delivery rate
-- Data identifies bottlenecks and improvements
-- Probabilistic forecasting replaces estimates
-
-**Kanban aligns with AAA:**
-- Visualization supports alignment
-- WIP limits enable genuine agreement
-- Flow optimization honors commitments
-
-**Start simple and evolve:**
-- Begin with basic board (3 columns)
-- Add complexity only when needed
-- Experiment and measure impact
-- Let process evolve based on learnings
-
-**The goal is flow, not moving sticky notes.**
+**Warning signs:** cycle time improving while defects rise, items reopened after being marked done, and rework entering as new cards that reset the clock.

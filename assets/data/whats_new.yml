@@ -17,36 +17,6 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
-- id: security-guides-revised-1
-  change: revised
-  type: guide
-  title: "Security guides rebuilt"
-  url: /study-guides.html?category=security
-  cta: "Browse Security guides"
-  note: "A consolidation and refinement pass over the whole Security category, with new guides on cryptography, identity and access management, and threat modeling, plus refreshed coverage of the OWASP Top 10 2025 and risk-based vulnerability prioritization."
-  links:
-    - title: "Cryptography"
-      url: /study-guides/security/cryptography.html
-    - title: "Identity and Access Management"
-      url: /study-guides/security/identity-access-management.html
-    - title: "Threat Modeling"
-      url: /study-guides/security/threat-modeling.html
-    - title: "Cryptographic Algorithm Choices"
-      url: /resources/cryptographic-algorithm-choices.html
-
-- id: iot-guides-revised-1
-  change: revised
-  type: guide
-  title: "IoT guides revised"
-  url: /study-guides.html?category=iot
-  cta: "Browse IoT guides"
-  note: "A full consolidation and refinement pass over the IoT guides, now vendor-neutral, with a new guide on predictive maintenance and a page of IoT architecture diagrams."
-  links:
-    - title: "Industrial Predictive Maintenance and Condition Monitoring"
-      url: /study-guides/iot/iiot-predictive-maintenance.html
-    - title: "IoT Architecture Diagrams"
-      url: /resources/iot-architecture-diagrams.html
-
 - id: beads-gas-city
   change: new
   type: guide

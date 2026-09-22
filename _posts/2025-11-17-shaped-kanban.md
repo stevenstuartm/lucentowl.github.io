@@ -118,10 +118,6 @@ The answer is to reframe technical work so it can compete at the betting table. 
 
 Technical debt framed as engineering work gets deprioritized. Framed as business risk, margin opportunity, or roadmap prerequisite, it gets bet on. This demands more rigor than Shape Up's cooldown, but architectural health becomes visible and competes on the same terms as every other bet.
 
-## Shaped Kanban and the AAA Cycle
-
-Shaped Kanban naturally supports the AAA Cycle discipline: shaping ensures genuine alignment before committing to solutions, betting creates explicit agreement on specific outcomes with understood scope, and Kanban flow supports applying what was agreed without sprint boundaries forcing compromise. When discovery changes understanding mid-work, you can adjust scope, extend the circuit breaker with stakeholder agreement, or stop and reshape. The feature commitment creates accountability to an outcome, not a calendar.
-
 ## What About Multi-Team Coordination?
 
 **Multi-team coordination is hard. Shaped Kanban doesn't pretend otherwise.** Scale deserves an honest answer.

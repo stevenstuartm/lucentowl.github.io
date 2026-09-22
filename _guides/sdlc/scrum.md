@@ -3,15 +3,15 @@ title: "Scrum Methodology"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Frameworks
-description: "Comprehensive guide to Scrum - roles, ceremonies, artifacts, and practices for iterative software development with structure and empirical process control."
-tags: [sdlc, methodology, agile, scrum, sprints, ceremonies]
+description: "Scrum as the 2020 Scrum Guide defines it: three accountabilities, five events inside a fixed-length Sprint, three artifacts and the commitments that make them inspectable, velocity and the metrics around it, and the eight ways teams keep the structure while losing the feedback."
+tags: [practical, scrum, agile, sprints, velocity, product-owner, scrum-master]
 ---
 
 ## What is Scrum
 
 *Developed by Jeff Sutherland and Ken Schwaber in early 1990s, formalized in 1995. Based on empirical process control theory and influenced by Takeuchi & Nonaka's "The New New Product Development Game" (1986). Codified in the [Scrum Guide](https://scrumguides.org/){:target="_blank" rel="noopener noreferrer"} by Sutherland and Schwaber.*
 
-**Scrum** is a lightweight framework for developing, delivering, and sustaining complex products. It provides a structured approach to Agile software development through defined roles, time-boxed events (ceremonies), and specific artifacts.
+**Scrum** is a lightweight framework for developing, delivering, and sustaining complex products. It works through three accountabilities, five events inside a fixed-length Sprint, and three artifacts, each of which carries a commitment that makes it inspectable.
 
 <blockquote class="pull-quote">
 <p>Knowledge comes from experience and decisions based on what is known, not from predictions and planning.</p>
@@ -22,13 +22,13 @@ tags: [sdlc, methodology, agile, scrum, sprints, ceremonies]
 - Iterative and incremental delivery
 - Self-organizing, cross-functional teams
 - Time-boxed sprints (typically 2 weeks)
-- Regular inspection and adaptation through ceremonies
+- Regular inspection and adaptation through events
 
 **Key Characteristics:**
 
 Unlike principle-based approaches (Lean, Kanban), Scrum prescribes specific:
-- **Roles**: Product Owner, Scrum Master, Development Team
-- **Ceremonies**: Sprint Planning, Daily Standup, Sprint Review, Sprint Retrospective
+- **Roles**: Product Owner, Scrum Master, Developers
+- **Events**: Sprint Planning, Daily Scrum, Sprint Review, Sprint Retrospective
 - **Artifacts**: Product Backlog, Sprint Backlog, Increment
 - **Time-boxes**: Fixed-length sprints (1-4 weeks, typically 2)
 
@@ -45,7 +45,7 @@ Traditional Waterfall development created several problems:
 
 **Scrum addresses these through:**
 - Short iterations with working software (fast feedback)
-- Regular ceremonies creating transparency and coordination
+- Regular events creating transparency and coordination
 - Cross-functional teams reducing handoffs
 - Frequent stakeholder involvement (sprint reviews)
 - Empirical process control (inspect and adapt)
@@ -88,7 +88,7 @@ Scrum is built on empirical process control theory, which asserts that knowledge
 </div>
 <div class="content-card content-card--accent-secondary">
 <h4>2. Inspection</h4>
-<p>Regularly inspect artifacts and progress: Daily Standup, Sprint Review, Sprint Retrospective, and continuous inspection during development.</p>
+<p>Regularly inspect artifacts and progress: Daily Scrum, Sprint Review, Sprint Retrospective, and continuous inspection during development.</p>
 </div>
 <div class="content-card content-card--accent-warning">
 <h4>3. Adaptation</h4>
@@ -140,13 +140,11 @@ Team members respect each other as:
 - People with different perspectives and expertise
 - Collaborative partners, not subordinates
 
-### Agile Manifesto Alignment
+### Where the Values Come From
 
-Scrum embodies Agile Manifesto values:
-- **Individuals and interactions** over processes and tools → Self-organizing teams, daily standups
-- **Working software** over comprehensive documentation → Increment delivered every sprint
-- **Customer collaboration** over contract negotiation → Product Owner represents customer, sprint reviews
-- **Responding to change** over following a plan → Adapt backlog, empirical process control
+Scrum's five values are not arbitrary. Each one names a behavior the empirical loop stops working without. Inspection requires openness, because an inspection of a flattering report inspects nothing. Adaptation requires courage, because changing a plan in front of the people who approved it is uncomfortable. Focus and commitment are what make a Sprint Goal mean anything, and respect is what lets a team disagree productively about how to reach it.
+
+This also explains why Scrum is usually described as easy to understand and difficult to master. The mechanics take an afternoon. The values are a description of a team that is already functioning well, and no framework installs those.
 
 ---
 
@@ -157,21 +155,23 @@ Scrum embodies Agile Manifesto values:
 Scrum is intentionally incomplete, defining only the framework while teams determine practices within it.
 
 **What Scrum prescribes:**
-- Three roles (Product Owner, Scrum Master, Development Team)
-- Five ceremonies (Sprint Planning, Daily Standup, Sprint Review, Sprint Retrospective, Sprint itself)
-- Three artifacts (Product Backlog, Sprint Backlog, Increment)
-- Definition of Done
+- Three accountabilities: Product Owner, Scrum Master, Developers
+- Five events: the Sprint, which is a container for the other four, plus Sprint Planning, the Daily Scrum, the Sprint Review and the Sprint Retrospective
+- Three artifacts, each with a commitment that makes it inspectable: Product Backlog with a **Product Goal**, Sprint Backlog with a **Sprint Goal**, Increment with a **Definition of Done**
+- A Scrum Team of typically ten or fewer people
+
+The commitments were added in the 2020 Scrum Guide, and they are the part most often missing from teams that learned Scrum earlier. Each exists so that inspecting the artifact has a reference point. A Product Backlog with no Product Goal can be ordered but cannot be judged, because nothing states what it is ordered toward.
 
 **What Scrum doesn't prescribe:**
-- Engineering practices (use XP practices: TDD, pair programming, CI)
+- Engineering practices (XP supplies these: TDD, pair programming, continuous integration)
 - Estimation methods (story points, ideal days, t-shirt sizes)
 - Tools (Jira, Azure DevOps, physical boards)
-- Team size specifics (guideline: 3-9 people)
 - Backlog format (user stories, job stories, use cases)
+- Any format for the Daily Scrum
 
 ### The Sprint
 
-**A sprint is a time-boxed iteration (1-4 weeks, typically 2 weeks) during which a "Done" increment is created.**
+**A Sprint is a fixed-length event of one month or less, during which a "Done" Increment is created.** Two weeks is the most common choice.
 
 **Sprint characteristics:**
 
@@ -183,7 +183,7 @@ Scrum is intentionally incomplete, defining only the framework while teams deter
 
 **Sprint flow:**
 ```
-Sprint Planning → Daily Standups (every day) → Development → Sprint Review → Retrospective → Next Sprint
+Sprint Planning → Daily Scrums (every day) → Development → Sprint Review → Retrospective → Next Sprint
 ```
 
 **Why time-boxes matter:**
@@ -204,7 +204,7 @@ Sprint Planning → Daily Standups (every day) → Development → Sprint Review
 
 ---
 
-## Scrum Roles
+## Scrum Accountabilities
 
 Scrum defines three roles, each with distinct responsibilities.
 
@@ -212,7 +212,7 @@ Scrum defines three roles, each with distinct responsibilities.
 
 **Responsibilities:**
 
-**1. Maximize value of product and Development Team's work**
+**1. Maximize value of product and Developers' work**
 - Understands customer needs and business context
 - Makes trade-offs between features, cost, time
 - Ensures work delivers business value
@@ -221,7 +221,7 @@ Scrum defines three roles, each with distinct responsibilities.
 - Creates and communicates Product Backlog items
 - Orders items by value (not necessarily priority)
 - Ensures backlog is visible, transparent, and clear
-- Ensures Development Team understands items sufficiently
+- Ensures Developers understands items sufficiently
 
 **3. Accept or reject work**
 - Validates work meets acceptance criteria
@@ -264,11 +264,11 @@ Scrum defines three roles, each with distinct responsibilities.
 
 **Responsibilities:**
 
-**1. Serve the Development Team**
+**1. Serve the Developers**
 
 Help team self-organize and be more effective:
 - **Coaching**: Teach Scrum practices and values
-- **Facilitation**: Run ceremonies effectively
+- **Facilitation**: Make the events produce decisions rather than reports
 - **Removing impediments**: Clear blockers team can't resolve themselves
 - **Protection**: Shield team from interruptions and distractions
 
@@ -290,7 +290,7 @@ Help organization adopt Scrum:
 
 **Key characteristics:**
 
-- **Servant leader**: Serves team rather than managing team
+- **A leader who serves**: the 2020 Scrum Guide describes Scrum Masters as true leaders who serve the Scrum Team and the wider organization
 - **Facilitator**: Enables team effectiveness without controlling work
 - **Coach**: Teaches and mentors rather than directs
 - **Change agent**: Helps organization transform culture
@@ -322,13 +322,13 @@ Scrum Master:
 **Red flags:**
 - Scrum Master assigns tasks to team members
 - Scrum Master makes technical decisions for team
-- Scrum Master doesn't attend ceremonies or shows up late
+- Scrum Master doesn't attend events or shows up late
 - Impediments remain unresolved sprint after sprint
 - Team afraid to surface problems (no psychological safety)
 
 ---
 
-### Development Team
+### Developers
 
 **Responsibilities:**
 
@@ -387,7 +387,7 @@ Teams in Scrum:
 
 ---
 
-## Scrum Ceremonies
+## Scrum Events
 
 Scrum defines five time-boxed events that provide structure and opportunities for inspection and adaptation.
 
@@ -397,7 +397,7 @@ Scrum defines five time-boxed events that provide structure and opportunities fo
 
 **Duration:** 2-4 hours for 2-week sprint (max 8 hours for 4-week sprint)
 
-**Participants:** Entire Scrum Team (Product Owner, Scrum Master, Development Team)
+**Participants:** Entire Scrum Team (Product Owner, Scrum Master, Developers)
 
 **Two parts:**
 
@@ -408,7 +408,7 @@ Product Owner presents highest priority Product Backlog items:
 - What are acceptance criteria?
 - Why is this valuable to build now?
 
-Development Team asks clarifying questions:
+Developers asks clarifying questions:
 - What edge cases exist?
 - What does "done" mean for this item?
 - What dependencies or risks exist?
@@ -420,7 +420,7 @@ Team collaboratively selects items:
 
 **Part 2: How will the work be done?**
 
-Development Team plans the work:
+Developers plans the work:
 - Break down Product Backlog items into tasks
 - Estimate effort (hours, points, or relative sizing)
 - Identify dependencies and risks
@@ -451,23 +451,21 @@ Good sprint goals provide focus and allow flexibility (team can adjust implement
 
 ---
 
-### Daily Standup (Daily Scrum)
+### Daily Scrum
 
 **Purpose:** Inspect progress toward sprint goal and adapt plan for next 24 hours.
 
 **Duration:** 15 minutes maximum
 
-**Participants:** Development Team (required), Scrum Master facilitates, Product Owner may attend
+**Participants:** Developers (required), Scrum Master facilitates, Product Owner may attend
 
 **Format:**
 
-**Traditional format (per person):**
-Each team member answers three questions:
-1. What did I do yesterday toward the sprint goal?
-2. What will I do today toward the sprint goal?
-3. Do I see any impediments that prevent me or the team from meeting the sprint goal?
+The 2020 Scrum Guide prescribes no format at all. Developers choose whatever structure they want, provided it focuses on progress toward the Sprint Goal. Two formats are common.
 
-**Alternative format (walk the board):**
+**Per person, three questions.** What did I do yesterday toward the Sprint Goal, what will I do today, and what is in my way. This is the format most people were taught, and it is also the one that most reliably degrades into a status round where each person reports and nobody adapts anything.
+
+**Walk the board, right to left.**
 Walk through items on Sprint Backlog from right to left (focus on finishing):
 - "This item is in testing. Who's working on it? Any blockers?"
 - "This item is in code review. Who can review today?"
@@ -509,7 +507,7 @@ Walk through items on Sprint Backlog from right to left (focus on finishing):
 
 **1. Present what was accomplished**
 
-Development Team demonstrates:
+Developers demonstrates:
 - "Done" work (meets Definition of Done)
 - Working software (not slide decks or demos of incomplete work)
 - How it delivers on sprint goal
@@ -567,7 +565,7 @@ Entire group discusses:
 
 **Duration:** 45-90 minutes for 2-week sprint (max 3 hours for 4-week sprint)
 
-**Participants:** Scrum Team (Product Owner, Scrum Master, Development Team)
+**Participants:** Scrum Team (Product Owner, Scrum Master, Developers)
 
 **Format:**
 
@@ -638,19 +636,19 @@ Wrap up:
 - No action items or vague actions ("communicate better")
 - Blame culture (pointing fingers at individuals)
 - Retrospectives skipped or canceled
-- Team afraid to raise real issues (lack of safety)
+- Team afraid to raise the issues that matter (lack of safety)
 
 ---
 
-### Backlog Refinement (Grooming)
+### Product Backlog Refinement
 
 **Purpose:** Add detail, estimates, and order to Product Backlog items.
 
-**Duration:** Not officially time-boxed, but typically consume no more than 10% of Development Team's capacity
+**Duration:** Not officially time-boxed, but typically consume no more than 10% of Developers' capacity
 
-**Participants:** Product Owner + Development Team (Scrum Master facilitates)
+**Participants:** Product Owner + Developers (Scrum Master facilitates)
 
-**Not an official Scrum ceremony**, but widely practiced because Sprint Planning is too late to refine items.
+Refinement is an ongoing activity rather than a timeboxed event, so the Scrum Guide prescribes no meeting for it. Most teams schedule one anyway, because Sprint Planning is too late to be discovering what an item means.
 
 **Activities:**
 
@@ -708,6 +706,8 @@ Ordered list of everything that might be needed in the product. Single source of
 - **Emergent**: Grows and changes as we learn more about product and customers
 - **Never complete**: Evolves as long as product exists
 - **Living document**: Continuously refined and re-prioritized
+
+**Its commitment is the Product Goal.** The Product Goal is the longer-term objective the Product Backlog is ordered toward, and the Scrum Team works on one at a time until it is met or abandoned. Without it, "ordered by value" has no reference point, and backlog ordering becomes an argument between stakeholders rather than a judgement against a stated objective.
 
 **Typical items:**
 
@@ -774,7 +774,7 @@ Set of Product Backlog items selected for the sprint, plus a plan for delivering
 
 **Characteristics:**
 
-- **Team commits**: Development Team selects items (not assigned by Product Owner)
+- **Team commits**: Developers selects items (not assigned by Product Owner)
 - **Detailed plan**: Broken down into tasks with estimates
 - **Living document**: Team updates daily as work progresses
 - **Transparent**: Visible to everyone (physical board or tool)
@@ -1015,7 +1015,7 @@ Track average cycle time:
 **Week 1: Formation**
 
 **Day 1-2: Team formation and training**
-- Scrum training for entire team (roles, ceremonies, artifacts)
+- Scrum training for entire team (roles, events, artifacts)
 - Establish team working agreements
 - Select Scrum Master and Product Owner
 - Set sprint cadence (typically 2 weeks)
@@ -1032,11 +1032,11 @@ Track average cycle time:
 
 **Week 2: First Sprint**
 
-- Daily Standups start immediately
+- Daily Scrums start immediately
 - Team delivers first increment
 - Keep first sprint focused and achievable (build confidence)
 
-**End of Week 2: First ceremonies**
+**End of Week 2: First events**
 - Sprint Review (show increment to stakeholders)
 - Sprint Retrospective (how did it go?)
 - Sprint Planning for Sprint 2
@@ -1046,7 +1046,7 @@ Track average cycle time:
 ### Sprints 1-3: Establishing Rhythm
 
 **Sprint 1: Focus on establishing cadence**
-- All ceremonies happen at scheduled times
+- All events happen at scheduled times
 - Team learns to work together
 - Initial velocity baseline (likely low)
 - Lots of learning and adjustment
@@ -1058,14 +1058,14 @@ Track average cycle time:
 - Address impediments from Sprint 1 retrospective
 
 **Sprint 3: Finding groove**
-- Ceremonies feel more natural
+- Events feel more natural
 - Velocity stabilizing
 - Team self-organizing effectively
 - Quality practices solidifying
 
 **By end of Sprint 3:**
 - Velocity becomes somewhat predictable
-- Team comfortable with ceremonies
+- Team comfortable with events
 - Backlog refinement rhythm established
 - Continuous improvement mindset forming
 
@@ -1082,7 +1082,7 @@ Track average cycle time:
 - Technical debt being managed
 
 **Process optimization:**
-- Ceremonies time-boxed effectively
+- Events time-boxed effectively
 - Retrospective actions actually implemented
 - Backlog refinement efficient
 - Sprint Planning under 2 hours
@@ -1097,15 +1097,15 @@ Track average cycle time:
 
 ### Common Implementation Challenges
 
-**Challenge 1: "We don't have time for ceremonies"**
+**Challenge 1: "We don't have time for events"**
 
-**Problem:** Team sees ceremonies as overhead
+**Problem:** Team sees events as overhead
 
 **Solution:**
-- Make ceremonies effective (time-boxed, facilitated well)
-- Track value from ceremonies (decisions made, impediments removed)
-- Treat ceremonies as work, not extra
-- Cancel ineffective ceremonies and retrospect on why
+- Make events effective (time-boxed, facilitated well)
+- Track value from events (decisions made, impediments removed)
+- Treat events as work, not extra
+- Cancel ineffective events and retrospect on why
 
 ---
 
@@ -1157,583 +1157,104 @@ Track average cycle time:
 
 ---
 
-## Alignment with AAA Cycle
-
-Scrum's sprint structure can support AAA when practiced with discipline, but has structural tensions.
-
-### How Scrum Can Support AAA
-
-**Align Phase: Sprint Planning + Backlog Refinement**
-
-Sprint Planning provides opportunity for alignment:
-
-**What works:**
-- Team and Product Owner discuss requirements
-- Clarifying questions surface misunderstandings
-- Acceptance criteria make expectations explicit
-
-**What's needed:**
-- Test assumptions **before** Sprint Planning (not during)
-- Backlog refinement includes discovery work
-- Spikes for risky unknowns happen in prior sprint
-
-**Example:**
-Product Owner wants search feature. Before Sprint Planning:
-1. User research validates need (Align: is this valuable?)
-2. Technical spike explores approach (Align: is this feasible?)
-3. Sprint Planning: Team commits based on validated understanding
-
----
-
-**Agree Phase: Sprint Commitment + Definition of Done**
-
-Sprint commitment is an agreement:
-
-**What works:**
-- Team commits to sprint goal (shared objective)
-- Definition of Done makes quality explicit
-- Team has voice in what's achievable
-
-**What's needed:**
-- Commitment to sprint goal, not just list of stories
-- Flexibility to adapt scope while maintaining goal
-- Don't commit to work without clear acceptance criteria
-
-**Example:**
-Sprint goal: "Enable users to search products." Team commits to goal. During sprint, discovers complexity. Team renegotiates scope with PO but maintains goal (perhaps basic search vs. advanced filters).
-
----
-
-**Apply Phase: Sprint Execution + Increment**
-
-Sprint execution applies the agreement:
-
-**What works:**
-- Time-box forces finishing work
-- Daily inspection enables course correction
-- Potentially shippable increment demonstrates completion
-
-**What's needed:**
-- Don't compromise quality to hit sprint commitment
-- Pause and realign when discovery changes everything
-- "Done" means honoring agreement (quality + functionality)
-
-**Example:**
-Team discovers technical constraint mid-sprint. Instead of shipping poor solution, team discusses with PO. Either adjust scope or extend to next sprint. Honor quality agreement.
-
----
-
-### Where Scrum Can Conflict with AAA
-
-**Conflict 1: Sprint commitment before sufficient discovery**
-
-**Problem:**
-- Sprint Planning happens in 2-4 hours
-- No time to test assumptions or run spikes
-- Team commits based on guesses
-
-**AAA requires:**
-- Test critical assumptions before committing
-- Discovery may take days, not hours
-- Defer commitment until sufficient understanding
-
-**How to reconcile:**
-- Use prior sprint for discovery (spikes)
-- Backlog refinement includes assumption testing
-- Accept that some sprints focus on discovery, not delivery
-
----
-
-**Conflict 2: Sprint boundary discourages realignment**
-
-**Problem:**
-- Team discovers misunderstanding mid-sprint
-- Time-box pressure encourages shipping anyway
-- "We committed" becomes reason to ignore learning
-
-**AAA requires:**
-- Pause and realign when discovery changes understanding
-- Agreement is about outcomes, not completing list of tasks
-- Realignment is discipline, not failure
-
-**How to reconcile:**
-- Sprint goal (not task list) is the commitment
-- Team renegotiates scope with PO when needed
-- Retrospective addresses why discovery was late
-
----
-
-**Conflict 3: Velocity pressure discourages quality**
-
-**Problem:**
-- Velocity tracked sprint-over-sprint
-- Pressure to maintain or increase velocity
-- Teams cut corners (skip tests, accumulate tech debt)
-
-**AAA requires:**
-- Honoring quality agreements
-- Sustainable pace
-- Technical excellence
-
-**How to reconcile:**
-- Velocity is planning tool, not performance metric
-- Definition of Done is non-negotiable
-- Track quality metrics (bugs, tech debt) alongside velocity
-
----
-
-**Conflict 4: Prescriptive structure can become rigid**
-
-**Problem:**
-- Ceremonies become rituals (not useful)
-- "Scrum says we must..." overrides common sense
-- Process compliance replaces empiricism
-
-**AAA requires:**
-- Adapt process based on learning
-- Focus on outcomes (alignment, agreement, application)
-- Process serves team, not vice versa
-
-**How to reconcile:**
-- Retrospectives question whether ceremonies useful
-- Scrum is framework, not rigid rules
-- Adapt Scrum based on team's context
-
----
-
-### Using Scrum to Strengthen AAA
-
-**Make alignment explicit in Sprint Planning:**
-- Don't plan work with unclear requirements
-- Use "Definition of Ready" to ensure alignment
-- Test assumptions before Sprint Planning
-
-**Make agreement visible in Sprint Backlog:**
-- Sprint goal is the agreement
-- Acceptance criteria are explicit
-- Definition of Done is the quality agreement
-
-**Honor agreements through increment:**
-- Potentially shippable increment
-- Don't compromise Definition of Done
-- Deliver what was agreed, or renegotiate transparently
-
-**AAA + Scrum in practice:**
-
-**Align:** Backlog refinement, spikes, Sprint Planning clarification
-**Agree:** Sprint goal, Definition of Done, acceptance criteria
-**Apply:** Sprint execution, daily adaptation, potentially shippable increment
-
----
-
 ## When to Use Scrum
 
-### Scrum Works Well For:
+Scrum suits work that is genuinely uncertain, where a cross-functional team can produce something demonstrable inside a few weeks, and where stakeholders are available to look at it and react. Those three conditions carry most of the decision, and all three have to hold.
 
-**Software product development:**
-- Building features iteratively
-- Regular stakeholder feedback valuable
-- Requirements evolve as you learn
-- Incremental delivery possible
+It is also a good scaffold for a team new to iterative work. Its prescriptiveness is usually described as a limitation, and for an experienced team it is, but for a team that has never run a feedback loop it supplies a rhythm that has to be deliberately abandoned rather than one that has to be deliberately built. Clear accountabilities remove a lot of early ambiguity about who decides what.
 
-**Teams new to Agile:**
-- Prescriptive structure provides guidance
-- Clear roles reduce ambiguity
-- Regular ceremonies create rhythm
-- Easier to learn than principle-based approaches
+Organizations that need forecasting get it from the cadence, since a team with a stable Sprint length and a few Sprints of history can forecast from its own record rather than from estimates.
 
-**Organizations wanting predictability:**
-- Regular sprint cadence
-- Velocity enables forecasting
-- Stakeholders comfortable with structured approach
+### Where Scrum Fits Badly
 
-**Cross-functional product teams:**
-- Team has all skills needed
-- Focused on single product
-- Stable team composition
+**Work that arrives unpredictably.** Support, maintenance and incident work cannot wait for a Sprint boundary, and forcing it into one either breaks the Sprint or delays the work. Continuous flow handles it better, and running it as a separate system alongside planned work is a common and sound arrangement.
 
-**Projects with engaged Product Owner:**
-- PO available and dedicated
-- Clear product vision
-- Authority to prioritize
+**Exploratory work with no definable goal.** A Sprint Goal requires knowing what would constitute progress. Research where that is genuinely unknown does not fit the container, though it often fits inside a Sprint as a timeboxed spike.
 
-**Medium-sized teams (5-9 people):**
-- Large enough for cross-functional skills
-- Small enough to coordinate without excessive overhead
+**Teams that cannot produce an increment.** When a team is blocked by other teams often enough that nothing reaches Done, the Sprint exposes the problem without solving it. This is nearly always a team-boundary or dependency problem rather than a framework problem, and adopting something with less structure hides it rather than fixing it.
+
+**Teams of one to three people.** The events cost roughly the same regardless of team size, and the coordination they produce is worth less when everyone already knows what everyone is doing. Distinct accountabilities also stop meaning much when one person holds several.
+
+**Unavailable stakeholders.** A Product Owner who cannot commit the time, or stakeholders who do not attend the Sprint Review, break the feedback loop the whole framework is built around. What is left is a two-week planning cycle.
+
+### Common Adaptations
+
+**Scrum with XP engineering practices** is the most valuable of these by a distance. Scrum is deliberately silent on how code gets written, and a large share of reported Scrum failures are the absence of the technical discipline it never claimed to supply.
+
+**Scrumban** keeps the Sprint cadence and adds WIP limits and flow metrics inside it, which suits a team that wants Scrum's rhythm but finds its work arriving in a less predictable shape than Sprint Planning assumes.
+
+**Separate systems for separate work types** runs planned product work on Sprints and operational work as flow, rather than forcing both through one process that fits neither.
+
+When several teams work on one product, coordination needs a deliberate mechanism rather than an ad hoc one, and the scaling frameworks exist for that.
 
 ---
 
-### Scrum May Not Fit:
+## Where Scrum Goes Wrong
 
-**Maintenance and support work:**
-- Unpredictable interruptions
-- Varied request types
-- Kanban's continuous flow better fit
+Scrum is a small framework with a large surface for misuse, and most of the misuse shares one root. The framework's parts exist to create feedback and to make what is actually happening visible. Each failure below keeps a part while removing the visibility it was there to produce.
 
-**Exploratory or research projects:**
-- Unknown scope
-- Difficult to define sprint goals
-- Need flexibility beyond 2-week time-boxes
+### Scrum Theater
 
-**Very small teams (1-3 people):**
-- Ceremony overhead too high
-- Roles don't make sense (who's Scrum Master?)
-- Kanban or XP more appropriate
+The events happen on schedule and none of them changes anything. The Daily Scrum becomes a status round delivered to the Scrum Master, the Sprint Review becomes a polished demo where no feedback is genuinely sought, the Retrospective raises the same issues every time, and Sprint Planning ratifies work that was already assigned.
 
-**Projects with unavailable stakeholders:**
-- Product Owner can't be dedicated
-- Stakeholders don't attend Sprint Reviews
-- Feedback loops break down
+Nothing in this is detectable from a calendar, which is why it persists. The test is not whether an event happened but whether anything was decided in it. An event that produces no decision, no change of plan and no removed impediment is a meeting with a Scrum name on it.
 
-**Teams with extensive external dependencies:**
-- Can't deliver increment within sprint
-- Blocked by other teams frequently
-- Cross-functional structure not possible
+**Warning signs:** the same format every time with no experimentation, attendance without engagement, and no action coming out of any event.
 
-**Highly regulated environments requiring extensive documentation:**
-- Scrum's lightweight approach may conflict
-- May need hybrid with Waterfall documentation
+### Velocity as a Performance Measure
 
-**Teams valuing autonomy over structure:**
-- Prescriptive framework feels constraining
-- Ceremonies feel like overhead
-- Lean or Kanban provide more flexibility
+Velocity exists so a team can forecast its own capacity. The moment it is used to evaluate the team, it stops being able to do that, because the team now has a reason to make the number go up that has nothing to do with delivery.
 
----
+What follows is predictable. Estimates inflate, work gets declared done while incomplete, and teams get compared to each other despite estimating in units that were never comparable. The number rises, the delivery does not, and the team has lost its only forecasting tool.
 
-### Hybrid Approaches
+**Warning signs:** velocity targets set by management, velocity compared between teams, and velocity rising while quality metrics fall.
 
-**Scrum + XP engineering practices:**
-- Use Scrum for project structure
-- Add TDD, pair programming, CI from XP
-- Very common and effective combination
+### Committing Without Understanding
 
-**Scrum + Kanban (Scrumban):**
-- Use sprint structure from Scrum
-- Add WIP limits and flow metrics from Kanban
-- Continuous flow within sprint boundaries
+Sprint Planning is a few hours long, which is enough time to plan work the team understands and nowhere near enough to understand work it does not. A team that commits to items whose acceptance criteria are vague or whose technical approach is unknown has committed to a guess.
 
-**Scrum for features, Kanban for support:**
-- Development team uses Scrum
-- Operations team uses Kanban
-- Separate workflows for different work types
+The failure surfaces mid-Sprint as discovery, and discovery mid-Sprint is expensive because the commitment is already made. Refinement exists to prevent this, which is why it is continuous rather than a meeting, and why spikes for genuinely unknown work belong in the Sprint before the one that builds the thing.
 
-**Multiple teams: Scrum of Scrums or scaling frameworks:**
-- LeSS (Large-Scale Scrum)
-- SAFe (Scaled Agile Framework)
-- Nexus
-- Coordinate multiple Scrum teams
+**Warning signs:** acceptance criteria written during Planning, items entering a Sprint with no agreed approach, and the same items rolling over repeatedly.
 
----
+### Sacrificing Quality to Hit the Commitment
 
-## Common Pitfalls and Red Flags
+When the Sprint is ending and the work is not done, the flexible variable looks like quality, because cutting it is invisible this Sprint. Tests get skipped, review gets cursory, and the increment ships with a shape nobody would have chosen.
 
-### Pitfall 1: Scrum Theater (Going Through Motions)
+The debt comes due whether or not anyone planned for it, so the next Sprint starts with less capacity than the last. Teams in this pattern get slower every Sprint while appearing to hold velocity, because the velocity is measured in points and the loss is in the codebase.
 
-**Problem:**
+**Warning signs:** the Definition of Done negotiated near the end of a Sprint, "we'll add tests next Sprint" recurring, and defect counts climbing while velocity holds.
 
-Team performs ceremonies without getting value. Scrum becomes ritual rather than empirical process control.
+### The Product Owner Who Only Routes Requests
 
-**What it looks like:**
-- Daily Standup: Status report to Scrum Master, no coordination
-- Sprint Review: Polished demo, no real feedback sought
-- Retrospective: Same issues raised, no improvements made
-- Sprint Planning: Rubber-stamp pre-determined work
+A Product Owner who passes stakeholder requests through to the backlog in the order they arrive is not ordering the backlog, they are queuing it. The accountability is to maximize value, which requires saying no, and saying no requires authority the organization has to actually grant.
 
-**Why it's wrong:**
+This is usually an organizational failure rather than a personal one. A Product Owner without the standing to refuse a senior stakeholder will not develop it by being coached, and the fix is at the level of what the role is empowered to decide.
 
-Ceremonies exist for inspection and adaptation. Without genuine engagement, you lose the feedback loops that make Scrum effective.
+**Warning signs:** a backlog ordered by who asked, no Product Goal anyone can state, and priorities that change whenever a stakeholder escalates.
 
-**How to avoid:**
+### The Scrum Master as Task Master
 
-- Ask "what value did we get from that ceremony?"
-- Retrospect on ceremonies themselves
-- Cancel ceremonies that aren't useful (and figure out why)
-- Focus on outcomes (decisions, learning) not activity
+Assigning work to individuals, tracking who is doing what, and reporting on people rather than on flow is project management with a Scrum title. It removes the self-management the Developers are accountable for, and with it the reason the team would take responsibility for the Sprint Goal.
 
-**Red flags:**
-- Ceremonies feel like obligation, not opportunity
-- Same format every time (no experimentation)
-- Low engagement (people distracted or disengaged)
-- No action items or decisions from ceremonies
+The accountability is to make the team effective, which mostly means removing what is in its way and protecting the conditions that let it decide for itself.
+
+**Warning signs:** tasks assigned in Planning rather than pulled, individual progress tracked and reported, and the team asking permission for decisions that are theirs.
+
+### The Sprint Goal Treated as a Contract
+
+The opposite failure to abandoning the commitment is treating it as immutable. A team that discovers mid-Sprint that its approach is wrong and builds it anyway because the Sprint was committed has chosen a schedule over the product.
+
+The Sprint Goal is meant to be the stable part while the scope that achieves it flexes. That distinction is what makes the commitment safe to make, and a team that cannot renegotiate scope against a fixed goal has kept the commitment and lost the mechanism.
+
+**Warning signs:** scope never changing mid-Sprint, known-wrong work completed because it was committed, and Sprint cancellation treated as unthinkable rather than as an available move.
+
+### Retrospectives That Change Nothing
+
+Retrospectives run, issues get raised, notes get taken, and the next retrospective raises the same issues. The team learns that the event does not lead anywhere, engagement drops, and the meeting continues.
+
+Two things break the loop. The first is limiting improvements to one or two per Sprint so they can actually be finished. The second is putting them in the Sprint Backlog, where they compete for capacity honestly, rather than in a separate list that gets done when there is time.
+
+**Warning signs:** the same issues appearing across several retrospectives, improvement actions with no owner, and organizational impediments raised repeatedly and never escalated.
 
 ---
-
-### Pitfall 2: Velocity as Performance Metric
-
-**Problem:**
-
-Using velocity to measure team performance creates perverse incentives.
-
-**What happens:**
-- Teams inflate estimates to boost velocity
-- Quality suffers (cut corners to complete more points)
-- Teams game the system (declare incomplete work "done")
-- Comparison between teams ("Team A is faster")
-
-**Why it's wrong:**
-
-Velocity is a planning tool, not a performance metric. Using it for evaluation destroys its usefulness and creates toxic dynamics.
-
-**How to avoid:**
-
-- Use velocity for capacity planning only
-- Never compare velocity across teams
-- Track quality metrics alongside velocity
-- Focus on value delivered, not points completed
-
-**Red flags:**
-- Management sets velocity targets
-- Teams punished for lower velocity
-- Estimates wildly inconsistent
-- Velocity increasing while quality declining
-
----
-
-### Pitfall 3: Committing Without Understanding
-
-**Problem:**
-
-Team commits to work in Sprint Planning without clear acceptance criteria or tested assumptions.
-
-**What happens:**
-- Team discovers requirements mid-sprint
-- Rework and thrashing
-- Quality compromised to meet commitment
-- Sprint goal missed because requirements were wrong
-
-**Why it's wrong:**
-
-Agreement requires understanding. Committing based on assumptions is building on sand.
-
-**How to avoid:**
-
-- Test critical assumptions before Sprint Planning (spikes)
-- Don't commit to work without clear acceptance criteria
-- Product Owner available during sprint for questions
-- Renegotiate scope when discovery changes understanding
-
-**Red flags:**
-- Frequent mid-sprint surprises
-- "I thought it meant X" conversations mid-sprint
-- Acceptance criteria added during sprint
-- Team commits without asking clarifying questions
-
----
-
-### Pitfall 4: Sacrificing Quality for Velocity
-
-**Problem:**
-
-Time pressure from sprint commitment leads to cutting corners.
-
-**What happens:**
-- Skip writing tests
-- Incomplete code reviews
-- Accumulating technical debt
-- Bugs escaping to production
-
-**Why it's wrong:**
-
-Short-term velocity gains create long-term slowdown. Technical debt compounds.
-
-**How to avoid:**
-
-- Definition of Done is non-negotiable
-- Reduce commitment rather than compromise quality
-- Track technical debt explicitly
-- Address quality in retrospectives
-
-**Red flags:**
-- "We'll fix it later" becomes standard phrase
-- Definition of Done weakens over time
-- Bug backlog growing
-- Velocity decreasing over time (technical debt slowing team)
-
----
-
-### Pitfall 5: Product Owner as Order-Taker
-
-**Problem:**
-
-Product Owner doesn't actually own product direction, just routes requests from stakeholders.
-
-**What happens:**
-- Backlog is wish-list from multiple stakeholders
-- No coherent product vision
-- Team builds features nobody uses
-- No prioritization (everything is P0)
-
-**Why it's wrong:**
-
-Product Owner must make hard choices about value. Order-taking abdicates this responsibility.
-
-**How to avoid:**
-
-- Empower Product Owner to say "no"
-- Product Owner accountable for outcomes
-- Stakeholder requests evaluated against product vision
-- Backlog ordered by value, not who shouted loudest
-
-**Red flags:**
-- Product Owner says "yes" to all requests
-- Backlog has items from 10+ different stakeholders
-- No clear product vision or strategy
-- Features shipped but not used (no outcome measurement)
-
----
-
-### Pitfall 6: Scrum Master as Task Master
-
-**Problem:**
-
-Scrum Master acts like traditional project manager (assigning tasks, tracking individuals, controlling process).
-
-**What happens:**
-- Team doesn't self-organize
-- Dependency on Scrum Master
-- No team ownership
-- Scrum Master becomes bottleneck
-
-**Why it's wrong:**
-
-Scrum Master is servant leader, not manager. Team must self-organize to be effective.
-
-**How to avoid:**
-
-- Scrum Master asks questions, doesn't provide answers
-- Team decides how to organize work
-- Scrum Master removes impediments, doesn't solve technical problems
-- Focus on process improvement, not controlling people
-
-**Red flags:**
-- Scrum Master assigns tasks to individuals
-- Team waits for Scrum Master to tell them what to do
-- Scrum Master makes technical decisions
-- Team can't function without Scrum Master present
-
----
-
-### Pitfall 7: Sprint Commitment Becomes Inflexible Contract
-
-**Problem:**
-
-Team treats sprint commitment as immutable, even when discovery changes understanding.
-
-**What happens:**
-- Discover requirements wrong mid-sprint, ship anyway
-- Technical constraint emerges, work around rather than address
-- External circumstances change, continue with original plan
-
-**Why it's wrong:**
-
-Empiricism requires adaptation. Commitment to learning and sprint goal, not task list.
-
-**How to avoid:**
-
-- Sprint goal is commitment (not specific tasks)
-- Renegotiate scope with Product Owner when needed
-- Focus on delivering value, not completing list
-- Retrospect on why discovery was late
-
-**Red flags:**
-- "We committed" used to justify shipping wrong thing
-- No mid-sprint adjustments even when circumstances change
-- Team afraid to raise concerns (might jeopardize commitment)
-- Sprint goal abandoned to complete task list
-
----
-
-### Pitfall 8: No Real Retrospective Improvement
-
-**Problem:**
-
-Retrospectives happen but nothing actually improves.
-
-**What happens:**
-- Same issues raised sprint after sprint
-- Action items forgotten or ignored
-- Vague improvements ("communicate better")
-- Blame culture prevents honest discussion
-
-**Why it's wrong:**
-
-Retrospectives exist for continuous improvement. Without action, team stagnates.
-
-**How to avoid:**
-
-- 1-3 concrete action items (not 10+ wishes)
-- Assign ownership for each action
-- Review previous actions at start of next retrospective
-- Make improvements visible (track them)
-
-**Red flags:**
-- Same issues discussed every retrospective
-- No action items or vague actions
-- Actions not reviewed or followed up
-- Team afraid to raise real issues
-- Retrospective skipped or rushed
-
----
-
-### Red Flags Summary
-
-**Process red flags:**
-- Ceremonies feel like obligation, not opportunity
-- Velocity used as performance metric
-- Quality compromised for velocity
-- Sprint commitment inflexible even when learning changes understanding
-
-**Role dysfunction red flags:**
-- Product Owner unavailable or order-taking
-- Scrum Master acting as project manager
-- Development Team not self-organizing
-- Roles unclear or contested
-
-**Cultural red flags:**
-- Blame culture (not psychological safety)
-- Committing without understanding
-- No retrospective improvements
-- Scrum theater (motions without value)
-
----
-
-## Key Takeaways
-
-**Scrum provides structure for empirical process control:**
-- Transparency through artifacts (backlog, sprint backlog, increment)
-- Inspection through ceremonies (daily standup, review, retrospective)
-- Adaptation through sprint boundaries and feedback loops
-
-**Three roles with distinct responsibilities:**
-- Product Owner maximizes value
-- Scrum Master serves team and organization
-- Development Team delivers increment
-
-**Five ceremonies create rhythm:**
-- Sprint Planning: Define sprint goal and plan
-- Daily Standup: Coordinate and adapt daily
-- Sprint Review: Inspect increment and adapt backlog
-- Sprint Retrospective: Improve process
-- Sprint: Time-boxed iteration (1-4 weeks)
-
-**Scrum works best when:**
-- Team new to Agile (structure helps)
-- Product Owner engaged and empowered
-- Cross-functional team with minimal dependencies
-- Stakeholders provide regular feedback
-
-**Scrum challenges:**
-- Can encourage committing before sufficient discovery
-- Sprint boundaries may discourage realignment
-- Velocity pressure can compromise quality
-- Ceremonies can become theater without genuine engagement
-
-**Success requires discipline:**
-- Test assumptions before committing
-- Adapt when discovery changes understanding
-- Don't compromise Definition of Done
-- Focus on sprint goal, not task completion
-- Continuous improvement through retrospectives
-
-**The goal is delivering value through empiricism, not perfect ceremony execution.**

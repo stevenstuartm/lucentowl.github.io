@@ -27,6 +27,7 @@
     "onnx-edge-inference-csharp.md",
     "iot-architecture-diagrams.md",
     "cryptographic-algorithm-choices.md",
-    "security-diagrams.md"
+    "security-diagrams.md",
+    "sdlc-diagrams.md"
   ]
 }

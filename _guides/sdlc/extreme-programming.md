@@ -3,13 +3,13 @@ title: "Extreme Programming (XP) Methodology"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Frameworks
-description: "Comprehensive guide to Extreme Programming (XP) - engineering practices, values, and disciplines for building high-quality software through technical excellence and continuous feedback."
-tags: [sdlc, methodology, xp, engineering-practices, tdd, pair-programming, technical-excellence]
+description: "The five values and twelve practices of XP, how the second edition split them into primary and corollary practices by what each one depends on, the roles, and the eight ways teams keep a practice form after removing what made it work."
+tags: [practical, xp, tdd, pair-programming, refactoring, continuous-integration, simple-design]
 ---
 
 ## What is Extreme Programming
 
-*Created by Kent Beck in the mid-1990s while working on the Chrysler Comprehensive Compensation System. Formalized in "Extreme Programming Explained: Embrace Change" (1999, revised 2004).*
+*Created by Kent Beck in the mid-1990s on the Chrysler Comprehensive Compensation project, and set out in "Extreme Programming Explained: Embrace Change" (1999). The second edition (2004, with Cynthia Andres) reorganized the material and added a fifth value.*
 
 **Extreme Programming (XP)** is an Agile software development methodology that emphasizes technical excellence, engineering discipline, and continuous feedback. XP takes good practices to "extreme" levels: if code reviews are good, do them constantly (pair programming); if testing is good, test everything all the time (TDD).
 
@@ -31,7 +31,7 @@ XP is distinct because:
 - **Feedback-driven**: Multiple feedback loops from seconds to weeks
 - **Courage-requiring**: Willing to refactor aggressively, make big changes
 - **Customer-centric**: On-site customer involvement daily
-- **Sustainable pace**: No overtime as standard (40-hour weeks)
+- **Sustainable pace**: the first edition called this the forty-hour week, and the second renamed it *energized work*, on the argument that what matters is hours in which you can think clearly rather than a number on a timesheet
 
 ### Why XP Emerged
 
@@ -280,7 +280,9 @@ Everyone contributes value, everyone's input matters, and no one is disposable.
 
 ## The Twelve Practices
 
-Kent Beck organized XP practices into four categories: Planning, Design, Coding, and Team.
+The twelve practices below are the first edition's model, and they remain the clearest way to learn XP because each one is concrete and the set is small enough to hold in mind. They fall into four groups: planning, design, coding, and team.
+
+The second edition reorganized them into thirteen *primary* practices and eleven *corollary* practices, split by how safely each can be adopted on its own. Primary practices can be introduced individually and in any order. Corollary practices depend on others already being in place, which is why adopting shared code ownership without a test suite goes badly. That distinction is the second edition's main contribution, and it answers the question the first edition left open about where to start.
 
 ### Planning Practices
 
@@ -315,7 +317,7 @@ Collaborative planning process where business and technical people determine sco
 - Write clear user stories with acceptance criteria
 - Estimate relative effort (story points or ideal days)
 - Track actual velocity (don't guess)
-- Adjust plans based on real data
+- Adjust plans based on measured velocity, not on the original estimate
 - Customer truly available (not proxy through PM)
 
 **Red flags:**
@@ -444,7 +446,7 @@ Design only for current requirements. No speculative complexity. Evolve design t
 **How to do this well:**
 - Resist temptation to "prepare for future"
 - Refactor when second similar case appears (rule of three)
-- Question every abstraction (is it solving real problem?)
+- Question every abstraction (does it solve a problem you actually have?)
 - Clear naming more valuable than clever patterns
 - Delete unused code aggressively
 
@@ -1119,481 +1121,100 @@ XP defines minimal roles compared to Scrum.
 
 ---
 
-## Alignment with AAA Cycle
-
-XP's emphasis on feedback, customer involvement, and technical excellence naturally supports AAA.
-
-### How XP Supports AAA
-
-**Align Phase: On-Site Customer + Acceptance Tests**
-
-XP practices enable continuous alignment:
-
-**What works:**
-- Customer writes user stories (defines value)
-- Acceptance tests make expectations explicit
-- Customer available for questions (immediate clarification)
-- Customer sees work in progress (early feedback)
-
-**Example:**
-Customer writes user story: "Users can search products by price range." Team asks clarifying questions immediately. Customer writes acceptance test defining exact behavior. Alignment happens before coding starts.
-
----
-
-**Agree Phase: Planning Game + Acceptance Criteria**
-
-XP makes agreements explicit and negotiable:
-
-**What works:**
-- Customer prioritizes by business value
-- Team estimates based on capacity
-- Negotiate scope to fit iteration
-- Acceptance criteria define "done"
-
-**Example:**
-Planning game: Customer wants five features. Team has capacity for three. Customer re-prioritizes. Team commits to three stories. Agreement is explicit and realistic.
-
----
-
-**Apply Phase: TDD + Continuous Integration + Small Releases**
-
-XP practices honor agreements through quality and delivery:
-
-**What works:**
-- TDD ensures code works correctly
-- Continuous integration prevents broken code
-- Small releases deliver value frequently
-- Acceptance tests validate agreement met
-
-**Example:**
-The team commits to three stories; TDD ensures quality while CI catches integration issues. Stories are deployed to production, and the customer validates with acceptance tests. Agreement honored.
-
----
-
-### Where XP Can Conflict with AAA
-
-**Conflict 1: Simple design may defer necessary alignment**
-
-**Problem:**
-- YAGNI principle: Don't build for future needs
-- May miss architectural decisions needing alignment
-
-**AAA requires:**
-- Align on architectural direction early
-- Some upfront design prevents costly rework
-
-**How to reconcile:**
-- Simple design for features
-- Architectural alignment for system design
-- Spike complex architectural unknowns
-- Refactoring handles most evolution
-
----
-
-**Conflict 2: Sustainable pace vs. urgent business needs**
-
-**Problem:**
-- XP: 40-hour weeks, no overtime
-- Business: "This is critical, work weekends"
-
-**AAA requires:**
-- Realistic agreements about what's achievable
-- Don't agree to impossible commitments
-
-**How to reconcile:**
-- Negotiate scope (remove less critical features)
-- Demonstrate velocity is sustainable
-- Show overtime reduces long-term productivity
-- True emergencies are rare (distinguish from poor planning)
-
----
-
-**Conflict 3: Refactoring may look like not delivering**
-
-**Problem:**
-- Refactoring doesn't add features
-- Management: "Why aren't you building new things?"
-
-**AAA requires:**
-- Agreement includes sustainable quality
-- Technical excellence is part of commitment
-
-**How to reconcile:**
-- Make technical debt visible
-- Track velocity impact of technical debt
-- Reserve capacity for refactoring (20% rule)
-- Show how refactoring enables future features
-
----
-
-### Using XP to Strengthen AAA
-
-**Make alignment testable:**
-- Acceptance tests = explicit agreement
-- Tests fail if requirements misunderstood
-- Customer validates continuously
-
-**Make agreements realistic:**
-- Velocity-based planning (empirical data)
-- Team estimates based on capacity
-- Negotiate scope to fit reality
-
-**Honor commitments through quality:**
-- TDD ensures correctness
-- Continuous integration prevents breaks
-- Sustainable pace enables long-term delivery
-
-**AAA + XP in practice:**
-
-**Align:** On-site customer, user stories, acceptance tests
-**Agree:** Planning game, velocity-based commitment, acceptance criteria
-**Apply:** TDD, pairing, CI, small releases, refactoring
-
----
-
 ## When to Use XP
 
-### XP Works Well For:
+XP suits teams that own a codebase they will live with. Its practices are an investment in keeping change cheap, and that investment only returns on code that will keep changing. A long-lived product in a domain that is still being understood is the clearest case, because the design will need to absorb change repeatedly and refactoring under test is what makes that affordable.
 
-**Projects needing high code quality:**
-- Long-lived products (will be maintained for years)
-- Critical systems (correctness matters)
-- Complex domains (refactoring will be needed)
+Two further conditions matter as much as the codebase. The team has to be able to get at a customer, since several practices assume someone who will use the system is available to answer questions in the moment. And the organization has to accept the practices as normal work rather than as overhead, because pairing and test-first development both look like they halve output to anyone counting lines.
 
-**Teams valuing technical excellence:**
-- Developers want to practice TDD, pairing
-- Organization values engineering discipline
-- Willing to invest in practices
+XP was described for a small co-located team, roughly two to twelve people, communicating by conversation.
 
-**Projects with engaged customer:**
-- Customer available for questions
-- Customer can prioritize
-- Customer writes acceptance criteria
+### Where XP Fits Badly
 
-**Small, co-located teams:**
-- 2-12 people
-- Can pair effectively
-- Communication easy
+**No access to a customer.** This is the most common blocker, and it removes more than it looks like it does, because the planning practices assume someone can prioritize and write acceptance criteria. The engineering practices survive on their own; the planning ones do not.
 
-**Changing requirements:**
-- Domain evolving
-- Learning through experimentation
-- Need to adapt quickly
+**Distributed teams.** Pairing and the informal communication XP relies on are harder across time zones. Remote pairing tooling has narrowed this gap considerably, and the residual problem is usually overlap hours rather than the pairing itself.
 
-**Long-term products:**
-- Will be maintained for years
-- Code quality compounds
-- Sustainable pace matters
+**Teams larger than about a dozen.** XP's coordination mechanism is people talking, which stops scaling at roughly the size where not everyone can hear everyone. Past that it needs either splitting or an added coordination structure.
+
+**Genuinely short-lived code.** A prototype that will be discarded in six weeks does not need to stay cheap to change. The caveat is that code intended to be thrown away frequently is not, and the practices are hardest to add retroactively.
+
+**Teams where pairing is refused.** Some developers work badly in pairs and say so. Forced pairing produces the disengaged-navigator failure rather than the practice. Rigorous code review recovers part of the value, though not the real-time design conversation.
+
+### Common Adaptations
+
+XP's engineering practices inside another framework's planning structure is by far the most common arrangement. Scrum supplies cadence, roles and prioritization while saying nothing about how code is written, which is exactly the half XP specifies. Teams that report Scrum failing on quality are usually teams that adopted the planning half and none of the technical half.
+
+The same combination works with flow-based delivery, where the practices are unchanged and only the scheduling around them differs, and it extends naturally into automated deployment, since continuous integration and a comprehensive test suite are what a deployment pipeline needs to be trustworthy.
+
+Adopting the engineering practices without the planning practices is a legitimate position rather than a compromise, and it is how most teams encounter XP today.
 
 ---
 
-### XP May Not Fit:
+## Where XP Goes Wrong
 
-**Very large teams:**
-- >12 people difficult to coordinate with XP
-- Pairing becomes complex
-- May need additional structure (Scrum of Scrums)
+XP's practices interlock, and most failures come from keeping a practice's form after removing the thing that made it work.
 
-**Distributed teams:**
-- Pairing more difficult remote
-- Customer availability across time zones
-- (But can be adapted with video pairing, async communication)
+### Pairing Where Only One Person Is Thinking
 
-**No customer availability:**
-- Can't get customer time
-- Product manager as proxy loses benefits
-- (May still use engineering practices without customer practices)
+The navigator watches the driver type, contributes nothing, and both people leave the session tired. What has happened is that one developer worked and another observed, at twice the cost.
 
-**Regulatory environments requiring extensive documentation:**
-- XP's minimal documentation may conflict
-- May need hybrid approach
-- (But practices like TDD produce living documentation)
+Pairing produces its value from two people reasoning about the same problem at different altitudes, with the driver in the details and the navigator on direction and edge cases. That requires swapping roles regularly and the navigator actually holding a separate thread. A pair where one person has been driving for two hours is not pairing.
 
-**Short-term projects:**
-- <3 months duration
-- May not see ROI from practices
-- (But practices still prevent quality issues)
+**Warning signs:** the same person always drives, sessions run without role swaps, and the navigator is reading something else.
 
-**Teams uncomfortable with pairing:**
-- Some developers strongly prefer solo work
-- Pairing feels invasive
-- (Can use code review as alternative)
+### Tests Written After the Code
 
----
+Writing tests afterwards to satisfy a coverage rule produces tests shaped by the implementation, which means they assert that the code does what it does. They pass, they add maintenance cost, and they catch almost nothing.
 
-### Hybrid Approaches
+Writing the test first changes what gets built, because a test that is hard to write is telling you the design is hard to use. Losing the ordering loses that signal entirely, which is most of what TDD is for.
 
-**XP + Scrum:**
-- Scrum for project structure (roles, ceremonies)
-- XP for engineering practices (TDD, pairing, CI)
-- Very common and effective combination
+**Warning signs:** tests committed after the implementation, tests that mirror the implementation's structure, and coverage rising without defects falling.
 
-**XP + Kanban:**
-- Kanban for workflow visualization
-- XP for engineering practices
-- Continuous flow with technical excellence
+### Simple Design as an Excuse Not to Design
 
-**XP + DevOps:**
-- XP for development practices
-- DevOps for deployment and operations
-- Continuous delivery through entire pipeline
+YAGNI says do not build for requirements you do not have. It does not say do not think. The failure reads the principle as permission to skip design entirely, and produces a codebase that is not simple but merely small and tangled.
 
-**XP practices without full XP:**
-- Adopt TDD, pairing, CI without planning game
-- Many teams use XP engineering practices within other frameworks
+Simple design in XP is a demanding standard: the code passes its tests, states every intention clearly, contains no duplication, and uses the fewest elements that satisfy the first three. Most code that gets called simple fails the second and third of those.
 
----
+**Warning signs:** duplication defended as simplicity, no design conversation before non-trivial work, and refactoring that never happens because nothing is ever revisited.
 
-## Common Pitfalls and Red Flags
+### A Proxy in Place of a Customer
 
-### Pitfall 1: Pair Programming as Code Review Only
+XP's on-site customer is meant to be someone who will use the system and can answer questions in the moment. A product manager relaying answers from elsewhere introduces the delay and the distortion the practice exists to remove.
 
-**Problem:**
+This is the practice organizations most often decide they cannot afford, and it is also the one the rest of XP leans on hardest. Short iterations with no one available to react to them are just short iterations.
 
-Navigator disengaged, just watching. Driver does all thinking.
+**Warning signs:** questions taking days to answer, requirements arriving as written specifications, and acceptance criteria written by someone who will not use the feature.
 
-**Why it's wrong:**
+### Collective Ownership Without the Safety Net
 
-Pairing value comes from two active minds solving problem together, not passive observation.
+Anyone changing any code works because a comprehensive test suite catches what a developer unfamiliar with the area breaks. Remove the tests and the same policy means anyone can break anything and find out later.
 
-**How to avoid:**
-- Switch roles frequently (every 15-30 minutes)
-- Navigator thinks ahead (design, edge cases)
-- Communicate constantly (think out loud)
-- Take breaks (intense, tiring)
+This is the clearest example of the second edition's corollary distinction. Shared code is a corollary practice, so adopting it before test-first programming and continuous integration are solid produces exactly the chaos its critics predict.
 
-**Red flags:**
-- Navigator on phone or distracted
-- Driver explains after coding (not during)
-- One person dominates all sessions
-- Team dreads pairing (forced, not collaborative)
+**Warning signs:** shared ownership announced as a policy change, no test suite for the areas being shared, and regressions in code the author did not know existed.
+
+### Unsustainable Pace With an XP Label
+
+Sixty-hour weeks are incompatible with every other practice in XP. Tired developers write worse code, refactor less, skip the pairing that would catch it, and produce the defects that justify the next crunch.
+
+Energized work is not a benefit offered to the team, it is a precondition for the technical practices producing what they are supposed to produce.
+
+**Warning signs:** sustained overtime described as temporary, defect rates rising during a push, and pairing abandoned first when pressure arrives.
+
+### Cherry-Picking the Practices
+
+"We do XP, we pair sometimes" describes a team that has adopted the most expensive practice and none of the ones that pay for it. XP's practices support each other, and several are close to useless alone.
+
+Continuous integration without a test suite tells you the build compiles. Refactoring without tests is editing and hoping. Collective ownership without either is a hazard. The second edition's primary and corollary split exists precisely to say which practices can be taken alone and which cannot.
+
+**Warning signs:** one or two practices adopted in isolation, practices dropped whenever a deadline approaches, and no one able to say why a given practice is in place.
+
+### XP as an Excuse Not to Plan
+
+XP plans continuously rather than not at all. The planning game, release planning, iteration planning and velocity-based forecasting are all practices in the set, and a team claiming XP exempts it from planning has discarded a quarter of the method.
+
+**Warning signs:** no release plan, no velocity being tracked, no stories estimated, and stakeholders who cannot get a forecast.
 
 ---
-
-### Pitfall 2: Tests Written After Code
-
-**Problem:**
-
-Writing tests after code to "check the box" on TDD.
-
-**Why it's wrong:**
-
-Loses design benefit of TDD. Tests become maintenance burden rather than design tool.
-
-**How to avoid:**
-- Red-Green-Refactor discipline
-- Test first, always
-- If caught writing code first, delete and start with test
-- Track coverage (but it's not enough—must be test-first)
-
-**Red flags:**
-- Tests written in separate "testing phase"
-- Low test coverage
-- Tests don't drive design
-- Tests brittle (break with every change)
-
----
-
-### Pitfall 3: "Simple Design" as Excuse for Poor Design
-
-**Problem:**
-
-Using YAGNI to avoid thinking about design at all.
-
-**Why it's wrong:**
-
-Simple design means appropriate design, not no design. Still need good abstractions and structure.
-
-**How to avoid:**
-- Simple design passes all tests
-- Code reveals intention (clear, readable)
-- Refactor when duplication appears
-- Simple ≠ simplistic
-
-**Red flags:**
-- God classes (too much in one place)
-- No abstractions (duplication everywhere)
-- "We'll refactor later" (never happens)
-- Code hard to understand ("simple" to write, not read)
-
----
-
-### Pitfall 4: No Real Customer Involvement
-
-**Problem:**
-
-Product manager acts as proxy while the real customer is never involved.
-
-**Why it's wrong:**
-
-Proxy doesn't have actual user knowledge. Requirements filtered through intermediary.
-
-**How to avoid:**
-- Get actual customer involvement (even partial)
-- Product manager facilitates, doesn't replace
-- User research and validation
-- Real acceptance criteria from users
-
-**Red flags:**
-- "Customer" has never used the product
-- Requirements come from business analysts
-- No user testing or validation
-- Building for imagined users
-
----
-
-### Pitfall 5: Collective Ownership Without Safety Net
-
-**Problem:**
-
-Everyone can change any code, but no tests or standards.
-
-**Why it's wrong:**
-
-Collective ownership requires safety net (tests) and consistency (standards). Without them, chaos.
-
-**How to avoid:**
-- Comprehensive test suite first
-- Coding standards agreed and enforced
-- Continuous integration catches issues
-- Pairing spreads knowledge
-
-**Red flags:**
-- No tests (unsafe to change)
-- No standards (inconsistent style)
-- Fear of changing unfamiliar code
-- "I don't want to break something"
-
----
-
-### Pitfall 6: Unsustainable Pace with XP Label
-
-**Problem:**
-
-Claiming to do XP while working 60-hour weeks.
-
-**Why it's wrong:**
-
-Sustainable pace is core XP value. Overtime as standard is failure, not XP.
-
-**How to avoid:**
-- 40 hours per week is commitment
-- Overtime signals planning problem
-- Negotiate scope, not hours
-- Technical practices prevent firefighting
-
-**Red flags:**
-- Regular overtime
-- "Crunch time" every release
-- Burnout and turnover
-- Pride in working long hours
-
----
-
-### Pitfall 7: Cherry-Picking Practices
-
-**Problem:**
-
-Adopting some practices but ignoring others. "We do XP; we pair sometimes."
-
-**Why it's wrong:**
-
-XP practices reinforce each other. Collective ownership needs tests. Refactoring needs tests. Pairing spreads knowledge for collective ownership.
-
-**How to avoid:**
-- Understand practice dependencies
-- Adopt incrementally but systematically
-- Engineering practices first (TDD, pairing, CI)
-- Customer practices as feasible
-
-**Red flags:**
-- "We do XP" but no TDD
-- "We do XP" but no pairing
-- "We do XP" but quarterly releases
-- Picking convenient parts, ignoring hard parts
-
----
-
-### Pitfall 8: XP as Excuse for No Planning
-
-**Problem:**
-
-"We're Agile/XP, we don't plan."
-
-**Why it's wrong:**
-
-XP has structured planning (planning game). Embracing change doesn't mean no planning.
-
-**How to avoid:**
-- Planning game every iteration
-- Release planning for longer term
-- Velocity-based forecasting
-- Adjust plans based on reality
-
-**Red flags:**
-- No iteration planning
-- No idea what's next
-- "We'll figure it out as we go"
-- Thrashing between priorities
-
----
-
-### Red Flags Summary
-
-**Engineering practice red flags:**
-- Tests written after code
-- No pairing or pairing as passive observation
-- No continuous integration
-- Broken builds linger
-- Low test coverage
-
-**Design red flags:**
-- "Simple design" excuse for poor design
-- No refactoring (technical debt accumulates)
-- Fear of changing code
-- Copy-paste duplication everywhere
-
-**Team practice red flags:**
-- Regular overtime (unsustainable pace)
-- No customer involvement
-- Cherry-picking practices
-- XP in name only
-
----
-
-## Key Takeaways
-
-**XP is about technical excellence and continuous feedback:**
-- Engineering practices maintain code quality (TDD, refactoring, simple design)
-- Customer involvement ensures building right thing
-- Fast feedback loops at multiple timescales
-- Sustainable pace enables long-term productivity
-
-**Five core values guide all practices:**
-- **Communication:** Everyone knows what's happening
-- **Simplicity:** Do simplest thing that works (YAGNI)
-- **Feedback:** Multiple fast feedback loops
-- **Courage:** Willing to make big changes when needed
-- **Respect:** For people, for code, for customer
-
-**Twelve practices work together:**
-- **Planning:** Planning game, small releases, acceptance tests
-- **Design:** Simple design, refactoring
-- **Coding:** Pair programming, TDD, collective ownership, coding standards, CI
-- **Team:** Sustainable pace, on-site customer
-
-**XP works best when:**
-- Team values technical excellence
-- Customer available and engaged
-- Small, co-located team (2-12 people)
-- Long-term product (quality compounds)
-- Changing requirements (adapt through refactoring)
-
-**Common pitfalls to avoid:**
-- Cherry-picking practices (they reinforce each other)
-- Tests written after code (loses design benefit)
-- No real customer involvement (proxy isn't enough)
-- Unsustainable pace (overtime as standard)
-- Simple design as excuse for poor design
-
-**The goal is sustainable delivery of high-quality software that meets real user needs.**

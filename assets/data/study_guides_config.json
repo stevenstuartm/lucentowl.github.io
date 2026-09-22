@@ -41,9 +41,9 @@
           "guides": [
             "sdlc/waterfall.md",
             "sdlc/scrum.md",
-            "sdlc/kanban.md",
-            "sdlc/lean.md",
             "sdlc/extreme-programming.md",
+            "sdlc/lean.md",
+            "sdlc/kanban.md",
             "sdlc/shape-up.md"
           ]
         },

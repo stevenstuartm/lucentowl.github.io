@@ -1,0 +1,90 @@
+---
+title: "Four Team Types and Three Interaction Modes"
+kind: structure
+system: sdlc
+summary: "The four team types, and which interaction mode connects each pair."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-labelledby="tt1-title tt1-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="tt1-title">Team Topologies team types connected by the three interaction modes</title>
+<desc id="tt1-desc">Four team types arranged in three columns. On the left, an enabling team, which helps other teams acquire a missing capability and then leaves. In the centre, two stream-aligned teams, each owning a continuous flow of work for one slice of the business and each delivering to users without handoffs. On the right, a platform team providing self-service internal products, and a complicated-subsystem team owning a part that needs deep specialist knowledge. Three interaction modes connect them. Facilitating runs from the enabling team to each stream-aligned team and is temporary. X-as-a-Service runs from each stream-aligned team to the platform team, where the consumer depends on a stable service with minimal conversation. Collaboration runs in both directions between the lower stream-aligned team and the complicated-subsystem team while an interface is still being discovered, and is expected to end. Cognitive load per team is the constraint the whole arrangement exists to manage.</desc>
+<style>
+.tt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.tt-hub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.tt-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.tt-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.tt-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.tt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.tt-el { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.tt-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.tt-svc { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.tt-fac { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.tt-col { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; stroke-dasharray: 3 4; }
+</style>
+<defs>
+<marker id="tt1-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="tt1-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="tt1-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="tt-hd" x="24" y="36">HELPS, THEN LEAVES</text>
+<text class="tt-hd" x="330" y="36">OWNS A SLICE OF VALUE</text>
+<text class="tt-hd" x="680" y="36">REDUCES OTHERS' LOAD</text>
+
+<rect class="tt-box" x="24" y="200" width="220" height="120" rx="6"/>
+<text class="tt-t" x="38" y="230">Enabling team</text>
+<text class="tt-k" x="38" y="250">[temporary by design]</text>
+<text class="tt-s" x="38" y="272">closes a capability gap</text>
+<text class="tt-s" x="38" y="290">in another team, then</text>
+<text class="tt-s" x="38" y="308">disengages</text>
+
+<rect class="tt-hub" x="330" y="70" width="250" height="130" rx="6"/>
+<text class="tt-t" x="344" y="100">Stream-aligned team</text>
+<text class="tt-k" x="344" y="120">[the default team type]</text>
+<text class="tt-s" x="344" y="142">one flow of work, end</text>
+<text class="tt-s" x="344" y="160">to end, no handoffs</text>
+<text class="tt-s" x="344" y="178">e.g. checkout</text>
+
+<rect class="tt-hub" x="330" y="250" width="250" height="130" rx="6"/>
+<text class="tt-t" x="344" y="280">Stream-aligned team</text>
+<text class="tt-k" x="344" y="300">[most teams are this]</text>
+<text class="tt-s" x="344" y="322">owns build and run</text>
+<text class="tt-s" x="344" y="340">for its own slice</text>
+<text class="tt-s" x="344" y="358">e.g. inventory</text>
+
+<rect class="tt-box" x="680" y="70" width="256" height="130" rx="6"/>
+<text class="tt-t" x="694" y="100">Platform team</text>
+<text class="tt-k" x="694" y="120">[treats teams as customers]</text>
+<text class="tt-s" x="694" y="142">self-service internal</text>
+<text class="tt-s" x="694" y="160">products, adopted</text>
+<text class="tt-s" x="694" y="178">because they are good</text>
+
+<rect class="tt-box" x="680" y="250" width="256" height="130" rx="6"/>
+<text class="tt-t" x="694" y="280">Complicated-subsystem</text>
+<text class="tt-k" x="694" y="300">[exists only when justified]</text>
+<text class="tt-s" x="694" y="322">a part needing deep</text>
+<text class="tt-s" x="694" y="340">specialist knowledge</text>
+<text class="tt-s" x="694" y="358">e.g. a pricing engine</text>
+
+<path class="tt-fac" d="M 244,240 H 284 V 135 H 324" marker-end="url(#tt1-p)"/>
+<path class="tt-fac" d="M 244,280 H 284 V 315 H 324" marker-end="url(#tt1-p)"/>
+<path class="tt-svc" d="M 580,135 H 674" marker-end="url(#tt1-a)"/>
+<path class="tt-svc" d="M 580,280 H 630 V 160 H 674" marker-end="url(#tt1-a)"/>
+<path class="tt-col" d="M 586,335 H 674" marker-end="url(#tt1-g)" marker-start="url(#tt1-g)"/>
+
+<text class="tt-hd" x="24" y="436">INTERACTION MODES</text>
+
+<path class="tt-svc" d="M 24,466 H 64" marker-end="url(#tt1-a)"/>
+<text class="tt-el" x="74" y="470">X-as-a-Service: the consumer depends on a stable service, with little conversation</text>
+
+<path class="tt-fac" d="M 24,496 H 64" marker-end="url(#tt1-p)"/>
+<text class="tt-el" x="74" y="500">Facilitating: one team helps another get better at something, then stops</text>
+
+<path class="tt-col" d="M 30,526 H 58" marker-end="url(#tt1-g)" marker-start="url(#tt1-g)"/>
+<text class="tt-el" x="74" y="530">Collaboration: high bandwidth both ways while an interface is discovered, then ends</text>
+
+<text class="tt-note" x="24" y="572">Cognitive load per team is the constraint. Every mode above exists to keep one team's load inside what it can actually hold.</text>
+
+</g>
+</svg>

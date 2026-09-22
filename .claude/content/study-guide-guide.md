@@ -304,7 +304,7 @@ When writing about software architecture, use correct terminology:
 | Data Structures & Algorithms | Fundamentals, Linear Data Structures, Trees & Heaps, Graphs, Hash Tables & Algorithms |
 | Object-Oriented Programming | OOP Foundations, Design Patterns |
 | Security | Security Fundamentals, Application Security, Security Operations, Governance & Risk |
-| Software Development Lifecycle | SDLC & Modeling |
+| Software Development Lifecycle | SDLC Fundamentals, AAA Cycle, SDLC Frameworks, DevOps & Delivery |
 | AI & Machine Learning | Machine Learning, Building with LLMs, AI in Engineering Practice |
 | Data & Analytics | Analytics |
 | Observability | Monitoring & Observability |

@@ -3,18 +3,18 @@ title: "Waterfall Methodology"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Frameworks
-description: "Comprehensive guide to Waterfall - sequential software development methodology for predictable, documentation-heavy, and highly regulated environments."
-tags: [sdlc, methodology, waterfall, sequential, documentation, regulated-industries]
+description: "Sequential development with phase gates: what Royce actually proposed, the six phases and their deliverables, where predictive planning genuinely wins, the hybrid forms in common use, and the eight ways deferred feedback turns into project failure."
+tags: [fundamentals, waterfall, phase-gates, requirements, regulated-industries, change-control]
 ---
 
 ## What is Waterfall
 
-*Formalized by Winston W. Royce in 1970 paper "Managing the Development of Large Software Systems." Ironically, Royce actually argued against the pure waterfall approach in the same paper, but it became the dominant methodology for decades.*
+*The sequential model is usually traced to Winston W. Royce's 1970 paper "Managing the Development of Large Software Systems." Royce presented the single-pass sequential diagram as a flawed process, called testing only at the end "risky and invites failure," and proposed five modifications to remove most of the development risk. The modifications never took hold; the diagram of the flawed process did. Royce never used the word "waterfall," which appears to have entered the literature later.*
 
 **Waterfall** is a sequential software development methodology where each phase must be completed before moving to the next. Progress flows in one direction (like a waterfall), with formal gates between phases.
 
 <blockquote class="pull-quote">
-<p>Waterfall's creator, Winston Royce, actually warned against using it in his original 1970 paper.</p>
+<p>The diagram that became Waterfall was drawn by Royce as an example of what not to do.</p>
 </blockquote>
 
 **Core Philosophy:**
@@ -803,216 +803,6 @@ Most of software's total cost is maintenance (60-90%). Waterfall projects often 
 
 ---
 
-## Alignment with AAA Cycle
-
-Waterfall's sequential structure creates fundamental tensions with the AAA discipline, though some phases naturally support AAA principles.
-
-### How Waterfall Can Support AAA
-
-**Align Phase: Requirements Gathering**
-
-Waterfall's extensive requirements phase can support alignment:
-
-**What works:**
-- Dedicated time for stakeholder interviews
-- Documentation forces explicit communication
-- Requirements review ensures shared understanding
-- Sign-off gates prevent proceeding with misalignment
-
-**What's needed:**
-- Requirements discovery, not just requirements capture
-- Testing assumptions during requirements phase
-- Iterative refinement within requirements phase
-- Prototyping to validate understanding
-
-**Example:**
-Enterprise system for financial services. Waterfall requires 3-month requirements phase. Team uses time well: interviews stakeholders, builds mockups, validates regulatory requirements, tests assumptions with prototypes. Requirements document reflects genuine alignment, not just wishful thinking.
-
----
-
-**Agree Phase: Design Sign-Off**
-
-Design phase can establish clear agreements:
-
-**What works:**
-- Detailed specifications document what will be built
-- Formal review and approval process
-- Clear scope boundaries
-- Written record of agreements
-
-**What's needed:**
-- Agreement on outcomes, not just technical specs
-- Success criteria beyond "built per spec"
-- Explicit acceptance criteria
-- Change control process that allows realignment
-
-**Example:**
-Design specifies database schema, API contracts, UI wireframes. Stakeholders review and approve. Team has clear agreement on what "done" means. However, agreement includes provision: if implementation reveals design flaws, team will pause and realign rather than blindly following flawed spec.
-
----
-
-**Apply Phase: Implementation and Testing**
-
-Waterfall's implementation phase can apply agreements:
-
-**What works:**
-- Build what was agreed in design phase
-- Testing validates implementation matches specification
-- Formal acceptance criteria
-- Traceability from requirements to implementation
-
-**What's needed:**
-- Quality is part of agreement, not afterthought
-- Pause mechanism when discovery invalidates design
-- Testing throughout, not just testing phase
-- Continuous stakeholder visibility
-
-**Example:**
-Implementation follows design specifications. Testing validates each component. However, team discovers security vulnerability in architectural approach. Rather than proceeding to meet schedule, team pauses, realigns with stakeholders on security requirements, updates design, continues. Honors true agreement (secure system) not just documented agreement (original design).
-
----
-
-### Where Waterfall Conflicts with AAA
-
-**Conflict 1: Late discovery, costly realignment**
-
-**Problem:**
-- Requirements frozen before implementation begins
-- Design approved before code written
-- Learning happens during implementation (too late)
-- Change is expensive and discouraged
-
-**AAA requires:**
-- Continuous realignment as understanding evolves
-- Discovery throughout the process
-- Easy adaptation based on learning
-- Realignment is expected, not exceptional
-
-**Why waterfall fails here:**
-Waterfall's entire philosophy assumes you can know everything upfront. Phase gates prevent easy realignment. By the time you learn critical information (during implementation), you've already committed to requirements and design. Realignment requires formal change requests, re-approval, schedule delays.
-
-**No real reconciliation:**
-This is fundamental tension. If your project allows late discovery and requires easy realignment, waterfall is wrong methodology. Use iterative approach.
-
----
-
-**Conflict 2: Agreement becomes contract, not shared commitment**
-
-**Problem:**
-- Requirements document becomes legal artifact
-- Changes trigger blame ("you signed off on this")
-- Stakeholders disengage after sign-off
-- Focus on contract compliance, not outcomes
-
-**AAA requires:**
-- Agreement based on shared understanding
-- Continuous stakeholder engagement
-- Focus on outcomes, not compliance
-- Realignment when learning demands it
-
-**Why waterfall fails here:**
-Waterfall documents create false sense of certainty. Stakeholders sign off thinking "we're done with requirements." Team builds to spec thinking "we have approval." When reality differs from plan, focus becomes "who approved this?" not "what should we do now?"
-
-**Partial reconciliation:**
-Include explicit clause in waterfall contracts: "This specification represents our current understanding. We will pause and realign if implementation reveals a significantly different reality." Make realignment process lightweight. Keep stakeholders engaged throughout implementation.
-
----
-
-**Conflict 3: Testing phase discovers problems too late**
-
-**Problem:**
-- Testing happens after implementation complete
-- Integration issues discovered late
-- User acceptance at end of process
-- No opportunity to adjust based on feedback
-
-**AAA requires:**
-- Continuous validation of understanding
-- Testing assumptions early
-- Stakeholder feedback throughout
-- Course correction before significant investment
-
-**Why waterfall fails here:**
-Separating testing from implementation means you build for months without validating. By testing phase, you've invested heavily in potentially wrong solution. User acceptance testing at the end means users see product for first time when it's "done." Too late for meaningful course correction.
-
-**Partial reconciliation:**
-- Prototype during requirements phase (test usability assumptions)
-- Incremental development within implementation phase
-- Continuous integration and automated testing
-- Stakeholder demos during implementation (not just at end)
-
-This is basically "waterfall with agile practices"; see Hybrid Approaches below.
-
----
-
-**Conflict 4: Sequential phases prevent parallel learning**
-
-**Problem:**
-- Can't start design until requirements complete
-- Can't start implementation until design complete
-- Learning from implementation can't inform design
-- No feedback loops between phases
-
-**AAA requires:**
-- Iterative refinement
-- Learning informs earlier decisions
-- Parallel exploration of design and implementation
-- Feedback loops throughout
-
-**Why waterfall fails here:**
-Waterfall assumes linear progression: understand → design → build. Reality: building teaches you what you need, design reveals requirement gaps, implementation exposes design flaws. Sequential phases prevent this natural learning.
-
-**No real reconciliation:**
-This is fundamental to waterfall. If your project benefits from parallel learning and feedback loops, use iterative methodology. Waterfall appropriate only when learning can genuinely happen sequentially.
-
----
-
-### When Waterfall Supports AAA (Rarely)
-
-Waterfall can support AAA in very specific contexts:
-
-**1. Truly stable, well-understood requirements**
-
-If requirements genuinely won't change (regulatory compliance, hardware constraints), waterfall's upfront alignment makes sense. Extensive requirements phase ensures genuine alignment before commitment.
-
-**Example:** Medical device software with fixed FDA requirements. Requirements are regulatory, not exploratory. Alignment means understanding regulations, not discovering user needs.
-
----
-
-**2. High cost of change encourages quality alignment**
-
-When changing course is extremely expensive (manufacturing dependencies, contractual obligations), waterfall forces quality alignment upfront. Better to spend 3 months on requirements than discover misalignment after 2 years of development.
-
-**Example:** Spacecraft software. Can't iterate after launch. Waterfall's extensive upfront work (requirements, design, testing) ensures genuine alignment and agreement before irreversible commitment.
-
----
-
-**3. Distributed teams with limited communication**
-
-When real-time collaboration is difficult (extreme time zones, security constraints), comprehensive documentation supports asynchronous alignment. Requirements and design documents establish shared understanding without requiring continuous interaction.
-
-**Example:** Defense contractor with distributed teams across multiple security domains. Face-to-face alignment difficult. Comprehensive documentation and formal reviews establish alignment.
-
----
-
-### Key Insight: Waterfall Works When Learning is Expensive
-
-Waterfall supports AAA when:
-- Cost of realignment is higher than cost of upfront alignment
-- Learning can genuinely happen sequentially
-- Requirements are stable and well-understood
-- Changes are more expensive than extensive planning
-
-Waterfall conflicts with AAA when:
-- Learning happens during implementation (most software)
-- Requirements emerge through building
-- Rapid feedback and course correction needed
-- Discovery reveals a significantly different reality
-
-For most modern software development, these conflicts make waterfall a poor fit with AAA. Use iterative methodologies (Lean, Kanban) that embrace continuous realignment.
-
----
-
 ## Hybrid Approaches
 
 Many organizations use hybrid approaches combining waterfall structure with agile practices.
@@ -1107,382 +897,80 @@ Increment 3: Requirements → Design → Implement → Test → Deploy
 
 ---
 
-## Common Pitfalls and Red Flags
+## Where Waterfall Goes Wrong
 
-### Pitfall 1: Late Discovery of Fundamental Issues
+Every failure below comes from the same root. Waterfall defers feedback to the end, so anything the team was wrong about stays wrong for as long as the project runs, and surfaces at the point where correcting it costs the most.
 
-**Problem:**
+### Late Discovery of Fundamental Issues
 
-Critical issues discovered in testing phase when expensive to fix.
+Nothing executable exists until implementation is nearly finished, so requirements misunderstandings, design flaws, integration mismatches and performance problems all arrive together during the testing phase. A defect found in requirements is a conversation. The same defect found after integration is a redesign of everything built on it.
 
-**What happens:**
-- Requirements misunderstood (built wrong thing)
-- Design flaws (doesn't scale, doesn't work)
-- Integration problems (components don't work together)
-- Performance issues (too slow, doesn't handle load)
+The countermeasure inside a sequential project is to create earlier evidence: prototypes during requirements and design, integration that happens continuously rather than as an event, and something demonstrable in front of stakeholders long before user acceptance testing.
 
-**Why it happens:**
-- No working software until late
-- Testing happens after implementation complete
-- Integration happens late
-- No feedback loops during development
+**Warning signs:** the first integration happens in the testing phase, no proof of concept exists for anything novel, and stakeholders see nothing until UAT.
 
-**Cost impact:**
+### Requirements Churn Meets Change Resistance
 
-**Cost of fixing defect:**
-- Requirements phase: 1x
-- Design phase: 5x
-- Implementation: 10x
-- Testing: 20x
-- Production: 100x
+Requirements change during any project long enough to matter, and Waterfall's change control exists to make that expensive. The result is one of two failures. Either change requests get denied and the project delivers faithfully against an understanding that is now obsolete, or changes happen informally, the plan silently stops matching reality, and the eventual overrun gets argued about rather than explained.
 
-**How to avoid:**
-- Prototyping during requirements/design
-- Early integration (continuous integration)
-- Incremental delivery (reduce batch size)
-- Feedback loops throughout (not just at end)
+Neither is a discipline problem. Long timelines guarantee the business context will move, and stakeholders discover what they actually want by seeing something work.
 
-**Red flags:**
-- First integration in testing phase
-- No prototypes or proof-of-concepts
-- "Big bang" integration
-- Stakeholders see nothing until UAT
+**Warning signs:** requirements locked for a year or more, no functioning mechanism for change, and stakeholders who have learned not to ask.
 
----
+### Documentation That Nobody Reads
 
-### Pitfall 2: Requirements Churn and Scope Creep
+When documents are the deliverable a phase gate checks, producing them becomes the work. Requirements specifications reach hundreds of pages, design documents describe systems in detail that implementation immediately invalidates, and nothing gets updated because updating is not what the gate measures.
 
-**Problem:**
+The defensible version keeps documentation that captures decisions and their reasoning, which is the part that cannot be recovered from the code later. The wasteful version documents what the code already says.
 
-Requirements change during project but waterfall resists change.
+**Warning signs:** weeks spent formatting rather than deciding, documents that nobody has opened since sign-off, and specifications that contradict the running system.
 
-**What happens:**
+### Phase Boundaries That Prevent Learning
 
-**Scenario 1: Change control prevents necessary changes**
-- Market shifts, competitors launch features
-- Change request denied (expensive, timeline impact)
-- Project delivers to obsolete requirements
-- Result: Wasted effort
+Strict gates assume information flows one way. In practice design reveals that requirements are ambiguous, implementation reveals that the design does not work, and testing reveals requirements nobody thought to state. A gate that forbids going back does not prevent the discovery, it only prevents acting on it.
 
-**Scenario 2: Changes made anyway (scope creep)**
-- Changes made without formal process
-- Timeline and budget impacted
-- Blame game ("requirements weren't clear")
-- Result: Over budget, late, contentious
+Sequential projects that work tend to allow overlap between adjacent phases and a path for later phases to correct earlier ones, which is most of what Royce's original modifications were about.
 
-**Why it happens:**
-- Requirements unknowable upfront
-- Business context changes during project
-- Stakeholders learn what they want by seeing product
-- Long project timelines (9-18 months)
+**Warning signs:** teams idle waiting for a gate, handoffs with no shared context, and known requirement errors that stay in because the gate closed.
 
-**How to avoid:**
-- Shorter project timelines (incremental)
-- Accept that requirements will evolve
-- Build flexibility into plan
-- Agile methodologies embrace change
+### Estimates Made When Least Is Known
 
-**Red flags:**
-- Requirements locked for 12+ months
-- No mechanism for change
-- "Requirements are final" mentality
-- Stakeholders afraid to ask for changes
+Waterfall needs a whole-project estimate at the point of minimum information, which is precisely where estimates are least reliable. Steve McConnell's cone of uncertainty describes this: early in a project, estimates range from roughly a quarter of the eventual figure to around four times it, and the range narrows only as the work reveals itself.
+
+Pressure makes this worse, because the request is usually for a single number rather than a range, and a range that honestly reflects the uncertainty tends to be read as evasion.
+
+**Warning signs:** point estimates demanded before design, no contingency, and estimates that are never revised as the project learns.
+
+### Testing as a Phase Rather Than a Practice
+
+Making testing a phase puts it at the end of the schedule, which is where the schedule pressure is. Defects surface with the launch date approaching, and the negotiation becomes which known defects ship rather than whether to ship.
+
+The structural fix is to stop treating quality as a stage. Automated tests that run on every change, and developers who own the quality of what they write, move detection to the point where fixing is cheap.
+
+**Warning signs:** no automated tests, QA discovering defects developers never saw, and a defect triage meeting whose purpose is deciding what to accept.
+
+### The Approved-Requirements Defence
+
+When a project delivers exactly what was specified and stakeholders say it is not what they wanted, both sides are telling the truth, and the sign-off gets used as an argument. It works as an argument and solves nothing, because the product is still wrong.
+
+A signature means the requirements were the best shared understanding available at that moment. Treating it as a transfer of responsibility is what turns a discovery into a dispute.
+
+**Warning signs:** "you signed off" appearing in a conversation about a defect, stakeholders surprised at a demo, and no stakeholder contact between requirements and UAT.
+
+### The Death March
+
+Late project, fixed date, and the only remaining variable is hours. Teams work nights and weekends, quality falls, people leave, and the extra hours produce less per hour than the normal ones did.
+
+This is the terminal form of the other failures rather than a separate problem. Optimistic estimates, unmanaged scope change and late discovery all arrive at the same place, and the response of adding hours rather than renegotiating scope is what converts a late project into a damaged team.
+
+**Warning signs:** sustained overtime described as a temporary push, quality metrics declining while the date holds, and turnover starting before the deadline.
 
 ---
 
-### Pitfall 3: Over-Emphasis on Documentation
+## If You Have to Use It
 
-**Problem:**
+Waterfall is sometimes the right choice and more often an inherited constraint. Both cases benefit from the same adjustments, all of which keep the contractual shape while shortening the distance to feedback.
 
-Effort spent on documentation instead of working software.
+Shorten the cycle by delivering in increments, so each pass through the phases covers a slice rather than the whole system. Allow adjacent phases to overlap, since design work genuinely does inform requirements. Prototype anything novel during requirements rather than discovering it during implementation. Integrate continuously instead of at a milestone. Document decisions and reasoning rather than everything. Estimate in ranges with stated contingency. And keep stakeholders involved past the requirements phase, because the signature was never the point.
 
-**What happens:**
-- Months spent on requirements documents
-- Design documents 100+ pages
-- Documents don't capture tacit knowledge
-- Documents become stale (not updated)
-- Nobody reads documents
-
-**Why it happens:**
-- Documentation seen as deliverable (contract fulfillment)
-- "Cover your ass" culture (document everything)
-- Mistaken belief documentation = understanding
-- Phase gates require documentation
-
-**How to avoid:**
-- Document what's valuable (decisions, rationale)
-- Working software over comprehensive documentation (Agile value)
-- Living documentation (code, tests, runbooks)
-- Just-enough documentation
-
-**Red flags:**
-- Requirements document 200+ pages
-- Weeks spent formatting documents
-- Documents not read or used
-- Documentation for documentation's sake
-
----
-
-### Pitfall 4: Artificial Phase Boundaries
-
-**Problem:**
-
-Rigid phase gates prevent natural overlap and iteration.
-
-**What happens:**
-- Design can't start until requirements 100% complete
-- Implementation can't start until design 100% complete
-- Idle time waiting for phase gates
-- No learning between phases
-
-**Why it's problematic:**
-
-**In reality:**
-- Requirements inform design
-- Design informs requirements
-- Implementation reveals design issues
-- Testing reveals requirement gaps
-
-**Artificial boundaries prevent this learning.**
-
-**How to avoid:**
-- Allow overlap between phases
-- Iterate within and between phases
-- Feedback loops from later phases to earlier
-- Incremental delivery
-
-**Red flags:**
-- Teams idle waiting for phase gate
-- No overlap between phases
-- "Throw it over the wall" handoffs
-- No iteration or feedback
-
----
-
-### Pitfall 5: Optimism Bias in Estimates
-
-**Problem:**
-
-Estimates made with incomplete information turn out wrong.
-
-**What happens:**
-- Requirements phase: Estimate entire project
-- Based on incomplete understanding
-- Complexity underestimated
-- Contingency insufficient
-- Result: Over budget, late
-
-**Why it happens:**
-- Pressure to provide estimate early
-- Unknown unknowns (don't know what you don't know)
-- Optimism bias (underestimate complexity)
-- Political pressure (management wants low estimate)
-
-**Reality of software estimation:**
-- Cone of uncertainty (estimates improve with information)
-- Early estimates have 4x variance (25% to 400% of estimate)
-- Estimation improves as project progresses
-- But waterfall needs estimate upfront
-
-**How to avoid:**
-- Ranges, not point estimates (50% to 150% confidence)
-- Contingency based on uncertainty
-- Re-estimate as information improves
-- Empirical data (velocity) over speculation
-
-**Red flags:**
-- Point estimates required before design
-- No contingency or ranges
-- Estimates not updated as learning occurs
-- "We need a number" pressure
-
----
-
-### Pitfall 6: Testing as Afterthought
-
-**Problem:**
-
-Testing phase at end means late discovery of issues and pressure to accept defects.
-
-**What happens:**
-- Testing starts after development complete
-- Defects found late (expensive to fix)
-- Timeline pressure (launch date approaching)
-- Pressure to accept known defects
-- Result: Poor quality or delayed launch
-
-**Why it happens:**
-- Waterfall structure (testing is a phase, not continuous)
-- No automated tests (manual testing slow)
-- Integration happens late
-- QA seen as separate from development
-
-**How to avoid:**
-- Test continuously (not phase at end)
-- Automated testing (TDD, CI)
-- Quality built in (XP practices)
-- Developers own quality
-
-**Red flags:**
-- No testing until "testing phase"
-- No automated tests
-- QA team discovers defects, not developers
-- Pressure to "accept" known defects for launch
-
----
-
-### Pitfall 7: "Requirements Were Approved" Blame Game
-
-**Problem:**
-
-When project fails, blame shifts to "requirements were signed off."
-
-**What happens:**
-- Project delivers to requirements
-- But requirements were wrong or incomplete
-- Stakeholders: "This isn't what we wanted"
-- Project team: "But you approved requirements"
-- Result: Finger-pointing, wasted effort, damaged relationships
-
-**Why it happens:**
-- Requirements unknowable upfront
-- Sign-off seen as contract (absolves responsibility)
-- Stakeholders don't understand requirements until seeing product
-- No collaboration after requirements phase
-
-**Reality:**
-
-**Sign-off doesn't mean:**
-- Requirements are correct
-- Stakeholders understand fully
-- Product will meet needs
-
-**Sign-off means:**
-- "This is our best understanding now"
-- Should evolve as learning occurs
-
-**How to avoid:**
-- Continuous stakeholder involvement (not just requirements phase)
-- Accept requirements will evolve
-- Prototypes and MVPs for validation
-- Agile methodologies (collaboration over sign-offs)
-
-**Red flags:**
-- "You signed off" used as defense
-- Stakeholders surprised at demo
-- No involvement after requirements phase
-- Adversarial relationship
-
----
-
-### Pitfall 8: Death March
-
-**Problem:**
-
-Project behind schedule, team works unsustainable hours trying to catch up.
-
-**What happens:**
-- Project late (optimistic estimates)
-- Management pressure to deliver on time
-- Team works nights and weekends
-- Quality suffers, burnout occurs
-- Result: Poor quality, staff turnover, project failure
-
-**Why it happens:**
-- Unrealistic timeline (optimistic estimates)
-- Scope creep (changes not managed)
-- Late discovery of issues
-- "Fixed date" mentality (can't slip)
-
-**How to avoid:**
-- Realistic estimates with contingency
-- Incremental delivery (reduce risk)
-- Sustainable pace (XP value)
-- Negotiate scope, not hours
-
-**Red flags:**
-- Regular overtime
-- "Crunch time" for weeks/months
-- Burnout and turnover
-- Quality declining
-
----
-
-### Red Flags Summary
-
-**Process red flags:**
-- Requirements locked for 12+ months
-- First integration in testing phase
-- Documentation for documentation's sake
-- Rigid phase boundaries (no overlap)
-
-**Estimation red flags:**
-- Point estimates before design
-- No ranges or contingency
-- Estimates never updated
-- Optimistic timelines
-
-**Quality red flags:**
-- Testing only at end
-- No automated tests
-- Pressure to accept defects
-- QA separate from development
-
-**Cultural red flags:**
-- Blame culture ("you approved it")
-- Death march (unsustainable pace)
-- Adversarial relationships
-- No collaboration after requirements
-
----
-
-## Key Takeaways
-
-**Waterfall is sequential, documentation-heavy methodology:**
-- Six phases: Requirements, Design, Implementation, Testing, Deployment, Maintenance
-- Each phase produces deliverables and requires sign-off
-- Change expensive after requirements phase
-- Predictive planning (plan everything upfront)
-
-**Waterfall works in specific contexts:**
-- Highly regulated industries (FDA, aerospace, defense)
-- Fixed-scope, fixed-bid contracts
-- Hardware-software integration
-- Truly stable requirements (rare)
-- Organizations with waterfall mandates
-
-**Waterfall doesn't work for:**
-- Evolving requirements (most software projects)
-- Innovative/exploratory projects
-- Software-only projects (no hardware constraints)
-- Fast-moving markets
-- Startups and product development
-
-**Common pitfalls:**
-- Late discovery of fundamental issues (testing at end)
-- Requirements churn and scope creep
-- Over-emphasis on documentation
-- Artificial phase boundaries
-- Optimism bias in estimates
-- Testing as afterthought
-- Blame game ("you approved requirements")
-- Death march (unsustainable pace)
-
-**Modern alternatives:**
-- Agile methodologies (Scrum, Kanban, XP) for most software
-- Hybrid approaches when waterfall required
-- Incremental delivery to reduce risk
-- Continuous feedback throughout
-
-**Historical note:**
-
-Even Royce (who formalized waterfall) warned against using it. Waterfall became dominant despite its flaws. Modern software development has largely moved past waterfall except where regulatory or contractual constraints require it.
-
-**If you must use waterfall:**
-- Keep phases short (incremental waterfall)
-- Allow overlap between phases
-- Prototype to validate requirements
-- Continuous integration (not "big bang")
-- Just-enough documentation (not excessive)
-- Build in contingency (estimates will be wrong)
-- Maintain stakeholder involvement throughout
+The regulated industries where Waterfall persists need evidence of a controlled process, not a single pass through it. That distinction is what most of the hybrid approaches above are built on.

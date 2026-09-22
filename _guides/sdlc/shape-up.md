@@ -3,8 +3,8 @@ title: "ShapeUp Methodology"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Frameworks
-description: "Comprehensive guide to Shape Up methodology - Basecamp's approach to product development featuring six-week cycles, shaping, betting, and building phases."
-tags: [sdlc, methodology, agile, product-development, basecamp]
+description: "Basecamp's alternative to Scrum: shaping work to an appetite before anyone commits to it, betting a team on a whole project for six weeks, building with fixed time and variable scope, and the circuit breaker that refuses automatic extensions."
+tags: [practical, shape-up, appetite, scope-hammering, hill-charts, product-development]
 ---
 
 ## What is Shape Up
@@ -46,87 +46,13 @@ Shape Up runs three parallel tracks:
 
 ## The Shape Up Workflow
 
-Shape Up has three main phases that repeat: **Shaping**, **Betting**, and **Building**.
+Shape Up runs three tracks that overlap in time rather than three phases that follow one another. At any moment someone is shaping work for a future cycle, a team is building work that was bet on earlier, and between cycles a betting table decides what happens next.
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          SHAPE UP WORKFLOW CYCLE                            │
-└─────────────────────────────────────────────────────────────────────────────┘
+{% include figure.html id="sdlc-shape-up-cycle" %}
 
-TRACK 1: SHAPING (Ongoing, 1-2 Cycles Ahead)
-─────────────────────────────────────────────────────────────────────────
-│
-│  Step 1: Set Boundaries (Define appetite, problem, scope)
-│     │
-│     ▼
-│  Step 2: Rough Out Elements (Breadboards, fat marker sketches)
-│     │
-│     ▼
-│  Step 3: Address Risks & Rabbit Holes (Technical spikes, de-scope)
-│     │
-│     ▼
-│  Step 4: Write the Pitch (Problem, Appetite, Solution, No-Gos)
-│     │
-│     └──────────────────────────────┐
-│                                    │
-│                                    ▼
-TRACK 2: BETTING (Every 6 Weeks)
-─────────────────────────────────────────────────────────────────────────
-                                     │
-                    Betting Table Meeting (2-4 hours)
-                                     │
-                    ┌────────────────┼────────────────┐
-                    │                │                │
-                   Bet             Bet             Defer
-                (Team A)        (Team B)        (Try again)
-                    │                │                │
-                    └────────────────┼────────────────┘
-                                     │
-                                     ▼
-TRACK 3: BUILDING (6 Weeks)
-─────────────────────────────────────────────────────────────────────────
-                                     │
-                        Week 1-2: Get Oriented
-                        (Understand pitch, plan approach)
-                                     │
-                                     ▼
-                        Week 3-4: Build Core
-                        (Vertical slices, start in the middle)
-                                     │
-                                     ▼
-                        Week 5-6: Finish & Ship
-                        (Scope hammering, deploy to production)
-                                     │
-                   ┌─────────────────┴─────────────────┐
-                   │                                   │
-               Shipped ✓                         Not Finished
-                   │                                   │
-                   ▼                                   ▼
-                                            Circuit Breaker Trips
-                                            (Re-evaluate, reshape,
-                                             or abandon)
-                                                       │
-                                     ┌─────────────────┴─────────────────┐
-                                     │                                   │
-                                     ▼                                   ▼
-COOL-DOWN (2 Weeks)
-─────────────────────────────────────────────────────────────────────────
+The timing is what makes this work. Shaping runs one to two cycles ahead, so the betting table always has finished pitches to choose between and never has to bet on an idea nobody has thought through. Building runs uninterrupted for six weeks, because the decision about what to build was made before the cycle started and is not revisited during it. Betting takes a few hours in cool-down, and it is a commitment of a team to a project rather than an entry on a list.
 
-    • Bug fixes, refactoring, exploration
-    • No scheduled work or commitments
-    • Teams shape ideas for next cycle
-    • Prevents burnout
-                                     │
-                                     ▼
-                            Cycle Repeats
-                        (Back to Betting Table)
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  TIMELINE: 8-Week Cycle = 6 Weeks Building + 2 Weeks Cool-Down             │
-│  THREE PARALLEL TRACKS: Shaping future work | Betting on next cycle |       │
-│                         Building current cycle                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Six weeks is chosen deliberately. It is long enough to finish something a user would notice, and short enough that the deadline is visible from the first day, which is what makes scope hammering happen at all.
 
 ### Phase 1: Shaping (Senior Staff)
 
@@ -551,60 +477,6 @@ Brand new teams still learning to work together, strict fixed-scope contracts or
 ### Adaptations for Your Context:
 
 Shape Up is adaptable. Adjust cycle length (4-8 weeks, 6 is standard), cool-down duration (1-2 weeks or flexible), betting table formality (formal meetings, informal discussions, or async), shaping approach (formal pitches or lightweight sketches), team size (1-2 for small projects, 3-4 for larger), and hill charts usage (optional). Mix with other methods; use Shape Up for features, Kanban for maintenance, or hybrid approaches as needed.
-
----
-
-## Alignment with AAA Cycle
-
-Shape Up's three-phase structure can align with [AAA Cycle](aaa-cycle.html) principles: **Shaping = Align**, **Betting Table = Agree**, **Building = Apply**.
-
-### Natural Compatibility
-
-Shape Up was designed around similar values as AAA:
-- **Alignment before commitment**: Don't bet on unshaped work; defer commitment until sufficient understanding
-- **Explicit agreements**: Betting table makes yes/no decisions with clear boundaries (appetite, must-haves, out of scope)
-- **Disciplined application**: Circuit breaker enforces time agreement; scope hammering respects appetite without cutting corners
-- **Outcomes over specifications**: Pitch defines problem and solution direction; teams have autonomy on implementation details
-
-### Friction Points and Resolution
-
-**Potential friction: Betting table can feel top-down**
-
-Teams may receive assignments without participating in shaping, which can feel like "told what to build" rather than collaborative alignment.
-
-**Resolution:**
-- Include team leads in betting table (at least as observers)
-- Shapers consult with teams during shaping for technical feasibility
-- Teams can push back if pitch doesn't make sense
-- Cool-down period allows team input on shaping for next cycle
-
----
-
-**Potential friction: Fixed 6-week cycle may not match discovery rhythm**
-
-Some problems need exploration during building, and the circuit breaker can feel arbitrary when shaping assumptions prove wrong.
-
-**Resolution:**
-- Use first week of cycle for team-level validation of the pitch
-- Hill charts surface when teams are stuck "uphill" (signal to pause and realign)
-- Unfinished work doesn't auto-rollover; re-evaluate if still worth doing
-- Explicit permission to stop and realign if fundamental assumptions wrong
-
----
-
-**Potential friction: Hand-off between shaping and building can lose context**
-
-Shapers understand the problem deeply, but teams receive a pitch document. Context and reasoning might not transfer completely.
-
-**Resolution:**
-- Shapers present pitches to teams directly (not just written pitch)
-- Include "why this matters" and research findings in every pitch
-- Shapers available during building to clarify intent
-- Teams have autonomy to adjust approach if better solution found
-
-### How Shape Up Structures AAA Phases
-
-Shape Up makes AAA's three phases explicit and structured. Teams know exactly when they're aligning vs. agreeing vs. applying. The methodology provides clear boundaries between these phases by design.
 
 ---
 
