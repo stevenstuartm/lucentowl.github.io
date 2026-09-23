@@ -1,0 +1,61 @@
+---
+title: "Change Data Capture Pipeline"
+kind: flow
+system: distributed-patterns
+summary: "The legacy database's log feeds a new store that follows it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="pcd-title pcd-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pcd-title">Change data capture from a legacy database to a new database</title>
+<desc id="pcd-desc">The legacy application writes to the legacy database, which remains the source of truth. A CDC connector such as Debezium reads the database's transaction log and emits change events to an event stream such as Kafka. A consumer transforms each event to the new model and writes it to the new database, which follows the legacy one. The legacy application is unchanged.</desc>
+<style>
+.pcd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pcd-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pcd-old { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.pcd-new { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.pcd-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pcd-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pcd-n-old { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pcd-n-g { font-size: 12.5px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.pcd-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.pcd-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.pcd-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pcd-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pcd-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pcd-old" x="30" y="30" width="190" height="56" rx="6"/>
+<text class="pcd-n-old" x="46" y="54">Legacy application</text>
+<text class="pcd-k" x="46" y="72">unchanged</text>
+<rect class="pcd-old" x="330" y="30" width="220" height="56" rx="6"/>
+<text class="pcd-n-old" x="346" y="54">Legacy database</text>
+<text class="pcd-k" x="346" y="72">source of truth</text>
+<path class="pcd-flow" d="M 220,58 L 324,58" marker-end="url(#pcd-a)"/>
+<text class="pcd-lab" x="240" y="50">writes</text>
+
+<rect class="pcd-sys" x="330" y="146" width="220" height="56" rx="6"/>
+<text class="pcd-n-inv" x="346" y="170">CDC connector</text>
+<text class="pcd-k-inv" x="346" y="188">e.g. Debezium</text>
+<path class="pcd-flow" d="M 440,86 L 440,140" marker-end="url(#pcd-a)"/>
+<text class="pcd-lab" x="450" y="118">transaction log</text>
+
+<rect class="pcd-box" x="650" y="146" width="220" height="56" rx="6"/>
+<text class="pcd-n" x="666" y="170">Event stream</text>
+<text class="pcd-k" x="666" y="188">e.g. Kafka</text>
+<path class="pcd-flow" d="M 550,174 L 644,174" marker-end="url(#pcd-a)"/>
+<text class="pcd-lab" x="560" y="166">change events</text>
+
+<rect class="pcd-box" x="650" y="262" width="220" height="56" rx="6"/>
+<text class="pcd-n" x="666" y="286">Transform</text>
+<text class="pcd-k" x="666" y="304">to the new model</text>
+<path class="pcd-flow" d="M 760,202 L 760,256" marker-end="url(#pcd-a)"/>
+
+<rect class="pcd-new" x="330" y="262" width="220" height="56" rx="6"/>
+<text class="pcd-n-g" x="346" y="286">New database</text>
+<text class="pcd-k" x="346" y="304">follower</text>
+<path class="pcd-flow" d="M 650,290 L 556,290" marker-end="url(#pcd-a)"/>
+</g>
+</svg>

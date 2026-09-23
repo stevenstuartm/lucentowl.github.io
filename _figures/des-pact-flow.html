@@ -1,0 +1,67 @@
+---
+title: "Consumer-Driven Contract Flow"
+kind: flow
+system: architecture-design
+summary: "The consumer publishes a pact, and the provider verifies it through a broker."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="dpf-title dpf-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dpf-title">Consumer-driven contract testing with Pact and a Pact Broker</title>
+<desc id="dpf-desc">In the consumer build, consumer tests run against a Pact mock provider and produce a pact file recording the requests made and the response fields relied on. The consumer publishes it to the Pact Broker. In the provider build, the provider starts on a real port, Pact replays each recorded request from the broker and checks the responses match, and the provider publishes the verification result back to the broker. Before either side releases a version, a can-i-deploy check against the broker confirms compatibility.</desc>
+<style>
+.dpf-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dpf-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dpf-grp { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.dpf-gate { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.dpf-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dpf-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dpf-n-g { font-size: 12.5px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.dpf-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dpf-s { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.dpf-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.dpf-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dpf-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dpf-gatel { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+
+<defs>
+<marker id="dpf-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dpf-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dpf-grp" x="10" y="16" width="290" height="210" rx="8"/>
+<text class="dpf-hd" x="24" y="38">CONSUMER BUILD</text>
+<rect class="dpf-box" x="30" y="52" width="250" height="56" rx="6"/>
+<text class="dpf-n" x="44" y="76">Consumer tests</text>
+<text class="dpf-s" x="44" y="94">run against a Pact mock provider</text>
+<path class="dpf-thin" d="M 155,108 L 155,138" marker-end="url(#dpf-a)"/>
+<rect class="dpf-box" x="30" y="144" width="250" height="66" rx="6"/>
+<text class="dpf-n" x="44" y="168">Pact file</text>
+<text class="dpf-s" x="44" y="186">requests made, response</text>
+<text class="dpf-s" x="44" y="202">fields relied on</text>
+
+<rect class="dpf-sys" x="380" y="120" width="140" height="70" rx="6"/>
+<text class="dpf-n-inv" x="450.0" y="160" text-anchor="middle">Pact Broker</text>
+<path class="dpf-flow" d="M 280,172 L 374,160" marker-end="url(#dpf-a)"/>
+<text class="dpf-lab" x="300" y="156">publish</text>
+
+<rect class="dpf-grp" x="600" y="16" width="290" height="210" rx="8"/>
+<text class="dpf-hd" x="614" y="38">PROVIDER BUILD</text>
+<rect class="dpf-box" x="620" y="52" width="250" height="44" rx="6"/>
+<text class="dpf-n" x="634" y="79">Provider on a real port</text>
+<path class="dpf-thin" d="M 745,96 L 745,130" marker-end="url(#dpf-a)"/>
+<rect class="dpf-box" x="620" y="136" width="250" height="66" rx="6"/>
+<text class="dpf-n" x="634" y="160">Pact replays requests</text>
+<text class="dpf-s" x="634" y="178">each recorded request,</text>
+<text class="dpf-s" x="634" y="194">checks the responses match</text>
+<path class="dpf-flow" d="M 520,140 L 614,150" marker-end="url(#dpf-a)"/>
+<text class="dpf-lab" x="540" y="132">pact</text>
+<path class="dpf-flow" d="M 620,188 C 580,200 560,190 526,178" marker-end="url(#dpf-a)"/>
+<text class="dpf-lab" x="594" y="216" text-anchor="end">verification result</text>
+
+<rect class="dpf-gate" x="330" y="258" width="240" height="46" rx="6"/>
+<text class="dpf-n-g" x="450.0" y="278" text-anchor="middle">can-i-deploy</text>
+<text class="dpf-s" x="450.0" y="295" text-anchor="middle">before either side releases</text>
+<path class="dpf-gatel" d="M 450,190 L 450,252" marker-end="url(#dpf-g)"/>
+</g>
+</svg>

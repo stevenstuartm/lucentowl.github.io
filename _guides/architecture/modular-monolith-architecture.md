@@ -23,23 +23,7 @@ Each module exposes a public interface and hides everything else. Other modules 
 
 All modules still deploy together as one application, sharing a process, memory, and resources. Because the whole system deploys and runs as one unit, it is a single architecture quantum, however cleanly the modules are separated.
 
-```
-┌──────────────────────────── one deployable application ────────────────────────────┐
-│                                                                                    │
-│  ┌──────────── Checkout ────────────┐          ┌──────────── Inventory ───────────┐ │
-│  │ public: ICheckoutService         │  calls   │ public: IInventoryService        │ │
-│  │ ──────────────────────────────── │ ───────▶ │ ──────────────────────────────── │ │
-│  │ internal: domain model, logic,   │          │ internal: domain model, logic,   │ │
-│  │           data access            │          │           data access            │ │
-│  └───────────────┬──────────────────┘          └───────────────┬──────────────────┘ │
-└──────────────────┼─────────────────────────────────────────────┼────────────────────┘
-                   ▼                                             ▼
-          ┌─────────────────┐                           ┌─────────────────┐
-          │ checkout schema │                           │ inventory schema│
-          └─────────────────┘                           └─────────────────┘
-
-Modules reach each other only through public interfaces, and each owns its own data.
-```
+{% include figure.html id="arch-modular-monolith" %}
 
 ### What a Module Contains
 
@@ -69,6 +53,8 @@ Modules reach each other only through public interfaces, and each owns its own d
 <p><strong>Trade-offs:</strong> Control flow is indirect and harder to trace, and the team has to establish conventions for commands, events, and handlers.</p>
 </div>
 </div>
+
+{% include figure.html id="arch-module-communication" %}
 
 <div class="callout callout--tip">
 <p class="callout__title">Hybrid Approach</p>

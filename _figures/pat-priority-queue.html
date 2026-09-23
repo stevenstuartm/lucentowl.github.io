@@ -1,0 +1,65 @@
+---
+title: "Priority Queues"
+kind: flow
+system: distributed-patterns
+summary: "Three queues, drained by priority rather than arrival order."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="ppq-title ppq-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ppq-title">Priority queue with strict ordering</title>
+<desc id="ppq-desc">Incoming messages go to a HIGH, MEDIUM, or LOW queue by priority. The consumer processes HIGH first, then MEDIUM, and serves LOW only when both higher queues are empty.</desc>
+<style>
+.ppq-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ppq-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ppq-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ppq-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ppq-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.ppq-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.ppq-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.ppq-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.ppq-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ppq-redd { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.ppq-dot { fill: var(--color-primary, #1A5F8A); }
+</style>
+
+<defs>
+<marker id="ppq-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ppq-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ppq-ext" x="40" y="60" width="170" height="40" rx="6"/>
+<text class="ppq-s" x="125.0" y="84.5" text-anchor="middle">priority: high</text>
+<rect class="ppq-box" x="300" y="54" width="240" height="52" rx="6"/>
+<text class="ppq-n" x="314" y="78">HIGH (P1)</text>
+<circle class="ppq-dot" cx="420" cy="80" r="6"/>
+<circle class="ppq-dot" cx="438" cy="80" r="6"/>
+<circle class="ppq-dot" cx="456" cy="80" r="6"/>
+<path class="ppq-flow" d="M 210,80 L 294,80" marker-end="url(#ppq-a)"/>
+<rect class="ppq-ext" x="40" y="140" width="170" height="40" rx="6"/>
+<text class="ppq-s" x="125.0" y="164.5" text-anchor="middle">priority: medium</text>
+<rect class="ppq-box" x="300" y="134" width="240" height="52" rx="6"/>
+<text class="ppq-n" x="314" y="158">MEDIUM (P2)</text>
+<circle class="ppq-dot" cx="420" cy="160" r="6"/>
+<circle class="ppq-dot" cx="438" cy="160" r="6"/>
+<path class="ppq-flow" d="M 210,160 L 294,160" marker-end="url(#ppq-a)"/>
+<rect class="ppq-ext" x="40" y="220" width="170" height="40" rx="6"/>
+<text class="ppq-s" x="125.0" y="244.5" text-anchor="middle">priority: low</text>
+<rect class="ppq-box" x="300" y="214" width="240" height="52" rx="6"/>
+<text class="ppq-n" x="314" y="238">LOW (P3)</text>
+<circle class="ppq-dot" cx="420" cy="240" r="6"/>
+<circle class="ppq-dot" cx="438" cy="240" r="6"/>
+<circle class="ppq-dot" cx="456" cy="240" r="6"/>
+<circle class="ppq-dot" cx="474" cy="240" r="6"/>
+<circle class="ppq-dot" cx="492" cy="240" r="6"/>
+<path class="ppq-flow" d="M 210,240 L 294,240" marker-end="url(#ppq-a)"/>
+<rect class="ppq-sys" x="700" y="120" width="160" height="80" rx="6"/>
+<text class="ppq-n-inv" x="780.0" y="164.0" text-anchor="middle">Consumer</text>
+<path class="ppq-flow" d="M 540,80 C 620,80 620,140 694,140" marker-end="url(#ppq-a)"/>
+<text class="ppq-lab" x="560" y="72">1. first</text>
+<path class="ppq-flow" d="M 540,160 H 694" marker-end="url(#ppq-a)"/>
+<text class="ppq-lab" x="560" y="152">2. then</text>
+<path class="ppq-redd" d="M 540,240 C 620,240 620,180 694,180" marker-end="url(#ppq-r)"/>
+<text class="ppq-labr" x="560" y="268">3. only when HIGH and</text>
+<text class="ppq-labr" x="560" y="284">MEDIUM are empty</text>
+</g>
+</svg>

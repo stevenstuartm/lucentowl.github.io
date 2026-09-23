@@ -1,0 +1,84 @@
+---
+title: "Space-Based Topology"
+kind: container
+system: architecture-styles
+summary: "Requests served from memory, with the database off the request path."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" role="img" aria-labelledby="asp-title asp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="asp-title">Space-based architecture topology</title>
+<desc id="asp-desc">Requests reach a messaging grid, which routes each one to a processing unit holding application code and in-memory data. A deployment manager starts and stops units as load changes. A data grid replicates changes between units asynchronously. A data pump carries changes asynchronously to a data writer, which applies them to the database. A data reader loads data from the database into units that start cold. No request waits on the database.</desc>
+<style>
+.asp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.asp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.asp-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.asp-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.asp-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.asp-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.asp-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.asp-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.asp-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.asp-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.asp-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.asp-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.asp-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.asp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.asp-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.asp-mut { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 3; }
+</style>
+
+<defs>
+<marker id="asp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="asp-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="asp-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="asp-ext" x="40" y="24" width="150" height="44" rx="6"/>
+<text class="asp-n-mute" x="115.0" y="50.0" text-anchor="middle">Requests</text>
+<rect class="asp-box" x="260" y="20" width="230" height="52" rx="6"/>
+<text class="asp-n" x="375.0" y="41.5" text-anchor="middle">Messaging grid</text>
+<text class="asp-k" x="375.0" y="59.5" text-anchor="middle">routes each request to a unit</text>
+<path class="asp-flow" d="M 190,46 L 254,46" marker-end="url(#asp-a)"/>
+<rect class="asp-box" x="640" y="20" width="220" height="52" rx="6"/>
+<text class="asp-n" x="750.0" y="41.5" text-anchor="middle">Deployment manager</text>
+<text class="asp-k" x="750.0" y="59.5" text-anchor="middle">starts and stops units on load</text>
+<rect class="asp-box" x="110" y="120" width="210" height="60" rx="6"/>
+<text class="asp-n" x="215.0" y="145.5" text-anchor="middle">Processing unit</text>
+<text class="asp-s" x="215.0" y="163.5" text-anchor="middle">code + in-memory data</text>
+<rect class="asp-box" x="360" y="120" width="210" height="60" rx="6"/>
+<text class="asp-n" x="465.0" y="145.5" text-anchor="middle">Processing unit</text>
+<text class="asp-s" x="465.0" y="163.5" text-anchor="middle">code + in-memory data</text>
+<rect class="asp-ext" x="610" y="120" width="210" height="60" rx="6"/>
+<text class="asp-n-mute" x="715.0" y="145.5" text-anchor="middle">More units</text>
+<text class="asp-s" x="715.0" y="163.5" text-anchor="middle">added as load rises</text>
+<path class="asp-flow" d="M 340,72 C 340,100 215,96 215,114" marker-end="url(#asp-a)"/>
+<path class="asp-flow" d="M 410,72 C 410,96 465,96 465,114" marker-end="url(#asp-a)"/>
+<path class="asp-mut" d="M 750,72 V 114" marker-end="url(#asp-m)"/>
+<rect class="asp-mute" x="110" y="214" width="710" height="32" rx="6"/>
+<text class="asp-s" x="465.0" y="234.5" text-anchor="middle">data grid: replicates changes between units, asynchronously</text>
+<path class="asp-ctl" d="M 215,186 V 208" marker-end="url(#asp-c)" marker-start="url(#asp-c)"/>
+<path class="asp-ctl" d="M 465,186 V 208" marker-end="url(#asp-c)" marker-start="url(#asp-c)"/>
+<path class="asp-ctl" d="M 715,186 V 208" marker-end="url(#asp-c)" marker-start="url(#asp-c)"/>
+<path class="asp-ctl" d="M 200,246 V 318" marker-end="url(#asp-c)"/>
+<text class="asp-labc" x="212" y="284">data pump (asynchronous)</text>
+<rect class="asp-box" x="110" y="324" width="180" height="44" rx="6"/>
+<text class="asp-n" x="200.0" y="350.0" text-anchor="middle">Data writer</text>
+<path class="asp-flow" d="M 290,346 L 384,346" marker-end="url(#asp-a)"/>
+<rect class="asp-sys" x="390" y="324" width="180" height="44" rx="6"/>
+<text class="asp-n-inv" x="480.0" y="341.5" text-anchor="middle">Database</text>
+<text class="asp-k-inv" x="480.0" y="359.5" text-anchor="middle">durable storage</text>
+<path class="asp-flow" d="M 570,346 L 634,346" marker-end="url(#asp-a)"/>
+<rect class="asp-box" x="640" y="324" width="180" height="44" rx="6"/>
+<text class="asp-n" x="730.0" y="350.0" text-anchor="middle">Data reader</text>
+<path class="asp-ctl" d="M 820,346 H 856 V 150 H 826" marker-end="url(#asp-c)"/>
+<text class="asp-labc" x="846" y="292" text-anchor="end">loads data into units</text>
+<text class="asp-labc" x="846" y="308" text-anchor="end">that start cold</text>
+<text class="asp-note" x="110" y="404">No request waits on the database.</text>
+<path class="asp-flow" d="M 110,428 H 144"/>
+<text class="asp-el" x="152" y="432">request or data access</text>
+<path class="asp-ctl" d="M 317.47,428 H 351.47"/>
+<text class="asp-el" x="359.47" y="432">asynchronous</text>
+<path class="asp-mut" d="M 466.09000000000003,428 H 500.09000000000003"/>
+<text class="asp-el" x="508.09000000000003" y="432">control</text>
+</g>
+</svg>

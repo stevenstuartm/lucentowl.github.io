@@ -1,0 +1,75 @@
+---
+title: "Strangler Fig Stages"
+kind: flow
+system: distributed-patterns
+summary: "A router moves capabilities to new code until the legacy system retires."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="psf-title psf-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="psf-title">Three stages of a strangler fig migration</title>
+<desc id="psf-desc">Three stages. In stage 1, requests reach a router that sends all of them to the legacy monolith. In stage 2, the router sends /orders to a new orders service and everything else to the legacy system, which has shrunk. In stage 3, the router sends all requests to new services and the legacy system is retired.</desc>
+<style>
+.psf-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.psf-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.psf-new { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.psf-old { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.psf-gone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.psf-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.psf-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.psf-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.psf-n-g { font-size: 12.5px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.psf-n-old { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.psf-s { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.psf-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.psf-lab { font-size: 11px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.psf-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="psf-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="psf-grp" x="10" y="16" width="280" height="270" rx="8"/>
+<text class="psf-hd" x="24" y="38">STAGE 1</text>
+<text class="psf-s" x="150" y="62" text-anchor="middle">requests</text>
+<path class="psf-flow" d="M 150,68 L 150,90" marker-end="url(#psf-a)"/>
+<rect class="psf-sys" x="100" y="96" width="100" height="36" rx="6"/>
+<text class="psf-n-inv" x="150.0" y="118.5" text-anchor="middle">Router</text>
+<path class="psf-flow" d="M 150,132 L 150,180" marker-end="url(#psf-a)"/>
+<text class="psf-lab" x="158" y="162">all</text>
+<rect class="psf-old" x="50" y="186" width="200" height="70" rx="6"/>
+<text class="psf-n-old" x="150.0" y="217" text-anchor="middle">Legacy</text>
+<text class="psf-n-old" x="150.0" y="235" text-anchor="middle">monolith</text>
+
+<rect class="psf-grp" x="310" y="16" width="280" height="270" rx="8"/>
+<text class="psf-hd" x="324" y="38">STAGE 2</text>
+<text class="psf-s" x="450" y="62" text-anchor="middle">requests</text>
+<path class="psf-flow" d="M 450,68 L 450,90" marker-end="url(#psf-a)"/>
+<rect class="psf-sys" x="400" y="96" width="100" height="36" rx="6"/>
+<text class="psf-n-inv" x="450.0" y="118.5" text-anchor="middle">Router</text>
+<path class="psf-flow" d="M 420,132 C 420,160 380,160 380,180" marker-end="url(#psf-a)"/>
+<text class="psf-lab" x="332" y="162">/orders</text>
+<path class="psf-flow" d="M 480,132 C 480,160 520,160 520,180" marker-end="url(#psf-a)"/>
+<text class="psf-lab" x="506" y="150">everything</text>
+<text class="psf-lab" x="530" y="164">else</text>
+<rect class="psf-new" x="330" y="186" width="100" height="50" rx="6"/>
+<text class="psf-n-g" x="380.0" y="208" text-anchor="middle">Orders</text>
+<text class="psf-s" x="380.0" y="224" text-anchor="middle">new</text>
+<rect class="psf-old" x="460" y="186" width="120" height="50" rx="6"/>
+<text class="psf-n-old" x="520.0" y="208" text-anchor="middle">Legacy</text>
+<text class="psf-s" x="520.0" y="224" text-anchor="middle">shrunk</text>
+
+<rect class="psf-grp" x="610" y="16" width="280" height="270" rx="8"/>
+<text class="psf-hd" x="624" y="38">STAGE 3</text>
+<text class="psf-s" x="750" y="62" text-anchor="middle">requests</text>
+<path class="psf-flow" d="M 750,68 L 750,90" marker-end="url(#psf-a)"/>
+<rect class="psf-sys" x="700" y="96" width="100" height="36" rx="6"/>
+<text class="psf-n-inv" x="750.0" y="118.5" text-anchor="middle">Router</text>
+<path class="psf-flow" d="M 750,132 L 750,180" marker-end="url(#psf-a)"/>
+<text class="psf-lab" x="758" y="162">all</text>
+<rect class="psf-new" x="650" y="186" width="200" height="44" rx="6"/>
+<text class="psf-n-g" x="750.0" y="212.5" text-anchor="middle">New services</text>
+<rect class="psf-gone" x="690" y="242" width="120" height="30" rx="6"/>
+<text class="psf-s" x="750.0" y="261" text-anchor="middle">legacy retired</text>
+</g>
+</svg>

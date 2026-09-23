@@ -1,0 +1,63 @@
+---
+title: "Afferent and Efferent Coupling"
+kind: graph
+system: architecture-styles
+summary: "Dependencies pointing in versus out, and the instability they give."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="aec-title aec-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aec-title">Afferent and efferent coupling of one component</title>
+<desc id="aec-desc">Three components depend on the component in the middle, so its afferent coupling Ca is 3. The component depends on two others, so its efferent coupling Ce is 2. Instability is Ce divided by Ce plus Ca, which is 2 over 5, or 0.4.</desc>
+<style>
+.aec-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.aec-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.aec-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.aec-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.aec-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.aec-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aec-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.aec-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aec-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.aec-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.aec-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.aec-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="aec-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="aec-band" x="20" y="20" width="250" height="290" rx="8"/>
+<text class="aec-hd" x="34" y="40">AFFERENT: DEPEND ON IT</text>
+<rect class="aec-band" x="630" y="20" width="250" height="290" rx="8"/>
+<text class="aec-hd" x="644" y="40">EFFERENT: IT DEPENDS ON</text>
+<rect class="aec-ext" x="50" y="52" width="190" height="58" rx="6"/>
+<text class="aec-n-mute" x="64" y="76">Dependent</text>
+<text class="aec-s" x="64" y="94">uses the component</text>
+<rect class="aec-ext" x="50" y="136" width="190" height="58" rx="6"/>
+<text class="aec-n-mute" x="64" y="160">Dependent</text>
+<text class="aec-s" x="64" y="178">uses the component</text>
+<rect class="aec-ext" x="50" y="220" width="190" height="58" rx="6"/>
+<text class="aec-n-mute" x="64" y="244">Dependent</text>
+<text class="aec-s" x="64" y="262">uses the component</text>
+<rect class="aec-sys" x="340" y="125" width="220" height="90" rx="6"/>
+<text class="aec-n-inv" x="354" y="149">The component</text>
+<text class="aec-s-inv" x="354" y="167">Ca = 3 arrows in</text>
+<text class="aec-s-inv" x="354" y="184">Ce = 2 arrows out</text>
+<rect class="aec-ext" x="660" y="94" width="190" height="58" rx="6"/>
+<text class="aec-n-mute" x="674" y="118">Dependency</text>
+<text class="aec-s" x="674" y="136">the component uses it</text>
+<rect class="aec-ext" x="660" y="190" width="190" height="58" rx="6"/>
+<text class="aec-n-mute" x="674" y="214">Dependency</text>
+<text class="aec-s" x="674" y="232">the component uses it</text>
+<path class="aec-flow" d="M 240,81 C 290,81 290,150 334,150" marker-end="url(#aec-a)"/>
+<path class="aec-flow" d="M 240,165 C 290,165 290,170 334,170" marker-end="url(#aec-a)"/>
+<path class="aec-flow" d="M 240,249 C 290,249 290,190 334,190" marker-end="url(#aec-a)"/>
+<path class="aec-flow" d="M 560,158 C 610,158 610,123 654,123" marker-end="url(#aec-a)"/>
+<path class="aec-flow" d="M 560,182 C 610,182 610,219 654,219" marker-end="url(#aec-a)"/>
+<text class="aec-lab" x="450" y="272" text-anchor="middle">I = Ce / (Ce + Ca) = 2 / (2 + 3) = 0.4</text>
+<text class="aec-note" x="450" y="292" text-anchor="middle">near 0: stable. near 1: free to change.</text>
+<path class="aec-flow" d="M 20,350 H 54"/>
+<text class="aec-el" x="62" y="354">depends on</text>
+</g>
+</svg>

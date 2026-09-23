@@ -1,0 +1,39 @@
+---
+title: "Why Scaling Out Isn't Linear"
+kind: chart
+system: architecture-design
+summary: "Contention caps throughput, and coherency costs can make it fall."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="dus-title dus-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dus-title">Throughput against instance count under the Universal Scalability Law</title>
+<desc id="dus-desc">Three illustrative curves of throughput as instances are added. Linear scaling rises in proportion to instance count. With contention for a shared resource, throughput flattens toward a ceiling no matter how many instances are added. With coherency costs as well, throughput peaks and then falls as more instances are added. The curves are illustrative, not measured.</desc>
+<style>
+.dus-ideal { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 5; }
+.dus-cont { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.dus-coh { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.dus-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.dus-t { font-size: 11.5px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.dus-s { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.dus-n { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="dus-axis" d="M 90,40 V 290 H 660"/>
+<path class="dus-ideal" d="M 90.0,272.9 L 104.1,255.7 L 118.2,238.6 L 132.3,221.4 L 146.4,204.3 L 160.5,187.1 L 174.6,170.0 L 188.7,152.9 L 202.8,135.7 L 216.9,118.6 L 231.0,101.4 L 245.1,84.3 L 259.2,67.1 L 273.3,50.0"/>
+<path class="dus-cont" d="M 90.0,272.9 L 104.1,258.3 L 118.2,245.7 L 132.3,234.7 L 146.4,225.1 L 160.5,216.5 L 174.6,208.9 L 188.7,202.1 L 202.8,195.9 L 216.9,190.3 L 231.0,185.2 L 245.1,180.6 L 259.2,176.3 L 273.3,172.4 L 287.4,168.7 L 301.5,165.3 L 315.6,162.2 L 329.7,159.2 L 343.8,156.5 L 357.9,153.9 L 372.1,151.5 L 386.2,149.3 L 400.3,147.1 L 414.4,145.1 L 428.5,143.2 L 442.6,141.4 L 456.7,139.7 L 470.8,138.1 L 484.9,136.6 L 499.0,135.1 L 513.1,133.7 L 527.2,132.4 L 541.3,131.1 L 555.4,129.9 L 569.5,128.7 L 583.6,127.6 L 597.7,126.5 L 611.8,125.5 L 625.9,124.5 L 640.0,123.6"/>
+<path class="dus-coh" d="M 90.0,272.9 L 104.1,258.5 L 118.2,246.6 L 132.3,236.8 L 146.4,228.8 L 160.5,222.3 L 174.6,217.2 L 188.7,213.1 L 202.8,210.0 L 216.9,207.6 L 231.0,205.8 L 245.1,204.6 L 259.2,203.8 L 273.3,203.3 L 287.4,203.1 L 301.5,203.2 L 315.6,203.5 L 329.7,203.9 L 343.8,204.5 L 357.9,205.1 L 372.1,205.9 L 386.2,206.7 L 400.3,207.6 L 414.4,208.5 L 428.5,209.4 L 442.6,210.4 L 456.7,211.4 L 470.8,212.4 L 484.9,213.4 L 499.0,214.4 L 513.1,215.4 L 527.2,216.3 L 541.3,217.3 L 555.4,218.3 L 569.5,219.2 L 583.6,220.2 L 597.7,221.1 L 611.8,222.0 L 625.9,222.9 L 640.0,223.8"/>
+<text class="dus-t" x="365" y="316" text-anchor="middle">instances</text>
+<text class="dus-t" x="98" y="34">throughput</text>
+<path class="dus-ideal" d="M 655,90 H 685"/>
+<text class="dus-n" x="695" y="94">Linear</text>
+<text class="dus-s" x="695" y="110">what adding instances promises</text>
+<path class="dus-cont" d="M 655,150 H 685"/>
+<text class="dus-n" x="695" y="154">Contention</text>
+<text class="dus-s" x="695" y="170">shared resources set a ceiling</text>
+<path class="dus-coh" d="M 655,210 H 685"/>
+<text class="dus-n" x="695" y="214">Plus coherency</text>
+<text class="dus-s" x="695" y="230">staying consistent costs more</text>
+<text class="dus-s" x="695" y="246">with every instance</text>
+<text class="dus-s" x="90" y="338">Illustrative curves, not measurements.</text>
+</g>
+</svg>

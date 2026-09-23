@@ -1,0 +1,50 @@
+---
+title: "Lock Expiry Under a Paused Holder"
+kind: flow
+system: distributed-patterns
+summary: "A paused holder's lock expires, and it writes anyway."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" role="img" aria-labelledby="ple-title ple-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ple-title">A lock expires while its holder is paused</title>
+<desc id="ple-desc">A timeline with two rows. Node A acquires the lock, then enters a long garbage collection pause. During the pause the lock expires, and node B acquires it and writes successfully. Node A then wakes and writes, unaware that its lock expired, so its write is stale.</desc>
+<style>
+.ple-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ple-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.ple-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.ple-good { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.ple-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ple-s-inv { font-size: 11.5px; font-weight: 600; fill: #FFFFFF; }
+.ple-s-mute { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.ple-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ple-labg { font-size: 11.5px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.ple-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.ple-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.ple-exp { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 4 4; }
+</style>
+
+<defs>
+<marker id="ple-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="ple-exp" d="M 400,50 V 200"/>
+<text class="ple-labr" x="400" y="40" text-anchor="middle">Node A's lock expires</text>
+
+<text class="ple-n" x="20" y="88">Node A</text>
+<rect class="ple-sys" x="150" y="66" width="130" height="34" rx="6"/>
+<text class="ple-s-inv" x="215.0" y="87.5" text-anchor="middle">acquire lock</text>
+<rect class="ple-mute" x="290" y="66" width="390" height="34" rx="6"/>
+<text class="ple-s-mute" x="485.0" y="87.5" text-anchor="middle">long GC pause</text>
+<rect class="ple-bad" x="690" y="66" width="150" height="34" rx="6"/>
+<text class="ple-labr" x="765.0" y="87.5" text-anchor="middle">write ✗ stale</text>
+
+<text class="ple-n" x="20" y="158">Node B</text>
+<rect class="ple-sys" x="420" y="136" width="130" height="34" rx="6"/>
+<text class="ple-s-inv" x="485.0" y="157.5" text-anchor="middle">acquire lock</text>
+<rect class="ple-good" x="560" y="136" width="110" height="34" rx="6"/>
+<text class="ple-labg" x="615.0" y="157.5" text-anchor="middle">write ✓</text>
+
+<path class="ple-axis" d="M 150,220 L 875,220" marker-end="url(#ple-m)"/>
+<text class="ple-ax" x="875" y="240" text-anchor="end">time</text>
+</g>
+</svg>

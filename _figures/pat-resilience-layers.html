@@ -1,0 +1,49 @@
+---
+title: "Resilience Layers"
+kind: layering
+system: distributed-patterns
+summary: "Total timeout, retry, circuit breaker, and attempt timeout, outermost first."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="prl-title prl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="prl-title">Resilience strategies layered around a dependency call</title>
+<desc id="prl-desc">Four nested layers around a call to a dependency. The outermost is the total timeout, covering the whole operation with retries included. Inside it is the retry layer, using backoff with jitter and capped attempts. Inside that is the circuit breaker, which counts every attempt and fails fast when open. Innermost is the attempt timeout for one call, which wraps the call to the dependency. The request enters from the outside.</desc>
+<style>
+.prl-l1 { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.prl-l2 { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.prl-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.prl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.prl-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.prl-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.prl-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.prl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="prl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="prl-box" x="20" y="228" width="100" height="40" rx="6"/>
+<text class="prl-n" x="70.0" y="252.5" text-anchor="middle">Request</text>
+
+<rect class="prl-l1" x="150" y="20" width="730" height="320" rx="10"/>
+<text class="prl-n" x="166" y="44">Total timeout</text>
+<text class="prl-s" x="166" y="62">the whole operation, retries included</text>
+
+<rect class="prl-l2" x="280" y="80" width="580" height="240" rx="10"/>
+<text class="prl-n" x="296" y="104">Retry</text>
+<text class="prl-s" x="296" y="122">backoff with jitter, capped attempts</text>
+
+<rect class="prl-l1" x="410" y="140" width="430" height="160" rx="10"/>
+<text class="prl-n" x="426" y="164">Circuit breaker</text>
+<text class="prl-s" x="426" y="182">counts every attempt, fails fast when open</text>
+
+<rect class="prl-l2" x="540" y="200" width="280" height="80" rx="10"/>
+<text class="prl-n" x="556" y="222">Attempt timeout</text>
+<text class="prl-s" x="556" y="272">one call</text>
+
+<rect class="prl-sys" x="680" y="228" width="120" height="40" rx="6"/>
+<text class="prl-n-inv" x="740.0" y="252.5" text-anchor="middle">Dependency</text>
+<path class="prl-flow" d="M 120,248 L 674,248" marker-end="url(#prl-a)"/>
+</g>
+</svg>

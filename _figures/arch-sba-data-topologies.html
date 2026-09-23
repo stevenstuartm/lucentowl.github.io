@@ -1,0 +1,110 @@
+---
+title: "Three Data Topologies"
+kind: structure
+system: architecture-styles
+summary: "One shared database, one per domain, or one per service."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="sdt-title sdt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="sdt-title">Shared, domain, and service-owned databases in service-based architecture</title>
+<desc id="sdt-desc">The same six services under three data topologies. With a shared database, all six use one database. With domain databases, catalog and search share a catalog database, cart and checkout share an orders database, and inventory and fulfillment share a logistics database. With service-owned databases, each service has its own.</desc>
+<style>
+.sdt-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.sdt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.sdt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.sdt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.sdt-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.sdt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.sdt-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.sdt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="sdt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="sdt-band" x="20" y="20" width="860" height="156" rx="8"/>
+<text class="sdt-hd" x="34" y="40">SHARED DATABASE</text>
+<rect class="sdt-box" x="40" y="52" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="100.0" y="72.0" text-anchor="middle">Catalog</text>
+<rect class="sdt-box" x="177" y="52" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="237.0" y="72.0" text-anchor="middle">Search</text>
+<rect class="sdt-box" x="314" y="52" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="374.0" y="72.0" text-anchor="middle">Cart</text>
+<rect class="sdt-box" x="451" y="52" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="511.0" y="72.0" text-anchor="middle">Checkout</text>
+<rect class="sdt-box" x="588" y="52" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="648.0" y="72.0" text-anchor="middle">Inventory</text>
+<rect class="sdt-box" x="725" y="52" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="785.0" y="72.0" text-anchor="middle">Fulfillment</text>
+<rect class="sdt-sys" x="40" y="122" width="805" height="30" rx="6"/>
+<text class="sdt-s-inv" x="442.5" y="141.5" text-anchor="middle">one database</text>
+<path class="sdt-flow" d="M 100,84 L 100,116" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 237,84 L 237,116" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 374,84 L 374,116" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 511,84 L 511,116" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 648,84 L 648,116" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 785,84 L 785,116" marker-end="url(#sdt-a)"/>
+<text class="sdt-el" x="40" y="168">transactions stay simple, and services are coupled through the schema</text>
+<rect class="sdt-band" x="20" y="190" width="860" height="156" rx="8"/>
+<text class="sdt-hd" x="34" y="210">DOMAIN DATABASES</text>
+<rect class="sdt-box" x="40" y="222" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="100.0" y="242.0" text-anchor="middle">Catalog</text>
+<rect class="sdt-box" x="177" y="222" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="237.0" y="242.0" text-anchor="middle">Search</text>
+<rect class="sdt-box" x="314" y="222" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="374.0" y="242.0" text-anchor="middle">Cart</text>
+<rect class="sdt-box" x="451" y="222" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="511.0" y="242.0" text-anchor="middle">Checkout</text>
+<rect class="sdt-box" x="588" y="222" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="648.0" y="242.0" text-anchor="middle">Inventory</text>
+<rect class="sdt-box" x="725" y="222" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="785.0" y="242.0" text-anchor="middle">Fulfillment</text>
+<rect class="sdt-sys" x="40" y="292" width="257" height="30" rx="6"/>
+<text class="sdt-s-inv" x="168.5" y="311.5" text-anchor="middle">catalog database</text>
+<path class="sdt-flow" d="M 100,254 L 100,286" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 237,254 L 237,286" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="314" y="292" width="257" height="30" rx="6"/>
+<text class="sdt-s-inv" x="442.5" y="311.5" text-anchor="middle">orders database</text>
+<path class="sdt-flow" d="M 374,254 L 374,286" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 511,254 L 511,286" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="588" y="292" width="257" height="30" rx="6"/>
+<text class="sdt-s-inv" x="716.5" y="311.5" text-anchor="middle">logistics database</text>
+<path class="sdt-flow" d="M 648,254 L 648,286" marker-end="url(#sdt-a)"/>
+<path class="sdt-flow" d="M 785,254 L 785,286" marker-end="url(#sdt-a)"/>
+<text class="sdt-el" x="40" y="338">transactions within a domain, and sagas or eventual consistency across domains</text>
+<rect class="sdt-band" x="20" y="360" width="860" height="156" rx="8"/>
+<text class="sdt-hd" x="34" y="380">SERVICE-OWNED DATABASES</text>
+<rect class="sdt-box" x="40" y="392" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="100.0" y="412.0" text-anchor="middle">Catalog</text>
+<rect class="sdt-box" x="177" y="392" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="237.0" y="412.0" text-anchor="middle">Search</text>
+<rect class="sdt-box" x="314" y="392" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="374.0" y="412.0" text-anchor="middle">Cart</text>
+<rect class="sdt-box" x="451" y="392" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="511.0" y="412.0" text-anchor="middle">Checkout</text>
+<rect class="sdt-box" x="588" y="392" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="648.0" y="412.0" text-anchor="middle">Inventory</text>
+<rect class="sdt-box" x="725" y="392" width="120" height="32" rx="6"/>
+<text class="sdt-n" x="785.0" y="412.0" text-anchor="middle">Fulfillment</text>
+<rect class="sdt-sys" x="40" y="462" width="120" height="30" rx="6"/>
+<text class="sdt-s-inv" x="100.0" y="481.5" text-anchor="middle">own database</text>
+<path class="sdt-flow" d="M 100,424 L 100,456" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="177" y="462" width="120" height="30" rx="6"/>
+<text class="sdt-s-inv" x="237.0" y="481.5" text-anchor="middle">own database</text>
+<path class="sdt-flow" d="M 237,424 L 237,456" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="314" y="462" width="120" height="30" rx="6"/>
+<text class="sdt-s-inv" x="374.0" y="481.5" text-anchor="middle">own database</text>
+<path class="sdt-flow" d="M 374,424 L 374,456" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="451" y="462" width="120" height="30" rx="6"/>
+<text class="sdt-s-inv" x="511.0" y="481.5" text-anchor="middle">own database</text>
+<path class="sdt-flow" d="M 511,424 L 511,456" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="588" y="462" width="120" height="30" rx="6"/>
+<text class="sdt-s-inv" x="648.0" y="481.5" text-anchor="middle">own database</text>
+<path class="sdt-flow" d="M 648,424 L 648,456" marker-end="url(#sdt-a)"/>
+<rect class="sdt-sys" x="725" y="462" width="120" height="30" rx="6"/>
+<text class="sdt-s-inv" x="785.0" y="481.5" text-anchor="middle">own database</text>
+<path class="sdt-flow" d="M 785,424 L 785,456" marker-end="url(#sdt-a)"/>
+<text class="sdt-el" x="40" y="508">services fully independent at the data level, and no transaction spans them</text>
+</g>
+</svg>

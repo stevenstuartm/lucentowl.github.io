@@ -1,0 +1,74 @@
+---
+title: "Replicated and Distributed Caching"
+kind: structure
+system: architecture-styles
+summary: "A full local copy in every unit versus one remote cache cluster."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="asc-title asc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="asc-title">Replicated caching versus distributed caching in space-based architecture</title>
+<desc id="asc-desc">With replicated caching, every processing unit holds a full copy of the cached data and changes replicate between units, so reads are local. With distributed caching, the data lives in a separate cache cluster, and every unit reads and writes it over the network, keeping one authoritative copy.</desc>
+<style>
+.asc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.asc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.asc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.asc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.asc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.asc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.asc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.asc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.asc-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.asc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.asc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.asc-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="asc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="asc-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="asc-band" x="20" y="20" width="420" height="290" rx="8"/>
+<text class="asc-hd" x="34" y="40">REPLICATED CACHING</text>
+<rect class="asc-box" x="40" y="54" width="250" height="60" rx="6"/>
+<text class="asc-n" x="54" y="78">Processing unit</text>
+<rect class="asc-sys" x="176" y="84" width="100" height="24" rx="6"/>
+<text class="asc-s-inv" x="226.0" y="100.5" text-anchor="middle">full copy</text>
+<rect class="asc-box" x="40" y="140" width="250" height="60" rx="6"/>
+<text class="asc-n" x="54" y="164">Processing unit</text>
+<rect class="asc-sys" x="176" y="170" width="100" height="24" rx="6"/>
+<text class="asc-s-inv" x="226.0" y="186.5" text-anchor="middle">full copy</text>
+<rect class="asc-box" x="40" y="226" width="250" height="60" rx="6"/>
+<text class="asc-n" x="54" y="250">Processing unit</text>
+<rect class="asc-sys" x="176" y="256" width="100" height="24" rx="6"/>
+<text class="asc-s-inv" x="226.0" y="272.5" text-anchor="middle">full copy</text>
+<path class="asc-ctl" d="M 226,114 V 164" marker-end="url(#asc-c)" marker-start="url(#asc-c)"/>
+<path class="asc-ctl" d="M 226,200 V 250" marker-end="url(#asc-c)" marker-start="url(#asc-c)"/>
+<text class="asc-labc" x="300" y="160">replicate</text>
+<text class="asc-labc" x="300" y="176">changes</text>
+<text class="asc-el" x="40" y="298">reads are local, and the whole cache fits in every unit</text>
+<rect class="asc-band" x="460" y="20" width="420" height="290" rx="8"/>
+<text class="asc-hd" x="474" y="40">DISTRIBUTED CACHING</text>
+<rect class="asc-box" x="480" y="54" width="190" height="64" rx="6"/>
+<text class="asc-n" x="494" y="78">Processing unit</text>
+<text class="asc-s" x="494" y="96">no local copy</text>
+<path class="asc-flow" d="M 670,86 C 705,86 705,168 730,168" marker-end="url(#asc-a)" marker-start="url(#asc-a)"/>
+<rect class="asc-box" x="480" y="136" width="190" height="64" rx="6"/>
+<text class="asc-n" x="494" y="160">Processing unit</text>
+<text class="asc-s" x="494" y="178">no local copy</text>
+<path class="asc-flow" d="M 670,168 C 705,168 705,168 730,168" marker-end="url(#asc-a)" marker-start="url(#asc-a)"/>
+<rect class="asc-box" x="480" y="218" width="190" height="64" rx="6"/>
+<text class="asc-n" x="494" y="242">Processing unit</text>
+<text class="asc-s" x="494" y="260">no local copy</text>
+<path class="asc-flow" d="M 670,250 C 705,250 705,168 730,168" marker-end="url(#asc-a)" marker-start="url(#asc-a)"/>
+<rect class="asc-sys" x="732" y="128" width="140" height="80" rx="6"/>
+<text class="asc-n-inv" x="802.0" y="155.0" text-anchor="middle">Cache cluster</text>
+<text class="asc-s-inv" x="802.0" y="173.0" text-anchor="middle">holds one</text>
+<text class="asc-s-inv" x="802.0" y="190.0" text-anchor="middle">authoritative copy</text>
+<text class="asc-el" x="480" y="298">every access crosses the network</text>
+<path class="asc-ctl" d="M 20,342 H 54"/>
+<text class="asc-el" x="62" y="346">replication</text>
+<path class="asc-flow" d="M 162.735,342 H 196.735"/>
+<text class="asc-el" x="204.735" y="346">network read or write</text>
+</g>
+</svg>

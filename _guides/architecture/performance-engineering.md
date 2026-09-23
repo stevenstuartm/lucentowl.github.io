@@ -33,16 +33,7 @@ Latency distributions have long tails, so an average hides what many users exper
 
 The tail matters more than its percentage suggests, because one user action usually involves many requests. Jeffrey Dean and Luiz André Barroso's "The Tail at Scale" gives the canonical example. If a server's p99 latency is one second and a user request fans out to 100 such servers in parallel, waiting for all of them, 63% of user requests take more than a second, since the chance that all 100 calls beat their p99 is 0.99¹⁰⁰, about 37%.
 
-```
-                        ┌──▶ Server 1    p99 = 1 s
-                        ├──▶ Server 2    p99 = 1 s
- User request ─▶ Front ─┼──▶  ...
-                  end   ├──▶ Server 99   p99 = 1 s
-                        └──▶ Server 100  p99 = 1 s
-
- Front end waits for all 100. P(all beat 1 s) = 0.99¹⁰⁰ ≈ 0.37
- So about 63% of user requests take longer than 1 s.
-```
+{% include figure.html id="des-fanout-tail" %}
 
 A page that makes 20 sequential backend calls faces the same arithmetic. So does a service whose p99 is acceptable in isolation but sits on a path called many times per user action.
 
@@ -214,6 +205,8 @@ Latency typically stays flat as load increases, then rises sharply past a point,
 
 Latency doesn't grow in proportion to utilization. Queueing theory shows why. In the simplest single-server queueing model, average response time equals service time divided by one minus utilization. At 50% utilization, requests take twice their service time on average. At 80%, five times. At 90%, ten times. Real systems differ in detail, but the shape holds. Latency degrades gently at moderate utilization and climbs steeply as a resource approaches full use.
 
+{% include figure.html id="des-utilization-latency" %}
+
 This is why capacity targets set utilization ceilings well below 100% for any resource on a latency-sensitive path. The right ceiling depends on how variable the load and service times are, and a load test that finds the knee gives a better number than a rule of thumb.
 
 ### Headroom and Growth
@@ -229,6 +222,8 @@ A capacity plan answers whether the system will meet its targets at the load it 
 ### Why Scaling Out Isn't Linear
 
 Adding instances rarely multiplies throughput by the number of instances. Neil Gunther's Universal Scalability Law describes two effects that erode it. **Contention** for shared resources, such as a database, a lock, or a queue, puts a ceiling on throughput no matter how many instances are added. **Coherency** costs, the work instances do to stay consistent with each other such as cache synchronization or distributed coordination, grow with instance count and can make throughput fall as instances are added. Measuring throughput at several instance counts shows which effect dominates, and whether more instances will help at all.
+
+{% include figure.html id="des-usl-scaling" %}
 
 ### Autoscaling
 

@@ -1,0 +1,74 @@
+---
+title: "Technical Versus Domain Partitioning"
+kind: structure
+system: architecture-styles
+summary: "Where one checkout change lands under each partitioning."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="apt-title apt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="apt-title">Technical partitioning versus domain partitioning</title>
+<desc id="apt-desc">On the left, a technically partitioned system has three layers: presentation, business logic, and persistence. A single checkout change touches code in every layer. On the right, a domain-partitioned system has three partitions, checkout, inventory, and shipping, each containing its own UI, logic, and data. The same checkout change stays inside the checkout partition.</desc>
+<style>
+.apt-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.apt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.apt-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.apt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.apt-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.apt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.apt-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.apt-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.apt-redd { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.apt-fillr { fill: var(--color-accent, #A5486E); fill-opacity: 0.10; stroke: none; }
+</style>
+
+<defs>
+
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="apt-band" x="20" y="20" width="410" height="320" rx="8"/>
+<text class="apt-hd" x="34" y="40">TECHNICAL PARTITIONING</text>
+<rect class="apt-box" x="40" y="56" width="370" height="66" rx="6"/>
+<text class="apt-n" x="54" y="94">Presentation</text>
+<rect class="apt-box" x="40" y="138" width="370" height="66" rx="6"/>
+<text class="apt-n" x="54" y="176">Business logic</text>
+<rect class="apt-box" x="40" y="220" width="370" height="66" rx="6"/>
+<text class="apt-n" x="54" y="258">Persistence</text>
+<rect class="apt-fillr" x="296" y="50" width="88" height="236" rx="6"/>
+<path class="apt-redd" d="M 296,50 H 384 V 286 H 296 Z"/>
+<text class="apt-labr" x="340" y="94" text-anchor="middle">checkout</text>
+<text class="apt-labr" x="340" y="176" text-anchor="middle">checkout</text>
+<text class="apt-labr" x="340" y="258" text-anchor="middle">checkout</text>
+<text class="apt-labr" x="40" y="316">A checkout change cuts across every layer</text>
+<rect class="apt-band" x="450" y="20" width="430" height="320" rx="8"/>
+<text class="apt-hd" x="464" y="40">DOMAIN PARTITIONING</text>
+<rect class="apt-box" x="470" y="60" width="122" height="230" rx="6"/>
+<text class="apt-n" x="531.0" y="84" text-anchor="middle">Checkout</text>
+<rect class="apt-mute" x="484" y="100" width="94" height="46" rx="6"/>
+<text class="apt-s" x="531.0" y="127.5" text-anchor="middle">UI</text>
+<rect class="apt-mute" x="484" y="162" width="94" height="46" rx="6"/>
+<text class="apt-s" x="531.0" y="189.5" text-anchor="middle">Logic</text>
+<rect class="apt-mute" x="484" y="224" width="94" height="46" rx="6"/>
+<text class="apt-s" x="531.0" y="251.5" text-anchor="middle">Data</text>
+<rect class="apt-box" x="606" y="60" width="122" height="230" rx="6"/>
+<text class="apt-n" x="667.0" y="84" text-anchor="middle">Inventory</text>
+<rect class="apt-mute" x="620" y="100" width="94" height="46" rx="6"/>
+<text class="apt-s" x="667.0" y="127.5" text-anchor="middle">UI</text>
+<rect class="apt-mute" x="620" y="162" width="94" height="46" rx="6"/>
+<text class="apt-s" x="667.0" y="189.5" text-anchor="middle">Logic</text>
+<rect class="apt-mute" x="620" y="224" width="94" height="46" rx="6"/>
+<text class="apt-s" x="667.0" y="251.5" text-anchor="middle">Data</text>
+<rect class="apt-box" x="742" y="60" width="122" height="230" rx="6"/>
+<text class="apt-n" x="803.0" y="84" text-anchor="middle">Shipping</text>
+<rect class="apt-mute" x="756" y="100" width="94" height="46" rx="6"/>
+<text class="apt-s" x="803.0" y="127.5" text-anchor="middle">UI</text>
+<rect class="apt-mute" x="756" y="162" width="94" height="46" rx="6"/>
+<text class="apt-s" x="803.0" y="189.5" text-anchor="middle">Logic</text>
+<rect class="apt-mute" x="756" y="224" width="94" height="46" rx="6"/>
+<text class="apt-s" x="803.0" y="251.5" text-anchor="middle">Data</text>
+<rect class="apt-fillr" x="464" y="54" width="134" height="242" rx="8"/>
+<path class="apt-redd" d="M 464,54 H 598 V 296 H 464 Z"/>
+<text class="apt-labr" x="470" y="316">The same change stays inside one partition</text>
+<path class="apt-redd" d="M 20,370 H 54"/>
+<text class="apt-el" x="62" y="374">code that one checkout change touches</text>
+</g>
+</svg>

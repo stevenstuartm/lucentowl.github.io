@@ -9,30 +9,7 @@ tags: [practical, request-response, publish-subscribe, event-streaming, scatter-
 
 Communication patterns define how services and components interact in a distributed system. The choice decides whether a caller waits, how many parties receive a message, and whether a message can be read again later.
 
-```
-Request-response: the caller waits for one answer
-
-Client ── request ──▶ Service
-       ◀─ response ──
-
-Scatter-gather: one request fans out in parallel, one combined answer
-
-                       ┌──▶ Service A ──┐
-Client ─▶ Aggregator ──┼──▶ Service B ──┼─▶ combined result ─▶ Client
-                       └──▶ Service C ──┘
-
-Publish-subscribe: one message, a copy for every subscriber
-
-Publisher ─▶ topic ─┬─▶ Subscriber A
-                    ├─▶ Subscriber B
-                    └─▶ Subscriber C
-
-Event streaming: an ordered, retained log that each consumer reads at its own position
-
-Producer ─▶ [ e1 | e2 | e3 | e4 | e5 | e6 ]
-                        ▲              ▲
-             Consumer A offset   Consumer B offset
-```
+{% include figure.html id="pat-communication-patterns" %}
 
 ## Request-Response
 
@@ -81,6 +58,8 @@ A publisher sends a message to a topic without knowing who will receive it, and 
 - Each consumer should scale independently
 
 **Fan-out and competing consumers**: A topic delivers a copy of each message to every subscription, so inventory, payment, and notification services each receive the "order placed" message. Within a single subscription, several instances of the same service can share the work as competing consumers, where each message goes to only one instance. Fan-out decides which services hear about a message. Competing consumers decide how one service scales its processing.
+
+{% include figure.html id="pat-fanout-competing" %}
 
 **Example**: Placing an order publishes an "order placed" message, and the inventory, payment, shipping, and notification services each receive it and react independently.
 

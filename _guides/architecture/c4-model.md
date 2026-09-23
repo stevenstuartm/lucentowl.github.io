@@ -86,7 +86,7 @@ Component diagrams earn their upkeep for containers whose internal structure is 
 
 A sensible default is to draw the context and container diagrams for every system, add dynamic diagrams for the handful of flows people repeatedly ask about, add a deployment diagram when infrastructure placement drives a decision, and draw component diagrams only where a specific container needs one.
 
-## C4 and UML
+## C4 Alongside UML and ArchiMate
 
 C4 doesn't replace UML. The C4 FAQ says plainly that a team for whom UML, SysML, or ArchiMate is working should keep using it. C4 is aimed at teams that found those notations too heavy to use consistently, and it borrows from UML where UML does the job well.
 
@@ -106,11 +106,13 @@ The two fit together by concern. C4's diagrams show structure at the architectur
 
 Mixing works best when each diagram adds information the others don't. A container diagram that already shows the Orders API reading from PostgreSQL doesn't need a UML deployment diagram restating that dependency. A sequence diagram for the checkout flow, an entity-relationship diagram for the orders schema, and a state diagram for an order's lifecycle each add something the container diagram can't show.
 
+**ArchiMate** is an open standard from The Open Group for modeling across an enterprise, spanning business, application, and technology concerns in one language. It was designed around a deliberately small set of concepts, and version 4, released in April 2026, reduced that set further. It fits when diagrams have to connect business capabilities and processes to the applications and infrastructure that support them across many systems, a scope C4's system landscape diagram only touches.
+
 ## Diagrams as Code
 
 Drawing tools produce diagrams quickly, but each diagram is a separate picture, so renaming a container means editing every diagram it appears in. Diagrams as code define elements in text and render views from it. The text lives in version control, changes go through code review, and with a model-based tool every view that includes an element updates when the element changes.
 
-- **[Structurizr](https://structurizr.com/){:target="_blank" rel="noopener noreferrer"}**, from Simon Brown, uses a DSL that defines one model and many views of it, which matches C4's separation of abstractions from diagrams. Its hosted cloud service shut down on 30 September 2026, and the tooling continues as self-hosted and local products.
+- **[Structurizr](https://structurizr.com/){:target="_blank" rel="noopener noreferrer"}**, from Simon Brown, uses a DSL that defines one model and many views of it, which matches C4's separation of abstractions from diagrams. Its hosted cloud service ends on 30 September 2026, and the tooling continues as self-hosted and local products.
 - **[C4-PlantUML](https://github.com/plantuml-stdlib/C4-PlantUML){:target="_blank" rel="noopener noreferrer"}** adds C4 element and relationship macros to PlantUML. Each diagram is its own file, so it is diagram-centric rather than model-centric.
 - **[Mermaid](https://mermaid.js.org/syntax/c4.html){:target="_blank" rel="noopener noreferrer"}** renders C4 diagrams inline in Markdown on platforms that support Mermaid, though its C4 syntax is still marked experimental.
 
@@ -118,13 +120,11 @@ A model-based tool keeps many views consistent with each other. A diagram-based 
 
 ## Diagramming Discipline
 
-These habits apply to any architecture diagram, C4 or not. Richards and Ford describe the first two in *Fundamentals of Software Architecture*.
+These habits apply to any architecture diagram, C4 or not. Richards and Ford describe both in *Fundamentals of Software Architecture*.
 
 **Representational consistency** means showing how a part relates to the whole before changing views, so a reader always knows where a detailed diagram sits. C4's zoom levels are one way to achieve it, and a component diagram that doesn't say which container it zooms into breaks it.
 
 **Irrational artifact attachment** is Neal Ford's name for the tendency to defend an artifact in proportion to how long it took to make. A polished diagram built over two days is harder to throw away than a whiteboard sketch, even when the design it shows is wrong. Low-fidelity sketches while a design is still moving keep iteration cheap, and polish belongs to diagrams of decisions that have settled.
-
-**ArchiMate** is an open standard from The Open Group for modeling across an enterprise, spanning business, application, and technology concerns in one language. It was designed around a deliberately small set of concepts, and version 4, released in April 2026, reduced that set further. It fits when diagrams have to connect business capabilities and processes to the applications and infrastructure that support them across many systems, a scope C4's system landscape diagram only touches.
 
 ## Common Pitfalls
 

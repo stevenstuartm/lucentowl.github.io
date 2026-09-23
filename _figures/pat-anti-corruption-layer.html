@@ -1,0 +1,54 @@
+---
+title: "Anti-Corruption Layer"
+kind: boundary
+system: distributed-patterns
+summary: "One layer translates between the new model and the legacy one."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220" role="img" aria-labelledby="pac-title pac-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pac-title">An anti-corruption layer between a new system and a legacy system</title>
+<desc id="pac-desc">The new system works with a domain model in its own terms. Its requests pass through the anti-corruption layer, which translates requests, translates responses, and maps codes and ids, to the legacy API or database, whose data uses legacy names such as CUST_ID and STAT equals A. Responses come back through the same layer.</desc>
+<style>
+.pac-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pac-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pac-old { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.pac-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pac-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pac-n-old { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pac-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pac-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pac-code { font-size: 11.5px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.pac-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pac-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pac-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="pac-hd" x="30" y="34">NEW SYSTEM</text>
+<rect class="pac-box" x="30" y="50" width="200" height="110" rx="6"/>
+<text class="pac-n" x="46" y="80">Domain model</text>
+<text class="pac-s" x="46" y="102">in its own terms:</text>
+<text class="pac-code" x="46" y="124">Customer</text>
+<text class="pac-code" x="46" y="142">CustomerStatus.Active</text>
+
+<text class="pac-hd" x="340" y="34">ANTI-CORRUPTION LAYER</text>
+<rect class="pac-sys" x="340" y="50" width="220" height="110" rx="6"/>
+<text class="pac-s-inv" x="356" y="84">translate requests</text>
+<text class="pac-s-inv" x="356" y="108">translate responses</text>
+<text class="pac-s-inv" x="356" y="132">map codes and ids</text>
+
+<text class="pac-hd" x="670" y="34">LEGACY SYSTEM</text>
+<rect class="pac-old" x="670" y="50" width="200" height="110" rx="6"/>
+<text class="pac-n-old" x="686" y="80">Legacy API or DB</text>
+<text class="pac-code" x="686" y="124">CUST_ID</text>
+<text class="pac-code" x="686" y="142">STAT='A'</text>
+
+<path class="pac-flow" d="M 230,92 L 334,92" marker-end="url(#pac-a)"/>
+<path class="pac-flow" d="M 340,120 L 236,120" marker-end="url(#pac-a)"/>
+<path class="pac-flow" d="M 560,92 L 664,92" marker-end="url(#pac-a)"/>
+<path class="pac-flow" d="M 670,120 L 566,120" marker-end="url(#pac-a)"/>
+<text class="pac-s" x="450" y="196" text-anchor="middle">Only the layer knows the legacy system's names, codes, and quirks.</text>
+</g>
+</svg>

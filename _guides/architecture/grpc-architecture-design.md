@@ -75,6 +75,8 @@ The protobuf compiler, `protoc`, or a tool such as Buf generates a client stub a
 | **Client streaming** | A stream of requests, one response | Uploading a file in chunks, sending a batch of readings for one aggregated result |
 | **Bidirectional streaming** | Both sides stream independently over one call | Interactive sessions, long-lived exchanges where both sides produce messages |
 
+{% include figure.html id="des-grpc-streaming-modes" %}
+
 Streams are long-lived HTTP/2 streams on a shared connection, so they cost far less than a connection per subscriber. They do complicate everything that assumes requests are short, including load balancing, proxies with idle timeouts, and deployments that need to drain connections.
 
 ### Deadlines and Cancellation
@@ -154,19 +156,7 @@ gRPC's connection reuse creates a load balancing problem that tends to surface i
 
 A layer 4 load balancer, including the default Kubernetes Service, balances TCP connections. With HTTP/1.1 that is close enough to balancing requests, because clients open many short connections. A gRPC client opens one HTTP/2 connection and sends every call over it for as long as it runs, so all of that client's traffic lands on whichever instance received the connection. New instances added by autoscaling receive nothing from existing clients.
 
-```
-Layer 4 balancing (connection-level)
-
-Client A ══ one connection ══▶ LB ══▶ Pod 1   (all of Client A's calls)
-Client B ══ one connection ══▶ LB ══▶ Pod 2   (all of Client B's calls)
-                                      Pod 3   (idle, including after scale-out)
-
-Layer 7 or client-side balancing (call-level)
-
-Client A ══ connection ══▶ proxy or client ─┬─▶ Pod 1
-                                            ├─▶ Pod 2
-                                            └─▶ Pod 3
-```
+{% include figure.html id="des-grpc-load-balancing" %}
 
 | Approach | How it works | Trade-off |
 |----------|--------------|-----------|
@@ -189,13 +179,7 @@ Per-call authorization rides in metadata. The client attaches a token, and a ser
 
 Browsers can't make native gRPC calls. Their HTTP APIs don't give JavaScript access to HTTP/2 framing or to response trailers, which gRPC depends on for status.
 
-```
-Browser ──gRPC-Web (HTTP/1.1 or HTTP/2)──▶ gRPC-Web support ──gRPC──▶ Service
-                                          (Envoy, or the server itself)
-
-Browser ──REST + JSON──▶ JSON transcoding ──gRPC──▶ Service
-                        (in-process, or a proxy such as grpc-gateway)
-```
+{% include figure.html id="des-grpc-browser-paths" %}
 
 **gRPC-Web** adapts the protocol to what browsers allow. The browser uses a generated gRPC-Web client, and the translation to native gRPC happens either in a proxy such as Envoy or in the server framework itself, as ASP.NET Core does with its gRPC-Web middleware. It supports unary and server streaming calls. Client and bidirectional streaming aren't available, so interactive browser sessions still need WebSockets or a similar channel.
 

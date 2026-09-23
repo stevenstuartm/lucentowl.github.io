@@ -1,0 +1,73 @@
+---
+title: "Mesh Control and Data Planes"
+kind: container
+system: distributed-patterns
+summary: "The control plane configures proxies, and only the proxies carry requests."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="pmp-title pmp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pmp-title">Service mesh control plane and data plane</title>
+<desc id="pmp-desc">The control plane, responsible for configuration, identity, and certificates, takes in operator policy and watches services and endpoints in the platform. It pushes configuration and certificates to the proxies. In the data plane, service A talks to its proxy, which connects over mutual TLS to service B's proxy, which talks to service B. Request traffic flows only through the data plane.</desc>
+<style>
+.pmp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pmp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pmp-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.pmp-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.pmp-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.pmp-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pmp-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pmp-s-inv { font-size: 11.5px; fill: #E8F1F8; }
+.pmp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pmp-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pmp-labs { font-size: 11.5px; font-weight: 600; fill: var(--color-secondary, #2D5A85); }
+.pmp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pmp-cfg { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.pmp-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pmp-leg { fill: none; }
+</style>
+
+<defs>
+<marker id="pmp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pmp-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pmp-sys" x="330" y="30" width="240" height="64" rx="6"/>
+<text class="pmp-n-inv" x="450.0" y="56" text-anchor="middle">Control plane</text>
+<text class="pmp-s-inv" x="450.0" y="76" text-anchor="middle">config · identity · certs</text>
+<path class="pmp-cfg" d="M 160,62 L 324,62" marker-end="url(#pmp-c)"/>
+<text class="pmp-labs" x="40" y="66">operator policy</text>
+<path class="pmp-cfg" d="M 740,62 L 576,62" marker-end="url(#pmp-c)"/>
+<text class="pmp-labs" x="750" y="58">watches services</text>
+<text class="pmp-labs" x="750" y="74">and endpoints</text>
+<text class="pmp-labs" x="750" y="90">in the platform</text>
+
+<path class="pmp-cfg" d="M 400,94 C 400,150 230,140 230,196" marker-end="url(#pmp-c)"/>
+<path class="pmp-cfg" d="M 500,94 C 500,150 670,140 670,196" marker-end="url(#pmp-c)"/>
+<text class="pmp-labs" x="450" y="150" text-anchor="middle">pushes config and certificates</text>
+
+<rect class="pmp-band" x="20" y="180" width="860" height="140" rx="8"/>
+<text class="pmp-hd" x="36" y="306">DATA PLANE (REQUEST TRAFFIC)</text>
+
+<rect class="pmp-grp" x="50" y="200" width="300" height="80" rx="8"/>
+<rect class="pmp-box" x="66" y="216" width="104" height="48" rx="6"/>
+<text class="pmp-n" x="118.0" y="244.5" text-anchor="middle">Service A</text>
+<rect class="pmp-px" x="220" y="216" width="110" height="48" rx="6"/>
+<text class="pmp-n" x="275.0" y="244.5" text-anchor="middle">proxy</text>
+<path class="pmp-flow" d="M 176,240 L 214,240" marker-start="url(#pmp-a)" marker-end="url(#pmp-a)"/>
+
+<rect class="pmp-grp" x="550" y="200" width="300" height="80" rx="8"/>
+<rect class="pmp-px" x="570" y="216" width="100" height="48" rx="6"/>
+<text class="pmp-n" x="620.0" y="244.5" text-anchor="middle">proxy</text>
+<rect class="pmp-box" x="730" y="216" width="104" height="48" rx="6"/>
+<text class="pmp-n" x="782.0" y="244.5" text-anchor="middle">Service B</text>
+<path class="pmp-flow" d="M 676,240 L 724,240" marker-start="url(#pmp-a)" marker-end="url(#pmp-a)"/>
+
+<path class="pmp-flow" d="M 336,240 L 564,240" marker-start="url(#pmp-a)" marker-end="url(#pmp-a)"/>
+<text class="pmp-lab" x="450" y="232" text-anchor="middle">mTLS</text>
+
+<path class="pmp-flow" d="M 40,336 L 70,336"/>
+<text class="pmp-s" x="78" y="340">request traffic</text>
+<path class="pmp-cfg" d="M 200,336 L 230,336"/>
+<text class="pmp-s" x="238" y="340">configuration, never requests</text>
+</g>
+</svg>

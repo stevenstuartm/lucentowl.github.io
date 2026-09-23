@@ -121,6 +121,8 @@ Any endpoint returning a collection needs pagination, because collections grow a
 | **Deep pages** | Slow, because the database still reads and discards every skipped row | Constant cost, since the cursor becomes an indexed range condition |
 | **Suits** | Small, stable collections and admin screens | Feeds, large collections, and anything clients sync from |
 
+{% include figure.html id="des-pagination-shift" %}
+
 ```json
 {
   "data": [ ... ],
@@ -236,6 +238,8 @@ query {
 ```
 
 The standard fix is batching through a DataLoader, which collects every customer id requested while resolving one level of the query and loads them in a single call, caching them for the rest of the request.
+
+{% include figure.html id="des-n-plus-one" %}
 
 Because clients write their own queries, the server also has to bound what a query can cost. Limit query depth, assign a cost to fields and reject queries over a budget, cap page sizes, and for first-party clients consider persisted queries, where the server accepts only queries registered in advance.
 

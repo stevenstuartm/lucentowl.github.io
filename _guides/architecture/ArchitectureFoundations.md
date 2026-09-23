@@ -34,7 +34,7 @@ An architecture is more than the boxes and lines on a diagram. Several interconn
 Each element constrains the others. A characteristic like elastic scalability narrows the viable styles, the chosen style shapes the components, and the decisions record why. Reasoning about one element while ignoring the rest tends to produce an architecture that looks coherent on paper and fights itself in practice.
 
 <blockquote class="pull-quote">
-<p>Characteristics drive architectural decisions more than functional requirements do.</p>
+<p>Characteristics tend to drive architectural decisions more than functional requirements do.</p>
 </blockquote>
 
 ## Architectural Thinking
@@ -74,20 +74,7 @@ Common business concerns map to architectural priorities:
 
 One of the first structural decisions is how to partition the system at its top level: by technical capability or by business domain. The choice affects team structure, communication patterns, and how hard the system is to change later.
 
-```
-Technical partitioning               Domain partitioning
-
-┌──────────────────────────┐         ┌──────────┐ ┌──────────┐ ┌──────────┐
-│ Presentation             │         │ Checkout │ │Inventory │ │ Shipping │
-├──────────────────────────┤         │          │ │          │ │          │
-│ Business logic           │         │ UI       │ │ UI       │ │ UI       │
-├──────────────────────────┤         │ Logic    │ │ Logic    │ │ Logic    │
-│ Persistence              │         │ Data     │ │ Data     │ │ Data     │
-└──────────────────────────┘         └──────────┘ └──────────┘ └──────────┘
-
-A checkout change cuts across        A checkout change stays inside
-every layer                          one partition
-```
+{% include figure.html id="arch-partitioning" %}
 
 <div class="comparison">
 <div class="content-card">

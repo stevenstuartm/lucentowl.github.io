@@ -1,0 +1,58 @@
+---
+title: "Circuit Breaker States"
+kind: state
+system: distributed-patterns
+summary: "Closed, open, and half-open, and what moves the breaker between them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="pcb-title pcb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pcb-title">Circuit breaker state machine</title>
+<desc id="pcb-desc">Three states. Closed lets calls pass. When failures cross the threshold it moves to open, which fails calls fast. When the break duration elapses it moves to half-open, which allows one trial call. If the trial call fails the breaker returns to open, and if it succeeds the breaker returns to closed.</desc>
+<style>
+.pcb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pcb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pcb-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.pcb-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pcb-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.pcb-n-bad { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.pcb-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pcb-s-inv { font-size: 11.5px; fill: #E8F1F8; }
+.pcb-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pcb-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.pcb-labg { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.pcb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pcb-flowr { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.pcb-flowg { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pcb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pcb-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="pcb-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pcb-sys" x="40" y="90" width="180" height="64" rx="32"/>
+<text class="pcb-n-inv" x="130.0" y="118" text-anchor="middle">CLOSED</text>
+<text class="pcb-s-inv" x="130.0" y="137" text-anchor="middle">calls pass</text>
+
+<rect class="pcb-bad" x="360" y="90" width="180" height="64" rx="32"/>
+<text class="pcb-n-bad" x="450.0" y="118" text-anchor="middle">OPEN</text>
+<text class="pcb-s" x="450.0" y="137" text-anchor="middle">fail fast</text>
+
+<rect class="pcb-box" x="680" y="90" width="180" height="64" rx="32"/>
+<text class="pcb-n" x="770.0" y="118" text-anchor="middle">HALF-OPEN</text>
+<text class="pcb-s" x="770.0" y="137" text-anchor="middle">one trial call</text>
+
+<path class="pcb-flowr" d="M 220,112 L 354,112" marker-end="url(#pcb-r)"/>
+<text class="pcb-labr" x="287" y="76" text-anchor="middle">failures over</text>
+<text class="pcb-labr" x="287" y="92" text-anchor="middle">threshold</text>
+<path class="pcb-flow" d="M 540,112 L 674,112" marker-end="url(#pcb-a)"/>
+<text class="pcb-lab" x="607" y="76" text-anchor="middle">break duration</text>
+<text class="pcb-lab" x="607" y="92" text-anchor="middle">elapses</text>
+
+<path class="pcb-flowr" d="M 720,154 C 700,200 540,200 510,160" marker-end="url(#pcb-r)"/>
+<text class="pcb-labr" x="615" y="210" text-anchor="middle">trial call fails</text>
+<path class="pcb-flowg" d="M 800,154 C 800,280 130,280 130,160" marker-end="url(#pcb-g)"/>
+<text class="pcb-labg" x="465" y="264" text-anchor="middle">trial call succeeds</text>
+</g>
+</svg>

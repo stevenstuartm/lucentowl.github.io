@@ -1,0 +1,49 @@
+---
+title: "CQRS"
+kind: flow
+system: distributed-patterns
+summary: "Writes and reads go to separate models, synced after commit."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="pcq-title pcq-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pcq-title">Command query responsibility segregation</title>
+<desc id="pcq-desc">Commands go to a command model normalized for correctness. After a write commits, a sync mechanism, using events, change data capture, or polling, updates a query model denormalized for the queries it serves. Queries read from the query model.</desc>
+<style>
+.pcq-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pcq-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pcq-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.pcq-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pcq-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pcq-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pcq-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.pcq-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.pcq-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.pcq-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pcq-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="pcq-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pcq-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pcq-ext" x="60" y="24" width="200" height="36" rx="6"/>
+<text class="pcq-n-mute" x="160.0" y="46.0" text-anchor="middle">Commands (writes)</text>
+<rect class="pcq-ext" x="640" y="24" width="200" height="36" rx="6"/>
+<text class="pcq-n-mute" x="740.0" y="46.0" text-anchor="middle">Queries (reads)</text>
+<rect class="pcq-box" x="60" y="100" width="200" height="64" rx="6"/>
+<text class="pcq-n" x="160.0" y="127.5" text-anchor="middle">Command model</text>
+<text class="pcq-k" x="160.0" y="145.5" text-anchor="middle">[normalized for correctness]</text>
+<rect class="pcq-box" x="640" y="100" width="200" height="64" rx="6"/>
+<text class="pcq-n" x="740.0" y="127.5" text-anchor="middle">Query model</text>
+<text class="pcq-k" x="740.0" y="145.5" text-anchor="middle">[denormalized per query]</text>
+<path class="pcq-flow" d="M 160,60 L 160,94" marker-end="url(#pcq-a)"/>
+<path class="pcq-flow" d="M 740,60 L 740,94" marker-end="url(#pcq-a)"/>
+<rect class="pcq-sys" x="340" y="200" width="220" height="64" rx="6"/>
+<text class="pcq-n-inv" x="450.0" y="227.5" text-anchor="middle">Sync mechanism</text>
+<text class="pcq-k-inv" x="450.0" y="245.5" text-anchor="middle">events, CDC, or polling</text>
+<path class="pcq-ctl" d="M 160,164 V 232 H 334" marker-end="url(#pcq-c)"/>
+<path class="pcq-ctl" d="M 560,232 H 740 V 170" marker-end="url(#pcq-c)"/>
+<text class="pcq-labc" x="172" y="222">after the write commits</text>
+</g>
+</svg>

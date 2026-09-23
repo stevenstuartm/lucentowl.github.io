@@ -42,14 +42,7 @@ Dedicated workflow engines exist because the state handling is the hard part rat
 
 No service owns the process. Each one does its work, publishes an event saying what it did, and other services react to the events they care about. The workflow exists only as the sum of those reactions.
 
-```
-Order Service → OrderCreated event → Event Bus
-                                         ↓
-          ┌──────────────┬──────────────┼──────────────┐
-          ↓              ↓              ↓              ↓
-    Inventory      Payment         Shipping      Notification
-    Service        Service         Service        Service
-```
+{% include figure.html id="pat-orchestration-choreography" %}
 
 **Use when**:
 - Steps are genuinely independent and don't need to happen in a fixed order
@@ -85,48 +78,11 @@ A saga is a sequence of local transactions, each committed in one service's own 
 
 **The problem it solves**: In a single database, one transaction covers every write and either all of it happens or none does. Across services with separate databases, there is no such transaction. Two-phase commit exists, but it holds locks across every participant for the whole duration and stalls if the coordinator dies mid-commit, and the datastores services actually use, including document stores, message brokers, and many managed cloud services, frequently don't offer it at all.
 
-```
-Monolith (single transaction):          Microservices (no shared transaction):
-┌─────────────────────────────────┐     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ BEGIN TRANSACTION               │     │ Order       │  │ Payment     │  │ Inventory   │
-│   INSERT order                  │     │ Service     │  │ Service     │  │ Service     │
-│   UPDATE inventory              │     │ (own DB)    │  │ (own DB)    │  │ (own DB)    │
-│   INSERT payment                │     └─────────────┘  └─────────────┘  └─────────────┘
-│ COMMIT (all or nothing)         │           │               │               │
-└─────────────────────────────────┘           └───────────────┴───────────────┘
-                                              How do we make these consistent?
-```
+{% include figure.html id="pat-saga-no-shared-transaction" %}
 
 **How a saga runs**:
 
-```
-Happy Path (all steps succeed):
-
-Step 1              Step 2              Step 3              Result
-┌──────────┐       ┌──────────┐       ┌──────────┐       ┌──────────┐
-│ Create   │──────→│ Reserve  │──────→│ Charge   │──────→│ Complete │
-│ Order    │       │ Inventory│       │ Payment  │       │ Order    │
-│ (pending)│       │          │       │          │       │ (confirm)│
-└──────────┘       └──────────┘       └──────────┘       └──────────┘
-    T1                 T2                 T3
-
-Failure Path (step 3 fails, compensate in reverse):
-
-Step 1              Step 2              Step 3 FAILS
-┌──────────┐       ┌──────────┐       ┌──────────┐
-│ Create   │──────→│ Reserve  │──────→│ Charge   │ ✗ Payment declined
-│ Order    │       │ Inventory│       │ Payment  │
-└──────────┘       └──────────┘       └──────────┘
-                        │                   │
-                        │    Compensate     │
-                        │←──────────────────┘
-                        ↓
-                   ┌──────────┐       ┌──────────┐
-                   │ Release  │←──────│ Cancel   │
-                   │ Inventory│       │ Order    │
-                   │ (C2)     │       │ (C1)     │
-                   └──────────┘       └──────────┘
-```
+{% include figure.html id="pat-saga-compensation" %}
 
 ### Compensating Transactions
 
@@ -147,13 +103,7 @@ Not every step can be undone, which means a saga has a point of no return. Richa
 - **The pivot transaction** is the go/no-go point. Once it commits, the saga is committed to finishing, so there is exactly one of these. It may be the last compensatable step, the first retriable one, or a step that is neither.
 - **Retriable transactions** come after the pivot. They cannot be undone, so the saga has to keep retrying each one until it succeeds, which means they must be designed so that succeeding is always eventually possible.
 
-```
-T1: CreateOrder(items, customer)     → C1: CancelOrder(orderId)        compensatable
-T2: ReserveInventory(items)          → C2: ReleaseInventory(items)     compensatable
-T3: ChargePayment(customer, amount)  → C3: RefundPayment(...)          pivot
-T4: ShipOrder(orderId)               → no compensation exists          retriable
-T5: SendConfirmation(orderId)        → no compensation exists          retriable
-```
+{% include figure.html id="pat-saga-pivot" %}
 
 Placing the pivot is a business decision rather than a technical one. Charging before shipping makes the charge the last reversible step, and everything after it has to be something the business is willing to retry until it works.
 
@@ -163,43 +113,13 @@ Both coordination styles from earlier in this guide apply to sagas, and the comp
 
 **Orchestrated**: the orchestrator holds the saga state and calls compensations itself when a step fails.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Saga Orchestrator                          │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Saga State: { orderId: 123, step: "PAYMENT", status: OK }│   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-         │              │              │              │
-         ▼              ▼              ▼              ▼
-    ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
-    │ Order   │   │Inventory│   │ Payment │   │Shipping │
-    │ Service │   │ Service │   │ Service │   │ Service │
-    └─────────┘   └─────────┘   └─────────┘   └─────────┘
-
-  1. OrderService.create()      → OK, orderId=123
-  2. InventoryService.reserve() → OK
-  3. PaymentService.charge()    → FAILED
-  4. InventoryService.release() → OK   (compensating T2)
-  5. OrderService.cancel()      → OK   (compensating T1)
-```
+{% include figure.html id="pat-saga-orchestrated" %}
 
 **Choreographed**: each service reacts to events, and a failure event is what triggers the compensations upstream of it.
 
-```
-┌─────────┐  OrderCreated  ┌─────────┐ InventoryReserved ┌─────────┐
-│ Order   │───────────────→│Inventory│──────────────────→│ Payment │
-│ Service │                │ Service │                   │ Service │
-└─────────┘                └─────────┘                   └─────────┘
-     ↑                          ↑                             │
-     │                          │                             │
-     │    OrderCancelled        │    InventoryReleased        │ PaymentFailed
-     └──────────────────────────┴─────────────────────────────┘
+{% include figure.html id="pat-saga-choreographed" %}
 
-Each service listens for the events it cares about, commits its local
-transaction, and publishes the result. A failure event tells every
-upstream participant to run its own compensation.
-```
+Each service listens for the events it cares about, commits its local transaction, and publishes the result.
 
 The saga state in the choreographed version is implied by which events have been published and which have not, so there is no single place to query how far a given order has progressed. That is the cost people underestimate.
 

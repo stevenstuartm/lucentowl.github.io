@@ -19,20 +19,7 @@ Each service aligns with a bounded context from domain-driven design, a cohesive
 
 Independent deployability is the point. A team can release a change to its service without coordinating with other teams or waiting for a shared release window. When services own their data and talk to each other asynchronously, each one is its own architecture quantum and can scale and fail on its own.
 
-```
-                     ┌──────────────────────────────┐
-                     │ API gateway / user interface │
-                     └──────┬──────────┬────────┬───┘
-                            ▼          ▼        ▼
-                     ┌─────────┐ ┌─────────┐ ┌─────────┐
-                     │  Order  │ │ Payment │ │ Catalog │
-                     │ service │ │ service │ │ service │
-                     └────┬────┘ └────┬────┘ └────┬────┘
-                          ▼           ▼           ▼
-                       (orders)   (payments)  (catalog)    each service owns its data
-
-                     Order ── "order placed" ──▶ event channel ──▶ Payment
-```
+{% include figure.html id="arch-microservices" %}
 
 ### Core Principles
 

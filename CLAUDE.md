@@ -59,7 +59,7 @@ bundle exec jekyll build
 - **_config.yml**: Site configuration, author info, social links, and build settings. Sets `data_dir: assets/data`, so `site.data` reads from `assets/data/`, not `_data/`
 - **_layouts/**: HTML templates that wrap content
   - `default.html`: Base template with header/footer includes
-  - `home.html`: Homepage layout (extends default) with recent posts section
+  - `home.html`: Homepage layout (extends default). Education first: hero, "four ways to learn" cards with live counts, then `featured_items` from `index.md` as a secondary section
   - `post.html`: Blog post template with metadata, tags, and author byline
   - `page.html`: Generic page template
   - `radar.html`: Tech radar page template with D3.js visualization

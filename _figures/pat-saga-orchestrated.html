@@ -1,0 +1,68 @@
+---
+title: "An Orchestrated Saga"
+kind: dynamic
+system: distributed-patterns
+summary: "The orchestrator holds saga state and calls the compensations itself."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="pso-title pso-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pso-title">Orchestrated saga with compensation</title>
+<desc id="pso-desc">A saga orchestrator holds the saga state for order 123. It calls the order service to create the order, which succeeds, then the inventory service to reserve stock, which succeeds, then the payment service to charge, which fails. It then calls the inventory service to release the stock, compensating step 2, and the order service to cancel, compensating step 1. The shipping service is never called.</desc>
+<style>
+.pso-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pso-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pso-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pso-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.pso-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pso-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pso-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pso-n-bad { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.pso-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pso-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pso-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.pso-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.pso-labm { font-size: 11.5px; font-weight: 600; fill: var(--color-text-light, #4A5568); }
+.pso-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.pso-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.pso-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pso-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.pso-red { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pso-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pso-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="pso-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pso-sys" x="40" y="24" width="820" height="64" rx="6"/>
+<text class="pso-n-inv" x="450.0" y="51.5" text-anchor="middle">Saga orchestrator</text>
+<text class="pso-s-inv" x="450.0" y="69.5" text-anchor="middle">saga state: orderId 123, step PAYMENT</text>
+<rect class="pso-box" x="40" y="220" width="180" height="48" rx="6"/>
+<text class="pso-n" x="130.0" y="248.0" text-anchor="middle">Order service</text>
+<rect class="pso-box" x="252" y="220" width="180" height="48" rx="6"/>
+<text class="pso-n" x="342.0" y="248.0" text-anchor="middle">Inventory service</text>
+<rect class="pso-bad" x="464" y="220" width="180" height="48" rx="6"/>
+<text class="pso-n-bad" x="554.0" y="248.0" text-anchor="middle">Payment service</text>
+<rect class="pso-mute" x="676" y="220" width="180" height="48" rx="6"/>
+<text class="pso-n-mute" x="766.0" y="248.0" text-anchor="middle">Shipping service</text>
+<path class="pso-flow" d="M 110,88 V 214" marker-end="url(#pso-a)"/>
+<text class="pso-lab" x="102" y="150" text-anchor="end">1 create</text>
+<path class="pso-ctl" d="M 170,88 V 214" marker-end="url(#pso-c)"/>
+<text class="pso-labc" x="178" y="150">5 cancel</text>
+<path class="pso-flow" d="M 322,88 V 214" marker-end="url(#pso-a)"/>
+<text class="pso-lab" x="314" y="150" text-anchor="end">2 reserve</text>
+<path class="pso-ctl" d="M 382,88 V 214" marker-end="url(#pso-c)"/>
+<text class="pso-labc" x="390" y="150">4 release</text>
+<path class="pso-red" d="M 554,88 V 214" marker-end="url(#pso-r)"/>
+<text class="pso-labr" x="562" y="150">3 charge: FAILED</text>
+<text class="pso-labm" x="766" y="290" text-anchor="middle">never called</text>
+<text class="pso-note" x="40" y="320">4 compensates T2 and 5 compensates T1, in reverse order.</text>
+<path class="pso-flow" d="M 40,356 H 74"/>
+<text class="pso-el" x="82" y="360">forward step</text>
+<path class="pso-red" d="M 188.62,356 H 222.62"/>
+<text class="pso-el" x="230.62" y="360">failed step</text>
+<path class="pso-ctl" d="M 331.355,356 H 365.355"/>
+<text class="pso-el" x="373.355" y="360">compensation</text>
+</g>
+</svg>

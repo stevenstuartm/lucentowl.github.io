@@ -32,27 +32,7 @@ Closed layers create **layers of isolation**. Each layer knows only the interfac
 
 An open layer can be bypassed. The common reason to open one is a shared services layer holding cross-cutting components such as logging, auditing, or date utilities. Placed below the business layer and marked open, it lets the business layer reach the persistence layer directly while still using the shared services when needed.
 
-```
-┌─────────────────────────────────────────┐
-│ Presentation                   (closed) │
-└────────────────────┬────────────────────┘
-                     ▼
-┌─────────────────────────────────────────┐
-│ Business                       (closed) │
-└──────────┬───────────────────────┬──────┘
-           ▼                       │ skips the open layer
-┌──────────────────────────┐       │
-│ Shared services   (open) │       │
-└──────────┬───────────────┘       │
-           ▼                       ▼
-┌─────────────────────────────────────────┐
-│ Persistence                    (closed) │
-└────────────────────┬────────────────────┘
-                     ▼
-┌─────────────────────────────────────────┐
-│ Database                                │
-└─────────────────────────────────────────┘
-```
+{% include figure.html id="arch-layered-open-closed" %}
 
 Open layers remove pass-through calls, but every open layer creates dependencies that cross layer boundaries and weakens isolation. Document which layers are open and why, because an undocumented open layer tends to become an excuse for bypassing every layer.
 

@@ -83,6 +83,8 @@ A bounded context is an explicit boundary inside which one model applies and eve
 
 "Customer" is the standard example. To sales it is a lead with a pipeline stage. To fulfillment it is a delivery address. To billing it is a payment history and a credit limit. To support it is a ticket history. A single `Customer` class serving all four either becomes a bloated compromise that serves none of them well, or couples four teams to every change in it. Four bounded contexts with four models, each small and coherent, is the DDD answer.
 
+{% include figure.html id="des-customer-contexts" %}
+
 **Signals that a boundary belongs somewhere**:
 - The same word means different things to different groups
 - Different teams or departments own the work
@@ -107,26 +109,9 @@ A context map records how bounded contexts relate. The relationships are as much
 | **Separate Ways** | No integration at all | Integrating costs more than duplicating |
 | **Big Ball of Mud** | A part of the system with no clear model | Draw a boundary around it and keep it from spreading |
 
-```
-                        ┌───────────────────┐
-                        │   Sales context   │
-                        │  (Open Host       │
-                        │   Service)        │
-                        └─────────┬─────────┘
-                               U  │
-                                  │ product and order API
-                               D  ▼
-┌───────────────────┐   ┌───────────────────────┐   ┌────────────────────────┐
-│  Legacy warehouse │ U │  Fulfillment context  │ U │ Payment provider       │
-│  (Big Ball of Mud)│──▶│  ACL toward warehouse │◀──│ (external)             │
-└───────────────────┘ D │  Conformist toward    │ D └────────────────────────┘
-                        │  payment provider     │
-                        └───────────────────────┘
+{% include figure.html id="des-context-map" %}
 
-U = upstream, D = downstream
-```
-
-The map above says three things a class diagram can't. Fulfillment consumes Sales through an API Sales designed for general use. Fulfillment protects its model from the warehouse system's with a translation layer. And fulfillment simply adopts the payment provider's model, because a single customer of a large provider has no leverage to negotiate a different one.
+The map says three things a class diagram can't. Fulfillment consumes Sales through an API Sales designed for general use. Fulfillment protects its model from the warehouse system's with a translation layer. And fulfillment simply adopts the payment provider's model, because a single customer of a large provider has no leverage to negotiate a different one.
 
 ### EventStorming
 
@@ -199,20 +184,7 @@ public sealed record Money
 
 An aggregate is a cluster of entities and value objects that must stay consistent with each other, treated as one unit for changes. One entity is the **aggregate root**, and all changes go through it, so the root can enforce the rules, called invariants, that span the cluster. The aggregate is also the unit of persistence: it is loaded and saved whole, in one transaction.
 
-```
-┌───────────────── Order aggregate ─────────────────┐
-│                                                   │
-│   Order (root)  ── enforces: total = sum of lines │
-│     │               no changes once confirmed     │
-│     ├── OrderLine     no confirming an empty order│
-│     ├── OrderLine                                 │
-│     └── OrderLine                                 │
-│                                                   │
-└───────────────────────────────────────────────────┘
-         │ references by id only
-         ▼
-   CustomerId ─ ─ ─ ▶ Customer aggregate (separate)
-```
+{% include figure.html id="des-order-aggregate" %}
 
 Vernon's rules of thumb for designing them:
 

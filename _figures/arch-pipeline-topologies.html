@@ -1,0 +1,89 @@
+---
+title: "Pipeline Topology Variations"
+kind: flow
+system: architecture-styles
+summary: "Branching, convergent, and parallel pipelines."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 530" role="img" aria-labelledby="apl-title apl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="apl-title">Branching, convergent, and parallel pipeline topologies</title>
+<desc id="apl-desc">Three pipeline shapes. Branching: read, parse, and validate, then valid records go to enrich and store while invalid records go to an error file. Convergent: CRM, billing, and web signup exports all feed normalize, deduplicate, and a customer store. Parallel: read and split, then three instances of a costly transform share the load before store.</desc>
+<style>
+.apl-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.apl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.apl-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.apl-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.apl-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.apl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.apl-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.apl-labg { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.apl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="apl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="apl-band" x="20" y="20" width="860" height="150" rx="8"/>
+<text class="apl-hd" x="34" y="40">BRANCHING: A TESTER ROUTES RECORDS BY CONTENT</text>
+<rect class="apl-box" x="40" y="86.0" width="90" height="32" rx="6"/>
+<text class="apl-n" x="85.0" y="106.0" text-anchor="middle">Read</text>
+<rect class="apl-box" x="160" y="86.0" width="90" height="32" rx="6"/>
+<text class="apl-n" x="205.0" y="106.0" text-anchor="middle">Parse</text>
+<rect class="apl-box" x="280" y="86.0" width="100" height="32" rx="6"/>
+<text class="apl-n" x="330.0" y="106.0" text-anchor="middle">Validate</text>
+<path class="apl-flow" d="M 130,102 L 154,102" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 250,102 L 274,102" marker-end="url(#apl-a)"/>
+<rect class="apl-box" x="470" y="56.0" width="100" height="32" rx="6"/>
+<text class="apl-n" x="520.0" y="76.0" text-anchor="middle">Enrich</text>
+<rect class="apl-box" x="600" y="56.0" width="100" height="32" rx="6"/>
+<text class="apl-n" x="650.0" y="76.0" text-anchor="middle">Store</text>
+<rect class="apl-ext" x="470" y="120.0" width="120" height="32" rx="6"/>
+<text class="apl-n-mute" x="530.0" y="140.0" text-anchor="middle">Error file</text>
+<path class="apl-flow" d="M 380,102 C 425.0,102 425.0,72 464,72" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 380,102 C 425.0,102 425.0,136 464,136" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 570,72 L 594,72" marker-end="url(#apl-a)"/>
+<text class="apl-labg" x="398" y="72">valid</text>
+<text class="apl-labr" x="392" y="146">invalid</text>
+<rect class="apl-band" x="20" y="185" width="860" height="160" rx="8"/>
+<text class="apl-hd" x="34" y="205">CONVERGENT: SEVERAL PRODUCERS FEED ONE PIPELINE</text>
+<rect class="apl-ext" x="40" y="212.0" width="130" height="32" rx="6"/>
+<text class="apl-n-mute" x="105.0" y="232.0" text-anchor="middle">CRM export</text>
+<path class="apl-flow" d="M 170,228 C 210.0,228 210.0,270 244,270" marker-end="url(#apl-a)"/>
+<rect class="apl-ext" x="40" y="254.0" width="130" height="32" rx="6"/>
+<text class="apl-n-mute" x="105.0" y="274.0" text-anchor="middle">Billing export</text>
+<path class="apl-flow" d="M 170,270 C 210.0,270 210.0,270 244,270" marker-end="url(#apl-a)"/>
+<rect class="apl-ext" x="40" y="296.0" width="130" height="32" rx="6"/>
+<text class="apl-n-mute" x="105.0" y="316.0" text-anchor="middle">Web signups</text>
+<path class="apl-flow" d="M 170,312 C 210.0,312 210.0,270 244,270" marker-end="url(#apl-a)"/>
+<rect class="apl-box" x="250" y="254.0" width="110" height="32" rx="6"/>
+<text class="apl-n" x="305.0" y="274.0" text-anchor="middle">Normalize</text>
+<rect class="apl-box" x="390" y="254.0" width="120" height="32" rx="6"/>
+<text class="apl-n" x="450.0" y="274.0" text-anchor="middle">Deduplicate</text>
+<rect class="apl-box" x="540" y="254.0" width="140" height="32" rx="6"/>
+<text class="apl-n" x="610.0" y="274.0" text-anchor="middle">Customer store</text>
+<path class="apl-flow" d="M 360,270 L 384,270" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 510,270 L 534,270" marker-end="url(#apl-a)"/>
+<rect class="apl-band" x="20" y="360" width="860" height="150" rx="8"/>
+<text class="apl-hd" x="34" y="380">PARALLEL: INSTANCES OF A COSTLY FILTER SHARE THE LOAD</text>
+<rect class="apl-box" x="40" y="426.0" width="90" height="32" rx="6"/>
+<text class="apl-n" x="85.0" y="446.0" text-anchor="middle">Read</text>
+<rect class="apl-box" x="160" y="426.0" width="90" height="32" rx="6"/>
+<text class="apl-n" x="205.0" y="446.0" text-anchor="middle">Split</text>
+<path class="apl-flow" d="M 130,442 L 154,442" marker-end="url(#apl-a)"/>
+<rect class="apl-box" x="310" y="389.0" width="190" height="32" rx="6"/>
+<text class="apl-n" x="405.0" y="409.0" text-anchor="middle">Transform (instance 1)</text>
+<path class="apl-flow" d="M 250,442 C 280.0,442 280.0,405 304,405" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 500,405 C 530.0,405 530.0,442 554,442" marker-end="url(#apl-a)"/>
+<rect class="apl-box" x="310" y="426.0" width="190" height="32" rx="6"/>
+<text class="apl-n" x="405.0" y="446.0" text-anchor="middle">Transform (instance 2)</text>
+<path class="apl-flow" d="M 250,442 C 280.0,442 280.0,442 304,442" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 500,442 C 530.0,442 530.0,442 554,442" marker-end="url(#apl-a)"/>
+<rect class="apl-box" x="310" y="463.0" width="190" height="32" rx="6"/>
+<text class="apl-n" x="405.0" y="483.0" text-anchor="middle">Transform (instance 3)</text>
+<path class="apl-flow" d="M 250,442 C 280.0,442 280.0,479 304,479" marker-end="url(#apl-a)"/>
+<path class="apl-flow" d="M 500,479 C 530.0,479 530.0,442 554,442" marker-end="url(#apl-a)"/>
+<rect class="apl-box" x="560" y="426.0" width="90" height="32" rx="6"/>
+<text class="apl-n" x="605.0" y="446.0" text-anchor="middle">Store</text>
+</g>
+</svg>

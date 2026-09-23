@@ -35,6 +35,8 @@ The [AWS SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens
 | **Pool** | Fully multitenant deployment | All compute, storage, and messaging | Lowest cost per tenant, one thing to deploy and monitor | Isolation lives in application code, one bad change or one heavy tenant affects everyone |
 | **Bridge** | Horizontally or vertically partitioned deployments | Some layers or some tenants, not others | Isolation spent where it's needed | The codebase has to run correctly in both shapes |
 
+{% include figure.html id="des-tenancy-models" %}
+
 A silo tenant still differs from a customer running their own copy of the product. In a silo model every tenant is onboarded, authenticated, deployed, and operated through the same shared pipeline and runs the same version. Once individual customers get their own release cadence or code branches, the system has become managed hosting, and the operational savings that justified multi-tenancy are gone.
 
 ### Bridge Along Layers or Along Tenants
@@ -51,25 +53,9 @@ A pooled deployment eventually hits a limit, whether a database's throughput cei
 
 Stamps turn tenant placement into a routing problem. A tenant catalog maps each tenant to its stamp, and something in front of the stamps reads that mapping on every request.
 
-```
-                     Request carrying a tenant identity
-                                   │
-                                   ▼
-                       ┌─────────────────────┐        ┌──────────────────┐
-                       │  Global router or   │◀──────▶│  Tenant catalog  │
-                       │  gateway            │        │  tenant → stamp  │
-                       └──────────┬──────────┘        └──────────────────┘
-                 ┌─────────────────┼──────────────────────┐
-                 ▼                 ▼                      ▼
-        ┌────────────────┐ ┌────────────────┐    ┌────────────────┐
-        │ Stamp 1 (pool) │ │ Stamp 2 (pool) │    │ Stamp 3 (silo) │
-        │ Tenants A, B, C│ │ Tenants D, E   │    │ Tenant F only  │
-        │ shared app, DB │ │ shared app, DB │    │ same code,     │
-        └────────────────┘ └────────────────┘    │ dedicated infra│
-                                                 └────────────────┘
-```
+{% include figure.html id="des-deployment-stamps" %}
 
-Moving tenant E from stamp 2 to stamp 3 means copying its data and then changing one catalog row. Stamps also give releases a natural rollout order, with each stamp acting as a wave.
+Moving tenant E from stamp 2 to stamp 1 means copying its data and then changing one catalog row. Stamps also give releases a natural rollout order, with each stamp acting as a wave.
 
 ## Data Isolation
 
@@ -202,15 +188,7 @@ app.UseAuthorization();
 
 Within one HTTP request, a scoped service carries the context. Leaks tend to happen at the boundaries where that request scope ends and new work begins.
 
-```
- HTTP request ──▶ API ──────────────▶ Queue ──────────────▶ Worker ──────────▶ Database
- token claim      TenantContext       message header        TenantContext      transaction-local
- tenant_id        (request scope)     tenant_id             set from header    app.tenant_id
-                        │                                   before handler
-                        ▼
-                  Outbound call ──▶ Downstream service
-                  header or token      resolves again
-```
+{% include figure.html id="des-tenant-context-hops" %}
 
 A background worker has no HTTP request, so nothing resolves its tenant unless the message carries one. The publisher writes the tenant ID into a message header, and the consumer sets its own scoped `TenantContext` from that header before the handler runs. A consumer that finds no tenant header should reject the message rather than run with an empty context. Scheduled jobs that sweep across tenants should loop over the catalog and open a fresh scope per tenant, so no work runs with one tenant's context while touching another tenant's data. Service-to-service calls carry the tenant in a token or header and resolve it again on arrival instead of trusting the caller's claim blindly.
 

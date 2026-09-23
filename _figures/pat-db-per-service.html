@@ -1,0 +1,70 @@
+---
+title: "Database per Service Versus Shared Database"
+kind: structure
+system: distributed-patterns
+summary: "Three services with their own databases, or one database for all."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="pdb-title pdb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pdb-title">Database per service compared with a shared database</title>
+<desc id="pdb-desc">On the left, orders, billing, and search each own a database. A cross-service read becomes an API call, a cross-service write takes many steps, and a schema change involves one team. On the right, the three services share one database. A cross-service read is a join, a cross-service write is one transaction, and a schema change involves every team.</desc>
+<style>
+.pdb-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.pdb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pdb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pdb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pdb-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pdb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pdb-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pdb-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.pdb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pdb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pdb-band" x="20" y="20" width="420" height="320" rx="8"/>
+<text class="pdb-hd" x="34" y="40">DATABASE PER SERVICE</text>
+<rect class="pdb-band" x="460" y="20" width="420" height="320" rx="8"/>
+<text class="pdb-hd" x="474" y="40">SHARED DATABASE</text>
+<rect class="pdb-box" x="40" y="56" width="120" height="36" rx="6"/>
+<text class="pdb-n" x="100.0" y="78.0" text-anchor="middle">Orders</text>
+<rect class="pdb-sys" x="250" y="56" width="150" height="36" rx="6"/>
+<text class="pdb-s-inv" x="325.0" y="78.5" text-anchor="middle">orders db</text>
+<path class="pdb-flow" d="M 160,74 L 244,74" marker-end="url(#pdb-a)"/>
+<rect class="pdb-box" x="480" y="56" width="120" height="36" rx="6"/>
+<text class="pdb-n" x="540.0" y="78.0" text-anchor="middle">Orders</text>
+<path class="pdb-flow" d="M 600,74 C 650,74 650,126 694,126" marker-end="url(#pdb-a)"/>
+<rect class="pdb-box" x="40" y="108" width="120" height="36" rx="6"/>
+<text class="pdb-n" x="100.0" y="130.0" text-anchor="middle">Billing</text>
+<rect class="pdb-sys" x="250" y="108" width="150" height="36" rx="6"/>
+<text class="pdb-s-inv" x="325.0" y="130.5" text-anchor="middle">billing db</text>
+<path class="pdb-flow" d="M 160,126 L 244,126" marker-end="url(#pdb-a)"/>
+<rect class="pdb-box" x="480" y="108" width="120" height="36" rx="6"/>
+<text class="pdb-n" x="540.0" y="130.0" text-anchor="middle">Billing</text>
+<path class="pdb-flow" d="M 600,126 C 650,126 650,126 694,126" marker-end="url(#pdb-a)"/>
+<rect class="pdb-box" x="40" y="160" width="120" height="36" rx="6"/>
+<text class="pdb-n" x="100.0" y="182.0" text-anchor="middle">Search</text>
+<rect class="pdb-sys" x="250" y="160" width="150" height="36" rx="6"/>
+<text class="pdb-s-inv" x="325.0" y="182.5" text-anchor="middle">search db</text>
+<path class="pdb-flow" d="M 160,178 L 244,178" marker-end="url(#pdb-a)"/>
+<rect class="pdb-box" x="480" y="160" width="120" height="36" rx="6"/>
+<text class="pdb-n" x="540.0" y="182.0" text-anchor="middle">Search</text>
+<path class="pdb-flow" d="M 600,178 C 650,178 650,126 694,126" marker-end="url(#pdb-a)"/>
+<rect class="pdb-sys" x="700" y="100" width="150" height="52" rx="6"/>
+<text class="pdb-s-inv" x="775.0" y="130.5" text-anchor="middle">one database</text>
+<text class="pdb-el" x="40" y="240">cross-service read</text>
+<text class="pdb-lab" x="250" y="240">an API call</text>
+<text class="pdb-el" x="480" y="240">cross-service read</text>
+<text class="pdb-lab" x="700" y="240">a join</text>
+<text class="pdb-el" x="40" y="268">cross-service write</text>
+<text class="pdb-lab" x="250" y="268">many steps</text>
+<text class="pdb-el" x="480" y="268">cross-service write</text>
+<text class="pdb-lab" x="700" y="268">one transaction</text>
+<text class="pdb-el" x="40" y="296">schema change</text>
+<text class="pdb-lab" x="250" y="296">one team</text>
+<text class="pdb-el" x="480" y="296">schema change</text>
+<text class="pdb-lab" x="700" y="296">every team</text>
+</g>
+</svg>

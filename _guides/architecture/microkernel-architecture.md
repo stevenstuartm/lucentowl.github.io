@@ -19,24 +19,7 @@ The style shows up in products sold to many customers with different needs, in e
 
 The topology has three parts: a core system, a registry of plug-ins, and the plug-ins themselves. When the core needs extended behavior, it looks up the right plug-in in the registry and invokes it through a contract.
 
-```
-                ┌─────────────────────────────┐
-                │         Core system         │
-                │  (minimal shared behavior)  │
-                │                             │
-                │   ┌─────────────────────┐   │
-                │   │      Registry       │   │
-                │   └─────────────────────┘   │
-                └──┬───────────┬───────────┬──┘
-          contract │  contract │  contract │
-                   ▼           ▼           ▼
-             ┌──────────┐┌──────────┐┌──────────┐
-             │ Plug-in  ││ Plug-in  ││ Plug-in  │
-             │ (Calif.) ││ (Texas)  ││ (N.Y.)   │
-             └──────────┘└──────────┘└──────────┘
-
-Plug-ins talk to the core through contracts, never to each other.
-```
+{% include figure.html id="arch-microkernel" %}
 
 ### Core System
 

@@ -19,18 +19,7 @@ A service that updates its database and publishes a message about that update ha
 
 The outbox pattern takes the second write off the critical path. The message is inserted into an outbox table in the same transaction as the business data, so the two commit or roll back together. A separate relay process reads the outbox afterwards and publishes to the broker.
 
-```
-         ┌──────────── single database transaction ────────────┐
-         │                                                     │
-Service ─┤─▶ INSERT order ──▶ [ business tables ]              │
-         │─▶ INSERT event ──▶ [ outbox table ]                 │
-         └──────────────────────────────┬──────────────────────┘
-                                        │
-                                        ▼
-                               Message Relay ──▶ Broker ──▶ Consumer
-                               (polling publisher, or
-                                transaction log tailing)
-```
+{% include figure.html id="pat-outbox" %}
 
 **Use when**:
 - A message must not be lost when the data it describes was committed
@@ -105,21 +94,7 @@ Stores a large message payload separately and sends only a reference through the
 
 **How it works**:
 
-```
-Producer                          Storage              Message Broker           Consumer
-   │                                │                       │                      │
-   │──1. Store payload ────────────→│                       │                      │
-   │←───── claim-check-id ──────────│                       │                      │
-   │                                │                       │                      │
-   │──2. Send message with id ──────┼──────────────────────→│                      │
-   │     (small: just the reference)│                       │                      │
-   │                                │                       │──3. Deliver ────────→│
-   │                                │                       │                      │
-   │                                │←──4. Fetch payload ───┼──────────────────────│
-   │                                │────── payload ────────┼─────────────────────→│
-   │                                │                       │                      │
-   │                                │←──5. Delete (optional)┼──────────────────────│
-```
+{% include figure.html id="pat-claim-check" %}
 
 **Use when**:
 - Payloads are large, such as images, documents, or video
@@ -172,21 +147,7 @@ A separate queue holding messages that failed processing repeatedly. Rather than
 
 **How it works**:
 
-```
-Main Queue                         Dead Letter Queue
-┌─────────┐                       ┌─────────────────┐
-│ Message │──→ Process ──→ Fail   │                 │
-│   A     │      ↓                │  Message A      │
-│         │   Retry 1 ──→ Fail    │  (failed 3x)    │
-│         │      ↓                │  reason: timeout│
-│         │   Retry 2 ──→ Fail    │  timestamp: ... │
-│         │      ↓                │                 │
-│         │   Retry 3 ──→ Fail ───┼──→              │
-└─────────┘      ↓                └─────────────────┘
-              Move to DLQ              ↓
-                                 Manual review or
-                                 automated replay
-```
+{% include figure.html id="pat-dead-letter-queue" %}
 
 **Use when**:
 - Messages can fail for transient reasons, permanent reasons, or both
@@ -235,19 +196,7 @@ Serves messages by priority rather than arrival order, so a message that matters
 
 **How it works**:
 
-```
-Incoming Messages          Priority Queues              Consumer
-                          ┌───────────────┐
-  [Priority: HIGH] ──────→│ HIGH (P1)     │──┐
-                          │ ○ ○ ○         │  │
-                          ├───────────────┤  ├──→ Process HIGH first
-  [Priority: MEDIUM] ────→│ MEDIUM (P2)   │  │     then MEDIUM
-                          │ ○ ○           │──┘     then LOW
-                          ├───────────────┤
-  [Priority: LOW] ───────→│ LOW (P3)      │
-                          │ ○ ○ ○ ○ ○     │──→ Only when P1, P2 empty
-                          └───────────────┘
-```
+{% include figure.html id="pat-priority-queue" %}
 
 **Use when**:
 - Message types carry genuinely different urgency, such as a payment failure against an analytics event

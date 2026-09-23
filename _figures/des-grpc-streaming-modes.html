@@ -1,0 +1,80 @@
+---
+title: "gRPC Communication Patterns"
+kind: dynamic
+system: architecture-design
+summary: "Unary, server streaming, client streaming, and bidirectional calls."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="dgs-title dgs-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dgs-title">The four gRPC communication patterns</title>
+<desc id="dgs-desc">Four panels, each with a client and a server. Unary: one request and one response. Server streaming: one request and a stream of responses. Client streaming: a stream of requests and one response. Bidirectional streaming: both sides send streams of messages independently over one call.</desc>
+<style>
+.dgs-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.dgs-hd { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; fill: var(--color-text-light, #4A5568); }
+.dgs-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dgs-s { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dgs-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.dgs-req { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.dgs-resp { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.dgs-legs { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+</style>
+
+<defs>
+<marker id="dgs-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dgs-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-green, #3C8D53)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dgs-grp" x="10" y="16" width="212" height="270" rx="8"/>
+<text class="dgs-hd" x="22" y="38">UNARY</text>
+<text class="dgs-n" x="50" y="64" text-anchor="middle">Client</text>
+<text class="dgs-n" x="182" y="64" text-anchor="middle">Server</text>
+<path class="dgs-life" d="M 50,72 V 240"/>
+<path class="dgs-life" d="M 182,72 V 240"/>
+<path class="dgs-req" d="M 50,90 L 176,100" marker-end="url(#dgs-a)"/>
+<path class="dgs-resp" d="M 182,130 L 56,140" marker-end="url(#dgs-g)"/>
+<text class="dgs-s" x="116" y="266" text-anchor="middle">One request, one response</text>
+<rect class="dgs-grp" x="230" y="16" width="212" height="270" rx="8"/>
+<text class="dgs-hd" x="242" y="38">SERVER STREAMING</text>
+<text class="dgs-n" x="270" y="64" text-anchor="middle">Client</text>
+<text class="dgs-n" x="402" y="64" text-anchor="middle">Server</text>
+<path class="dgs-life" d="M 270,72 V 240"/>
+<path class="dgs-life" d="M 402,72 V 240"/>
+<path class="dgs-req" d="M 270,86 L 396,96" marker-end="url(#dgs-a)"/>
+<path class="dgs-resp" d="M 402,118 L 276,128" marker-end="url(#dgs-g)"/>
+<path class="dgs-resp" d="M 402,146 L 276,156" marker-end="url(#dgs-g)"/>
+<path class="dgs-resp" d="M 402,174 L 276,184" marker-end="url(#dgs-g)"/>
+<path class="dgs-resp" d="M 402,202 L 276,212" marker-end="url(#dgs-g)"/>
+<text class="dgs-s" x="336" y="266" text-anchor="middle">One request, a stream of responses</text>
+<rect class="dgs-grp" x="450" y="16" width="212" height="270" rx="8"/>
+<text class="dgs-hd" x="462" y="38">CLIENT STREAMING</text>
+<text class="dgs-n" x="490" y="64" text-anchor="middle">Client</text>
+<text class="dgs-n" x="622" y="64" text-anchor="middle">Server</text>
+<path class="dgs-life" d="M 490,72 V 240"/>
+<path class="dgs-life" d="M 622,72 V 240"/>
+<path class="dgs-req" d="M 490,86 L 616,96" marker-end="url(#dgs-a)"/>
+<path class="dgs-req" d="M 490,114 L 616,124" marker-end="url(#dgs-a)"/>
+<path class="dgs-req" d="M 490,142 L 616,152" marker-end="url(#dgs-a)"/>
+<path class="dgs-req" d="M 490,170 L 616,180" marker-end="url(#dgs-a)"/>
+<path class="dgs-resp" d="M 622,210 L 496,220" marker-end="url(#dgs-g)"/>
+<text class="dgs-s" x="556" y="266" text-anchor="middle">A stream of requests, one response</text>
+<rect class="dgs-grp" x="670" y="16" width="212" height="270" rx="8"/>
+<text class="dgs-hd" x="682" y="38">BIDIRECTIONAL</text>
+<text class="dgs-n" x="710" y="64" text-anchor="middle">Client</text>
+<text class="dgs-n" x="842" y="64" text-anchor="middle">Server</text>
+<path class="dgs-life" d="M 710,72 V 240"/>
+<path class="dgs-life" d="M 842,72 V 240"/>
+<path class="dgs-req" d="M 710,86 L 836,96" marker-end="url(#dgs-a)"/>
+<path class="dgs-resp" d="M 842,104 L 716,114" marker-end="url(#dgs-g)"/>
+<path class="dgs-req" d="M 710,130 L 836,140" marker-end="url(#dgs-a)"/>
+<path class="dgs-req" d="M 710,150 L 836,160" marker-end="url(#dgs-a)"/>
+<path class="dgs-resp" d="M 842,168 L 716,178" marker-end="url(#dgs-g)"/>
+<path class="dgs-resp" d="M 842,192 L 716,202" marker-end="url(#dgs-g)"/>
+<path class="dgs-req" d="M 710,206 L 836,216" marker-end="url(#dgs-a)"/>
+<text class="dgs-s" x="776" y="266" text-anchor="middle">Both sides stream independently</text>
+<path class="dgs-req" d="M 20,306 L 50,306"/>
+<text class="dgs-legs" x="58" y="310">request message</text>
+<path class="dgs-resp" d="M 190,306 L 220,306"/>
+<text class="dgs-legs" x="228" y="310">response message</text>
+<text class="dgs-legs" x="400" y="310">time runs downward</text>
+</g>
+</svg>

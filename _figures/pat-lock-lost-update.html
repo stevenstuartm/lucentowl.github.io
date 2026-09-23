@@ -1,0 +1,83 @@
+---
+title: "Lost Update Without a Lock"
+kind: flow
+system: distributed-patterns
+summary: "Two read-modify-writes race, and a distributed lock serializes them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="plu-title plu-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="plu-title">A lost update without a lock, and the same updates under a distributed lock</title>
+<desc id="plu-desc">Two panels, time running downward. Without a lock, node A and node B both read 10. A adds 5 and writes 15, B adds 3 and writes 13, and the final value is 13 because A's update was lost. With a distributed lock, A acquires the lock while B's acquire is blocked. A reads 10, adds 5, writes 15, and releases. B then acquires the lock, reads 15, adds 3, and writes 18, so the final value is 18.</desc>
+<style>
+.plu-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.plu-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.plu-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.plu-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.plu-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.plu-s { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.plu-s-inv { font-size: 11.5px; font-weight: 600; fill: #FFFFFF; }
+.plu-s-mute { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.plu-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.plu-labr { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.plu-labg { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.plu-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.plu-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.plu-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+</style>
+
+<defs>
+<marker id="plu-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="plu-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="plu-axis" d="M 22,60 L 22,330" marker-end="url(#plu-m)"/>
+<text class="plu-ax" x="8" y="348">time</text>
+
+<rect class="plu-grp" x="50" y="20" width="330" height="362" rx="8"/>
+<text class="plu-hd" x="64" y="42">WITHOUT A LOCK</text>
+<text class="plu-n" x="135" y="68" text-anchor="middle">Node A</text>
+<text class="plu-n" x="295" y="68" text-anchor="middle">Node B</text>
+<rect class="plu-box" x="75" y="80" width="120" height="26" rx="5"/>
+<text class="plu-s" x="135.0" y="97.5" text-anchor="middle">read 10</text>
+<rect class="plu-box" x="75" y="112" width="120" height="26" rx="5"/>
+<text class="plu-s" x="135.0" y="129.5" text-anchor="middle">add 5</text>
+<rect class="plu-box" x="75" y="144" width="120" height="26" rx="5"/>
+<text class="plu-s" x="135.0" y="161.5" text-anchor="middle">write 15</text>
+<rect class="plu-box" x="235" y="80" width="120" height="26" rx="5"/>
+<text class="plu-s" x="295.0" y="97.5" text-anchor="middle">read 10</text>
+<rect class="plu-box" x="235" y="112" width="120" height="26" rx="5"/>
+<text class="plu-s" x="295.0" y="129.5" text-anchor="middle">add 3</text>
+<rect class="plu-box" x="235" y="144" width="120" height="26" rx="5"/>
+<text class="plu-s" x="295.0" y="161.5" text-anchor="middle">write 13</text>
+<text class="plu-labr" x="215" y="204" text-anchor="middle">Final value: 13 (lost update)</text>
+
+<rect class="plu-grp" x="410" y="20" width="470" height="362" rx="8"/>
+<text class="plu-hd" x="424" y="42">WITH A DISTRIBUTED LOCK</text>
+<text class="plu-n" x="535" y="68" text-anchor="middle">Node A</text>
+<text class="plu-n" x="765" y="68" text-anchor="middle">Node B</text>
+<rect class="plu-sys" x="475" y="80" width="120" height="26" rx="5"/>
+<text class="plu-s-inv" x="535.0" y="97.5" text-anchor="middle">acquire</text>
+<rect class="plu-box" x="475" y="112" width="120" height="26" rx="5"/>
+<text class="plu-s" x="535.0" y="129.5" text-anchor="middle">read 10</text>
+<rect class="plu-box" x="475" y="144" width="120" height="26" rx="5"/>
+<text class="plu-s" x="535.0" y="161.5" text-anchor="middle">add 5</text>
+<rect class="plu-box" x="475" y="176" width="120" height="26" rx="5"/>
+<text class="plu-s" x="535.0" y="193.5" text-anchor="middle">write 15</text>
+<rect class="plu-sys" x="475" y="208" width="120" height="26" rx="5"/>
+<text class="plu-s-inv" x="535.0" y="225.5" text-anchor="middle">release</text>
+
+<rect class="plu-mute" x="705" y="80" width="120" height="122" rx="5"/>
+<text class="plu-s-mute" x="765.0" y="137" text-anchor="middle">acquire</text>
+<text class="plu-s-mute" x="765.0" y="153" text-anchor="middle">blocked, waiting</text>
+<rect class="plu-sys" x="705" y="208" width="120" height="26" rx="5"/>
+<text class="plu-s-inv" x="765.0" y="225.5" text-anchor="middle">acquire</text>
+<rect class="plu-box" x="705" y="240" width="120" height="26" rx="5"/>
+<text class="plu-s" x="765.0" y="257.5" text-anchor="middle">read 15</text>
+<rect class="plu-box" x="705" y="272" width="120" height="26" rx="5"/>
+<text class="plu-s" x="765.0" y="289.5" text-anchor="middle">add 3</text>
+<rect class="plu-box" x="705" y="304" width="120" height="26" rx="5"/>
+<text class="plu-s" x="765.0" y="321.5" text-anchor="middle">write 18</text>
+<path class="plu-thin" d="M 595,221 L 699,221" marker-end="url(#plu-a)"/>
+<text class="plu-labg" x="645" y="352" text-anchor="middle">Final value: 18</text>
+</g>
+</svg>

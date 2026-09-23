@@ -1,0 +1,49 @@
+---
+title: "Ambassador"
+kind: deployment
+system: distributed-patterns
+summary: "The application calls localhost, and the ambassador makes the real call."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 230" role="img" aria-labelledby="pam-title pam-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pam-title">An ambassador handling an application's outbound call</title>
+<desc id="pam-desc">An application calls the ambassador on localhost as if it were the remote service. The ambassador, running beside the application, handles service discovery, TLS origination, and timeouts, retries, and circuit breaking, then calls the external payment API over TLS.</desc>
+<style>
+.pam-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pam-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pam-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.pam-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.pam-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pam-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pam-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pam-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pam-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pam-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pam-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pam-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pam-grp" x="16" y="20" width="560" height="190" rx="10"/>
+<text class="pam-hd" x="32" y="42">SERVICE INSTANCE</text>
+
+<rect class="pam-box" x="40" y="90" width="140" height="50" rx="6"/>
+<text class="pam-n" x="110.0" y="119.5" text-anchor="middle">Application</text>
+
+<rect class="pam-sys" x="300" y="60" width="250" height="120" rx="6"/>
+<text class="pam-n-inv" x="316" y="86">Ambassador</text>
+<text class="pam-s-inv" x="316" y="112">• service discovery</text>
+<text class="pam-s-inv" x="316" y="132">• TLS origination</text>
+<text class="pam-s-inv" x="316" y="152">• timeouts, retries, circuit breaking</text>
+
+<path class="pam-flow" d="M 180,115 L 294,115" marker-end="url(#pam-a)"/>
+<text class="pam-lab" x="190" y="105">localhost</text>
+
+<rect class="pam-ext" x="680" y="90" width="200" height="50" rx="6"/>
+<text class="pam-n-mute" x="780.0" y="119.5" text-anchor="middle">External payment API</text>
+<path class="pam-flow" d="M 550,115 L 674,115" marker-end="url(#pam-a)"/>
+<text class="pam-lab" x="596" y="105">TLS</text>
+</g>
+</svg>

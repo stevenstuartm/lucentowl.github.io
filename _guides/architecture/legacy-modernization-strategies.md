@@ -32,22 +32,7 @@ Default to incremental replacement unless the system is small enough to rewrite 
 
 New code is built alongside the legacy system and takes over its behavior a piece at a time, with a routing layer deciding which system handles each request. The legacy system shrinks until nothing routes to it, and then it is switched off.
 
-```
-Stage 1                     Stage 2                                     Stage 3
-
-Requests                    Requests                                    Requests
-      │                                   │                                    │
-      ▼                                   ▼                                    ▼
- ┌─────────┐                   ┌─────────────────────┐                    ┌─────────┐
- │  Router │                   │        Router       │                    │  Router │
- └────┬────┘                   └──┬───────────────┬──┘                    └────┬────┘
-      │ all                       │ /orders       │ everything else            │ all
-      ▼                           ▼               ▼                            ▼
-┌────────────┐               ┌─────────┐   ┌─────────────┐              ┌──────────────┐
-│   Legacy   │               │  Orders │   │    Legacy   │              │ New services │
-│  monolith  │               │   (new) │   │   (shrunk)  │              └──────────────┘
-└────────────┘               └─────────┘   └─────────────┘              legacy retired
-```
+{% include figure.html id="pat-strangler-fig" %}
 
 **How it proceeds**:
 1. Put a routing layer in front of the legacy system that initially sends everything to it, such as a reverse proxy, API gateway, or facade in code
@@ -83,14 +68,7 @@ Be careful about falling back to the legacy system automatically when the new on
 
 When new code has to talk to the legacy system, and during a strangler migration it constantly does, an anti-corruption layer translates between the two models so that legacy concepts don't leak into the new one. The new code works entirely in its own terms, and the layer is the only place that knows the legacy system's names, codes, and quirks.
 
-```
-New system                 Anti-corruption layer            Legacy system
-┌────────────────┐        ┌─────────────────────┐         ┌──────────────────┐
-│ Domain model   │ ─────▶ │ translate requests  │ ──────▶ │ Legacy API or DB │
-│ in its own     │ ◀───── │ translate responses │ ◀────── │ CUST_ID, STAT='A'│
-│ terms          │        │ map codes and ids   │         │                  │
-└────────────────┘        └─────────────────────┘         └──────────────────┘
-```
+{% include figure.html id="pat-anti-corruption-layer" %}
 
 **Example**: The legacy customer service returns abbreviated fields and single-letter status codes. The new code only ever sees a `Customer`.
 
@@ -207,18 +185,7 @@ Code can run in two places at once. Data is harder, because at any moment exactl
 
 Change data capture reads the legacy database's own transaction log, such as the MySQL binlog or the PostgreSQL write-ahead log, and emits every insert, update, and delete as an event. The new system consumes those events to keep its store current. The legacy application needs no changes at all, which matters when it can't safely be changed.
 
-```
-Legacy application ──writes──▶ Legacy database (source of truth)
-                                      │ transaction log
-                                      ▼
-                               CDC connector (e.g. Debezium)
-                                      │ change events
-                                      ▼
-                               Event stream (e.g. Kafka)
-                                      │
-                                      ▼
-                          Transform to the new model ──▶ New database (follower)
-```
+{% include figure.html id="pat-cdc-migration" %}
 
 Debezium is the common open source choice, and managed services such as AWS Database Migration Service and Oracle GoldenGate fill the same role. Log-based capture is preferable to database triggers, which add work to every legacy transaction, and to polling on a timestamp column, which misses deletes.
 

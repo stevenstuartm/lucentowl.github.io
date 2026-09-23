@@ -66,19 +66,7 @@ Events keep publishers independent of whoever reacts, which is the source of the
 
 Event-driven systems take one of two basic shapes, depending on whether anything coordinates the workflow.
 
-```
-Broker topology: no coordinator, processors react and publish
-
-                          ┌─▶ Inventory ─── "inventory reserved" ─┐
-Order ─ "order placed" ───┼─▶ Payment ───── "payment captured" ───┼─▶ further processors
-                          └─▶ Notification
-
-Mediator topology: a mediator directs the steps of the workflow
-
-                                   ┌─ step 1 ─▶ Inventory
-Order ─ "order placed" ─▶ Mediator ┼─ step 2 ─▶ Payment      (after step 1 succeeds)
-                                   └─ step 3 ─▶ Notification (after step 2 succeeds)
-```
+{% include figure.html id="arch-eda-topologies" %}
 
 <div class="comparison">
 <div class="content-card content-card--accent">
@@ -143,6 +131,8 @@ The event carries all the data subscribers need. An "OrderPlaced" event includes
 ### Key-Based Events
 
 The event carries only identifiers. An "OrderPlaced" event contains just the order ID, and subscribers fetch the details they need.
+
+{% include figure.html id="arch-eda-payloads" %}
 
 **Advantages**:
 - Contracts stay stable, because identifiers rarely change

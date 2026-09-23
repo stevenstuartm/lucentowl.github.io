@@ -43,25 +43,7 @@ A pipeline is usually deployed as a single application, which makes it a monolit
 
 The simplest pipeline is **linear**: each filter has one input and one output, and every record follows the same path. Real pipelines often add three variations.
 
-```
-Branching: a tester routes records by content
-
-                           ┌─▶ Enrich ──▶ Store         (valid)
-Read ──▶ Parse ──▶ Validate┤
-                           └─▶ Error file               (invalid)
-
-Convergent: several producers feed one pipeline
-
-CRM export ─────┐
-Billing export ─┼─▶ Normalize ──▶ Deduplicate ──▶ Customer store
-Web signups ────┘
-
-Parallel: several instances of a costly filter share the load
-
-                ┌─▶ Transform (instance 1) ─┐
-Read ──▶ Split ─┼─▶ Transform (instance 2) ─┼─▶ Store
-                └─▶ Transform (instance 3) ─┘
-```
+{% include figure.html id="arch-pipeline-topologies" %}
 
 **Branching** handles different kinds of records differently, such as sending invalid records to an error pipe or priority records to expedited processing.
 

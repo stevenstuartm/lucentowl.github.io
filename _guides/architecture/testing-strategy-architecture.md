@@ -134,6 +134,8 @@ The shapes below describe how many tests to write at each scope. Each one reflec
 | **Trophy** | Kent C. Dodds (2018) | Static analysis at the base, then mostly integration tests, fewer unit and end-to-end tests | JavaScript front ends, where components are thin and integration is where bugs appear |
 | **Honeycomb** | Spotify Engineering (2018) | Mostly integration tests of each service, few tests of implementation detail, fewest integrated tests across services | Microservices whose complexity is in how they interact rather than inside them |
 
+{% include figure.html id="des-test-shapes" %}
+
 The pyramid's lasting advice, as Ham Vocke's "The Practical Test Pyramid" summarizes it, is to write tests at different granularities and fewer of them the higher the level. The trophy and honeycomb don't contradict that. They move the bulk of the tests to wherever the risk actually is. A service that mostly validates a request, calls two others, and stores the result has little logic for unit tests to find, and its defects sit in serialization, queries, and calls to other services. A pricing engine is the opposite case.
 
 Two warning signs apply to any shape. If a change to internal structure breaks many tests while behavior stays the same, tests are too tied to implementation. If defects keep reaching production through paths that each test scope assumed another scope covered, the gaps between scopes are the problem, not the ratio.
@@ -146,23 +148,7 @@ In a system of independently deployed services, the riskiest change is one a pro
 
 In consumer-driven contract testing, each consumer records the requests it makes and the parts of the response it relies on. The provider then verifies that it satisfies every consumer's recorded expectations. [Pact](https://docs.pact.io/){:target="_blank" rel="noopener noreferrer"} is a widely used tool for it, and a contract it produces is called a pact.
 
-```
-  Consumer build                                         Provider build
- ┌───────────────────────┐                          ┌──────────────────────────┐
- │ Consumer tests run    │                          │ Provider starts on a     │
- │ against a Pact mock   │                          │ real port                │
- │ provider              │                          │                          │
- │         │             │                          │ Pact replays each        │
- │         ▼             │   publish   ┌─────────┐  │ recorded request, checks │
- │ Pact file: requests   │────────────▶│  Pact   │─▶│ responses match          │
- │ made, response fields │             │ Broker  │  └────────────┬─────────────┘
- │ relied on             │             │         │◀──────────────┘
- └───────────────────────┘             └────┬────┘   publish verification result
-                                            │
-                                            ▼
-                                   can-i-deploy check before either
-                                   side releases a version
-```
+{% include figure.html id="des-pact-flow" %}
 
 The consumer test defines the interaction and exercises the real client code against Pact's mock server. Matching on types rather than exact values keeps the contract from over-specifying data the consumer doesn't care about:
 

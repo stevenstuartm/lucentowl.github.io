@@ -2,7 +2,7 @@
 layout: home
 title: Illuminating the Why Behind the How
 hero_title: "Illuminating the <span class=\"hero-gold\">Why</span> Behind the How"
-subtitle: Practical insights on building software that serve real needs and deliver genuine value.
+subtitle: "Free learning resources for software engineers, with the reasoning behind every practice."
 
 featured_items:
   - label: "Featured Post"

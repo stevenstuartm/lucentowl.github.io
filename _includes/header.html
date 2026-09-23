@@ -4,7 +4,7 @@
             <h1 class="site-title">
                 <a href="{{ '/' | relative_url }}" aria-label="Lucent Owl - Home">
                     <img src="{{ '/assets/img/favicon-64x64.png' | relative_url }}" alt="Lucent Owl logo" class="site-icon">
-                    <span class="site-name">Lucent Owl</span>
+                    <span class="site-name">Lucent Owl<span class="site-tag" aria-hidden="true">&lt;/&gt;</span></span>
                 </a>
             </h1>
             <div class="header-actions">
@@ -28,32 +28,8 @@
             </button>
             <div class="header-right">
                 <nav class="site-nav">
-                    <div class="nav-group">
-                        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="navMenuArticles">
-                            <span>Articles</span>
-                            <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
-                        <div class="nav-group-menu" id="navMenuArticles">
-                            <a href="{{ '/blog.html' | relative_url }}">
-                                <span class="nav-menu-head">
-                                    <span class="nav-menu-title">Blog</span>
-                                    <span class="nav-menu-count">{{ site.posts.size }}</span>
-                                </span>
-                                <span class="nav-menu-desc">Essays on architecture and practice</span>
-                            </a>
-                            <a href="{{ '/case-studies.html' | relative_url }}">
-                                <span class="nav-menu-head">
-                                    <span class="nav-menu-title">Case Studies</span>
-                                    <span class="nav-menu-count">{{ site.case_studies.size }}</span>
-                                </span>
-                                <span class="nav-menu-desc">Production systems, decisions and outcomes</span>
-                            </a>
-                        </div>
-                    </div>
+                    <a href="{{ '/study-guides.html' | relative_url }}">Study Guides</a>
 
-                     <a href="{{ '/study-guides.html' | relative_url }}">Study Guides</a>
 
                     <div class="nav-group">
                         <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="navMenuReference">
@@ -75,6 +51,31 @@
                                     <span class="nav-menu-title">Tech Radar</span>
                                 </span>
                                 <span class="nav-menu-desc">What we adopt, trial, assess, and hold</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="nav-group">
+                        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="navMenuArticles">
+                            <span>Articles</span>
+                            <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="nav-group-menu" id="navMenuArticles">
+                            <a href="{{ '/blog.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Blog</span>
+                                    <span class="nav-menu-count">{{ site.posts.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Essays on architecture and practice</span>
+                            </a>
+                            <a href="{{ '/case-studies.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Case Studies</span>
+                                    <span class="nav-menu-count">{{ site.case_studies.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Production systems, decisions and outcomes</span>
                             </a>
                         </div>
                     </div>

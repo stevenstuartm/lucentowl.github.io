@@ -1,0 +1,56 @@
+---
+title: "Claim Check"
+kind: dynamic
+system: distributed-patterns
+summary: "The payload goes to storage; only a reference crosses the broker."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="pcc-title pcc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pcc-title">Claim check sequence</title>
+<desc id="pcc-desc">The producer stores the payload and gets back a claim check id. It sends a small message carrying only that reference through the broker, which delivers it to the consumer. The consumer fetches the payload from storage using the id, and optionally deletes it last, after acknowledging the message.</desc>
+<style>
+.pcc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pcc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pcc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pcc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pcc-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pcc-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.pcc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pcc-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pcc-redd { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.pcc-mut { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 3; }
+</style>
+
+<defs>
+<marker id="pcc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pcc-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pcc-box" x="35" y="20" width="150" height="38" rx="6"/>
+<text class="pcc-n" x="110.0" y="43.0" text-anchor="middle">Producer</text>
+<path class="pcc-mut" d="M 110,58 V 376"/>
+<rect class="pcc-box" x="265" y="20" width="150" height="38" rx="6"/>
+<text class="pcc-n" x="340.0" y="43.0" text-anchor="middle">Storage</text>
+<path class="pcc-mut" d="M 340,58 V 376"/>
+<rect class="pcc-sys" x="495" y="20" width="150" height="38" rx="6"/>
+<text class="pcc-n-inv" x="570.0" y="43.0" text-anchor="middle">Message broker</text>
+<path class="pcc-mut" d="M 570,58 V 376"/>
+<rect class="pcc-box" x="715" y="20" width="150" height="38" rx="6"/>
+<text class="pcc-n" x="790.0" y="43.0" text-anchor="middle">Consumer</text>
+<path class="pcc-mut" d="M 790,58 V 376"/>
+<path class="pcc-flow" d="M 110,96 L 334,96" marker-end="url(#pcc-a)"/>
+<text class="pcc-lab" x="225.0" y="88" text-anchor="middle">1. store payload</text>
+<path class="pcc-thin" d="M 340,130 L 116,130" marker-end="url(#pcc-a)"/>
+<text class="pcc-lab" x="225.0" y="122" text-anchor="middle">claim check id</text>
+<path class="pcc-flow" d="M 110,180 L 564,180" marker-end="url(#pcc-a)"/>
+<text class="pcc-lab" x="340.0" y="172" text-anchor="middle">2. send message with the id only</text>
+<path class="pcc-flow" d="M 570,226 L 784,226" marker-end="url(#pcc-a)"/>
+<text class="pcc-lab" x="680.0" y="218" text-anchor="middle">3. deliver</text>
+<path class="pcc-flow" d="M 790,272 L 346,272" marker-end="url(#pcc-a)"/>
+<text class="pcc-lab" x="565.0" y="264" text-anchor="middle">4. fetch payload using the id</text>
+<path class="pcc-thin" d="M 340,306 L 784,306" marker-end="url(#pcc-a)"/>
+<text class="pcc-lab" x="565.0" y="298" text-anchor="middle">payload</text>
+<path class="pcc-redd" d="M 790,352 L 346,352" marker-end="url(#pcc-r)"/>
+<text class="pcc-labr" x="565.0" y="344" text-anchor="middle">5. delete, last, after the ack (optional)</text>
+</g>
+</svg>

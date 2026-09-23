@@ -40,18 +40,7 @@ public IActionResult UpdateProfile(UpdateProfileRequest request)
 
 That last gap costs more than inconvenience. Requiring a client to hold and resend full current state exposes the system to the classic lost-update problem: client A fetches the resource, client B fetches the same resource, B writes its change, and A, still holding what is now stale full state, writes back and silently overwrites B's change. Neither client did anything wrong in isolation, but the write that "wins" depends entirely on request timing, and the loser's change disappears without an error.
 
-```
-Client A                     Server                     Client B
-   │── GET /profile ─────────▶│                              │
-   │◀─ {email: a@x, phone: 1} │                              │
-   │                          │◀──────────── GET /profile ───│
-   │                          │ {email: a@x, phone: 1} ─────▶│
-   │                          │◀─ PUT {email: a@x, phone: 2} │  B changes phone
-   │                          │   stored: phone 2            │
-   │── PUT {email: b@x, ─────▶│                              │  A changes email,
-   │        phone: 1}         │   stored: email b@x, phone 1 │  resending stale phone
-   │                          │   B's phone change is gone   │
-```
+{% include figure.html id="des-lost-update" %}
 
 <div class="callout callout--warning">
 <p class="callout__title">Why This Bites in Production</p>
@@ -354,6 +343,8 @@ kubectl apply --server-side --field-manager=autoscaler -f replicas-patch.yaml
 ```
 
 **How it's applied**: `kubectl apply` sends one request to the API server for one object, and the update commits to etcd as a single atomic write, so Kubernetes has no notion of partially updating an object. Server-side apply adds a coarser way for the whole request to fail on top of that: if the field manager detects that another manager already owns a field being changed, the API server rejects the whole apply with a 409 Conflict, and the caller has to either drop the conflicting field or resubmit with `--force-conflicts` to take ownership, rather than the non-conflicting fields landing while the conflicting one is skipped.
+
+{% include figure.html id="des-ssa-field-ownership" %}
 
 Omission clarity is solved, and collection targeting is the most complete answer in this comparison, purpose-built for exactly the large-collection and multi-actor reconciliation pressures described above. Concurrency is solved directly by [server-side apply's field-manager model](https://kubernetes.io/docs/reference/using-api/server-side-apply/){:target="_blank" rel="noopener noreferrer"}, which tracks sub-resource-path ownership and detects conflicts rather than relying on whole-resource versioning. This is the fine-grained end of the OCC spectrum described earlier: the only mechanism here with true field-level ownership rather than a version number or an ETag. There's no DTO trap on the client side either, since a patch document is constructed as exactly the fields the caller means to own, not deserialized from a model with nullable properties standing in for "maybe."
 

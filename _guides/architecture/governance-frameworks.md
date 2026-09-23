@@ -32,27 +32,7 @@ These combine more often than they compete. An organization might use TOGAF's me
 
 TOGAF's core is the Architecture Development Method (ADM), an iterative cycle for developing and changing an enterprise's architecture. A Preliminary phase establishes the architecture capability itself. Eight phases, labeled A through H, then form the cycle, and Requirements Management sits at the center, feeding requirements into every phase and capturing new ones from each.
 
-```
-                         Preliminary
-                              │
-                              ▼
-                      A. Architecture Vision
-                 ┌──────────────────────────────┐
-     H. Architecture                         B. Business
-        Change Management                       Architecture
-                 │                              │
-                 │     ┌──────────────────┐     │
-  G. Implementation    │   Requirements   │   C. Information Systems
-     Governance        │   Management     │      Architectures
-                 │     └──────────────────┘     │     (data, application)
-                 │                              │
-     F. Migration                            D. Technology
-        Planning                                Architecture
-                 └──────────────────────────────┘
-                     E. Opportunities and Solutions
-
-   Requirements Management exchanges requirements with every phase.
-```
+{% include figure.html id="des-togaf-adm" %}
 
 | Phase | Purpose |
 |---|---|

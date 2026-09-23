@@ -1,0 +1,71 @@
+---
+title: "Offset and Cursor Pages Under an Insert"
+kind: chart
+system: architecture-design
+summary: "An insert shifts offset pages, while a cursor keeps its place."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="dps-title dps-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dps-title">An inserted item shifting offset pagination but not cursor pagination</title>
+<desc id="dps-desc">Page 1, fetched with offset 0 and limit 3, returns items A, B, and C. Before page 2 is fetched, a new item X is inserted at the front of the collection, so it now reads X, A, B, C, D, E, F. Page 2 with offset 3 returns C, D, and E, so C is repeated. Page 2 with a cursor positioned after C returns D, E, and F, with nothing repeated or skipped.</desc>
+<style>
+.dps-chip { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dps-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.dps-new { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.dps-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.dps-good { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.dps-t { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dps-tg { font-size: 13px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.dps-tr { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dps-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dps-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.dps-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-secondary, #2D5A85); }
+.dps-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dps-off { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dps-n" x="20" y="66">Page 1</text>
+<text class="dps-s" x="20" y="82">offset 0, limit 3</text>
+<rect class="dps-chip" x="250" y="50" width="64" height="32" rx="5"/>
+<text class="dps-t" x="282" y="71" text-anchor="middle">A</text>
+<rect class="dps-chip" x="324" y="50" width="64" height="32" rx="5"/>
+<text class="dps-t" x="356" y="71" text-anchor="middle">B</text>
+<rect class="dps-chip" x="398" y="50" width="64" height="32" rx="5"/>
+<text class="dps-t" x="430" y="71" text-anchor="middle">C</text>
+<text class="dps-n" x="20" y="126">Before page 2,</text>
+<text class="dps-s" x="20" y="142">X is inserted first</text>
+<rect class="dps-new" x="250" y="110" width="64" height="32" rx="5"/>
+<text class="dps-tg" x="282" y="131" text-anchor="middle">X</text>
+<rect class="dps-mute" x="324" y="110" width="64" height="32" rx="5"/>
+<text class="dps-t" x="356" y="131" text-anchor="middle">A</text>
+<rect class="dps-mute" x="398" y="110" width="64" height="32" rx="5"/>
+<text class="dps-t" x="430" y="131" text-anchor="middle">B</text>
+<rect class="dps-mute" x="472" y="110" width="64" height="32" rx="5"/>
+<text class="dps-t" x="504" y="131" text-anchor="middle">C</text>
+<rect class="dps-mute" x="546" y="110" width="64" height="32" rx="5"/>
+<text class="dps-t" x="578" y="131" text-anchor="middle">D</text>
+<rect class="dps-mute" x="620" y="110" width="64" height="32" rx="5"/>
+<text class="dps-t" x="652" y="131" text-anchor="middle">E</text>
+<rect class="dps-mute" x="694" y="110" width="64" height="32" rx="5"/>
+<text class="dps-t" x="726" y="131" text-anchor="middle">F</text>
+<text class="dps-n" x="20" y="186">Page 2, offset</text>
+<text class="dps-s" x="20" y="202">offset 3, limit 3</text>
+<rect class="dps-bad" x="472" y="170" width="64" height="32" rx="5"/>
+<text class="dps-tr" x="504" y="191" text-anchor="middle">C</text>
+<rect class="dps-chip" x="546" y="170" width="64" height="32" rx="5"/>
+<text class="dps-t" x="578" y="191" text-anchor="middle">D</text>
+<rect class="dps-chip" x="620" y="170" width="64" height="32" rx="5"/>
+<text class="dps-t" x="652" y="191" text-anchor="middle">E</text>
+<text class="dps-labr" x="504" y="222" text-anchor="middle">repeated</text>
+<text class="dps-n" x="20" y="256">Page 2, cursor</text>
+<text class="dps-s" x="20" y="272">after C, limit 3</text>
+<rect class="dps-good" x="546" y="240" width="64" height="32" rx="5"/>
+<text class="dps-tg" x="578" y="261" text-anchor="middle">D</text>
+<rect class="dps-good" x="620" y="240" width="64" height="32" rx="5"/>
+<text class="dps-tg" x="652" y="261" text-anchor="middle">E</text>
+<rect class="dps-good" x="694" y="240" width="64" height="32" rx="5"/>
+<text class="dps-tg" x="726" y="261" text-anchor="middle">F</text>
+<path class="dps-off" d="M 467,40 V 212"/>
+<text class="dps-lab" x="467" y="32" text-anchor="middle">offset 3</text>
+</g>
+</svg>

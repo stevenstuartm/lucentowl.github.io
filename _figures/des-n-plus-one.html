@@ -1,0 +1,64 @@
+---
+title: "N+1 Queries and Batching"
+kind: flow
+system: architecture-design
+summary: "Per-order customer lookups, against one batched load through a DataLoader."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 290" role="img" aria-labelledby="dnp-title dnp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dnp-title">N+1 queries from naive resolvers compared with DataLoader batching</title>
+<desc id="dnp-desc">Two panels for a query asking for 50 orders with their customers. With naive resolvers, the GraphQL server runs one query for the orders and then one query per order for its customer, 51 queries in total. With a DataLoader, the server runs one query for the orders and one batched query for every customer id collected while resolving that level, 2 queries in total.</desc>
+<style>
+.dnp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dnp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dnp-db { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dnp-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.dnp-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dnp-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dnp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dnp-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.dnp-labr { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dnp-labg { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.dnp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dnp-thin { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.25; }
+</style>
+
+<defs>
+<marker id="dnp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dnp-r" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto-start-reverse"><path d="M0,0 L6,2.5 L0,5 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dnp-grp" x="10" y="16" width="430" height="258" rx="8"/>
+<text class="dnp-hd" x="24" y="38">NAIVE RESOLVERS</text>
+<rect class="dnp-sys" x="30" y="66" width="120" height="130" rx="6"/>
+<text class="dnp-n-inv" x="90.0" y="131" text-anchor="middle">GraphQL</text>
+<text class="dnp-n-inv" x="90.0" y="149" text-anchor="middle">server</text>
+<rect class="dnp-db" x="320" y="60" width="100" height="170" rx="6"/>
+<text class="dnp-n" x="370.0" y="150" text-anchor="middle">Database</text>
+<path class="dnp-flow" d="M 150,86 L 314,86" marker-end="url(#dnp-a)"/>
+<text class="dnp-lab" x="160" y="78">orders: 1 query</text>
+<path class="dnp-thin" d="M 150,118 L 314,118" marker-end="url(#dnp-r)"/>
+<path class="dnp-thin" d="M 150,130 L 314,130" marker-end="url(#dnp-r)"/>
+<path class="dnp-thin" d="M 150,142 L 314,142" marker-end="url(#dnp-r)"/>
+<path class="dnp-thin" d="M 150,154 L 314,154" marker-end="url(#dnp-r)"/>
+<path class="dnp-thin" d="M 150,166 L 314,166" marker-end="url(#dnp-r)"/>
+<path class="dnp-thin" d="M 150,178 L 314,178" marker-end="url(#dnp-r)"/>
+<text class="dnp-labr" x="160" y="212">customer: 1 query</text>
+<text class="dnp-labr" x="160" y="228">per order</text>
+<text class="dnp-labr" x="24" y="258">51 queries</text>
+
+<rect class="dnp-grp" x="460" y="16" width="430" height="258" rx="8"/>
+<text class="dnp-hd" x="474" y="38">DATALOADER</text>
+<rect class="dnp-sys" x="480" y="66" width="120" height="130" rx="6"/>
+<text class="dnp-n-inv" x="540.0" y="131" text-anchor="middle">GraphQL</text>
+<text class="dnp-n-inv" x="540.0" y="149" text-anchor="middle">server</text>
+<rect class="dnp-db" x="770" y="60" width="100" height="170" rx="6"/>
+<text class="dnp-n" x="820.0" y="150" text-anchor="middle">Database</text>
+<path class="dnp-flow" d="M 600,86 L 764,86" marker-end="url(#dnp-a)"/>
+<text class="dnp-lab" x="610" y="78">orders: 1 query</text>
+<path class="dnp-flow" d="M 600,150 L 764,150" marker-end="url(#dnp-a)"/>
+<text class="dnp-lab" x="610" y="142">customers: 1 batched</text>
+<text class="dnp-lab" x="610" y="172">query for all ids</text>
+<text class="dnp-labg" x="474" y="258">2 queries</text>
+</g>
+</svg>

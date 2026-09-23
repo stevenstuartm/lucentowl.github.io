@@ -1,0 +1,51 @@
+---
+title: "gRPC from a Browser"
+kind: flow
+system: architecture-design
+summary: "gRPC-Web or JSON transcoding translates to native gRPC before the service."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 230" role="img" aria-labelledby="dgb-title dgb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dgb-title">Two ways for a browser to reach a gRPC service</title>
+<desc id="dgb-desc">Two paths. In the first, the browser calls with gRPC-Web over HTTP/1.1 or HTTP/2 to gRPC-Web support, provided by Envoy or by the server itself, which calls the service with gRPC. In the second, the browser calls with REST and JSON to JSON transcoding, running in-process or in a proxy such as grpc-gateway, which calls the service with gRPC.</desc>
+<style>
+.dgb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dgb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dgb-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.dgb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dgb-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dgb-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dgb-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.dgb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="dgb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dgb-box" x="20" y="30" width="110" height="50" rx="6"/>
+<text class="dgb-n" x="75.0" y="59.5" text-anchor="middle">Browser</text>
+<rect class="dgb-px" x="370" y="24" width="290" height="62" rx="6"/>
+<text class="dgb-n" x="386" y="50">gRPC-Web support</text>
+<text class="dgb-k" x="386" y="70">Envoy, or the server itself</text>
+<rect class="dgb-sys" x="760" y="30" width="120" height="50" rx="6"/>
+<text class="dgb-n-inv" x="820.0" y="59.5" text-anchor="middle">Service</text>
+<path class="dgb-flow" d="M 130,55 L 364,55" marker-end="url(#dgb-a)"/>
+<text class="dgb-lab" x="142" y="45">gRPC-Web</text>
+<text class="dgb-k" x="142" y="74">HTTP/1.1 or HTTP/2</text>
+<path class="dgb-flow" d="M 660,55 L 754,55" marker-end="url(#dgb-a)"/>
+<text class="dgb-lab" x="676" y="45">gRPC</text>
+
+<rect class="dgb-box" x="20" y="150" width="110" height="50" rx="6"/>
+<text class="dgb-n" x="75.0" y="179.5" text-anchor="middle">Browser</text>
+<rect class="dgb-px" x="370" y="144" width="290" height="62" rx="6"/>
+<text class="dgb-n" x="386" y="170">JSON transcoding</text>
+<text class="dgb-k" x="386" y="190">in-process, or a proxy such as grpc-gateway</text>
+<rect class="dgb-sys" x="760" y="150" width="120" height="50" rx="6"/>
+<text class="dgb-n-inv" x="820.0" y="179.5" text-anchor="middle">Service</text>
+<path class="dgb-flow" d="M 130,175 L 364,175" marker-end="url(#dgb-a)"/>
+<text class="dgb-lab" x="142" y="165">REST + JSON</text>
+<path class="dgb-flow" d="M 660,175 L 754,175" marker-end="url(#dgb-a)"/>
+<text class="dgb-lab" x="676" y="165">gRPC</text>
+</g>
+</svg>

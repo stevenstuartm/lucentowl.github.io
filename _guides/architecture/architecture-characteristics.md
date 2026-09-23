@@ -41,6 +41,8 @@ Characteristics don't have to apply uniformly to a whole system. An architecture
 
 This scope has structural consequences. If two parts of a system need genuinely different characteristics, they are hard to keep in a single deployable unit, because that unit has to meet the stricter set everywhere. Differing characteristics are one of the strongest signals that a system should be split into separate quanta. A single set that suffices for everything is a signal that it may not need to be.
 
+{% include figure.html id="arch-quantum-characteristics" %}
+
 ## Selecting Architecture Characteristics
 
 You cannot optimize for everything, so selection is about priority rather than completeness.

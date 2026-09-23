@@ -1,6 +1,6 @@
 # Site settings
 title: Lucent Owl
-description: Practical insights on building software that serve real needs and deliver genuine value.
+description: Free learning resources for software engineers, with the reasoning behind every practice.
 baseurl: ""
 url: "https://lucentowl.com"
 version: 1.0.20

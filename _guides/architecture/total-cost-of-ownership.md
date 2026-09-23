@@ -112,6 +112,8 @@ The self-managed infrastructure bill is about half the managed service's fees, b
 
 The staffing estimate is also the most uncertain input. If a team already experienced with the platform could run the cluster with half an engineer instead of a full one, the self-managed total drops to $640K, below the managed service. The infrastructure prices, which the team spent the most time researching, don't change the ranking across the ranges the team considered realistic. The staffing assumption does, which makes it the input to investigate before deciding, for example by asking teams who operate the same platform how much time it takes them.
 
+{% include figure.html id="des-tco-staffing" %}
+
 ## Common Pitfalls
 
 - **Pricing infrastructure and assuming people are free.** Operations, on-call, upgrades, and integration effort are often the largest costs, and leaving them out favors self-built and self-hosted options.

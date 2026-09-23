@@ -19,24 +19,7 @@ Each domain service is a separately deployed unit with its own internal layers: 
 
 The coarse grain is deliberate. Fewer, larger services mean less communication between services and simpler deployment than microservices. A single service often handles a whole business workflow, such as placing an order, from start to finish.
 
-```
-┌───────────────────────── User interface ─────────────────────────┐
-└───────┬──────────────┬───────────────┬───────────────┬───────────┘
-        ▼              ▼               ▼               ▼
-  ┌───────────┐  ┌───────────┐  ┌────────────┐  ┌─────────────┐
-  │  Catalog  │  │ Checkout  │  │ Inventory  │  │ Fulfillment │
-  │  service  │  │  service  │  │  service   │  │   service   │
-  │ facade    │  │ facade    │  │ facade     │  │ facade      │
-  │ logic     │  │ logic     │  │ logic      │  │ logic       │
-  │ data      │  │ data      │  │ data       │  │ data        │
-  └─────┬─────┘  └─────┬─────┘  └─────┬──────┘  └──────┬──────┘
-        └──────────────┴──────┬───────┴────────────────┘
-                              ▼
-          ┌───────────────────────────────────────────┐
-          │ Shared database, with tables grouped by   │
-          │ domain: catalog | orders | stock | ship   │
-          └───────────────────────────────────────────┘
-```
+{% include figure.html id="arch-service-based" %}
 
 ### Service Granularity
 
@@ -63,6 +46,8 @@ The user interface presents a unified experience and routes each request to the 
 The data topology is one of the most consequential decisions in this style, because it sets how coupled the services are, how complex transactions become, and how much there is to operate.
 
 It also decides how many architecture quanta the system has. Services that share a database depend on it to run, so a system with one shared database usually remains a single quantum even though its services deploy separately. Separate databases are what give services separate quanta.
+
+{% include figure.html id="arch-sba-data-topologies" %}
 
 ### Shared Database
 

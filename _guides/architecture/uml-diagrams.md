@@ -192,12 +192,12 @@ Generating diagrams from code, which many IDEs and modeling tools can do for cla
 
 ## Quick Reference
 
-| Diagram | Answers | Key notation | Best for |
-|---|---|---|---|
-| **Class** | What types exist and how are they related? | Compartments, visibility, association, generalization, composition, multiplicity | Domain models, API shape |
-| **Component** | Which parts are replaceable, and through which interfaces? | Provided and required interfaces, ports | Module boundaries, plugin architectures |
-| **Deployment** | What runs where? | Nodes, artifacts, communication paths | Placement and network zone decisions |
-| **Sequence** | In what order do participants interact? | Lifelines, sync and async messages, combined fragments | Cross-service flows, protocols, error paths |
-| **Activity** | What are the steps and who does each? | Actions, decision and merge, fork and join, partitions | Business processes, parallel workflows |
-| **State machine** | What states can an entity be in? | States, `trigger [guard] / effect` transitions | Order, payment, and workflow lifecycles |
-| **Use case** | What goals does the system serve, and for whom? | Actors, use cases, include, extend, system boundary | Scoping with stakeholders |
+| Diagram | Key notation | Best for |
+|---|---|---|
+| **Class** | Compartments, visibility, association, generalization, composition, multiplicity | Domain models, API shape |
+| **Component** | Provided and required interfaces, ports | Module boundaries, plugin architectures |
+| **Deployment** | Nodes, artifacts, communication paths | Placement and network zone decisions |
+| **Sequence** | Lifelines, sync and async messages, combined fragments | Cross-service flows, protocols, error paths |
+| **Activity** | Actions, decision and merge, fork and join, partitions | Business processes, parallel workflows |
+| **State machine** | States, `trigger [guard] / effect` transitions | Order, payment, and workflow lifecycles |
+| **Use case** | Actors, use cases, include, extend, system boundary | Scoping with stakeholders |

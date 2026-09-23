@@ -1,0 +1,62 @@
+---
+title: "Consistent Hashing Ring"
+kind: graph
+system: distributed-patterns
+summary: "A new shard takes keys from one neighbor and leaves the rest in place."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="pch-title pch-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pch-title">Adding a shard to a consistent hashing ring</title>
+<desc id="pch-desc">A ring of hash values with shards A at the top, D on the right, B at the bottom, and C on the left. Each key belongs to the first shard found moving clockwise from it. Shard D is new. It takes only the keys on the arc between A and D, which previously belonged to B. Keys on every other arc stay where they were.</desc>
+<style>
+.pch-ring { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.pch-arc { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 7; stroke-linecap: round; }
+.pch-node { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pch-new { fill: var(--color-green, #3C8D53); stroke: var(--color-green, #3C8D53); stroke-width: 1.5; }
+.pch-key { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.pch-keyg { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.pch-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.pch-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pch-labg { font-size: 11.5px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.pch-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pch-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.pch-cw { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+</style>
+
+<defs>
+<marker id="pch-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<circle class="pch-ring" cx="260" cy="190" r="130"/>
+<path class="pch-arc" d="M 278.6,61.3 A 130 130 0 0 1 388.7,171.4"/>
+<path class="pch-cw" d="M 334.2,32.7 A 175 175 0 0 1 402.2,85.6" marker-end="url(#pch-m)"/>
+<text class="pch-s" x="392" y="52">clockwise</text>
+
+<circle class="pch-key" cx="148.4" cy="125.0" r="6"/>
+<circle class="pch-key" cx="168.1" cy="281.9" r="6"/>
+<circle class="pch-key" cx="365.2" cy="266.4" r="6"/>
+<circle class="pch-key" cx="325.0" cy="302.6" r="6"/>
+<circle class="pch-keyg" cx="325.0" cy="77.4" r="6"/>
+<circle class="pch-keyg" cx="372.6" cy="125.0" r="6"/>
+
+<circle class="pch-node" cx="260" cy="60" r="20"/>
+<text class="pch-n-inv" x="260" y="64.5" text-anchor="middle">A</text>
+<circle class="pch-new" cx="390" cy="190" r="20"/>
+<text class="pch-n-inv" x="390" y="194.5" text-anchor="middle">D</text>
+<circle class="pch-node" cx="260" cy="320" r="20"/>
+<text class="pch-n-inv" x="260" y="324.5" text-anchor="middle">B</text>
+<circle class="pch-node" cx="130" cy="190" r="20"/>
+<text class="pch-n-inv" x="130" y="194.5" text-anchor="middle">C</text>
+<text class="pch-labg" x="418" y="194">new shard</text>
+
+<circle class="pch-key" cx="520" cy="96" r="6"/>
+<text class="pch-note" x="536" y="100">A key belongs to the first shard found</text>
+<text class="pch-note" x="536" y="118">moving clockwise from it.</text>
+<circle class="pch-keyg" cx="520" cy="166" r="6"/>
+<text class="pch-note" x="536" y="170">Keys between A and D moved from B to D,</text>
+<text class="pch-note" x="536" y="188">the only keys that moved.</text>
+<text class="pch-note" x="536" y="240">Every other key stays where it was.</text>
+<text class="pch-note" x="536" y="258">Going from 3 shards to 4 moves roughly</text>
+<text class="pch-note" x="536" y="276">a quarter of the keys, not three quarters.</text>
+</g>
+</svg>

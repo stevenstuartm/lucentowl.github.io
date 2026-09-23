@@ -1,0 +1,69 @@
+---
+title: "One Transaction Versus Separate Databases"
+kind: structure
+system: distributed-patterns
+summary: "One all-or-nothing commit, or three local commits with nothing tying them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="pst-title pst-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pst-title">A single database transaction compared with separate service databases</title>
+<desc id="pst-desc">In a monolith, one transaction inserts the order, updates inventory, and inserts the payment, and commits all or nothing. With microservices, the order, payment, and inventory services each own a database and commit locally, and no shared transaction covers the three.</desc>
+<style>
+.pst-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.pst-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pst-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pst-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pst-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.pst-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pst-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pst-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pst-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pst-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pst-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.pst-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.pst-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pst-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pst-band" x="20" y="20" width="400" height="250" rx="8"/>
+<text class="pst-hd" x="34" y="40">ONE DATABASE</text>
+<rect class="pst-grp" x="44" y="56" width="352" height="190" rx="8"/>
+<text class="pst-lab" x="60" y="78">BEGIN TRANSACTION</text>
+<rect class="pst-mute" x="70" y="90" width="300" height="32" rx="6"/>
+<text class="pst-s" x="84" y="111">INSERT order</text>
+<rect class="pst-mute" x="70" y="130" width="300" height="32" rx="6"/>
+<text class="pst-s" x="84" y="151">UPDATE inventory</text>
+<rect class="pst-mute" x="70" y="170" width="300" height="32" rx="6"/>
+<text class="pst-s" x="84" y="191">INSERT payment</text>
+<text class="pst-lab" x="60" y="234">COMMIT: all or nothing</text>
+<rect class="pst-band" x="440" y="20" width="440" height="250" rx="8"/>
+<text class="pst-hd" x="454" y="40">SEPARATE DATABASES</text>
+<rect class="pst-grp" x="460" y="56" width="124" height="150" rx="8"/>
+<rect class="pst-box" x="472" y="68" width="100" height="40" rx="6"/>
+<text class="pst-n" x="522.0" y="92.0" text-anchor="middle">Order</text>
+<rect class="pst-sys" x="472" y="140" width="100" height="36" rx="6"/>
+<text class="pst-s-inv" x="522.0" y="162.5" text-anchor="middle">own DB</text>
+<path class="pst-flow" d="M 522,108 L 522,134" marker-end="url(#pst-a)"/>
+<text class="pst-el" x="522" y="198" text-anchor="middle">local commit</text>
+<rect class="pst-grp" x="600" y="56" width="124" height="150" rx="8"/>
+<rect class="pst-box" x="612" y="68" width="100" height="40" rx="6"/>
+<text class="pst-n" x="662.0" y="92.0" text-anchor="middle">Payment</text>
+<rect class="pst-sys" x="612" y="140" width="100" height="36" rx="6"/>
+<text class="pst-s-inv" x="662.0" y="162.5" text-anchor="middle">own DB</text>
+<path class="pst-flow" d="M 662,108 L 662,134" marker-end="url(#pst-a)"/>
+<text class="pst-el" x="662" y="198" text-anchor="middle">local commit</text>
+<rect class="pst-grp" x="740" y="56" width="124" height="150" rx="8"/>
+<rect class="pst-box" x="752" y="68" width="100" height="40" rx="6"/>
+<text class="pst-n" x="802.0" y="92.0" text-anchor="middle">Inventory</text>
+<rect class="pst-sys" x="752" y="140" width="100" height="36" rx="6"/>
+<text class="pst-s-inv" x="802.0" y="162.5" text-anchor="middle">own DB</text>
+<path class="pst-flow" d="M 802,108 L 802,134" marker-end="url(#pst-a)"/>
+<text class="pst-el" x="802" y="198" text-anchor="middle">local commit</text>
+<text class="pst-labr" x="660" y="236" text-anchor="middle">No transaction covers all three.</text>
+<path class="pst-grp" d="M 20,288 H 54"/>
+<text class="pst-el" x="62" y="292">transaction boundary</text>
+</g>
+</svg>

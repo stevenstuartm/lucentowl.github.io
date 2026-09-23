@@ -9,16 +9,9 @@ tags: [practical, api-gateway, bff, sidecar, ambassador, reverse-proxy]
 
 Every service ends up needing the same network concerns: authenticating callers, limiting their rate, retrying failed calls, encrypting traffic, emitting traces. Built into each service, those concerns get implemented slightly differently in every language and framework, and changing one means redeploying everything. These patterns move them out of application code into a proxy, and differ in where that proxy sits.
 
-```
-Web app    ──▶ Web BFF    ─┐
-                           ├──▶ API Gateway ──┬──▶ [ Orders service  + sidecar ] ──▶ ambassador ──▶ external API
-Mobile app ──▶ Mobile BFF ─┘                  └──▶ [ Billing service + sidecar ]
-
-               one per client   one for all        one per service instance
-               experience       external traffic
-```
-
 An API gateway handles traffic entering the system. A backend for frontend shapes that traffic for one kind of client. A sidecar handles traffic in and out of one service instance, and an ambassador is a sidecar specialized for that instance's outbound calls.
+
+{% include figure.html id="pat-gateway-topology" %}
 
 ## API Gateway
 
@@ -86,6 +79,8 @@ A helper process deployed alongside each instance of a service, sharing its life
 
 **Example**: A service pod runs the application alongside an Envoy proxy. All traffic in and out of the pod passes through Envoy, which applies mutual TLS, retries, and tracing without any change to the application code. A service mesh is this arrangement applied to every service and managed centrally.
 
+{% include figure.html id="pat-sidecar-proxy" %}
+
 Kubernetes also has a native form of the pattern, stable since version 1.33. An init container with `restartPolicy: Always` starts before the application containers, keeps running alongside them, and is stopped after them.
 
 ```yaml
@@ -123,12 +118,7 @@ A sidecar dedicated to the service's outbound calls. The application talks to th
 
 **Example**: A legacy application calls `http://localhost:9000/payments`. The ambassador listening there resolves the current payment provider endpoint, originates a TLS connection to it, applies a timeout and retry policy, and opens a circuit when the provider is failing. The application still believes it is making a plain local HTTP call.
 
-```
-Application ──localhost──▶ Ambassador ──TLS──▶ External payment API
-                            • service discovery
-                            • TLS origination
-                            • timeouts, retries, circuit breaking
-```
+{% include figure.html id="pat-ambassador" %}
 
 **Trade-offs**: The ambassador shares the sidecar's costs, and it adds one of its own. Because the application no longer sees the real failures, only whatever the ambassador passes back, a retry policy in the ambassador and another in the application can multiply attempts without either side knowing. Keep each resilience policy in one place.
 

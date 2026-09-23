@@ -1,0 +1,66 @@
+---
+title: "Data-Based and Key-Based Events"
+kind: flow
+system: architecture-styles
+summary: "A full payload versus an identifier the subscriber has to look up."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="epl-title epl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="epl-title">Data-based events versus key-based events</title>
+<desc id="epl-desc">On the left, a data-based OrderPlaced event carries customer details, items, prices, and the shipping address, and the subscriber acts on it without querying anything. On the right, a key-based OrderPlaced event carries only the order ID, and the subscriber queries the order service for the details it needs. That query needs the source to be available at runtime, and it returns the data as it is at query time, which may differ from its state when the event occurred.</desc>
+<style>
+.epl-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.epl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.epl-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.epl-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.epl-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.epl-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.epl-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.epl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.epl-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.epl-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.epl-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.epl-red { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="epl-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="epl-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="epl-band" x="20" y="20" width="420" height="290" rx="8"/>
+<text class="epl-hd" x="34" y="40">DATA-BASED EVENT</text>
+<rect class="epl-box" x="40" y="56" width="150" height="50" rx="6"/>
+<text class="epl-n" x="115.0" y="76.5" text-anchor="middle">Order service</text>
+<text class="epl-k" x="115.0" y="94.5" text-anchor="middle">publisher</text>
+<rect class="epl-box" x="270" y="216" width="150" height="50" rx="6"/>
+<text class="epl-n" x="345.0" y="245.0" text-anchor="middle">Subscriber</text>
+<rect class="epl-band" x="460" y="20" width="420" height="290" rx="8"/>
+<text class="epl-hd" x="474" y="40">KEY-BASED EVENT</text>
+<rect class="epl-box" x="480" y="56" width="150" height="50" rx="6"/>
+<text class="epl-n" x="555.0" y="76.5" text-anchor="middle">Order service</text>
+<text class="epl-k" x="555.0" y="94.5" text-anchor="middle">publisher</text>
+<rect class="epl-box" x="710" y="216" width="150" height="50" rx="6"/>
+<text class="epl-n" x="785.0" y="245.0" text-anchor="middle">Subscriber</text>
+<rect class="epl-mute" x="40" y="136" width="210" height="90" rx="6"/>
+<text class="epl-n-mute" x="54" y="160">OrderPlaced</text>
+<text class="epl-s" x="54" y="178">customer details, items,</text>
+<text class="epl-s" x="54" y="195">prices, shipping address</text>
+<path class="epl-ctl" d="M 115,106 V 130" marker-end="url(#epl-c)"/>
+<path class="epl-ctl" d="M 250,181 H 330 Q 345,181 345,196 V 210" marker-end="url(#epl-c)"/>
+<rect class="epl-mute" x="480" y="136" width="150" height="60" rx="6"/>
+<text class="epl-n-mute" x="494" y="160">OrderPlaced</text>
+<text class="epl-s" x="494" y="178">orderId only</text>
+<path class="epl-ctl" d="M 555,106 V 130" marker-end="url(#epl-c)"/>
+<path class="epl-ctl" d="M 630,166 H 745 Q 760,166 760,181 V 210" marker-end="url(#epl-c)"/>
+<path class="epl-red" d="M 830,216 C 830,120 760,81 636,81" marker-end="url(#epl-r)"/>
+<text class="epl-labr" x="798" y="146" text-anchor="end">query for details</text>
+<text class="epl-el" x="40" y="290">acts immediately, with no query</text>
+<text class="epl-el" x="480" y="280">needs the source available at runtime, and</text>
+<text class="epl-el" x="480" y="296">sees data as it is now, not at the event</text>
+<path class="epl-ctl" d="M 20,342 H 54"/>
+<text class="epl-el" x="62" y="346">event</text>
+<path class="epl-red" d="M 127.42500000000001,342 H 161.425"/>
+<text class="epl-el" x="169.425" y="346">extra call back to the source</text>
+</g>
+</svg>

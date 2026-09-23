@@ -19,19 +19,7 @@ The **data plane** is the set of proxies that actually carry traffic. Each call 
 
 The **control plane** never touches request traffic. It watches the platform for services and endpoints, issues certificates that give each workload an identity, turns the operator's routing and security policy into proxy configuration, and pushes that configuration out to the data plane.
 
-```
-                        ┌───────────────────────────────┐
-  operator policy ────▶ │         Control plane         │ ◀── watches services and
-                        │  config · identity · certs    │     endpoints in the platform
-                        └───────────────┬───────────────┘
-                                        │ pushes config and certificates
-                    ┌───────────────────┴───────────────────┐
-                    ▼                                       ▼
-  ┌──────────────────────────────┐        ┌──────────────────────────────┐
-  │ Service A  ◀─▶  proxy        │ ◀────▶ │ proxy  ◀─▶  Service B        │
-  └──────────────────────────────┘  mTLS  └──────────────────────────────┘
-                              data plane (request traffic)
-```
+{% include figure.html id="pat-mesh-planes" %}
 
 Because the control plane is out of the request path, a control plane outage stops configuration changes and new certificate issuance, but proxies keep serving traffic with the configuration they already have until their certificates expire.
 
@@ -41,20 +29,7 @@ On Kubernetes, the control plane doesn't need services to register themselves. I
 
 Meshes differ most in how the data plane is deployed, and the choice drives most of a mesh's cost.
 
-```
-Sidecar model                           Sidecarless (per-node) model
-
-Node                                    Node
-┌────────────────────────────────┐      ┌────────────────────────────────────────────┐
-│ Pod: [ Service A | proxy ]     │      │ Pod: [ Service A ]    Pod: [ Service B ]   │
-│ Pod: [ Service B | proxy ]     │      │           │                   │            │
-│ Pod: [ Service C | proxy ]     │      │           └──── node proxy ───┘            │
-└────────────────────────────────┘      │           (L4: mTLS, identity)             │
-one proxy per instance, handling        └────────────────────────────────────────────┘
-L4 and L7 for that instance                       │ only where L7 policy applies
-                                                  ▼
-                                        shared L7 proxy per service or namespace
-```
+{% include figure.html id="pat-mesh-data-plane-models" %}
 
 **Sidecar**: a proxy is injected into every workload instance, and network rules redirect the instance's traffic through it. Each proxy handles everything for its own instance, so isolation between workloads is strong and every feature is available everywhere. The cost is a proxy per instance, whether or not that instance uses more than encryption, and injecting or upgrading the proxy means restarting the workload.
 
@@ -85,11 +60,7 @@ Because every call passes through a proxy the control plane configures, routing 
 - **Timeouts, retries, and circuit breaking** configured as policy per route rather than coded per service
 - **Fault injection**, adding delays or errors to test how callers cope
 
-```
-                         ┌──▶ reviews v1 (stable)   90%
-caller ──▶ proxy ──split─┤
-                         └──▶ reviews v2 (canary)   10%
-```
+{% include figure.html id="pat-mesh-traffic-split" %}
 
 Moving resilience policy into the mesh has one hazard. If the application also retries, the two layers multiply attempts. Decide which layer owns each policy.
 
@@ -103,18 +74,7 @@ Tracing needs slightly more. The proxies generate spans, but a trace only connec
 
 The proxies inside the mesh handle traffic between services. Traffic crossing the mesh boundary goes through gateways, which are standalone proxies managed by the same control plane.
 
-```
-External client                              External API
-      │                                            ▲
-      ▼                                            │ TLS originated at the gateway
-┌─────────────────┐                        ┌─────────────────┐
-│ Ingress gateway │                        │ Egress gateway  │
-│ external TLS,   │                        │ allow list,     │
-│ mesh routing    │                        │ audit           │
-└────────┬────────┘                        └────────▲────────┘
-         │           mesh (mTLS inside)             │
-         └──────▶ Service A ──────▶ Service B ──────┘
-```
+{% include figure.html id="pat-mesh-gateways" %}
 
 An **ingress gateway** brings external traffic into the mesh, so that routing and policy for external requests use the same configuration model as internal ones. An **egress gateway** gives outbound traffic to external services one controlled exit, where calls can be allowed or denied by destination, logged for audit, and given TLS toward the external service, and where outbound firewall rules have a single source to allow. Istio ships both kinds of gateway and configures them through the Kubernetes Gateway API. Linkerd deliberately ships no ingress gateway of its own and instead meshes whichever ingress controller the cluster already runs.
 

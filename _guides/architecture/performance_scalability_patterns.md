@@ -38,17 +38,7 @@ A layer 4 balancer routes TCP or UDP connections by address and port without rea
 
 A layer 7 balancer terminates the connection and reads the application protocol, so it can route by path, header, or cookie, and balance individual requests. It pays for that in per-request processing and in being a point where TLS has to terminate.
 
-```
-Layer 4: balances connections
-
-Client ══ one HTTP/2 connection ══▶ LB ═══▶ Instance A  (all 500 requests)
-                                        └──  Instance B  (idle)
-
-Layer 7: balances requests
-
-Client ══ one HTTP/2 connection ══▶ LB ┬──▶ Instance A  (≈250 requests)
-                                        └──▶ Instance B  (≈250 requests)
-```
+{% include figure.html id="pat-l4-l7-balancing" %}
 
 **Common implementations**: NGINX, HAProxy, Envoy, and cloud balancers such as AWS Application Load Balancer at layer 7 and Network Load Balancer at layer 4.
 
@@ -77,6 +67,8 @@ A rate limiter caps how many requests a client, key, or tenant can make in a per
 | **Sliding window counter** | Weight the previous window's count by how much of it still overlaps, and add the current count | Approximately bounded | Two counters |
 
 The fixed window's boundary problem is the one that surprises people. A limit of 100 per minute allows 100 requests at 12:00:59 and another 100 at 12:01:00, so 200 arrive within two seconds.
+
+{% include figure.html id="pat-fixed-window-boundary" %}
 
 Token bucket is the common default for APIs because it permits short bursts while holding the long-run average, and it is what [Amazon API Gateway throttling](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html){:target="_blank" rel="noopener noreferrer"} uses. The sliding window counter gets close to a log's accuracy with a counter's memory, and Cloudflare [described using it](https://blog.cloudflare.com/counting-things-a-lot-of-different-things/){:target="_blank" rel="noopener noreferrer"} to rate limit across its edge network.
 
@@ -113,15 +105,7 @@ A rejected client should get `429 Too Many Requests` with a `Retry-After` header
 
 A cache keeps a copy of data somewhere faster to read than its source, trading freshness and memory for fewer trips to the database. The patterns differ in which component is responsible for loading the cache and keeping it current.
 
-```
-Cache-aside                         Read-through / write-through
-
-App ──1. get──▶ Cache               App ──get / set──▶ Cache ──load / store──▶ DB
- │   ◀─miss──                                          (cache owns the DB access)
- ├──2. query──▶ DB
- └──3. set────▶ Cache
-(app owns both calls)
-```
+{% include figure.html id="pat-cache-patterns" %}
 
 ### Cache-Aside
 
@@ -166,18 +150,7 @@ A **cache stampede** happens when a popular entry expires and every concurrent r
 
 Sharding splits one database's data across several databases, each holding a subset chosen by a shard key. Every query is routed to the shard that holds its key. It is how a data store grows past the limits of one machine, and it is the pattern here that is hardest to reverse.
 
-```
-Before sharding:                    After sharding:
-┌─────────────────────┐            ┌─────────┐ ┌─────────┐ ┌─────────┐
-│   Single Database   │            │ Shard 0 │ │ Shard 1 │ │ Shard 2 │
-│   100M users        │     →      │ Users   │ │ Users   │ │ Users   │
-│   (overloaded)      │            │ A-H     │ │ I-P     │ │ Q-Z     │
-└─────────────────────┘            └─────────┘ └─────────┘ └─────────┘
-
-Application:
-  shard = routeToShard("john_doe")   // → Shard 1 (I-P)
-  shard.query("SELECT * FROM users WHERE username = ?", "john_doe")
-```
+{% include figure.html id="pat-sharding" %}
 
 **Use when**:
 - Write volume exceeds what one database server can sustain
@@ -224,13 +197,7 @@ hash = 5310:  % 3 = 0,  % 4 = 2   → moves
 
 Consistent hashing places both shards and keys on a ring of hash values, and each key belongs to the first shard found moving clockwise from it. Adding a shard claims only the arc of the ring just before it, taking keys from the one shard that previously owned that arc and leaving every other key where it was. Going from 3 shards to 4 moves roughly a quarter of the keys instead of three quarters.
 
-```
-              Shard A
-            ╱         ╲
-    Shard C             Shard D  ← new: takes only the keys between A and D,
-            ╲         ╱                 which previously belonged to B
-              Shard B
-```
+{% include figure.html id="pat-consistent-hashing" %}
 
 In practice each physical shard is placed at many points on the ring, called virtual nodes, which evens out how much of the ring each shard owns.
 

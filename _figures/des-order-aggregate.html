@@ -1,0 +1,63 @@
+---
+title: "Order Aggregate"
+kind: structure
+system: architecture-design
+summary: "Changes go through the root, and other aggregates are referenced by id."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="dag-title dag-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dag-title">An order aggregate and its reference to a customer aggregate</title>
+<desc id="dag-desc">The order aggregate contains the order, which is the root, and its order lines. The root enforces three invariants: the total equals the sum of the lines, no changes once confirmed, and no confirming an empty order. Outside the boundary, the order references the separate customer aggregate by id only, through a CustomerId.</desc>
+<style>
+.dag-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dag-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dag-agg { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.75; }
+.dag-ext { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.dag-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dag-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dag-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.dag-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dag-s { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.dag-s-inv { font-size: 11px; fill: #E8F1F8; }
+.dag-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.dag-code { font-size: 11.5px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dag-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dag-ref { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="dag-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dag-agg" x="20" y="20" width="560" height="280" rx="10"/>
+<text class="dag-hd" x="36" y="44">ORDER AGGREGATE</text>
+
+<rect class="dag-sys" x="50" y="64" width="160" height="56" rx="6"/>
+<text class="dag-n-inv" x="66" y="88">Order</text>
+<text class="dag-s-inv" x="66" y="106">aggregate root</text>
+
+<text class="dag-lab" x="310" y="180">Root enforces:</text>
+<text class="dag-s" x="310" y="202">total = sum of lines</text>
+<text class="dag-s" x="310" y="222">no changes once confirmed</text>
+<text class="dag-s" x="310" y="242">no confirming an empty order</text>
+
+<path class="dag-line" d="M 90,120 L 90,264"/>
+<path class="dag-line" d="M 90,172 L 120,172"/>
+<path class="dag-line" d="M 90,218 L 120,218"/>
+<path class="dag-line" d="M 90,264 L 120,264"/>
+<rect class="dag-box" x="120" y="156" width="140" height="32" rx="6"/>
+<text class="dag-n" x="190.0" y="176.5" text-anchor="middle">OrderLine</text>
+<rect class="dag-box" x="120" y="202" width="140" height="32" rx="6"/>
+<text class="dag-n" x="190.0" y="222.5" text-anchor="middle">OrderLine</text>
+<rect class="dag-box" x="120" y="248" width="140" height="32" rx="6"/>
+<text class="dag-n" x="190.0" y="268.5" text-anchor="middle">OrderLine</text>
+
+<path class="dag-ref" d="M 210,92 L 654,92" marker-end="url(#dag-m)"/>
+<text class="dag-code" x="300" y="82">CustomerId</text>
+<text class="dag-lab" x="622" y="82" text-anchor="middle">by id only</text>
+
+<rect class="dag-ext" x="660" y="56" width="220" height="72" rx="8"/>
+<text class="dag-n-mute" x="676" y="86">Customer aggregate</text>
+<text class="dag-s" x="676" y="108">separate</text>
+</g>
+</svg>

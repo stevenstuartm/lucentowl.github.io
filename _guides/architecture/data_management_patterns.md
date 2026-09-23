@@ -15,17 +15,7 @@ They compose rather than compete. A service can own its own database, publish ev
 
 Each service owns its data and its schema. No other service reads or writes those tables directly, so the owning service can change them without coordinating with anyone.
 
-```
-Database per service                   Shared database
-
- Orders  ─▶ [ orders db ]               Orders  ─┐
- Billing ─▶ [ billing db ]              Billing ─┼─▶ [ one database ]
- Search  ─▶ [ search db ]               Search  ─┘
-
- Cross-service read  = an API call      Cross-service read  = a join
- Cross-service write = many steps       Cross-service write = one transaction
- Schema change       = one team         Schema change       = every team
-```
+{% include figure.html id="pat-db-per-service" %}
 
 **Use when**:
 - Services need to deploy and evolve on their own schedules
@@ -63,6 +53,8 @@ Once data lives in more than one place, whether that is two service databases or
 
 The useful question is never whether a system is eventually consistent. It is how long the window lasts, and which reader is looking during it.
 
+{% include figure.html id="pat-consistency-window" %}
+
 | Reader | Tolerance for the window |
 |--------|--------------------------|
 | The user who just made the write | Very low. Their own change appearing to vanish reads as a bug, not as latency |
@@ -84,21 +76,7 @@ Rather than storing current state and overwriting it on each change, event sourc
 
 **How it works**:
 
-```
-Traditional (state-based):              Event Sourcing:
-┌─────────────────────┐                 ┌─────────────────────────────────┐
-│ Account             │                 │ Event Store                     │
-│ ─────────────────── │                 │ ─────────────────────────────── │
-│ id: 123             │                 │ 1. AccountOpened(id:123)        │
-│ balance: $120       │                 │ 2. Deposited($100)              │
-│ status: active      │                 │ 3. Withdrawn($30)               │
-│                     │                 │ 4. Deposited($50)               │
-│ (only current state)│                 │                                 │
-└─────────────────────┘                 │ Current state = replay all      │
-                                        │ Balance = 0 + 100 - 30 + 50     │
-                                        │         = $120                  │
-                                        └─────────────────────────────────┘
-```
+{% include figure.html id="pat-event-sourcing" %}
 
 **Use when**:
 - The history of how state changed is itself required, as in finance, healthcare, or anything audited
@@ -108,17 +86,7 @@ Traditional (state-based):              Event Sourcing:
 
 **Snapshotting**: Replaying a long log to answer one question gets slow. A snapshot stores the computed state at a point in the log so replay only has to cover what came after it.
 
-```
-Event Store with Snapshots:
-┌────────────────────────────────────────────────────────────────────┐
-│ Events 1-1000 │ Snapshot @ 1000 │ Events 1001-2000 │ Snapshot @2000│
-│               │ balance: $5000  │                  │ balance: $7500│
-└────────────────────────────────────────────────────────────────────┘
-
-To read state at event 2347:
-  1. Load snapshot @ 2000 (balance: $7500)
-  2. Replay only events 2001-2347
-```
+{% include figure.html id="pat-es-snapshots" %}
 
 **Schema evolution**: Events are immutable, but the shape of new events changes over time, so a replay has to handle every version ever written.
 
@@ -156,21 +124,9 @@ CQRS uses separate models for writing and reading. Writes go to a model normaliz
 
 **How it works**:
 
-```
-                    Commands (writes)              Queries (reads)
-                          │                              │
-                          ▼                              ▼
-                  ┌───────────────┐              ┌───────────────┐
-                  │ Command Model │              │  Query Model  │
-                  │  (normalized) │              │(denormalized) │
-                  └───────┬───────┘              └───────────────┘
-                          │                              ▲
-                          │    ┌─────────────────┐       │
-                          └───→│ Sync Mechanism  │───────┘
-                               │ (events/CDC/    │
-                               │  polling)       │
-                               └─────────────────┘
+{% include figure.html id="pat-cqrs" %}
 
+```
 Write: CreatePost(userId, content)
   → Command DB: INSERT into posts, users_posts (normalized)
   → Publish: PostCreated event

@@ -49,6 +49,8 @@ Monolithic styles keep deployment, transactions, and operations simple, and limi
 
 Partitioning matters as much as deployment. A technically partitioned style makes a single business change cut across every layer or tier. A domain-partitioned style keeps that change inside one module or service, which is why domain-partitioned monoliths tend to be easier to split later.
 
+{% include figure.html id="arch-partitioning" %}
+
 ## Choosing a Style
 
 Style selection starts from the architecture characteristics that matter most, then narrows by constraints and data topology.

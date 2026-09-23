@@ -1,0 +1,59 @@
+---
+title: "Deployment Stamps"
+kind: deployment
+system: architecture-design
+summary: "A router reads the tenant catalog and sends each request to its stamp."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="dds-title dds-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dds-title">Tenants routed across deployment stamps through a tenant catalog</title>
+<desc id="dds-desc">A request carrying a tenant identity reaches a global router or gateway, which looks up the tenant in a tenant catalog mapping each tenant to a stamp. The router forwards the request to one of three stamps. Stamp 1 is a pool with shared app and database for tenants A, B, and C. Stamp 2 is a pool for tenants D and E. Stamp 3 is a silo serving tenant F only, with the same code on dedicated infrastructure.</desc>
+<style>
+.dds-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dds-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dds-cat { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.dds-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dds-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dds-s { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.dds-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dds-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.dds-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="dds-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dds-lab" x="450" y="24" text-anchor="middle">request carrying a tenant identity</text>
+<path class="dds-flow" d="M 450,32 L 450,60" marker-end="url(#dds-a)"/>
+<rect class="dds-sys" x="360" y="66" width="180" height="50" rx="6"/>
+<text class="dds-n-inv" x="450.0" y="95.5" text-anchor="middle">Global router or gateway</text>
+
+<rect class="dds-cat" x="650" y="66" width="200" height="50" rx="6"/>
+<text class="dds-n" x="666" y="87">Tenant catalog</text>
+<text class="dds-k" x="666" y="104">tenant → stamp</text>
+<path class="dds-flow" d="M 546,91 L 644,91" marker-start="url(#dds-a)" marker-end="url(#dds-a)"/>
+
+<path class="dds-flow" d="M 420,116 C 420,160 170,150 170,194" marker-end="url(#dds-a)"/>
+<path class="dds-flow" d="M 450,116 L 450,194" marker-end="url(#dds-a)"/>
+<path class="dds-flow" d="M 480,116 C 480,160 730,150 730,194" marker-end="url(#dds-a)"/>
+
+<rect class="dds-box" x="70" y="200" width="200" height="100" rx="6"/>
+<text class="dds-n" x="86" y="224">Stamp 1</text>
+<text class="dds-k" x="146" y="224">pool</text>
+<text class="dds-s" x="86" y="252">Tenants A, B, C</text>
+<text class="dds-s" x="86" y="274">shared app, DB</text>
+
+<rect class="dds-box" x="350" y="200" width="200" height="100" rx="6"/>
+<text class="dds-n" x="366" y="224">Stamp 2</text>
+<text class="dds-k" x="426" y="224">pool</text>
+<text class="dds-s" x="366" y="252">Tenants D, E</text>
+<text class="dds-s" x="366" y="274">shared app, DB</text>
+
+<rect class="dds-box" x="630" y="200" width="200" height="100" rx="6"/>
+<text class="dds-n" x="646" y="224">Stamp 3</text>
+<text class="dds-k" x="706" y="224">silo</text>
+<text class="dds-s" x="646" y="252">Tenant F only</text>
+<text class="dds-s" x="646" y="274">same code, dedicated infra</text>
+</g>
+</svg>

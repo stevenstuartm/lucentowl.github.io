@@ -17,27 +17,7 @@ Service-oriented architecture, in the form sometimes called orchestration-driven
 
 SOA sorted services into a strict taxonomy by granularity and purpose. An orchestration engine composed those services into business processes, and an ESB handled routing, transformation, and protocol mediation between them.
 
-```
-         Consumers (applications, partners, user interfaces)
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Business services       "Submit loan application"               │
-└───────────────────────────────┬─────────────────────────────────┘
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ Orchestration engine and enterprise service bus                 │
-│ (process flow, routing, transformation, protocol mediation)     │
-└───────┬─────────────────────┬─────────────────────┬─────────────┘
-        ▼                     ▼                     ▼
-┌───────────────┐   ┌───────────────────┐   ┌──────────────┐
-│ Enterprise    │   │ Enterprise        │   │ Application  │
-│ service:      │   │ service:          │   │ service      │
-│ Validate      │   │ Calculate credit  │   │ (one-off)    │
-│ customer      │   │ score             │   │              │
-└───────────────┘   └───────────────────┘   └──────────────┘
-        └──────── Infrastructure services (logging, security) ──────┘
-```
+{% include figure.html id="arch-soa" %}
 
 ### Service Taxonomy
 

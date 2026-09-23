@@ -1,0 +1,54 @@
+---
+title: "The Eventual Consistency Window"
+kind: chart
+system: distributed-patterns
+summary: "Two copies disagree between a write and convergence."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="pcw-title pcw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pcw-title">Eventual consistency window between a write model and a read model</title>
+<desc id="pcw-desc">A timeline with two rows. The write model changes from the old value to the new value when a write commits. The read model keeps the old value until it catches up some time later. Between the two moments is the window, when the copies disagree. The user who just made the write, reading during the window, sees the old value. A reader after the window sees the new value.</desc>
+<style>
+.pcw-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pcw-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pcw-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pcw-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pcw-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pcw-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pcw-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.pcw-labg { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.pcw-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.pcw-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pcw-dotr { fill: var(--color-accent, #A5486E); }
+.pcw-dotg { fill: var(--color-green, #3C8D53); }
+.pcw-fillr { fill: var(--color-accent, #A5486E); fill-opacity: 0.10; stroke: none; }
+</style>
+
+<defs>
+<marker id="pcw-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pcw-fillr" x="320" y="50" width="280" height="196" rx="0"/>
+<text class="pcw-labr" x="460.0" y="44" text-anchor="middle">the window: the copies disagree</text>
+<text class="pcw-n" x="20" y="102">Write model</text>
+<rect class="pcw-mute" x="150" y="80" width="170" height="36" rx="6"/>
+<text class="pcw-s" x="235.0" y="102.5" text-anchor="middle">old value</text>
+<rect class="pcw-sys" x="320" y="80" width="540" height="36" rx="6"/>
+<text class="pcw-s-inv" x="590.0" y="102.5" text-anchor="middle">new value</text>
+<text class="pcw-n" x="20" y="192">Read model</text>
+<rect class="pcw-mute" x="150" y="170" width="450" height="36" rx="6"/>
+<text class="pcw-s" x="375.0" y="192.5" text-anchor="middle">old value</text>
+<rect class="pcw-sys" x="600" y="170" width="260" height="36" rx="6"/>
+<text class="pcw-s-inv" x="730.0" y="192.5" text-anchor="middle">new value</text>
+<circle class="pcw-dotr" cx="460" cy="222" r="7"/>
+<text class="pcw-labr" x="460" y="264" text-anchor="middle">the writer reads here: old value</text>
+<circle class="pcw-dotg" cx="700" cy="222" r="7"/>
+<text class="pcw-labg" x="700" y="264" text-anchor="middle">a later reader sees the new value</text>
+<path class="pcw-axis" d="M 150,290 L 870,290" marker-end="url(#pcw-m)"/>
+<text class="pcw-ax" x="870" y="310" text-anchor="end">time</text>
+<path class="pcw-axis" d="M 320,284 V 296"/>
+<text class="pcw-lab" x="320" y="312" text-anchor="middle">write commits</text>
+<path class="pcw-axis" d="M 600,284 V 296"/>
+<text class="pcw-lab" x="600" y="312" text-anchor="middle">read model catches up</text>
+</g>
+</svg>

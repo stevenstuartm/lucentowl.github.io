@@ -17,16 +17,7 @@ Some work only goes right when exactly one node does it: one scheduler assigning
 
 One node in a group is chosen to coordinate. It assigns work, makes decisions, or acts as the single writer for some shared state. When it fails, the remaining nodes choose another.
 
-```
-Initial State:                   Leader Failure:                  New Election:
-┌─────────────────────┐         ┌─────────────────────┐         ┌─────────────────────┐
-│ Node 1 (Leader) ★   │         │ Node 1 (Leader) ✗   │         │ Node 1 ✗            │
-│ Node 2 (Follower)   │    →    │ Node 2 (Follower)   │    →    │ Node 2 (Leader) ★   │
-│ Node 3 (Follower)   │         │ Node 3 (Follower)   │         │ Node 3 (Follower)   │
-└─────────────────────┘         └─────────────────────┘         └─────────────────────┘
-                                 Followers detect failure        A new leader is chosen
-                                 via heartbeat timeout
-```
+{% include figure.html id="pat-leader-failover" %}
 
 **Use when**:
 - A task such as job scheduling or partition assignment must have one coordinator
@@ -64,15 +55,7 @@ Systems that need election internally increasingly embed Raft instead of dependi
 
 A node that has been voted out doesn't necessarily know it. If it paused or lost connectivity, it may resume still believing it leads, while a new leader is already acting. That is split-brain. A lease limits it: leadership is granted for a fixed period that the leader must keep renewing, and a new leader is only chosen after the old lease has expired.
 
-```
-T=0:   Node 1 acquires lease (expires T=10)
-T=5:   Node 1 renews lease (expires T=15)
-T=8:   Node 1 crashes, stops renewing
-T=15:  Lease expires
-T=16:  Node 2 acquires a new lease, becomes leader
-
-T=8 to T=15: no leader, which is safer than two
-```
+{% include figure.html id="pat-leader-lease" %}
 
 A lease only works if the old leader checks it before acting, and even then it relies on clocks and on the leader not pausing between the check and the action. A garbage collection pause that starts right after a successful check leaves the old leader acting on a lease that expired while it was paused. Leases shrink the window, but they don't close it. Fencing tokens, covered under distributed locks below, close it.
 
@@ -84,21 +67,7 @@ A lease only works if the old leader checks it before acting, and even then it r
 
 A lock that holds across a cluster, so that only one node at a time works on a given resource. Unlike a local mutex, it has to survive the holder crashing, the network dropping, and the holder pausing without knowing it paused.
 
-```
-Without Lock:                        With Distributed Lock:
-┌───────────┐   ┌───────────┐       ┌───────────┐   ┌───────────┐
-│  Node A   │   │  Node B   │       │  Node A   │   │  Node B   │
-│  Read: 10 │   │  Read: 10 │       │ Acquire ──┼───┼─→ BLOCKED │
-│  Add: 5   │   │  Add: 3   │       │  Read: 10 │   │  (waiting)│
-│  Write:15 │   │  Write:13 │       │  Add: 5   │   │           │
-└───────────┘   └───────────┘       │  Write:15 │   │           │
-     ↓               ↓              │  Release ─┼───┼─→ Acquire │
-Final value: 13 (lost update)       │           │   │  Read: 15 │
-                                    │           │   │  Add: 3   │
-                                    │           │   │  Write:18 │
-                                    └───────────┘   └───────────┘
-                                    Final value: 18
-```
+{% include figure.html id="pat-lock-lost-update" %}
 
 **Use when**:
 - Several nodes may act on the same resource at the same time
@@ -131,19 +100,11 @@ The release checks ownership because the lock may already have expired and been 
 
 The expiry that saves you from a crashed holder creates a new problem with a slow one. The holder can stall for longer than the TTL, whether from a garbage collection pause, a swapped-out process, or a network delay, then wake and carry on writing, unaware its lock expired and a second node now holds it.
 
-```
-Node A: acquire lock ─── long GC pause ───────────────────── write ✗ (stale)
-                             lock expires
-Node B:                            acquire lock ── write ✓
-```
+{% include figure.html id="pat-lock-expiry" %}
 
 No check inside Node A can prevent this, because the pause can happen after the check. The fix has to live at the resource being protected. A **fencing token** is a number that increases every time the lock is granted. The holder sends its token with every write, and the storage rejects any write carrying a token lower than the highest it has already seen.
 
-```
-Node A: acquire lock (token 33) ── long pause ─────────────── write(token 33) → REJECTED
-Node B:                              acquire lock (token 34) ── write(token 34) → accepted
-                                                                  storage now requires ≥ 34
-```
+{% include figure.html id="pat-fencing-token" %}
 
 That requires two things: a lock service that issues monotonically increasing tokens, and a resource that checks them. ZooKeeper's znode version or transaction id and etcd's revision numbers both serve as tokens. A database can enforce the check with a conditional update on a stored token column.
 
@@ -179,11 +140,7 @@ Consensus gets a group of nodes to agree on a value, such as which node leads, w
 
 The core rule is a majority quorum. A cluster of 2f+1 nodes keeps working with up to f of them failed, because any two majorities overlap in at least one node, and that node carries forward what was decided. Three nodes tolerate one failure, and five tolerate two.
 
-```
-Client → write request → Leader
-Leader → append to log, replicate → [Follower 1, Follower 2]
-Majority (2 of 3) acknowledges → entry committed → reply to client
-```
+{% include figure.html id="pat-consensus-replication" %}
 
 **Use when**:
 - A decision must hold even if some of the nodes that made it are lost

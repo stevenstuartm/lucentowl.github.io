@@ -1,0 +1,61 @@
+---
+title: "Transactional Outbox"
+kind: flow
+system: distributed-patterns
+summary: "The event commits with the data, and a relay publishes it afterward."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="pob-title pob-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pob-title">Transactional outbox pattern</title>
+<desc id="pob-desc">A service inserts an order into its business tables and an event into an outbox table inside one database transaction, so both commit or roll back together. Outside that transaction, a message relay, either a polling publisher or transaction log tailing, reads the outbox and publishes to the broker, which delivers to the consumer.</desc>
+<style>
+.pob-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pob-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pob-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pob-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.pob-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pob-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pob-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pob-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.pob-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pob-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.pob-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pob-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pob-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.pob-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pob-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+</style>
+
+<defs>
+<marker id="pob-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pob-box" x="40" y="110" width="120" height="50" rx="6"/>
+<text class="pob-n" x="100.0" y="139.0" text-anchor="middle">Service</text>
+<rect class="pob-grp" x="200" y="30" width="400" height="190" rx="8"/>
+<text class="pob-hd" x="214" y="50">ONE DATABASE TRANSACTION</text>
+<rect class="pob-box" x="230" y="64" width="340" height="56" rx="6"/>
+<text class="pob-n" x="244" y="88">Business tables</text>
+<text class="pob-s" x="244" y="106">INSERT order</text>
+<rect class="pob-mute" x="230" y="140" width="340" height="56" rx="6"/>
+<text class="pob-n-mute" x="244" y="164">Outbox table</text>
+<text class="pob-s" x="244" y="182">INSERT event</text>
+<path class="pob-flow" d="M 160,128 C 190,128 195,92 224,92" marker-end="url(#pob-a)"/>
+<path class="pob-flow" d="M 160,142 C 190,142 195,168 224,168" marker-end="url(#pob-a)"/>
+<text class="pob-note" x="620" y="102">Both rows commit</text>
+<text class="pob-note" x="620" y="120">or roll back together.</text>
+<rect class="pob-sys" x="230" y="256" width="220" height="72" rx="6"/>
+<text class="pob-n-inv" x="244" y="280">Message relay</text>
+<text class="pob-k-inv" x="244" y="298">polling or log tailing</text>
+<text class="pob-s-inv" x="244" y="315">outside the transaction</text>
+<path class="pob-thin" d="M 340,196 V 250" marker-end="url(#pob-a)"/>
+<text class="pob-lab" x="350" y="230">reads unpublished rows</text>
+<rect class="pob-box" x="530" y="272" width="130" height="40" rx="6"/>
+<text class="pob-n" x="595.0" y="296.0" text-anchor="middle">Broker</text>
+<rect class="pob-box" x="720" y="272" width="140" height="40" rx="6"/>
+<text class="pob-n" x="790.0" y="296.0" text-anchor="middle">Consumer</text>
+<path class="pob-flow" d="M 450,292 L 524,292" marker-end="url(#pob-a)"/>
+<path class="pob-flow" d="M 660,292 L 714,292" marker-end="url(#pob-a)"/>
+<text class="pob-lab" x="468" y="284">publish</text>
+</g>
+</svg>

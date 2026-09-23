@@ -1,0 +1,102 @@
+---
+title: "Retry Waves and Jitter"
+kind: chart
+system: distributed-patterns
+summary: "Clients that fail together retry together, unless jitter spreads them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="pj-title pj-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pj-title">Retry arrivals with exponential backoff, without and with jitter</title>
+<desc id="pj-desc">Two rows of retry arrivals over time from many clients that failed at the same moment. With exponential backoff alone, every client retries after the same delays, so the retries arrive in synchronized waves after 1, 3, and 7 seconds. With full jitter, each client picks a random delay up to the exponential value, so the same retries are spread across the interval in much lower bars. The bars are illustrative, not measured.</desc>
+<style>
+.pj-bar { fill: var(--color-accent, #A5486E); }
+.pj-bar2 { fill: var(--color-primary, #1A5F8A); }
+.pj-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pj-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pj-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.pj-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.pj-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+</style>
+
+<defs>
+<marker id="pj-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="pj-n" x="20" y="100">Backoff</text>
+<text class="pj-s" x="20" y="118">no jitter</text>
+<path class="pj-axis" d="M 150,150 L 880,150"/>
+<text class="pj-n" x="20" y="250">Backoff</text>
+<text class="pj-s" x="20" y="268">full jitter</text>
+<rect class="pj-bar" x="234" y="60" width="12" height="90"/>
+<text class="pj-lab" x="252" y="74">attempt 1</text>
+<rect class="pj-bar" x="414" y="60" width="12" height="90"/>
+<text class="pj-lab" x="432" y="74">attempt 2</text>
+<rect class="pj-bar" x="774" y="60" width="12" height="90"/>
+<text class="pj-lab" x="792" y="74">attempt 3</text>
+<rect class="pj-bar2" x="158" y="282" width="10" height="18"/>
+<rect class="pj-bar2" x="176" y="280" width="10" height="20"/>
+<rect class="pj-bar2" x="193" y="290" width="10" height="10"/>
+<rect class="pj-bar2" x="210" y="289" width="10" height="11"/>
+<rect class="pj-bar2" x="225" y="291" width="10" height="9"/>
+<rect class="pj-bar2" x="243" y="286" width="10" height="14"/>
+<rect class="pj-bar2" x="256" y="279" width="10" height="21"/>
+<rect class="pj-bar2" x="272" y="285" width="10" height="15"/>
+<rect class="pj-bar2" x="286" y="279" width="10" height="21"/>
+<rect class="pj-bar2" x="299" y="274" width="10" height="26"/>
+<rect class="pj-bar2" x="313" y="285" width="10" height="15"/>
+<rect class="pj-bar2" x="330" y="274" width="10" height="26"/>
+<rect class="pj-bar2" x="348" y="274" width="10" height="26"/>
+<rect class="pj-bar2" x="364" y="291" width="10" height="9"/>
+<rect class="pj-bar2" x="382" y="291" width="10" height="9"/>
+<rect class="pj-bar2" x="398" y="288" width="10" height="12"/>
+<rect class="pj-bar2" x="412" y="288" width="10" height="12"/>
+<rect class="pj-bar2" x="428" y="274" width="10" height="26"/>
+<rect class="pj-bar2" x="443" y="271" width="10" height="29"/>
+<rect class="pj-bar2" x="457" y="274" width="10" height="26"/>
+<rect class="pj-bar2" x="474" y="286" width="10" height="14"/>
+<rect class="pj-bar2" x="489" y="275" width="10" height="25"/>
+<rect class="pj-bar2" x="505" y="287" width="10" height="13"/>
+<rect class="pj-bar2" x="519" y="293" width="10" height="7"/>
+<rect class="pj-bar2" x="535" y="288" width="10" height="12"/>
+<rect class="pj-bar2" x="550" y="291" width="10" height="9"/>
+<rect class="pj-bar2" x="566" y="282" width="10" height="18"/>
+<rect class="pj-bar2" x="581" y="292" width="10" height="8"/>
+<rect class="pj-bar2" x="596" y="294" width="10" height="6"/>
+<rect class="pj-bar2" x="613" y="293" width="10" height="7"/>
+<rect class="pj-bar2" x="627" y="292" width="10" height="8"/>
+<rect class="pj-bar2" x="642" y="282" width="10" height="18"/>
+<rect class="pj-bar2" x="658" y="289" width="10" height="11"/>
+<rect class="pj-bar2" x="672" y="295" width="10" height="5"/>
+<rect class="pj-bar2" x="686" y="290" width="10" height="10"/>
+<rect class="pj-bar2" x="701" y="291" width="10" height="9"/>
+<rect class="pj-bar2" x="715" y="289" width="10" height="11"/>
+<rect class="pj-bar2" x="730" y="286" width="10" height="14"/>
+<rect class="pj-bar2" x="744" y="288" width="10" height="12"/>
+<rect class="pj-bar2" x="760" y="282" width="10" height="18"/>
+<rect class="pj-bar2" x="777" y="291" width="10" height="9"/>
+<rect class="pj-bar2" x="794" y="287" width="10" height="13"/>
+<rect class="pj-bar2" x="810" y="284" width="10" height="16"/>
+<rect class="pj-bar2" x="825" y="283" width="10" height="17"/>
+<path class="pj-axis" d="M 150,310 L 880,310" marker-end="url(#pj-m)"/>
+<path class="pj-axis" d="M 150,300 L 880,300"/>
+<path class="pj-axis" d="M 150,306 V 314"/>
+<text class="pj-ax" x="150" y="330" text-anchor="middle">0s</text>
+<path class="pj-axis" d="M 240,306 V 314"/>
+<text class="pj-ax" x="240" y="330" text-anchor="middle">1s</text>
+<path class="pj-axis" d="M 330,306 V 314"/>
+<text class="pj-ax" x="330" y="330" text-anchor="middle">2s</text>
+<path class="pj-axis" d="M 420,306 V 314"/>
+<text class="pj-ax" x="420" y="330" text-anchor="middle">3s</text>
+<path class="pj-axis" d="M 510,306 V 314"/>
+<text class="pj-ax" x="510" y="330" text-anchor="middle">4s</text>
+<path class="pj-axis" d="M 600,306 V 314"/>
+<text class="pj-ax" x="600" y="330" text-anchor="middle">5s</text>
+<path class="pj-axis" d="M 690,306 V 314"/>
+<text class="pj-ax" x="690" y="330" text-anchor="middle">6s</text>
+<path class="pj-axis" d="M 780,306 V 314"/>
+<text class="pj-ax" x="780" y="330" text-anchor="middle">7s</text>
+<path class="pj-axis" d="M 870,306 V 314"/>
+<text class="pj-ax" x="870" y="330" text-anchor="middle">8s</text>
+<text class="pj-s" x="150" y="30">Retries arriving at the service from many clients that failed at the same moment</text>
+</g>
+</svg>

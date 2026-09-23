@@ -1,0 +1,52 @@
+---
+title: "A Choreographed Saga"
+kind: flow
+system: distributed-patterns
+summary: "A failure event travels upstream and each service compensates itself."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="psh-title psh-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="psh-title">Choreographed saga with compensation</title>
+<desc id="psh-desc">The order service publishes OrderCreated, the inventory service reserves stock and publishes InventoryReserved, and the payment service fails and publishes PaymentFailed. That failure event reaches every upstream participant: the inventory service releases stock and publishes InventoryReleased, and the order service cancels and publishes OrderCancelled. No single place holds the saga state.</desc>
+<style>
+.psh-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.psh-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.psh-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.psh-n-bad { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.psh-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.psh-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.psh-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.psh-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.psh-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.psh-redd { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="psh-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="psh-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="psh-box" x="60" y="90" width="180" height="56" rx="6"/>
+<text class="psh-n" x="150.0" y="122.0" text-anchor="middle">Order service</text>
+<rect class="psh-box" x="360" y="90" width="180" height="56" rx="6"/>
+<text class="psh-n" x="450.0" y="122.0" text-anchor="middle">Inventory service</text>
+<rect class="psh-bad" x="660" y="90" width="180" height="56" rx="6"/>
+<text class="psh-n-bad" x="750.0" y="122.0" text-anchor="middle">Payment service</text>
+<path class="psh-ctl" d="M 240,110 H 354" marker-end="url(#psh-c)"/>
+<text class="psh-labc" x="248" y="100">OrderCreated</text>
+<path class="psh-ctl" d="M 540,110 H 654" marker-end="url(#psh-c)"/>
+<text class="psh-labc" x="597" y="100" text-anchor="middle">InventoryReserved</text>
+<path class="psh-redd" d="M 750,146 V 220 H 150 V 152" marker-end="url(#psh-r)"/>
+<path class="psh-redd" d="M 450,220 V 152" marker-end="url(#psh-r)"/>
+<text class="psh-labr" x="760" y="190">PaymentFailed</text>
+<text class="psh-el" x="150" y="250" text-anchor="middle">cancels, then publishes</text>
+<text class="psh-labc" x="150" y="266" text-anchor="middle">OrderCancelled</text>
+<text class="psh-el" x="450" y="250" text-anchor="middle">releases, then publishes</text>
+<text class="psh-labc" x="450" y="266" text-anchor="middle">InventoryReleased</text>
+<text class="psh-note" x="60" y="50">Saga state is implied by which events have been published. No single place holds it.</text>
+<path class="psh-ctl" d="M 60,312 H 94"/>
+<text class="psh-el" x="102" y="316">event</text>
+<path class="psh-redd" d="M 167.425,312 H 201.425"/>
+<text class="psh-el" x="209.425" y="316">failure event, sent upstream</text>
+</g>
+</svg>

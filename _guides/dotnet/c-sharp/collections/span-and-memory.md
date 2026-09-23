@@ -3,8 +3,8 @@ title: "C# Span, Memory, and High-Performance Patterns"
 layout: guide
 category: ".NET & C#"
 subcategory: "Collections & Data"
-description: "Zero-allocation programming with Span<T>, Memory<T>, ArrayPool, and performance optimization techniques."
-tags: [c-sharp, dotnet, performance, span, memory, optimization, advanced]
+description: "Working with memory without copying it: Span<T> and ReadOnlySpan<T> over heap, stack, and native memory, why spans are confined to the stack, Memory<T> for async code, ArrayPool and MemoryPool, stackalloc, inline arrays, ref structs built over spans, and when these techniques are worth their complexity."
+tags: [span, memory, arraypool, stackalloc, inline-arrays, performance, advanced]
 ---
 
 ## The Allocation Problem
@@ -21,7 +21,7 @@ int age = int.Parse(parts[1]);
 string dept = parts[2];
 ```
 
-This allocates a `string[]` array and three new `string` objects. Each string copies characters from the original into its own heap memory. If this code runs millions of times (processing a CSV file, handling HTTP headers, parsing log lines), those allocations add up fast. The data already exists in memory as part of the original string; the copies are pure waste.
+This allocates a `string[]` array and three new `string` objects. Each string copies characters from the original into its own heap memory. If this code runs millions of times (processing a CSV file, handling HTTP headers, parsing log lines), those allocations add up fast. The data already exists in memory as part of the original string, so the copies are pure waste.
 
 The types in `System.Memory` solve this problem by providing ways to reference existing memory without copying it. They let code "look at" a region of memory that's already allocated, whether that memory lives on the heap, the stack, or even in unmanaged (native) space. The core idea is that reading and processing data should not require owning a separate copy of that data.
 
@@ -80,34 +80,34 @@ A method that accepts `Span<T>` or `ReadOnlySpan<T>` as a parameter doesn't need
 
 ### The Stack-Only Constraint
 
-`Span<T>` is declared as a `ref struct`, which means the runtime guarantees it can only live on the stack. It cannot be stored as a field in a class or a regular struct. It cannot be boxed. It cannot be captured in a lambda or used inside an `async` method.
+`Span<T>` is declared as a `ref struct`, so the compiler confines it to the stack: it can't be a field of a class or an ordinary struct, can't be boxed, can't be captured by a lambda, and can't stay alive across an `await`.
 
-These restrictions exist because of what `Span<T>` can point to. If a span wraps a `stackalloc` buffer and that span escapes to the heap (stored in a field, captured in a closure), the stack frame it points to will eventually unwind. The span would become a dangling pointer, referencing memory that has been reclaimed and may now hold completely unrelated data. The `ref struct` constraint prevents this at compile time.
+Two things make the confinement necessary. A span can point at a `stackalloc` buffer, and if the span escaped to the heap it would outlive the stack frame that buffer belongs to, leaving a dangling pointer to memory that now holds something else. And even a span over an array holds an interior reference, a pointer into the middle of an object rather than to its start, which the garbage collector can only track when it lives on the stack. The `ref struct` rules make both situations compile errors.
 
 ```csharp
-// This won't compile
 class BadExample
 {
-    private Span<int> stored;  // Error: cannot use ref struct as field in class
+    private Span<int> stored;   // error: a ref struct can't be a field of a class
 
     void Capture()
     {
         Span<int> local = stackalloc int[10];
-        Action lambda = () => Console.WriteLine(local[0]);  // Error: cannot capture
+        Action lambda = () => Console.WriteLine(local[0]);   // error: can't capture
     }
 
     async Task AsyncUse()
     {
         Span<int> buffer = stackalloc int[10];
-        await Task.Delay(100);  // Error: Span cannot cross await boundary
-        buffer[0] = 1;
+        buffer[0] = 1;             // fine: before the await
+        await Task.Delay(100);
+        buffer[1] = 2;             // error: the span would have to survive the await
     }
 }
 ```
 
-The async restriction deserves extra explanation. When an `async` method hits an `await`, the runtime may suspend execution and resume on a different thread later. The method's local state gets lifted into a state machine object on the heap. Since `Span<T>` can't live on the heap, it can't survive across an `await`. This is a hard rule enforced by the compiler, not a guideline.
+The `await` rule follows from how `async` works: at an `await`, locals that are still needed afterward move into a state machine object on the heap, and a span can't go there. Since C# 13, a span local is allowed in an `async` method as long as every use of it falls between two awaits and none spans one.
 
-These constraints are the price for `Span<T>`'s performance. When code stays within a single synchronous method (or a chain of synchronous calls), `Span<T>` is the right tool. When code needs to cross async boundaries or store references for later, that's where `Memory<T>` comes in.
+These constraints are the price of `Span<T>`'s performance. When code stays within synchronous methods, `Span<T>` is the right tool. When a buffer has to cross an `await` or be stored for later, that's where `Memory<T>` comes in.
 
 ## ReadOnlySpan&lt;T&gt;: Immutable Views
 
@@ -210,7 +210,7 @@ The rule of thumb: start with `Span<T>` for parameters and local processing. Upg
 
 Even with spans, code sometimes needs actual arrays (for APIs that require `byte[]`, for storage across async boundaries, or when the data outlives a single method call). `ArrayPool<T>` addresses the allocation cost by renting arrays from a pool instead of allocating new ones each time.
 
-The problem it solves is specific: code that frequently allocates and discards arrays of similar sizes. Each allocation adds GC pressure, and arrays larger than 85,000 bytes land on the Large Object Heap (LOH), which is only collected during expensive Gen 2 collections. Pooling reuses existing arrays instead of creating new ones.
+The problem it solves is specific: code that frequently allocates and discards arrays of similar sizes. Each allocation adds GC pressure, and arrays of 85,000 bytes or more land on the Large Object Heap (LOH), which is only collected during expensive Gen 2 collections. Pooling reuses existing arrays instead of creating new ones.
 
 ```csharp
 public void ProcessChunks(Stream input)
@@ -232,6 +232,8 @@ public void ProcessChunks(Stream input)
 ```
 
 There are two important behaviors to understand. First, `Rent` may return an array larger than requested. The pool buckets arrays by size ranges, so requesting 4096 bytes might return a 4096-byte array or an 8192-byte one. Code must track the actual length it needs rather than relying on `buffer.Length`. Second, `Return` doesn't clear the array by default. If the buffer held sensitive data like passwords or tokens, pass `clearArray: true` to zero it out before returning.
+
+Pooling also brings the bugs of manual memory management back into a garbage-collected language. Code that keeps using an array after returning it reads or corrupts data that another caller has since rented. Returning the same array twice lets two callers rent it at once. Neither fails loudly, so keep the rent and return in one method with a `try`/`finally`, and don't let the array escape it.
 
 The `Shared` pool is a singleton suitable for most use cases. For specialized scenarios where the default pool's bucket sizes or retention policies don't fit, `ArrayPool<T>.Create()` creates a custom pool.
 
@@ -274,7 +276,7 @@ buffer.Fill(0);
 // buffer[200] = 1;  // Throws IndexOutOfRangeException - bounds checked
 ```
 
-Stack allocation is ideal for small, short-lived temporary buffers. The key constraint is size: the default thread stack in .NET is 1MB. Allocating too much on the stack causes a `StackOverflowException`, which is unrecoverable. A common defensive pattern allocates on the stack for small sizes and falls back to the heap for larger ones.
+Stack allocation is ideal for small, short-lived temporary buffers. The key constraint is size: a thread's stack is typically around a megabyte, and less on some platforms. Allocating too much on the stack causes a `StackOverflowException`, which can't be caught and terminates the process. A common defensive pattern allocates on the stack for small sizes and falls back to the heap for larger ones.
 
 ```csharp
 public static bool TryFormatValue(int value, Span<char> destination, out int charsWritten)
@@ -300,7 +302,7 @@ public static bool TryFormatValue(int value, Span<char> destination, out int cha
 }
 ```
 
-The typical threshold is 256 to 512 bytes for unconditional stack allocation. Above that, code should either fall back to the heap or use `ArrayPool<T>`.
+A common cutoff for unconditional stack allocation is somewhere between a few hundred bytes and 1 KB. Above that, code should either fall back to the heap or use `ArrayPool<T>`.
 
 ```csharp
 const int StackThreshold = 256;
@@ -309,6 +311,8 @@ Span<byte> buffer = size <= StackThreshold
     ? stackalloc byte[size]
     : new byte[size];  // Falls back to heap allocation for larger sizes
 ```
+
+Never `stackalloc` inside a loop. Stack memory is released only when the method returns, not at the end of each iteration, so a loop that allocates 256 bytes per pass a few thousand times overflows the stack. Allocate the buffer once before the loop and reuse it.
 
 ## Inline Arrays (C# 12): Fixed-Size Buffers Without Unsafe
 
@@ -362,13 +366,11 @@ public struct FastAsciiClassifier
 }
 ```
 
-Inline arrays make sense when the size is known at compile time and is small enough that embedding in a struct is reasonable. For dynamically sized or large buffers, `Span<T>` with `stackalloc` or `ArrayPool<T>` remains the better choice.
+Inline arrays make sense when the size is known at compile time and small enough that copying the whole struct stays cheap. For dynamically sized or large buffers, `Span<T>` with `stackalloc` or `ArrayPool<T>` remains the better choice.
 
-## Ref Structs: Building Stack-Only Types
+## Ref Structs Built Over Spans
 
-`Span<T>` is a `ref struct`, but any code can define its own ref structs. The `ref struct` modifier tells the compiler that instances of this type must live on the stack and follow the same restrictions as `Span<T>`: no boxing, no heap storage, no use in async methods or lambdas.
-
-The reason to build custom ref structs is to create types that compose over `Span<T>`. Since `Span<T>` can't be a field in a regular struct or class, any type that needs a `Span<T>` field must itself be a ref struct.
+A class or ordinary struct can't hold a `Span<T>` field, so a type that needs to keep a span, such as a parser that walks through a buffer, must itself be a `ref struct` and accept the same confinement.
 
 ```csharp
 public ref struct LineReader
@@ -403,7 +405,7 @@ public ref struct LineReader
 }
 ```
 
-This `LineReader` can iterate through lines in a string or any character buffer without allocating a single object. Each "line" is just a span pointing into the original text. Compare this to `string.Split('\n')`, which allocates an array and a new string for every line.
+This `LineReader` iterates through the lines of a string or any character buffer without allocating a single object. Each "line" is a span pointing into the original text. Compare this to `string.Split('\n')`, which allocates an array and a new string for every line.
 
 ```csharp
 string logFile = File.ReadAllText("server.log");
@@ -418,7 +420,7 @@ while (reader.TryReadLine(out ReadOnlySpan<char> line))
 }
 ```
 
-Ref structs gained `IDisposable` support in C# 8, allowing them to participate in `using` statements. This is useful for ref structs that rent from pools or hold other resources that need deterministic cleanup.
+A `ref struct` that rents a resource can still be used with `using`. Since C# 8, `using` accepts any `ref struct` with an accessible `Dispose()` method, without the type implementing `IDisposable`:
 
 ```csharp
 public ref struct RentedBuffer<T>
@@ -444,9 +446,9 @@ public ref struct RentedBuffer<T>
     }
 }
 
-// Usage: array is returned to the pool when 'buffer' goes out of scope
+// The array returns to the pool when 'buffer' goes out of scope
 using var buffer = new RentedBuffer<byte>(4096);
-stream.Read(buffer.Span);
+int read = stream.Read(buffer.Span);
 ```
 
 ## Practical Patterns
@@ -531,17 +533,24 @@ ReadOnlySpan<char> formattedPrice = buffer[..written];
 
 The `string.Create` method takes this further, letting code build a string by writing directly into the string's internal buffer during construction. The string is allocated once at its final size rather than assembled through concatenation or `StringBuilder`.
 
+That final size must be exact. `string.Create` allocates exactly the length it's given, and any characters the callback doesn't write stay as `'\0'` inside the returned string. Compute the length first:
+
 ```csharp
-string result = string.Create(20, (id: 42, name: "Alice"), (chars, state) =>
+int id = 42;
+string name = "Alice";
+
+int length = CountDigits(id) + 2 + name.Length;   // "42: Alice" is 9 characters
+string result = string.Create(length, (id, name), (chars, state) =>
 {
-    int pos = 0;
     state.id.TryFormat(chars, out int written);
-    pos += written;
-    ": ".AsSpan().CopyTo(chars[pos..]);
-    pos += 2;
-    state.name.AsSpan().CopyTo(chars[pos..]);
+    ": ".CopyTo(chars[written..]);
+    state.name.CopyTo(chars[(written + 2)..]);
 });
+
+static int CountDigits(int value) => value == 0 ? 1 : (int)Math.Floor(Math.Log10(Math.Abs((double)value))) + 1 + (value < 0 ? 1 : 0);
 ```
+
+For most formatting, an interpolated string is simpler and, since C# 10 and .NET 6, already formats each value straight into one buffer without intermediate strings. `string.Create` is for hot paths where the length is cheap to know in advance.
 
 ## When These Optimizations Matter
 
@@ -551,4 +560,20 @@ These types add complexity to code. A method using `ReadOnlySpan<char>` is harde
 
 **Don't reach for these types when** allocations are infrequent or the code isn't on a hot path. A method that runs once during startup, a configuration parser that processes a 50-line file, or a CLI tool that runs and exits doesn't benefit meaningfully from zero-allocation techniques. The GC handles occasional allocations with negligible overhead.
 
+Recent C# versions keep lowering the cost of using spans. C# 13 lets a method declare `params ReadOnlySpan<T>`, so callers pass a variable number of arguments without allocating an array. C# 14 adds implicit conversions from arrays to spans in more places, such as calling an extension method written for `ReadOnlySpan<T>` directly on an array.
+
 The practical approach is to write straightforward code first, measure with a profiler or `BenchmarkDotNet`, and then apply span-based optimizations to the specific methods where allocation shows up as a cost. These types are surgical tools for measured problems, not defaults for all code.
+
+## Key Takeaways
+
+**A span is a view, not a copy.** Slicing an array, a string, stack memory, or native memory produces a window onto the same data, with no allocation.
+
+**Spans stay on the stack.** They can't be fields of ordinary types, can't be captured, and can't survive an `await`. Use `Memory<T>` to carry a buffer through async code and take `.Span` to process it.
+
+**Accept `ReadOnlySpan<T>` when a method only reads.** It takes arrays, strings, and stack buffers alike.
+
+**Pool buffers carefully.** `ArrayPool<T>` may hand back a larger array, doesn't clear on return by default, and turns use-after-return into silent data corruption.
+
+**Keep `stackalloc` small and out of loops.** Fall back to the heap or the pool above a fixed threshold.
+
+**Measure first.** These techniques pay off on hot paths that a profiler has shown to be allocation-bound, and cost readability everywhere else.

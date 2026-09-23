@@ -1,0 +1,82 @@
+---
+title: "Where the Quantum Boundary Falls"
+kind: structure
+system: architecture-styles
+summary: "A synchronous call, a queued message, and a shared database."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="aqb-title aqb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aqb-title">Where the architecture quantum boundary falls in three cases</title>
+<desc id="aqb-desc">Three cases. A synchronous call from Order to Payment binds them into one quantum: if Payment is down, orders stop. An asynchronous message through a queue leaves Order and Payment as two quanta: if Payment is down, orders wait in the queue and are paid later. Three services that deploy separately but share one database form one quantum, because none can run correctly without the shared database.</desc>
+<style>
+.aqb-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.aqb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aqb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.aqb-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.aqb-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.aqb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aqb-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.aqb-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aqb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aqb-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.aqb-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.aqb-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.aqb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="aqb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="aqb-band" x="20" y="20" width="270" height="320" rx="8"/>
+<text class="aqb-hd" x="34" y="40">SYNCHRONOUS CALL</text>
+<rect class="aqb-grp" x="40" y="48" width="230" height="236" rx="8"/>
+<text class="aqb-lab" x="56" y="272">one quantum</text>
+<rect class="aqb-box" x="70" y="62" width="170" height="50" rx="6"/>
+<text class="aqb-n" x="155.0" y="91.0" text-anchor="middle">Order</text>
+<rect class="aqb-box" x="70" y="200" width="170" height="50" rx="6"/>
+<text class="aqb-n" x="155.0" y="229.0" text-anchor="middle">Payment</text>
+<path class="aqb-flow" d="M 135,112 L 135,194" marker-end="url(#aqb-a)"/>
+<text class="aqb-lab" x="127" y="158" text-anchor="end">request</text>
+<path class="aqb-flow" d="M 175,200 L 175,118" marker-end="url(#aqb-a)"/>
+<text class="aqb-lab" x="183" y="158">response</text>
+<text class="aqb-note" x="40" y="310">Payment down: orders stop.</text>
+<rect class="aqb-band" x="315" y="20" width="270" height="320" rx="8"/>
+<text class="aqb-hd" x="329" y="40">ASYNCHRONOUS MESSAGE</text>
+<rect class="aqb-grp" x="335" y="48" width="230" height="80" rx="8"/>
+<rect class="aqb-box" x="365" y="58" width="170" height="44" rx="6"/>
+<text class="aqb-n" x="450.0" y="84.0" text-anchor="middle">Order</text>
+<text class="aqb-lab" x="549" y="120" text-anchor="end">quantum</text>
+<rect class="aqb-mute" x="390" y="146" width="120" height="32" rx="6"/>
+<text class="aqb-s" x="450.0" y="166.5" text-anchor="middle">queue</text>
+<rect class="aqb-grp" x="335" y="198" width="230" height="86" rx="8"/>
+<rect class="aqb-box" x="365" y="208" width="170" height="44" rx="6"/>
+<text class="aqb-n" x="450.0" y="234.0" text-anchor="middle">Payment</text>
+<text class="aqb-lab" x="549" y="276" text-anchor="end">quantum</text>
+<path class="aqb-flow" d="M 450,102 L 450,140" marker-end="url(#aqb-a)"/>
+<path class="aqb-flow" d="M 450,178 L 450,202" marker-end="url(#aqb-a)"/>
+<text class="aqb-note" x="335" y="310">Payment down: orders wait in the</text>
+<text class="aqb-note" x="335" y="327">queue and are paid later.</text>
+<rect class="aqb-band" x="610" y="20" width="270" height="320" rx="8"/>
+<text class="aqb-hd" x="624" y="40">SHARED DATABASE</text>
+<rect class="aqb-grp" x="630" y="48" width="230" height="236" rx="8"/>
+<rect class="aqb-box" x="644" y="62" width="64" height="50" rx="6"/>
+<text class="aqb-n" x="676.0" y="91.0" text-anchor="middle">Svc A</text>
+<rect class="aqb-box" x="716" y="62" width="64" height="50" rx="6"/>
+<text class="aqb-n" x="748.0" y="91.0" text-anchor="middle">Svc B</text>
+<rect class="aqb-box" x="788" y="62" width="64" height="50" rx="6"/>
+<text class="aqb-n" x="820.0" y="91.0" text-anchor="middle">Svc C</text>
+<path class="aqb-flow" d="M 676,112 C 676,160 720,160 730,194" marker-end="url(#aqb-a)"/>
+<path class="aqb-flow" d="M 745,112 V 194" marker-end="url(#aqb-a)"/>
+<path class="aqb-flow" d="M 820,112 C 820,160 770,160 760,194" marker-end="url(#aqb-a)"/>
+<rect class="aqb-sys" x="670" y="200" width="150" height="50" rx="6"/>
+<text class="aqb-n-inv" x="745.0" y="229.0" text-anchor="middle">One database</text>
+<text class="aqb-lab" x="646" y="272">one quantum</text>
+<text class="aqb-note" x="630" y="310">Deploy separately, but none</text>
+<text class="aqb-note" x="630" y="327">runs without the shared piece.</text>
+<path class="aqb-grp" d="M 20,372 H 54"/>
+<text class="aqb-el" x="62" y="376">quantum boundary</text>
+<path class="aqb-flow" d="M 192.16000000000003,372 H 226.16000000000003"/>
+<text class="aqb-el" x="234.16000000000003" y="376">call, message, or data access</text>
+</g>
+</svg>

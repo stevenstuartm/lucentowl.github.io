@@ -1,0 +1,73 @@
+---
+title: "Fan-Out and Competing Consumers"
+kind: flow
+system: distributed-patterns
+summary: "Every subscription gets a copy; one instance per subscription takes it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="pfc-title pfc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pfc-title">Fan-out across subscriptions and competing consumers within one</title>
+<desc id="pfc-desc">A publisher sends an order placed message to a topic. The topic delivers a copy to every subscription: inventory, payment, and notification. Within the payment subscription, three instances of the payment service compete, and each message goes to only one of them. Fan-out decides which services hear about a message. Competing consumers decide how one service scales its processing.</desc>
+<style>
+.pfc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.pfc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pfc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pfc-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pfc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pfc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pfc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.pfc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pfc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pfc-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pfc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.pfc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.pfc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pfc-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="pfc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pfc-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pfc-box" x="40" y="150" width="120" height="44" rx="6"/>
+<text class="pfc-n" x="100.0" y="176.0" text-anchor="middle">Publisher</text>
+<rect class="pfc-sys" x="210" y="140" width="120" height="64" rx="6"/>
+<text class="pfc-n-inv" x="270.0" y="167.5" text-anchor="middle">Topic</text>
+<text class="pfc-k-inv" x="270.0" y="185.5" text-anchor="middle">order placed</text>
+<path class="pfc-ctl" d="M 160,172 H 204" marker-end="url(#pfc-c)"/>
+<rect class="pfc-band" x="400" y="20" width="300" height="70" rx="8"/>
+<text class="pfc-hd" x="414" y="40">INVENTORY SUBSCRIPTION</text>
+<path class="pfc-ctl" d="M 330,172 C 370,172 370,55.0 394,55.0" marker-end="url(#pfc-c)"/>
+<rect class="pfc-box" x="560" y="48" width="120" height="30" rx="6"/>
+<text class="pfc-s" x="620.0" y="67.5" text-anchor="middle">one instance</text>
+<rect class="pfc-band" x="400" y="106" width="300" height="170" rx="8"/>
+<text class="pfc-hd" x="414" y="126">PAYMENT SUBSCRIPTION</text>
+<path class="pfc-ctl" d="M 330,172 C 370,172 370,191.0 394,191.0" marker-end="url(#pfc-c)"/>
+<rect class="pfc-box" x="560" y="136" width="120" height="32" rx="6"/>
+<text class="pfc-s" x="620.0" y="156.5" text-anchor="middle">instance 1</text>
+<rect class="pfc-mute" x="560" y="180" width="120" height="32" rx="6"/>
+<text class="pfc-s" x="620.0" y="200.5" text-anchor="middle">instance 2</text>
+<rect class="pfc-mute" x="560" y="224" width="120" height="32" rx="6"/>
+<text class="pfc-s" x="620.0" y="244.5" text-anchor="middle">instance 3</text>
+<path class="pfc-flow" d="M 404,191 C 500,191 500,152 554,152" marker-end="url(#pfc-a)"/>
+<text class="pfc-lab" x="416" y="214">this message</text>
+<text class="pfc-el" x="420" y="256">next message may go</text>
+<text class="pfc-el" x="420" y="270">to another instance</text>
+<rect class="pfc-band" x="400" y="292" width="300" height="70" rx="8"/>
+<text class="pfc-hd" x="414" y="312">NOTIFICATION SUBSCRIPTION</text>
+<path class="pfc-ctl" d="M 330,172 C 370,172 370,327.0 394,327.0" marker-end="url(#pfc-c)"/>
+<rect class="pfc-box" x="560" y="320" width="120" height="30" rx="6"/>
+<text class="pfc-s" x="620.0" y="339.5" text-anchor="middle">one instance</text>
+<text class="pfc-hd" x="210" y="240">FAN-OUT</text>
+<text class="pfc-note" x="210" y="258">every subscription</text>
+<text class="pfc-note" x="210" y="274">gets its own copy</text>
+<text class="pfc-hd" x="720" y="172">COMPETING CONSUMERS</text>
+<text class="pfc-note" x="720" y="190">one instance</text>
+<text class="pfc-note" x="720" y="206">takes each message</text>
+<path class="pfc-ctl" d="M 40,388 H 74"/>
+<text class="pfc-el" x="82" y="392">copy of the message</text>
+<path class="pfc-flow" d="M 229.815,388 H 263.815"/>
+<text class="pfc-el" x="271.815" y="392">delivered to one instance</text>
+</g>
+</svg>

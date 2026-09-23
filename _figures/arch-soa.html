@@ -1,0 +1,60 @@
+---
+title: "Orchestration-Driven SOA"
+kind: layering
+system: architecture-styles
+summary: "The service taxonomy, with the orchestration engine and bus in the middle."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 460" role="img" aria-labelledby="soa-title soa-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="soa-title">Orchestration-driven service-oriented architecture</title>
+<desc id="soa-desc">Consumers such as applications, partners, and user interfaces call coarse-grained business services such as Submit loan application. Business services run through the orchestration engine and enterprise service bus, which handle process flow, routing, transformation, and protocol mediation. The bus calls shared enterprise services such as Validate customer and Calculate credit score, and one-off application services. Infrastructure services for logging and security sit beneath them all.</desc>
+<style>
+.soa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.soa-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.soa-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.soa-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.soa-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.soa-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.soa-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.soa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.soa-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.soa-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.soa-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="soa-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="soa-ext" x="40" y="20" width="820" height="40" rx="6"/>
+<text class="soa-s" x="450.0" y="44.5" text-anchor="middle">Consumers: applications, partners, user interfaces</text>
+<path class="soa-flow" d="M 450,60 L 450,84" marker-end="url(#soa-a)"/>
+<rect class="soa-box" x="40" y="90" width="820" height="60" rx="6"/>
+<text class="soa-n" x="54" y="114">Business services</text>
+<text class="soa-k" x="54" y="132">coarse-grained entry points for whole processes</text>
+<rect class="soa-mute" x="600" y="102" width="240" height="36" rx="6"/>
+<text class="soa-s" x="720.0" y="124.5" text-anchor="middle">"Submit loan application"</text>
+<path class="soa-flow" d="M 450,150 L 450,174" marker-end="url(#soa-a)"/>
+<rect class="soa-sys" x="40" y="180" width="820" height="64" rx="6"/>
+<text class="soa-n-inv" x="54" y="206">Orchestration engine and enterprise service bus</text>
+<text class="soa-s-inv" x="54" y="224">process flow, routing, transformation, protocol mediation</text>
+<rect class="soa-box" x="40" y="290" width="260" height="76" rx="6"/>
+<text class="soa-n" x="54" y="314">Enterprise service</text>
+<text class="soa-k" x="54" y="332">[shared, reused]</text>
+<text class="soa-s" x="54" y="349">Validate customer</text>
+<path class="soa-flow" d="M 170,244 L 170,284" marker-end="url(#soa-a)"/>
+<rect class="soa-box" x="320" y="290" width="260" height="76" rx="6"/>
+<text class="soa-n" x="334" y="314">Enterprise service</text>
+<text class="soa-k" x="334" y="332">[shared, reused]</text>
+<text class="soa-s" x="334" y="349">Calculate credit score</text>
+<path class="soa-flow" d="M 450,244 L 450,284" marker-end="url(#soa-a)"/>
+<rect class="soa-box" x="600" y="290" width="260" height="76" rx="6"/>
+<text class="soa-n" x="614" y="314">Application service</text>
+<text class="soa-k" x="614" y="332">[one-off]</text>
+<text class="soa-s" x="614" y="349">single application only</text>
+<path class="soa-flow" d="M 730,244 L 730,284" marker-end="url(#soa-a)"/>
+<rect class="soa-mute" x="40" y="390" width="820" height="40" rx="6"/>
+<text class="soa-s" x="450.0" y="414.5" text-anchor="middle">Infrastructure services: logging, monitoring, authentication, authorization</text>
+<text class="soa-note" x="40" y="452">All communication flows through the bus, which makes it the central coupling point.</text>
+</g>
+</svg>

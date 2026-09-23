@@ -1,0 +1,58 @@
+---
+title: "Mesh Ingress and Egress Gateways"
+kind: boundary
+system: distributed-patterns
+summary: "One controlled path into the mesh and one controlled path out."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="pmg-title pmg-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pmg-title">Ingress and egress gateways at the mesh boundary</title>
+<desc id="pmg-desc">An external client's traffic enters the mesh through an ingress gateway, which handles external TLS and mesh routing. Inside the mesh, where traffic uses mutual TLS, the request goes to service A and then service B. Service B's call to an external API leaves through an egress gateway, which applies an allow list and audit, and TLS toward the external API is originated at the gateway.</desc>
+<style>
+.pmg-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pmg-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.pmg-ext { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.pmg-mesh { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.pmg-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pmg-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.pmg-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.pmg-s-inv { font-size: 11px; fill: #E8F1F8; }
+.pmg-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pmg-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.pmg-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="pmg-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pmg-ext" x="60" y="20" width="160" height="44" rx="6"/>
+<text class="pmg-n-mute" x="140.0" y="46.5" text-anchor="middle">External client</text>
+<rect class="pmg-ext" x="680" y="20" width="160" height="44" rx="6"/>
+<text class="pmg-n-mute" x="760.0" y="46.5" text-anchor="middle">External API</text>
+
+<rect class="pmg-mesh" x="30" y="120" width="840" height="180" rx="10"/>
+<text class="pmg-hd" x="46" y="288">MESH (mTLS INSIDE)</text>
+
+<rect class="pmg-sys" x="60" y="96" width="160" height="80" rx="6"/>
+<text class="pmg-n-inv" x="76" y="134">Ingress gateway</text>
+<text class="pmg-s-inv" x="76" y="152">external TLS,</text>
+<text class="pmg-s-inv" x="76" y="167">mesh routing</text>
+<rect class="pmg-sys" x="680" y="96" width="160" height="80" rx="6"/>
+<text class="pmg-n-inv" x="696" y="134">Egress gateway</text>
+<text class="pmg-s-inv" x="696" y="152">allow list,</text>
+<text class="pmg-s-inv" x="696" y="167">audit</text>
+
+<rect class="pmg-box" x="300" y="210" width="120" height="44" rx="6"/>
+<text class="pmg-n" x="360.0" y="236.5" text-anchor="middle">Service A</text>
+<rect class="pmg-box" x="480" y="210" width="120" height="44" rx="6"/>
+<text class="pmg-n" x="540.0" y="236.5" text-anchor="middle">Service B</text>
+
+<path class="pmg-flow" d="M 140,64 L 140,90" marker-end="url(#pmg-a)"/>
+<path class="pmg-flow" d="M 140,176 L 140,232 L 294,232" marker-end="url(#pmg-a)"/>
+<path class="pmg-flow" d="M 420,232 L 474,232" marker-end="url(#pmg-a)"/>
+<path class="pmg-flow" d="M 600,232 L 760,232 L 760,182" marker-end="url(#pmg-a)"/>
+<path class="pmg-flow" d="M 760,96 L 760,70" marker-end="url(#pmg-a)"/>
+<text class="pmg-lab" x="750" y="88" text-anchor="end">TLS originated at the gateway</text>
+</g>
+</svg>

@@ -1,0 +1,51 @@
+---
+title: "Fixed Window Boundary Burst"
+kind: chart
+system: distributed-patterns
+summary: "Two full windows back to back let double the limit through."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 290" role="img" aria-labelledby="pfw-title pfw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pfw-title">A fixed window rate limit allowing a burst across a window boundary</title>
+<desc id="pfw-desc">A timeline from 12:00:00 to 12:02:00 split into two one-minute windows with a limit of 100 requests each. 100 requests arrive at 12:00:59, at the end of the first window, and another 100 at 12:01:00, at the start of the second. Each window stays within its limit, yet 200 requests arrive within two seconds.</desc>
+<style>
+.pfw-win { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pfw-bar { fill: var(--color-accent, #A5486E); }
+.pfw-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pfw-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pfw-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.pfw-labg { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.pfw-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.pfw-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pfw-brk { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+</style>
+
+<defs>
+<marker id="pfw-m" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pfw-win" x="90" y="70" width="360" height="150" rx="0"/>
+<text class="pfw-n" x="104" y="92">Window 1</text>
+<text class="pfw-labg" x="104" y="110">100 of 100 allowed</text>
+<rect class="pfw-win" x="450" y="70" width="360" height="150" rx="0"/>
+<text class="pfw-n" x="796" y="92" text-anchor="end">Window 2</text>
+<text class="pfw-labg" x="796" y="110" text-anchor="end">100 of 100 allowed</text>
+
+<rect class="pfw-bar" x="436" y="130" width="12" height="90"/>
+<rect class="pfw-bar" x="452" y="130" width="12" height="90"/>
+<text class="pfw-labr" x="428" y="160" text-anchor="end">100 at 12:00:59</text>
+<text class="pfw-labr" x="472" y="160">100 at 12:01:00</text>
+
+<path class="pfw-brk" d="M 434,50 V 42 H 466 V 50"/>
+<text class="pfw-labr" x="450" y="32" text-anchor="middle">200 requests within two seconds</text>
+
+<path class="pfw-axis" d="M 90,220 L 840,220" marker-end="url(#pfw-m)"/>
+<path class="pfw-axis" d="M 90,214 V 226"/>
+<text class="pfw-ax" x="90" y="244" text-anchor="middle">12:00:00</text>
+<path class="pfw-axis" d="M 450,214 V 226"/>
+<text class="pfw-ax" x="450" y="244" text-anchor="middle">12:01:00</text>
+<path class="pfw-axis" d="M 810,214 V 226"/>
+<text class="pfw-ax" x="810" y="244" text-anchor="middle">12:02:00</text>
+<text class="pfw-s" x="450" y="272" text-anchor="middle">Limit: 100 requests per one-minute window</text>
+</g>
+</svg>

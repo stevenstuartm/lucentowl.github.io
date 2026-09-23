@@ -1,0 +1,64 @@
+---
+title: "The Lost Update"
+kind: dynamic
+system: architecture-design
+summary: "Client A's full-state write silently overwrites client B's change."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="dlu-title dlu-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dlu-title">Two clients losing an update through full-state writes</title>
+<desc id="dlu-desc">Client A gets the profile and receives email a@x and phone 1. Client B gets the same profile. B changes the phone and puts email a@x, phone 2, and the server stores phone 2. A then changes the email and puts email b@x with the stale phone 1, and the server stores email b@x, phone 1. B's phone change is gone.</desc>
+<style>
+.dlu-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dlu-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dlu-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dlu-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dlu-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 4 4; }
+.dlu-req { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.dlu-resp { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.dlu-code { font-size: 11.5px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dlu-note { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.dlu-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; }
+.dlu-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.dlu-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+
+<defs>
+<marker id="dlu-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dlu-box" x="60" y="16" width="120" height="36" rx="6"/>
+<text class="dlu-n" x="120.0" y="38.5" text-anchor="middle">Client A</text>
+<rect class="dlu-sys" x="390" y="16" width="120" height="36" rx="6"/>
+<text class="dlu-n-inv" x="450.0" y="38.5" text-anchor="middle">Server</text>
+<rect class="dlu-box" x="720" y="16" width="120" height="36" rx="6"/>
+<text class="dlu-n" x="780.0" y="38.5" text-anchor="middle">Client B</text>
+<path class="dlu-life" d="M 120,52 V 390"/>
+<path class="dlu-life" d="M 450,52 V 390"/>
+<path class="dlu-life" d="M 780,52 V 390"/>
+
+<path class="dlu-req" d="M 120,80 L 444,80" marker-end="url(#dlu-a)"/>
+<text class="dlu-code" x="134" y="72">GET /profile</text>
+<path class="dlu-resp" d="M 450,110 L 126,110" marker-end="url(#dlu-a)"/>
+<text class="dlu-code" x="134" y="102">{email: a@x, phone: 1}</text>
+
+<path class="dlu-req" d="M 780,140 L 456,140" marker-end="url(#dlu-a)"/>
+<text class="dlu-code" x="766" y="132" text-anchor="end">GET /profile</text>
+<path class="dlu-resp" d="M 450,170 L 774,170" marker-end="url(#dlu-a)"/>
+<text class="dlu-code" x="766" y="162" text-anchor="end">{email: a@x, phone: 1}</text>
+
+<path class="dlu-req" d="M 780,210 L 456,210" marker-end="url(#dlu-a)"/>
+<text class="dlu-code" x="766" y="202" text-anchor="end">PUT {email: a@x, phone: 2}</text>
+<text class="dlu-note" x="790" y="214">B changes phone</text>
+<rect class="dlu-store" x="380" y="222" width="140" height="28" rx="5"/>
+<text class="dlu-code" x="450" y="240" text-anchor="middle">stored: phone 2</text>
+
+<path class="dlu-req" d="M 120,280 L 444,280" marker-end="url(#dlu-a)"/>
+<text class="dlu-code" x="134" y="272">PUT {email: b@x, phone: 1}</text>
+<text class="dlu-note" x="134" y="302">A changes email,</text>
+<text class="dlu-note" x="134" y="318">resending stale phone</text>
+<rect class="dlu-bad" x="345" y="294" width="210" height="28" rx="5"/>
+<text class="dlu-code" x="450" y="312" text-anchor="middle">stored: email b@x, phone 1</text>
+<text class="dlu-labr" x="450" y="346" text-anchor="middle">B's phone change is gone</text>
+</g>
+</svg>

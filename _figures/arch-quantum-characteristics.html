@@ -1,0 +1,54 @@
+---
+title: "Characteristics per Architecture Quantum"
+kind: structure
+system: architecture-styles
+summary: "One deployable unit meets the stricter set everywhere; separate quanta do not."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="aqc-title aqc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aqc-title">Architecture characteristics scoped to one unit versus separate quanta</title>
+<desc id="aqc-desc">On the left, checkout and monthly reporting share one deployable unit. Checkout needs high availability and elastic scalability, so the whole unit has to meet them, including reporting, which needs neither. On the right, checkout and reporting are separate quanta. Checkout carries high availability and elastic scalability, and reporting carries neither.</desc>
+<style>
+.aqc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.aqc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aqc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.aqc-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.aqc-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.aqc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aqc-n-bad { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.aqc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.aqc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.aqc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aqc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+
+<defs>
+
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="aqc-band" x="20" y="20" width="420" height="290" rx="8"/>
+<text class="aqc-hd" x="34" y="40">ONE DEPLOYABLE UNIT</text>
+<rect class="aqc-box" x="40" y="50" width="380" height="240" rx="6"/>
+<rect class="aqc-sys" x="40" y="50" width="380" height="44" rx="6"/>
+<text class="aqc-s-inv" x="54" y="77">must meet: high availability, elastic scalability</text>
+<rect class="aqc-box" x="60" y="112" width="340" height="70" rx="6"/>
+<text class="aqc-n" x="74" y="136">Checkout</text>
+<text class="aqc-s" x="74" y="154">needs high availability and elastic scalability</text>
+<rect class="aqc-bad" x="60" y="198" width="340" height="76" rx="6"/>
+<text class="aqc-n-bad" x="74" y="222">Monthly reporting</text>
+<text class="aqc-s" x="74" y="240">needs neither, and has to meet both anyway</text>
+<rect class="aqc-band" x="460" y="20" width="420" height="290" rx="8"/>
+<text class="aqc-hd" x="474" y="40">SEPARATE QUANTA</text>
+<rect class="aqc-box" x="480" y="50" width="380" height="112" rx="6"/>
+<rect class="aqc-sys" x="480" y="50" width="380" height="44" rx="6"/>
+<text class="aqc-s-inv" x="494" y="77">own set: high availability, elastic scalability</text>
+<rect class="aqc-box" x="500" y="104" width="340" height="44" rx="6"/>
+<text class="aqc-n" x="514" y="131">Checkout quantum</text>
+<rect class="aqc-box" x="480" y="178" width="380" height="112" rx="6"/>
+<rect class="aqc-mute" x="480" y="178" width="380" height="44" rx="6"/>
+<text class="aqc-s" x="494" y="205">own set: neither</text>
+<rect class="aqc-box" x="500" y="232" width="340" height="44" rx="6"/>
+<text class="aqc-n" x="514" y="259">Monthly reporting quantum</text>
+<text class="aqc-note" x="20" y="334">Differing characteristics are one of the strongest signals that a system should be split into separate quanta.</text>
+</g>
+</svg>

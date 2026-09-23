@@ -1,0 +1,63 @@
+---
+title: "Compensatable, Pivot, and Retriable Steps"
+kind: flow
+system: distributed-patterns
+summary: "The pivot is the point of no return in a saga."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 280" role="img" aria-labelledby="ppv-title ppv-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ppv-title">Compensatable, pivot, and retriable saga steps</title>
+<desc id="ppv-desc">Five saga steps in order. CreateOrder and ReserveInventory are compensatable, with CancelOrder and ReleaseInventory as their compensations. ChargePayment is the pivot, the go or no-go point. After it commits, the saga is committed to finishing. ShipOrder and SendConfirmation are retriable: no compensation exists, so the saga retries each until it succeeds.</desc>
+<style>
+.ppv-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ppv-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ppv-good { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 1.75; }
+.ppv-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ppv-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.ppv-n-good { font-size: 12.5px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.ppv-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ppv-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.ppv-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.ppv-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.ppv-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ppv-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.ppv-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ppv-redd { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="ppv-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ppv-box" x="30" y="90" width="146" height="76" rx="6"/>
+<text class="ppv-n" x="44" y="114">T1</text>
+<text class="ppv-k" x="44" y="132">CreateOrder</text>
+<text class="ppv-s" x="44" y="149">C1: CancelOrder</text>
+<rect class="ppv-box" x="202" y="90" width="146" height="76" rx="6"/>
+<text class="ppv-n" x="216" y="114">T2</text>
+<text class="ppv-k" x="216" y="132">ReserveInventory</text>
+<text class="ppv-s" x="216" y="149">C2: ReleaseInventory</text>
+<path class="ppv-flow" d="M 176,128 L 196,128" marker-end="url(#ppv-a)"/>
+<rect class="ppv-sys" x="374" y="90" width="146" height="76" rx="6"/>
+<text class="ppv-n-inv" x="388" y="114">T3</text>
+<text class="ppv-k-inv" x="388" y="132">ChargePayment</text>
+<text class="ppv-s-inv" x="388" y="149">C3: RefundPayment</text>
+<path class="ppv-flow" d="M 348,128 L 368,128" marker-end="url(#ppv-a)"/>
+<rect class="ppv-good" x="546" y="90" width="146" height="76" rx="6"/>
+<text class="ppv-n-good" x="560" y="114">T4</text>
+<text class="ppv-k" x="560" y="132">ShipOrder</text>
+<text class="ppv-s" x="560" y="149">no compensation</text>
+<path class="ppv-flow" d="M 520,128 L 540,128" marker-end="url(#ppv-a)"/>
+<rect class="ppv-good" x="718" y="90" width="146" height="76" rx="6"/>
+<text class="ppv-n-good" x="732" y="114">T5</text>
+<text class="ppv-k" x="732" y="132">SendConfirmation</text>
+<text class="ppv-s" x="732" y="149">no compensation</text>
+<path class="ppv-flow" d="M 692,128 L 712,128" marker-end="url(#ppv-a)"/>
+<text class="ppv-hd" x="30" y="66">COMPENSATABLE: CAN BE UNDONE</text>
+<text class="ppv-hd" x="374" y="66">PIVOT</text>
+<text class="ppv-hd" x="546" y="66">RETRIABLE: RETRIED UNTIL THEY SUCCEED</text>
+<path class="ppv-redd" d="M 532,40 V 214"/>
+<text class="ppv-labr" x="532" y="236" text-anchor="middle">point of no return: once the pivot commits,</text>
+<text class="ppv-labr" x="532" y="252" text-anchor="middle">the saga is committed to finishing</text>
+</g>
+</svg>

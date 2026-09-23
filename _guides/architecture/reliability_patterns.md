@@ -45,6 +45,8 @@ Retrying immediately gives a struggling service no time to recover. Exponential 
 
 Backoff alone still has a problem. If a hundred clients all failed at the same moment, they all back off by the same amounts and retry in synchronized waves, each hitting the service at once. Jitter randomizes the delay to spread those waves out. Marc Brooker's [analysis on the AWS Architecture Blog](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/){:target="_blank" rel="noopener noreferrer"} compares several forms, and the simplest effective one, full jitter, picks a random delay anywhere up to the exponential value.
 
+{% include figure.html id="pat-retry-jitter" %}
+
 ```
 Full jitter:  sleep = random(0, min(cap, base * 2^attempt))
 
@@ -101,13 +103,7 @@ The check-then-act above still has a gap where two concurrent attempts both pass
 
 A circuit breaker sits in front of a dependency and watches its failures. When failures cross a threshold, it opens and fails calls immediately without making them, which protects the caller from waiting on something broken and gives the dependency room to recover.
 
-```
-CLOSED ─── failures over threshold ──▶ OPEN ─── break duration elapses ──▶ HALF-OPEN
-calls pass                             fail fast                           one trial call
-  ▲                                     ▲                                      │
-  │                                     └────────── trial call fails ──────────┤
-  └─────────────────────────── trial call succeeds ────────────────────────────┘
-```
+{% include figure.html id="pat-circuit-breaker" %}
 
 **Use when**:
 - A dependency can fail for long enough that waiting on each call would exhaust the caller's resources
@@ -126,25 +122,18 @@ Resilience4j is the standard library in the JVM world. Polly fills the same role
 
 Named after the watertight compartments in a ship's hull, a bulkhead gives each dependency or class of work its own limited pool of resources, so one of them exhausting its pool can't sink the others.
 
-```
-Without bulkheads                         With bulkheads
-
-  All requests                              Checkout ─▶ [ pool: 40 ] ─▶ Payment API
-      │                                     Search   ─▶ [ pool: 20 ] ─▶ Search index
-      ▼                                     Reports  ─▶ [ pool: 10 ] ─▶ Reporting DB
-  [ shared pool: 70 ]
-      │                                     Reporting DB hangs:
-  Reporting DB hangs,                       its 10 slots fill and further report
-  its calls hold all 70 slots,              calls are rejected. Checkout and
-  checkout and search stall too             search keep their own slots.
-```
+{% include figure.html id="pat-bulkhead" %}
 
 **Use when**:
 - Some work matters more than other work sharing the same process
 - One dependency is noticeably less reliable than the rest
 - A spike in one kind of traffic shouldn't starve another
 
-**How it's applied**: separate connection pools per downstream dependency, a concurrency limit per dependency in the client library, separate thread pools or queues per class of work, or at a coarser grain, separate instances or deployments for critical and non-critical workloads.
+**How it's applied**:
+- Separate connection pools per downstream dependency
+- A concurrency limit per dependency in the client library
+- Separate thread pools or queues per class of work
+- At a coarser grain, separate instances or deployments for critical and non-critical workloads
 
 **Trade-offs**: Partitioned pools waste capacity, since one can sit idle while another rejects work it could have absorbed. Sizing each partition is a capacity-planning exercise that has to be redone as traffic shifts. Rejected work also needs somewhere to go, whether a fast error, a queue, or a fallback.
 
@@ -212,27 +201,7 @@ When part of the system fails, graceful degradation keeps the rest of it useful 
 
 These patterns are layers, and their order matters. The outermost layer sees one logical request, and the innermost sees one attempt.
 
-```
-Request
-  │
-  ▼
-┌─────────────────────────────────────────────────────────┐
-│ Total timeout: the whole operation, retries included    │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │ Retry: backoff with jitter, capped attempts       │  │
-│  │  ┌─────────────────────────────────────────────┐  │  │
-│  │  │ Circuit breaker: counts every attempt,      │  │  │
-│  │  │ fails fast when open                        │  │  │
-│  │  │  ┌───────────────────────────────────────┐  │  │  │
-│  │  │  │ Attempt timeout: one call             │  │  │  │
-│  │  │  │         │                             │  │  │  │
-│  │  │  │         ▼                             │  │  │  │
-│  │  │  │    Dependency                         │  │  │  │
-│  │  │  └───────────────────────────────────────┘  │  │  │
-│  │  └─────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
+{% include figure.html id="pat-resilience-layers" %}
 
 The circuit breaker sits inside the retry so that each attempt counts toward its failure ratio, and so that an open breaker fails every remaining retry immediately rather than waiting. The attempt timeout sits innermost so that a hung call counts as a failure. The total timeout sits outermost so retries can't stretch a request past its deadline.
 

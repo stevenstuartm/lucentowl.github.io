@@ -50,6 +50,8 @@ Two counts quantify coupling from a component's point of view:
 </div>
 </div>
 
+{% include figure.html id="arch-afferent-efferent" %}
+
 Both counts see only static dependencies, the kind visible in the code. Coupling on timing or execution order doesn't show up in them. Connascence, covered below, names that kind precisely.
 
 ### Abstractness, Instability, and the Main Sequence
@@ -80,20 +82,7 @@ D = |A + I - 1|
 
 The main sequence is the line A + I = 1. Components near it balance the two properties. Stable components are abstract enough to extend without modification, and unstable components can be concrete because nothing depends on them. D near zero is healthy. Components far from the line fall into one of two zones.
 
-```
-A (abstractness)
-1 ┼ ●                          Zone of uselessness
-  │   ●                        (abstract, nothing depends on it)
-  │     ●
-  │       ●     main sequence
-  │         ●   A + I = 1
-  │           ●
-  │ Zone of pain  ●
-  │ (concrete,      ●
-  │ heavily used)     ●
-0 ┼─────────────────────●───── I (instability)
-  0                     1
-```
+{% include figure.html id="arch-main-sequence" %}
 
 <div class="callout callout--warning">
 <p class="callout__title">The Two Zones</p>

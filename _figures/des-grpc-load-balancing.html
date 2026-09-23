@@ -1,0 +1,72 @@
+---
+title: "Balancing gRPC Connections and Calls"
+kind: flow
+system: architecture-design
+summary: "Connection-level balancing pins each client to one pod."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 290" role="img" aria-labelledby="dgl-title dgl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dgl-title">Layer 4 connection balancing compared with call-level balancing for gRPC</title>
+<desc id="dgl-desc">Two panels. With layer 4, connection-level balancing, client A holds one connection that the load balancer sends to pod 1, and client B holds one connection sent to pod 2, so each pod receives all of one client's calls and pod 3 stays idle, including after scale-out. With layer 7 or client-side, call-level balancing, client A's single connection reaches a proxy or balancing client that spreads its calls across pods 1, 2, and 3.</desc>
+<style>
+.dgl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dgl-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dgl-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.dgl-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.dgl-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dgl-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.dgl-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.dgl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dgl-s { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.dgl-conn { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 5; }
+.dgl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="dgl-b" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto-start-reverse"><path d="M0,0 L4.5,2 L0,4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dgl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dgl-grp" x="10" y="16" width="435" height="262" rx="8"/>
+<text class="dgl-hd" x="24" y="38">LAYER 4: CONNECTION-LEVEL</text>
+<rect class="dgl-box" x="24" y="66" width="86" height="36" rx="6"/>
+<text class="dgl-n" x="67.0" y="88.5" text-anchor="middle">Client A</text>
+<rect class="dgl-box" x="24" y="146" width="86" height="36" rx="6"/>
+<text class="dgl-n" x="67.0" y="168.5" text-anchor="middle">Client B</text>
+<rect class="dgl-sys" x="180" y="66" width="60" height="116" rx="6"/>
+<text class="dgl-n-inv" x="210.0" y="128.5" text-anchor="middle">LB</text>
+<path class="dgl-conn" d="M 110,84 L 174,84" marker-end="url(#dgl-b)"/>
+<path class="dgl-conn" d="M 110,164 L 174,164" marker-end="url(#dgl-b)"/>
+<rect class="dgl-box" x="320" y="66" width="100" height="36" rx="6"/>
+<text class="dgl-n" x="370.0" y="88.5" text-anchor="middle">Pod 1</text>
+<rect class="dgl-box" x="320" y="146" width="100" height="36" rx="6"/>
+<text class="dgl-n" x="370.0" y="168.5" text-anchor="middle">Pod 2</text>
+<rect class="dgl-mute" x="320" y="214" width="100" height="36" rx="6"/>
+<text class="dgl-n-mute" x="370.0" y="236.5" text-anchor="middle">Pod 3</text>
+<path class="dgl-conn" d="M 240,84 L 314,84" marker-end="url(#dgl-b)"/>
+<path class="dgl-conn" d="M 240,164 L 314,164" marker-end="url(#dgl-b)"/>
+<text class="dgl-s" x="370" y="118" text-anchor="middle">all of A's calls</text>
+<text class="dgl-s" x="370" y="198" text-anchor="middle">all of B's calls</text>
+<text class="dgl-s" x="308" y="229" text-anchor="end">idle, including</text>
+<text class="dgl-s" x="308" y="245" text-anchor="end">after scale-out</text>
+
+<rect class="dgl-grp" x="455" y="16" width="435" height="262" rx="8"/>
+<text class="dgl-hd" x="469" y="38">LAYER 7 OR CLIENT-SIDE: CALL-LEVEL</text>
+<rect class="dgl-box" x="469" y="130" width="86" height="36" rx="6"/>
+<text class="dgl-n" x="512.0" y="152.5" text-anchor="middle">Client A</text>
+<rect class="dgl-sys" x="615" y="118" width="110" height="60" rx="6"/>
+<text class="dgl-n-inv" x="670.0" y="144" text-anchor="middle">proxy or</text>
+<text class="dgl-n-inv" x="670.0" y="160" text-anchor="middle">client</text>
+<path class="dgl-conn" d="M 555,148 L 609,148" marker-end="url(#dgl-b)"/>
+<rect class="dgl-box" x="775" y="66" width="100" height="36" rx="6"/>
+<text class="dgl-n" x="825.0" y="88.5" text-anchor="middle">Pod 1</text>
+<rect class="dgl-box" x="775" y="130" width="100" height="36" rx="6"/>
+<text class="dgl-n" x="825.0" y="152.5" text-anchor="middle">Pod 2</text>
+<rect class="dgl-box" x="775" y="194" width="100" height="36" rx="6"/>
+<text class="dgl-n" x="825.0" y="216.5" text-anchor="middle">Pod 3</text>
+<path class="dgl-flow" d="M 725,136 C 750,136 745,84 769,84" marker-end="url(#dgl-a)"/>
+<path class="dgl-flow" d="M 725,148 L 769,148" marker-end="url(#dgl-a)"/>
+<path class="dgl-flow" d="M 725,160 C 750,160 745,212 769,212" marker-end="url(#dgl-a)"/>
+<text class="dgl-s" x="582" y="190" text-anchor="middle">one connection</text>
+</g>
+</svg>

@@ -74,17 +74,7 @@ The definition rests on two kinds of coupling.
 
 Communication is the dimension that decides quantum boundaries. A synchronous call binds the caller to the callee's availability. An asynchronous message lets each side continue when the other is slow or down.
 
-```
-Synchronous call: one quantum            Asynchronous message: two quanta
-
-┌──────────────────────────────────┐     ┌───────────┐          ┌───────────┐
-│  Order ─── request ──▶ Payment   │     │   Order   │─▶ queue ─▶│  Payment  │
-│        ◀── response ──           │     └───────────┘          └───────────┘
-└──────────────────────────────────┘
-
-If Payment is down, orders stop.         If Payment is down, orders wait in
-                                         the queue and are paid later.
-```
+{% include figure.html id="arch-quantum-boundaries" %}
 
 ### Why Quanta Matter
 

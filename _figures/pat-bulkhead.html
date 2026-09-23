@@ -1,0 +1,87 @@
+---
+title: "Bulkheads"
+kind: structure
+system: distributed-patterns
+summary: "A hung dependency fills one shared pool, or only its own partition."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="pbh-title pbh-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pbh-title">A shared connection pool compared with bulkheaded pools</title>
+<desc id="pbh-desc">Two panels. Without bulkheads, checkout, search, and reports requests all draw from one shared pool of 70 slots. When the reporting database hangs, its calls hold all 70 slots and checkout and search stall too. With bulkheads, checkout has a pool of 40 slots to the payment API, search has 20 to the search index, and reports have 10 to the reporting database. When the reporting database hangs, its 10 slots fill and further report calls are rejected, while checkout and search keep their own slots.</desc>
+<style>
+.pbh-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pbh-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.pbh-full { fill: var(--color-accent, #A5486E); fill-opacity: 0.14; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.pbh-pool { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pbh-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; stroke-dasharray: 7 5; }
+.pbh-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pbh-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.pbh-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pbh-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.pbh-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pbh-flowr { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+</style>
+
+<defs>
+<marker id="pbh-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pbh-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pbh-grp" x="10" y="16" width="425" height="300" rx="8"/>
+<text class="pbh-hd" x="24" y="38">WITHOUT BULKHEADS</text>
+<rect class="pbh-box" x="28" y="62" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="78.0" y="83.5" text-anchor="middle">Checkout</text>
+<rect class="pbh-box" x="28" y="122" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="78.0" y="143.5" text-anchor="middle">Search</text>
+<rect class="pbh-box" x="28" y="182" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="78.0" y="203.5" text-anchor="middle">Reports</text>
+<rect class="pbh-full" x="168" y="62" width="100" height="154" rx="6"/>
+<text class="pbh-n-bad" x="218.0" y="134" text-anchor="middle">shared pool</text>
+<text class="pbh-n-bad" x="218.0" y="152" text-anchor="middle">70 of 70 held</text>
+<path class="pbh-flow" d="M 128,79 L 162,79" marker-end="url(#pbh-a)"/>
+<path class="pbh-flow" d="M 128,139 L 162,139" marker-end="url(#pbh-a)"/>
+<path class="pbh-flow" d="M 128,199 L 162,199" marker-end="url(#pbh-a)"/>
+<rect class="pbh-box" x="308" y="62" width="112" height="34" rx="6"/>
+<text class="pbh-n" x="364.0" y="83.5" text-anchor="middle">Payment API</text>
+<rect class="pbh-box" x="308" y="122" width="112" height="34" rx="6"/>
+<text class="pbh-n" x="364.0" y="143.5" text-anchor="middle">Search index</text>
+<rect class="pbh-bad" x="308" y="182" width="112" height="34" rx="6"/>
+<text class="pbh-n-bad" x="364.0" y="203.5" text-anchor="middle">Reporting DB</text>
+<path class="pbh-flow" d="M 268,79 L 302,79" marker-end="url(#pbh-a)"/>
+<path class="pbh-flow" d="M 268,139 L 302,139" marker-end="url(#pbh-a)"/>
+<path class="pbh-flowr" d="M 268,199 L 302,199" marker-end="url(#pbh-r)"/>
+<text class="pbh-note" x="28" y="262">Reporting DB hangs, and its calls hold</text>
+<text class="pbh-note" x="28" y="280">all 70 slots. Checkout and search</text>
+<text class="pbh-note" x="28" y="298">stall too.</text>
+
+<rect class="pbh-grp" x="465" y="16" width="425" height="300" rx="8"/>
+<text class="pbh-hd" x="479" y="38">WITH BULKHEADS</text>
+<rect class="pbh-box" x="483" y="62" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="533.0" y="83.5" text-anchor="middle">Checkout</text>
+<rect class="pbh-box" x="483" y="122" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="533.0" y="143.5" text-anchor="middle">Search</text>
+<rect class="pbh-box" x="483" y="182" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="533.0" y="203.5" text-anchor="middle">Reports</text>
+<rect class="pbh-pool" x="623" y="62" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="673.0" y="83.5" text-anchor="middle">pool: 40</text>
+<rect class="pbh-pool" x="623" y="122" width="100" height="34" rx="6"/>
+<text class="pbh-n" x="673.0" y="143.5" text-anchor="middle">pool: 20</text>
+<rect class="pbh-full" x="623" y="182" width="100" height="34" rx="6"/>
+<text class="pbh-n-bad" x="673.0" y="203.5" text-anchor="middle">10 of 10 held</text>
+<path class="pbh-flow" d="M 583,79 L 617,79" marker-end="url(#pbh-a)"/>
+<path class="pbh-flow" d="M 583,139 L 617,139" marker-end="url(#pbh-a)"/>
+<path class="pbh-flowr" d="M 583,199 L 617,199" marker-end="url(#pbh-r)"/>
+<rect class="pbh-box" x="763" y="62" width="112" height="34" rx="6"/>
+<text class="pbh-n" x="819.0" y="83.5" text-anchor="middle">Payment API</text>
+<rect class="pbh-box" x="763" y="122" width="112" height="34" rx="6"/>
+<text class="pbh-n" x="819.0" y="143.5" text-anchor="middle">Search index</text>
+<rect class="pbh-bad" x="763" y="182" width="112" height="34" rx="6"/>
+<text class="pbh-n-bad" x="819.0" y="203.5" text-anchor="middle">Reporting DB</text>
+<path class="pbh-flow" d="M 723,79 L 757,79" marker-end="url(#pbh-a)"/>
+<path class="pbh-flow" d="M 723,139 L 757,139" marker-end="url(#pbh-a)"/>
+<path class="pbh-flowr" d="M 723,199 L 757,199" marker-end="url(#pbh-r)"/>
+<text class="pbh-note" x="483" y="262">Reporting DB hangs, and its 10 slots fill.</text>
+<text class="pbh-note" x="483" y="280">Further report calls are rejected.</text>
+<text class="pbh-note" x="483" y="298">Checkout and search keep their own slots.</text>
+</g>
+</svg>

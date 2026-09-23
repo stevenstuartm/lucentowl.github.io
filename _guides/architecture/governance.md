@@ -107,27 +107,7 @@ Variances are also data about the standards. When many teams request variances f
 
 Reviewing every change centrally doesn't scale, and reviewing none leaves cross-team risks unseen. Routing each proposed change to a level of review proportional to its risk handles both.
 
-```
-                    Proposed architecture change
-                                 │
-                                 ▼
-             Uses approved patterns and technology,
-             and its consequences stay within one team?
-                 │ yes                          │ no
-                 ▼                              ▼
-       ┌───────────────────┐    Crosses team or system boundaries,
-       │ Self-service      │    introduces new technology, or affects
-       │ Automated checks, │    security, compliance, or shared data?
-       │ team records the  │         │ no                    │ yes
-       │ decision          │         ▼                       ▼
-       └───────────────────┘  ┌──────────────────┐  ┌──────────────────────┐
-                              │ Peer review      │  │ Board-level review   │
-                              │ Another team or  │  │ Review board, or     │
-                              │ community of     │  │ broad advice from    │
-                              │ practice reviews │  │ affected teams and   │
-                              │ the design       │  │ experts              │
-                              └──────────────────┘  └──────────────────────┘
-```
+{% include figure.html id="des-review-routing" %}
 
 The routing criteria should be published, so teams can place their own changes and nobody has to ask whether a review is needed. Irreversibility deserves extra weight. A decision that would be expensive to undo, such as a datastore choice or a public API contract, merits more scrutiny than a larger change that could be rolled back in a day.
 

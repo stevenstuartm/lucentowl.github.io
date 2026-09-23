@@ -10,19 +10,49 @@ layout: default
         {% endif %}
     </section>
 
-    <!-- Editorial Feed -->
+    <!-- Ways to learn: one door per content type, named for how it is used -->
+    <section class="learn-paths" aria-labelledby="learnPathsHeading">
+        <h3 class="home-section-heading" id="learnPathsHeading">Four ways to learn</h3>
+        <div class="learn-paths-grid">
+            <a href="{{ '/study-guides.html' | relative_url }}" class="learn-path">
+                <span class="learn-path-verb">Learn a topic</span>
+                <span class="learn-path-name">Study Guides <span class="learn-path-count">{{ site.guides.size }}</span></span>
+                <span class="learn-path-desc">Structured guides that build a subject from the fundamentals up, with the reasoning behind each practice.</span>
+            </a>
+            <a href="{{ '/resources.html' | relative_url }}" class="learn-path">
+                <span class="learn-path-verb">Look it up</span>
+                <span class="learn-path-name">Resources <span class="learn-path-count">{{ site.resources.size }}</span></span>
+                <span class="learn-path-desc">Cheatsheets, comparisons, and diagrams to keep open while you work.</span>
+            </a>
+            <a href="{{ '/case-studies.html' | relative_url }}" class="learn-path">
+                <span class="learn-path-verb">See it applied</span>
+                <span class="learn-path-name">Case Studies <span class="learn-path-count">{{ site.case_studies.size }}</span></span>
+                <span class="learn-path-desc">Production systems, the decisions behind them, and how they turned out.</span>
+            </a>
+            <a href="{{ '/blog.html' | relative_url }}" class="learn-path">
+                <span class="learn-path-verb">Think it through</span>
+                <span class="learn-path-name">Essays <span class="learn-path-count">{{ site.posts.size }}</span></span>
+                <span class="learn-path-desc">Longer arguments about architecture, teams, and engineering practice.</span>
+            </a>
+        </div>
+    </section>
+
+    <!-- Featured: secondary to the learning paths above -->
     {% if page.featured_items %}
-    <section class="editorial-feed">
-        {% for item in page.featured_items %}
-        <a href="{{ item.url | relative_url }}" class="editorial-item" aria-label="{{ item.title }}">
-            <div class="editorial-label">{{ item.label }}</div>
-            <div class="editorial-body">
-                <h3 class="editorial-title">{{ item.title }}</h3>
-                <p class="editorial-description">{{ item.description }}</p>
-                <span class="editorial-cta">{{ item.cta }} →</span>
-            </div>
-        </a>
-        {% endfor %}
+    <section class="home-featured" aria-labelledby="homeFeaturedHeading">
+        <h3 class="home-section-heading" id="homeFeaturedHeading">Featured</h3>
+        <div class="editorial-feed">
+            {% for item in page.featured_items %}
+            <a href="{{ item.url | relative_url }}" class="editorial-item" aria-label="{{ item.title }}">
+                <div class="editorial-label">{{ item.label }}</div>
+                <div class="editorial-body">
+                    <h4 class="editorial-title">{{ item.title }}</h4>
+                    <p class="editorial-description">{{ item.description }}</p>
+                    <span class="editorial-cta">{{ item.cta }} →</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
     </section>
     {% endif %}
 </div>

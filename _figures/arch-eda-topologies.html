@@ -1,0 +1,83 @@
+---
+title: "Broker and Mediator Topologies"
+kind: flow
+system: architecture-styles
+summary: "Processors reacting on their own versus steps directed by a mediator."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" role="img" aria-labelledby="eto-title eto-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="eto-title">Broker topology versus mediator topology in event-driven architecture</title>
+<desc id="eto-desc">In the broker topology, an order placed event reaches inventory, payment, and notification processors at once, with no coordinator. Inventory publishes inventory reserved and payment publishes payment captured, and those events reach further processors. In the mediator topology, the order placed event goes to a mediator, which sends step 1 to inventory, step 2 to payment after step 1 succeeds, and step 3 to notification after step 2 succeeds.</desc>
+<style>
+.eto-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.eto-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.eto-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.eto-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.eto-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.eto-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.eto-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.eto-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.eto-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.eto-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.eto-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.eto-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.eto-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.eto-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.eto-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="eto-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="eto-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="eto-band" x="20" y="20" width="860" height="192" rx="8"/>
+<text class="eto-hd" x="34" y="40">BROKER: NO COORDINATOR, PROCESSORS REACT AND PUBLISH</text>
+<rect class="eto-box" x="40" y="105" width="110" height="34" rx="6"/>
+<text class="eto-n" x="95.0" y="126.0" text-anchor="middle">Order</text>
+<rect class="eto-box" x="330" y="51.0" width="140" height="34" rx="6"/>
+<text class="eto-n" x="400.0" y="72.0" text-anchor="middle">Inventory</text>
+<path class="eto-ctl" d="M 150,122 C 240,122 240,68 324,68" marker-end="url(#eto-c)"/>
+<rect class="eto-box" x="330" y="105.0" width="140" height="34" rx="6"/>
+<text class="eto-n" x="400.0" y="126.0" text-anchor="middle">Payment</text>
+<path class="eto-ctl" d="M 150,122 C 240,122 240,122 324,122" marker-end="url(#eto-c)"/>
+<rect class="eto-box" x="330" y="159.0" width="140" height="34" rx="6"/>
+<text class="eto-n" x="400.0" y="180.0" text-anchor="middle">Notification</text>
+<path class="eto-ctl" d="M 150,122 C 240,122 240,176 324,176" marker-end="url(#eto-c)"/>
+<text class="eto-labc" x="40" y="96">order placed</text>
+<rect class="eto-ext" x="700" y="78" width="160" height="52" rx="6"/>
+<text class="eto-n-mute" x="780.0" y="99.5" text-anchor="middle">Further</text>
+<text class="eto-s" x="780.0" y="117.5" text-anchor="middle">processors</text>
+<path class="eto-ctl" d="M 470,68 C 590,68 600,98 694,98" marker-end="url(#eto-c)"/>
+<text class="eto-labc" x="488" y="60">inventory reserved</text>
+<path class="eto-ctl" d="M 470,122 C 590,122 600,112 694,112" marker-end="url(#eto-c)"/>
+<text class="eto-labc" x="488" y="138">payment captured</text>
+<rect class="eto-band" x="20" y="227" width="860" height="180" rx="8"/>
+<text class="eto-hd" x="34" y="247">MEDIATOR: A MEDIATOR DIRECTS THE STEPS</text>
+<rect class="eto-box" x="40" y="300" width="110" height="34" rx="6"/>
+<text class="eto-n" x="95.0" y="321.0" text-anchor="middle">Order</text>
+<rect class="eto-sys" x="250" y="292" width="130" height="50" rx="6"/>
+<text class="eto-n-inv" x="315.0" y="312.5" text-anchor="middle">Mediator</text>
+<text class="eto-k-inv" x="315.0" y="330.5" text-anchor="middle">tracks the workflow</text>
+<path class="eto-ctl" d="M 150,317 H 244" marker-end="url(#eto-c)"/>
+<text class="eto-labc" x="158" y="309">order placed</text>
+<rect class="eto-box" x="530" y="246.0" width="140" height="34" rx="6"/>
+<text class="eto-n" x="600.0" y="267.0" text-anchor="middle">Inventory</text>
+<path class="eto-flow" d="M 380,317 C 450,317 450,263 524,263" marker-end="url(#eto-a)"/>
+<text class="eto-lab" x="486" y="251">step 1</text>
+<rect class="eto-box" x="530" y="300.0" width="140" height="34" rx="6"/>
+<text class="eto-n" x="600.0" y="321.0" text-anchor="middle">Payment</text>
+<path class="eto-flow" d="M 380,317 C 450,317 450,317 524,317" marker-end="url(#eto-a)"/>
+<text class="eto-lab" x="486" y="305">step 2</text>
+<text class="eto-el" x="686" y="321">after step 1 succeeds</text>
+<rect class="eto-box" x="530" y="354.0" width="140" height="34" rx="6"/>
+<text class="eto-n" x="600.0" y="375.0" text-anchor="middle">Notification</text>
+<path class="eto-flow" d="M 380,317 C 450,317 450,371 524,371" marker-end="url(#eto-a)"/>
+<text class="eto-lab" x="486" y="359">step 3</text>
+<text class="eto-el" x="686" y="375">after step 2 succeeds</text>
+<path class="eto-ctl" d="M 20,428 H 54"/>
+<text class="eto-el" x="62" y="432">event</text>
+<path class="eto-flow" d="M 127.42500000000001,428 H 161.425"/>
+<text class="eto-el" x="169.425" y="432">directed step</text>
+</g>
+</svg>

@@ -113,6 +113,8 @@ Sensitivity analysis recalculates the result while varying one input at a time. 
 
 The break-even value of an input is the value at which the investment stops making sense. Here, the annual benefit at which NPV reaches zero is $100K divided by the five-year discount factor total of 3.791, about $26.4K. Stakeholders can then debate a concrete question, "are we confident the benefit is at least $26K a year?", instead of arguing over a single projection.
 
+{% include figure.html id="des-npv-breakeven" %}
+
 ## Estimation Bias
 
 Estimates of technology investments tend to err in one direction. Benefits are overestimated and costs and durations underestimated, a pattern known as optimism bias. Daniel Kahneman and Amos Tversky named the tendency to underestimate the time and cost of planned work the planning fallacy. The people proposing an investment usually want it approved, which adds motivated reasoning on top.

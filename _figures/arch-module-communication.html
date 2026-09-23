@@ -1,0 +1,71 @@
+---
+title: "Direct and Mediated Module Calls"
+kind: flow
+system: architecture-styles
+summary: "A direct interface call versus a command and event through a mediator."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="amc-title amc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="amc-title">Direct calls through interfaces versus mediated commands and events</title>
+<desc id="amc-desc">On the left, Checkout calls ReserveStock on IInventoryService directly, and Inventory supplies the implementation. On the right, Checkout sends a ReserveStockCommand to an in-process mediator, which routes it to the Inventory handler. Inventory publishes a StockReservedEvent through the mediator, and interested modules handle it. Checkout and Inventory never reference each other.</desc>
+<style>
+.amc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.amc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.amc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.amc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.amc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.amc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.amc-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.amc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.amc-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.amc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.amc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.amc-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.amc-labc { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.amc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.amc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.amc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.amc-ctl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="amc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="amc-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="amc-band" x="20" y="20" width="280" height="320" rx="8"/>
+<text class="amc-hd" x="34" y="40">DIRECT CALLS</text>
+<rect class="amc-box" x="45" y="60" width="230" height="56" rx="6"/>
+<text class="amc-n" x="160.0" y="92.0" text-anchor="middle">Checkout</text>
+<rect class="amc-box" x="45" y="250" width="230" height="56" rx="6"/>
+<text class="amc-n" x="160.0" y="273.5" text-anchor="middle">Inventory</text>
+<text class="amc-k" x="160.0" y="291.5" text-anchor="middle">supplies the implementation</text>
+<path class="amc-flow" d="M 160,116 L 160,244" marker-end="url(#amc-a)"/>
+<text class="amc-lab" x="172" y="176">IInventoryService</text>
+<text class="amc-lab" x="172" y="193">.ReserveStock()</text>
+<rect class="amc-band" x="320" y="20" width="560" height="320" rx="8"/>
+<text class="amc-hd" x="334" y="40">MEDIATED COMMANDS AND EVENTS</text>
+<rect class="amc-box" x="345" y="60" width="150" height="56" rx="6"/>
+<text class="amc-n" x="420.0" y="92.0" text-anchor="middle">Checkout</text>
+<rect class="amc-sys" x="530" y="165" width="150" height="56" rx="6"/>
+<text class="amc-n-inv" x="605.0" y="188.5" text-anchor="middle">Mediator</text>
+<text class="amc-k-inv" x="605.0" y="206.5" text-anchor="middle">[in-process]</text>
+<rect class="amc-box" x="715" y="60" width="150" height="56" rx="6"/>
+<text class="amc-n" x="790.0" y="83.5" text-anchor="middle">Inventory</text>
+<text class="amc-k" x="790.0" y="101.5" text-anchor="middle">handler</text>
+<rect class="amc-ext" x="715" y="255" width="150" height="56" rx="6"/>
+<text class="amc-n-mute" x="790.0" y="278.5" text-anchor="middle">Interested</text>
+<text class="amc-s" x="790.0" y="296.5" text-anchor="middle">modules</text>
+<path class="amc-flow" d="M 420,116 C 420,193 470,193 524,193" marker-end="url(#amc-a)"/>
+<text class="amc-lab" x="430" y="146">ReserveStockCommand</text>
+<path class="amc-flow" d="M 580,165 C 580,88 650,88 709,88" marker-end="url(#amc-a)"/>
+<path class="amc-ctl" d="M 790,116 C 790,193 740,193 686,193" marker-end="url(#amc-c)"/>
+<text class="amc-labc" x="782" y="150" text-anchor="end">StockReservedEvent</text>
+<path class="amc-ctl" d="M 605,221 C 605,283 650,283 709,283" marker-end="url(#amc-c)"/>
+<text class="amc-note" x="20" y="364">On the right, the two modules never reference each other, and control flow is harder to trace.</text>
+<path class="amc-flow" d="M 20,386 H 54"/>
+<text class="amc-el" x="62" y="390">call or command</text>
+<path class="amc-ctl" d="M 186.275,386 H 220.275"/>
+<text class="amc-el" x="228.275" y="390">event</text>
+</g>
+</svg>

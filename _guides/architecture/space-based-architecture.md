@@ -21,32 +21,7 @@ In a typical web application under rising load, adding web servers helps until t
 
 Requests go to processing units, each of which holds application code and an in-memory copy of the data it needs. A unit handles a request from memory, and the data grid replicates any changes to the other units. Changes reach the database later and asynchronously, so the database stays as durable storage but no longer sits between a user and a response.
 
-```
-                         Requests
-                            │
-                            ▼
-                  ┌───────────────────┐        ┌────────────────────┐
-                  │  Messaging grid   │        │ Deployment manager │
-                  │ (routes requests) │        │ (starts and stops  │
-                  └────┬─────────┬────┘        │  units on load)    │
-                       ▼         ▼             └────────────────────┘
-          ┌──────────────────┐ ┌──────────────────┐
-          │ Processing unit  │ │ Processing unit  │  ...more units as load rises
-          │ code + in-memory │ │ code + in-memory │
-          │ data             │ │ data             │
-          └────────┬─────────┘ └────────┬─────────┘
-                   └──── data grid ─────┘   (replicates changes between units)
-                            │
-                            │ data pump (asynchronous)
-                            ▼
-                     ┌─────────────┐        ┌──────────┐
-                     │ Data writer │ ─────▶ │ Database │
-                     └─────────────┘        └────┬─────┘
-                                                 │
-                     ┌─────────────┐             │
-                     │ Data reader │ ◀───────────┘ loads data into units on cold start
-                     └─────────────┘
-```
+{% include figure.html id="arch-space-based" %}
 
 ### Processing Units
 
@@ -75,6 +50,8 @@ The middleware handles the infrastructure concerns that keep the units working t
 ## Replicated and Distributed Caching
 
 How data is placed across processing units shapes most of the style's trade-offs.
+
+{% include figure.html id="arch-space-caching" %}
 
 <div class="comparison">
 <div class="content-card content-card--accent">

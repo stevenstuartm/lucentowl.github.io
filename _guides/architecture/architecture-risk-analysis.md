@@ -100,24 +100,7 @@ At the session, participants place their notes on a large shared copy of the dia
 
 The group consolidates the notes into one set of agreed ratings. That set feeds the risk assessment.
 
-```
-                    ┌──────────────────┐
-                    │  API gateway     │
-                    └────────┬─────────┘
-               ┌─────────────┴──────────────┐
-               ▼                            ▼
-      ┌──────────────────┐         ┌──────────────────┐
-      │  Order service   │────────▶│ Payment service  │
-      └────────┬─────────┘         └────────┬─────────┘
-               │                            │
-               ▼                            ▼
-      ┌──────────────────┐         ┌──────────────────┐
-      │ Orders database  │         │ Payment provider │
-      │ (single instance)│         │ (one vendor)     │
-      └──────────────────┘         └──────────────────┘
-   [6] no replica or failover     [9] no fallback provider,
-                                      outage stops checkout
-```
+{% include figure.html id="des-risk-storming" %}
 
 Placed on the diagram, the agreed availability risks show at a glance that checkout depends on two single points of failure.
 
