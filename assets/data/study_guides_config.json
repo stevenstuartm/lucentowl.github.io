@@ -283,9 +283,10 @@
       "subcategories": [
         {
           "name": "Network Fundamentals",
-          "description": "Core networking concepts for developers",
+          "description": "How data moves between machines: addressing, routing, transport, name resolution, and the HTTP versions on top",
           "guides": [
-            "networking.md",
+            "networking/networking.md",
+            "networking/dns.md",
             "networking/http-protocol-versions.md"
           ]
         }
@@ -294,11 +295,13 @@
     "Databases": {
       "subcategories": [
         {
-          "name": "Database Fundamentals",
-          "description": "Core database concepts, CAP theorem, ACID properties, and data modeling",
+          "name": "Database Foundations",
+          "description": "Data models, storage engines, transactions and isolation, and replication and consistency",
           "guides": [
             "data/database-fundamentals.md",
-            "data/data-architecture.md"
+            "data/storage-engines-and-indexing.md",
+            "data/transactions-and-isolation.md",
+            "data/replication-and-consistency.md"
           ]
         },
         {
@@ -311,10 +314,8 @@
             "data/wide-column-stores.md",
             "data/graph-databases.md",
             "data/time-series-databases.md",
-            "data/vector-databases.md",
             "data/search-engines.md",
-            "data/in-memory-databases.md",
-            "data/multi-model-databases.md",
+            "data/vector-databases.md",
             "data/newsql-databases.md"
           ]
         }
@@ -708,9 +709,10 @@
       "subcategories": [
         {
           "name": "Analytics",
-          "description": "Statistics and data analysis",
+          "description": "Statistics, data analysis, and analytical data platforms",
           "guides": [
-            "analytics-and-statistics.md"
+            "analytics-and-statistics.md",
+            "data/data-architecture.md"
           ]
         }
       ]

@@ -1,0 +1,41 @@
+---
+title: "TCP Congestion Window Over Time"
+kind: chart
+system: networking
+summary: "The window doubles each round trip, then grows slowly and halves on loss."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="ncw-title ncw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ncw-title">Illustrative TCP congestion window across round trips</title>
+<desc id="ncw-desc">A line chart of how much data a TCP sender allows in flight, across successive round trips. In slow start the window doubles every round trip, from one segment to thirty-two over five round trips. Growth then turns linear, adding a little each round trip. When a packet is lost the window is cut in half, and linear growth resumes from there. The shape is the classic Reno-style pattern; newer algorithms such as CUBIC and BBR grow differently.</desc>
+<style>
+.ncw-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; }
+.ncw-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; stroke-linejoin: round; }
+.ncw-loss { fill: #B83232; }
+.ncw-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ncw-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.ncw-losslab { font-size: 11.5px; font-weight: 600; fill: #B83232; }
+</style>
+
+<defs>
+<marker id="ncw-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="ncw-axis" d="M 80,285 L 80,30" marker-end="url(#ncw-a)"/>
+<path class="ncw-axis" d="M 80,285 L 876,285" marker-end="url(#ncw-a)"/>
+<text class="ncw-k" x="90" y="34">data allowed in flight (congestion window)</text>
+<text class="ncw-k" x="876" y="304" text-anchor="end">round trips</text>
+
+<path class="ncw-line" d="M 80,275 L 132,270 L 184,260 L 236,240 L 288,200 L 340,120 L 392,110 L 444,100 L 496,90 L 548,80 L 548,180 L 600,170 L 652,160 L 704,150 L 756,140 L 808,130 L 860,120"/>
+<circle class="ncw-loss" cx="548" cy="80" r="5"/>
+
+<text class="ncw-lab" x="96" y="170">slow start: doubles</text>
+<text class="ncw-lab" x="96" y="186">every round trip</text>
+<text class="ncw-lab" x="360" y="70">then grows a little</text>
+<text class="ncw-lab" x="360" y="86">each round trip</text>
+<text class="ncw-losslab" x="562" y="72">packet lost</text>
+<text class="ncw-losslab" x="562" y="214">window halved</text>
+
+<text class="ncw-k" x="80" y="320">Illustrative, classic Reno-style shape. CUBIC and BBR grow differently.</text>
+</g>
+</svg>

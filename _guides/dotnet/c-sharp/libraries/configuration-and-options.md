@@ -3,104 +3,145 @@ title: "C# Configuration and Options Pattern"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "How .NET configuration actually works in modern cloud-native applications: layered providers, the Options Pattern, and a holistic example showing secrets from vaults, operational defaults from DevOps, and feature settings from centralized services."
-tags: [c-sharp, dotnet, configuration, options-pattern, dependency-injection, practical]
+description: "How .NET configuration works: flattened keys, the provider stack the host builds by default and how added providers override it, secrets from vaults, refreshing centralized configuration, where the configuration schema should live, binding rules, validation at startup and on reload, and choosing between IOptions, IOptionsSnapshot, and IOptionsMonitor."
+tags: [configuration, options-pattern, ioptionsmonitor, user-secrets, azure-app-configuration, key-vault, practical]
 ---
 
-## The Real Shape of Modern Configuration
+## How IConfiguration Sees Your Settings
 
-Configuration in a modern .NET application does not live in one place. Secrets come from a cloud vault. Logging and observability defaults come from platform or DevOps-controlled infrastructure. Feature behavior comes from centralized configuration services or feature flag systems. In many cloud-native systems, local JSON files play no role at all; every value comes from an external source, and the options classes themselves serve as the schema.
+.NET configuration loads settings from any number of **providers**, like JSON files, environment variables, command-line arguments, or a cloud vault, and merges them into one `IConfiguration`. Code that reads a value doesn't know which provider supplied it.
 
-.NET's configuration system is built for exactly this reality. It loads settings from multiple providers into a single `IConfiguration` interface, where later sources override earlier ones. The application code never knows or cares where a value came from. It just reads `configuration["Database:ConnectionString"]` and gets the right answer, whether that value was set by AWS Parameter Store, injected by Kubernetes, or pulled from Azure Key Vault.
+### Keys Are Flattened Paths
 
-This guide walks through the full picture: how configuration providers compose, how different architectural maturity levels change the role of local files (from full schema to bootstrapping to nothing at all), and how the Options Pattern gives your code a clean, validated interface regardless of where values originate.
-
-## A Real Application's Configuration Stack
-
-Consider an order processing service running in Azure Kubernetes Service. Here is what its configuration stack actually looks like, from bottom to top.
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-// Layer 1: Structural defaults (what the app expects)
-// Already loaded by default: appsettings.json, appsettings.{Environment}.json
-
-// Layer 2: Platform/infrastructure overrides (DevOps-controlled)
-builder.Configuration.AddEnvironmentVariables("ORDERSERVICE_");
-
-// Layer 3: Centralized configuration (shared across services)
-builder.Configuration.AddAzureAppConfiguration(options =>
-{
-    options.Connect(builder.Configuration["AppConfig:Endpoint"])
-        .Select(KeyFilter.Any, LabelFilter.Null)
-        .Select(KeyFilter.Any, builder.Environment.EnvironmentName)
-        .ConfigureRefresh(refresh =>
-            refresh.Register("Sentinel", refreshAll: true));
-});
-
-// Layer 4: Secrets (always from a vault in non-dev environments)
-if (builder.Environment.IsDevelopment())
-{
-    builder.Configuration.AddUserSecrets<Program>();
-}
-else
-{
-    builder.Configuration.AddAzureKeyVault(
-        new Uri(builder.Configuration["KeyVault:Uri"]!),
-        new DefaultAzureCredential());
-}
-```
-
-Each layer has a distinct owner and a distinct purpose.
-
-### Layer 1: Local Files Bootstrap the Host, Not the Domains
-
-In small applications where all the code lives in a single project, a local JSON file can reasonably define the full configuration shape. But in any system with distributed domain logic, libraries, or shared NuGet packages, that model falls apart quickly.
-
-Each package already owns its configuration contract. A marketing client library defines `MarketingApiOptions`. A database package defines `DatabaseOptions`. An observability package defines `TelemetryOptions`. These packages declare their own options classes, their own defaults, and their own validation. The host has no business redeclaring all of that in a monolithic JSON file.
-
-In practice, `appsettings.json` should contain only what the host itself controls: hosting configuration, provider bootstrapping endpoints (like a vault URI or App Configuration connection string), and logging defaults. Everything else belongs to the packages that actually own those domains.
-
-#### When the Host Owns Everything
-
-In a single-project application or a small service with no shared packages, a flat JSON file can define the full configuration surface. This is simple and readable.
+Every provider reduces its data to flat string keys with `:` separating levels, and string values. This JSON:
 
 ```json
-// appsettings.json - small service, all config in one place
 {
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
   "Database": {
-    "MaxConnections": 10,
-    "CommandTimeout": 30,
-    "ConnectionString": ""
+    "ConnectionString": "Server=db;Database=orders",
+    "Replicas": [ "db-r1", "db-r2" ]
   },
-  "Orders": {
-    "MaxItemsPerOrder": 100,
-    "DefaultCurrency": "USD"
-  },
-  "Email": {
-    "SmtpServer": "",
-    "Port": 587,
-    "UseSsl": true,
-    "FromAddress": ""
+  "ConnectionStrings": {
+    "Reporting": "Server=reports;Database=warehouse"
   }
 }
 ```
 
-This works when the host is the application. It breaks when the host composes independent packages that each bring their own configuration needs.
+becomes these keys:
 
-#### When Packages Own Their Domains
+```
+Database:ConnectionString   = Server=db;Database=orders
+Database:Replicas:0         = db-r1
+Database:Replicas:1         = db-r2
+ConnectionStrings:Reporting = Server=reports;Database=warehouse
+```
 
-In a package-oriented architecture, each library registers its own options and binds its own configuration section. The host provides the configuration sources; the packages pull what they need.
+Arrays become numbered keys, and keys are case-insensitive. `configuration["Database:ConnectionString"]` reads one value, `configuration.GetSection("Database")` returns the subtree, and `configuration.GetConnectionString("Reporting")` is shorthand for `configuration["ConnectionStrings:Reporting"]`.
+
+Providers whose source can't contain `:` use a substitute that they translate. An environment variable uses a double underscore, so `Database__ConnectionString` sets `Database:ConnectionString`. A Key Vault secret uses a double dash, so a secret named `Database--ConnectionString` sets the same key.
+
+### The Last Provider Wins
+
+When two providers supply the same key, the provider added later wins. `WebApplication.CreateBuilder` and `Host.CreateApplicationBuilder` register a default stack before your code runs, from lowest to highest precedence:
+
+| Provider | Loaded when |
+|---|---|
+| Environment variables prefixed `DOTNET_` (and `ASPNETCORE_` for web apps) | Always |
+| `appsettings.json` | If the file exists |
+| `appsettings.{Environment}.json` | If the file exists |
+| User secrets | Only in the `Development` environment, and only if the project has a `UserSecretsId` |
+| Environment variables, unprefixed | Always |
+| Command-line arguments | If any are passed |
+
+Both JSON files are optional and reload when they change on disk. The environment name comes from `DOTNET_ENVIRONMENT` or `ASPNETCORE_ENVIRONMENT` and defaults to `Production`.
+
+Anything you add through `builder.Configuration.Add...` goes on top of this stack, above the unprefixed environment variables and the command line. A vault added this way overrides an environment variable an operator set to fix an emergency. If operators need the last word, add `AddEnvironmentVariables()` again after your own providers.
+
+## A Layered Configuration Stack
+
+Consider an order service deployed to Kubernetes, with settings coming from four owners: the developers' defaults, the platform team's environment variables, a shared Azure App Configuration store, and Azure Key Vault for secrets:
 
 ```csharp
-// Inside a NuGet package: TMI.Clients.Marketing
-public static class MarketingServiceExtensions
+var builder = WebApplication.CreateBuilder(args);
+// Already loaded: appsettings.json, appsettings.{Environment}.json,
+// user secrets in Development, environment variables, command line
+
+// Environment variables scoped to this service; the prefix is removed from the key
+builder.Configuration.AddEnvironmentVariables("ORDERSERVICE_");
+
+// Shared, centrally managed settings
+builder.Configuration.AddAzureAppConfiguration(options =>
+{
+    options.Connect(new Uri(builder.Configuration["AppConfig:Endpoint"]!), new ManagedIdentityCredential())
+        .Select(KeyFilter.Any, LabelFilter.Null)
+        .Select(KeyFilter.Any, builder.Environment.EnvironmentName)
+        .ConfigureRefresh(refresh => refresh.RegisterAll());
+});
+
+// Secrets, outside Development (user secrets cover Development)
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddAzureKeyVault(
+        new Uri(builder.Configuration["KeyVault:Uri"]!),
+        new ManagedIdentityCredential());
+}
+```
+
+The endpoints for App Configuration and Key Vault are read from configuration that is already loaded, which is why these providers come after the defaults. The two `Select` calls load unlabeled keys first and then keys labeled with the environment name, so an environment-specific value overrides the shared one.
+
+### Environment Variables for Operational Control
+
+Environment variables are how a platform team adjusts a deployed service without a new build. In Kubernetes they come from the pod spec, a ConfigMap, or a Helm chart:
+
+```yaml
+env:
+  - name: ORDERSERVICE_Logging__LogLevel__Default
+    value: "Warning"
+  - name: ORDERSERVICE_Database__MaxConnections
+    value: "50"
+```
+
+`AddEnvironmentVariables("ORDERSERVICE_")` loads only variables starting with the prefix and strips it, so the second variable sets `Database:MaxConnections`. The prefix keeps this service's settings separate from variables meant for other processes in the same environment. The default, unprefixed provider still loads every variable, including these ones under their full names, which is harmless because nothing reads a key starting with `ORDERSERVICE_`.
+
+### Secrets Come from a Vault
+
+Connection strings, API keys, and certificates belong in a secret store like Azure Key Vault or AWS Secrets Manager, not in `appsettings.json` or source control. The Key Vault provider (`Azure.Extensions.AspNetCore.Configuration.Secrets`) loads every secret the identity can read and maps `--` to `:`.
+
+`DefaultAzureCredential` tries a chain of credentials in turn, including environment variables, managed identity, and developer tools, and uses the first that works. That chain suits local development. Microsoft recommends a specific credential such as `ManagedIdentityCredential` in deployed environments, because a chain is harder to debug when authentication fails and an unrelated environment variable on the host can change which credential it picks.
+
+During development, **user secrets** keep values out of the repository:
+
+```bash
+dotnet user-secrets init
+dotnet user-secrets set "Database:ConnectionString" "Server=localhost;Database=orders"
+```
+
+The values are stored in `%APPDATA%\Microsoft\UserSecrets\<id>\secrets.json` on Windows and `~/.microsoft/usersecrets/<id>/secrets.json` on Linux and macOS. The file is plain JSON and isn't encrypted. User secrets keep a password out of source control, but they don't protect it on the machine. The default host loads them only in `Development`, so calling `AddUserSecrets` yourself adds them a second time.
+
+### Refreshing Centralized Configuration
+
+A central store is useful partly because a value can change without a redeploy, but the new value has to reach the running process. With Azure App Configuration, `ConfigureRefresh` decides what to watch. `RegisterAll()` reloads everything when any selected key changes. The older pattern registers a single **sentinel** key and reloads everything when it changes, which lets an operator edit several keys and then bump the sentinel once.
+
+Registering keys doesn't start any polling. In ASP.NET Core, `builder.Services.AddAzureAppConfiguration()` and `app.UseAzureAppConfiguration()` from the `Microsoft.Azure.AppConfiguration.AspNetCore` package add middleware that checks for changes as requests arrive, at most once per refresh interval (30 seconds by default). The check runs in the background, so the request that triggers it may still see old values. An app that receives no requests never refreshes, and a worker service has to trigger refresh itself through `IConfigurationRefresher`.
+
+A refreshed value reaches code only through something that rereads configuration. `IOptions<T>` never does. See [Choosing an Options Interface](#choosing-an-options-interface).
+
+## Where the Configuration Schema Lives
+
+A small service can define its whole configuration in `appsettings.json`. The file doubles as documentation of every key the service reads:
+
+```json
+{
+  "Database": { "MaxConnections": 10, "CommandTimeout": 30, "ConnectionString": "" },
+  "Orders": { "MaxItemsPerOrder": 100, "DefaultCurrency": "USD" },
+  "Email": { "SmtpServer": "", "Port": 587, "FromAddress": "" }
+}
+```
+
+That stops working when the host composes libraries that each have their own settings. If every host has to redeclare every library's keys, every library change that adds a key needs a coordinated change to every host. Instead, a library can own its configuration contract. It defines an options class with defaults and validation, and binds its own section:
+
+```csharp
+public static class MarketingServiceCollectionExtensions
 {
     public static IServiceCollection AddMarketingClient(
         this IServiceCollection services, IConfiguration configuration)
@@ -116,190 +157,28 @@ public static class MarketingServiceExtensions
 }
 ```
 
-The package owns `MarketingApiOptions`, its defaults, its validation, and its binding. The host just calls `AddMarketingClient` and provides the configuration sources. Whether the `Marketing:ApiKey` value comes from Key Vault, App Configuration, or an environment variable is determined by the provider stack, not by the package or the host's JSON file.
+The host calls `AddMarketingClient` and supplies providers. Its own `appsettings.json` shrinks to what the host controls, like logging levels and the endpoints of its configuration stores. Defaults live on the options classes, and a reader learns what a library expects by reading its options class.
 
-The host's `appsettings.json` shrinks to what the host actually controls.
-
-```json
-// appsettings.json - host-level concerns only
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AppConfig": {
-    "Endpoint": ""
-  },
-  "KeyVault": {
-    "Uri": ""
-  }
-}
-```
-
-Domain-level defaults live inside the packages themselves, as default values on options properties or through `PostConfigure` registrations. If a package needs `MaxConnections` to default to 10, that default is on the `DatabaseOptions` class, not in a JSON file the host maintains.
-
-#### Why This Matters at Scale
-
-A distributed system with hundreds of features and dozens of packages cannot maintain a single schema per host. The combinatorics alone make it unsustainable: every package update that adds or changes a configuration key would require coordinated changes to every host that consumes it. Packages owning their own configuration contracts means the host stays thin, packages evolve independently, and configuration changes are localized to the domain that owns them.
-
-#### When Configuration Is Fully Externalized
-
-The most streamlined approach eliminates local config files entirely. Every value comes from an external configuration service like AWS Parameter Store, Azure App Configuration, or a similar centralized source. The service has no `appsettings.json` at all.
+Taken further, a service can have no configuration files at all and read everything from one external store:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
-// Clear the default file-based providers
 builder.Configuration.Sources.Clear();
+builder.Configuration.AddSystemsManager("/orderservice/");   // AWS Systems Manager Parameter Store
 
-// Single external source for all configuration
-builder.Configuration.AddSystemsManager("/orderservice/");
-
-// Packages register their own options against IConfiguration as usual
 builder.Services.AddMarketingClient(builder.Configuration);
-builder.Services.AddOrderProcessing(builder.Configuration);
-builder.Services.AddObservability(builder.Configuration);
 ```
 
-The provider stack collapses to a single source. There is no override chain to reason about, no question of "which layer won?" for a given key. Your chosen configuration service is the single source of truth. The path hierarchy in Parameter Store like `/orderservice/Database/ConnectionString` maps directly to `configuration["Database:ConnectionString"]`, and the options classes bind to it the same way they would bind to a JSON file.
+The Parameter Store provider (`Amazon.Extensions.Configuration.SystemsManager`) strips the path prefix and maps `/` to `:`, so `/orderservice/Database/ConnectionString` becomes `Database:ConnectionString`. With one source there is no precedence to reason about. `Sources.Clear()` removes the environment variables and command line too, so an operator can no longer override a value without changing the store.
 
-The schema still exists; it just lives in code rather than in a file. Each package's options class declares the expected keys, their types, their defaults, and their validation rules. A new developer reads `DatabaseOptions` to understand what database configuration the system expects. They read Parameter Store to see the actual values. There is no JSON file that might be stale, incomplete, or misleading.
+Local development then needs somewhere to get values. Aspire's AppHost project can supply them. It starts the service's dependencies locally and passes their connection strings to the service as environment variables, so the service's own repository needs no local configuration files.
 
-The common concern with this approach is local development: if all configuration comes from a cloud service, how does a developer run the application locally? .NET Aspire solves this cleanly. The Aspire `AppHost` project defines the local development topology, wires up resource connection strings, configures service discovery, and provides local defaults, all outside the service's own repository. The service itself stays zero-config, and Aspire handles the local equivalent of what Parameter Store does in production.
+## The Options Pattern
+
+Reading `configuration["Orders:MaxItemsPerOrder"]` throughout the code scatters string keys and parsing everywhere. The options pattern binds a section to a class once and injects the result:
 
 ```csharp
-// In the Aspire AppHost project (separate from the service)
-var builder = DistributedApplication.CreateBuilder(args);
-
-var database = builder.AddPostgres("orderdb")
-    .AddDatabase("orders");
-
-var orderService = builder.AddProject<Projects.OrderService>("orderservice")
-    .WithReference(database);
-```
-
-The service receives its connection string through Aspire's service discovery and configuration injection, so it never needs a local JSON file, environment variable, or User Secrets setup. When the same service runs in production, Parameter Store provides the values instead.
-
-This approach works well when:
-
-- The team has invested in a centralized configuration service as part of its platform
-- All environments (including local dev via Aspire) can provide configuration through the same `IConfiguration` abstraction
-- The organization values a single source of truth over layered overrides
-- Dozens of packages each own their own configuration contracts, making a host-level schema file impractical
-
-### Layer 2: Platform Overrides for Operational Control
-
-Environment variables are how platform teams and DevOps control operational behavior without touching application code or configuration files. In Kubernetes, these come from ConfigMaps, pod specs, or Helm charts. In Azure App Service, they come from Application Settings.
-
-```csharp
-builder.Configuration.AddEnvironmentVariables("ORDERSERVICE_");
-```
-
-A prefix like `ORDERSERVICE_` scopes the variables to this service and prevents collisions. Double underscores represent hierarchy.
-
-```yaml
-# Kubernetes deployment (controlled by DevOps, not developers)
-env:
-  - name: ORDERSERVICE_Logging__LogLevel__Default
-    value: "Warning"
-  - name: ORDERSERVICE_Database__MaxConnections
-    value: "50"
-  - name: ORDERSERVICE_Metrics__Enabled
-    value: "true"
-```
-
-This is how DevOps teams control logging verbosity, connection pool sizes, feature flags, and retry behavior across environments without redeploying the application. The platform team sets `Logging:LogLevel:Default` to `Warning` in production and `Debug` in staging, and developers never need to think about it.
-
-### Layer 3: Centralized Configuration for Shared Settings
-
-When multiple services need the same settings, or when settings need to change without redeployment, a centralized configuration service becomes the source of truth. Azure App Configuration, AWS AppConfig, or a custom database-backed provider all serve this role.
-
-```csharp
-builder.Configuration.AddAzureAppConfiguration(options =>
-{
-    options.Connect(builder.Configuration["AppConfig:Endpoint"])
-        .Select(KeyFilter.Any, LabelFilter.Null)
-        .Select(KeyFilter.Any, builder.Environment.EnvironmentName)
-        .ConfigureRefresh(refresh =>
-            refresh.Register("Sentinel", refreshAll: true));
-});
-```
-
-This is where settings like SMTP server addresses, third-party API base URLs, feature flags, and shared business rules typically live. The `Sentinel` pattern means a single key change triggers a refresh of all configuration, so you can update multiple related values atomically.
-
-Settings that commonly live in centralized configuration include:
-
-- **Shared service endpoints**: API base URLs that all services call
-- **Feature flags**: controlled by product teams, not developers
-- **Business rules**: order limits, rate limits, retry policies
-- **Third-party integration settings**: email servers, payment gateway URLs, notification service endpoints
-
-### Layer 4: Secrets Always Come from a Vault
-
-In any non-development environment, secrets belong in a dedicated secret management service. Connection strings, API keys, certificates, and credentials should never exist in files, environment variables, or source control.
-
-```csharp
-if (builder.Environment.IsDevelopment())
-{
-    builder.Configuration.AddUserSecrets<Program>();
-}
-else
-{
-    builder.Configuration.AddAzureKeyVault(
-        new Uri(builder.Configuration["KeyVault:Uri"]!),
-        new DefaultAzureCredential());
-}
-```
-
-Key Vault secrets use `--` as hierarchy separators. A secret named `Database--ConnectionString` maps to `configuration["Database:ConnectionString"]`, which overrides the empty placeholder from `appsettings.json`. Authentication uses `DefaultAzureCredential`, which resolves to managed identity in Azure and developer credentials locally.
-
-**User Secrets** serve the same role during local development. They store sensitive values on the developer's machine outside the project directory so they never end up in source control.
-
-```bash
-dotnet user-secrets init
-dotnet user-secrets set "Database:ConnectionString" "Server=localhost;..."
-dotnet user-secrets set "Email:ApiKey" "dev-key-abc123"
-```
-
-The values are stored in `%APPDATA%\Microsoft\UserSecrets\{guid}\secrets.json` on Windows and `~/.microsoft/usersecrets/{guid}/secrets.json` on Linux/macOS.
-
-### How the Layers Compose
-
-Provider ordering determines which layer wins when the same key exists in multiple sources. Later providers override earlier ones. For the order processing service above, the resolution order is:
-
-1. `appsettings.json` provides structural defaults
-2. `appsettings.{Environment}.json` overrides for the current environment
-3. Environment variables override anything from files (DevOps control)
-4. Azure App Configuration overrides with centralized settings
-5. Key Vault (or User Secrets in dev) overrides with secrets
-
-When the application reads `configuration["Database:ConnectionString"]`, it gets the Key Vault value in production, the User Secrets value in development, and falls back to the empty string from `appsettings.json` if nothing else is configured. The application code never makes this decision; the provider stack handles it.
-
-## The Options Pattern: How Application Code Consumes Configuration
-
-With configuration coming from four different layers, the application code needs a clean way to consume it. The Options Pattern binds configuration sections to strongly-typed classes and integrates with dependency injection, so services never deal with string keys or raw `IConfiguration`.
-
-### Defining Options Classes
-
-Each options class maps to a configuration section and provides compile-time safety.
-
-```csharp
-public class DatabaseOptions
-{
-    public const string SectionName = "Database";
-
-    [Required]
-    public string ConnectionString { get; set; } = "";
-
-    [Range(1, 200)]
-    public int MaxConnections { get; set; } = 10;
-
-    [Range(1, 300)]
-    public int CommandTimeout { get; set; } = 30;
-}
-
 public class OrderOptions
 {
     public const string SectionName = "Orders";
@@ -307,152 +186,41 @@ public class OrderOptions
     [Range(1, 1000)]
     public int MaxItemsPerOrder { get; set; } = 100;
 
+    [Required]
     public string DefaultCurrency { get; set; } = "USD";
 }
-
-public class EmailOptions
-{
-    public const string SectionName = "Email";
-
-    [Required]
-    public string SmtpServer { get; set; } = "";
-
-    public int Port { get; set; } = 587;
-
-    [Required]
-    public string FromAddress { get; set; } = "";
-
-    public bool UseSsl { get; set; } = true;
-}
-```
-
-### Registering Options with Validation
-
-Registration binds each options class to its configuration section and adds validation that runs at startup. `ValidateOnStart()` ensures the application fails immediately if required secrets are missing or values are out of range, rather than failing unpredictably at runtime.
-
-```csharp
-builder.Services.AddOptions<DatabaseOptions>()
-    .Bind(builder.Configuration.GetSection(DatabaseOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
 
 builder.Services.AddOptions<OrderOptions>()
     .Bind(builder.Configuration.GetSection(OrderOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddOptions<EmailOptions>()
-    .Bind(builder.Configuration.GetSection(EmailOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-```
-
-If Key Vault is unreachable and `Database:ConnectionString` remains empty, the `[Required]` annotation on `DatabaseOptions.ConnectionString` causes the application to fail on startup with a clear error message rather than throwing a cryptic `SqlException` later when the first query runs.
-
-### Choosing the Right Options Interface
-
-Services receive their configuration through one of three interfaces, depending on whether the values might change at runtime.
-
-| Interface | Lifetime | Picks Up Changes | Best For |
-|-----------|----------|------------------|----------|
-| `IOptions<T>` | Singleton | No | Configuration that is fixed at startup |
-| `IOptionsSnapshot<T>` | Scoped | Per request | Web request handlers where config might change between requests |
-| `IOptionsMonitor<T>` | Singleton | Yes, with callback | Background services and long-running processes |
-
-Most services should use `IOptions<T>` because most configuration is effectively static once the application starts. `IOptionsSnapshot<T>` is useful when centralized configuration changes (like feature flags from Azure App Configuration) need to take effect without restarting. `IOptionsMonitor<T>` is for background services that run continuously and need to react to changes.
-
-```csharp
-// Standard service - configuration is fixed at startup
-public class OrderService
+public class OrderService(IOptions<OrderOptions> options)
 {
-    private readonly OrderOptions _options;
-    private readonly DatabaseOptions _dbOptions;
-
-    public OrderService(
-        IOptions<OrderOptions> options,
-        IOptions<DatabaseOptions> dbOptions)
-    {
-        _options = options.Value;
-        _dbOptions = dbOptions.Value;
-    }
-
-    public async Task<Order> CreateOrderAsync(OrderRequest request)
-    {
-        if (request.Items.Count > _options.MaxItemsPerOrder)
-            throw new ValidationException(
-                $"Orders cannot exceed {_options.MaxItemsPerOrder} items");
-
-        // _dbOptions.ConnectionString came from Key Vault
-        // _options.MaxItemsPerOrder came from App Configuration or appsettings.json
-        // The service doesn't know or care about the source
-        return await PersistOrderAsync(request);
-    }
-}
-
-// Background service - needs to react to configuration changes
-public class OrderProcessingWorker : BackgroundService
-{
-    private readonly IOptionsMonitor<OrderOptions> _optionsMonitor;
-
-    public OrderProcessingWorker(IOptionsMonitor<OrderOptions> optionsMonitor)
-    {
-        _optionsMonitor = optionsMonitor;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            var options = _optionsMonitor.CurrentValue;
-            await ProcessPendingOrdersAsync(options);
-            await Task.Delay(TimeSpan.FromSeconds(30), ct);
-        }
-    }
+    private readonly OrderOptions _options = options.Value;
 }
 ```
 
-### Named Options
+### What Binding Does and Doesn't Check
 
-When you need multiple configurations of the same shape, named options let you register and retrieve them by name. This is common for HTTP clients calling different APIs.
+The binder matches keys to public properties with setters, ignoring case, and converts each string to the property's type. Its rules are forgiving in ways that hide mistakes:
 
-```csharp
-public class HttpClientOptions
-{
-    public string BaseUrl { get; set; } = "";
-    public int TimeoutSeconds { get; set; } = 30;
-}
+| Situation | Result |
+|---|---|
+| Key missing | The property keeps its default |
+| Key present but misspelled (`MaxItemsPerOder`) | Ignored silently, and the property keeps its default |
+| Value can't be converted (`"abc"` for an `int`) | `InvalidOperationException` when the options are first created |
+| Collection property already initialized, like `= ["a"]` | Configured items are **added** to the default ones |
 
-// Registration - each name maps to a different configuration section
-builder.Services.Configure<HttpClientOptions>("GitHub",
-    builder.Configuration.GetSection("HttpClients:GitHub"));
-builder.Services.Configure<HttpClientOptions>("Stripe",
-    builder.Configuration.GetSection("HttpClients:Stripe"));
+The misspelled key is the common production bug. Nothing fails, and the default quietly applies. Setting `BinderOptions.ErrorOnUnknownConfiguration` in the `Bind` call makes an unmatched key throw instead. The collection rule surprises in the other direction. A `List<string>` initialized with a default host and then bound to two configured hosts ends up with three, so leave collection properties empty and apply defaults after binding.
 
-// Consumption - resolve by name
-public class ApiClientFactory
-{
-    private readonly IOptionsSnapshot<HttpClientOptions> _options;
+### Validation at Startup
 
-    public ApiClientFactory(IOptionsSnapshot<HttpClientOptions> options)
-    {
-        _options = options;
-    }
+Binding succeeds with any missing value, so validation is what turns a missing secret into an error. `ValidateDataAnnotations()` checks attributes like `[Required]` and `[Range]`. `[Required]` rejects an empty string as well as `null`, which catches a placeholder `""` left in a JSON file that no vault overrode.
 
-    public HttpClient CreateClient(string name)
-    {
-        var options = _options.Get(name);
-        return new HttpClient
-        {
-            BaseAddress = new Uri(options.BaseUrl),
-            Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds)
-        };
-    }
-}
-```
+Without `ValidateOnStart()`, validation runs only when something first reads the options, which might be the first request that needs them, long after deployment. With it, the host throws `OptionsValidationException` as it starts, and the deployment fails where it can be seen. `AddOptionsWithValidateOnStart<T>()` (.NET 8) combines the `AddOptions` and `ValidateOnStart` calls.
 
-## Custom Validation
-
-Data annotations handle most validation needs, but complex rules require `IValidateOptions<T>`. This is useful when validation depends on relationships between properties or external conditions.
+Data annotations check only the top-level properties. A `[Range]` on a property of a nested `RetryOptions` object inside `OrderOptions` is never evaluated. Rules that span properties, or that data annotations can't express, go in an `IValidateOptions<T>`:
 
 ```csharp
 public class EmailOptionsValidator : IValidateOptions<EmailOptions>
@@ -461,15 +229,11 @@ public class EmailOptionsValidator : IValidateOptions<EmailOptions>
     {
         var failures = new List<string>();
 
-        if (string.IsNullOrEmpty(options.SmtpServer))
-            failures.Add("SmtpServer is required");
+        if (options.RequireAuthentication && string.IsNullOrEmpty(options.Username))
+            failures.Add("Username is required when RequireAuthentication is true");
 
-        if (!string.IsNullOrEmpty(options.SmtpServer)
-            && !Uri.TryCreate($"smtp://{options.SmtpServer}", UriKind.Absolute, out _))
-            failures.Add("SmtpServer must be a valid hostname");
-
-        if (options.UseSsl && options.Port == 25)
-            failures.Add("Port 25 does not support SSL; use 587 or 465");
+        if (options.Retry.MaxAttempts is < 1 or > 10)
+            failures.Add("Retry:MaxAttempts must be between 1 and 10");
 
         return failures.Count > 0
             ? ValidateOptionsResult.Fail(failures)
@@ -477,145 +241,146 @@ public class EmailOptionsValidator : IValidateOptions<EmailOptions>
     }
 }
 
-builder.Services.AddSingleton<
-    IValidateOptions<EmailOptions>, EmailOptionsValidator>();
+builder.Services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
 ```
 
-## Post-Configuration
+For a single rule, `.Validate(o => ..., "message")` on the `AddOptions` builder does the same without a class. For trimmed or Native AOT apps, the `[OptionsValidator]` source generator (.NET 8) produces a reflection-free validator, and its `[ValidateObjectMembers]` attribute extends validation into nested objects.
 
-Post-configuration runs after all providers have been applied and all binding is complete. Use it to enforce defaults, normalize values, or compute derived properties.
+### Configure, PostConfigure, Validate
+
+An options instance is built in three passes, whatever order they're registered in:
+
+1. Every `Configure` action, including `Bind`, in registration order.
+2. Every `PostConfigure` action.
+3. Every validator.
+
+`PostConfigure` sees the fully bound object, which makes it the place for derived values and for defaults that depend on other settings. Validation runs last, so a value filled in by `PostConfigure` counts as present:
 
 ```csharp
 builder.Services.PostConfigure<EmailOptions>(options =>
 {
     if (string.IsNullOrEmpty(options.FromAddress))
-    {
-        options.FromAddress = "noreply@example.com";
-    }
-});
-
-// PostConfigureAll applies to all named instances
-builder.Services.PostConfigureAll<HttpClientOptions>(options =>
-{
-    if (options.TimeoutSeconds == default)
-    {
-        options.TimeoutSeconds = 30;
-    }
+        options.FromAddress = $"noreply@{options.Domain}";
 });
 ```
 
-## Building a Custom Configuration Provider
+### Choosing an Options Interface
 
-When your configuration source is not covered by an existing NuGet package, you can build a provider that plugs into the standard pipeline. The application code never knows the difference; it just sees values in `IConfiguration`.
+| Interface | Registered as | Sees changed configuration |
+|---|---|---|
+| `IOptions<T>` | Singleton | Never. The value is created once, on first use |
+| `IOptionsSnapshot<T>` | Scoped | Once per scope, so each request sees the values as of its start |
+| `IOptionsMonitor<T>` | Singleton | Yes. `CurrentValue` reflects the latest reload, and `OnChange` notifies you |
+
+`IOptions<T>` suits the large majority of settings, which don't change while a process runs. `IOptionsSnapshot<T>` gives a request a consistent view, but its scoped lifetime means a singleton can't take it. Resolving it from the root provider throws under scope validation. A singleton or a background service that needs current values uses `IOptionsMonitor<T>` and reads `CurrentValue` each time it needs a value rather than caching it:
 
 ```csharp
-public class DatabaseConfigurationProvider : ConfigurationProvider
+public class OrderProcessingWorker(IOptionsMonitor<OrderOptions> options) : BackgroundService
 {
-    private readonly string _connectionString;
-
-    public DatabaseConfigurationProvider(string connectionString)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _connectionString = connectionString;
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            OrderOptions current = options.CurrentValue;
+            await ProcessPendingOrdersAsync(current, stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+        }
     }
+}
+```
 
+`ValidateOnStart` protects startup only. When a reload produces values that fail validation, `IOptionsMonitor<T>.CurrentValue` and new `IOptionsSnapshot<T>` instances throw `OptionsValidationException` until the configuration is fixed, so a bad edit in a central store can break a running service. `IOptions<T>` keeps the value it started with.
+
+### Named Options
+
+Named options hold several configurations of the same shape, like the settings for each external API a service calls:
+
+```csharp
+public class ApiOptions
+{
+    public string BaseUrl { get; set; } = "";
+    public int TimeoutSeconds { get; set; } = 30;
+}
+
+builder.Services.Configure<ApiOptions>("GitHub", builder.Configuration.GetSection("Apis:GitHub"));
+builder.Services.Configure<ApiOptions>("Stripe", builder.Configuration.GetSection("Apis:Stripe"));
+
+builder.Services.AddHttpClient("GitHub", (sp, client) =>
+{
+    ApiOptions options = sp.GetRequiredService<IOptionsMonitor<ApiOptions>>().Get("GitHub");
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
+```
+
+`IOptionsMonitor<T>.Get(name)` and `IOptionsSnapshot<T>.Get(name)` return a named instance. `IOptions<T>` only exposes the unnamed default. `ConfigureAll` and `PostConfigureAll` apply to every name at once, and a validator's `name` parameter says which instance it's checking.
+
+## Building a Custom Provider
+
+A store with no existing provider can be plugged in by deriving from `ConfigurationProvider` and filling its `Data` dictionary:
+
+```csharp
+public class DatabaseConfigurationProvider(string connectionString) : ConfigurationProvider
+{
     public override void Load()
     {
-        using var connection = new SqlConnection(_connectionString);
+        using var connection = new SqlConnection(connectionString);
         connection.Open();
 
-        using var command = new SqlCommand(
-            "SELECT [Key], [Value] FROM Configuration", connection);
+        using var command = new SqlCommand("SELECT [Key], [Value] FROM Configuration", connection);
         using var reader = command.ExecuteReader();
 
-        var data = new Dictionary<string, string?>(
-            StringComparer.OrdinalIgnoreCase);
+        var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         while (reader.Read())
-        {
-            data[reader.GetString(0)] = reader.GetString(1);
-        }
+            data[reader.GetString(0)] = reader.IsDBNull(1) ? null : reader.GetString(1);
 
         Data = data;
     }
 }
 
-public class DatabaseConfigurationSource : IConfigurationSource
+public class DatabaseConfigurationSource(string connectionString) : IConfigurationSource
 {
-    public string ConnectionString { get; set; } = "";
-
-    public IConfigurationProvider Build(IConfigurationBuilder builder)
-        => new DatabaseConfigurationProvider(ConnectionString);
+    public IConfigurationProvider Build(IConfigurationBuilder builder) =>
+        new DatabaseConfigurationProvider(connectionString);
 }
 
-public static class ConfigurationExtensions
+public static class DatabaseConfigurationExtensions
 {
-    public static IConfigurationBuilder AddDatabase(
-        this IConfigurationBuilder builder, string connectionString)
-        => builder.Add(new DatabaseConfigurationSource
-        {
-            ConnectionString = connectionString
-        });
+    public static IConfigurationBuilder AddDatabase(this IConfigurationBuilder builder, string connectionString) =>
+        builder.Add(new DatabaseConfigurationSource(connectionString));
 }
 ```
 
-## Cloud Provider Differences
+`Load` runs synchronously while configuration is built, so a slow or unreachable store delays or fails startup. A provider that supports changes reloads its data and calls `OnReload()`, which signals `IOptionsMonitor<T>` and anything else watching configuration.
 
-The level of .NET integration varies significantly across cloud providers. This matters when choosing where to store secrets and configuration.
+## Configuration in Tests
 
-**Azure Key Vault** has the smoothest experience because Microsoft provides a first-party NuGet package (`Azure.Extensions.AspNetCore.Configuration.Secrets`) that plugs directly into the configuration pipeline. Authentication through `DefaultAzureCredential` works identically in local development and production.
-
-**AWS Systems Manager Parameter Store** has an official AWS-maintained package (`Amazon.Extensions.Configuration.SystemsManager`) that works as an `IConfiguration` provider. Parameter Store organizes secrets by path, so `/myapp/production/Database/ConnectionString` maps to `configuration["Database:ConnectionString"]`. It supports both plain strings and SecureString parameters encrypted with KMS.
+A test can replace the whole provider stack with an in-memory dictionary, using the same flattened keys:
 
 ```csharp
-// AWS Parameter Store as an IConfiguration provider
-builder.Configuration.AddSystemsManager("/myapp/production/");
-```
-
-**AWS Secrets Manager** does not have a first-party `IConfiguration` provider. You can use the community NuGet package `Kralizek.Extensions.Configuration.AWSSecretsManager`, build a custom provider using the pattern above, or load secrets directly via the SDK. The trade-off between Parameter Store and Secrets Manager on AWS is worth understanding: Parameter Store is simpler, cheaper (free tier for standard parameters), and has native `IConfiguration` support, while Secrets Manager adds automatic rotation, cross-account access, and replication at a per-secret cost.
-
-**HashiCorp Vault** also requires a community package or custom provider since there is no first-party integration.
-
-## In-Memory Configuration for Testing
-
-For unit and integration tests, in-memory configuration replaces the entire provider stack so tests have no dependencies on files, environment variables, or cloud services.
-
-```csharp
-var testConfig = new Dictionary<string, string?>
-{
-    ["Database:ConnectionString"] = "Server=test-db;Database=orders_test",
-    ["Database:MaxConnections"] = "5",
-    ["Orders:MaxItemsPerOrder"] = "10",
-    ["Email:SmtpServer"] = "localhost",
-    ["Email:FromAddress"] = "test@example.com"
-};
-
-var configuration = new ConfigurationBuilder()
-    .AddInMemoryCollection(testConfig)
+IConfiguration configuration = new ConfigurationBuilder()
+    .AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["Orders:MaxItemsPerOrder"] = "10",
+        ["Database:ConnectionString"] = "Server=test-db;Database=orders_test"
+    })
     .Build();
 ```
 
-This also works with the Options Pattern for testing services in isolation.
+A class that takes `IOptions<T>` can skip configuration entirely:
 
 ```csharp
-var options = Options.Create(new OrderOptions
-{
-    MaxItemsPerOrder = 10,
-    DefaultCurrency = "EUR"
-});
-
-var service = new OrderService(options, dbOptions);
+var service = new OrderService(Options.Create(new OrderOptions { MaxItemsPerOrder = 10 }));
 ```
 
-## Choosing the Right Strategy
+## Key Takeaways
 
-The right approach depends on how your system is structured. In a small single-project service, local JSON files can reasonably define the full configuration surface. In a package-oriented architecture, each package owns its config contract and the host file shrinks to bootstrapping. In a fully cloud-native system, there may be no local config files at all.
+**Know the default stack before adding to it.** The host already loads JSON files, user secrets in Development, environment variables, and the command line, and whatever you add overrides all of them.
 
-| What You're Configuring | Who Owns It | Where It Lives | Example |
-|------------------------|-------------|----------------|---------|
-| Application structure and safe defaults | Developers | Options classes (code), optionally `appsettings.json` | Page sizes, timeouts, default ports |
-| Environment-specific operational behavior | DevOps / Platform team | Environment variables, ConfigMaps, or centralized config | Log levels, connection pool sizes, feature toggles |
-| Shared settings across services | Product / Platform team | Centralized config service (Parameter Store, App Configuration) | API endpoints, feature flags, business rules |
-| Secrets and credentials | Security / Platform team | Cloud vault (Key Vault, Parameter Store, Secrets Manager) | Connection strings, API keys, certificates |
-| Local development configuration | Individual developer | Aspire AppHost, User Secrets, or `appsettings.Development.json` | Local database connections, dev API keys |
-| Test configuration | Developers | In-memory collections | Test connection strings, reduced limits |
+**Keep secrets in a vault, with a specific credential in production.** User secrets are a development convenience and aren't encrypted.
 
-In a layered approach, provider ordering determines which source wins: later providers override earlier ones. In a fully externalized approach, there is only one source and no override chain to reason about. Both approaches use the same `IConfiguration` interface and Options Pattern, so application code is identical regardless of which strategy you choose. The difference is entirely in how the host wires up its providers.
+**Binding is forgiving, so validate.** A misspelled key is silently ignored, and only validation with `ValidateOnStart` turns a missing value into a startup failure.
+
+**Choose the options interface by whether values change.** `IOptions<T>` never sees a reload. `IOptionsMonitor<T>` does, and a reload that fails validation makes it throw.
+
+**Let libraries own their options classes,** so hosts supply values without redeclaring every library's schema.

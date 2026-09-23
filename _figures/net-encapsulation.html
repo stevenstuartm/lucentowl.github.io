@@ -1,0 +1,64 @@
+---
+title: "Encapsulation Down the Stack"
+kind: layering
+system: networking
+summary: "Each layer adds its own header in front of the data from above."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="nen-title nen-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="nen-title">An HTTP request wrapped by TCP, IP, and Ethernet</title>
+<desc id="nen-desc">Four rows. At the application layer the message is the HTTP request. At the transport layer a TCP header is added in front of it, making a segment. At the internet layer an IP header is added in front of that, making a packet. At the link layer an Ethernet header is added in front and a frame check trailer behind, making a frame. The Ethernet header carries MAC addresses that are rewritten at every hop, the IP header carries host addresses that stay the same end to end, and the TCP header carries ports that identify the process.</desc>
+<style>
+.nen-pay { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.nen-hdr { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.nen-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nen-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.nen-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.nen-guide { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="nen-n" x="20" y="47">Application</text>
+<text class="nen-k" x="20" y="63">message</text>
+<rect class="nen-pay" x="640" y="30" width="200" height="44" rx="4"/>
+<text class="nen-lab" x="740.0" y="56" text-anchor="middle">HTTP request</text>
+
+<text class="nen-n" x="20" y="107">Transport</text>
+<text class="nen-k" x="20" y="123">segment</text>
+<rect class="nen-hdr" x="520" y="90" width="120" height="44" rx="4"/>
+<text class="nen-lab" x="580.0" y="116" text-anchor="middle">TCP header</text>
+<rect class="nen-pay" x="640" y="90" width="200" height="44" rx="4"/>
+<text class="nen-lab" x="740.0" y="116" text-anchor="middle">HTTP request</text>
+
+<text class="nen-n" x="20" y="167">Internet</text>
+<text class="nen-k" x="20" y="183">packet</text>
+<rect class="nen-hdr" x="400" y="150" width="120" height="44" rx="4"/>
+<text class="nen-lab" x="460.0" y="176" text-anchor="middle">IP header</text>
+<rect class="nen-hdr" x="520" y="150" width="120" height="44" rx="4"/>
+<text class="nen-lab" x="580.0" y="176" text-anchor="middle">TCP header</text>
+<rect class="nen-pay" x="640" y="150" width="200" height="44" rx="4"/>
+<text class="nen-lab" x="740.0" y="176" text-anchor="middle">HTTP request</text>
+
+<text class="nen-n" x="20" y="227">Link</text>
+<text class="nen-k" x="20" y="243">frame</text>
+<rect class="nen-hdr" x="280" y="210" width="120" height="44" rx="4"/>
+<text class="nen-lab" x="340.0" y="236" text-anchor="middle">Ethernet header</text>
+<rect class="nen-hdr" x="400" y="210" width="120" height="44" rx="4"/>
+<text class="nen-lab" x="460.0" y="236" text-anchor="middle">IP header</text>
+<rect class="nen-hdr" x="520" y="210" width="120" height="44" rx="4"/>
+<text class="nen-lab" x="580.0" y="236" text-anchor="middle">TCP header</text>
+<rect class="nen-pay" x="640" y="210" width="200" height="44" rx="4"/>
+<text class="nen-lab" x="740.0" y="236" text-anchor="middle">HTTP request</text>
+<rect class="nen-hdr" x="840" y="210" width="44" height="44" rx="4"/>
+<text class="nen-k" x="862.0" y="236" text-anchor="middle">FCS</text>
+
+<path class="nen-guide" d="M 340,258 L 340,282"/>
+<text class="nen-k" x="340.0" y="298" text-anchor="middle">MAC addresses,</text>
+<text class="nen-k" x="340.0" y="313" text-anchor="middle">rewritten each hop</text>
+<path class="nen-guide" d="M 460,258 L 460,282"/>
+<text class="nen-k" x="460.0" y="298" text-anchor="middle">host addresses,</text>
+<text class="nen-k" x="460.0" y="313" text-anchor="middle">end to end</text>
+<path class="nen-guide" d="M 580,258 L 580,282"/>
+<text class="nen-k" x="580.0" y="298" text-anchor="middle">ports, which</text>
+<text class="nen-k" x="580.0" y="313" text-anchor="middle">process on the host</text>
+</g>
+</svg>

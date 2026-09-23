@@ -1,0 +1,72 @@
+---
+title: "Change Data Capture"
+kind: flow
+system: databases
+summary: "Committed changes flowing from the transaction log to secondary stores."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="dcs-title dcs-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dcs-title">Change data capture feeding secondary stores from the primary database's log</title>
+<desc id="dcs-desc">The application writes to the primary database, PostgreSQL, which records each committed change in its transaction log. A CDC connector such as Debezium reads the log and publishes each change as an event to a stream such as a Kafka topic. A search index and a cache each consume the stream and update their copies. Only committed changes reach the log, so the copies can lag the primary but won't drift from it.</desc>
+<style>
+.dcs-bound { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dcs-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dcs-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dcs-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dcs-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.dcs-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dcs-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.dcs-s { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.dcs-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dcs-lab { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.dcs-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+
+<defs>
+<marker id="dcs-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dcs-sys" x="30" y="20" width="160" height="60" rx="6"/>
+<text class="dcs-n-inv" x="110" y="44" text-anchor="middle">Application</text>
+<text class="dcs-k-inv" x="110" y="62" text-anchor="middle">[writes business data]</text>
+
+<path class="dcs-flow" d="M 110,80 V 144" marker-end="url(#dcs-a)"/>
+<text class="dcs-lab" x="120" y="116">writes</text>
+
+<rect class="dcs-bound" x="30" y="150" width="310" height="130" rx="6"/>
+<text class="dcs-n" x="46" y="174">Primary database</text>
+<text class="dcs-k" x="46" y="190">[system of record: PostgreSQL]</text>
+<rect class="dcs-box" x="160" y="200" width="160" height="60" rx="5"/>
+<text class="dcs-n" x="240" y="224" text-anchor="middle">Transaction log</text>
+<text class="dcs-s" x="240" y="242" text-anchor="middle">committed changes</text>
+
+<path class="dcs-flow" d="M 320,230 H 384" marker-end="url(#dcs-a)"/>
+<text class="dcs-lab" x="363" y="220" text-anchor="middle">reads</text>
+
+<rect class="dcs-box" x="390" y="190" width="150" height="80" rx="6"/>
+<text class="dcs-n" x="465" y="220" text-anchor="middle">CDC connector</text>
+<text class="dcs-k" x="465" y="238" text-anchor="middle">[Debezium]</text>
+<text class="dcs-s" x="465" y="256" text-anchor="middle">change to event</text>
+
+<path class="dcs-flow" d="M 540,230 H 584" marker-end="url(#dcs-a)"/>
+
+<rect class="dcs-box" x="590" y="190" width="140" height="80" rx="6"/>
+<text class="dcs-n" x="660" y="220" text-anchor="middle">Event stream</text>
+<text class="dcs-k" x="660" y="238" text-anchor="middle">[Kafka topic]</text>
+<text class="dcs-s" x="660" y="256" text-anchor="middle">ordered changes</text>
+
+<path class="dcs-flow" d="M 730,215 H 745 V 150 H 759" marker-end="url(#dcs-a)"/>
+<path class="dcs-flow" d="M 730,245 H 745 V 310 H 759" marker-end="url(#dcs-a)"/>
+
+<rect class="dcs-box" x="765" y="118" width="120" height="64" rx="6"/>
+<text class="dcs-n" x="825" y="144" text-anchor="middle">Search index</text>
+<text class="dcs-k" x="825" y="162" text-anchor="middle">[Elasticsearch]</text>
+
+<rect class="dcs-box" x="765" y="278" width="120" height="64" rx="6"/>
+<text class="dcs-n" x="825" y="304" text-anchor="middle">Cache</text>
+<text class="dcs-k" x="825" y="322" text-anchor="middle">[Redis]</text>
+
+<text class="dcs-note" x="30" y="330">Only committed changes reach the log, so the copies</text>
+<text class="dcs-note" x="30" y="348">can lag the primary but won't drift from it.</text>
+</g>
+</svg>

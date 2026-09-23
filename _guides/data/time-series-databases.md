@@ -3,15 +3,15 @@ layout: guide
 title: "Time-Series Databases"
 category: Databases
 subcategory: Database Types
-description: "Deep dive into time-series databases—how they optimize for metrics, events, and sensor data with time-based partitioning and compression."
-tags: [databases, time-series, metrics, monitoring, observability, performance]
+description: "How time-series databases handle high-volume timestamped data with time partitioning, columnar compression, retention, and downsampling, and why series cardinality is the limit to watch."
+tags: [time-series, metrics, observability, compression, cardinality, practical]
 ---
 
 ## What They Are
 
 Time-series databases optimize specifically for data indexed by time: metrics, events, sensor readings, financial prices. Every data point has a timestamp, and the primary access patterns are writing new data (which always arrives in roughly time-order) and reading data within time ranges.
 
-General-purpose databases can store time-series data, but they're not optimized for it. Time-series workloads have unique characteristics: extremely high write throughput, append-mostly (rarely updating old data), queries over time windows, and data that becomes less valuable over time (you care about yesterday's metrics, not last year's).
+General-purpose databases can store time-series data, but the workload has a distinctive shape. Writes arrive at very high volume and almost never update old data. Queries ask for ranges of time, usually aggregated into windows. And data loses value with age, since yesterday's metrics matter more than last year's.
 
 ---
 
@@ -42,12 +42,13 @@ General-purpose databases can store time-series data, but they're not optimized 
 │  ...                   │  ...                                            │
 └────────────────────────┴─────────────────────────────────────────────────┘
 
-Query: SELECT mean(value) FROM cpu_usage
+InfluxQL query:
+       SELECT mean(value) FROM cpu_usage
        WHERE time > now() - 1h AND region = 'us-east'
        GROUP BY time(5m), host
 ```
 
-Data organizes by metric name + tags, creating distinct time-series. Timestamps are the primary index. Queries aggregate across time windows (5-minute averages, hourly sums).
+Each combination of a metric name and tag values is a separate series. Timestamps are the primary index, and queries aggregate across time windows such as 5-minute averages or hourly sums.
 
 ---
 
@@ -55,19 +56,19 @@ Data organizes by metric name + tags, creating distinct time-series. Timestamps 
 
 ### Time-Based Partitioning
 
-Data automatically partitions by time (hourly, daily, weekly chunks). This makes retention policies trivial. Deleting last month's data means dropping a partition, not scanning and deleting individual rows. It also keeps hot data (recent) separate from cold data (historical).
+Data is split into chunks by time, such as one per hour or day. Retention becomes cheap, since deleting last month's data means dropping whole chunks rather than finding and deleting individual rows. Recent, frequently queried data also stays separate from older data, which can move to cheaper storage.
 
 ### Columnar Storage
 
-Time-series databases often store data in columns rather than rows. Since queries typically ask for a specific metric across many timestamps, columnar storage allows reading just that metric's column without loading irrelevant data.
+Many time-series databases store data in columns rather than rows, at least for older chunks. Queries typically ask for one metric across many timestamps, so columnar storage reads just that column.
 
 ### Compression
 
-Time-series data compresses extremely well. Sequential timestamps delta-encode (storing the difference from the previous value rather than absolute values). Similar metric values compress with run-length encoding or more sophisticated algorithms. 10:1 or 20:1 compression is typical.
+Time-series data compresses very well. Timestamps arriving at regular intervals are stored as differences from the previous timestamp, and differences of differences, which are usually zero. Consecutive values tend to be close to each other, so storing how they differ takes few bits. Facebook's Gorilla paper (2015) reported compressing 16-byte timestamp-and-value points to about 1.37 bytes on average with these techniques.
 
 ### Downsampling
 
-Older data often doesn't need full resolution. Instead of keeping every second's CPU reading for a year, aggregate to minute averages after a week, hour averages after a month. The database handles this automatically through retention policies.
+Older data often doesn't need full resolution. Instead of keeping every second's CPU reading for a year, a system can keep minute averages after a week and hourly averages after a month. Some databases do this continuously for you, such as TimescaleDB's continuous aggregates. Others, like Prometheus, leave it to companion tools or scheduled jobs.
 
 ### Specialized Query Functions
 
@@ -84,7 +85,7 @@ Time-series databases include functions for:
 
 ### Write Throughput
 
-The append-mostly nature and time-partitioned storage allow ingesting millions of data points per second.
+Because writes almost always append to the newest chunk, time-series databases ingest hundreds of thousands of points per second on a single node, and clusters go well beyond that.
 
 ### Storage Efficiency
 
@@ -102,17 +103,21 @@ Operations like "group by 5-minute intervals" or "calculate the derivative" are 
 
 ## Why They Struggle
 
-### Non-Time-Based Queries
+### High Cardinality
 
-If you need to query by attributes other than time (find all metrics where region='us-east'), you need secondary indexes that time-series databases may or may not support well.
+Tags are indexed, so filtering by `region` or `host` is cheap, but every unique combination of tag values creates a new series. Tagging metrics with a user ID, request ID, or container ID can turn thousands of series into millions, and many time-series databases slow down or run out of memory as series count grows. Values with unbounded variety belong in fields or in a different store, not in tags.
+
+### Queries That Don't Start From Time
+
+Queries that don't filter by time, or that look up individual records by some other attribute, have no efficient path in a store organized around time.
 
 ### Updates and Deletes
 
-Modifying historical data often requires rewriting entire time partitions, which is an expensive operation.
+Old chunks are often compressed and immutable, so correcting historical data can mean decompressing or rewriting a whole chunk.
 
 ### Relationships
 
-Time-series databases store independent series. Correlating data across series happens at query time, with limited join capabilities.
+Time-series databases store independent series. Correlating series, or joining them to other data such as device metadata, happens at query time and ranges from limited to unsupported, depending on the engine. SQL-based engines such as TimescaleDB are the exception.
 
 ---
 
@@ -136,14 +141,6 @@ If your data isn't primarily accessed by time range, if you need complex relatio
 
 ## Examples
 
-**InfluxDB** is purpose-built for time-series, with the Flux query language and strong community adoption for DevOps metrics.
-
-**TimescaleDB** is a PostgreSQL extension that adds time-series capabilities while retaining full SQL support, making it a good choice when you need both relational and time-series features.
-
-**Prometheus** is the standard for Kubernetes monitoring, using a pull-based model where it scrapes metrics from targets.
-
-**QuestDB** emphasizes extreme ingestion speed and SQL compatibility, particularly for financial data.
-
-**Amazon Timestream** offers serverless time-series storage with automatic tiering between hot and cold storage.
+**Prometheus** is the standard metrics system for Kubernetes and cloud-native monitoring. It scrapes metrics from targets on a schedule, stores them locally, and relies on companion systems for long-term storage. **InfluxDB** is a purpose-built time-series database. Version 3, rewritten in Rust on columnar Parquet storage, is queried with SQL and InfluxQL, and the Flux language from version 2 isn't supported. **TimescaleDB** is a PostgreSQL extension that adds time partitioning and columnar compression while keeping full SQL, which suits workloads that need time-series and relational data together. **QuestDB** is a columnar, SQL-based time-series database focused on fast ingestion, common with financial market data. On AWS, **Amazon Timestream for InfluxDB** is the managed option. The original Timestream for LiveAnalytics closed to new customers in June 2025.
 
 ---

@@ -1,0 +1,64 @@
+---
+title: "Lost Update Under Read Committed"
+kind: dynamic
+system: databases
+summary: "Two transactions both read stock 1 and both sell the last item."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="dlr-title dlr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dlr-title">Two transactions losing an update under Read Committed</title>
+<desc id="dlr-desc">Transaction 1 reads the product row and gets stock 1. Transaction 2 reads the same row and also gets stock 1. Transaction 1 writes stock 0 and commits. Transaction 2, still acting on its earlier read, writes stock 0 and commits. The row ends at stock 0, but two items were sold with one in stock.</desc>
+<style>
+.dlr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dlr-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dlr-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dlr-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dlr-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 4 4; }
+.dlr-req { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.dlr-resp { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.dlr-code { font-size: 11.5px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dlr-note { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.dlr-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; }
+.dlr-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.dlr-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+
+<defs>
+<marker id="dlr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dlr-box" x="50" y="16" width="140" height="36" rx="6"/>
+<text class="dlr-n" x="120" y="38.5" text-anchor="middle">Transaction 1</text>
+<rect class="dlr-sys" x="375" y="16" width="150" height="36" rx="6"/>
+<text class="dlr-n-inv" x="450" y="38.5" text-anchor="middle">products row 7</text>
+<rect class="dlr-box" x="710" y="16" width="140" height="36" rx="6"/>
+<text class="dlr-n" x="780" y="38.5" text-anchor="middle">Transaction 2</text>
+<path class="dlr-life" d="M 120,52 V 390"/>
+<path class="dlr-life" d="M 450,52 V 390"/>
+<path class="dlr-life" d="M 780,52 V 390"/>
+
+<path class="dlr-req" d="M 120,80 L 444,80" marker-end="url(#dlr-a)"/>
+<text class="dlr-code" x="134" y="72">SELECT stock</text>
+<path class="dlr-resp" d="M 450,110 L 126,110" marker-end="url(#dlr-a)"/>
+<text class="dlr-code" x="134" y="102">stock = 1</text>
+
+<path class="dlr-req" d="M 780,140 L 456,140" marker-end="url(#dlr-a)"/>
+<text class="dlr-code" x="766" y="132" text-anchor="end">SELECT stock</text>
+<path class="dlr-resp" d="M 450,170 L 774,170" marker-end="url(#dlr-a)"/>
+<text class="dlr-code" x="766" y="162" text-anchor="end">stock = 1</text>
+
+<path class="dlr-req" d="M 120,210 L 444,210" marker-end="url(#dlr-a)"/>
+<text class="dlr-code" x="134" y="202">UPDATE stock = 0; COMMIT</text>
+<text class="dlr-note" x="134" y="228">sells the item</text>
+<rect class="dlr-store" x="390" y="222" width="120" height="28" rx="5"/>
+<text class="dlr-code" x="450" y="240" text-anchor="middle">stock: 0</text>
+
+<path class="dlr-req" d="M 780,280 L 456,280" marker-end="url(#dlr-a)"/>
+<text class="dlr-code" x="766" y="272" text-anchor="end">UPDATE stock = 0; COMMIT</text>
+<text class="dlr-note" x="766" y="302" text-anchor="end">still acting on its read of 1,</text>
+<text class="dlr-note" x="766" y="318" text-anchor="end">sells the same item</text>
+<rect class="dlr-bad" x="390" y="294" width="120" height="28" rx="5"/>
+<text class="dlr-code" x="450" y="312" text-anchor="middle">stock: 0</text>
+<text class="dlr-labr" x="450" y="350" text-anchor="middle">Two items sold, one in stock</text>
+</g>
+</svg>

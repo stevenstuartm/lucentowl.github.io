@@ -1,225 +1,114 @@
 ---
 layout: guide
-title: "Data Architecture & Processing"
-category: Databases
-subcategory: Database Fundamentals
-description: "Comprehensive data architecture covering database fundamentals, ACID properties, ETL pipelines, big data processing, and modern data lakehouse architectures."
-tags: [databases, data-architecture, data-modeling, etl, big-data, data-lakehouse]
+title: "Analytical Data Architecture"
+category: Data & Analytics
+subcategory: Analytics
+description: "How organizations move operational data into analytical systems: ETL and ELT pipelines, batch and stream processing, warehouses, lakes, and lakehouses with open table formats, dimensional modeling, and data mesh."
+tags: [data-architecture, elt, data-warehouse, data-lakehouse, dimensional-modeling, data-mesh, practical]
 redirect_from:
   - /study-guides/data-architecture.html
 ---
 
-## Database Fundamentals
+## Why Analytical Data Lives Apart
 
-### ACID Properties
+Operational databases run the business one transaction at a time: place this order, update that account. Analytical questions look across everything at once: revenue by region per month, churn by signup cohort, which products sell together. Those queries scan and aggregate millions or billions of rows, and running them against the operational database competes with customers for the same resources.
 
-**Atomicity**: All or nothing. If you're transferring $100 between bank accounts, either both the deduction AND addition happen, or neither does. No money disappears into thin air.
-
-**Consistency**: Rules are enforced. If you have a rule that inventory can't go negative, the database won't let you sell more items than you have in stock.
-
-**Isolation**: Transactions don't interfere with each other. Two people trying to book the last airplane seat won't both succeed; one will get it, the other gets an error.
-
-**Durability**: Once confirmed, it's permanent. When the system says your order went through, it survives even if the server crashes five minutes later.
+So analytical data usually lives in a separate system, organized for reading large volumes rather than for small, fast transactions. Analytical data architecture is the set of decisions about how data gets from the operational systems into that separate place, what shape it takes there, and who owns it.
 
 ---
 
-## ETL (Extract, Transform, Load)
+## Moving Data: ETL and ELT
 
-### Overview
-ETL is how you get data from where it lives (your CRM, website, spreadsheets) into where you can analyze it (your data warehouse). Most companies pull from 10+ different systems, each with different formats and quirks.
+### Extract
 
-### Extract - Getting the Data Out
+Extraction pulls data out of source systems such as application databases, SaaS tools through their APIs, files, and event streams. A **full extraction** copies everything each time, which is simple but only practical for small datasets. An **incremental extraction** copies only what changed since the last run, using a last-modified timestamp or, more reliably, change data capture from the source database's transaction log, which also catches deletes.
 
-**Full Extraction**: Copy everything every time. Simple but slow and resource-heavy. Good for small datasets or one-time migrations.
+### Transform
 
-**Incremental Extraction**: Only copy what's changed since last time. Much more efficient but requires tracking changes. Most production systems use this.
+Transformation turns raw, inconsistent data into something analysts can trust:
 
-**Real-world example**: Your e-commerce site might do full extraction of your small product catalog weekly, but incremental extraction of customer orders every hour.
+- **Cleaning**: "N/A", "NULL", an empty string, and "Not Available" all become a real null
+- **Standardizing**: "M/F", "Male/Female", and "1/0" become one consistent code
+- **Joining**: customer records from the CRM combined with purchases from the e-commerce platform
+- **Business logic**: raw transactions turned into measures like customer lifetime value
 
-### Transform - Making Data Useful
+Transformation is where most of the effort and most of the bugs in a data pipeline tend to live, because it encodes business definitions that different teams may not agree on.
 
-This is where messy real-world data becomes clean, consistent data you can actually analyze.
+### Load
 
-**Common transformations**:
-- **Cleaning**: "N/A", "NULL", "", "Not Available" all become a standard null value
-- **Standardization**: "M/F", "Male/Female", "1/0" all become consistent gender codes  
-- **Business logic**: Raw transactions become "Customer Lifetime Value" through calculations
-- **Joining**: Combine customer info from your CRM with purchase history from your e-commerce platform
+Loading writes the result into the analytical store. A **full load** replaces the target table each run. An **incremental load** inserts new rows and updates changed ones, usually with a merge on a key. Loads should be idempotent, meaning a run can be repeated after a failure without duplicating data, because pipelines fail and get rerun.
 
-Transformation often takes 70% of your ETL effort. Don't underestimate it.
+### ETL vs. ELT
 
-### Load - Putting Data Where It Belongs
+**ETL** transforms data before loading it, on separate processing infrastructure, so only cleaned data reaches the warehouse. It suited on-premises warehouses where storage and compute were expensive and fixed.
 
-**Full Load**: Replace everything in the target. Clean but can create downtime.
+**ELT** loads raw data first and transforms it inside the warehouse with SQL. Cloud warehouses made this the common default, because storage is cheap, compute scales on demand, and keeping the raw data means a transformation can be fixed and rerun without extracting again. Tools like dbt manage those in-warehouse SQL transformations as version-controlled, tested code. ETL remains the better fit when data must be filtered or masked before it lands, such as removing personal data that the warehouse isn't allowed to hold.
 
-**Incremental Load**: Only add/update changed records. Faster and no downtime, but more complex logic.
+{% include figure.html id="db-elt-flow" %}
 
-### Major ETL Challenges
+### Where Pipelines Break
 
-**Different data sources, different problems**: Your Salesforce API works differently than your Google Analytics export, which works differently than your accounting system's CSV files.
-
-**Things break**: Source systems change their APIs, network connections fail, data formats shift. Plan for failures.
-
-**Performance**: What works for 1,000 records might be painfully slow for 1 million records.
+Pipelines fail in predictable ways. A source system renames a column or changes a type, and every downstream transformation breaks or, worse, silently produces nulls. Data arrives late or out of order. An API rate-limits the extraction. A logic change needs history recomputed, called a backfill. Teams defend against these with schema checks at ingestion, data quality tests on each transformation, alerting on freshness and row counts, and **data contracts**, agreements between the team producing data and the teams consuming it about its schema and meaning.
 
 ---
 
-## Big Data Processing
+## Batch and Stream Processing
 
-### When You Need Big Data Approaches
-- **Volume**: More data than fits comfortably in memory or processes in reasonable time
-- **Variety**: Mix of databases, files, APIs, real-time streams
-- **Velocity**: Data arrives faster than traditional batch processing can handle
+**Batch processing** handles data in scheduled chunks, such as last night's sales processed at 2 a.m. It's simpler, cheaper, and easy to rerun, and the results are hours old.
 
-### MapReduce - The Big Idea
-Break big problems into smaller pieces that can run in parallel, then combine the results.
+**Stream processing** handles each event within seconds of its arrival, which suits fraud detection, live dashboards, and alerting. It costs more to build and operate, and handling late or out-of-order events correctly is hard.
 
-**Example - Counting Words Across 1000 Documents**:
-- **Map phase**: Each server counts words in 10 documents  
-- **Reduce phase**: One server adds up all the "the" counts, another adds all the "dog" counts, etc.
-- **Result**: Total word counts across all documents
-
-**Why it works**: You can throw more servers at the problem to go faster. The framework handles failures, scheduling, and coordination automatically.
-
-### Batch vs Real-time Processing
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Batch Processing</h4>
-<ul>
-<li><strong>Good for</strong>: Historical analysis, complex calculations, cost efficiency</li>
-<li><strong>Example</strong>: Nightly processing of the day's sales data for reporting</li>
-<li><strong>Tradeoff</strong>: High latency but comprehensive and reliable</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Real-time Processing</h4>
-<ul>
-<li><strong>Good for</strong>: Immediate responses, monitoring, personalization</li>
-<li><strong>Example</strong>: Fraud detection on credit card transactions</li>
-<li><strong>Tradeoff</strong>: Low latency but limited historical context</li>
-</ul>
-</div>
-</div>
-
-<div class="callout callout--note">
-<p class="callout__title">Lambda Architecture</p>
-<p>Run both batch and real-time processing, combine the results. Get comprehensive analysis AND fast responses, but double the complexity.</p>
-</div>
+Large-scale batch processing grew out of MapReduce, the model Google published in 2004 and Hadoop popularized: split the work into a map step that runs in parallel across many machines and a reduce step that combines the partial results. Current engines like Apache Spark generalize that into multi-step dataflows that keep intermediate data in memory, and most also process streams. Many organizations run both batch and streaming paths over the same data. The Lambda and Kappa architectures are two ways of organizing that combination.
 
 ---
 
-## Modern Data Architectures
+## Where Analytical Data Lives
 
-### Data Warehouse vs Data Lake vs Data Lakehouse
+### Data Warehouse
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Data Warehouse</h4>
-<ul>
-<li><strong>What</strong>: Structured data, optimized for business reporting</li>
-<li><strong>Best for</strong>: Executive dashboards, financial reports, regulatory compliance</li>
-<li><strong>Think</strong>: Your company's "source of truth" for business metrics</li>
-<li><strong>Examples</strong>: Snowflake, BigQuery, Redshift</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Data Lake</h4>
-<ul>
-<li><strong>What</strong>: Store any type of data in raw format, figure out structure later</li>
-<li><strong>Best for</strong>: Data science, machine learning, exploratory analysis</li>
-<li><strong>Think</strong>: A big bucket where you dump everything, organize it when needed</li>
-<li><strong>Challenge</strong>: Can become a "data swamp" without proper organization</li>
-</ul>
-</div>
-</div>
+A data warehouse stores structured, modeled data in columnar tables and answers SQL queries over it quickly. Data is cleaned and shaped before analysts query it, so it's the trusted source for dashboards, financial reporting, and regulatory numbers. Snowflake, Google BigQuery, Amazon Redshift, and Azure Synapse are common cloud warehouses. The limitation is that data has to fit the warehouse's tables, and raw or unstructured data such as logs, images, and free text doesn't.
 
-<div class="callout callout--note">
-<p class="callout__title">Data Lakehouse</p>
-<p><strong>What</strong>: Combines warehouse performance with lake flexibility</p>
-<p><strong>Best for</strong>: Organizations that want both structured reporting AND data science</p>
-<p><strong>Think</strong>: One system instead of maintaining separate warehouse and lake</p>
-<p><strong>Examples</strong>: Databricks Delta Lake, Apache Iceberg</p>
-</div>
+### Data Lake
 
-<div class="callout callout--tip">
-<p class="callout__title">Choosing Your Architecture</p>
-<p>Small company with clear reporting needs? Start with warehouse. Lots of unstructured data and data science? Consider lakehouse. Just getting started? Warehouse is simpler.</p>
-</div>
+A data lake stores raw data of any kind as files in cheap object storage such as Amazon S3 or Azure Data Lake Storage, often in columnar file formats like Parquet, and applies structure only when it's read. It suits data science, machine learning, and exploration, where the raw data's full detail matters. Without cataloging and governance, a lake tends to become a "data swamp" that nobody can find anything in or trust. Plain files also offer no transactions, so a reader can see a half-written update.
 
-### Data Mesh
+### Data Lakehouse
 
-**Core idea**: Instead of one central data team managing everything, each business domain (Marketing, Sales, Customer Service) owns and manages their own data.
+A lakehouse adds warehouse features to the files in a lake. The key piece is an **open table format**, such as Delta Lake, Apache Iceberg, or Apache Hudi, which keeps a transaction log and metadata alongside the Parquet files. That log gives the tables ACID commits, schema enforcement and evolution, and time travel to earlier versions, while the data stays in open files in the organization's own storage. Engines like Spark, Trino, Databricks, and Snowflake can all query the same tables. Lakehouses commonly organize data in layers that each add refinement, often called bronze for raw data, silver for cleaned data, and gold for business-ready tables.
 
-**Key principles**:
-- **Domain ownership**: Marketing team owns marketing data, knows it best
-- **Data as product**: Treat data like a product with customers and quality standards  
-- **Self-service platform**: Provide tools so domains don't need deep technical expertise
-- **Federated governance**: Common standards, but domains implement them locally
+| Architecture | Stores | Best for | Main trade-off |
+| --- | --- | --- | --- |
+| Warehouse | Modeled, structured tables | Trusted reporting and BI | Only structured data, traditionally held in the vendor's own storage format |
+| Lake | Raw files of any kind | Data science, ML, exploration | Becomes a swamp without governance, and has no transactions |
+| Lakehouse | Files plus an open table format | Reporting and data science on one copy of the data | More moving parts to operate than a managed warehouse |
 
-**When it works**: Large organizations with mature data teams in each business area.
-
-**When it doesn't**: Small companies, organizations without technical expertise in business domains, or anywhere lacking strong data culture.
-
-### Modern Data Stack (MDS)
-
-**The pattern**: Best-of-breed cloud tools connected by APIs rather than one monolithic platform.
-
-**Typical stack**:
-1. **Ingestion**: Fivetran, Airbyte (connect to data sources)
-2. **Storage**: Snowflake, BigQuery (cloud data warehouse)  
-3. **Transformation**: dbt (SQL-based transformations)
-4. **BI**: Looker, Tableau, PowerBI (dashboards and reports)
-5. **Observability**: Monte Carlo, Great Expectations (monitor data quality)
-
-**Benefits**: Choose the best tool for each job, avoid vendor lock-in, faster innovation.
-
-**Challenges**: More tools to manage, integration complexity, potential security gaps.
+A small organization with clear reporting needs is usually best served by a managed warehouse. A lakehouse earns its complexity when large volumes of raw or semi-structured data and data science workloads sit alongside reporting.
 
 ---
 
-## Quick Reference
+## Dimensional Modeling
 
-### Architecture Patterns
+Analytical tables are usually shaped differently from operational ones. The dominant approach, dimensional modeling, splits data into two kinds of table.
 
-| Architecture | Best For | Trade-off |
-|--------------|----------|-----------|
-| **Data Warehouse** | Business reporting, structured data | Less flexible, structured only |
-| **Data Lake** | Data science, ML, exploration | Can become "data swamp" |
-| **Data Lakehouse** | Both structured & unstructured | More complex |
-| **Data Mesh** | Large orgs with domain expertise | Requires mature teams |
+**Fact tables** record events and their measures: each row is a sale, with a quantity, a price, and keys pointing to the context of the sale. They're long and narrow, and they grow continuously.
 
-### ETL vs ELT
+**Dimension tables** describe that context: the customer, the product, the store, the date. They're wide, holding many descriptive attributes to filter and group by, and they change slowly.
 
-**ETL** (Extract, Transform, Load): Transform before loading
-- **Good for**: Resource-constrained environments, complex transformations
-- **Bad for**: Cloud warehouses with cheap compute
+A fact table surrounded by the dimensions it references forms a **star schema**. A query joins the fact table to a few dimensions and aggregates, such as total sales by product category and month, a shape that warehouses are optimized to run. Unlike an operational schema, dimensions are deliberately denormalized so that queries need few joins.
 
-**ELT** (Extract, Load, Transform): Load raw data, transform in warehouse
-- **Good for**: Cloud warehouses, flexibility, modern data stack
-- **Bad for**: Limited warehouse resources
+Dimensions change over time, and the model has to decide what history to keep. When a customer moves from Seattle to Denver, a **type 1** change overwrites the city, so all past sales now appear under Denver. A **type 2** change adds a new row for the customer with effective dates, so past sales stay attributed to Seattle and new ones to Denver. These are called **slowly changing dimensions**, and choosing the type per attribute is one of the core modeling decisions.
 
-### Processing Models
+---
 
-**Batch Processing**:
-- Scheduled intervals (hourly, daily, weekly)
-- High latency, comprehensive analysis
-- Lower cost, simpler
+## Data Mesh
 
-**Stream Processing**:
-- Real-time as data arrives
-- Low latency, immediate insights
-- Higher cost, more complex
+Data mesh, a set of principles Zhamak Dehghani proposed in 2019, is about organization rather than technology. Instead of one central data team building every pipeline, each business domain owns its analytical data and publishes it for others to use. It rests on four principles:
 
-**Lambda Architecture**: Both batch and streaming (high complexity)
+- **Domain ownership**: the team that runs a business area owns that area's analytical data, because it understands the data best
+- **Data as a product**: each domain publishes datasets with documented schemas, quality guarantees, and named owners, treating other teams as customers
+- **Self-serve platform**: a central platform team provides the storage, pipeline, and access tooling so domains don't each build their own
+- **Federated governance**: standards for security, interoperability, and quality are set jointly and applied by each domain
 
-### Key Concepts
-
-**ACID**: Atomicity, Consistency, Isolation, Durability. Database transaction guarantees.
-**CDC**: Change Data Capture. Tracks database changes in real-time.
-**Data Contract**: Agreement defining data quality, schema, and delivery expectations.
-**Data Lineage**: Map of data origin, transformations, and destinations.
-**dbt**: Data build tool. SQL-based transformation framework.
-**Slowly Changing Dimensions**: Techniques for tracking historical changes.
+Data mesh fits large organizations where a central data team has become a bottleneck and domains have the engineering capacity to own their data. It fits poorly in small organizations or where domain teams lack data engineering skills, since it spreads responsibility across teams that have to be able to carry it.
 
 ---

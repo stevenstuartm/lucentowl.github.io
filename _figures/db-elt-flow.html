@@ -1,0 +1,73 @@
+---
+title: "ELT Into a Lakehouse"
+kind: flow
+system: databases
+summary: "Raw data loaded first, then refined in layers inside the analytical store."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="del-title del-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="del-title">An ELT pipeline loading raw data and refining it in layers</title>
+<desc id="del-desc">Three sources, an application database read through change data capture, SaaS APIs, and an event stream, are extracted and loaded without transformation into the raw layer of the analytical store, often called bronze. Transformations run inside the store with SQL, producing a cleaned layer, silver, and then business-ready tables, gold. BI dashboards read the gold tables, and data science reads the silver and gold layers.</desc>
+<style>
+.del-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.del-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.del-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.del-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.del-store { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.del-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.del-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.del-lab { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.del-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.del-xf { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.del-labp { font-size: 11px; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="del-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="del-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="del-hd" x="30" y="30">SOURCES</text>
+<rect class="del-box" x="30" y="45" width="150" height="54" rx="6"/>
+<text class="del-n" x="105" y="68" text-anchor="middle">Application DB</text>
+<text class="del-k" x="105" y="86" text-anchor="middle">[via change data capture]</text>
+<rect class="del-box" x="30" y="125" width="150" height="54" rx="6"/>
+<text class="del-n" x="105" y="148" text-anchor="middle">SaaS APIs</text>
+<text class="del-k" x="105" y="166" text-anchor="middle">[CRM, billing]</text>
+<rect class="del-box" x="30" y="205" width="150" height="54" rx="6"/>
+<text class="del-n" x="105" y="228" text-anchor="middle">Event stream</text>
+<text class="del-k" x="105" y="246" text-anchor="middle">[clicks, telemetry]</text>
+
+<path class="del-flow" d="M 180,72 H 200 V 152 H 234" marker-end="url(#del-a)"/>
+<path class="del-flow" d="M 180,152 H 234" marker-end="url(#del-a)"/>
+<path class="del-flow" d="M 180,232 H 200 V 152" />
+<text class="del-lab" x="196" y="290">extract + load,</text>
+<text class="del-lab" x="196" y="305">no transform</text>
+
+<rect class="del-bound" x="240" y="30" width="440" height="250" rx="8"/>
+<text class="del-hd" x="256" y="52">ANALYTICAL STORE</text>
+<rect class="del-store" x="260" y="120" width="120" height="64" rx="6"/>
+<text class="del-n" x="320" y="146" text-anchor="middle">Raw</text>
+<text class="del-k" x="320" y="164" text-anchor="middle">[bronze]</text>
+<rect class="del-store" x="400" y="120" width="120" height="64" rx="6"/>
+<text class="del-n" x="460" y="146" text-anchor="middle">Cleaned</text>
+<text class="del-k" x="460" y="164" text-anchor="middle">[silver]</text>
+<rect class="del-store" x="540" y="120" width="120" height="64" rx="6"/>
+<text class="del-n" x="600" y="146" text-anchor="middle">Business-ready</text>
+<text class="del-k" x="600" y="164" text-anchor="middle">[gold]</text>
+<path class="del-xf" d="M 380,152 H 394" marker-end="url(#del-p)"/>
+<path class="del-xf" d="M 520,152 H 534" marker-end="url(#del-p)"/>
+<text class="del-labp" x="460" y="100" text-anchor="middle">transform inside the store with SQL (tools like dbt)</text>
+
+<path class="del-flow" d="M 660,140 H 734" marker-end="url(#del-a)"/>
+<path class="del-flow" d="M 600,184 V 300 H 734" marker-end="url(#del-a)"/>
+<path class="del-flow" d="M 460,184 V 300 H 600" />
+
+<rect class="del-box" x="740" y="110" width="140" height="54" rx="6"/>
+<text class="del-n" x="810" y="133" text-anchor="middle">BI dashboards</text>
+<text class="del-k" x="810" y="151" text-anchor="middle">[reads gold]</text>
+<rect class="del-box" x="740" y="273" width="140" height="54" rx="6"/>
+<text class="del-n" x="810" y="296" text-anchor="middle">Data science</text>
+<text class="del-k" x="810" y="314" text-anchor="middle">[silver and gold]</text>
+</g>
+</svg>

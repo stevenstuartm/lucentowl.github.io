@@ -1,0 +1,97 @@
+---
+title: "Head-of-Line Blocking by Version"
+kind: flow
+system: networking
+summary: "What a slow response or a lost packet holds up in each HTTP version."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="nhb-title nhb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="nhb-title">Head-of-line blocking in HTTP/1.1, HTTP/2, and HTTP/3</title>
+<desc id="nhb-desc">Three rows showing data arriving on one connection over time. In HTTP/1.1, a slow response A occupies the connection and requests B and C queue behind it. In HTTP/2 over TCP, packets from streams 1, 2, and 3 interleave; when a packet for stream 2 is lost, every packet that arrives after it is held until the retransmission, whichever stream it belongs to. In HTTP/3 over QUIC, the same loss holds only the later stream 2 packet, and the packets for streams 1 and 3 are delivered.</desc>
+<style>
+.nhb-ok { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.nhb-hold { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.nhb-lost { fill: var(--color-card-bg, #FFFFFF); stroke: #B83232; stroke-width: 2; }
+.nhb-x { stroke: #B83232; stroke-width: 2; }
+.nhb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nhb-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.nhb-p { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nhb-ph { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.nhb-note { font-size: 11px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.nhb-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+</style>
+
+<defs>
+<marker id="nhb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="nhb-axis" d="M 210,26 L 700,26" marker-end="url(#nhb-a)"/>
+<text class="nhb-k" x="210" y="18">arrival order on one connection</text>
+
+<text class="nhb-n" x="20" y="62">HTTP/1.1</text>
+<text class="nhb-k" x="20" y="78">over TCP</text>
+<rect class="nhb-ok" x="210" y="48" width="212" height="36" rx="4"/>
+<text class="nhb-p" x="316.0" y="70.5" text-anchor="middle">response A (slow)</text>
+<rect class="nhb-hold" x="434" y="48" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="456.0" y="70.5" text-anchor="middle">B</text>
+<rect class="nhb-hold" x="490" y="48" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="512.0" y="70.5" text-anchor="middle">C</text>
+<text class="nhb-note" x="720" y="62">B and C queue</text>
+<text class="nhb-note" x="720" y="78">behind A</text>
+
+<text class="nhb-n" x="20" y="152">HTTP/2</text>
+<text class="nhb-k" x="20" y="168">streams over TCP</text>
+<rect class="nhb-ok" x="210" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="232.0" y="160.5" text-anchor="middle">1</text>
+<rect class="nhb-ok" x="266" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="288.0" y="160.5" text-anchor="middle">2</text>
+<rect class="nhb-ok" x="322" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="344.0" y="160.5" text-anchor="middle">3</text>
+<rect class="nhb-ok" x="378" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="400.0" y="160.5" text-anchor="middle">1</text>
+<rect class="nhb-lost" x="434" y="138" width="44" height="36" rx="4"/>
+<path class="nhb-x" d="M 440,144 L 472,168 M 472,144 L 440,168"/>
+<rect class="nhb-hold" x="490" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="512.0" y="160.5" text-anchor="middle">3</text>
+<rect class="nhb-hold" x="546" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="568.0" y="160.5" text-anchor="middle">1</text>
+<rect class="nhb-hold" x="602" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="624.0" y="160.5" text-anchor="middle">2</text>
+<rect class="nhb-hold" x="658" y="138" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="680.0" y="160.5" text-anchor="middle">3</text>
+<text class="nhb-note" x="720" y="152">every stream waits</text>
+<text class="nhb-note" x="720" y="168">for the retransmission</text>
+<text class="nhb-k" x="434" y="194">stream 2 packet lost</text>
+
+<text class="nhb-n" x="20" y="252">HTTP/3</text>
+<text class="nhb-k" x="20" y="268">streams over QUIC</text>
+<rect class="nhb-ok" x="210" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="232.0" y="260.5" text-anchor="middle">1</text>
+<rect class="nhb-ok" x="266" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="288.0" y="260.5" text-anchor="middle">2</text>
+<rect class="nhb-ok" x="322" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="344.0" y="260.5" text-anchor="middle">3</text>
+<rect class="nhb-ok" x="378" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="400.0" y="260.5" text-anchor="middle">1</text>
+<rect class="nhb-lost" x="434" y="238" width="44" height="36" rx="4"/>
+<path class="nhb-x" d="M 440,244 L 472,268 M 472,244 L 440,268"/>
+<rect class="nhb-ok" x="490" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="512.0" y="260.5" text-anchor="middle">3</text>
+<rect class="nhb-ok" x="546" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="568.0" y="260.5" text-anchor="middle">1</text>
+<rect class="nhb-hold" x="602" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-ph" x="624.0" y="260.5" text-anchor="middle">2</text>
+<rect class="nhb-ok" x="658" y="238" width="44" height="36" rx="4"/>
+<text class="nhb-p" x="680.0" y="260.5" text-anchor="middle">3</text>
+<text class="nhb-note" x="720" y="252">only stream 2 waits</text>
+<text class="nhb-k" x="434" y="294">stream 2 packet lost</text>
+
+<rect class="nhb-ok" x="210" y="326" width="28" height="22" rx="3"/>
+<text class="nhb-k" x="246" y="341">delivered to the application</text>
+<rect class="nhb-hold" x="430" y="326" width="28" height="22" rx="3"/>
+<text class="nhb-k" x="466" y="341">received but held back</text>
+<rect class="nhb-lost" x="630" y="326" width="28" height="22" rx="3"/>
+<path class="nhb-x" d="M 634,330 L 654,344 M 654,330 L 634,344"/>
+<text class="nhb-k" x="666" y="341">lost</text>
+</g>
+</svg>

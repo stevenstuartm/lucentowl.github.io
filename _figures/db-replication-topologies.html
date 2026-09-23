@@ -1,0 +1,87 @@
+---
+title: "Replication Topologies"
+kind: structure
+system: databases
+summary: "Where writes enter and how they spread in each replication topology."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" role="img" aria-labelledby="drt-title drt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="drt-title">Single-leader, multi-leader, and leaderless replication</title>
+<desc id="drt-desc">In single-leader replication, a client writes to the one leader, which ships its log to two followers. In multi-leader replication, clients write to leader A or leader B, each leader has its own follower, and the two leaders replicate to each other and must resolve conflicting writes. In leaderless replication, a client sends each write to all three replicas and the write succeeds once W of the N replicas acknowledge it; reads query R replicas.</desc>
+<style>
+.drt-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.drt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.drt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.drt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.drt-cli { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.drt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.drt-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.drt-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.drt-lab { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.drt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.drt-sync { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.drt-labp { font-size: 11px; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="drt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="drt-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="drt-band" x="15" y="15" width="280" height="310" rx="6"/>
+<text class="drt-hd" x="30" y="38">SINGLE-LEADER</text>
+<rect class="drt-band" x="305" y="15" width="280" height="310" rx="6"/>
+<text class="drt-hd" x="320" y="38">MULTI-LEADER</text>
+<rect class="drt-band" x="595" y="15" width="290" height="310" rx="6"/>
+<text class="drt-hd" x="610" y="38">LEADERLESS</text>
+
+<rect class="drt-cli" x="100" y="55" width="110" height="30" rx="5"/>
+<text class="drt-n-mute" x="155" y="75" text-anchor="middle">Client</text>
+<path class="drt-flow" d="M 155,85 V 119" marker-end="url(#drt-a)"/>
+<text class="drt-lab" x="163" y="107">writes</text>
+<rect class="drt-sys" x="95" y="125" width="120" height="44" rx="6"/>
+<text class="drt-n-inv" x="155" y="152" text-anchor="middle">Leader</text>
+<path class="drt-flow" d="M 125,169 L 92,234" marker-end="url(#drt-a)"/>
+<path class="drt-flow" d="M 185,169 L 218,234" marker-end="url(#drt-a)"/>
+<text class="drt-lab" x="155" y="214" text-anchor="middle">log</text>
+<rect class="drt-box" x="35" y="240" width="110" height="40" rx="6"/>
+<text class="drt-n" x="90" y="265" text-anchor="middle">Follower</text>
+<rect class="drt-box" x="165" y="240" width="110" height="40" rx="6"/>
+<text class="drt-n" x="220" y="265" text-anchor="middle">Follower</text>
+
+<rect class="drt-cli" x="323" y="55" width="100" height="30" rx="5"/>
+<text class="drt-n-mute" x="373" y="75" text-anchor="middle">Client</text>
+<rect class="drt-cli" x="467" y="55" width="100" height="30" rx="5"/>
+<text class="drt-n-mute" x="517" y="75" text-anchor="middle">Client</text>
+<path class="drt-flow" d="M 373,85 V 119" marker-end="url(#drt-a)"/>
+<path class="drt-flow" d="M 517,85 V 119" marker-end="url(#drt-a)"/>
+<rect class="drt-sys" x="318" y="125" width="105" height="44" rx="6"/>
+<text class="drt-n-inv" x="370" y="152" text-anchor="middle">Leader A</text>
+<rect class="drt-sys" x="467" y="125" width="105" height="44" rx="6"/>
+<text class="drt-n-inv" x="519" y="152" text-anchor="middle">Leader B</text>
+<path class="drt-sync" d="M 429,147 H 461" marker-start="url(#drt-p)" marker-end="url(#drt-p)"/>
+<text class="drt-labp" x="445" y="196" text-anchor="middle">replicate both ways,</text>
+<text class="drt-labp" x="445" y="210" text-anchor="middle">resolve conflicts</text>
+<path class="drt-flow" d="M 340,169 V 234" marker-end="url(#drt-a)"/>
+<path class="drt-flow" d="M 550,169 V 234" marker-end="url(#drt-a)"/>
+<rect class="drt-box" x="318" y="240" width="95" height="40" rx="6"/>
+<text class="drt-n" x="365" y="265" text-anchor="middle">Follower</text>
+<rect class="drt-box" x="477" y="240" width="95" height="40" rx="6"/>
+<text class="drt-n" x="524" y="265" text-anchor="middle">Follower</text>
+
+<rect class="drt-cli" x="685" y="55" width="110" height="30" rx="5"/>
+<text class="drt-n-mute" x="740" y="75" text-anchor="middle">Client</text>
+<path class="drt-flow" d="M 715,85 L 652,164" marker-end="url(#drt-a)"/>
+<path class="drt-flow" d="M 740,85 V 164" marker-end="url(#drt-a)"/>
+<path class="drt-flow" d="M 765,85 L 828,164" marker-end="url(#drt-a)"/>
+<text class="drt-lab" x="802" y="74">write to all N</text>
+<rect class="drt-box" x="605" y="170" width="85" height="44" rx="6"/>
+<text class="drt-n" x="647" y="197" text-anchor="middle">Replica</text>
+<rect class="drt-box" x="698" y="170" width="85" height="44" rx="6"/>
+<text class="drt-n" x="740" y="197" text-anchor="middle">Replica</text>
+<rect class="drt-box" x="791" y="170" width="85" height="44" rx="6"/>
+<text class="drt-n" x="833" y="197" text-anchor="middle">Replica</text>
+<text class="drt-lab" x="740" y="258" text-anchor="middle">A write succeeds after W of N acks;</text>
+<text class="drt-lab" x="740" y="274" text-anchor="middle">a read asks R replicas</text>
+</g>
+</svg>

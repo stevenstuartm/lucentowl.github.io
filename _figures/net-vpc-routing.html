@@ -1,0 +1,71 @@
+---
+title: "Public and Private Subnets"
+kind: deployment
+system: networking
+summary: "The default route decides whether a subnet is public or private."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="nvr-title nvr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="nvr-title">A cloud network with a public subnet and a private subnet</title>
+<desc id="nvr-desc">A cloud network with an internet gateway at its edge and two subnets. The public subnet's route table sends 0.0.0.0/0 to the internet gateway, and it holds a load balancer and a NAT gateway. The private subnet's route table sends 0.0.0.0/0 to the NAT gateway, and it holds the application instances. Inbound requests come from the internet through the internet gateway to the load balancer and then to the instances. Outbound calls from the instances go to the NAT gateway, then the internet gateway, then the internet. Both route tables also route the network's own range, 10.20.0.0/16, locally.</desc>
+<style>
+.nvr-vpc { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 6 4; }
+.nvr-sub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1; }
+.nvr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.nvr-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.nvr-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nvr-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.nvr-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.nvr-sn { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.nvr-rt { font-size: 10.5px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #1A202C); }
+.nvr-in { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.nvr-out { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2; stroke-dasharray: 6 4; }
+</style>
+
+<defs>
+<marker id="nvr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="nvr-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="nvr-box" x="20" y="150" width="100" height="56" rx="6"/>
+<text class="nvr-n" x="32" y="182">Internet</text>
+
+<rect class="nvr-vpc" x="140" y="16" width="744" height="316" rx="8"/>
+<text class="nvr-k" x="300" y="34">cloud network 10.20.0.0/16</text>
+
+<rect class="nvr-sys" x="160" y="150" width="90" height="56" rx="6"/>
+<text class="nvr-n-inv" x="172" y="173">Internet</text>
+<text class="nvr-n-inv" x="172" y="191">gateway</text>
+
+<rect class="nvr-sub" x="290" y="46" width="270" height="274" rx="6"/>
+<text class="nvr-sn" x="302" y="66">Public subnet</text>
+<rect class="nvr-box" x="310" y="80" width="230" height="46" rx="6"/>
+<text class="nvr-n" x="322" y="108">Load balancer</text>
+<rect class="nvr-box" x="310" y="244" width="230" height="46" rx="6"/>
+<text class="nvr-n" x="322" y="272">NAT gateway</text>
+<text class="nvr-k" x="310" y="156">route table</text>
+<text class="nvr-rt" x="310" y="176">10.20.0.0/16  local</text>
+<text class="nvr-rt" x="310" y="194">0.0.0.0/0     internet gateway</text>
+
+<rect class="nvr-sub" x="600" y="46" width="270" height="274" rx="6"/>
+<text class="nvr-sn" x="612" y="66">Private subnet</text>
+<rect class="nvr-box" x="620" y="140" width="230" height="56" rx="6"/>
+<text class="nvr-n" x="632" y="163">App instances</text>
+<text class="nvr-k" x="632" y="182">private addresses only</text>
+<text class="nvr-k" x="620" y="246">route table</text>
+<text class="nvr-rt" x="620" y="266">10.20.0.0/16  local</text>
+<text class="nvr-rt" x="620" y="284">0.0.0.0/0     NAT gateway</text>
+
+<path class="nvr-in" d="M 120,170 L 154,170" marker-end="url(#nvr-a)"/>
+<path class="nvr-out" d="M 160,188 L 126,188" marker-end="url(#nvr-b)"/>
+<path class="nvr-in" d="M 250,160 L 304,110" marker-end="url(#nvr-a)"/>
+<path class="nvr-in" d="M 540,110 L 614,155" marker-end="url(#nvr-a)"/>
+<path class="nvr-out" d="M 620,185 L 546,258" marker-end="url(#nvr-b)"/>
+<path class="nvr-out" d="M 310,262 L 256,200" marker-end="url(#nvr-b)"/>
+
+<path class="nvr-in" d="M 300,352 L 340,352" marker-end="url(#nvr-a)"/>
+<text class="nvr-k" x="348" y="356">inbound request</text>
+<path class="nvr-out" d="M 500,352 L 540,352" marker-end="url(#nvr-b)"/>
+<text class="nvr-k" x="548" y="356">outbound call from a private instance</text>
+</g>
+</svg>

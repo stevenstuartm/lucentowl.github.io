@@ -1,0 +1,58 @@
+---
+title: "Reading Your Own Write From a Lagging Follower"
+kind: dynamic
+system: databases
+summary: "A user's write reaches the leader, but their next read hits a follower that hasn't caught up."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="drl-title drl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="drl-title">A read-your-writes violation caused by replication lag</title>
+<desc id="drl-desc">A user saves a new display name, and the write goes to the leader, which confirms it. The leader then ships the change to a follower, but the change is delayed. Before it arrives, the user reloads the page, the read is routed to the follower, and the follower returns the old name. The change reaches the follower only afterward.</desc>
+<style>
+.drl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.drl-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.drl-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.drl-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.drl-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 4 4; }
+.drl-req { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.drl-resp { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.drl-rep { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 3 3; }
+.drl-code { font-size: 11.5px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.drl-note { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.drl-labp { font-size: 11.5px; fill: var(--color-purple, #6B3FA0); }
+.drl-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+
+<defs>
+<marker id="drl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="drl-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="drl-box" x="60" y="16" width="120" height="36" rx="6"/>
+<text class="drl-n" x="120" y="38.5" text-anchor="middle">User</text>
+<rect class="drl-sys" x="390" y="16" width="120" height="36" rx="6"/>
+<text class="drl-n-inv" x="450" y="38.5" text-anchor="middle">Leader</text>
+<rect class="drl-box" x="720" y="16" width="120" height="36" rx="6"/>
+<text class="drl-n" x="780" y="38.5" text-anchor="middle">Follower</text>
+<path class="drl-life" d="M 120,52 V 370"/>
+<path class="drl-life" d="M 450,52 V 370"/>
+<path class="drl-life" d="M 780,52 V 370"/>
+
+<path class="drl-req" d="M 120,80 L 444,80" marker-end="url(#drl-a)"/>
+<text class="drl-code" x="134" y="72">save name = "Sam"</text>
+<path class="drl-resp" d="M 450,110 L 126,110" marker-end="url(#drl-a)"/>
+<text class="drl-code" x="134" y="102">OK</text>
+
+<path class="drl-rep" d="M 450,120 L 774,300" marker-end="url(#drl-p)"/>
+<text class="drl-labp" x="560" y="150">replication, delayed</text>
+
+<path class="drl-req" d="M 120,170 C 300,170 600,190 774,190" marker-end="url(#drl-a)"/>
+<text class="drl-code" x="134" y="162">reload profile</text>
+<path class="drl-resp" d="M 780,230 C 600,230 300,250 126,250" marker-end="url(#drl-a)"/>
+<text class="drl-code" x="134" y="242">name = "Alex"</text>
+<text class="drl-labr" x="134" y="272">the user's own change is missing</text>
+
+<text class="drl-note" x="790" y="304">change arrives</text>
+<text class="drl-note" x="790" y="320">after the read</text>
+</g>
+</svg>

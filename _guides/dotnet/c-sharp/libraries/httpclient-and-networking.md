@@ -3,95 +3,79 @@ title: "C# HttpClient and Networking"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "HttpClient patterns, IHttpClientFactory, resilience, REST APIs, and modern networking best practices."
-tags: [c-sharp, dotnet, networking, httpclient, rest-api, resilience, practical]
+description: "How HttpClient manages connections and why its lifetime matters: long-lived clients with SocketsHttpHandler versus IHttpClientFactory, named and typed clients, per-request headers and content, timeouts versus cancellation, HttpRequestException, delegating handlers, resilience with Microsoft.Extensions.Http.Resilience, streaming, and HTTP/2 and HTTP/3."
+tags: [httpclient, ihttpclientfactory, socketshttphandler, delegatinghandler, resilience, networking, practical]
 ---
 
-## HttpClient Basics
+## What an HttpClient Owns
 
-HttpClient is the primary class for making HTTP requests in .NET.
+`HttpClient` is a thin object. It holds settings that apply to every request it sends, like `BaseAddress`, `Timeout`, and `DefaultRequestHeaders`, and it passes each request to a handler. The handler does the network work. Since .NET Core 2.1 the bottom of that chain is `SocketsHttpHandler`, which owns a connection pool:
 
-```csharp
-using var client = new HttpClient();
-client.BaseAddress = new Uri("https://api.example.com/");
-
-// GET request
-HttpResponseMessage response = await client.GetAsync("users/1");
-response.EnsureSuccessStatusCode();  // Throws if not 2xx
-string content = await response.Content.ReadAsStringAsync();
-
-// GET with JSON deserialization
-User? user = await client.GetFromJsonAsync<User>("users/1");
-
-// POST with JSON
-var newUser = new User { Name = "Alice", Email = "alice@example.com" };
-response = await client.PostAsJsonAsync("users", newUser);
-
-// PUT
-await client.PutAsJsonAsync("users/1", updatedUser);
-
-// DELETE
-await client.DeleteAsync("users/1");
+```
+HttpClient                BaseAddress, Timeout, DefaultRequestHeaders
+  └── handler chain       optional DelegatingHandlers (logging, auth, retries)
+        └── SocketsHttpHandler
+              └── connection pool
+                    ├── TCP connection to api.example.com (IP resolved when it opened)
+                    └── TCP connection to api.example.com
 ```
 
-## The HttpClient Lifetime Problem
+Every lifetime rule for `HttpClient` comes from two facts about that pool. A connection is expensive to open and should be reused. And DNS is resolved only when a connection opens, so a connection that never closes never sees a DNS change.
 
-Creating HttpClient instances directly causes socket exhaustion.
+### A Client per Request Exhausts Ports
+
+Creating and disposing a client for each request throws the pool away each time:
 
 ```csharp
-// WRONG - causes socket exhaustion
+// Wrong: every iteration opens a new connection and then closes it
 for (int i = 0; i < 1000; i++)
 {
-    using var client = new HttpClient();  // Bad: creates new connection each time
+    using var client = new HttpClient();
     await client.GetAsync("https://api.example.com/data");
 }
-// Sockets linger in TIME_WAIT state, eventually exhausting available ports
-
-// ALSO WRONG - static client doesn't respect DNS changes
-private static readonly HttpClient _client = new HttpClient();  // DNS cached forever
 ```
 
-<div class="callout callout--warning">
-<p class="callout__title">The HttpClient Dilemma</p>
-<p>Creating HttpClient instances in a <code>using</code> block causes socket exhaustion. Creating a static instance caches DNS forever. .NET provides two ways to solve this: a static <code>HttpClient</code> with <code>SocketsHttpHandler</code> connection rotation for simple scenarios, and <code>IHttpClientFactory</code> for DI-based applications.</p>
-</div>
+A client created with `new HttpClient()` owns its handler, so disposing the client disposes the pool and closes its connections. A closed TCP connection holds its local port in the `TIME_WAIT` state for a while before the operating system releases it. At a high request rate, the ports run out faster than they come back, and new requests fail with socket errors. Each request also pays for a fresh TCP and TLS handshake.
 
-## Choosing a Creation Strategy
+### A Client That Lives Forever Misses DNS Changes
 
-Both approaches solve socket exhaustion and DNS caching, but they serve different application types.
-
-| Approach | Best for | DNS handling | DI required |
-|---|---|---|---|
-| Static + SocketsHttpHandler | Console apps, libraries, Azure Functions | `PooledConnectionLifetime` rotates connections | No |
-| IHttpClientFactory (basic) | DI-based apps with simple HTTP needs | Automatic handler rotation (default 2 min) | Yes |
-| Named clients (via factory) | DI-based apps calling multiple external APIs | Via factory | Yes |
-| Typed clients (via factory) | Complex API integrations needing encapsulation | Via factory | Yes |
-
-## Static HttpClient with SocketsHttpHandler
-
-For applications without dependency injection, or libraries that shouldn't impose DI requirements on consumers, a static `HttpClient` with `SocketsHttpHandler` solves both problems at once.
+The obvious fix is one shared client:
 
 ```csharp
-private static readonly HttpClient _client = new HttpClient(new SocketsHttpHandler
+// Reuses connections, but keeps each one open indefinitely
+private static readonly HttpClient Client = new HttpClient();
+```
+
+This solves port exhaustion, but `SocketsHttpHandler.PooledConnectionLifetime` defaults to infinite. A connection that stays busy is never closed, so the client keeps talking to the IP address it resolved when the connection opened. If the service behind that name moves, as it does during a blue-green deployment or a failover, the client keeps sending traffic to the old address.
+
+## Two Correct Lifetime Strategies
+
+Microsoft's guidance offers two answers, and both keep the pool alive while letting connections turn over:
+
+| Strategy | How connections turn over | Fits |
+|---|---|---|
+| Long-lived client with `PooledConnectionLifetime` set | The handler closes each connection after the configured interval, and the next one resolves DNS again | Console apps, libraries, and anything without a DI container |
+| Short-lived clients from `IHttpClientFactory` | The factory pools handlers and replaces each one after its `HandlerLifetime` (2 minutes by default) | Apps that use `Microsoft.Extensions.DependencyInjection`, including ASP.NET Core and worker services |
+
+### Long-Lived Client with PooledConnectionLifetime
+
+```csharp
+private static readonly HttpClient Client = new HttpClient(new SocketsHttpHandler
 {
-    PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
-    MaxConnectionsPerServer = 10
+    PooledConnectionLifetime = TimeSpan.FromMinutes(2)
 });
 ```
 
-`SocketsHttpHandler` (the default handler since .NET Core 2.1) manages its own connection pool internally. Setting `PooledConnectionLifetime` ensures connections are recycled after the specified duration, which triggers fresh DNS resolution on subsequent requests. This gives you the reuse benefits of a static client without the stale DNS problem.
+After two minutes, each connection finishes its current request and closes, and the replacement resolves DNS again. Choose the interval from how quickly DNS changes need to take effect. Shorter means more handshakes.
 
-When multiple static clients need to call different APIs, share a single handler to avoid duplicating connection pools.
+A few clients that call different APIs can share one handler, and therefore one pool. Pass `disposeHandler: false` so that disposing one client doesn't close connections the others are using:
 
 ```csharp
 public static class HttpClients
 {
     private static readonly SocketsHttpHandler SharedHandler = new()
     {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
-        MaxConnectionsPerServer = 10
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2)
     };
 
     public static HttpClient GitHub { get; } = new(SharedHandler, disposeHandler: false)
@@ -99,668 +83,479 @@ public static class HttpClients
         BaseAddress = new Uri("https://api.github.com/"),
         DefaultRequestHeaders =
         {
-            { "Accept", "application/vnd.github.v3+json" },
+            { "Accept", "application/vnd.github+json" },
             { "User-Agent", "MyApp" }
         }
     };
 
     public static HttpClient Weather { get; } = new(SharedHandler, disposeHandler: false)
     {
-        BaseAddress = new Uri("https://api.weather.com/"),
+        BaseAddress = new Uri("https://api.weather.example/"),
         Timeout = TimeSpan.FromSeconds(30)
     };
 }
 ```
 
-Setting `disposeHandler: false` is critical when sharing a handler across multiple clients. Without it, disposing one client closes connections used by others.
+This strategy suits code that has no container, and libraries that shouldn't force one on their consumers. A small fixed number of clients is fine too. What matters is that none of them is created per request.
 
-**When to use this approach**:
-- Console applications and CLI tools
-- Azure Functions (especially the isolated worker model)
-- Libraries and NuGet packages that shouldn't force consumers into DI
-- Simple services with one or two HTTP dependencies
-- Unit tests and prototypes
+### IHttpClientFactory
 
-## IHttpClientFactory
-
-For ASP.NET Core applications and other DI-based services, `IHttpClientFactory` manages handler lifetime and connection pooling automatically. It creates `HttpMessageHandler` instances with a configurable lifetime (2 minutes by default), pooling and reusing them across `HttpClient` instances.
-
-### Basic Factory Usage
+`IHttpClientFactory`, from the `Microsoft.Extensions.Http` package, turns the lifetime problem around. The clients it creates are cheap and meant to be short-lived, and the expensive part, the handler chain with its pool, lives in the factory:
 
 ```csharp
-// Registration in DI
 services.AddHttpClient();
 
-// Injection and usage
-public class MyService
+public class ReportService(IHttpClientFactory clientFactory)
 {
-    private readonly IHttpClientFactory _clientFactory;
-
-    public MyService(IHttpClientFactory clientFactory)
+    public async Task<string> GetReportAsync(CancellationToken cancellationToken)
     {
-        _clientFactory = clientFactory;
-    }
-
-    public async Task<string> GetDataAsync()
-    {
-        var client = _clientFactory.CreateClient();
-        return await client.GetStringAsync("https://api.example.com/data");
+        HttpClient client = clientFactory.CreateClient();
+        return await client.GetStringAsync("https://api.example.com/report", cancellationToken);
     }
 }
 ```
+
+Each `CreateClient` call returns a new `HttpClient` wrapped around a pooled handler. Disposing that client doesn't dispose the handler, so it causes no port exhaustion. The factory replaces a handler once its `HandlerLifetime` has passed, and it disposes the old one after no client is using it. Clients created afterward get the new handler and new connections.
+
+That rotation only helps clients that are created again. A factory-created client kept for the life of the application stays on the handler it started with, which brings back the DNS problem.
+
+The factory's default primary handler is an implementation detail that Microsoft says not to depend on. When you want `SocketsHttpHandler` settings, configure the handler explicitly. With `PooledConnectionLifetime` set, the handler turns connections over itself, so factory-level rotation can be turned off:
+
+```csharp
+services.AddHttpClient("inventory")
+    .UseSocketsHttpHandler((handler, _) =>
+        handler.PooledConnectionLifetime = TimeSpan.FromMinutes(2))
+    .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+```
+
+The factory shares a pooled handler, including its `CookieContainer`, across every client created from it. An app that relies on cookies can leak them between unrelated callers, and it loses them whenever the handler rotates. Microsoft recommends a long-lived client instead of the factory when cookies matter.
 
 ### Named Clients
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Named Clients</h4>
-<ul>
-<li>Configure per-API settings</li>
-<li>Access via factory with name</li>
-<li>Good for multiple external APIs</li>
-<li>Simple configuration</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Typed Clients</h4>
-<ul>
-<li>Encapsulate HTTP logic in class</li>
-<li>Inject client directly</li>
-<li>Better for complex APIs</li>
-<li>Type-safe and testable</li>
-</ul>
-</div>
-</div>
-
-Configure different settings for different APIs.
+A named client attaches configuration to a name, and `CreateClient(name)` applies it:
 
 ```csharp
-// Registration
 services.AddHttpClient("github", client =>
 {
     client.BaseAddress = new Uri("https://api.github.com/");
-    client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+    client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
     client.DefaultRequestHeaders.Add("User-Agent", "MyApp");
 });
 
-services.AddHttpClient("weather", client =>
-{
-    client.BaseAddress = new Uri("https://api.weather.com/");
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-
-// Usage
-var githubClient = _clientFactory.CreateClient("github");
-var weatherClient = _clientFactory.CreateClient("weather");
+HttpClient github = clientFactory.CreateClient("github");
 ```
+
+Each name gets its own handler chain and pool. Keep the set of names fixed. Deriving names from input creates a new pool per distinct value.
 
 ### Typed Clients
 
-Encapsulate HTTP logic in dedicated service classes.
+A typed client is a class that takes an `HttpClient` in its constructor and exposes methods named after what the remote API does:
 
 ```csharp
-// Typed client class
-public class GitHubClient
+public class GitHubClient(HttpClient client)
 {
-    private readonly HttpClient _client;
-
-    public GitHubClient(HttpClient client)
+    public async Task<IReadOnlyList<Repository>> GetRepositoriesAsync(
+        string user, CancellationToken cancellationToken)
     {
-        _client = client;
-        _client.BaseAddress = new Uri("https://api.github.com/");
-        _client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
-        _client.DefaultRequestHeaders.Add("User-Agent", "MyApp");
-    }
-
-    public async Task<IEnumerable<Repository>> GetRepositoriesAsync(string user)
-    {
-        var repos = await _client.GetFromJsonAsync<List<Repository>>($"users/{user}/repos");
-        return repos ?? Enumerable.Empty<Repository>();
-    }
-
-    public async Task<Repository?> GetRepositoryAsync(string owner, string repo)
-    {
-        return await _client.GetFromJsonAsync<Repository>($"repos/{owner}/{repo}");
+        var repos = await client.GetFromJsonAsync<List<Repository>>(
+            $"users/{user}/repos", cancellationToken);
+        return repos ?? [];
     }
 }
 
-// Registration
-services.AddHttpClient<GitHubClient>();
-
-// Usage - inject typed client directly
-public class MyService
+services.AddHttpClient<GitHubClient>(client =>
 {
-    private readonly GitHubClient _github;
-
-    public MyService(GitHubClient github)
-    {
-        _github = github;
-    }
-
-    public async Task DisplayReposAsync(string user)
-    {
-        var repos = await _github.GetRepositoriesAsync(user);
-        foreach (var repo in repos)
-        {
-            Console.WriteLine(repo.Name);
-        }
-    }
-}
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+    client.DefaultRequestHeaders.Add("User-Agent", "MyApp");
+});
 ```
 
-## Request and Response Handling
+Consumers inject `GitHubClient` directly and never see a string key. Putting the configuration in the registration rather than the constructor keeps it next to the rest of the client's pipeline settings.
 
-### Setting Headers
+`AddHttpClient<GitHubClient>` registers the typed client as **transient**, and it's short-lived for the same reason a factory-created `HttpClient` is. Injected into a singleton, the typed client and the `HttpClient` inside it live as long as the singleton does, which is a captive dependency that dependency-injection validation doesn't catch. The singleton never picks up a rotated handler. A singleton that needs HTTP should take `IHttpClientFactory` and create a client per operation, or use a typed client whose primary handler sets `PooledConnectionLifetime`, as shown above.
+
+Don't also register the typed client class with `AddTransient` or `AddScoped`. The later registration replaces the factory's, and the class then receives an unconfigured `HttpClient`.
+
+## Sending Requests
+
+### Convenience Methods and HttpRequestMessage
+
+The `GetAsync`, `PostAsync`, `PutAsync`, and `DeleteAsync` methods cover most calls. The JSON extension methods in `System.Net.Http.Json` serialize and deserialize in the same step:
 
 ```csharp
-// Default headers (on HttpClient)
-client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
-client.DefaultRequestHeaders.Authorization =
-    new AuthenticationHeaderValue("Bearer", token);
+User? user = await client.GetFromJsonAsync<User>("users/1", cancellationToken);
 
-// Per-request headers
-var request = new HttpRequestMessage(HttpMethod.Get, "users");
+using HttpResponseMessage created = await client.PostAsJsonAsync("users", newUser, cancellationToken);
+created.EnsureSuccessStatusCode();
+
+using HttpResponseMessage deleted = await client.DeleteAsync("users/1", cancellationToken);
+```
+
+Anything the convenience methods don't expose, like a per-request header or a specific HTTP version, goes through an `HttpRequestMessage` and `SendAsync`:
+
+```csharp
+using var request = new HttpRequestMessage(HttpMethod.Get, "users/1");
 request.Headers.Add("X-Request-Id", Guid.NewGuid().ToString());
 
-// Content headers
-var content = new StringContent(json, Encoding.UTF8, "application/json");
-content.Headers.ContentType = new MediaTypeHeaderValue("application/json")
-{
-    CharSet = "utf-8"
-};
+using HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
 ```
 
-### Reading Responses
+An `HttpRequestMessage` can be sent once. Passing the same instance to `SendAsync` again throws `InvalidOperationException`, so any code that repeats a request builds a new message each time.
+
+Dispose every response. By default the body has already been buffered by the time the call returns, so the connection is back in the pool, but a response read as a stream (see [Streaming Large Responses](#streaming-large-responses)) keeps its connection until it's disposed. Disposing everything means the code stays correct when someone switches it to streaming. `GetFromJsonAsync` and `GetStringAsync` dispose the response for you.
+
+### Client Headers and Request Headers
+
+`DefaultRequestHeaders` is shared by every request the client sends, from every thread. It suits values that are the same for every call, like `Accept` and `User-Agent`. Anything that varies per caller, like a user's bearer token or a correlation ID, belongs on the request:
 
 ```csharp
-HttpResponseMessage response = await client.GetAsync("users/1");
-
-// Status checking
-if (response.IsSuccessStatusCode)  // 200-299
-{
-    var user = await response.Content.ReadFromJsonAsync<User>();
-}
-
-// Get specific status
-HttpStatusCode status = response.StatusCode;
-switch (status)
-{
-    case HttpStatusCode.OK:
-        break;
-    case HttpStatusCode.NotFound:
-        throw new UserNotFoundException();
-    case HttpStatusCode.Unauthorized:
-        throw new AuthenticationException();
-}
-
-// Read response headers
-string? etag = response.Headers.ETag?.Tag;
-DateTimeOffset? expires = response.Content.Headers.Expires;
-
-// Read as different types
-string text = await response.Content.ReadAsStringAsync();
-byte[] bytes = await response.Content.ReadAsByteArrayAsync();
-Stream stream = await response.Content.ReadAsStreamAsync();
+using var request = new HttpRequestMessage(HttpMethod.Get, "orders");
+request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", userToken);
 ```
 
-### Sending Different Content Types
+Setting a per-user token on `DefaultRequestHeaders` of a shared client sends one user's token with another user's request whenever two calls overlap. `HttpClient` doesn't prevent this. It throws `InvalidOperationException` if you change `BaseAddress` or `Timeout` after the first request, but `DefaultRequestHeaders` stays mutable, and it isn't safe to change while requests are in flight. The send methods themselves are thread-safe, which is what makes a shared client work at all.
+
+### Request Content
 
 ```csharp
-// JSON
-var json = JsonSerializer.Serialize(user);
-var jsonContent = new StringContent(json, Encoding.UTF8, "application/json");
-await client.PostAsync("users", jsonContent);
+// JSON: serialized with the web defaults (camelCase names)
+await client.PostAsJsonAsync("users", user, cancellationToken);
 
-// Or using extension method
-await client.PostAsJsonAsync("users", user);
+// A string you already have
+var json = new StringContent(payload, Encoding.UTF8, "application/json");
 
 // Form data
-var formContent = new FormUrlEncodedContent(new Dictionary<string, string>
+var form = new FormUrlEncodedContent(new Dictionary<string, string>
 {
-    ["username"] = "alice",
-    ["password"] = "secret"
+    ["grant_type"] = "client_credentials",
+    ["scope"] = "orders.read"
 });
-await client.PostAsync("login", formContent);
 
-// Multipart (file upload)
+// Multipart, for file uploads
 using var multipart = new MultipartFormDataContent();
 multipart.Add(new StringContent("Alice"), "name");
 
-using var fileStream = File.OpenRead("photo.jpg");
+await using var fileStream = File.OpenRead("photo.jpg");
 var fileContent = new StreamContent(fileStream);
 fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
 multipart.Add(fileContent, "file", "photo.jpg");
 
-await client.PostAsync("upload", multipart);
+using HttpResponseMessage response = await client.PostAsync("upload", multipart, cancellationToken);
 ```
 
-## Cancellation
+`StringContent` without a media type is sent as `text/plain; charset=utf-8`, which many JSON APIs reject. Name the media type, or use the JSON extension methods. Those use `JsonSerializerDefaults.Web`, which writes camelCase property names, and which reads names case-insensitively and accepts numbers written as quoted strings. They differ from a bare `JsonSerializer` call, which is case-sensitive and PascalCase by default.
 
-<div class="callout callout--tip">
-<p class="callout__title">Always Support Cancellation</p>
-<p>Cancellation tokens enable request timeouts, user-initiated cancellation, and graceful shutdown. Pass them through to all async HTTP operations.</p>
-</div>
+### Reading Responses
 
 ```csharp
-// With CancellationToken
-public async Task<User?> GetUserAsync(int id, CancellationToken cancellationToken = default)
+using HttpResponseMessage response = await client.GetAsync("users/1", cancellationToken);
+
+if (response.StatusCode == HttpStatusCode.NotFound)
+    return null;
+
+response.EnsureSuccessStatusCode();   // Throws HttpRequestException for any non-2xx status
+
+string? etag = response.Headers.ETag?.Tag;
+DateTimeOffset? expires = response.Content.Headers.Expires;
+
+User? user = await response.Content.ReadFromJsonAsync<User>(cancellationToken);
+```
+
+Headers are split by what they describe. `response.Headers` holds headers about the response, like `ETag` and `Retry-After`, and `response.Content.Headers` holds headers about the body, like `Content-Type`, `Content-Length`, and `Expires`. A header that seems missing is usually in the other collection.
+
+## Timeouts and Cancellation
+
+Two limits bound every request. One is the client's `Timeout`, which defaults to 100 seconds and applies to every request the client sends. The other is the cancellation token passed to the call. Both surface as `TaskCanceledException`, and code that handles them has to tell them apart:
+
+```csharp
+public async Task<User?> GetUserAsync(int id, CancellationToken cancellationToken)
 {
     try
     {
-        return await _client.GetFromJsonAsync<User>(
-            $"users/{id}",
-            cancellationToken);
-    }
-    catch (OperationCanceledException)
-    {
-        // Request was cancelled
-        return null;
-    }
-}
-
-// Timeout via CancellationToken
-using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-try
-{
-    var result = await client.GetStringAsync(url, cts.Token);
-}
-catch (OperationCanceledException)
-{
-    Console.WriteLine("Request timed out");
-}
-
-// Combined timeout
-using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-    requestCancellation,
-    timeoutCts.Token);
-```
-
-## Error Handling
-
-```csharp
-public async Task<Result<User>> GetUserSafeAsync(int id)
-{
-    try
-    {
-        var response = await _client.GetAsync($"users/{id}");
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return Result<User>.NotFound($"User {id} not found");
-        }
-
-        response.EnsureSuccessStatusCode();
-
-        var user = await response.Content.ReadFromJsonAsync<User>();
-        return Result<User>.Success(user!);
-    }
-    catch (HttpRequestException ex)
-    {
-        _logger.LogError(ex, "HTTP error getting user {UserId}", id);
-        return Result<User>.Error("Network error occurred");
+        return await _client.GetFromJsonAsync<User>($"users/{id}", cancellationToken);
     }
     catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
     {
-        _logger.LogWarning("Timeout getting user {UserId}", id);
-        return Result<User>.Error("Request timed out");
-    }
-    catch (JsonException ex)
-    {
-        _logger.LogError(ex, "Failed to parse user response");
-        return Result<User>.Error("Invalid response format");
+        _logger.LogWarning("Timed out getting user {UserId}", id);
+        throw;
     }
 }
 ```
 
-## Resilience with Polly
+Since .NET 5, a request that hits `HttpClient.Timeout` throws a `TaskCanceledException` whose `InnerException` is a `TimeoutException`. A request canceled through the caller's token has no such inner exception. Let the caller's cancellation propagate. Catching it and returning `null` makes a canceled operation look like a missing user, and the method's task completes successfully instead of showing as canceled.
 
-Add retry, circuit breaker, and timeout policies.
+`Timeout` is one setting for the whole client. A tighter limit for one call links a timer to the caller's token:
 
 ```csharp
-// Install: Microsoft.Extensions.Http.Polly
+using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-// Retry policy
-services.AddHttpClient<WeatherClient>()
-    .AddTransientHttpErrorPolicy(policy =>
-        policy.WaitAndRetryAsync(3, retryAttempt =>
-            TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
-
-// Circuit breaker
-services.AddHttpClient<PaymentClient>()
-    .AddTransientHttpErrorPolicy(policy =>
-        policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
-
-// Combined policies
-services.AddHttpClient<ApiClient>()
-    .AddTransientHttpErrorPolicy(policy =>
-        policy.WaitAndRetryAsync(3, _ => TimeSpan.FromMilliseconds(300)))
-    .AddTransientHttpErrorPolicy(policy =>
-        policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
-
-// Custom policy
-var retryPolicy = Policy
-    .HandleResult<HttpResponseMessage>(r =>
-        r.StatusCode == HttpStatusCode.TooManyRequests)
-    .WaitAndRetryAsync(3, retryAttempt =>
-    {
-        // Respect Retry-After header
-        return TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
-    });
-
-services.AddHttpClient<RateLimitedClient>()
-    .AddPolicyHandler(retryPolicy);
+string result = await client.GetStringAsync(url, cts.Token);
 ```
+
+The request now stops at five seconds or when the caller cancels, whichever comes first. When it stops at five seconds, the exception is an `OperationCanceledException` from your own token, and `cancellationToken.IsCancellationRequested` being false tells you it was the timer rather than the caller.
+
+## Handling Errors
+
+`HttpClient` throws for transport failures and leaves HTTP status codes to you, except where a method has nowhere else to put one:
+
+| What went wrong | What you see |
+|---|---|
+| DNS failure, refused connection, TLS failure, connection dropped | `HttpRequestException`, with `HttpRequestError` (.NET 8) naming the category, such as `NameResolutionError` or `ConnectionError` |
+| Server returned 4xx or 5xx from `GetAsync`, `SendAsync`, or `PostAsync` | No exception. The status is on the response |
+| Server returned 4xx or 5xx from `GetFromJsonAsync` or `GetStringAsync`, or you called `EnsureSuccessStatusCode` | `HttpRequestException`, with `StatusCode` (.NET 5) set |
+| Body isn't valid JSON for the target type | `JsonException` |
+| `HttpClient.Timeout` elapsed | `TaskCanceledException` wrapping `TimeoutException` |
+
+`EnsureSuccessStatusCode` discards the response body, which is where most APIs explain what went wrong. When the body matters, read it before throwing:
+
+```csharp
+public async Task<Order> CreateOrderAsync(NewOrder order, CancellationToken cancellationToken)
+{
+    using HttpResponseMessage response =
+        await _client.PostAsJsonAsync("orders", order, cancellationToken);
+
+    if (!response.IsSuccessStatusCode)
+    {
+        string problem = await response.Content.ReadAsStringAsync(cancellationToken);
+        _logger.LogError("Order API returned {StatusCode}: {Problem}", response.StatusCode, problem);
+        throw new HttpRequestException(
+            $"Order API returned {(int)response.StatusCode}", null, response.StatusCode);
+    }
+
+    return (await response.Content.ReadFromJsonAsync<Order>(cancellationToken))!;
+}
+```
+
+Keeping the exception an `HttpRequestException` with `StatusCode` set means a caller, or a resilience handler, can still decide from the status whether to retry.
 
 ## Delegating Handlers
 
-Add cross-cutting concerns like logging, authentication, or metrics.
+A `DelegatingHandler` sits in the handler chain and sees every request on the way out and every response on the way back. It's the place for concerns that apply to every call a client makes, like logging, adding credentials, or recording metrics:
 
 ```csharp
-// Logging handler
-public class LoggingHandler : DelegatingHandler
+public class TimingHandler(ILogger<TimingHandler> logger) : DelegatingHandler
 {
-    private readonly ILogger<LoggingHandler> _logger;
-
-    public LoggingHandler(ILogger<LoggingHandler> logger)
-    {
-        _logger = logger;
-    }
-
     protected override async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
-        CancellationToken cancellationToken)
+        HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var sw = Stopwatch.StartNew();
+        long start = Stopwatch.GetTimestamp();
+        HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
 
-        _logger.LogInformation("Sending {Method} {Uri}",
-            request.Method, request.RequestUri);
-
-        var response = await base.SendAsync(request, cancellationToken);
-
-        _logger.LogInformation("Received {StatusCode} from {Uri} in {Elapsed}ms",
-            response.StatusCode, request.RequestUri, sw.ElapsedMilliseconds);
+        logger.LogInformation("{Method} {Uri} returned {StatusCode} in {Elapsed} ms",
+            request.Method, request.RequestUri, (int)response.StatusCode,
+            Stopwatch.GetElapsedTime(start).TotalMilliseconds);
 
         return response;
     }
 }
 
-// Auth token handler
-public class AuthTokenHandler : DelegatingHandler
+services.AddTransient<AuthTokenHandler>();
+services.AddTransient<TimingHandler>();
+
+services.AddHttpClient<OrdersClient>()
+    .AddHttpMessageHandler<AuthTokenHandler>()
+    .AddHttpMessageHandler<TimingHandler>();
+```
+
+Handlers run in the order they're added, with the first one outermost:
+
+```
+request  → AuthTokenHandler → TimingHandler → SocketsHttpHandler → network
+response ← AuthTokenHandler ← TimingHandler ← SocketsHttpHandler ←
+```
+
+Order changes what each handler observes. `TimingHandler` sits inside `AuthTokenHandler`, so if the auth handler sends a request twice, the timing handler logs both attempts.
+
+### Handler Lifetime and Scopes
+
+A handler is created with the handler chain, not per request, so it lives as long as the factory keeps that chain, two minutes by default. The factory resolves handlers from a DI scope of its own, separate from the ASP.NET Core request scope. A scoped service injected into a handler is therefore not the request's instance, and the same instance can serve several requests from different users. Don't inject request-specific state into a handler, or cache any in one. Pass per-request values on the `HttpRequestMessage` itself, through a header or `request.Options`.
+
+### Sending a Request Twice
+
+A handler can call `base.SendAsync` more than once with the same message. The single-send rule is enforced by `HttpClient`, not by the chain. Retrying on a 401 after refreshing a token looks like this:
+
+```csharp
+public class AuthTokenHandler(ITokenService tokens) : DelegatingHandler
 {
-    private readonly ITokenService _tokenService;
-
-    public AuthTokenHandler(ITokenService tokenService)
-    {
-        _tokenService = tokenService;
-    }
-
     protected override async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
-        CancellationToken cancellationToken)
+        HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var token = await _tokenService.GetTokenAsync();
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", await tokens.GetTokenAsync(cancellationToken));
 
-        var response = await base.SendAsync(request, cancellationToken);
+        HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
 
-        // Handle token expiration
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
-            token = await _tokenService.RefreshTokenAsync();
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            response.Dispose();
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", await tokens.RefreshTokenAsync(cancellationToken));
             response = await base.SendAsync(request, cancellationToken);
         }
 
         return response;
     }
 }
-
-// Registration
-services.AddTransient<LoggingHandler>();
-services.AddTransient<AuthTokenHandler>();
-
-services.AddHttpClient<ApiClient>()
-    .AddHttpMessageHandler<AuthTokenHandler>()
-    .AddHttpMessageHandler<LoggingHandler>();
 ```
+
+Dispose the first response before sending again, or its connection stays tied up. A resend only works when the request body can be read twice. `StringContent`, `ByteArrayContent`, and JSON content can, but a `StreamContent` over a file or network stream has already been consumed.
+
+## Resilience
+
+Transient failures, like a dropped connection, a 503 during a deployment, or a 429 from a rate limiter, often succeed on a second try. The `Microsoft.Extensions.Http.Resilience` package adds retries, timeouts, and circuit breaking to a client's handler chain, built on Polly v8. The older `Microsoft.Extensions.Http.Polly` package and its `AddTransientHttpErrorPolicy` and `AddPolicyHandler` methods are deprecated, and NuGet names the resilience packages as their replacement.
+
+### The Standard Pipeline
+
+One call adds a pipeline with defaults chosen for typical HTTP traffic:
+
+```csharp
+services.AddHttpClient<OrdersClient>()
+    .AddStandardResilienceHandler();
+```
+
+It stacks five strategies, outermost first:
+
+| Strategy | Default |
+|---|---|
+| Rate limiter | 1,000 concurrent requests, no queue |
+| Total request timeout | 30 seconds across every attempt |
+| Retry | 3 retries, exponential backoff from 2 seconds with jitter, honoring `Retry-After` |
+| Circuit breaker | Opens for 5 seconds when at least 10% of at least 100 requests in a 30-second window fail |
+| Attempt timeout | 10 seconds per attempt |
+
+The retry and circuit breaker treat 5xx responses, 408, 429, `HttpRequestException`, and attempt timeouts as transient. Because the attempt timeout sits inside the retry, one slow attempt is cut off and retried rather than consuming the whole budget. The total timeout still caps the sum.
+
+Every value is adjustable:
+
+```csharp
+services.AddHttpClient<OrdersClient>()
+    .AddStandardResilienceHandler(options =>
+    {
+        options.Retry.MaxRetryAttempts = 5;
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
+        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
+    });
+```
+
+The pipeline's total timeout and the client's own `Timeout` (100 seconds) both apply. Whichever is shorter ends the request, so raising the pipeline's total above 100 seconds also means raising `HttpClient.Timeout`.
+
+### Retrying Unsafe Methods
+
+The standard retry doesn't look at the HTTP method, so it retries a `POST` the same way it retries a `GET`. If the first attempt reached the server and only the response was lost, a retried `POST` creates a second order. Retry non-idempotent requests only when the API supports an idempotency key, or turn retries off for them. `options.Retry.DisableForUnsafeHttpMethods()` does that for `POST`, `PATCH`, `PUT`, `DELETE`, and `CONNECT`, and `DisableFor(...)` takes a list of methods. In the 10.x package both are marked experimental, so using them means suppressing diagnostic `EXTEXP0001`.
+
+Add one resilience handler per client. Microsoft advises against stacking several, and `AddResilienceHandler` covers the cases where the standard one doesn't fit.
+
+### A Custom Pipeline
+
+When the standard stack is the wrong shape, `AddResilienceHandler` builds one from individual strategies:
+
+```csharp
+services.AddHttpClient<PaymentsClient>()
+    .AddResilienceHandler("payments", pipeline =>
+    {
+        pipeline.AddTimeout(TimeSpan.FromSeconds(10));
+        pipeline.AddRetry(new HttpRetryStrategyOptions
+        {
+            MaxRetryAttempts = 2,
+            BackoffType = DelayBackoffType.Exponential,
+            UseJitter = true
+        });
+    });
+```
+
+Strategies wrap in the order they're added, so the timeout above bounds both attempts together. Adding it after the retry would bound each attempt instead.
+
+A static client without a container can use the same strategies. Build a `ResiliencePipeline<HttpResponseMessage>`, wrap it in a `ResilienceHandler`, and set a `SocketsHttpHandler` with `PooledConnectionLifetime` as its `InnerHandler`.
 
 ## Streaming Large Responses
 
+By default, `GetAsync` and `SendAsync` read the entire body into memory before returning. `HttpCompletionOption.ResponseHeadersRead` returns as soon as the headers arrive and leaves the body on the connection to be read as a stream:
+
 ```csharp
-// Stream response without loading into memory
-public async Task DownloadFileAsync(string url, string destinationPath)
+public async Task DownloadAsync(string url, string path, CancellationToken cancellationToken)
 {
-    using var response = await _client.GetAsync(url,
-        HttpCompletionOption.ResponseHeadersRead);
-
+    using HttpResponseMessage response = await _client.GetAsync(
+        url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     response.EnsureSuccessStatusCode();
 
-    await using var contentStream = await response.Content.ReadAsStreamAsync();
-    await using var fileStream = File.Create(destinationPath);
-
-    await contentStream.CopyToAsync(fileStream);
-}
-
-// Process large JSON stream
-public async IAsyncEnumerable<User> GetUsersStreamAsync(
-    [EnumeratorCancellation] CancellationToken cancellationToken = default)
-{
-    using var response = await _client.GetAsync("users/all",
-        HttpCompletionOption.ResponseHeadersRead,
-        cancellationToken);
-
-    response.EnsureSuccessStatusCode();
-
-    await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-
-    await foreach (var user in JsonSerializer.DeserializeAsyncEnumerable<User>(
-        stream, cancellationToken: cancellationToken))
-    {
-        if (user != null)
-            yield return user;
-    }
+    await using Stream body = await response.Content.ReadAsStreamAsync(cancellationToken);
+    await using FileStream file = File.Create(path);
+    await body.CopyToAsync(file, cancellationToken);
 }
 ```
+
+The connection belongs to that response until it's disposed, so the `using` on the response matters more here than anywhere else.
+
+A large JSON array can be consumed one element at a time. `GetFromJsonAsAsyncEnumerable` (.NET 8) streams the response and yields each element as it's parsed:
+
+```csharp
+await foreach (User? user in _client.GetFromJsonAsAsyncEnumerable<User>("users/all", cancellationToken))
+{
+    if (user is not null)
+        await ProcessAsync(user, cancellationToken);
+}
+```
+
+Memory stays flat regardless of how many elements the array holds.
 
 ## HTTP/2 and HTTP/3
 
+`HttpClient` sends HTTP/1.1 unless told otherwise. `DefaultRequestVersion` is 1.1 and `DefaultVersionPolicy` is `RequestVersionOrLower`, so HTTP/2 is used only when a request asks for it:
+
 ```csharp
-// HTTP/2 (default in .NET Core 3.0+)
-var handler = new SocketsHttpHandler
+var client = new HttpClient(new SocketsHttpHandler
 {
-    // Connection pooling
     PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
-    MaxConnectionsPerServer = 10,
-
-    // HTTP/2 settings
     EnableMultipleHttp2Connections = true
-};
-
-var client = new HttpClient(handler);
-
-// Force HTTP version
-var request = new HttpRequestMessage(HttpMethod.Get, url)
-{
-    Version = HttpVersion.Version20,
-    VersionPolicy = HttpVersionPolicy.RequestVersionExact
-};
-
-// HTTP/3 (.NET 7+)
-var http3Handler = new SocketsHttpHandler
-{
-    // Enable HTTP/3
-};
-var request3 = new HttpRequestMessage(HttpMethod.Get, url)
-{
-    Version = HttpVersion.Version30,
-    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
-};
-```
-
-## Configuration Best Practices
-
-```csharp
-// Configure via IHttpClientFactory
-services.AddHttpClient("api", (serviceProvider, client) =>
-{
-    var config = serviceProvider.GetRequiredService<IConfiguration>();
-    client.BaseAddress = new Uri(config["ApiBaseUrl"]!);
-    client.Timeout = TimeSpan.FromSeconds(30);
 })
-.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
-    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-    MaxConnectionsPerServer = 20,
-    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-});
-
-// Named options per client
-services.AddHttpClient("internal")
-    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
-
-services.AddHttpClient("external")
-    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(60));
+    DefaultRequestVersion = HttpVersion.Version20,
+    DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+};
 ```
 
-## Testing HttpClient
+`RequestVersionOrLower` falls back to HTTP/1.1 against a server that doesn't negotiate HTTP/2. `RequestVersionExact` fails instead. HTTP/2 multiplexes requests over one connection, and the server caps how many streams that connection can carry at once. `EnableMultipleHttp2Connections` lets the handler open a second connection when the first is full rather than queueing requests behind it.
+
+HTTP/3 runs over QUIC instead of TCP and has been supported since .NET 7. It depends on the MsQuic library, which ships with Windows 11 and Windows Server 2022 and has to be installed as `libmsquic` on Linux. It also requires TLS 1.3. Where those requirements aren't met, HTTP/3 is unavailable. Because some networks block QUIC, Microsoft recommends asking for a lower version with `RequestVersionOrHigher`, which lets the client move up to HTTP/3 when the server advertises it and fall back otherwise.
+
+## Testing Code That Uses HttpClient
+
+`HttpClient` has no interface to mock, and it doesn't need one. The seam is the handler. A stub handler returns canned responses without touching the network, and the code under test receives an ordinary `HttpClient` built around it:
 
 ```csharp
-// Mock handler for unit tests
-public class MockHttpMessageHandler : HttpMessageHandler
+public class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
 {
-    private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
-
-    public MockHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
-    {
-        _handler = handler;
-    }
-
     protected override Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
-        CancellationToken cancellationToken)
-    {
-        return Task.FromResult(_handler(request));
-    }
+        HttpRequestMessage request, CancellationToken cancellationToken) =>
+        Task.FromResult(respond(request));
 }
 
-// Usage in tests
-[Fact]
-public async Task GetUser_ReturnsUser()
+var client = new HttpClient(new StubHandler(_ =>
+    new HttpResponseMessage(HttpStatusCode.OK)
+    {
+        Content = JsonContent.Create(new User { Id = 1, Name = "Alice" })
+    }))
 {
-    var mockHandler = new MockHttpMessageHandler(request =>
-    {
-        Assert.Equal(HttpMethod.Get, request.Method);
-        Assert.Contains("users/1", request.RequestUri!.ToString());
+    BaseAddress = new Uri("https://api.example.com/")
+};
 
-        return new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = JsonContent.Create(new User { Id = 1, Name = "Alice" })
-        };
-    });
-
-    var client = new HttpClient(mockHandler)
-    {
-        BaseAddress = new Uri("https://api.example.com/")
-    };
-
-    var userService = new UserService(client);
-    var user = await userService.GetUserAsync(1);
-
-    Assert.Equal("Alice", user.Name);
-}
-
-// With Moq and interface
-public interface IApiClient
-{
-    Task<User?> GetUserAsync(int id);
-}
-
-var mockClient = new Mock<IApiClient>();
-mockClient.Setup(c => c.GetUserAsync(1))
-    .ReturnsAsync(new User { Id = 1, Name = "Alice" });
+var github = new GitHubClient(client);
 ```
 
-## REST API Client Pattern
-
-```csharp
-public interface IRestClient
-{
-    Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken = default);
-    Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest data, CancellationToken cancellationToken = default);
-    Task PutAsync<T>(string path, T data, CancellationToken cancellationToken = default);
-    Task DeleteAsync(string path, CancellationToken cancellationToken = default);
-}
-
-public class RestClient : IRestClient
-{
-    private readonly HttpClient _client;
-    private readonly ILogger<RestClient> _logger;
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
-
-    public RestClient(HttpClient client, ILogger<RestClient> logger)
-    {
-        _client = client;
-        _logger = logger;
-    }
-
-    public async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken = default)
-    {
-        var response = await _client.GetAsync(path, cancellationToken);
-        await EnsureSuccessAsync(response, path);
-        return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
-    }
-
-    public async Task<TResponse?> PostAsync<TRequest, TResponse>(
-        string path,
-        TRequest data,
-        CancellationToken cancellationToken = default)
-    {
-        var response = await _client.PostAsJsonAsync(path, data, JsonOptions, cancellationToken);
-        await EnsureSuccessAsync(response, path);
-        return await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
-    }
-
-    public async Task PutAsync<T>(string path, T data, CancellationToken cancellationToken = default)
-    {
-        var response = await _client.PutAsJsonAsync(path, data, JsonOptions, cancellationToken);
-        await EnsureSuccessAsync(response, path);
-    }
-
-    public async Task DeleteAsync(string path, CancellationToken cancellationToken = default)
-    {
-        var response = await _client.DeleteAsync(path, cancellationToken);
-        await EnsureSuccessAsync(response, path);
-    }
-
-    private async Task EnsureSuccessAsync(HttpResponseMessage response, string path)
-    {
-        if (!response.IsSuccessStatusCode)
-        {
-            var content = await response.Content.ReadAsStringAsync();
-            _logger.LogError("HTTP {StatusCode} from {Path}: {Content}",
-                response.StatusCode, path, content);
-            throw new ApiException(response.StatusCode, content);
-        }
-    }
-}
-```
+This works because a typed client takes `HttpClient` through its constructor. A class that calls `new HttpClient()` internally or reaches a static instance can't be given a stub, which is one more reason to receive the client rather than create it.
 
 ## Key Takeaways
 
-**Manage HttpClient lifetime deliberately**: Use `IHttpClientFactory` in DI-based applications or a static `HttpClient` with `SocketsHttpHandler.PooledConnectionLifetime` in simpler scenarios. Never create and dispose `HttpClient` in a tight loop.
+**Reuse the connection pool, and let connections turn over.** Use a long-lived client with `PooledConnectionLifetime` set, or short-lived clients from `IHttpClientFactory`. Never create and dispose a client per request.
 
-**Typed clients for clean APIs**: In DI-based apps, encapsulate HTTP logic in typed client classes for better organization and testability.
+**Treat factory clients and typed clients as short-lived.** Don't hold either in a singleton. Create a client per operation, or give the handler its own `PooledConnectionLifetime`.
 
-**Handle failures gracefully**: Use Polly for retries and circuit breakers. Handle timeouts and network errors explicitly.
+**Keep per-caller data off the shared client.** Tokens and correlation IDs go on the `HttpRequestMessage`, not in `DefaultRequestHeaders`.
 
-**Use cancellation tokens**: Always pass cancellation tokens for timeout control and cooperative cancellation.
+**Tell a timeout from a cancellation.** A client timeout wraps `TimeoutException`. Let the caller's cancellation propagate instead of turning it into a result.
 
-**Stream large responses**: Use HttpCompletionOption.ResponseHeadersRead and stream processing for large payloads.
+**Use `Microsoft.Extensions.Http.Resilience`, not the deprecated Polly integration,** and decide explicitly whether a `POST` may be retried.
 
-**Add cross-cutting concerns via handlers**: Use DelegatingHandler for logging, authentication, and metrics.
+**Put cross-cutting behavior in delegating handlers,** and keep request-scoped state out of them, since they outlive any one request.

@@ -1,0 +1,57 @@
+---
+title: "Lowering a TTL for a Cutover"
+kind: chart
+system: networking
+summary: "How long caches can hold the old address when the TTL is lowered early or late."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="ntc-title ntc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ntc-title">Cache lifetimes around a DNS cutover, lowering the TTL early versus at the cutover</title>
+<desc id="ntc-desc">A timeline, not to scale. In the first plan, the TTL is lowered from one day to 60 seconds a full day before the cutover. Answers cached just before the change can live for up to a day, but they have all expired by the cutover. Answers cached after the change live 60 seconds each, so after the cutover the old address lingers for at most 60 seconds. In the second plan, the TTL is lowered at the moment of the cutover. Answers cached shortly before it still carry the one-day TTL, so some clients keep the old address for up to a day after the cutover.</desc>
+<style>
+.ntc-old { fill: #E8D9C4; stroke: #9A6B2F; stroke-width: 1.2; }
+.ntc-new { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.2; }
+.ntc-bad { fill: #F3D6D6; stroke: #B83232; stroke-width: 1.2; }
+.ntc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ntc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ntc-lab { font-size: 11px; font-weight: 600; fill: var(--color-text, #1A202C); }
+.ntc-badlab { font-size: 11px; font-weight: 600; fill: #B83232; }
+.ntc-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; }
+.ntc-mark { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 4; }
+.ntc-cut { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="ntc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="ntc-mark" d="M 150,20 L 150,262"/>
+<path class="ntc-mark" d="M 560,20 L 560,262"/>
+<path class="ntc-cut" d="M 620,20 L 620,262"/>
+
+<text class="ntc-n" x="20" y="36">Lower first</text>
+<rect class="ntc-old" x="150" y="46" width="410" height="20" rx="3"/>
+<text class="ntc-lab" x="160" y="60">cached just before the TTL change: up to 1 day</text>
+<rect class="ntc-new" x="200" y="76" width="30" height="20" rx="3"/>
+<rect class="ntc-new" x="300" y="76" width="30" height="20" rx="3"/>
+<rect class="ntc-new" x="400" y="76" width="30" height="20" rx="3"/>
+<rect class="ntc-new" x="500" y="76" width="30" height="20" rx="3"/>
+<rect class="ntc-new" x="590" y="76" width="30" height="20" rx="3"/>
+<text class="ntc-k" x="640" y="90">cached after: 60 s each</text>
+<rect class="ntc-new" x="620" y="106" width="30" height="20" rx="3"/>
+<text class="ntc-lab" x="660" y="120">old address gone within 60 s</text>
+
+<text class="ntc-n" x="20" y="170">Lower at cutover</text>
+<rect class="ntc-old" x="520" y="180" width="340" height="20" rx="3"/>
+<text class="ntc-lab" x="530" y="194">cached before the cutover with the 1-day TTL</text>
+<rect class="ntc-bad" x="620" y="210" width="240" height="20" rx="3"/>
+<text class="ntc-badlab" x="630" y="224">old address for up to a day</text>
+
+<path class="ntc-axis" d="M 20,262 L 880,262" marker-end="url(#ntc-a)"/>
+<text class="ntc-k" x="150" y="282" text-anchor="middle">TTL lowered</text>
+<text class="ntc-k" x="150" y="296" text-anchor="middle">(first plan)</text>
+<text class="ntc-k" x="560" y="282" text-anchor="end">one old TTL later</text>
+<text class="ntc-n" x="626" y="282">cutover</text>
+<text class="ntc-k" x="20" y="316">time, not to scale</text>
+</g>
+</svg>

@@ -1,0 +1,66 @@
+---
+title: "Two Protocol Hops Through a Load Balancer"
+kind: deployment
+system: networking
+summary: "Clients negotiate a version with the balancer, which forwards over its own connections."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="npb-title npb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="npb-title">A load balancer terminating client connections and forwarding to services</title>
+<desc id="npb-desc">Clients on the internet connect to a load balancer over HTTP/2 with TLS, or HTTP/3 where the load balancer supports it. Client connections end at the load balancer, which is the trust boundary and enforces idle timeouts, stream limits, and connection-level defenses. Inside the private network, the load balancer opens its own connections to two service instances, over HTTP/1.1 by default or HTTP/2 or gRPC when configured. The services handle request-level concerns such as size limits, authentication, and per-user rate limits.</desc>
+<style>
+.npb-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 5 4; }
+.npb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.npb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.npb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.npb-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.npb-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.npb-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.npb-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.npb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.npb-edge { fill: none; stroke: #B83232; stroke-width: 2; stroke-dasharray: 8 5; }
+.npb-edgelab { font-size: 11px; font-weight: 600; fill: #B83232; }
+</style>
+
+<defs>
+<marker id="npb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="npb-box" x="20" y="96" width="130" height="70" rx="6"/>
+<text class="npb-n" x="34" y="122">Clients</text>
+<text class="npb-k" x="34" y="140">browsers, apps,</text>
+<text class="npb-k" x="34" y="156">API consumers</text>
+
+<rect class="npb-band" x="300" y="20" width="584" height="260" rx="8"/>
+<text class="npb-k" x="316" y="40">your private network</text>
+
+<path class="npb-edge" d="M 300,52 L 300,262"/>
+<text class="npb-edgelab" x="140" y="248">trust boundary:</text>
+<text class="npb-edgelab" x="140" y="264">client connections end</text>
+
+<rect class="npb-sys" x="330" y="76" width="200" height="110" rx="6"/>
+<text class="npb-n-inv" x="344" y="100">Load balancer</text>
+<text class="npb-k-inv" x="344" y="120">terminates TLS</text>
+<text class="npb-k-inv" x="344" y="137">idle timeouts, stream limits</text>
+<text class="npb-k-inv" x="344" y="154">connection-level defenses</text>
+
+<rect class="npb-box" x="700" y="60" width="170" height="70" rx="6"/>
+<text class="npb-n" x="714" y="86">Service instance</text>
+<text class="npb-k" x="714" y="104">size limits, auth,</text>
+<text class="npb-k" x="714" y="120">per-user rate limits</text>
+<rect class="npb-box" x="700" y="160" width="170" height="70" rx="6"/>
+<text class="npb-n" x="714" y="186">Service instance</text>
+<text class="npb-k" x="714" y="204">size limits, auth,</text>
+<text class="npb-k" x="714" y="220">per-user rate limits</text>
+
+<path class="npb-flow" d="M 150,131 L 324,131" marker-end="url(#npb-a)"/>
+<text class="npb-lab" x="160" y="114">HTTP/2, or HTTP/3</text>
+<text class="npb-k" x="160" y="152">if the front end</text>
+<text class="npb-k" x="160" y="167">supports it</text>
+
+<path class="npb-flow" d="M 530,110 L 694,95" marker-end="url(#npb-a)"/>
+<path class="npb-flow" d="M 530,152 L 694,195" marker-end="url(#npb-a)"/>
+<text class="npb-lab" x="546" y="132">HTTP/1.1 by default</text>
+<text class="npb-k" x="546" y="147">or HTTP/2, gRPC if set</text>
+</g>
+</svg>

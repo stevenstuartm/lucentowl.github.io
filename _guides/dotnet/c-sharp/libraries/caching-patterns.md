@@ -3,780 +3,387 @@ title: "C# Caching Patterns"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "In-memory caching, distributed caching, cache strategies, and best practices for performance optimization."
-tags: [c-sharp, dotnet, caching, performance, distributed-systems, scalability, practical]
+description: "Caching in .NET with IMemoryCache, IDistributedCache, and HybridCache: expiration and eviction, bounding memory, why GetOrCreate doesn't stop stampedes, shared-reference and serialized-copy semantics, Redis as a distributed store, tag invalidation, invalidating on write, and key design."
+tags: [caching, imemorycache, idistributedcache, hybridcache, redis, cache-invalidation, practical]
 ---
 
-## Why Caching
+## What a Cache Trades
 
-Caching stores computed or fetched data for quick retrieval, reducing latency and load on downstream systems.
+A cache keeps a copy of data that is expensive to get, so later requests can skip the database query, the HTTP call, or the computation. The pattern almost every .NET cache follows is **cache-aside**: look in the cache, and on a miss load from the source and store the result:
 
 ```csharp
-// Without caching - hits database every time
-public async Task<Product> GetProductAsync(int id)
+public async Task<Product?> GetProductAsync(int id, CancellationToken cancellationToken)
 {
-    return await _database.Products.FindAsync(id);  // ~50ms per call
-}
+    string key = $"product:{id}";
 
-// With caching - returns cached data when available
-public async Task<Product> GetProductAsync(int id)
-{
-    var cacheKey = $"product:{id}";
+    if (_cache.TryGetValue(key, out Product? cached))
+        return cached;
 
-    if (_cache.TryGetValue(cacheKey, out Product cached))
-        return cached;  // ~1ms
-
-    var product = await _database.Products.FindAsync(id);
-    _cache.Set(cacheKey, product, TimeSpan.FromMinutes(5));
+    Product? product = await _db.Products.FindAsync([id], cancellationToken);
+    _cache.Set(key, product, TimeSpan.FromMinutes(5));
     return product;
 }
 ```
 
-## Choosing Between Cache Types
+The copy can be wrong. From the moment it's stored, the source can change and the cache won't know. Every caching decision in this guide is a choice about how long a stale copy is acceptable, who can see it, and what happens when many callers miss at once.
 
-<div class="callout callout--tip">
-<p class="callout__title">Cache Type Decision Guide</p>
-<p>Choose your cache type based on deployment topology and consistency requirements. The wrong choice can cause subtle bugs in production.</p>
-</div>
+## Choosing a Cache Abstraction
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>IMemoryCache (In-Process)</h4>
-<ul>
-<li>Fast: no serialization, no network</li>
-<li>Each instance has its own cache</li>
-<li>Use for: single instance, or latency-critical read-heavy data</li>
-<li>Trade-off: no cache consistency across instances</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>IDistributedCache</h4>
-<ul>
-<li>Shared across instances via external store (Redis, SQL)</li>
-<li>Survives application restarts</li>
-<li>Use for: multi-instance deployments needing consistency</li>
-<li>Trade-off: serialization overhead, network latency</li>
-</ul>
-</div>
-</div>
+.NET has three caching abstractions, and they differ in where the data lives:
 
-**Hybrid approach**: Use both. IMemoryCache as an L1 cache for hot data with very short TTL, backed by IDistributedCache as L2 for shared, longer-lived data. .NET 9's HybridCache formalizes this pattern.
+| | `IMemoryCache` | `IDistributedCache` | `HybridCache` |
+|---|---|---|---|
+| Where entries live | This process's memory | An external store such as Redis or SQL Server | This process's memory, backed by an `IDistributedCache` if one is registered |
+| What you store | The object itself, by reference | `byte[]`, serialized by you | Objects, serialized for you when stored in the distributed layer |
+| Shared across instances | No | Yes | The distributed layer is, the local layer isn't |
+| Survives a restart | No | Yes | The distributed layer does |
+| Concurrent misses for one key | Each caller runs the factory | Each caller loads from the source | One caller per instance runs the factory, the rest wait |
 
-## IMemoryCache (In-Process)
+In a deployment of several instances behind a load balancer, the layers look like this:
 
-Built-in memory cache for single-instance applications.
-
-### Basic Usage
-
-```csharp
-using Microsoft.Extensions.Caching.Memory;
-
-// Registration
-services.AddMemoryCache();
-
-// Injection
-public class ProductService
-{
-    private readonly IMemoryCache _cache;
-    private readonly IProductRepository _repository;
-
-    public ProductService(IMemoryCache cache, IProductRepository repository)
-    {
-        _cache = cache;
-        _repository = repository;
-    }
-
-    public async Task<Product?> GetProductAsync(int id)
-    {
-        var cacheKey = $"product:{id}";
-
-        // Try to get from cache
-        if (_cache.TryGetValue(cacheKey, out Product? product))
-        {
-            return product;
-        }
-
-        // Load from source
-        product = await _repository.GetByIdAsync(id);
-
-        if (product != null)
-        {
-            // Cache with options
-            var options = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(TimeSpan.FromMinutes(10))
-                .SetSlidingExpiration(TimeSpan.FromMinutes(2))
-                .SetPriority(CacheItemPriority.Normal);
-
-            _cache.Set(cacheKey, product, options);
-        }
-
-        return product;
-    }
-}
+```
+  Instance A                 Instance B                 Instance C
+  ┌──────────────┐           ┌──────────────┐           ┌──────────────┐
+  │ local cache  │           │ local cache  │           │ local cache  │   L1: fast, private,
+  └──────┬───────┘           └──────┬───────┘           └──────┬───────┘       lost on restart
+         │                          │                          │
+         └──────────────────────────┼──────────────────────────┘
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Redis / SQL Server  │                            L2: shared, serialized,
+                         └──────────┬──────────┘                                one network hop
+                                    ▼
+                         ┌─────────────────────┐
+                         │  database or API    │
+                         └─────────────────────┘
 ```
 
-### GetOrCreate Pattern
+`IMemoryCache` alone is the L1 layer, which works well for one instance or for data where each instance holding its own copy is fine. `IDistributedCache` alone is the L2 layer. Every instance sees the same entry and an invalidation reaches all of them, at the cost of a network call and serialization on every read. `HybridCache` combines them, and is the default choice for new code that needs both.
 
-```csharp
-// Synchronous
-var product = _cache.GetOrCreate($"product:{id}", entry =>
-{
-    entry.SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
-    return _repository.GetById(id);
-});
+## IMemoryCache
 
-// Async
-var product = await _cache.GetOrCreateAsync($"product:{id}", async entry =>
-{
-    entry.SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
-    return await _repository.GetByIdAsync(id);
-});
-```
+`services.AddMemoryCache()` registers a singleton `MemoryCache` from `Microsoft.Extensions.Caching.Memory`. Entries are keyed by `object` and stored as-is, with no serialization.
 
-### Cache Entry Options
+### Expiration
 
 ```csharp
 var options = new MemoryCacheEntryOptions
 {
-    // Time-based expiration
-    AbsoluteExpiration = DateTimeOffset.Now.AddHours(1),
-    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
-    SlidingExpiration = TimeSpan.FromMinutes(5),  // Resets on access
-
-    // Eviction priority under memory pressure
-    Priority = CacheItemPriority.High,
-
-    // Size for bounded cache
-    Size = 1  // Relative size
+    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10),
+    SlidingExpiration = TimeSpan.FromMinutes(2)
 };
 
-// Callback on eviction
-options.RegisterPostEvictionCallback((key, value, reason, state) =>
-{
-    Console.WriteLine($"Cache entry {key} evicted: {reason}");
-});
-
-_cache.Set("key", value, options);
+_cache.Set(key, product, options);
 ```
 
-### Bounded Cache
+**Absolute expiration** ends the entry at a fixed point, no matter how often it's read. **Sliding expiration** ends it after a period with no reads, and every read restarts that period. Sliding expiration on its own can keep a frequently read entry alive indefinitely, serving data that went stale hours ago, so pair it with an absolute limit. With both set, the entry expires at whichever comes first.
 
-Limit memory usage by setting cache size.
+Expired entries are removed lazily. A read of an expired entry treats it as a miss and removes it, and a background scan removes the rest, no more often than `ExpirationScanFrequency` (one minute by default). An expired entry can therefore stay in memory, and its post-eviction callback can wait to run, until something touches the cache.
+
+### The Cache Holds References
+
+`IMemoryCache` stores the object you give it, and every reader gets that same object back:
 
 ```csharp
-// Configuration
-services.AddMemoryCache(options =>
-{
-    options.SizeLimit = 1000;  // Maximum entries (by size sum)
-});
+var tags = new List<string> { "sale" };
+_cache.Set("featured-tags", tags);
 
-// Each entry must specify size
-_cache.Set("key", value, new MemoryCacheEntryOptions
-{
-    Size = 1  // Counts as 1 toward limit
-});
+tags.Add("clearance");   // The cached list now has two items
 ```
 
-### Cache Invalidation
+A caller that modifies a cached object modifies it for every other caller, from any thread, with no synchronization. Cache immutable types such as records with `init` properties, `IReadOnlyList<T>`, or frozen collections, or treat anything read from the cache as read-only by convention. This is the opposite of a distributed cache, where every read deserializes a fresh copy.
+
+### Bounding Memory
+
+A `MemoryCache` with no size limit grows until entries expire. It doesn't react to memory pressure, and the `CompactOnMemoryPressure` option that suggested otherwise is obsolete. A cache keyed by something unbounded, like a user ID or a search string, grows with the number of distinct keys. To bound it, set `SizeLimit`:
 
 ```csharp
-// Remove specific entry
-_cache.Remove($"product:{id}");
+services.AddMemoryCache(options => options.SizeLimit = 10_000);
 
-// Invalidate with tokens
-var cts = new CancellationTokenSource();
-var options = new MemoryCacheEntryOptions()
-    .AddExpirationToken(new CancellationChangeToken(cts.Token));
-
-_cache.Set("key", value, options);
-
-// Later: invalidate all entries with this token
-cts.Cancel();
-
-// Linked invalidation
-var parentCts = new CancellationTokenSource();
-_cache.Set("products:all", allProducts, new MemoryCacheEntryOptions()
-    .AddExpirationToken(new CancellationChangeToken(parentCts.Token)));
-
-// Child entries depend on parent
-_cache.Set($"product:{id}", product, new MemoryCacheEntryOptions()
-    .AddExpirationToken(new CancellationChangeToken(parentCts.Token)));
-
-// Invalidate all product caches
-parentCts.Cancel();
+_cache.Set(key, product, new MemoryCacheEntryOptions
+{
+    Size = 1,
+    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+});
 ```
+
+`SizeLimit` has no unit. The cache adds up each entry's `Size` and compares the sum to the limit, so the units are whatever the application decides: one per entry, an estimate in kilobytes, or anything consistent. Once a limit is set, every entry has to declare a `Size`, and `Set` throws `InvalidOperationException` for one that doesn't. That includes entries added by other code sharing the same registered cache, which is why a library that needs a bounded cache should create its own `MemoryCache` instance rather than set a limit on the shared one.
+
+When a new entry would push the total past the limit, the cache doesn't store it. `Set` returns normally, the entry is silently dropped, and the cache starts a background compaction. Compaction removes expired entries first, then evicts others, lowest `Priority` first and least recently used within a priority, aiming to free `CompactionPercentage` of the limit (5% by default). Until compaction frees room, a cache at its limit misses on every new key while the old entries stay resident.
+
+### GetOrCreate Doesn't Prevent Stampedes
+
+`GetOrCreate` and `GetOrCreateAsync` are shorthand for the cache-aside code above:
+
+```csharp
+Product? product = await _cache.GetOrCreateAsync(key, async entry =>
+{
+    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+    return await _repository.GetByIdAsync(id, cancellationToken);
+});
+```
+
+They don't lock. When an entry expires under load, every request that arrives before the first load finishes also misses and runs the factory. Twenty concurrent callers for one missing key run the factory twenty times. This is a **cache stampede**, and it hits the source exactly when the cache was supposed to shield it. See [Preventing Stampedes](#preventing-stampedes).
+
+### Invalidating Groups of Entries
+
+`Remove(key)` drops one entry. To drop a group at once, attach a change token to each entry in the group and fire it:
+
+```csharp
+private CancellationTokenSource _productsVersion = new();
+
+_cache.Set(key, product, new MemoryCacheEntryOptions()
+    .SetAbsoluteExpiration(TimeSpan.FromMinutes(10))
+    .AddExpirationToken(new CancellationChangeToken(_productsVersion.Token)));
+
+// Later: expire every entry registered with this token, then start a new group
+var old = Interlocked.Exchange(ref _productsVersion, new CancellationTokenSource());
+old.Cancel();
+old.Dispose();
+```
+
+Canceling the token expires every entry that carries it. `IMemoryCache` has no other notion of a group or tag.
+
+### Measuring Hit Rate
+
+A cache with a low hit rate costs memory and adds a lookup to every request while saving little. `MemoryCache` can count for you:
+
+```csharp
+services.AddMemoryCache(options => options.TrackStatistics = true);
+
+MemoryCacheStatistics? stats = _cache.GetCurrentStatistics();
+// stats.TotalHits, stats.TotalMisses, stats.CurrentEntryCount, stats.CurrentEstimatedSize
+```
+
+Tracking is off by default. Export the hit and miss counts to whatever metrics system the application already uses, and watch the ratio over time rather than at one moment.
 
 ## IDistributedCache
 
-Shared cache across multiple application instances.
-
-### Interface
+`IDistributedCache` stores `byte[]` values in a store outside the process:
 
 ```csharp
 public interface IDistributedCache
 {
     byte[]? Get(string key);
     Task<byte[]?> GetAsync(string key, CancellationToken token = default);
-
     void Set(string key, byte[] value, DistributedCacheEntryOptions options);
     Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default);
-
     void Refresh(string key);
     Task RefreshAsync(string key, CancellationToken token = default);
-
     void Remove(string key);
     Task RemoveAsync(string key, CancellationToken token = default);
 }
 ```
 
-### Implementations
+`Refresh` resets an entry's sliding expiration without reading its value. Implementations come from separate packages:
 
 ```csharp
-// In-memory (for development/testing)
-services.AddDistributedMemoryCache();
+// Redis (Microsoft.Extensions.Caching.StackExchangeRedis)
+services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.InstanceName = "orders:";   // Prefix added to every key
+});
 
-// SQL Server
+// SQL Server (Microsoft.Extensions.Caching.SqlServer)
 services.AddDistributedSqlServerCache(options =>
 {
-    options.ConnectionString = connectionString;
+    options.ConnectionString = builder.Configuration.GetConnectionString("Cache");
     options.SchemaName = "dbo";
     options.TableName = "Cache";
 });
 
-// Redis
-services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = "localhost:6379";
-    options.InstanceName = "myapp:";
-});
-
-// NCache
-services.AddNCacheDistributedCache(options =>
-{
-    options.CacheName = "myCache";
-    options.EnableLogs = true;
-});
+// In-process, for development and tests only: not shared between instances
+services.AddDistributedMemoryCache();
 ```
 
-### Usage
+`InstanceName` keeps several applications that share one Redis server from overwriting each other's keys.
+
+### Serialization Is Yours
+
+The interface only handles bytes, so code that caches objects serializes them itself:
 
 ```csharp
-public class ProductService
+public async Task<Product?> GetProductAsync(int id, CancellationToken cancellationToken)
 {
-    private readonly IDistributedCache _cache;
-    private readonly IProductRepository _repository;
-    private static readonly JsonSerializerOptions JsonOptions = new();
+    string key = $"product:{id}";
 
-    public ProductService(IDistributedCache cache, IProductRepository repository)
+    byte[]? cached = await _cache.GetAsync(key, cancellationToken);
+    if (cached is not null)
+        return JsonSerializer.Deserialize<Product>(cached);
+
+    Product? product = await _repository.GetByIdAsync(id, cancellationToken);
+    if (product is not null)
     {
-        _cache = cache;
-        _repository = repository;
-    }
-
-    public async Task<Product?> GetProductAsync(int id, CancellationToken ct = default)
-    {
-        var cacheKey = $"product:{id}";
-
-        // Try cache
-        var cached = await _cache.GetStringAsync(cacheKey, ct);
-        if (cached != null)
-        {
-            return JsonSerializer.Deserialize<Product>(cached, JsonOptions);
-        }
-
-        // Load from source
-        var product = await _repository.GetByIdAsync(id, ct);
-        if (product != null)
-        {
-            var json = JsonSerializer.Serialize(product, JsonOptions);
-            var options = new DistributedCacheEntryOptions
+        await _cache.SetAsync(key, JsonSerializer.SerializeToUtf8Bytes(product),
+            new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10),
-                SlidingExpiration = TimeSpan.FromMinutes(2)
-            };
-            await _cache.SetStringAsync(cacheKey, json, options, ct);
-        }
-
-        return product;
-    }
-
-    public async Task InvalidateProductAsync(int id, CancellationToken ct = default)
-    {
-        await _cache.RemoveAsync($"product:{id}", ct);
-    }
-}
-```
-
-### Extension Methods
-
-```csharp
-// Built-in extensions for string values
-await _cache.SetStringAsync("key", "value");
-var value = await _cache.GetStringAsync("key");
-
-// Custom extensions for objects
-public static class DistributedCacheExtensions
-{
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
-    public static async Task SetAsync<T>(
-        this IDistributedCache cache,
-        string key,
-        T value,
-        DistributedCacheEntryOptions options,
-        CancellationToken ct = default)
-    {
-        var json = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-        await cache.SetAsync(key, json, options, ct);
-    }
-
-    public static async Task<T?> GetAsync<T>(
-        this IDistributedCache cache,
-        string key,
-        CancellationToken ct = default)
-    {
-        var bytes = await cache.GetAsync(key, ct);
-        if (bytes == null) return default;
-        return JsonSerializer.Deserialize<T>(bytes, JsonOptions);
-    }
-
-    public static async Task<T> GetOrSetAsync<T>(
-        this IDistributedCache cache,
-        string key,
-        Func<Task<T>> factory,
-        DistributedCacheEntryOptions options,
-        CancellationToken ct = default)
-    {
-        var cached = await cache.GetAsync<T>(key, ct);
-        if (cached != null) return cached;
-
-        var value = await factory();
-        await cache.SetAsync(key, value, options, ct);
-        return value;
-    }
-}
-```
-
-## Redis with StackExchange.Redis
-
-Direct Redis access for advanced scenarios.
-
-```csharp
-using StackExchange.Redis;
-
-// Connection
-var redis = ConnectionMultiplexer.Connect("localhost:6379");
-var db = redis.GetDatabase();
-
-// Basic operations
-await db.StringSetAsync("key", "value", TimeSpan.FromMinutes(10));
-var value = await db.StringGetAsync("key");
-
-// Objects (with serialization)
-var json = JsonSerializer.Serialize(user);
-await db.StringSetAsync($"user:{user.Id}", json);
-
-// Hash operations
-await db.HashSetAsync($"user:{id}", new HashEntry[]
-{
-    new("name", user.Name),
-    new("email", user.Email),
-    new("age", user.Age)
-});
-
-var name = await db.HashGetAsync($"user:{id}", "name");
-var allFields = await db.HashGetAllAsync($"user:{id}");
-
-// Sets (unique collections)
-await db.SetAddAsync("active-users", userId);
-await db.SetRemoveAsync("active-users", userId);
-var isActive = await db.SetContainsAsync("active-users", userId);
-
-// Sorted sets (ranked data)
-await db.SortedSetAddAsync("leaderboard", playerId, score);
-var topPlayers = await db.SortedSetRangeByRankAsync("leaderboard", 0, 9, Order.Descending);
-
-// Lists (queues)
-await db.ListRightPushAsync("queue:tasks", taskJson);
-var task = await db.ListLeftPopAsync("queue:tasks");
-
-// Pub/Sub
-var sub = redis.GetSubscriber();
-await sub.SubscribeAsync("notifications", (channel, message) =>
-{
-    Console.WriteLine($"Received: {message}");
-});
-await sub.PublishAsync("notifications", "Hello!");
-```
-
-## Caching Patterns
-
-### Cache-Aside (Lazy Loading)
-
-Application manages cache reads and writes.
-
-```csharp
-public async Task<Product?> GetProductAsync(int id)
-{
-    // 1. Check cache
-    var cached = await _cache.GetAsync<Product>($"product:{id}");
-    if (cached != null) return cached;
-
-    // 2. Load from database
-    var product = await _repository.GetByIdAsync(id);
-
-    // 3. Populate cache
-    if (product != null)
-    {
-        await _cache.SetAsync($"product:{id}", product, DefaultOptions);
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            },
+            cancellationToken);
     }
 
     return product;
 }
-
-public async Task UpdateProductAsync(Product product)
-{
-    // 1. Update database
-    await _repository.UpdateAsync(product);
-
-    // 2. Invalidate cache
-    await _cache.RemoveAsync($"product:{product.Id}");
-}
 ```
 
-### Write-Through
+Every read pays for a network round trip and deserialization, and returns a fresh object, so the shared-mutation problem of `IMemoryCache` doesn't arise. The serialized form is also a contract. After a deployment renames a property, entries written by the old version still deserialize, silently leaving the new property at its default. Include a version in the key, like `product:v2:{id}`, when a cached type's shape changes.
 
-Update cache synchronously with database.
+### When the Cache Store Is Down
 
-```csharp
-public async Task UpdateProductAsync(Product product)
-{
-    // Update both atomically
-    await _repository.UpdateAsync(product);
-    await _cache.SetAsync($"product:{product.Id}", product, DefaultOptions);
-}
-```
+A distributed cache is a network dependency. When Redis is unreachable, `GetAsync` throws rather than returning `null`, and code written as above turns a cache outage into an application outage. A cache is meant to be optional, so catch the failure, log it, and fall through to the source. That fallback is only safe if the source can absorb the full load the cache normally absorbs.
 
-### Write-Behind (Write-Back)
+## HybridCache
 
-Buffer writes in cache, persist asynchronously.
+`HybridCache`, in the `Microsoft.Extensions.Caching.Hybrid` package, puts an in-process L1 cache in front of whatever `IDistributedCache` is registered as L2, and it serializes values for the L2 layer itself. It supports target frameworks back to .NET Framework 4.7.2 and .NET Standard 2.0, so it isn't tied to a runtime version.
 
 ```csharp
-public class WriteBackCache<T>
+services.AddStackExchangeRedisCache(options =>
+    options.Configuration = builder.Configuration.GetConnectionString("Redis"));
+
+services.AddHybridCache(options =>
 {
-    private readonly IDistributedCache _cache;
-    private readonly Channel<(string Key, T Value)> _writeQueue;
-
-    public WriteBackCache(IDistributedCache cache)
+    options.DefaultEntryOptions = new HybridCacheEntryOptions
     {
-        _cache = cache;
-        _writeQueue = Channel.CreateUnbounded<(string, T)>();
-        _ = ProcessWritesAsync();
-    }
-
-    public async Task SetAsync(string key, T value)
-    {
-        // Write to cache immediately
-        await _cache.SetAsync(key, value, DefaultOptions);
-
-        // Queue for database write
-        await _writeQueue.Writer.WriteAsync((key, value));
-    }
-
-    private async Task ProcessWritesAsync()
-    {
-        await foreach (var (key, value) in _writeQueue.Reader.ReadAllAsync())
-        {
-            try
-            {
-                await PersistToDatabaseAsync(key, value);
-            }
-            catch (Exception ex)
-            {
-                // Log and potentially retry
-            }
-        }
-    }
-}
-```
-
-### Stampede Prevention
-
-Prevent multiple cache misses from overloading the database.
-
-```csharp
-public class StampedeProtectedCache
-{
-    private readonly IDistributedCache _cache;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
-
-    public async Task<T?> GetOrCreateAsync<T>(
-        string key,
-        Func<Task<T>> factory,
-        DistributedCacheEntryOptions options)
-    {
-        // Check cache first
-        var cached = await _cache.GetAsync<T>(key);
-        if (cached != null) return cached;
-
-        // Get or create lock for this key
-        var semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-
-        await semaphore.WaitAsync();
-        try
-        {
-            // Double-check after acquiring lock
-            cached = await _cache.GetAsync<T>(key);
-            if (cached != null) return cached;
-
-            // Only one caller loads data
-            var value = await factory();
-            await _cache.SetAsync(key, value, options);
-            return value;
-        }
-        finally
-        {
-            semaphore.Release();
-        }
-    }
-}
-```
-
-### Probabilistic Early Expiration
-
-Refresh cache before expiration to prevent misses.
-
-```csharp
-public async Task<T?> GetWithEarlyRefreshAsync<T>(
-    string key,
-    Func<Task<T>> factory,
-    TimeSpan expiration)
-{
-    var entry = await _cache.GetAsync<CacheEntry<T>>(key);
-
-    if (entry != null)
-    {
-        // Calculate if we should refresh early
-        var remainingTime = entry.ExpiresAt - DateTimeOffset.UtcNow;
-        var refreshThreshold = expiration * 0.1;  // 10% of TTL
-
-        if (remainingTime > refreshThreshold)
-        {
-            return entry.Value;  // Still fresh
-        }
-
-        // Refresh in background
-        _ = Task.Run(async () =>
-        {
-            var value = await factory();
-            await SetCacheEntryAsync(key, value, expiration);
-        });
-
-        return entry.Value;  // Return stale while refreshing
-    }
-
-    // Cache miss - load synchronously
-    var newValue = await factory();
-    await SetCacheEntryAsync(key, newValue, expiration);
-    return newValue;
-}
-
-private record CacheEntry<T>(T Value, DateTimeOffset ExpiresAt);
-```
-
-## Response Caching
-
-Cache HTTP responses in ASP.NET Core.
-
-```csharp
-// Register middleware
-services.AddResponseCaching();
-app.UseResponseCaching();
-
-// Cache for 60 seconds
-[ResponseCache(Duration = 60)]
-public IActionResult GetProducts()
-{
-    return Ok(_service.GetProducts());
-}
-
-// Vary by query parameter
-[ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "category" })]
-public IActionResult GetProducts(string category)
-{
-    return Ok(_service.GetProducts(category));
-}
-
-// No cache
-[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public IActionResult GetUserData()
-{
-    return Ok(_service.GetUserData());
-}
-
-// Cache profiles
-services.AddControllersWithViews(options =>
-{
-    options.CacheProfiles.Add("Default", new CacheProfile
-    {
-        Duration = 60,
-        Location = ResponseCacheLocation.Any
-    });
-    options.CacheProfiles.Add("Private", new CacheProfile
-    {
-        Duration = 300,
-        Location = ResponseCacheLocation.Client
-    });
+        Expiration = TimeSpan.FromMinutes(10),          // L2, and L1 unless overridden
+        LocalCacheExpiration = TimeSpan.FromMinutes(1)  // L1
+    };
 });
 
-[ResponseCache(CacheProfileName = "Default")]
-public IActionResult Index() { }
-```
-
-## Output Caching (.NET 7+)
-
-Server-side caching of HTTP responses.
-
-```csharp
-// Register
-services.AddOutputCache();
-app.UseOutputCache();
-
-// Basic caching
-app.MapGet("/products", [OutputCache] () => GetProducts());
-
-// With policy
-app.MapGet("/products", () => GetProducts())
-   .CacheOutput(policy => policy
-       .Expire(TimeSpan.FromMinutes(10))
-       .SetVaryByQuery("category")
-       .Tag("products"));
-
-// Named policies
-services.AddOutputCache(options =>
+public class ProductService(HybridCache cache, IProductRepository repository)
 {
-    options.AddPolicy("ProductCache", builder =>
-        builder.Expire(TimeSpan.FromMinutes(10))
-               .SetVaryByQuery("category", "page"));
-
-    options.AddPolicy("UserCache", builder =>
-        builder.Expire(TimeSpan.FromMinutes(1))
-               .SetVaryByHeader("Authorization"));
-});
-
-app.MapGet("/products", [OutputCache(PolicyName = "ProductCache")] () => GetProducts());
-
-// Tag-based invalidation
-app.MapPost("/products", async (IOutputCacheStore store) =>
-{
-    await CreateProduct();
-    await store.EvictByTagAsync("products", default);
-});
-```
-
-## HybridCache (.NET 9)
-
-Combines local and distributed caching with stampede protection.
-
-```csharp
-// Registration
-services.AddHybridCache();
-
-// Usage
-public class ProductService
-{
-    private readonly HybridCache _cache;
-
-    public async Task<Product?> GetProductAsync(int id)
-    {
-        return await _cache.GetOrCreateAsync(
+    public async Task<Product?> GetProductAsync(int id, CancellationToken cancellationToken) =>
+        await cache.GetOrCreateAsync(
             $"product:{id}",
-            async ct => await _repository.GetByIdAsync(id, ct),
-            new HybridCacheEntryOptions
-            {
-                Expiration = TimeSpan.FromMinutes(10),
-                LocalCacheExpiration = TimeSpan.FromMinutes(1)
-            });
-    }
+            async ct => await repository.GetByIdAsync(id, ct),
+            tags: ["products"],
+            cancellationToken: cancellationToken);
 }
 ```
 
-## Best Practices
+A read checks L1, then L2, then runs the factory and stores the result in both. Without a registered `IDistributedCache`, it works as an in-process cache.
 
-### Cache Key Design
+### One Factory Call per Key per Instance
+
+`HybridCache` coordinates concurrent callers. When twenty requests miss on the same key at once, one of them runs the factory and the other nineteen wait for its result. The factory's cancellation token is canceled only when every waiting caller has canceled. The coordination stops at the process boundary. Ten instances that miss at the same moment still produce up to ten loads, one per instance, which is usually an acceptable ceiling.
+
+### Invalidation and Other Instances' L1
+
+`RemoveAsync(key)` removes an entry from this instance's L1 and from L2. `RemoveByTagAsync(tag)` invalidates every entry created with that tag, and `"*"` invalidates everything. Tag invalidation is logical. The entries stay in storage until they expire, and `HybridCache` treats any entry created before the invalidation as a miss.
+
+Neither call reaches the L1 caches of other instances. After instance A removes `product:42`, instances B and C keep serving their local copies until `LocalCacheExpiration` passes. That setting is the bound on cross-instance staleness, so keep it short for data that changes, and longer only for data that rarely does.
+
+### Copies Unless the Type Is Immutable
+
+To avoid the shared-mutation problem, `HybridCache` deserializes a new instance for each caller by default, as `IDistributedCache` code would. A type that is `sealed` and marked `[ImmutableObject(true)]` from `System.ComponentModel` tells it instances are safe to share, and it then returns the same instance from L1 without deserializing again:
 
 ```csharp
-// Include all relevant parameters
-var key = $"user:{userId}:orders:{status}:page:{page}";
-
-// Use consistent naming convention
-var key = $"{prefix}:{entityType}:{id}:{variant}";
-
-// Consider key length for distributed cache
-// Redis: keep keys under 1KB, ideally < 100 bytes
+[ImmutableObject(true)]
+public sealed record ProductSummary(int Id, string Name, decimal Price);
 ```
 
-### What to Cache
+### Limits and Serialization
+
+Values are serialized with `System.Text.Json`, except `string` and `byte[]`, which are stored directly. `AddSerializer` on the `AddHybridCache` builder plugs in another format. A value larger than `MaximumPayloadBytes` (1 MB by default) or a key longer than `MaximumKeyLength` (1,024 characters by default) isn't cached. The attempt is logged and the factory's result is returned uncached, so an oversized value quietly turns into a miss on every call.
+
+## Using Redis Directly
+
+`IDistributedCache` exposes only get, set, refresh, and remove. For anything else Redis offers, like atomic counters, sets, sorted sets, key expiry inspection, or pub/sub, use the `StackExchange.Redis` client directly. Its `ConnectionMultiplexer` is designed to be created once and shared by the whole application:
 
 ```csharp
-// Good candidates:
-// - Expensive database queries
-// - External API responses
-// - Computed/aggregated data
-// - Configuration data
+services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!));
 
-// Avoid caching:
-// - User-specific sensitive data
-// - Rapidly changing data
-// - Data requiring strong consistency
-// - Very large objects (serialize cost > db cost)
-```
-
-### Monitoring
-
-```csharp
-public class InstrumentedCache : IDistributedCache
+public class RateCounter(IConnectionMultiplexer redis)
 {
-    private readonly IDistributedCache _inner;
-    private readonly ILogger _logger;
-    private static readonly Counter<long> HitCount = /* metrics */;
-    private static readonly Counter<long> MissCount = /* metrics */;
-
-    public async Task<byte[]?> GetAsync(string key, CancellationToken token)
+    public async Task<long> IncrementAsync(string clientId)
     {
-        var result = await _inner.GetAsync(key, token);
+        IDatabase db = redis.GetDatabase();
+        string key = $"requests:{clientId}:{DateTime.UtcNow:yyyyMMddHHmm}";
 
-        if (result != null)
-        {
-            HitCount.Add(1);
-            _logger.LogDebug("Cache hit: {Key}", key);
-        }
-        else
-        {
-            MissCount.Add(1);
-            _logger.LogDebug("Cache miss: {Key}", key);
-        }
+        long count = await db.StringIncrementAsync(key);
+        if (count == 1)
+            await db.KeyExpireAsync(key, TimeSpan.FromMinutes(2));
 
-        return result;
+        return count;
     }
 }
 ```
+
+Creating a multiplexer per operation opens a new connection each time, which is the Redis equivalent of creating an `HttpClient` per request. `GetDatabase()` is cheap and can be called wherever it's needed.
+
+## Preventing Stampedes
+
+The fix for a stampede is to make concurrent misses for one key share one load. `HybridCache` does this, and it's the first thing to reach for. Code that has to stay on `IMemoryCache` or `IDistributedCache` can hold a per-key lock around the load and check the cache again once inside:
+
+```csharp
+private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+
+public async Task<T?> GetOrLoadAsync<T>(string key, Func<Task<T?>> load)
+{
+    if (_cache.TryGetValue(key, out T? value))
+        return value;
+
+    SemaphoreSlim gate = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+    await gate.WaitAsync();
+    try
+    {
+        if (_cache.TryGetValue(key, out value))   // Another caller may have loaded it
+            return value;
+
+        value = await load();
+        _cache.Set(key, value, TimeSpan.FromMinutes(10));
+        return value;
+    }
+    finally
+    {
+        gate.Release();
+    }
+}
+```
+
+This protects one process only, like `HybridCache`. It also keeps one semaphore per key forever, so over an unbounded key space the lock dictionary becomes its own memory leak. Removing semaphores safely while other callers may be waiting on them is subtle, which is a good reason to use `HybridCache` instead of maintaining this.
+
+A stampede can also come from many keys expiring together, such as everything loaded at startup with the same ten-minute expiration. Adding a small random amount to each entry's expiration spreads the reloads out.
+
+## Keeping the Cache Consistent with the Source
+
+### Invalidate on Write
+
+With cache-aside, the code that changes the data removes the cached copy after the write succeeds:
+
+```csharp
+public async Task UpdateProductAsync(Product product, CancellationToken cancellationToken)
+{
+    await _repository.UpdateAsync(product, cancellationToken);
+    await _cache.RemoveAsync($"product:{product.Id}", cancellationToken);
+}
+```
+
+Removing is safer than writing the new value into the cache, because two concurrent updates can write their cache values in the opposite order from their database writes and leave the older value cached. Removal still has a narrow race. A reader that loaded the old row just before the update can store it just after the removal. The expiration time is the backstop that bounds how long such a stale entry survives, which is why even explicitly invalidated entries should expire.
+
+Writes that bypass this code, like another service updating the same table, a migration, or a manual fix, leave the cache stale until expiration. Where that happens, the expiration time is the only consistency guarantee the cache has. Write-through, write-behind, and event-driven invalidation are architecture patterns with their own trade-offs, and the choice between them isn't specific to .NET.
+
+### Cache Misses Too
+
+The cache-aside code in [Serialization Is Yours](#serialization-is-yours) caches only non-null results. A request for a product that doesn't exist misses every time and queries the database every time. A client, or an attacker, requesting random IDs bypasses the cache entirely. Caching the absence for a short time, with a sentinel value or a nullable wrapper, closes that gap. `HybridCache` caches a `null` factory result like any other value.
+
+### Key Design
+
+A key has to identify everything the cached value depends on. A key built from a user ID and a page number, where the query also filters by status, serves one status's results to requests for another. Separate the parts with a delimiter, so that `order:{customerId}:{orderId}` can't produce the same key for customer 42 with order 123 and customer 421 with order 23.
+
+Build keys from trusted identifiers, not raw user input. A key taken directly from a query string lets a client create unlimited distinct entries and fill the cache, and it can collide with keys the application relies on.
 
 ## Key Takeaways
 
-**IMemoryCache for single-instance**: Fast, no serialization, but doesn't scale horizontally.
+**Every cached value is a stale copy with a lifetime.** Choose that lifetime on purpose, and keep an absolute expiration on entries you also invalidate explicitly.
 
-**IDistributedCache for multi-instance**: Shared cache via Redis, SQL Server, etc.
+**Know what a read returns.** `IMemoryCache` returns the shared instance, so cache immutable types. A distributed cache returns a fresh deserialized copy.
 
-**Cache-aside is most common**: Application manages cache reads and invalidation.
+**Bound `IMemoryCache` when keys are unbounded.** It doesn't evict under memory pressure, and a full cache silently drops new entries.
 
-**Prevent stampede**: Use locks or semaphores to prevent thundering herd on cache miss.
+**`GetOrCreateAsync` on `IMemoryCache` doesn't stop stampedes.** `HybridCache` does, per instance.
 
-**Set appropriate TTL**: Balance freshness against cache hit rate.
+**With `HybridCache`, `LocalCacheExpiration` bounds cross-instance staleness,** because invalidation never reaches another instance's local copy.
 
-**Invalidate on writes**: Update or remove cache entries when source data changes.
-
-**Monitor cache effectiveness**: Track hit rate, latency, and memory usage.
+**Treat the distributed store as optional.** Decide what happens when it's down before it is.

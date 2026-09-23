@@ -1,0 +1,58 @@
+---
+title: "A New HTTPS Connection"
+kind: dynamic
+system: networking
+summary: "TCP, TLS 1.3, and the first request each cost one round trip."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="ncs-title ncs-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ncs-title">Round trips before the first response byte on a new HTTPS connection</title>
+<desc id="ncs-desc">A sequence between a client and a server. First round trip, the TCP handshake: the client sends SYN and the server replies SYN-ACK. Second round trip, the TLS 1.3 handshake: the client sends ACK with the TLS ClientHello, and the server replies with ServerHello, its certificate, and Finished. Third round trip, the request: the client sends TLS Finished with the HTTP request, and the server replies with the first byte of the HTTP response. A request on a connection that is already open costs only the third round trip.</desc>
+<style>
+.ncs-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ncs-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ncs-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ncs-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.ncs-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ncs-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.ncs-life { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 4; }
+.ncs-msg { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.8; }
+.ncs-brk { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+</style>
+
+<defs>
+<marker id="ncs-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ncs-box" x="200" y="16" width="120" height="40" rx="6"/>
+<text class="ncs-n" x="260.0" y="40.5" text-anchor="middle">Client</text>
+<rect class="ncs-sys" x="720" y="16" width="120" height="40" rx="6"/>
+<text class="ncs-n-inv" x="780.0" y="40.5" text-anchor="middle">Server</text>
+<path class="ncs-life" d="M 260,56 L 260,360"/>
+<path class="ncs-life" d="M 780,56 L 780,360"/>
+
+<path class="ncs-msg" d="M 260,80 L 774,124" marker-end="url(#ncs-a)"/>
+<text class="ncs-lab" x="520.0" y="88" text-anchor="middle">SYN</text>
+<path class="ncs-msg" d="M 780,124 L 266,168" marker-end="url(#ncs-a)"/>
+<text class="ncs-lab" x="520.0" y="132" text-anchor="middle">SYN-ACK</text>
+<path class="ncs-msg" d="M 260,168 L 774,212" marker-end="url(#ncs-a)"/>
+<text class="ncs-lab" x="520.0" y="176" text-anchor="middle">ACK + TLS ClientHello</text>
+<path class="ncs-msg" d="M 780,212 L 266,256" marker-end="url(#ncs-a)"/>
+<text class="ncs-lab" x="520.0" y="220" text-anchor="middle">ServerHello, certificate, Finished</text>
+<path class="ncs-msg" d="M 260,256 L 774,300" marker-end="url(#ncs-a)"/>
+<text class="ncs-lab" x="520.0" y="264" text-anchor="middle">TLS Finished + HTTP request</text>
+<path class="ncs-msg" d="M 780,300 L 266,344" marker-end="url(#ncs-a)"/>
+<text class="ncs-lab" x="520.0" y="308" text-anchor="middle">first byte of HTTP response</text>
+
+<path class="ncs-brk" d="M 164,82 L 156,82 L 156,166 L 164,166"/>
+<text class="ncs-n" x="20" y="120">TCP handshake</text>
+<text class="ncs-k" x="20" y="136">1 round trip</text>
+<path class="ncs-brk" d="M 164,170 L 156,170 L 156,254 L 164,254"/>
+<text class="ncs-n" x="20" y="208">TLS 1.3</text>
+<text class="ncs-k" x="20" y="224">1 round trip</text>
+<path class="ncs-brk" d="M 164,258 L 156,258 L 156,342 L 164,342"/>
+<text class="ncs-n" x="20" y="296">Request</text>
+<text class="ncs-k" x="20" y="312">1 round trip</text>
+<text class="ncs-k" x="20" y="328">(the only one when reused)</text>
+</g>
+</svg>

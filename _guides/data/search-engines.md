@@ -3,8 +3,8 @@ layout: guide
 title: "Search Engines"
 category: Databases
 subcategory: Database Types
-description: "Deep dive into search engines—how they index unstructured text, rank by relevance, and power full-text search applications."
-tags: [databases, search, elasticsearch, full-text, relevance, indexing]
+description: "How search engines like Elasticsearch and OpenSearch build inverted indexes, analyze text, rank results with BM25, and power faceted search, and why they sit beside a database rather than replacing it."
+tags: [full-text-search, inverted-index, relevance, bm25, elasticsearch, practical]
 ---
 
 ## What They Are
@@ -47,7 +47,7 @@ INVERTED INDEX (what the search engine builds):
 Query: "database performance"
        → Look up "databas*" → [2, 3]
        → Look up "perform*" → [2, 3]
-       → Intersection + relevance scoring → doc 2 (score: 0.89),
+       → Score each matching document     → doc 2 (score: 0.89),
                                             doc 3 (score: 0.76)
 ```
 
@@ -74,7 +74,7 @@ The same pipeline processes search queries, ensuring "Databases" matches documen
 
 ### Relevance Scoring
 
-Not all matches are equal. TF-IDF (term frequency-inverse document frequency) scores documents higher when they contain rare terms. BM25 improves on TF-IDF with better handling of document length. Modern search engines allow custom scoring with boosts and decay functions.
+Not all matches are equal. The classic scoring idea, TF-IDF (term frequency times inverse document frequency), ranks a document higher when a query term appears in it often and when that term is rare across the whole collection, so "performance" counts for more than "the." **BM25**, the default in Elasticsearch, OpenSearch, and Solr, refines this so repeated terms add less and less, and a match in a short document counts for more than the same match in a long one. On top of the text score, engines let you boost fields, such as weighting a title match above a body match, and blend in signals like recency or popularity.
 
 ### Faceting and Aggregation
 
@@ -82,7 +82,7 @@ Beyond finding documents, search engines can compute aggregations like counting 
 
 ### Near-Real-Time Indexing
 
-Documents become searchable within seconds of indexing. The engine balances index freshness against query performance.
+New documents aren't searchable the instant they're written. The engine buffers them and periodically makes the buffer searchable, which Elasticsearch calls a refresh and does about once a second by default. Refreshing less often speeds up bulk indexing at the cost of freshness.
 
 ---
 
@@ -98,7 +98,7 @@ Stemming, synonyms, and language-specific analysis make search feel natural to u
 
 ### Performance at Scale
 
-Inverted indexes make searching millions of documents fast.
+Inverted indexes make searching millions of documents fast, and an index is split into shards spread across nodes, so the collection and the query load can both grow.
 
 ### Faceted Navigation
 
@@ -114,11 +114,11 @@ Search engines are designed for search, not primary storage. Data should live in
 
 ### Eventual Consistency
 
-Indexing isn't instantaneous. There's a delay between writing data and it becoming searchable.
+There's a delay between writing a document and being able to find it, and the index lags the database of record by however long the sync pipeline takes. Search engines also don't offer multi-document transactions.
 
 ### Operational Complexity
 
-Elasticsearch clusters require capacity planning, shard management, and monitoring.
+Clusters need capacity planning, shard sizing, and monitoring. The number of primary shards is set when an index is created, so growth beyond the original plan usually means creating a new index and reindexing into it.
 
 ---
 
@@ -135,18 +135,12 @@ Search engines are appropriate for:
 
 ## When to Look Elsewhere
 
-Don't use a search engine as your primary database. Don't use it for simple key-based lookups. Don't use it where exact matching matters more than relevance.
+Don't use a search engine as your primary database, for simple key-based lookups, or where exact matching matters more than relevance. For modest full-text needs, the built-in full-text search in PostgreSQL or another relational database avoids running and syncing a second system.
 
 ---
 
 ## Examples
 
-**Elasticsearch** dominates enterprise search with a rich feature set, distributed architecture, and the ELK stack (Elasticsearch, Logstash, Kibana) for log analysis.
-
-**OpenSearch** is Amazon's fork of Elasticsearch, fully open source under Apache 2.0 license.
-
-**Apache Solr** is mature and feature-rich but has a steeper learning curve than Elasticsearch.
-
-**Typesense** and **Meilisearch** focus on developer experience and ease of use, often described as "search that just works" compared to Elasticsearch's complexity.
+**Elasticsearch** is the most widely used search engine, and together with Logstash and Kibana forms the Elastic Stack, which is common for log analysis. Elastic moved it off the Apache 2.0 license in 2021 and added the open-source AGPL as an option in 2024. **OpenSearch** is the Apache 2.0 fork that AWS started in 2021, now governed by the OpenSearch Software Foundation under the Linux Foundation. **Apache Solr** is the older Lucene-based engine, still common in enterprise and site search. **Typesense** and **Meilisearch** are lighter engines aimed at fast setup and typo-tolerant search for applications.
 
 ---

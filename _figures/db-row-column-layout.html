@@ -1,0 +1,72 @@
+---
+title: "Row vs Column Layout"
+kind: structure
+system: databases
+summary: "The same four orders stored row by row and column by column."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 310" role="img" aria-labelledby="drc-title drc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="drc-title">Four orders laid out in row-oriented pages and in column-oriented storage</title>
+<desc id="drc-desc">In row-oriented storage, each page holds whole rows: page 1 holds orders 1 and 2 with their id, name, total, and date together, and page 2 holds orders 3 and 4. Reading one order reads one page. In column-oriented storage, each column is stored separately: all ids together, all names together, all totals together, and all dates together. Summing the total column reads only the totals.</desc>
+<style>
+.drc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.drc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.drc-page { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.drc-rec { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1; }
+.drc-hot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.25; }
+.drc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.drc-nr { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.drc-code { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.drc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="drc-band" x="15" y="15" width="430" height="285" rx="6"/>
+<text class="drc-hd" x="30" y="40">ROW-ORIENTED</text>
+<rect class="drc-band" x="455" y="15" width="430" height="285" rx="6"/>
+<text class="drc-hd" x="470" y="40">COLUMN-ORIENTED</text>
+
+<rect class="drc-page" x="35" y="55" width="390" height="100" rx="5"/>
+<text class="drc-n" x="47" y="74">Page 1</text>
+<rect class="drc-rec" x="47" y="84" width="366" height="26" rx="3"/>
+<text class="drc-code" x="57" y="101">1 | Alice | 99.99 | 2026-01-15</text>
+<rect class="drc-rec" x="47" y="116" width="366" height="26" rx="3"/>
+<text class="drc-code" x="57" y="133">2 | Bob | 45.50 | 2026-01-15</text>
+
+<rect class="drc-page" x="35" y="165" width="390" height="100" rx="5"/>
+<text class="drc-n" x="47" y="184">Page 2</text>
+<rect class="drc-rec" x="47" y="194" width="366" height="26" rx="3"/>
+<text class="drc-code" x="57" y="211">3 | Carol | 200.00 | 2026-01-16</text>
+<rect class="drc-rec" x="47" y="226" width="366" height="26" rx="3"/>
+<text class="drc-code" x="57" y="243">4 | Dan | 12.00 | 2026-01-16</text>
+<text class="drc-note" x="35" y="288">Reading one order reads one page</text>
+
+<rect class="drc-page" x="475" y="55" width="90" height="210" rx="5"/>
+<text class="drc-n" x="520" y="76" text-anchor="middle">id</text>
+<text class="drc-code" x="520" y="110" text-anchor="middle">1</text>
+<text class="drc-code" x="520" y="146" text-anchor="middle">2</text>
+<text class="drc-code" x="520" y="182" text-anchor="middle">3</text>
+<text class="drc-code" x="520" y="218" text-anchor="middle">4</text>
+
+<rect class="drc-page" x="575" y="55" width="90" height="210" rx="5"/>
+<text class="drc-n" x="620" y="76" text-anchor="middle">name</text>
+<text class="drc-code" x="620" y="110" text-anchor="middle">Alice</text>
+<text class="drc-code" x="620" y="146" text-anchor="middle">Bob</text>
+<text class="drc-code" x="620" y="182" text-anchor="middle">Carol</text>
+<text class="drc-code" x="620" y="218" text-anchor="middle">Dan</text>
+
+<rect class="drc-hot" x="675" y="55" width="90" height="210" rx="5"/>
+<text class="drc-nr" x="720" y="76" text-anchor="middle">total</text>
+<text class="drc-code" x="720" y="110" text-anchor="middle">99.99</text>
+<text class="drc-code" x="720" y="146" text-anchor="middle">45.50</text>
+<text class="drc-code" x="720" y="182" text-anchor="middle">200.00</text>
+<text class="drc-code" x="720" y="218" text-anchor="middle">12.00</text>
+
+<rect class="drc-page" x="775" y="55" width="90" height="210" rx="5"/>
+<text class="drc-n" x="820" y="76" text-anchor="middle">date</text>
+<text class="drc-code" x="820" y="110" text-anchor="middle">01-15</text>
+<text class="drc-code" x="820" y="146" text-anchor="middle">01-15</text>
+<text class="drc-code" x="820" y="182" text-anchor="middle">01-16</text>
+<text class="drc-code" x="820" y="218" text-anchor="middle">01-16</text>
+<text class="drc-note" x="475" y="288">SUM(total) reads only the total column</text>
+</g>
+</svg>

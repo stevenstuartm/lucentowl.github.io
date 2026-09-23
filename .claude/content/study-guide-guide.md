@@ -341,6 +341,7 @@ When writing about software architecture, use correct terminology:
 | Security | Security Fundamentals, Application Security, Security Operations, Governance & Risk |
 | Software Development Lifecycle | SDLC Fundamentals, AAA Cycle, SDLC Frameworks, DevOps & Delivery |
 | AI & Machine Learning | Machine Learning, Building with LLMs, AI in Engineering Practice |
+| Databases | Database Foundations, Database Types |
 | Data & Analytics | Analytics |
 | Observability | Monitoring & Observability |
 | Networking | Network Fundamentals |
@@ -356,10 +357,12 @@ When writing about software architecture, use correct terminology:
 - Security guides: `_guides/security/`
 - SDLC guides: `_guides/sdlc/`
 - AI & ML guides: `_guides/ai/`
+- Databases guides: `_guides/data/`. `data-architecture.md` also lives there but belongs to the Data & Analytics category
 - IoT guides: `_guides/iot/` (vendor-neutral; Azure IoT product guides live under `_guides/infrastructure/azure/`)
 - Leadership guides: `_guides/leadership/` (including architecture decision-making, which is a leadership topic rather than an architecture one)
 - .NET & C# guides: `_guides/dotnet/c-sharp/` (by subcategory: `foundations/`, `fundamentals/`, `oop/`, `async/`, `collections/`, `libraries/`, `advanced/`, `tooling/`) plus `_guides/dotnet/iot/` for the IoT & Embedded subcategory. `_guides/dotnet/asp/`, `_guides/dotnet/aspire/`, and `_guides/dotnet/winui/` belong to the separate ASP.NET Core and WinUI 3 categories
-- Top-level guides (observability, networking, etc.): `_guides/`
+- Networking guides: `_guides/networking/`
+- Top-level guides (observability, etc.): `_guides/`
 
 **When to create new subcategories**:
 - Group related guides under a coherent theme

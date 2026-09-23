@@ -3,15 +3,15 @@ layout: guide
 title: "Relational Databases"
 category: Databases
 subcategory: Database Types
-description: "Deep dive into relational databases (RDBMS)—how they work, when they excel, and when to consider alternatives."
-tags: [databases, relational, sql, acid, transactions, data-modeling, fundamentals]
+description: "How relational databases (RDBMS) model data as tables joined by keys, what the declarative query planner and declared constraints buy you, where they struggle with scale and schema change, and when to look elsewhere."
+tags: [relational, sql, joins, constraints, query-planning, schema-migrations, fundamentals]
 ---
 
 ## What They Are
 
-Relational databases store data in tables composed of rows and columns, where relationships between tables are expressed through shared values (foreign keys). They use SQL (Structured Query Language) for data manipulation and enforce ACID properties for transactions.
+Relational databases store data in tables of rows and columns, and express relationships between tables through shared values called keys. A primary key identifies each row, and a foreign key in another table refers to it. Data is read and changed with SQL (Structured Query Language), and changes run inside transactions that commit as a unit.
 
-The relational model was invented by Edgar Codd at IBM in 1970 to solve a specific problem: data independence. Before relational databases, applications were tightly coupled to how data was physically stored on disk. Change the storage layout, and you'd break every application that used it. Codd's insight was to separate logical data organization (tables and relationships) from physical storage, allowing the database engine to optimize storage independently.
+Edgar Codd proposed the relational model at IBM in 1970 to solve a specific problem: data independence. Applications of the time were tightly coupled to how data was physically stored, so changing the storage layout broke every application that used it. Codd separated the logical organization of data, tables and relationships, from its physical storage, which left the database engine free to change how data is stored and accessed without breaking the queries that use it.
 
 ---
 
@@ -35,9 +35,9 @@ The relational model was invented by Edgar Codd at IBM in 1970 to solve a specif
 │ id (PK)  │ customer_id  │ total      │ created_at           │
 │          │ (FK)         │            │                      │
 ├──────────┼──────────────┼────────────┼──────────────────────┤
-│ 101      │ 1            │ 99.99      │ 2024-01-15           │
-│ 102      │ 1            │ 45.50      │ 2024-01-16           │
-│ 103      │ 2            │ 200.00     │ 2024-01-16           │
+│ 101      │ 1            │ 99.99      │ 2026-01-15           │
+│ 102      │ 1            │ 45.50      │ 2026-01-16           │
+│ 103      │ 2            │ 200.00     │ 2026-01-16           │
 └──────────┴──────────────┴────────────┴──────────────────────┘
 
 Query: SELECT c.name, o.total FROM customers c
@@ -45,57 +45,50 @@ Query: SELECT c.name, o.total FROM customers c
        WHERE o.total > 50
 ```
 
-Data is normalized across tables. The customer's name appears once; orders reference it by ID. A join combines the data at query time.
+The customer's name is stored once, and each order refers to it by ID. A join combines the two tables at query time.
 
 ---
 
 ## How They Work
 
-### Tables and Schemas
+### Tables, Schemas, and Types
 
-Data lives in tables with predefined columns. Each column has a type (integer, string, date). The database enforces this schema, so you cannot insert a string into an integer column. This rigidity prevents bad data from entering the system.
+Data lives in tables with predefined columns, and each column has a type such as integer, text, or timestamp. The database enforces the schema, so a string can't be inserted into an integer column. Data is usually normalized, meaning each fact is stored in one place and referenced elsewhere by key, which is why reassembling a complete picture of an order takes joins.
 
-### Normalization
+### Declarative Queries and the Query Planner
 
-Relational design emphasizes eliminating data duplication. Instead of storing a customer's address with every order, you store the address once in a customers table and reference it by ID from the orders table. Updates to the address automatically apply everywhere. This is called normalization.
+SQL describes what data you want, not how to get it. The database's **query planner** examines the query, considers the available indexes and join strategies, estimates the cost of each approach from statistics about the data, and picks an execution plan. The same query can run differently as data grows, because the planner's estimates, and therefore its choices, change. This separation is Codd's data independence in practice: add an index, and existing queries can start using it without being rewritten.
 
-### Indexes
+### Constraints the Database Enforces
 
-To find data quickly, relational databases build indexes. These separate data structures map column values to row locations. Without an index, finding all orders from customer 12345 requires scanning every row in the orders table. With an index on customer_id, the database jumps directly to the relevant rows.
+Integrity rules are declared in the schema and enforced by the database for every client that writes to it:
 
-### Query Planning
+- **Foreign keys** prevent an order from referencing a customer that doesn't exist.
+- **Unique constraints** prevent duplicate emails or order numbers.
+- **Check constraints** enforce rules such as `total >= 0`.
+- **Not-null constraints** require a value.
 
-When you write a SQL query, you describe what data you want, not how to get it. The database's query planner examines your query, considers available indexes, estimates costs of different approaches, and generates an execution plan. This is why the same query can perform differently as data grows; the planner makes different choices.
+Rules declared this way hold no matter which application, script, or administrator writes the data, which is hard to guarantee when the same rules live in application code.
 
-### Transactions and ACID
+### Transactions
 
-Relational databases guarantee ACID properties for transactions:
-
-**Atomicity**: A transaction with multiple operations either completes entirely or has no effect. Transfer $100 from account A to account B? Either both the debit and credit happen, or neither does.
-
-**Consistency**: The database moves from one valid state to another. Constraints like "balance cannot be negative" are enforced.
-
-**Isolation**: Concurrent transactions don't interfere with each other. Two people buying the last item in stock don't both succeed.
-
-**Durability**: Once a transaction commits, it survives power failures, crashes, and other disasters.
-
-These guarantees require coordination. The database uses locking mechanisms to prevent concurrent modifications to the same data, write-ahead logging to ensure durability, and multi-version concurrency control (MVCC) to allow readers and writers to work simultaneously.
+Relational databases run changes inside ACID transactions, so a multi-row change either commits completely or not at all, and committed changes survive crashes. How much concurrent transactions see of each other depends on the isolation level, and the default in most engines doesn't protect read-then-write logic. Two customers buying the last item in stock can both succeed at the default Read Committed level unless the update is written to prevent it.
 
 ---
 
 ## Why They Excel
 
-### Complex Queries
+### Flexible Queries Over Data You Didn't Plan For
 
-SQL can express sophisticated operations in a single query, including joining five tables, filtering by multiple conditions, grouping and aggregating results, and sorting by computed values. The database optimizes execution.
+SQL can express joins across many tables, filters on any column, grouping, aggregation, and window functions in one query, and the planner works out how to run it. Questions nobody anticipated when the schema was designed can still be answered, which is the relational model's biggest advantage over stores designed around known access patterns.
 
 ### Data Integrity
 
-Foreign key constraints ensure you can't create an order referencing a non-existent customer. Check constraints enforce business rules. Unique constraints prevent duplicates. The database guarantees consistency that would require extensive application code otherwise.
+Declared constraints and transactions keep the data valid without every application reimplementing the rules. For financial, inventory, and healthcare records, this is usually the deciding factor.
 
-### Mature Tooling
+### Maturity and Tooling
 
-Decades of development have produced sophisticated backup systems, replication mechanisms, monitoring tools, and administrative interfaces.
+Decades of development have produced mature backup and point-in-time recovery, replication, monitoring, and administration tools, and SQL skills are widespread among engineers and analysts.
 
 ---
 
@@ -103,26 +96,26 @@ Decades of development have produced sophisticated backup systems, replication m
 
 ### Horizontal Scaling
 
-Relational databases were designed for single-server deployment. Distributing data across multiple servers while maintaining ACID transactions and supporting arbitrary joins is technically possible but operationally complex. Solutions like sharding require careful planning and limit query flexibility.
+The major relational engines were designed around a single primary server. Read replicas scale reads, but writes still go through one node. Splitting data across servers while keeping transactions and arbitrary joins across the splits is hard, so sharding a relational database, whether by hand or with a layer like Citus for PostgreSQL or Vitess for MySQL, limits which queries and transactions stay efficient. Distributed SQL databases were built to remove this limit.
 
-### Schema Rigidity
+### Schema Changes on Large Tables
 
-Changing a table's structure requires migrations. Adding a column is usually fast, but some changes require rewriting entire tables, which can take hours for large datasets and may require downtime.
+Changing a table's structure requires a migration. Many changes are now quick metadata updates: PostgreSQL since version 11 adds a column with a constant default without rewriting the table, and MySQL since 8.0.12 can add columns instantly. Others, such as changing a column's type, still rewrite the whole table, which can take hours on a large one and, depending on the engine, block other queries while it runs. Teams handle these with online schema change tools or multi-step migrations that add a new column, backfill it, and switch over.
 
 ### Object-Relational Impedance Mismatch
 
-Application objects with nested structures and inheritance hierarchies don't map naturally to flat tables. ORMs hide this complexity but introduce their own problems.
+Application objects with nested structures and inheritance hierarchies don't map naturally to flat tables. Object-relational mappers (ORMs) hide the translation, but they can generate inefficient queries, such as one query per item in a list instead of one join.
 
 ---
 
 ## When to Use Them
 
-Relational databases remain the right choice for most applications. Use them when you need:
+Relational databases remain the right default for most applications. Use them when you need:
 
-- Complex transactions spanning multiple entities
-- Non-negotiable data integrity (financial systems, healthcare records)
-- Ad-hoc analytical queries
-- Teams with relational expertise where the operational complexity of alternatives isn't justified
+- Transactions spanning several entities, such as an order and its line items and the inventory they reserve
+- Integrity rules enforced for every writer, as in financial systems and healthcare records
+- Ad hoc queries and reporting over the same data
+- A team whose existing SQL expertise outweighs the benefits of something more specialized
 
 ---
 
@@ -130,21 +123,15 @@ Relational databases remain the right choice for most applications. Use them whe
 
 Consider alternatives when:
 
-- Write throughput exceeds what a single server can handle
-- Your data is naturally hierarchical or graph-structured
-- Schema changes happen frequently and migrations are painful
-- You're storing large volumes of time-series or log data
+- Write volume exceeds what a single primary can absorb, and sharding would sacrifice the joins and transactions you chose relational for
+- The data is naturally hierarchical and always read whole, or naturally a graph traversed many hops deep
+- The data is a high-volume stream of time-stamped measurements or logs, read mostly by time range
+- The main query is full-text relevance or similarity search
 
 ---
 
 ## Examples
 
-**PostgreSQL** is the most feature-rich open-source option, supporting JSON documents, full-text search, geospatial data, and extensions like pgvector for vector similarity search. It's often the best starting point.
-
-**MySQL** powers much of the web, with a focus on read performance and ease of use. Multiple storage engines offer different trade-offs.
-
-**SQL Server** provides tight integration with Microsoft's ecosystem and strong enterprise features.
-
-**Oracle** remains dominant in large enterprises, offering advanced features at significant licensing cost.
+**PostgreSQL** is the most extensible open-source option, with JSON document support, full-text search, and extensions such as PostGIS for geospatial data and pgvector for vector search. It's often the best starting point. **MySQL**, with its InnoDB engine, is the other widely used open-source choice and runs a large share of web applications. **SQL Server** and **Oracle** are the main commercial engines, strong in enterprise features and in their vendors' ecosystems. **SQLite** is an embedded relational database that runs inside the application process, common in mobile and desktop apps.
 
 ---

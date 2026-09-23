@@ -1,0 +1,98 @@
+---
+title: "LSM Tree With Leveled Compaction"
+kind: flow
+system: databases
+summary: "Writes buffered in memory, flushed to immutable files, merged level by level."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="dlt-title dlt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dlt-title">How an LSM tree handles writes</title>
+<desc id="dlt-desc">A write is appended to the write-ahead log on disk and inserted into the memtable, a sorted structure in memory. When the memtable is full, it is flushed to disk as an immutable SSTable in level 0. Compaction merges SSTables from level 0 into level 1 and from level 1 into level 2, keeping the newest version of each key and dropping overwritten and deleted values.</desc>
+<style>
+.dlt-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.dlt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dlt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dlt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dlt-lvl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; }
+.dlt-sst { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.dlt-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dlt-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.dlt-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dlt-t { font-size: 10px; fill: var(--color-text, #2C3E50); }
+.dlt-lab { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.dlt-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.dlt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dlt-cmp { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.dlt-labp { font-size: 11px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+</style>
+
+<defs>
+<marker id="dlt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dlt-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dlt-band" x="15" y="15" width="870" height="115" rx="6"/>
+<text class="dlt-hd" x="30" y="36">MEMORY</text>
+<rect class="dlt-band" x="15" y="145" width="870" height="260" rx="6"/>
+<text class="dlt-hd" x="30" y="166">DISK</text>
+
+<rect class="dlt-sys" x="30" y="50" width="130" height="50" rx="6"/>
+<text class="dlt-n-inv" x="95" y="80" text-anchor="middle">Write</text>
+
+<path class="dlt-flow" d="M 160,75 H 254" marker-end="url(#dlt-a)"/>
+<text class="dlt-lab" x="207" y="67" text-anchor="middle">insert</text>
+
+<rect class="dlt-box" x="260" y="45" width="200" height="60" rx="6"/>
+<text class="dlt-n" x="360" y="70" text-anchor="middle">Memtable</text>
+<text class="dlt-k" x="360" y="88" text-anchor="middle">[sorted, in memory]</text>
+
+<path class="dlt-flow" d="M 95,100 V 174" marker-end="url(#dlt-a)"/>
+<text class="dlt-lab" x="103" y="140">append</text>
+
+<rect class="dlt-box" x="30" y="180" width="170" height="60" rx="6"/>
+<text class="dlt-n" x="115" y="205" text-anchor="middle">Write-ahead log</text>
+<text class="dlt-k" x="115" y="223" text-anchor="middle">[sequential append]</text>
+
+<path class="dlt-flow" d="M 360,105 V 169" marker-end="url(#dlt-a)"/>
+<text class="dlt-lab" x="370" y="140">flush when full</text>
+
+<rect class="dlt-lvl" x="260" y="175" width="400" height="56" rx="5"/>
+<text class="dlt-n" x="272" y="208">Level 0</text>
+<rect class="dlt-sst" x="340" y="188" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="372" y="207" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="416" y="188" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="448" y="207" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="492" y="188" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="524" y="207" text-anchor="middle">SSTable</text>
+
+<rect class="dlt-lvl" x="260" y="255" width="400" height="56" rx="5"/>
+<text class="dlt-n" x="272" y="288">Level 1</text>
+<rect class="dlt-sst" x="340" y="268" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="372" y="287" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="416" y="268" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="448" y="287" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="492" y="268" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="524" y="287" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="568" y="268" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="600" y="287" text-anchor="middle">SSTable</text>
+
+<rect class="dlt-lvl" x="260" y="335" width="400" height="56" rx="5"/>
+<text class="dlt-n" x="272" y="368">Level 2</text>
+<rect class="dlt-sst" x="340" y="348" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="372" y="367" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="416" y="348" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="448" y="367" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="492" y="348" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="524" y="367" text-anchor="middle">SSTable</text>
+<rect class="dlt-sst" x="568" y="348" width="64" height="30" rx="3"/>
+<text class="dlt-t" x="600" y="367" text-anchor="middle">SSTable</text>
+
+<path class="dlt-cmp" d="M 660,195 H 700 V 275 H 666" marker-end="url(#dlt-p)"/>
+<text class="dlt-labp" x="712" y="232">compaction</text>
+<text class="dlt-lab" x="712" y="248">merge, keep newest</text>
+<path class="dlt-cmp" d="M 660,293 H 700 V 355 H 666" marker-end="url(#dlt-p)"/>
+<text class="dlt-labp" x="712" y="320">compaction</text>
+<text class="dlt-lab" x="712" y="336">drop old versions</text>
+
+</g>
+</svg>

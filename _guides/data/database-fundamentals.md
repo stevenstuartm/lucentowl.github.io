@@ -2,20 +2,21 @@
 layout: guide
 title: "Database Fundamentals"
 category: Databases
-subcategory: Database Fundamentals
-description: "Core database concepts including the CAP theorem, ACID vs BASE consistency models, data modeling, and database selection criteria."
-tags: [databases, fundamentals, cap-theorem, acid, data-modeling, architecture]
+subcategory: Database Foundations
+description: "What databases do, the main data models and the workloads they serve, normalization and schema trade-offs, and how to choose, combine, and migrate between database types."
+tags: [fundamentals, data-modeling, normalization, polyglot-persistence, decision-making, oltp-olap]
 redirect_from:
   - /study-guides/database-types.html
+  - /study-guides/data/multi-model-databases.html
 ---
 
 ## Why Databases Exist
 
 Applications need to persist data beyond the lifetime of a single process. They need to share data across multiple processes, servers, and users. They need to query data in flexible ways, ensure data isn't lost during failures, and prevent concurrent modifications from corrupting state.
 
-A database is software that solves these problems. It provides durable storage (data survives crashes), concurrent access (multiple users can read and write safely), query capabilities (find data matching specific criteria), and often transactions (group multiple operations into atomic units).
+A database is software that solves these problems. It provides durable storage so data survives crashes, concurrent access so multiple users can read and write safely, queries that find data matching specific criteria, and often transactions that group several operations into one all-or-nothing unit.
 
-Without databases, applications would need to implement all of these features themselves, and they'd do it poorly. Databases represent decades of engineering effort to solve these problems correctly.
+Without a database, each application would have to build all of this itself, and the hard parts (crash recovery, concurrent writers, efficient lookup) are exactly where hand-built versions tend to go wrong.
 
 ---
 
@@ -23,127 +24,36 @@ Without databases, applications would need to implement all of these features th
 
 For decades, relational databases were the default choice for nearly every application. They worked well enough for most use cases, but "well enough" started breaking down as applications scaled and data patterns diversified.
 
-Relational databases make certain trade-offs: they enforce schemas, maintain ACID transactions, and optimize for complex queries across related tables. These trade-offs work beautifully for some workloads and terribly for others.
+Relational databases make specific trade-offs. They enforce schemas, run transactions that either fully commit or leave no trace, and optimize for flexible queries across related tables. Those trade-offs suit some workloads and hurt others.
 
-Consider write throughput. A relational database must maintain indexes, enforce constraints, and coordinate transactions. Every write involves multiple disk operations. For an e-commerce order system processing hundreds of transactions per second, this overhead is negligible. For a telemetry system ingesting millions of sensor readings per second, it's a bottleneck.
+Consider write throughput. A relational database must maintain indexes, enforce constraints, and coordinate transactions, so every write involves several disk operations. For an e-commerce order system processing hundreds of transactions per second, that overhead is negligible. For a telemetry system ingesting millions of sensor readings per second, it becomes the bottleneck.
 
-Or consider data structure. Relational databases force data into rows with fixed columns. A user profile with varying attributes requires either nullable columns (wasting space and complicating queries) or multiple tables with joins (adding complexity and latency). Some users have phone numbers while others don't; some have multiple addresses while others have none.
+Or consider data shape. Relational databases put data into rows with fixed columns. A user profile with varying attributes needs either many nullable columns or several tables joined back together. Some users have phone numbers while others don't, and some have multiple addresses while others have none.
 
-Specialized databases emerged because different problems have different optimal solutions. The database that excels at finding the shortest path between two nodes in a social graph is architecturally incapable of efficiently aggregating time-series metrics.
+Specialized databases emerged because different problems have different optimal solutions. An engine whose storage is laid out to follow relationships from one record to the next is poorly suited to scanning and aggregating billions of time-stamped metrics, and the reverse holds too.
 
----
+### The Main Data Models
 
-## The CAP Theorem
+Each data model fixes what the database understands about your data, and that decides which questions it can answer efficiently.
 
-Every distributed database confronts an impossible choice. The CAP theorem, proven mathematically in 2002, states that a distributed system can provide at most two of three guarantees:
+| Model | What it stores | What it's built to answer |
+| --- | --- | --- |
+| Relational | Rows in tables with fixed columns, linked by keys | Ad hoc queries and joins across related entities, with strong transactional guarantees |
+| Key-value | An opaque value per key | "Give me the value for this key," very fast |
+| Document | Self-contained JSON-like documents | "Give me this whole object," plus queries on fields inside it |
+| Wide-column | Rows partitioned by key, each with its own set of columns | Very high write volume with reads by partition key |
+| Graph | Nodes and the edges between them | Multi-hop traversals across relationships |
+| Time-series | Timestamped measurements | Writes in time order and reads over time ranges |
+| Search engine | Analyzed text in an inverted index | Relevance-ranked full-text search |
+| Vector | High-dimensional embeddings | "Find the items most similar to this one" |
 
-**Consistency** means every read returns the most recent write. If you update your profile, everyone immediately sees the update.
+Distributed SQL (NewSQL) databases keep the relational model and change the architecture underneath it, spreading tables across many nodes while keeping transactions.
 
-**Availability** means every request receives a response. The system never refuses to answer.
+### Operational and Analytical Workloads
 
-**Partition tolerance** means the system continues operating when network failures prevent some nodes from communicating with others.
+Cutting across the data model is the workload. **Operational (OLTP)** workloads run the application: many small reads and writes, each touching a few rows, with low latency expected. **Analytical (OLAP)** workloads answer business questions: fewer queries, each scanning and aggregating millions of rows.
 
-Networks fail and partitions happen, so every distributed database must choose partition tolerance, leaving a choice between consistency and availability during failures.
-
-### CP Systems (Consistency + Partition Tolerance)
-
-These systems choose consistency over availability. During a network partition, they'll refuse to serve requests rather than risk returning stale data.
-
-Examples include traditional relational databases, etcd, ZooKeeper, and HBase.
-
-**Trade-off**: During network issues, some requests will fail. Better for financial systems where stale data causes real problems.
-
-### AP Systems (Availability + Partition Tolerance)
-
-These systems choose availability over consistency. During a network partition, they'll continue serving requests but may return stale data.
-
-Examples include Cassandra, DynamoDB, CouchDB, and most eventually consistent systems.
-
-**Trade-off**: Reads might return outdated data. Better for systems where availability matters more than perfect accuracy (social media feeds, product catalogs).
-
-### Understanding the Practical Implications
-
-CAP doesn't mean you have exactly two properties all the time. During normal operation, when no partitions exist, you can have all three. The theorem constrains behavior during failures.
-
-Modern databases often let you tune this trade-off per operation. Cassandra lets you specify consistency levels: write to one node (fast, less durable), write to a quorum (slower, more durable), or write to all nodes (slowest, most durable).
-
----
-
-## ACID Properties
-
-ACID defines the guarantees that traditional relational databases provide for transactions. Each letter represents a specific guarantee:
-
-### Atomicity
-
-A transaction is an atomic unit of work. All operations within a transaction either complete successfully or have no effect. There's no partial state.
-
-If you transfer $100 from account A to account B, atomicity guarantees that either both the debit from A and credit to B happen, or neither happens. You won't end up with money debited but not credited.
-
-### Consistency
-
-The database moves from one valid state to another valid state. Constraints like foreign keys, unique constraints, and check constraints are always enforced.
-
-If you have a constraint that account balances must be non-negative, the database will reject any transaction that would violate this constraint, even if atomicity would technically allow it.
-
-### Isolation
-
-Concurrent transactions don't interfere with each other. Each transaction behaves as if it's the only one running, even when thousands run simultaneously.
-
-Isolation levels control how much transactions can see of each other's uncommitted changes:
-- **Read Uncommitted**: Can see uncommitted changes (dirty reads)
-- **Read Committed**: Only sees committed changes
-- **Repeatable Read**: Same rows return same values throughout transaction
-- **Serializable**: Transactions appear to run one at a time
-
-Higher isolation levels provide stronger guarantees but reduce concurrency.
-
-### Durability
-
-Once a transaction commits, the changes survive any subsequent failure including power loss, crashes, and hardware failures. The database uses write-ahead logging to ensure committed data can be recovered.
-
-### The Cost of ACID
-
-ACID guarantees aren't free. They require:
-- Locking or multi-version concurrency control for isolation
-- Write-ahead logging for durability
-- Constraint checking for consistency
-- Coordination for distributed transactions
-
-This overhead limits throughput and adds latency. Many NoSQL databases trade ACID guarantees for performance.
-
----
-
-## BASE: The Alternative to ACID
-
-BASE describes the properties of many distributed NoSQL systems. It stands for:
-
-**Basically Available**: The system guarantees availability (in the CAP sense). Requests receive responses, though responses may be stale.
-
-**Soft state**: The system's state may change over time even without input, as updates propagate through replicas.
-
-**Eventual consistency**: Given enough time without new updates, all replicas will converge to the same state. Reads will eventually return the most recent write.
-
-### ACID vs BASE
-
-| Property | ACID | BASE |
-|----------|------|------|
-| Consistency | Strong, immediate | Eventual |
-| Availability during failures | May be unavailable | Highly available |
-| Latency | Higher (coordination overhead) | Lower |
-| Complexity | Simpler for developers | Requires handling stale data |
-| Use cases | Financial, healthcare, inventory | Social, content, analytics |
-
-### When BASE Is Acceptable
-
-Eventual consistency works when:
-- Stale reads have low cost (showing a slightly outdated follower count)
-- The application can handle or hide inconsistency (UI optimistic updates)
-- Availability matters more than accuracy (better to show old data than nothing)
-
-Eventual consistency fails when:
-- Decisions based on reads affect real resources (inventory, money)
-- Users directly compare values across requests (two users seeing different prices)
-- Regulatory requirements mandate consistency
+The two want opposite physical layouts. Row-oriented storage keeps each record together, which suits reading or updating one order at a time. Column-oriented storage keeps each column together, which suits summing one column across every order. Running heavy analytics on the operational database competes with the application for the same resources, which is why analytical data usually moves to a separate warehouse or lakehouse.
 
 ---
 
@@ -151,152 +61,101 @@ Eventual consistency fails when:
 
 ### Normalization
 
-Normalization organizes relational data to reduce redundancy. Instead of storing a customer's address with every order, you store it once in a customers table and reference it by ID.
+Normalization organizes relational data to reduce redundancy. Instead of storing a customer's address with every order, you store it once in a customers table and reference it by ID. Updates happen in one place and the data can't disagree with itself, at the cost of joins to reassemble it and more complex queries.
 
-**Benefits**:
-- Updates happen in one place
-- Less storage waste
-- Consistent data
-
-**Costs**:
-- Joins required to reassemble data
-- More complex queries
-- Potential performance overhead
-
-**Normal forms** (1NF through 5NF) define increasing levels of normalization. Most applications use third normal form (3NF) as a practical balance.
+The normal forms (1NF, 2NF, 3NF, Boyce-Codd normal form, and the rarer 4NF and 5NF) define progressively stricter rules about which columns may depend on which. Third normal form is the common practical target for transactional schemas.
 
 ### Denormalization
 
-Denormalization intentionally introduces redundancy for read performance. Store the customer's name directly in the order record so you don't need to join.
+Denormalization intentionally introduces redundancy for read performance. Store the customer's name directly in the order record, and displaying an order no longer needs a join.
 
-**When to denormalize**:
-- Read-heavy workloads with known access patterns
-- Performance requirements that joins can't meet
-- Distributed systems where joins are expensive or impossible
-
-**Costs**:
-- Updates must happen in multiple places
-- Risk of inconsistent data
-- More storage required
+It pays off for read-heavy workloads with known access patterns, for performance targets that joins can't meet, and in distributed databases where a join would cross nodes or isn't supported at all. The price is that every copy has to be updated when the source changes, and any copy that isn't updated is now wrong.
 
 ### Schema-on-Write vs Schema-on-Read
 
-**Schema-on-write** (relational databases): Define the schema before inserting data. The database enforces structure.
+**Schema-on-write**, the relational approach, defines the schema before data goes in, and the database rejects anything that doesn't fit. **Schema-on-read**, the default in document databases and data lakes, stores data without enforcing structure, and the application interprets it when reading.
 
-**Schema-on-read** (document databases, data lakes): Store data without enforcing structure. The application interprets structure when reading.
-
-Schema-on-write catches errors early but requires migrations. Schema-on-read provides flexibility but can lead to data quality issues.
+Schema-on-write catches errors at insert time but requires migrations when the structure changes. Schema-on-read makes change easy but moves validation into every reader, and inconsistent data can accumulate unnoticed. Many document databases now offer optional schema validation, which lets a team choose a point between the two.
 
 ---
 
-## Database Selection Framework
+## Choosing a Database
 
 ### Start With Access Patterns
 
-Database selection should flow from access patterns, not the other way around. Ask:
+Database selection should flow from access patterns, not the other way around. Four questions narrow the field:
 
-- **How will data be written?** High-volume streams? Transactional batches? User-driven updates?
-- **How will data be read?** By primary key? By arbitrary attributes? By time range? By relationship traversal?
-- **What are the consistency requirements?** Financial accuracy? Eventual consistency acceptable?
-- **What's the expected scale?** Hundreds of gigabytes? Petabytes? Millions of reads per second?
-
-### Decision Matrix
-
-| Primary Access Pattern | Database Category |
-|------------------------|-------------------|
-| Transactions across related entities | Relational or NewSQL |
-| Simple key-based lookups at massive scale | Key-Value |
-| Flexible documents with varied schemas | Document |
-| Time-range queries on metrics/events | Time-Series |
-| Relationship traversal (friends-of-friends) | Graph |
-| Semantic similarity search | Vector |
-| Full-text search with relevance ranking | Search Engine |
-| Sub-millisecond caching | In-Memory |
-| Massive write throughput, sparse columns | Wide-Column |
+- **How will data be written?** High-volume streams, transactional batches, or user-driven updates?
+- **How will data be read?** By primary key, by arbitrary attributes, by time range, or by relationship traversal?
+- **What are the consistency requirements?** Must every read reflect the latest write, or is briefly stale data acceptable?
+- **What's the expected scale?** Hundreds of gigabytes or petabytes? Thousands or millions of operations per second?
 
 ### The PostgreSQL Default
 
-**Start with relational unless you have a specific reason not to.** PostgreSQL handles more use cases than most teams realize:
-- JSON columns provide document flexibility
-- The pgvector extension enables vector search
-- Full-text search is built in
-- Extensions like TimescaleDB add time-series capabilities
+**Start with relational unless you have a specific reason not to.** PostgreSQL covers more use cases than many teams expect:
 
-If you're not sure what you need, PostgreSQL is the safe default. You can always add specialized databases later when specific needs emerge.
+- `jsonb` columns store and index JSON documents
+- The pgvector extension adds vector similarity search
+- Full-text search is built in
+- The TimescaleDB extension adds time-series partitioning and compression
+
+If you're not sure what you need, PostgreSQL is a safe default. You can add specialized databases later when a specific need emerges.
 
 ### Operational Considerations
 
-A database you can operate well beats a theoretically superior database you operate poorly. Consider:
-
-- **Team expertise**: Do you have experience with this technology?
-- **Managed services**: Is a managed option available to reduce operational burden?
-- **Tooling**: Are there good backup, monitoring, and debugging tools?
-- **Community**: Can you find help when things go wrong?
+A database your team can operate well beats a theoretically better one it operates poorly. Weigh the team's experience with the technology, whether a managed service exists to take on patching, backup, and failover, the maturity of its backup, monitoring, and debugging tools, and how easy it is to find help when something goes wrong.
 
 ---
 
 ## Polyglot Persistence
 
-Most non-trivial applications use multiple databases, each optimized for its specific use case. This pattern is called polyglot persistence.
+Many non-trivial applications use more than one database, each chosen for a specific access pattern. A web application might keep orders in PostgreSQL, sessions and cached pages in Redis, and a product search index in Elasticsearch. This pattern is called polyglot persistence.
 
-### Common Combinations
+### Keeping Stores in Sync
 
-**Web application**: PostgreSQL (primary data) + Redis (sessions, caching) + Elasticsearch (search)
+The hard part of polyglot persistence is keeping the stores consistent with each other. One store is the system of record, and the others hold copies derived from it.
 
-**IoT platform**: TimescaleDB (metrics) + PostgreSQL (device metadata) + Redis (real-time state)
+**Dual writes** have the application write to each store in turn. They're simple, but nothing makes the writes atomic, so a crash or error between them leaves the stores disagreeing with no record of it.
 
-**E-commerce**: PostgreSQL (orders, customers) + Elasticsearch (product search) + Redis (cart, sessions)
+**Change data capture (CDC)** reads the primary database's transaction log and turns each committed change into an event. Debezium is a widely used example. It publishes changes as events, typically to Kafka, and each secondary store consumes that stream. Because the log only contains committed changes, the copies can lag the primary but won't drift from it.
 
-**AI application**: PostgreSQL (application data) + Pinecone or pgvector (embeddings) + Redis (caching)
+{% include figure.html id="db-cdc-sync" %}
 
-**Social platform**: PostgreSQL (user data) + Neo4j (social graph) + Redis (feeds, caching)
+**The transactional outbox** is the application-side alternative. The application writes an event row into an outbox table in the same transaction as the business change, and a separate process publishes those rows. The event exists if and only if the change committed.
 
-### Managing Data Synchronization
+**Scheduled sync** periodically copies data from the primary to the secondaries. It's the simplest option, and the copies are stale by up to one full interval.
 
-The challenge with polyglot persistence is keeping data synchronized across systems. Common approaches:
+**Event sourcing** goes further and makes an append-only event log the system of record, with every database building its own view from the events. That changes how the whole application is designed, not just how copies are synchronized.
 
-**Change data capture (CDC)**: Capture changes from the primary database and apply them to secondary systems. Tools like Debezium stream changes from database transaction logs.
+### Multi-Model Databases as the Alternative
 
-**Dual writes**: Write to multiple systems from the application. Simple but risks inconsistency if one write fails.
+A multi-model database supports several data models in one system, such as documents, graphs, and key-value access over the same underlying data. It trades polyglot persistence's many systems for one.
 
-**Event sourcing**: Use an event log as the source of truth. Each database builds its view from events.
+The appeal is operational. One system to deploy, secure, back up, and monitor is easier than four, and nothing needs to be synchronized between stores. The cost is that an engine serving several models can't optimize as aggressively for any one of them, so a specialized database usually does better at its own workload.
 
-**Scheduled sync**: Periodically copy data from primary to secondary systems. Simple but introduces latency.
+A multi-model database fits when the same data genuinely needs more than one access pattern, such as being queried as documents and traversed as a graph, and operational simplicity matters more than peak performance on either. If you only use one model, the extra models are complexity you pay for without using.
 
 ---
 
-## Migration Considerations
+## Migrating Between Database Types
 
 ### Don't Migrate Prematurely
 
-The operational cost of running a second database type often exceeds the performance benefit until you've truly hit limits. PostgreSQL can handle more than most teams expect.
+The operational cost of running a second database type often exceeds the performance benefit until you've actually hit the current database's limits. The signs that you have are specific: you've already tuned queries and indexes and still can't meet requirements, the team spends significant effort working around the database's model, or the access pattern plainly doesn't match what the database was built for.
 
-Signs you might actually need a specialized database:
-- You've optimized queries and still can't meet requirements
-- You're spending significant effort working around the current database's limitations
-- The access pattern clearly doesn't match the database model
+### Consider Extending Before Replacing
 
-### Consider Hybrid Approaches First
-
-Before a full migration, consider:
-- PostgreSQL with TimescaleDB extension for time-series
-- PostgreSQL with pgvector for vector search
-- Redis alongside PostgreSQL for caching
-- Elasticsearch alongside PostgreSQL for search
-
-These hybrid approaches often provide 80% of the benefit with 20% of the migration effort.
+Before a full migration, check whether an extension or a companion store covers the gap. TimescaleDB adds time-series handling to PostgreSQL, pgvector adds vector search, Redis alongside the primary database handles caching, and a search engine alongside it handles full-text search. These approaches keep the existing system of record and often deliver much of the benefit for a fraction of the migration effort.
 
 ### Migration Is Never Just Moving Data
 
-When you do migrate, budget for more than data transfer. Query patterns differ between database types:
-- Application code that worked with implicit joins needs restructuring for document databases
-- Code that relied on transactions needs compensation logic for eventually consistent stores
-- ORMs may not support the new database, requiring significant code changes
+When you do migrate, budget for more than data transfer, because query patterns differ between database types. Application code that relied on joins needs restructuring for a document database. Code that relied on multi-row transactions needs compensating logic for an eventually consistent store. The ORM may not support the new database at all.
 
-Plan for:
+Plan for four pieces of work:
+
 - Schema redesign for the new data model
 - Application code changes
-- Testing for behavioral differences
-- Rollback strategy if issues emerge
+- Testing for behavioral differences, especially around consistency and transactions
+- A rollback strategy if problems emerge after cutover
 
 ---

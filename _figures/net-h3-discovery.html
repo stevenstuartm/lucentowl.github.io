@@ -1,0 +1,58 @@
+---
+title: "Discovering HTTP/3"
+kind: flow
+system: networking
+summary: "Alt-Svc or a DNS HTTPS record tells the client to try QUIC."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="nhd-title nhd-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="nhd-title">Two ways a client learns a server supports HTTP/3</title>
+<desc id="nhd-desc">First way: the client connects to the server over TCP and TLS, offering h2 and http/1.1 through ALPN, and the server's response carries an Alt-Svc header advertising h3 on UDP port 443. Second way: the client looks up the domain's DNS HTTPS record, which lists h3 and h2 among its supported protocols. Either way, the client then connects over QUIC on UDP port 443, and falls back to TCP if the QUIC attempt fails.</desc>
+<style>
+.nhd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.nhd-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.nhd-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.nhd-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nhd-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.nhd-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.nhd-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.nhd-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.nhd-quic { font-size: 11.5px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.nhd-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.nhd-ret { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; stroke-dasharray: 6 4; }
+.nhd-q { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 3; }
+</style>
+
+<defs>
+<marker id="nhd-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="nhd-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="nhd-box" x="20" y="30" width="130" height="270" rx="6"/>
+<text class="nhd-n" x="34" y="54">Client</text>
+<text class="nhd-k" x="34" y="72">browser or library</text>
+
+<rect class="nhd-sys" x="720" y="30" width="160" height="150" rx="6"/>
+<text class="nhd-n-inv" x="734" y="54">Server</text>
+<text class="nhd-k-inv" x="734" y="72">TCP 443 and UDP 443</text>
+
+<rect class="nhd-px" x="720" y="220" width="160" height="80" rx="6"/>
+<text class="nhd-n" x="734" y="244">DNS</text>
+<text class="nhd-k" x="734" y="262">HTTPS record for</text>
+<text class="nhd-k" x="734" y="278">the domain</text>
+
+<path class="nhd-flow" d="M 150,92 L 714,92" marker-end="url(#nhd-a)"/>
+<text class="nhd-lab" x="170" y="84">TCP + TLS, ALPN offers h2 and http/1.1</text>
+<path class="nhd-ret" d="M 720,120 L 156,120" marker-end="url(#nhd-a)"/>
+<text class="nhd-lab" x="170" y="112">response header  Alt-Svc: h3=":443"</text>
+
+<path class="nhd-q" d="M 150,158 L 714,158" marker-end="url(#nhd-b)"/>
+<text class="nhd-quic" x="170" y="150">QUIC on UDP 443, HTTP/3</text>
+<text class="nhd-k" x="170" y="176">if it fails, the client stays on TCP</text>
+
+<path class="nhd-flow" d="M 150,244 L 714,244" marker-end="url(#nhd-a)"/>
+<text class="nhd-lab" x="170" y="236">look up the HTTPS record</text>
+<path class="nhd-ret" d="M 720,272 L 156,272" marker-end="url(#nhd-a)"/>
+<text class="nhd-lab" x="170" y="264">alpn: h3, h2  (QUIC on the first connection)</text>
+</g>
+</svg>

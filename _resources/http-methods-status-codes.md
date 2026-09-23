@@ -8,7 +8,7 @@ last_updated: 2026-09-22
 tags: [networking, api-design, rest, http, web-development]
 related_guides:
   - /study-guides/architecture/api-design-architecture.html
-  - /study-guides/networking.html
+  - /study-guides/networking/networking.html
 ---
 
 ## HTTP Methods

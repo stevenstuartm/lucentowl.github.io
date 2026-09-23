@@ -1,0 +1,55 @@
+---
+title: "Clustered Table vs Heap Table"
+kind: structure
+system: databases
+summary: "A secondary-index lookup in a clustered table versus a heap table."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="dch-title dch-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dch-title">Looking up a row through a secondary index in a clustered table and in a heap table</title>
+<desc id="dch-desc">In a clustered table, as in InnoDB or SQL Server, a secondary index on email returns the row's primary key, 42. The engine then walks the primary-key B-tree, which is the table itself, down to the leaf page holding the full row. That is two tree walks. In a heap table, as in PostgreSQL, the index on email returns the row's physical location, page 17 slot 3, and the engine reads that heap page directly. That is one index walk and one page read.</desc>
+<style>
+.dch-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.dch-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dch-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dch-row { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.dch-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dch-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dch-lab { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dch-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.dch-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+
+<defs>
+<marker id="dch-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dch-band" x="15" y="15" width="430" height="275" rx="6"/>
+<text class="dch-hd" x="30" y="40">CLUSTERED TABLE: INNODB, SQL SERVER</text>
+<rect class="dch-band" x="455" y="15" width="430" height="275" rx="6"/>
+<text class="dch-hd" x="470" y="40">HEAP TABLE: POSTGRESQL</text>
+
+<rect class="dch-box" x="35" y="90" width="150" height="60" rx="6"/>
+<text class="dch-n" x="110" y="116" text-anchor="middle">Secondary index</text>
+<text class="dch-k" x="110" y="134" text-anchor="middle">[on email]</text>
+<path class="dch-flow" d="M 185,120 H 269" marker-end="url(#dch-a)"/>
+<text class="dch-lab" x="228" y="82" text-anchor="middle">key 42</text>
+<rect class="dch-box" x="275" y="90" width="150" height="60" rx="6"/>
+<text class="dch-n" x="350" y="116" text-anchor="middle">Primary-key B-tree</text>
+<text class="dch-k" x="350" y="134" text-anchor="middle">[the table itself]</text>
+<path class="dch-flow" d="M 350,150 V 194" marker-end="url(#dch-a)"/>
+<rect class="dch-row" x="275" y="200" width="150" height="46" rx="6"/>
+<text class="dch-n" x="350" y="228" text-anchor="middle">Leaf: full row</text>
+<text class="dch-note" x="35" y="276">Two tree walks per secondary lookup</text>
+
+<rect class="dch-box" x="475" y="90" width="150" height="60" rx="6"/>
+<text class="dch-n" x="550" y="116" text-anchor="middle">Index</text>
+<text class="dch-k" x="550" y="134" text-anchor="middle">[on email]</text>
+<path class="dch-flow" d="M 625,120 H 714" marker-end="url(#dch-a)"/>
+<text class="dch-lab" x="670" y="82" text-anchor="middle">page 17, slot 3</text>
+<rect class="dch-row" x="720" y="90" width="150" height="60" rx="6"/>
+<text class="dch-n" x="795" y="116" text-anchor="middle">Heap page 17</text>
+<text class="dch-k" x="795" y="134" text-anchor="middle">[rows in no order]</text>
+<text class="dch-note" x="475" y="276">One index walk, then one page read</text>
+</g>
+</svg>

@@ -8,6 +8,8 @@
     "aaa-gate-readiness.md",
     "aaa-worked-example.md",
     "http-methods-status-codes.md",
+    "networking-quick-reference.md",
+    "networking-diagrams.md",
     "design-patterns-quick-reference.md",
     "architecture-style-comparison.md",
     "architecture-style-diagrams.md",
@@ -37,6 +39,8 @@
     "dotnet-format-strings.md",
     "core-ai-concepts-diagrams.md",
     "machine-learning-diagrams.md",
-    "llm-systems-diagrams.md"
+    "llm-systems-diagrams.md",
+    "database-selection-matrix.md",
+    "database-diagrams.md"
   ]
 }

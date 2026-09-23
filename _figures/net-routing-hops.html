@@ -1,0 +1,70 @@
+---
+title: "A Packet Crossing Two Routers"
+kind: flow
+system: networking
+summary: "The IP addresses stay fixed end to end while each hop gets a new frame."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-labelledby="nrh-title nrh-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="nrh-title">A packet forwarded hop by hop from a host to a server</title>
+<desc id="nrh-desc">A host at 10.20.10.15 sends a packet to a server at 198.51.100.10. On the first link the frame goes from the host's MAC address to the gateway router's MAC address. The gateway builds a new frame from its own MAC address to the next router's MAC address. The next router builds a third frame to the server's MAC address. On every link the IP header stays the same: source 10.20.10.15, destination 198.51.100.10. Each router chooses the next hop from its own routing table.</desc>
+<style>
+.nrh-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.nrh-rt { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.nrh-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.nrh-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nrh-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.nrh-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.nrh-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.nrh-mac { font-size: 11px; font-weight: 600; fill: var(--color-secondary, #2D5A85); }
+.nrh-ip { font-size: 11px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.nrh-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.nrh-hdr { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+</style>
+
+<defs>
+<marker id="nrh-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="nrh-box" x="20" y="40" width="130" height="56" rx="6"/>
+<text class="nrh-n" x="32" y="63">Host</text>
+<text class="nrh-k" x="32" y="82">10.20.10.15</text>
+
+<rect class="nrh-rt" x="270" y="40" width="130" height="56" rx="6"/>
+<text class="nrh-n" x="282" y="63">Gateway router</text>
+<text class="nrh-k" x="282" y="82">looks up next hop</text>
+
+<rect class="nrh-rt" x="520" y="40" width="130" height="56" rx="6"/>
+<text class="nrh-n" x="532" y="63">Next router</text>
+<text class="nrh-k" x="532" y="82">looks up next hop</text>
+
+<rect class="nrh-sys" x="750" y="40" width="130" height="56" rx="6"/>
+<text class="nrh-n-inv" x="762" y="63">Server</text>
+<text class="nrh-k-inv" x="762" y="82">198.51.100.10</text>
+
+<path class="nrh-flow" d="M 150,68 L 264,68" marker-end="url(#nrh-a)"/>
+<path class="nrh-flow" d="M 400,68 L 514,68" marker-end="url(#nrh-a)"/>
+<path class="nrh-flow" d="M 650,68 L 744,68" marker-end="url(#nrh-a)"/>
+
+<rect class="nrh-hdr" x="140" y="130" width="140" height="92" rx="4"/>
+<text class="nrh-k" x="150" y="148">frame on link 1</text>
+<text class="nrh-mac" x="150" y="168">MAC host to gateway</text>
+<text class="nrh-ip" x="150" y="192">IP 10.20.10.15 to</text>
+<text class="nrh-ip" x="150" y="208">198.51.100.10</text>
+
+<rect class="nrh-hdr" x="390" y="130" width="140" height="92" rx="4"/>
+<text class="nrh-k" x="400" y="148">frame on link 2</text>
+<text class="nrh-mac" x="400" y="168">MAC gateway to next</text>
+<text class="nrh-ip" x="400" y="192">IP 10.20.10.15 to</text>
+<text class="nrh-ip" x="400" y="208">198.51.100.10</text>
+
+<rect class="nrh-hdr" x="640" y="130" width="140" height="92" rx="4"/>
+<text class="nrh-k" x="650" y="148">frame on link 3</text>
+<text class="nrh-mac" x="650" y="168">MAC next to server</text>
+<text class="nrh-ip" x="650" y="192">IP 10.20.10.15 to</text>
+<text class="nrh-ip" x="650" y="208">198.51.100.10</text>
+
+<text class="nrh-mac" x="140" y="256">MAC addresses: rewritten on every link</text>
+<text class="nrh-ip" x="140" y="276">IP addresses: unchanged end to end (unless NAT rewrites them)</text>
+</g>
+</svg>
