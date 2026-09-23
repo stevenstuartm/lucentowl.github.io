@@ -1,0 +1,98 @@
+---
+title: "Spring Forward and Fall Back"
+kind: flow
+system: dotnet
+summary: "New York's clock skipping an hour in March and repeating one in November."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" role="img" aria-labelledby="dst-title dst-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dst-title">UTC against the New York wall clock across both 2026 daylight saving transitions</title>
+<desc id="dst-desc">Spring forward on 2026-03-08: as UTC runs 06:00, 06:30, 07:00, 07:30, 08:00, the New York clock reads 01:00, 01:30, then jumps to 03:00, 03:30, 04:00, so 02:00 to 02:59 is never shown. Fall back on 2026-11-01: as UTC runs 04:00, 05:00, 05:30, 06:00, 06:30, 07:00, the New York clock reads 00:00, 01:00, 01:30 in EDT, then 01:00, 01:30 again in EST, then 02:00, so 01:00 to 01:59 is shown twice. The UTC axis never skips or repeats.</desc>
+<style>
+.dst-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dst-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dst-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.dst-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.dst-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.dst-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.dst-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dst-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dst-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dst-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.dst-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dst-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.dst-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dst-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dst-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dst-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dst-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dst-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.dst-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.dst-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.dst-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.dst-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.dst-dot { fill: var(--color-primary, #1A5F8A); }
+.dst-dot-hot { fill: var(--color-accent, #A5486E); }
+.dst-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.dst-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.dst-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="dst-ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dst-hd" x="30" y="30">SPRING FORWARD, 2026-03-08</text>
+<text class="dst-n" x="30" y="76">UTC</text>
+<text class="dst-n" x="30" y="126">New York</text>
+<line class="dst-axis" x1="134" y1="72" x2="526" y2="72"/>
+<line class="dst-axis" x1="150" y1="66" x2="150" y2="78"/>
+<text class="dst-note" x="150" y="58" text-anchor="middle">06:00</text>
+<text class="dst-note" x="150" y="126" text-anchor="middle">01:00</text>
+<line class="dst-axis" x1="240" y1="66" x2="240" y2="78"/>
+<text class="dst-note" x="240" y="58" text-anchor="middle">06:30</text>
+<text class="dst-note" x="240" y="126" text-anchor="middle">01:30</text>
+<line class="dst-axis" x1="330" y1="66" x2="330" y2="78"/>
+<text class="dst-note" x="330" y="58" text-anchor="middle">07:00</text>
+<text class="dst-note" x="330" y="126" text-anchor="middle">03:00</text>
+<line class="dst-axis" x1="420" y1="66" x2="420" y2="78"/>
+<text class="dst-note" x="420" y="58" text-anchor="middle">07:30</text>
+<text class="dst-note" x="420" y="126" text-anchor="middle">03:30</text>
+<line class="dst-axis" x1="510" y1="66" x2="510" y2="78"/>
+<text class="dst-note" x="510" y="58" text-anchor="middle">08:00</text>
+<text class="dst-note" x="510" y="126" text-anchor="middle">04:00</text>
+<path class="dst-hot" d="M262,122 L306,122" marker-end="url(#dst-ah)"/>
+<text class="dst-em" x="285.0" y="150" text-anchor="middle">02:00 to 02:59 never shown</text>
+<text class="dst-lab" x="620" y="60">Clocks jump from 01:59:59 to 03:00.</text>
+<text class="dst-lab" x="620" y="75">A local time of 02:30 that night</text>
+<text class="dst-lab" x="620" y="90">matches no instant at all.</text>
+<text class="dst-hd" x="30" y="200">FALL BACK, 2026-11-01</text>
+<text class="dst-n" x="30" y="246">UTC</text>
+<text class="dst-n" x="30" y="296">New York</text>
+<line class="dst-axis" x1="134" y1="242" x2="706" y2="242"/>
+<line class="dst-axis" x1="150" y1="236" x2="150" y2="248"/>
+<text class="dst-note" x="150" y="228" text-anchor="middle">04:00</text>
+<text class="dst-note" x="150" y="296" text-anchor="middle">00:00</text>
+<line class="dst-axis" x1="330" y1="236" x2="330" y2="248"/>
+<text class="dst-note" x="330" y="228" text-anchor="middle">05:00</text>
+<text class="dst-note" x="330" y="296" text-anchor="middle">01:00</text>
+<line class="dst-axis" x1="420" y1="236" x2="420" y2="248"/>
+<text class="dst-note" x="420" y="228" text-anchor="middle">05:30</text>
+<text class="dst-note" x="420" y="296" text-anchor="middle">01:30</text>
+<line class="dst-axis" x1="510" y1="236" x2="510" y2="248"/>
+<text class="dst-note" x="510" y="228" text-anchor="middle">06:00</text>
+<text class="dst-note" x="510" y="296" text-anchor="middle">01:00</text>
+<line class="dst-axis" x1="600" y1="236" x2="600" y2="248"/>
+<text class="dst-note" x="600" y="228" text-anchor="middle">06:30</text>
+<text class="dst-note" x="600" y="296" text-anchor="middle">01:30</text>
+<line class="dst-axis" x1="690" y1="236" x2="690" y2="248"/>
+<text class="dst-note" x="690" y="228" text-anchor="middle">07:00</text>
+<text class="dst-note" x="690" y="296" text-anchor="middle">02:00</text>
+<path class="dst-flow" d="M316,306 L316,312 L434,312 L434,306"/>
+<text class="dst-lab" x="375.0" y="330" text-anchor="middle">EDT, -04:00</text>
+<path class="dst-hot" d="M496,306 L496,312 L614,312 L614,306"/>
+<text class="dst-lab" x="555.0" y="330" text-anchor="middle">EST, -05:00</text>
+<text class="dst-em" x="465.0" y="362" text-anchor="middle">01:00 to 01:59 shown twice, an hour apart</text>
+<text class="dst-lab" x="740" y="230">Clocks run 01:00 to 01:59:59</text>
+<text class="dst-lab" x="740" y="245">twice. A local time of 01:30</text>
+<text class="dst-lab" x="740" y="260">that night matches two instants.</text>
+</g>
+</svg>

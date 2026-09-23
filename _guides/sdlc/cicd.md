@@ -353,45 +353,28 @@ A typical CI/CD pipeline consists of multiple stages that code must pass through
 
 ### Pipeline Patterns
 
+The four common patterns differ in shape: one line of stages, stages that fan out and join, deployments that fan out to several targets, and different pipelines for different branches.
+
+{% endraw %}
+{% include figure.html id="sdlc-pipeline-patterns" %}
+{% raw %}
+
 **Sequential Pipeline:**
-```
-Build → Test → Package → Deploy → Verify
-```
 - Simple and predictable
 - Stages run one after another
 - Easy to understand and debug
 
 **Parallel Pipeline:**
-```
-        ├─ Unit Tests
-Build ──├─ Integration Tests
-        ├─ Security Scan
-        └─ Linting
-           ↓
-        Package → Deploy
-```
 - Faster execution
 - Independent stages run concurrently
 - Requires more resources
 
 **Fan-Out/Fan-In Pipeline:**
-```
-              ├─ Deploy to Region A
-Package  ────├─ Deploy to Region B ───→ Aggregate Results → Verify
-              └─ Deploy to Region C
-```
 - Deploy to multiple targets simultaneously
 - Collect and aggregate results
 - Useful for multi-region deployments
 
 **Branch-Based Pipeline:**
-```
-Feature Branch → PR Pipeline (build, test, security scan)
-       ↓
-Main Branch → Full Pipeline (build, test, scan, deploy to staging)
-       ↓
-Release Tag → Production Pipeline (deploy to prod)
-```
 - Different pipeline behavior per branch
 - More thorough validation on main branch
 - Production deployments from release tags

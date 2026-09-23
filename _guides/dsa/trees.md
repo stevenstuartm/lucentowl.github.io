@@ -16,7 +16,7 @@ Many things are hierarchies: folders inside folders, an org chart, the nested st
 
 ## Tree Vocabulary
 
-A tree is a set of nodes connected by edges, where one node is the root and every other node has exactly one parent. That rule means a tree has no cycles and exactly one path between any two nodes.
+A tree is a set of nodes connected by edges, where one node is the root, every other node has exactly one parent, and following parents upward from any node always leads back to the root. Those rules mean a tree is connected, has no cycles, and has exactly one path between any two nodes.
 
 | Term | Meaning |
 | --- | --- |
@@ -28,8 +28,21 @@ A tree is a set of nodes connected by edges, where one node is the root and ever
 | Depth of a node | The number of edges from the root down to it. The root has depth 0 |
 | Level | All the nodes at one depth |
 | Height of a tree | The number of edges on the longest path from the root down to a leaf |
+| Full level | A level holding every node it can: 1 at depth 0, 2 at depth 1, 4 at depth 2, and so on |
+| Complete binary tree | A binary tree whose levels are all full except possibly the last, which fills from left to right. CLRS calls this shape nearly complete |
+
+{% endraw %}
+{% include figure.html id="dsa-tree-vocabulary" %}
+{% raw %}
 
 This guide counts height in edges, so a single node has height 0 and an empty tree height −1. Some sources count nodes instead, which gives one more. Either convention works if it is used consistently, and the difference never changes a Big O result.
+
+Height follows directly from the definition. A node's height is one more than the taller of its two subtrees, and an empty subtree counts as −1, so a leaf comes out at 0. The `TreeNode` type is defined in the binary tree section below.
+
+```csharp
+public static int Height(TreeNode? node) =>
+    node == null ? -1 : 1 + Math.Max(Height(node.Left), Height(node.Right));
+```
 
 ---
 
@@ -76,7 +89,7 @@ Console.WriteLine(root.TotalSize());  // 50000
 
 ## Binary Trees and Traversal Orders
 
-A binary tree limits every node to at most two children, called left and right. Most algorithmic trees are binary, including binary search trees and heaps. This guide's examples use a node with integer values:
+A binary tree limits every node to at most two children, called left and right. Many algorithmic trees are binary, including binary search trees and binary heaps. This guide's examples use a node with integer values:
 
 ```csharp
 public class TreeNode
@@ -93,10 +106,19 @@ A traversal visits every node once. The four standard orders differ only in when
 
 | Order | Visit sequence | Typical use |
 | --- | --- | --- |
-| Pre-order | Node, then left subtree, then right subtree | Copying or serializing a tree, since a parent is written before its children |
+| Pre-order | Node, then left subtree, then right subtree | Copying or serializing a tree (writing it out so it can be rebuilt), since a parent is written before its children |
 | In-order | Left subtree, then node, then right subtree | Reading a binary search tree's keys in sorted order |
 | Post-order | Left subtree, then right subtree, then node | Anything that needs the children's results first: directory sizes, deleting a tree, evaluating an expression tree |
-| Level-order | All of depth 0, then depth 1, and so on | Processing a tree level by level, or finding the shallowest node that meets a condition |
+| Level-order (breadth-first) | All of depth 0, then depth 1, and so on | Processing a tree level by level, or finding the shallowest node that meets a condition |
+
+For the tree in the vocabulary figure, the four orders visit the nodes like this:
+
+| Order | Visits |
+| --- | --- |
+| Pre-order | A, B, D, E, C, F |
+| In-order | D, B, E, A, C, F |
+| Post-order | D, E, B, F, C, A |
+| Level-order | A, B, C, D, E, F |
 
 The three depth-first orders are the same recursion with the visit placed differently:
 
@@ -126,7 +148,7 @@ public static void PostOrder(TreeNode? node, List<int> output)
 }
 ```
 
-Passing one output list down, instead of having each call return and concatenate its own list, keeps each traversal O(n). Concatenating lists at every level copies elements repeatedly, which costs up to O(n²) on a deep tree. The recursion depth equals the tree's height, so on a very deep tree these can overflow the stack, and an explicit `Stack<T>` replaces the recursion.
+Passing one output list down, instead of having each call return and concatenate its own list, keeps each traversal O(n). Concatenating lists at every level copies elements repeatedly, which costs up to O(n²) on a deep tree. The recursion depth grows with the tree's height, so on a very deep tree these can overflow the stack, and an explicit `Stack<T>` can replace the recursion.
 
 Level-order traversal uses a queue instead of recursion. Counting the queue's length at the start of each level separates the levels:
 
@@ -165,7 +187,7 @@ All four traversals are O(n) time. The depth-first orders use O(h) extra space f
 
 ## Binary Search Trees
 
-A binary search tree (BST) is a binary tree that keeps one rule at every node: every key in the left subtree is smaller than the node's key, and every key in the right subtree is larger. The rule applies to the entire subtree, not just the immediate children. A tree whose root is 10 cannot have a 12 anywhere in its left subtree, even as a right child several levels down.
+A binary search tree (BST) is a binary tree whose node values act as keys, and it keeps one rule at every node: every key in the left subtree is smaller than the node's key, and every key in the right subtree is larger. The rule applies to the entire subtree, not just the immediate children. A tree whose root is 10 cannot have a 12 anywhere in its left subtree, even as a right child several levels down.
 
 The rule makes searching work like binary search. At each node, one comparison says whether the target is here, to the left, or to the right, and the other side of the tree is never examined. It also means an in-order traversal returns the keys sorted.
 
@@ -207,6 +229,10 @@ Deleting a node has three cases, depending on how many children it has:
 2. **One child.** Replace the node with its child. The child's whole subtree moves up one level, and the ordering rule still holds.
 3. **Two children.** Find the node's in-order successor, the smallest key in its right subtree. Copy that key into the node, then delete the successor from the right subtree. The successor has no left child (otherwise that child would be smaller), so its own deletion is always case 1 or 2.
 
+{% endraw %}
+{% include figure.html id="dsa-bst-delete-successor" %}
+{% raw %}
+
 ```csharp
 public static TreeNode? Delete(TreeNode? node, int key)
 {
@@ -235,7 +261,7 @@ public static TreeNode? Delete(TreeNode? node, int key)
 }
 ```
 
-The successor is the right choice because it is larger than everything in the left subtree and smaller than everything else in the right subtree, so it can take the deleted key's place without breaking the rule. The in-order predecessor, the largest key in the left subtree, works equally well.
+The successor is the right choice because it is larger than everything in the left subtree and smaller than everything else in the right subtree, so it can take the deleted key's place without breaking the rule. The in-order predecessor, the largest key in the left subtree, works as well for correctness.
 
 ---
 
@@ -257,7 +283,7 @@ A tree whose levels are full has height about log₂ n, so a million keys fit in
 | Minimum or maximum | O(log n) | O(n) |
 | In-order traversal | O(n) | O(n) |
 
-A plain BST makes no promise about its shape, so it cannot promise O(log n). Self-balancing trees, such as AVL trees and red-black trees, restructure themselves after inserts and deletes to keep their height O(log n) whatever order the keys arrive in. That guarantee is why production code uses them instead of the plain BST shown here.
+A plain BST makes no promise about its shape, so it cannot promise O(log n). Self-balancing trees, such as AVL trees and red-black trees, restructure themselves after inserts and deletes to keep their height O(log n) whatever order the keys arrive in. `SortedSet<T>` and `SortedDictionary<TKey,TValue>` in .NET are self-balancing trees for that reason, not the plain BST shown here.
 
 ---
 
@@ -308,7 +334,7 @@ This assumes both keys are in the tree, and it runs in O(h).
 
 ### Building a Balanced BST from Sorted Data
 
-A sorted array can be turned into a tree of minimum height by making the middle element the root and building each half the same way. This is the right way to load sorted data into a BST, since inserting it in order produces the chain shown earlier.
+A sorted array can be turned into a tree of minimum height by making the middle element the root and building each half the same way. This is a good way to load sorted data into a BST, since inserting it in order produces the chain shown earlier.
 
 ```csharp
 public static TreeNode? FromSorted(int[] sorted, int start, int end)
@@ -331,9 +357,9 @@ TreeNode? balanced = FromSorted(new[] { 1, 2, 3, 4, 5, 6, 7 }, 0, 6);  // Root 4
 
 ## Expression Trees
 
-An arithmetic expression is a tree. Each operator is an internal node with its operands as children, and each number is a leaf. `(3 + 4) * 2` has `*` at the root, with the subtree for `3 + 4` on the left and the leaf `2` on the right. Parentheses disappear, because the tree's shape already records what is grouped with what.
+An arithmetic expression is a tree. (These are unrelated to .NET's LINQ expression trees in `System.Linq.Expressions`, although those are built on the same idea.) Each operator is an internal node with its operands as children, and each number is a leaf. `(3 + 4) * 2` has `*` at the root, with the subtree for `3 + 4` on the left and the leaf `2` on the right. Parentheses disappear, because the tree's shape already records what is grouped with what.
 
-Evaluating the tree is a post-order traversal, because an operator needs both operand values first. An in-order traversal with parentheses added around each operator prints the familiar infix form, and a post-order traversal prints postfix.
+Evaluating the tree is a post-order traversal, because an operator needs both operand values first. An in-order traversal with parentheses added around each operator prints the familiar infix form, with each operator between its operands, and a post-order traversal prints postfix, with each operator after them.
 
 ```csharp
 public record ExprNode(string Token, ExprNode? Left = null, ExprNode? Right = null);
@@ -366,16 +392,16 @@ Compilers and interpreters build trees like this, called abstract syntax trees, 
 
 ## Trees in .NET
 
-.NET has no general-purpose public binary tree type, but its sorted collections are balanced binary search trees:
+.NET has no general-purpose public binary tree type. The mutable `SortedSet<T>` and `SortedDictionary<TKey,TValue>` are balanced binary search trees, and `SortedList<TKey,TValue>` keeps sorted arrays instead:
 
 | Type | Structure | Use it for |
 | --- | --- | --- |
 | `SortedSet<T>` | Red-black tree | A set kept in sorted order, with `Min`, `Max`, and range queries through `GetViewBetween` |
 | `SortedDictionary<TKey,TValue>` | Red-black tree of key-value pairs | A dictionary whose keys stay sorted, with O(log n) inserts and removals |
-| `SortedList<TKey,TValue>` | Two sorted arrays with binary search | Sorted data that is mostly read. Lookups are O(log n), but inserts shift elements and are O(n) |
+| `SortedList<TKey,TValue>` | Two sorted arrays with binary search | Sorted data that is mostly read. Lookups are O(log n). Inserts shift elements and are O(n), except that adding a key larger than every existing key appends without shifting, in O(log n) unless the arrays have to grow |
 
-A red-black tree keeps its height at most 2 log₂(n + 1), so these types guarantee O(log n) operations regardless of insertion order.
+A red-black tree keeps its height at most 2 log₂(n + 1), so `SortedSet<T>` and `SortedDictionary<TKey,TValue>` guarantee O(log n) operations regardless of insertion order. `SortedList<TKey,TValue>` makes no such promise for inserts. The immutable versions, `ImmutableSortedSet<T>` and `ImmutableSortedDictionary<TKey,TValue>`, are balanced trees too, AVL trees in the `dotnet/runtime` source.
 
-The choice against a hash table comes down to order. `Dictionary<TKey,TValue>` is faster on average, O(1) against O(log n), but it keeps no order. When code needs sorted iteration, the smallest or largest key, or every key in a range, a sorted tree is the right structure.
+The choice against a hash table comes down to order. `Dictionary<TKey,TValue>` is faster on average, O(1) against O(log n), but it keeps no order. When code needs sorted iteration, the smallest or largest key, or every key in a range, a sorted collection is the right structure.
 
 {% endraw %}

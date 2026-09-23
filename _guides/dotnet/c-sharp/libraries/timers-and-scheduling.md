@@ -50,13 +50,7 @@ public sealed class PollingService(ILogger<PollingService> logger) : BackgroundS
 
 Because the loop body runs to completion before the next `WaitForNextTickAsync`, two runs of the work can never overlap. The schedule itself doesn't pause for the work, though. Ticks stay on a fixed cadence measured from when the timer was created, and ticks that fall due while the work is running collapse into a single pending tick. With a 100 ms period and one run that took 350 ms, the measured ticks came at 110, 204, 569, 601, and 700 ms. The run that started at 204 ended around 555, the ticks due at 300, 400, and 500 became one tick at 569, and the cadence resumed at 600.
 
-```
-ms         0    100   200   300   400   500   600   700
-due             |     |     |     |     |     |     |
-tick            T     T                       T T   T
-work                  [======= 350 ms =======]
-                            300, 400, 500 missed -> one tick at 569
-```
+{% include figure.html id="dn-periodic-timer-ticks" %}
 
 A few rules shape how the loop is written:
 

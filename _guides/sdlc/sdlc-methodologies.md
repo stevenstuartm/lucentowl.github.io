@@ -80,6 +80,8 @@ Barry Boehm described the spiral model in a [1986 paper](https://dl.acm.org/doi/
 
 Each spiral passes through four activities. Determine objectives and constraints, identify and evaluate risks, develop and verify the next increment, then plan the next spiral with stakeholders. The cycle repeats, and each pass commits more resources than the last because each pass has removed uncertainty that justified holding back.
 
+{% include figure.html id="sdlc-spiral" %}
+
 What makes Spiral distinctive is that risk, not feature priority, sets the agenda. If the largest risk is that a third-party integration might not support the required throughput, the next spiral builds a prototype of that integration and nothing else. Most modern methodologies handle this with spikes and prototypes without making risk the organizing structure of the whole project.
 
 Spiral suits projects where technical uncertainty is the dominant problem and the budget can absorb prototyping that produces no shippable output. It is heavy for anything small, and it depends on having people who can assess risk credibly, which is a scarcer skill than it sounds.

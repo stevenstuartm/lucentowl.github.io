@@ -29,6 +29,8 @@ Methodologies do not change what the activities are. They change the order, the 
 | **Iterative** | All six phases run inside each iteration, over a slice of the system | Learning arrives every iteration, and the cost of a wrong decision is capped at one slice |
 | **Continuous** | Phases collapse into a pipeline that individual changes flow through independently | Learning arrives per change, at the cost of needing the automation to make that safe |
 
+{% include figure.html id="sdlc-traversal" %}
+
 The choice between them is mostly a bet about where learning is cheapest. Sequential traversal is defensible when changing your mind late is catastrophic and expensive, as with hardware you have already manufactured or a regulatory submission you have already filed. Iterative traversal is defensible when the requirements are genuinely uncertain and feedback is the only way to resolve them.
 
 ---

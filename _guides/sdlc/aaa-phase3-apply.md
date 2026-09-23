@@ -3,9 +3,9 @@ title: "AAA Cycle: Phase 3 - Apply the Plan and Deliver"
 layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
-description: "Execute with discipline while maintaining alignment."
+description: "The third AAA phase: when to continue, adapt, or go back, circuit breakers that force the decision, handling failed dependencies and scope gaps, CI/CD as a check on agreements, hill charts for honest progress, and the quality gates through to delivery and handoff."
 author: steven-stuart
-tags: [sdlc, aaa-cycle, implementation, delivery, governance, practical]
+tags: [practical, aaa-cycle, circuit-breakers, hill-charts, scope-negotiation, dependency-management, governance]
 ---
 
 ## Phase Overview
@@ -116,7 +116,7 @@ External dependencies are a primary source of discovery during Apply. Other team
 
 ## Scope Negotiation
 
-### Scope Negotiation Framework
+### From Gap to Agreement in Five Steps
 
 1. **Quantify the gap**: How much are we short? (days, story points, effort)
 2. **Present options, not problems**: Reduce scope, extend timeline, add resources, or accept quality risk
@@ -165,8 +165,6 @@ At the implementation level, CI/CD pipelines operationalize the AAA discipline. 
 - **Code reviews verify alignment**: PR reviews confirm that the implementation matches shared understanding of intent.
 - **Security and quality gates verify standards**: Pipeline gates enforce the quality and security agreements established during Phase 2.
 
-See [CI/CD and Technical Agreement](/study-guides/sdlc/cicd.html#cicd-and-technical-agreement) for detailed guidance on how AAA operates at the code level.
-
 **Architecture Governance**:
 - **Architecture Decision Records (ADRs)**: Document significant decisions as they're made
 - **Architecture Reviews**: Weekly or bi-weekly review of significant changes
@@ -207,7 +205,7 @@ Traditional progress tracking ("we're 80% done") hides more than it reveals. Tea
 
 **Downhill (making it happen)**: Building is under way. The team knows what to build and is executing.
 
-This distinction matters for stakeholder communication:
+The stage tells stakeholders how much uncertainty is left:
 - "We're uphill on the integration" signals uncertainty
 - "We're downhill on the UI" signals confidence
 - An item in the same uphill spot for several updates is stuck on an unknown, and should be raised now rather than reported as nearly done
@@ -239,20 +237,8 @@ See [Security Testing](/study-guides/security/security-testing.html){:target="_b
 
 **Quality Gates**:
 - **Pre-merge**: Tests pass, review approved
-- **Pre-release**: All acceptance criteria met, no critical bugs, security scan clean
-- **Pre-production**: UAT passed, performance validated, rollback plan tested
-
-<div class="callout callout--tip">
-<p class="callout__title">Ready for Release</p>
-<ul>
-<li>All acceptance criteria met</li>
-<li>Test coverage targets achieved</li>
-<li>No critical/high-severity bugs</li>
-<li>Security scan passed</li>
-<li>Performance meets SLOs</li>
-<li>UAT completed and approved</li>
-</ul>
-</div>
+- **Pre-release**: All acceptance criteria met, test coverage targets achieved, no critical or high-severity bugs, security scan clean
+- **Pre-production**: UAT completed and approved, performance meets SLOs, rollback plan tested
 
 ---
 
@@ -261,7 +247,6 @@ See [Security Testing](/study-guides/security/security-testing.html){:target="_b
 **Deploy reliably and transition operations smoothly.**
 
 For detailed deployment guidance, see:
-- [CI/CD](/study-guides/sdlc/cicd.html){:target="_blank" rel="noopener noreferrer"}
 - [Deployment Strategies](/study-guides/infrastructure/deployment-strategies.html){:target="_blank" rel="noopener noreferrer"}
 - [Observability Fundamentals](/study-guides/observability-fundamentals.html){:target="_blank" rel="noopener noreferrer"}
 

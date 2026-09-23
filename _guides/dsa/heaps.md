@@ -3,705 +3,325 @@ title: "Heaps & Priority Queues"
 layout: guide
 category: Data Structures & Algorithms
 subcategory: Trees & Heaps
-description: "Learn heap data structure properties, heapify operations, priority queue implementations, and applications from task scheduling to finding top-K elements."
-tags: [data-structures, algorithms, heaps, priority-queues, practical]
+description: "How a binary heap keeps the smallest or largest element on top with O(log n) inserts and removals, why it fits in a plain array, why building one from n elements is O(n), how .NET's PriorityQueue<TElement,TPriority> behaves, and the problems heaps solve: top-k, merging sorted streams, and running medians."
+tags: [heaps, priority-queues, binary-heap, top-k, fundamentals]
 ---
+{% raw %}
 
 ## Why Heaps Exist
 
-*Binary heap data structure introduced by J.W.J. Williams in 1964 for heapsort. Robert W. Floyd later improved the heap construction algorithm in 1964.*
+Many programs repeatedly need the smallest or largest item from a collection that keeps changing: the next task by priority, the nearest unvisited node in a shortest-path search, the earliest timer to fire. A sorted list answers that in O(1) but pays O(n) to insert. An unsorted list inserts in O(1) but pays O(n) to find the minimum. A heap does both operations in O(log n) by keeping only as much order as the question needs.
 
-Efficiently maintain the minimum or maximum element while allowing dynamic insertions and deletions. Heaps solve the problem of quickly accessing the "most important" element in a changing dataset without maintaining full sorted order, achieving O(1) peek and O(log n) insert/delete.
+That pair of operations, insert and remove the minimum (or the maximum), is the contract of a priority queue, an abstract data type in the same sense as a stack or a queue. The sorted list and the unsorted list above are two ways to implement it. A binary heap is a third, and the usual one, because neither of its operations is O(n).
 
-## When to Use Heaps
-
-**Use when:**
-- Need to repeatedly find/remove min or max element
-- Implementing priority queues (task scheduling, algorithms)
-- Finding top-K elements in large datasets
-- Merging multiple sorted sequences
-- Graph algorithms (Dijkstra's, Prim's)
-- Streaming data where you need extremes
-
-**Don't use when:**
-- Need to search for arbitrary elements (use hash table)
-- Need sorted iteration through all elements (use balanced BST)
-- Simple min/max of static data (just iterate once)
-- Need to access elements by index (use array)
-
-**Modern reality:** Use C#'s built-in `PriorityQueue<T,P>` (.NET 6+) or `SortedSet<T>` for older versions. Implement heaps in interviews to show understanding.
+J. W. J. Williams introduced the binary heap in 1964 as the core of heapsort, and Robert Floyd published the faster way to build one from existing data later that year.
 
 ---
 
-## Heap Properties
+## The Heap Rules
 
-### Complete Binary Tree Structure
-- All levels filled except possibly the last
-- Last level filled left-to-right
-- Height is always O(log n)
-- Can be efficiently represented as an array
+A binary heap is a binary tree that obeys two rules.
 
-### Heap Order Property
-**Min-Heap:** Parent ≤ children (root is minimum)
-**Max-Heap:** Parent ≥ children (root is maximum)
+**The shape rule.** The tree is complete: every level is full except possibly the last, and the last level fills from left to right with no gaps. A complete tree with n nodes always has height ⌊log₂ n⌋, so no path from the root is longer than about log₂ n.
 
-### Array Representation
-For element at index `i`:
-- **Parent:** `(i - 1) / 2`
-- **Left child:** `2 * i + 1`
-- **Right child:** `2 * i + 2`
+**The order rule.** In a min-heap, every node is less than or equal to its children, so the smallest element is always at the root. A max-heap reverses the rule and keeps the largest at the root.
 
-```
-Array: [1, 3, 6, 5, 9, 8]
-Tree:       1
-          /   \
-         3     6
-        / \   /
-       5   9 8
-```
+The order rule relates parents to children and nothing else. Siblings and cousins can be in any order, so a heap is not sorted. That partial order is enough to find the extreme element instantly, and it is much cheaper to maintain than full sorted order.
 
 ---
 
-## Time Complexity
+## Storing a Heap in an Array
 
-| Operation | Binary Heap | Notes |
-|-----------|-------------|-------|
-| **Insert** | O(log n) | Bubble up to maintain heap property |
-| **Extract Min/Max** | O(log n) | Remove root, bubble down |
-| **Peek Min/Max** | O(1) | Root element |
-| **Delete arbitrary** | O(log n) | Find + bubble down |
-| **Build from array** | O(n) | Bottom-up heapify |
-| **Search** | O(n) | No ordering except parent-child |
+The shape rule means a heap needs no pointers at all. Numbering the nodes level by level, left to right, packs the tree into consecutive array slots with no gaps, and the parent and child positions become arithmetic:
+
+- The children of index i are at 2i + 1 and 2i + 2.
+- The parent of index i is at (i − 1) / 2, using integer division.
+
+{% endraw %}
+{% include figure.html id="dsa-heap-array" %}
+{% raw %}
+
+Moving between parent and child is one multiplication or division instead of following a reference, and the whole heap is one contiguous block of memory. Appending to the array always fills the next position in the last level, which is exactly what the shape rule requires.
 
 ---
 
-## Min-Heap Implementation
+## Insert and Remove
+
+Both operations first put the tree back into the right shape, which may break the order rule along one path, and then repair that one path.
+
+**Insert (sift up).** Append the new element at the end of the array, the next free spot in the bottom level. While it is smaller than its parent, swap it with the parent. It rises at most the height of the tree, so insert is O(log n).
+
+**Remove the minimum (sift down).** Take the root, which is the answer. Move the last element of the array into the root's slot and shrink the array by one. While that element is larger than its smaller child, swap it with that child. It sinks at most the height of the tree, so removal is also O(log n). Swapping with the smaller child matters, because the smaller child is the only one that can become the parent of the other without breaking the order rule.
+
+{% endraw %}
+{% include figure.html id="dsa-heap-sift-down" %}
+{% raw %}
+
 ```csharp
-public class MinHeap<T> where T : IComparable<T>
+public class MinHeap<T>
 {
-    private List<T> heap;
-    
-    public MinHeap()
+    private readonly List<T> _items = new();
+    private readonly IComparer<T> _comparer;
+
+    public MinHeap(IComparer<T>? comparer = null) => _comparer = comparer ?? Comparer<T>.Default;
+
+    public int Count => _items.Count;
+
+    public T Peek() => _items.Count > 0 ? _items[0] : throw new InvalidOperationException("The heap is empty.");
+
+    public void Push(T item)
     {
-        heap = new List<T>();
+        _items.Add(item);
+        SiftUp(_items.Count - 1);
     }
-    
-    private int Parent(int i) => (i - 1) / 2;
-    private int LeftChild(int i) => 2 * i + 1;
-    private int RightChild(int i) => 2 * i + 2;
-    
-    private void Swap(int i, int j)
+
+    public T Pop()
     {
-        T temp = heap[i];
-        heap[i] = heap[j];
-        heap[j] = temp;
+        if (_items.Count == 0)
+            throw new InvalidOperationException("The heap is empty.");
+
+        T min = _items[0];
+        int last = _items.Count - 1;
+        _items[0] = _items[last];  // Move the last element to the root
+        _items.RemoveAt(last);
+
+        if (_items.Count > 0)
+            SiftDown(0);
+
+        return min;
     }
-    
-    public void Insert(T value)
+
+    private void SiftUp(int i)
     {
-        heap.Add(value);
-        BubbleUp(heap.Count - 1);
-        Console.WriteLine($"Inserted {value}: [{string.Join(", ", heap)}]");
-    }
-    
-    private void BubbleUp(int index)
-    {
-        while (index > 0)
+        while (i > 0)
         {
-            int parentIndex = Parent(index);
-            
-            // If heap property is satisfied, stop
-            if (heap[parentIndex].CompareTo(heap[index]) <= 0)
-                break;
-            
-            Console.WriteLine($"Bubbling up: swap {heap[index]} with parent {heap[parentIndex]}");
-            Swap(index, parentIndex);
-            index = parentIndex;
+            int parent = (i - 1) / 2;
+            if (_comparer.Compare(_items[i], _items[parent]) >= 0)
+                break;  // The order rule holds
+
+            (_items[i], _items[parent]) = (_items[parent], _items[i]);
+            i = parent;
         }
     }
-    
-    public T ExtractMin()
-    {
-        if (heap.Count == 0)
-            throw new InvalidOperationException("Heap is empty");
-        
-        if (heap.Count == 1)
-            return heap[0];
-        
-        // Save min value
-        T minVal = heap[0];
-        
-        // Move last element to root
-        heap[0] = heap[heap.Count - 1];
-        heap.RemoveAt(heap.Count - 1);
-        Console.WriteLine($"After moving last to root: [{string.Join(", ", heap)}]");
-        
-        // Restore heap property
-        if (heap.Count > 0)
-            BubbleDown(0);
-        
-        Console.WriteLine($"Extracted {minVal}, heap is now: [{string.Join(", ", heap)}]");
-        return minVal;
-    }
-    
-    private void BubbleDown(int index)
+
+    private void SiftDown(int i)
     {
         while (true)
         {
-            int minIndex = index;
-            int left = LeftChild(index);
-            int right = RightChild(index);
-            
-            // Find smallest among node and its children
-            if (left < heap.Count && heap[left].CompareTo(heap[minIndex]) < 0)
-                minIndex = left;
-            
-            if (right < heap.Count && heap[right].CompareTo(heap[minIndex]) < 0)
-                minIndex = right;
-            
-            // If no swap needed, heap property is satisfied
-            if (minIndex == index)
-                break;
-            
-            Console.WriteLine($"Bubbling down: swap {heap[index]} with {heap[minIndex]}");
-            Swap(index, minIndex);
-            index = minIndex;
+            int left = 2 * i + 1, right = left + 1, smallest = i;
+
+            if (left < _items.Count && _comparer.Compare(_items[left], _items[smallest]) < 0)
+                smallest = left;
+            if (right < _items.Count && _comparer.Compare(_items[right], _items[smallest]) < 0)
+                smallest = right;
+
+            if (smallest == i)
+                return;  // Smaller than both children
+
+            (_items[i], _items[smallest]) = (_items[smallest], _items[i]);
+            i = smallest;
         }
     }
-    
-    public T Peek()
-    {
-        if (heap.Count == 0)
-            throw new InvalidOperationException("Heap is empty");
-        return heap[0];
-    }
-    
-    public int Count => heap.Count;
-    public bool IsEmpty => heap.Count == 0;
-    
-    public override string ToString()
-    {
-        return $"MinHeap([{string.Join(", ", heap)}])";
-    }
 }
 
-// Example usage
-Console.WriteLine("=== Min Heap Demo ===");
 var heap = new MinHeap<int>();
+foreach (int value in new[] { 10, 5, 20, 3, 8, 15 })
+    heap.Push(value);
 
-// Insert elements
-int[] values = {10, 5, 20, 3, 8, 15};
-foreach (var val in values)
-{
-    heap.Insert(val);
-}
-
-Console.WriteLine($"\nFinal heap: {heap}");
-Console.WriteLine($"Minimum element: {heap.Peek()}");
-
-// Extract elements
-Console.WriteLine("\nExtracting elements in sorted order:");
-while (!heap.IsEmpty)
-{
-    Console.WriteLine($"Extracted: {heap.ExtractMin()}");
-}
+while (heap.Count > 0)
+    Console.Write($"{heap.Pop()} ");  // 3 5 8 10 15 20
 ```
+
+A max-heap needs no separate class. Passing a reversed comparer, such as `Comparer<int>.Create((a, b) => b.CompareTo(a))`, turns the same code into one.
 
 ---
 
-## Building Heap from Array (O(n) Algorithm)
+## Building a Heap in O(n)
 
-### Bottom-Up Heapify
+Pushing n elements one at a time costs O(n log n). Floyd's bottom-up construction does better. Treat the unsorted array as a complete tree as-is, then sift down every node that has children, starting from the last one and working back to the root. When a node is sifted down, both of its subtrees are already valid heaps, so one sift down fixes the whole subtree.
+
 ```csharp
-public static int[] BuildMinHeap(int[] arr)
+public static void Heapify(int[] values)
 {
-    // Build min heap from array in O(n) time
-    int[] heap = new int[arr.Length];
-    Array.Copy(arr, heap, arr.Length);
-    int n = heap.Length;
-
-    // Start from last non-leaf node and heapify down
-    for (int i = (n - 2) / 2; i >= 0; i--)
-    {
-        HeapifyDown(heap, i, n);
-        Console.WriteLine($"After heapifying index {i}: [{string.Join(", ", heap)}]");
-    }
-
-    return heap;
+    // The last node with a child is the parent of the last element
+    for (int i = values.Length / 2 - 1; i >= 0; i--)
+        SiftDown(values, i, values.Length);
 }
 
-private static void HeapifyDown(int[] heap, int index, int heapSize)
+private static void SiftDown(int[] values, int i, int size)
 {
-    // Helper function for heapify down
     while (true)
     {
-        int minIndex = index;
-        int left = 2 * index + 1;
-        int right = 2 * index + 2;
+        int left = 2 * i + 1, right = left + 1, smallest = i;
+        if (left < size && values[left] < values[smallest]) smallest = left;
+        if (right < size && values[right] < values[smallest]) smallest = right;
+        if (smallest == i) return;
 
-        if (left < heapSize && heap[left] < heap[minIndex])
-            minIndex = left;
-
-        if (right < heapSize && heap[right] < heap[minIndex])
-            minIndex = right;
-
-        if (minIndex == index)
-            break;
-
-        (heap[index], heap[minIndex]) = (heap[minIndex], heap[index]);
-        index = minIndex;
+        (values[i], values[smallest]) = (values[smallest], values[i]);
+        i = smallest;
     }
 }
 
-// Example usage
-int[] array = {20, 15, 8, 10, 5, 7, 6, 2, 9, 1};
-Console.WriteLine($"Original array: [{string.Join(", ", array)}]");
-int[] heap = BuildMinHeap(array);
-Console.WriteLine($"Min heap: [{string.Join(", ", heap)}]");
+int[] data = { 10, 5, 20, 3, 8, 15 };
+Heapify(data);
+Console.WriteLine(string.Join(", ", data));  // 3, 5, 15, 10, 8, 20
 ```
 
-<div class="callout callout--tip">
-<p class="callout__title">Why Building a Heap is O(n)</p>
-<p>Most nodes are near the bottom (leaves need no work). Nodes at height h: at most ⌈n/2^(h+1)⌉. Work at height h: at most h operations. Total work: Σ(h × n/2^(h+1)) = O(n). This is faster than inserting n elements one by one, which would be O(n log n).</p>
-</div>
+This is O(n) because most nodes are near the bottom, where sifting down is cheap. Half the nodes are leaves and are skipped entirely. A quarter are one level above the leaves and move at most one step. An eighth move at most two steps, and so on. Only the root can move the full height. Adding it up, the total number of swaps is less than n. Heapsort, a sorting algorithm, starts from this same construction.
 
 ---
 
-## Priority Queue Implementation
+## Operation Costs
 
-### C# Priority Queue (.NET 6+)
-```csharp
-// Using built-in PriorityQueue (available in .NET 6+)
-public static void DemonstratePriorityQueue()
-{
-    var pq = new PriorityQueue<string, int>();
-    
-    // Add items (lower number = higher priority)
-    pq.Enqueue("Low priority task", 3);
-    pq.Enqueue("High priority task", 1);
-    pq.Enqueue("Medium priority task", 2);
-    pq.Enqueue("Another high priority", 1);
-    
-    Console.WriteLine("Processing tasks by priority:");
-    while (pq.Count > 0)
-    {
-        var task = pq.Dequeue();
-        Console.WriteLine($"Processing: {task}");
-    }
-}
+| Operation | Binary heap | Why |
+| --- | --- | --- |
+| Peek at the minimum | O(1) | It is always at index 0 |
+| Insert | O(log n) | One sift up along one path |
+| Remove the minimum | O(log n) | One sift down along one path |
+| Build from n elements | O(n) | Floyd's bottom-up construction |
+| Search for an arbitrary element | O(n) | The order rule doesn't say where to look |
+| Remove or change an arbitrary element | O(n) to find it, then O(log n) | O(log n) alone only if its index is already known |
 
-// Custom priority queue for older .NET versions
-public class CustomPriorityQueue<T> where T : IComparable<T>
-{
-    private List<(T item, int priority)> heap;
-    
-    public CustomPriorityQueue()
-    {
-        heap = new List<(T, int)>();
-    }
-    
-    public void Enqueue(T item, int priority)
-    {
-        heap.Add((item, priority));
-        BubbleUp(heap.Count - 1);
-    }
-    
-    public T Dequeue()
-    {
-        if (heap.Count == 0)
-            throw new InvalidOperationException("Queue is empty");
-        
-        var result = heap[0].item;
-        
-        // Move last to first and bubble down
-        heap[0] = heap[heap.Count - 1];
-        heap.RemoveAt(heap.Count - 1);
-        
-        if (heap.Count > 0)
-            BubbleDown(0);
-        
-        return result;
-    }
-    
-    private void BubbleUp(int index)
-    {
-        while (index > 0)
-        {
-            int parentIndex = (index - 1) / 2;
-            
-            if (heap[parentIndex].priority <= heap[index].priority)
-                break;
-            
-            (heap[index], heap[parentIndex]) = (heap[parentIndex], heap[index]);
-            index = parentIndex;
-        }
-    }
-    
-    private void BubbleDown(int index)
-    {
-        while (true)
-        {
-            int minIndex = index;
-            int left = 2 * index + 1;
-            int right = 2 * index + 2;
-            
-            if (left < heap.Count && heap[left].priority < heap[minIndex].priority)
-                minIndex = left;
-            
-            if (right < heap.Count && heap[right].priority < heap[minIndex].priority)
-                minIndex = right;
-            
-            if (minIndex == index)
-                break;
-            
-            (heap[index], heap[minIndex]) = (heap[minIndex], heap[index]);
-            index = minIndex;
-        }
-    }
-    
-    public int Count => heap.Count;
-    public bool IsEmpty => heap.Count == 0;
-}
-```
+The last two rows are the heap's blind spot. Lowering the priority value of an element already in a min-heap, so that it moves toward the root, is called decrease-key. Algorithms that need it, such as Dijkstra's shortest paths, either track each element's index in a separate dictionary or insert a new copy with the better priority and skip stale copies when they come out.
 
 ---
 
-## Heap Applications
+## PriorityQueue in .NET
 
-### 1. Top-K Elements
+.NET 6 added `PriorityQueue<TElement, TPriority>`. The runtime source describes it as an array-backed quaternary min-heap. Each node has up to four children instead of two, which makes the tree shallower at the cost of comparing more children at each step of a sift down. The costs in Big O terms match the binary heap's.
+
 ```csharp
-public static List<int> FindKLargest(int[] nums, int k)
+var tasks = new PriorityQueue<string, int>();
+tasks.Enqueue("Write report", 3);
+tasks.Enqueue("Fix outage", 1);
+tasks.Enqueue("Review PR", 2);
+
+while (tasks.TryDequeue(out string? task, out int priority))
+    Console.WriteLine($"{priority}: {task}");  // 1: Fix outage, 2: Review PR, 3: Write report
+```
+
+Several behaviors matter before relying on it:
+
+- **Lowest priority value first.** For a max-queue, pass a reversed `IComparer<TPriority>` to the constructor.
+- **No order among equal priorities.** Microsoft's documentation states that it does not guarantee first-in-first-out order for elements of equal priority. To get first-in-first-out among ties, make the priority a tuple of the priority and an increasing sequence number.
+- **No priority updates.** There is no decrease-key operation, and no way to change an element's priority in place. .NET 9 added `Remove`, which finds an element with a linear scan, so updating a priority means `Remove` and `Enqueue` at O(n), or the stale-copy approach above.
+- **Unordered enumeration.** `UnorderedItems` returns the elements in heap-array order, not priority order.
+- **Batch helpers.** The constructor that takes a collection builds the heap in O(n), and so does `EnqueueRange` when the queue is empty. `EnqueueDequeue` pushes and pops in one step, which suits keeping a fixed-size heap of the best k items.
+
+---
+
+## What Heaps Solve
+
+### The k Largest Elements
+
+To keep the k largest values from a large or unbounded stream, hold a min-heap of size k. Its root is the smallest of the current top k, so each new value only needs to beat the root to get in. That costs O(n log k) time and O(k) memory, where sorting everything costs O(n log n) time and O(n) memory.
+
+```csharp
+public static int[] LargestK(IEnumerable<int> values, int k)
 {
-    // Find k largest elements using min-heap
-    if (k >= nums.Length)
-        return nums.OrderByDescending(x => x).ToList();
+    if (k <= 0)
+        return Array.Empty<int>();
 
-    // Use min-heap of size k
-    var heap = new MinHeap<int>();
+    var top = new PriorityQueue<int, int>();  // Min-heap: the root is the smallest of the top k
 
-    foreach (int num in nums)
+    foreach (int value in values)
     {
-        if (heap.Count < k)
-        {
-            heap.Insert(num);
-        }
-        else if (num > heap.Peek())
-        {
-            heap.ExtractMin();
-            heap.Insert(num);
-        }
+        if (top.Count < k)
+            top.Enqueue(value, value);
+        else if (value > top.Peek())
+            top.EnqueueDequeue(value, value);  // Admit the new value, evict the old smallest
     }
 
-    var result = new List<int>();
-    while (!heap.IsEmpty)
-    {
-        result.Add(heap.ExtractMin());
-    }
-
-    result.Reverse();
+    var result = new int[top.Count];
+    for (int i = result.Length - 1; i >= 0; i--)
+        result[i] = top.Dequeue();             // Fill from the back so the result is descending
     return result;
 }
 
-public static List<int> FindKSmallest(int[] nums, int k)
-{
-    // Find k smallest elements using max-heap (negate values)
-    var heap = new MinHeap<int>();
-
-    foreach (int num in nums)
-    {
-        if (heap.Count < k)
-        {
-            heap.Insert(-num);  // Negate for max-heap behavior
-        }
-        else if (num < -heap.Peek())  // num < max element in heap
-        {
-            heap.ExtractMin();
-            heap.Insert(-num);
-        }
-    }
-
-    var result = new List<int>();
-    while (!heap.IsEmpty)
-    {
-        result.Add(-heap.ExtractMin());
-    }
-
-    result.Sort();
-    return result;
-}
-
-// Example usage
-int[] numbers = {3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5};
-Console.WriteLine($"Original: [{string.Join(", ", numbers)}]");
-Console.WriteLine($"3 largest: [{string.Join(", ", FindKLargest(numbers, 3))}]");
-Console.WriteLine($"3 smallest: [{string.Join(", ", FindKSmallest(numbers, 3))}]");
+Console.WriteLine(string.Join(", ", LargestK(new[] { 3, 1, 4, 1, 5, 9, 2, 6, 5, 3 }, 3)));  // 9, 6, 5
 ```
 
-### 2. Merge K Sorted Arrays
+When the whole input is already in memory and only the k-th largest value is needed, quickselect, a partitioning algorithm related to quicksort, finds it in O(n) on average without a heap.
+
+### Merging k Sorted Sequences
+
+To merge k sorted lists, put the first element of each list in a min-heap along with which list it came from. Repeatedly take the smallest, output it, and push the next element from the same list. The heap never holds more than k elements, so merging n total elements costs O(n log k). External sorts use this for data too large to sort in memory. They sort one memory-sized chunk at a time, write each sorted chunk to disk as a run, and then merge the runs, often in a single pass. Database engines use the same technique for large sorts.
+
 ```csharp
-public static List<int> MergeKSortedArrays(List<List<int>> arrays)
+public static List<int> MergeSorted(IReadOnlyList<int[]> lists)
 {
-    // Merge k sorted arrays using heap
-    var heap = new PriorityQueue<(int value, int arrayIndex, int elementIndex), int>();
-    var result = new List<int>();
-
-    // Add first element from each array to heap
-    for (int i = 0; i < arrays.Count; i++)
+    var heads = new PriorityQueue<(int List, int Index), int>();
+    for (int i = 0; i < lists.Count; i++)
     {
-        if (arrays[i].Count > 0)  // Skip empty arrays
-        {
-            heap.Enqueue((arrays[i][0], i, 0), arrays[i][0]);
-        }
+        if (lists[i].Length > 0)
+            heads.Enqueue((i, 0), lists[i][0]);
     }
 
-    while (heap.Count > 0)
+    var merged = new List<int>();
+    while (heads.TryDequeue(out var head, out int value))
     {
-        var (value, arrIdx, elemIdx) = heap.Dequeue();
-        result.Add(value);
+        merged.Add(value);
 
-        // Add next element from the same array
-        if (elemIdx + 1 < arrays[arrIdx].Count)
-        {
-            int nextValue = arrays[arrIdx][elemIdx + 1];
-            heap.Enqueue((nextValue, arrIdx, elemIdx + 1), nextValue);
-        }
+        int next = head.Index + 1;
+        if (next < lists[head.List].Length)
+            heads.Enqueue((head.List, next), lists[head.List][next]);
     }
 
-    return result;
+    return merged;
 }
 
-// Example usage
-var arrays = new List<List<int>>
-{
-    new List<int> {1, 4, 5},
-    new List<int> {1, 3, 4},
-    new List<int> {2, 6}
-};
-var merged = MergeKSortedArrays(arrays);
-Console.WriteLine($"Merged: [{string.Join(", ", merged)}]");  // [1, 1, 2, 3, 4, 4, 5, 6]
+var lists = new[] { new[] { 1, 4, 5 }, new[] { 1, 3, 4 }, new[] { 2, 6 } };
+Console.WriteLine(string.Join(", ", MergeSorted(lists)));  // 1, 1, 2, 3, 4, 4, 5, 6
 ```
 
-### 3. Running Median
+### A Running Median
+
+The median of a stream can be kept current with two heaps that split the values in half: a max-heap holding the lower half and a min-heap holding the upper half. Keeping their sizes within one of each other puts the median at one heap's root, or halfway between both roots.
+
 ```csharp
-public class MedianFinder
+public class RunningMedian
 {
-    // Find median from data stream using two heaps
-    private PriorityQueue<int, int> maxHeap;  // Left half (negate priorities for max-heap)
-    private PriorityQueue<int, int> minHeap;  // Right half
+    private readonly PriorityQueue<int, int> _lower =
+        new(Comparer<int>.Create((a, b) => b.CompareTo(a)));  // Max-heap: largest of the lower half on top
+    private readonly PriorityQueue<int, int> _upper = new();   // Min-heap: smallest of the upper half on top
 
-    public MedianFinder()
+    public void Add(int value)
     {
-        maxHeap = new PriorityQueue<int, int>(Comparer<int>.Create((a, b) => b.CompareTo(a)));
-        minHeap = new PriorityQueue<int, int>();
-    }
+        _lower.Enqueue(value, value);
 
-    public void AddNumber(int num)
-    {
-        // Add to max_heap first
-        maxHeap.Enqueue(num, num);
+        int largestLower = _lower.Dequeue();          // Pass the lower half's largest up
+        _upper.Enqueue(largestLower, largestLower);
 
-        // Move largest from max_heap to min_heap
-        minHeap.Enqueue(maxHeap.Peek(), maxHeap.Dequeue());
-
-        // Balance heaps (max_heap can have at most one more element)
-        if (minHeap.Count > maxHeap.Count)
+        if (_upper.Count > _lower.Count)              // Keep the lower half the same size or one larger
         {
-            maxHeap.Enqueue(minHeap.Peek(), minHeap.Dequeue());
+            int smallestUpper = _upper.Dequeue();
+            _lower.Enqueue(smallestUpper, smallestUpper);
         }
     }
 
-    public double FindMedian()
-    {
-        if (maxHeap.Count > minHeap.Count)
-        {
-            return maxHeap.Peek();
-        }
-        else
-        {
-            return (maxHeap.Peek() + minHeap.Peek()) / 2.0;
-        }
-    }
+    public double Median =>
+        _lower.Count == 0 ? throw new InvalidOperationException("No values added yet.")
+        : _lower.Count > _upper.Count ? _lower.Peek()
+        : (_lower.Peek() + (double)_upper.Peek()) / 2;
 }
 
-// Example usage
-var medianFinder = new MedianFinder();
-int[] numbers = {1, 2, 3, 4, 5};
-
-foreach (int num in numbers)
+var median = new RunningMedian();
+foreach (int value in new[] { 5, 15, 1, 3 })
 {
-    medianFinder.AddNumber(num);
-    Console.WriteLine($"Added {num}, median: {medianFinder.FindMedian()}");
+    median.Add(value);
+    Console.Write($"{median.Median} ");  // 5 10 5 4
 }
 ```
+
+Each insert is O(log n) and reading the median is O(1).
 
 ---
 
-## Interview Problems
+## When Not to Use a Heap
 
-### 1. Kth Largest Element
-```csharp
-public static int FindKthLargest(int[] nums, int k)
-{
-    // Find kth largest element using heap
-    // Method 1: Use min-heap of size k
-    var heap = new MinHeap<int>();
+- **Searching or membership checks.** A heap finds only its root quickly. Use a hash set for "is this present".
+- **Sorted iteration.** Draining a heap produces sorted output, but it destroys the heap and costs O(n log n). A balanced search tree such as `SortedSet<T>` keeps everything in order and supports ranges.
+- **A one-time minimum.** For the smallest element of data that doesn't change, one O(n) scan beats building anything.
+- **Frequent priority changes.** Without an index map, each change is O(n). If the workload is mostly updates, a balanced tree keyed by priority may fit better.
 
-    foreach (int num in nums)
-    {
-        if (heap.Count < k)
-        {
-            heap.Insert(num);
-        }
-        else if (num > heap.Peek())
-        {
-            heap.ExtractMin();
-            heap.Insert(num);
-        }
-    }
-
-    return heap.Peek();
-}
-
-public static int FindKthLargestQuickSelect(int[] nums, int k)
-{
-    // Alternative: Quick select algorithm
-    int Partition(int left, int right, int pivotIndex)
-    {
-        int pivotValue = nums[pivotIndex];
-        (nums[pivotIndex], nums[right]) = (nums[right], nums[pivotIndex]);
-
-        int storeIndex = left;
-        for (int i = left; i < right; i++)
-        {
-            if (nums[i] > pivotValue)
-            {
-                (nums[storeIndex], nums[i]) = (nums[i], nums[storeIndex]);
-                storeIndex++;
-            }
-        }
-
-        (nums[right], nums[storeIndex]) = (nums[storeIndex], nums[right]);
-        return storeIndex;
-    }
-
-    int Select(int left, int right, int kSmallest)
-    {
-        if (left == right)
-            return nums[left];
-
-        int pivotIndex = left + (right - left) / 2;
-        pivotIndex = Partition(left, right, pivotIndex);
-
-        if (kSmallest == pivotIndex)
-            return nums[kSmallest];
-        else if (kSmallest < pivotIndex)
-            return Select(left, pivotIndex - 1, kSmallest);
-        else
-            return Select(pivotIndex + 1, right, kSmallest);
-    }
-
-    return Select(0, nums.Length - 1, k - 1);
-}
-
-// Example usage
-int[] nums = {3, 2, 1, 5, 6, 4};
-int k = 2;
-Console.WriteLine($"Array: [{string.Join(", ", nums)}]");
-Console.WriteLine($"{k}th largest (heap): {FindKthLargest(nums, k)}");
-Console.WriteLine($"{k}th largest (quickselect): {FindKthLargestQuickSelect((int[])nums.Clone(), k)}");
-```
-
-### 2. Task Scheduler
-```csharp
-public static int LeastInterval(char[] tasks, int n)
-{
-    // Minimum intervals to execute all tasks with cooldown n
-    if (n == 0)
-        return tasks.Length;
-
-    // Count frequency of each task
-    var taskCounts = new Dictionary<char, int>();
-    foreach (char task in tasks)
-    {
-        taskCounts[task] = taskCounts.GetValueOrDefault(task, 0) + 1;
-    }
-
-    // Max heap of frequencies (negate for max-heap behavior)
-    var heap = new PriorityQueue<int, int>(Comparer<int>.Create((a, b) => b.CompareTo(a)));
-    foreach (int count in taskCounts.Values)
-    {
-        heap.Enqueue(count, count);
-    }
-
-    // Queue to store (count, available_time)
-    var queue = new Queue<(int count, int availableTime)>();
-    int time = 0;
-
-    while (heap.Count > 0 || queue.Count > 0)
-    {
-        time++;
-
-        // Add back available tasks from queue
-        if (queue.Count > 0 && queue.Peek().availableTime == time)
-        {
-            var (count, _) = queue.Dequeue();
-            heap.Enqueue(count, count);
-        }
-
-        // Execute most frequent available task
-        if (heap.Count > 0)
-        {
-            int count = heap.Dequeue();
-            count--;  // Reduce frequency
-
-            if (count > 0)  // Still has remaining executions
-            {
-                queue.Enqueue((count, time + n + 1));
-            }
-        }
-    }
-
-    return time;
-}
-
-// Example usage
-char[] tasks = {'A', 'A', 'A', 'B', 'B', 'B'};
-int n = 2;
-int result = LeastInterval(tasks, n);
-Console.WriteLine($"Tasks: [{string.Join(", ", tasks)}], cooldown: {n}");
-Console.WriteLine($"Minimum intervals: {result}");
-```
-
----
-
-## Quick Reference
-
-### Heap Operations
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Insert | O(log n) | Bubble up |
-| Extract min/max | O(log n) | Bubble down |
-| Peek min/max | O(1) | Root element |
-| Build heap | O(n) | Heapify from array |
-| Heapify | O(log n) | Restore heap property |
-
-### Heap Types
-- **Min Heap:** Root is minimum, children ≥ parent
-- **Max Heap:** Root is maximum, children ≤ parent
-- **Binary Heap:** Complete binary tree in array
-
-### Common Use Cases
-✓ Priority queues
-✓ Heap sort (O(n log n))
-✓ Top K elements
-✓ Median in stream (two heaps)
-✓ Dijkstra's algorithm
-
-### C# Implementation
-- `.NET 6+:` `PriorityQueue<TElement, TPriority>`
-- `SortedSet<T>` for ordered operations
-- Array-based for custom needs
-
-**Key Insight:** Heaps excel when you need repeated access to extremes (min/max)
-
----
+{% endraw %}

@@ -1,0 +1,79 @@
+---
+title: "What await Does to the Caller"
+kind: dynamic
+system: dotnet
+summary: "An async method running synchronously, returning a task, then resuming later."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" role="img" aria-labelledby="awt-title awt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awt-title">Timeline of a call to an async method that awaits an HTTP request</title>
+<desc id="awt-desc">The caller calls GetCustomerAsync, which runs on the caller's thread: it logs, then awaits GetStringAsync. The HTTP request is not complete, so the method registers a continuation and returns an incomplete Task of Customer to the caller, whose thread is then free for other work. No thread waits while the request is in flight. When the response arrives, the continuation runs, deserializes the JSON, and returns, which completes the task and resumes anything awaiting it.</desc>
+<style>
+.awt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.awt-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.awt-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.awt-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.awt-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.awt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awt-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.awt-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awt-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.awt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.awt-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.awt-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awt-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.awt-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.awt-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.awt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awt-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.awt-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.awt-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.awt-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.awt-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.awt-dot { fill: var(--color-primary, #1A5F8A); }
+.awt-dot-hot { fill: var(--color-accent, #A5486E); }
+.awt-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.awt-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.awt-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="awt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awt-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="awt-box" x="15" y="20" width="190" height="48" rx="6"/>
+<text class="awt-n" x="110.0" y="40.0" text-anchor="middle">Caller</text>
+<text class="awt-k" x="110.0" y="58.0" text-anchor="middle">its thread</text>
+<line class="awt-rule" x1="110" y1="68" x2="110" y2="450"/>
+<rect class="awt-sys" x="295" y="20" width="190" height="48" rx="6"/>
+<text class="awt-n-inv" x="390.0" y="40.0" text-anchor="middle">GetCustomerAsync</text>
+<text class="awt-k-inv" x="390.0" y="58.0" text-anchor="middle">the async method</text>
+<line class="awt-rule" x1="390" y1="68" x2="390" y2="450"/>
+<rect class="awt-box" x="585" y="20" width="190" height="48" rx="6"/>
+<text class="awt-n" x="680.0" y="40.0" text-anchor="middle">HTTP request</text>
+<text class="awt-k" x="680.0" y="58.0" text-anchor="middle">in flight, no thread</text>
+<line class="awt-rule" x1="680" y1="68" x2="680" y2="450"/>
+<rect class="awt-px" x="104" y="90" width="12" height="110" rx="2"/>
+<rect class="awt-sys" x="384" y="100" width="12" height="90" rx="2"/>
+<path class="awt-flow" d="M116,104 L382,104" marker-end="url(#awt-a)"/>
+<text class="awt-lab" x="250" y="97" text-anchor="middle">call</text>
+<text class="awt-note" x="406" y="128">Log("starting") runs synchronously</text>
+<path class="awt-ctl" d="M396,150 L678,150" marker-end="url(#awt-ag)"/>
+<text class="awt-mono" x="406" y="143">await GetStringAsync(...)</text>
+<text class="awt-lab" x="406" y="170">not complete: register continuation</text>
+<path class="awt-flow" d="M382,186 L118,186" marker-end="url(#awt-a)"/>
+<text class="awt-lab" x="250" y="179" text-anchor="middle">incomplete Task&lt;Customer&gt;</text>
+<rect class="awt-band" x="104" y="214" width="12" height="70" rx="2"/>
+<text class="awt-em" x="126" y="236">thread free for</text>
+<text class="awt-em" x="126" y="252">other work</text>
+<rect class="awt-px" x="674" y="150" width="12" height="200" rx="2"/>
+<text class="awt-lab" x="696" y="250">no thread is blocked</text>
+<text class="awt-lab" x="696" y="265">while this waits</text>
+<path class="awt-ctl" d="M672,350 L398,350" marker-end="url(#awt-ag)"/>
+<text class="awt-lab" x="535" y="343" text-anchor="middle">response arrives</text>
+<rect class="awt-sys" x="384" y="350" width="12" height="70" rx="2"/>
+<text class="awt-n" x="374" y="374" text-anchor="end">continuation</text>
+<text class="awt-note" x="406" y="374">Deserialize, return</text>
+<text class="awt-note" x="406" y="392">task completes, awaiters resume</text>
+</g>
+</svg>

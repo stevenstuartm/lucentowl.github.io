@@ -1,0 +1,85 @@
+---
+title: "Bridge Turns N × M Classes Into N + M"
+kind: structure
+system: oop
+summary: "Three shapes and three renderers, by inheritance alone and through a bridge."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 390" role="img" aria-labelledby="br-title br-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="br-title">Bridge splits a two-dimensional class hierarchy into two hierarchies</title>
+<desc id="br-desc">Left: with inheritance alone, three shapes and three renderers need nine classes, one per combination, from VectorCircle to PdfTriangle. Right: with a bridge, an abstract Shape class has three subclasses, Circle, Rectangle, and Triangle, and an IRenderer interface has three implementations, VectorRenderer, RasterRenderer, and PdfRenderer. Shape holds a reference to an IRenderer, which is the bridge, so six classes cover every combination and a new renderer is one new class.</desc>
+<style>
+.br-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.br-if { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.br-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.br-n-if { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.br-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.br-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.br-lab { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.br-ref { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.br-inh { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.br-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.br-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="br-a" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="br-t" markerWidth="14" markerHeight="14" refX="12" refY="6" orient="auto"><path d="M1,1 L12,6 L1,11 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-text-light, #4A5568)" stroke-width="1.5"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="br-hd" x="30" y="32">INHERITANCE ONLY: 3 × 3 = 9 CLASSES</text>
+<rect class="br-box" x="30" y="62" width="128" height="40"/>
+<text class="br-n" x="94" y="86.5" text-anchor="middle">VectorCircle</text>
+<rect class="br-box" x="168" y="62" width="128" height="40"/>
+<text class="br-n" x="232" y="86.5" text-anchor="middle">RasterCircle</text>
+<rect class="br-box" x="306" y="62" width="128" height="40"/>
+<text class="br-n" x="370" y="86.5" text-anchor="middle">PdfCircle</text>
+<rect class="br-box" x="30" y="118" width="128" height="40"/>
+<text class="br-n" x="94" y="142.5" text-anchor="middle">VectorRectangle</text>
+<rect class="br-box" x="168" y="118" width="128" height="40"/>
+<text class="br-n" x="232" y="142.5" text-anchor="middle">RasterRectangle</text>
+<rect class="br-box" x="306" y="118" width="128" height="40"/>
+<text class="br-n" x="370" y="142.5" text-anchor="middle">PdfRectangle</text>
+<rect class="br-box" x="30" y="174" width="128" height="40"/>
+<text class="br-n" x="94" y="198.5" text-anchor="middle">VectorTriangle</text>
+<rect class="br-box" x="168" y="174" width="128" height="40"/>
+<text class="br-n" x="232" y="198.5" text-anchor="middle">RasterTriangle</text>
+<rect class="br-box" x="306" y="174" width="128" height="40"/>
+<text class="br-n" x="370" y="198.5" text-anchor="middle">PdfTriangle</text>
+<text class="br-note" x="30" y="252">Every combination is its own class. A fourth</text>
+<text class="br-note" x="30" y="269">renderer adds three more classes.</text>
+<text class="br-hd" x="500" y="32">BRIDGE: 3 + 3 = 6 CLASSES</text>
+<rect class="br-box" x="526" y="60" width="150" height="48"/>
+<text class="br-n" x="601" y="79" text-anchor="middle">Shape</text>
+<text class="br-k" x="601" y="95" text-anchor="middle">[abstract class]</text>
+<rect class="br-if" x="760" y="60" width="150" height="48"/>
+<text class="br-n-if" x="835" y="79" text-anchor="middle">IRenderer</text>
+<text class="br-k" x="835" y="95" text-anchor="middle">[interface]</text>
+<path class="br-ref" d="M 676,84 L 757,84" marker-end="url(#br-a)"/>
+<text class="br-lab" x="716" y="76" text-anchor="middle">bridge</text>
+<rect class="br-box" x="526" y="140" width="150" height="36"/>
+<text class="br-n" x="601" y="162.5" text-anchor="middle">Circle</text>
+<path class="br-inh" d="M 526,158 L 512,158"/>
+<rect class="br-box" x="526" y="190" width="150" height="36"/>
+<text class="br-n" x="601" y="212.5" text-anchor="middle">Rectangle</text>
+<path class="br-inh" d="M 526,208 L 512,208"/>
+<rect class="br-box" x="526" y="240" width="150" height="36"/>
+<text class="br-n" x="601" y="262.5" text-anchor="middle">Triangle</text>
+<path class="br-inh" d="M 526,258 L 512,258"/>
+<path class="br-inh" d="M 512,258 L 512,84 L 523,84" marker-end="url(#br-t)"/>
+<rect class="br-box" x="760" y="140" width="150" height="36"/>
+<text class="br-n" x="835" y="162.5" text-anchor="middle">VectorRenderer</text>
+<path class="br-inh" d="M 910,158 L 924,158"/>
+<rect class="br-box" x="760" y="190" width="150" height="36"/>
+<text class="br-n" x="835" y="212.5" text-anchor="middle">RasterRenderer</text>
+<path class="br-inh" d="M 910,208 L 924,208"/>
+<rect class="br-box" x="760" y="240" width="150" height="36"/>
+<text class="br-n" x="835" y="262.5" text-anchor="middle">PdfRenderer</text>
+<path class="br-inh" d="M 910,258 L 924,258"/>
+<path class="br-inh" d="M 924,258 L 924,84 L 913,84" marker-end="url(#br-t)"/>
+<text class="br-note" x="500" y="304">Each shape holds a reference to some renderer.</text>
+<text class="br-note" x="500" y="321">A fourth renderer is one new class.</text>
+<path class="br-inh" d="M 30,362 L 66,362" marker-end="url(#br-t)"/>
+<text class="br-el" x="76" y="366">inherits or implements</text>
+<path class="br-ref" d="M 240,362 L 276,362" marker-end="url(#br-a)"/>
+<text class="br-el" x="286" y="366">holds a reference</text>
+</g>
+</svg>

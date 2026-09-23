@@ -86,19 +86,7 @@ After `Build()`, the host's service collection is read-only, and adding to it th
 
 Lifetimes only make sense once you know who holds each instance. The provider you build is the **root provider**. It can create **scopes**, each of which is a child provider with its own cache. ASP.NET Core creates one scope per HTTP request. Everywhere else, you create them.
 
-```
-Root provider (lives as long as the app)
-├── singletons: one of each, shared by everything
-├── disposable transients resolved directly from the root
-│
-├── Scope A (request 1)
-│   ├── scoped instances: one of each, shared within the scope
-│   └── disposable transients resolved in this scope
-│
-└── Scope B (request 2)
-    ├── scoped instances: separate from Scope A's
-    └── disposable transients resolved in this scope
-```
+{% include figure.html id="dn-di-scopes" %}
 
 When a scope is disposed, it disposes every `IDisposable` or `IAsyncDisposable` instance it created, in reverse order of creation. When the root is disposed, it does the same for singletons and for anything resolved directly from it. Every lifetime rule and every lifetime bug in this guide follows from this picture.
 

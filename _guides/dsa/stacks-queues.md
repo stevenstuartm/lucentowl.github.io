@@ -4,13 +4,13 @@ layout: guide
 category: Data Structures & Algorithms
 subcategory: Core Data Structures
 description: "Stacks (last in, first out) and queues (first in, first out) as contracts, how each is built on an array, why a queue needs a circular buffer, what .NET's Stack<T> and Queue<T> do, and the problems each order solves: matching brackets, evaluating expressions, and processing work in arrival order."
-tags: [stacks, queues, lifo, fifo, circular-buffer, deque, fundamentals]
+tags: [stacks, queues, circular-buffer, deque, shunting-yard, fundamentals]
 ---
 {% raw %}
 
 ## Stacks and Queues Are Contracts
 
-A stack and a queue are abstract data types: each is defined by the operations it allows, not by how it stores anything. Both hold a sequence of elements, and both restrict where elements come in and go out.
+A stack and a queue are abstract data types. Each is defined by the operations it allows, not by how it stores anything. Both hold a sequence of elements, and both restrict where elements come in and go out.
 
 | | Stack | Queue |
 | --- | --- | --- |
@@ -22,7 +22,9 @@ A stack and a queue are abstract data types: each is defined by the operations i
 
 The restriction is the point. Code that uses a stack cannot reach into the middle, so it cannot get the order wrong, and the implementation is free to make every allowed operation fast.
 
-Because they are contracts, costs belong to an implementation, not to the idea. A stack or queue built on a linked list (with a tail reference, for a queue), or on an array used the right way, makes all four operations O(1), amortized when an array has to grow. A queue built naively on an array does not, as the queue section shows.
+Because they are contracts, costs belong to an implementation, not to the idea. A stack or queue built on a linked list (with a tail reference, for a queue), or on an array used the right way, makes every operation in the table O(1), amortized when an array has to grow. A queue built naively on an array does not, as the queue section shows.
+
+A priority queue, despite its name, is a different contract. It serves the highest-priority element first, whenever it arrived. .NET provides it as `PriorityQueue<TElement, TPriority>`, where the smallest priority value counts as the highest priority.
 
 ---
 
@@ -76,7 +78,7 @@ A linked list whose head serves as the top also works, since adding and removing
 
 ### `Stack<T>` in .NET
 
-.NET's `Stack<T>` is the array version. It allocates capacity 4 on the first push and doubles from there. `Pop` and `Peek` throw `InvalidOperationException` on an empty stack, and `TryPop` and `TryPeek` return `false` instead.
+.NET's `Stack<T>` is the array version. It allocates capacity 4 on the first push and doubles from there. `Pop` and `Peek` throw `InvalidOperationException` on an empty stack, and `TryPop` and `TryPeek` return `false` instead. Enumerating a `Stack<T>`, or calling `ToArray`, returns items top first, so `new Stack<T>(otherStack)` builds a copy in reversed order.
 
 ### Where Stacks Appear
 
@@ -133,11 +135,15 @@ public static double EvaluatePostfix(string expression)
 
     foreach (string token in expression.Split(' ', StringSplitOptions.RemoveEmptyEntries))
     {
-        if (double.TryParse(token, out double number))
+        // Invariant culture, so "2.5" parses the same on every machine
+        if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out double number))
         {
             operands.Push(number);
             continue;
         }
+
+        if (operands.Count < 2)
+            throw new ArgumentException($"'{token}' needs two operands.");
 
         double right = operands.Pop();  // The second operand is on top
         double left = operands.Pop();
@@ -152,6 +158,9 @@ public static double EvaluatePostfix(string expression)
         });
     }
 
+    if (operands.Count != 1)
+        throw new ArgumentException("The expression leaves more than one value, or none.");
+
     return operands.Pop();
 }
 
@@ -159,7 +168,83 @@ Console.WriteLine(EvaluatePostfix("3 4 + 2 *"));  // 14
 Console.WriteLine(EvaluatePostfix("10 2 8 * + 3 -"));  // 23
 ```
 
-The order of the two pops matters for subtraction and division. The right-hand operand was pushed last, so it comes off first.
+The order of the two pops matters for subtraction and division. The right-hand operand was pushed last, so it comes off first. The two checks reject malformed input, such as `3 +` with too few operands or `3 4` with an operator missing. `NumberStyles` and `CultureInfo` come from `System.Globalization`.
+
+### Worked Example: Converting Infix to Postfix
+
+People write expressions in infix form, with each operator between its operands, so a calculator has to convert `( 3 + 4 ) * 2` into `3 4 + 2 *` before it can evaluate it. Dijkstra's shunting-yard algorithm does the conversion with one stack, which holds operators that are waiting for their right-hand operand to finish.
+
+Numbers go straight to the output. An operator first pops every waiting operator that binds at least as tightly and sends it to the output, then waits on the stack itself. An opening parenthesis waits on the stack as a barrier, and a closing parenthesis pops operators to the output until it reaches that barrier.
+
+Here is `3 + 4 * 2` going through it:
+
+| Token | Action | Waiting stack | Output |
+| --- | --- | --- | --- |
+| `3` | Number to output | (empty) | `3` |
+| `+` | Nothing waiting, so push | `+` | `3` |
+| `4` | Number to output | `+` | `3 4` |
+| `*` | `+` binds less tightly, so push on top of it | `+ *` | `3 4` |
+| `2` | Number to output | `+ *` | `3 4 2` |
+| End | Pop everything | (empty) | `3 4 2 * +` |
+
+```csharp
+public static string InfixToPostfix(string expression)
+{
+    var output = new List<string>();
+    var waiting = new Stack<string>();
+
+    foreach (string token in expression.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+    {
+        if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        {
+            output.Add(token);
+        }
+        else if (token == "(")
+        {
+            waiting.Push(token);
+        }
+        else if (token == ")")
+        {
+            while (waiting.Count > 0 && waiting.Peek() != "(")
+                output.Add(waiting.Pop());
+            if (!waiting.TryPop(out _))
+                throw new ArgumentException("Unbalanced parentheses.");
+        }
+        else
+        {
+            int precedence = Precedence(token);  // Throws on an unknown operator
+
+            // Pop operators that bind at least as tightly, so 8 - 3 - 2 groups as (8 - 3) - 2
+            while (waiting.Count > 0 && waiting.Peek() != "(" && Precedence(waiting.Peek()) >= precedence)
+                output.Add(waiting.Pop());
+            waiting.Push(token);
+        }
+    }
+
+    while (waiting.Count > 0)
+    {
+        string op = waiting.Pop();
+        if (op == "(")
+            throw new ArgumentException("Unbalanced parentheses.");
+        output.Add(op);
+    }
+
+    return string.Join(' ', output);
+}
+
+private static int Precedence(string op) => op switch
+{
+    "+" or "-" => 1,
+    "*" or "/" => 2,
+    _ => throw new ArgumentException($"Unknown operator '{op}'.")
+};
+
+Console.WriteLine(InfixToPostfix("( 3 + 4 ) * 2"));  // 3 4 + 2 *
+Console.WriteLine(InfixToPostfix("3 + 4 * 2"));      // 3 4 2 * +
+Console.WriteLine(InfixToPostfix("8 - 3 - 2"));      // 8 3 - 2 -
+```
+
+Each token is pushed and popped at most once, so the conversion is O(n), and feeding its output to `EvaluatePostfix` evaluates an infix expression in two linear passes. This version checks parentheses and operator names only. It doesn't check that operands and operators alternate, so `3 + + 4` passes through and fails in `EvaluatePostfix`, and `3 4 +` is accepted outright. It handles the four left-associative operators. Right-associative operators like exponentiation pop only on strictly higher precedence, and unary minus needs its own token.
 
 ---
 
@@ -177,7 +262,7 @@ Leaving the front slot empty and moving a start index forward avoids the shift. 
 
 ### The Circular Buffer
 
-A circular buffer, also called a ring buffer, treats the array as if its end joined its beginning. The queue keeps two indices, a head where the next dequeue reads and a tail where the next enqueue writes. Both only ever move forward, and when either passes the last slot it wraps to slot 0. The freed slots at the start get reused, so no element ever moves and both operations are O(1).
+A circular buffer, also called a ring buffer, treats the array as if its end joined its beginning. The queue keeps two indices, a head where the next dequeue reads and a tail where the next enqueue writes. Both only ever move forward, and when either passes the last slot it wraps to slot 0. The freed slots at the start get reused, so enqueue and dequeue never shift elements.
 
 {% endraw %}
 {% include figure.html id="dsa-circular-buffer" %}
@@ -231,7 +316,13 @@ public class CircularQueue<T>
 }
 ```
 
-Growing is the one subtle step. When the buffer is full and wrapped, the front of the queue sits in the middle of the array. Copying the array as-is would keep the elements in slot order, not queue order, so `Grow` copies them front to back and resets the head to 0.
+The `_count` field does more than report the size. When the buffer is full, the tail has wrapped all the way around to the head, so `_head == _tail`. That is also true when the buffer is empty. The count tells the two states apart. A common alternative without a count leaves one slot unused, so that a full buffer never has head equal to tail.
+
+Growing is the other subtle step. When the buffer is full and wrapped, the front of the queue sits in the middle of the array. Copying the array as-is would keep the elements in slot order, not queue order, so `Grow` copies them front to back and resets the head to 0.
+
+{% endraw %}
+{% include figure.html id="dsa-circular-buffer-grow" %}
+{% raw %}
 
 A fixed-capacity circular buffer that never grows is common in its own right. It either rejects new items when full or overwrites the oldest one, which suits logs of recent events, audio and network buffers, and anything that should keep the last N values in bounded memory.
 
@@ -239,7 +330,7 @@ A fixed-capacity circular buffer that never grows is common in its own right. It
 
 .NET's `Queue<T>` is a circular buffer, and its source says so. `Enqueue` and `Dequeue` are O(1), with `Enqueue` O(1) amortized because a full buffer grows. It grows by a factor of 2, by at least 4 slots. Like `Stack<T>`, it offers `TryDequeue` and `TryPeek` alongside the throwing versions.
 
-`Queue<T>` is not safe for concurrent use. When one thread produces work and another consumes it, `ConcurrentQueue<T>` is safe for concurrent enqueues and dequeues, and `System.Threading.Channels` adds waiting for items to arrive and limits on queue length.
+`Queue<T>` is not safe when any thread modifies it while others use it. When one thread produces work and another consumes it, `ConcurrentQueue<T>` is safe for concurrent enqueues and dequeues, and `System.Threading.Channels` adds waiting for items to arrive and limits on queue length.
 
 ### Where Queues Appear
 
@@ -251,17 +342,11 @@ A queue fits any problem where work should be handled in the order it arrived, o
 
 ---
 
-## Deques and Priority Queues
-
-### Deques
+## Deques
 
 A deque (a double-ended queue, pronounced "deck") allows adding and removing at both ends in O(1), so it can act as a stack, a queue, or both at once. A capped history list is a simple example. New entries are added at the back and undone from the back, like a stack, but when the history reaches its limit, the oldest entry drops off the front, like a queue.
 
 The .NET base class library has no dedicated deque type. `LinkedList<T>` provides O(1) `AddFirst`, `AddLast`, `RemoveFirst`, and `RemoveLast`, at the cost of one heap allocation per element. A circular buffer extended to move its head backward as well as its tail forward gives the same operations on an array.
-
-### Priority Queues
-
-A priority queue serves elements by priority instead of arrival order. `Dequeue` always returns the highest-priority element, whenever it arrived. Despite the name, it is a different contract from a queue, and it is usually implemented with a heap rather than an array or a list. .NET provides it as `PriorityQueue<TElement, TPriority>`, which treats the smallest priority value as the highest priority.
 
 ---
 
@@ -304,6 +389,6 @@ A single dequeue can move n elements, but each element is pushed and popped at m
 | The most important item must be handled first | Priority queue | `PriorityQueue<TElement, TPriority>` |
 | Only the last N items matter | Fixed-size circular buffer | A custom circular buffer |
 
-None of these structures supports efficient search or access by position. If the code needs either, the problem is not really a stack or a queue.
+None of these contracts offers search or access by position. A circular buffer could index its slots in O(1), but the queue contract hides them. If the code needs either, the problem is not really a stack or a queue.
 
 {% endraw %}

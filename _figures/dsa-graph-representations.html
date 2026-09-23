@@ -1,0 +1,116 @@
+---
+title: "One Graph, Two Representations"
+kind: structure
+system: dsa
+summary: "The same four-vertex graph as an adjacency list and a matrix."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="grp-title grp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="grp-title">An undirected graph stored as an adjacency list and as an adjacency matrix</title>
+<desc id="grp-desc">An undirected graph with vertices A, B, C, and D and edges A–B, A–C, B–C, and C–D. As an adjacency list, A lists B and C, B lists A and C, C lists A, B, and D, and D lists C, for 8 entries, since each undirected edge appears in both endpoints' lists. As an adjacency matrix, a 4 by 4 grid holds 1 where the row and column vertices share an edge and 0 elsewhere. The matrix is symmetric and has 16 cells regardless of how many edges exist.</desc>
+<style>
+.grp-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.grp-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.grp-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; }
+.grp-key { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.25; }
+.grp-kv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.grp-cell { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.grp-cv { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.grp-ar { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.grp-on { fill: var(--color-primary, #1A5F8A); stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1.5; }
+.grp-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #CBD5E0); stroke-width: 1.25; }
+.grp-onv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.grp-offv { font-size: 13px; fill: var(--color-text-light, #4A5568); }
+.grp-mh { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.grp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.grp-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="grp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="grp-hd" x="40" y="34">THE GRAPH</text>
+<path class="grp-e" d="M 108.0,90.0 L 182.0,90.0"/>
+<path class="grp-e" d="M 99.0,105.6 L 136.0,169.4"/>
+<path class="grp-e" d="M 191.0,105.6 L 154.0,169.4"/>
+<path class="grp-e" d="M 161.7,191.8 L 238.3,223.2"/>
+<circle class="grp-n" cx="90" cy="90" r="18"/><text class="grp-v" x="90" y="95" text-anchor="middle">A</text>
+<circle class="grp-n" cx="200" cy="90" r="18"/><text class="grp-v" x="200" y="95" text-anchor="middle">B</text>
+<circle class="grp-n" cx="145" cy="185" r="18"/><text class="grp-v" x="145" y="190" text-anchor="middle">C</text>
+<circle class="grp-n" cx="255" cy="230" r="18"/><text class="grp-v" x="255" y="235" text-anchor="middle">D</text>
+<text class="grp-s" x="40" y="300">4 vertices, 4 undirected edges</text>
+<text class="grp-hd" x="340" y="34">ADJACENCY LIST</text>
+<rect class="grp-key" x="340" y="60" width="34" height="32" rx="4"/>
+<text class="grp-kv" x="357" y="81" text-anchor="middle">A</text>
+<path class="grp-ar" d="M 376,76 L 394,76" marker-end="url(#grp-a)"/>
+<rect class="grp-cell" x="398" y="60" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="414" y="81" text-anchor="middle">B</text>
+<rect class="grp-cell" x="434" y="60" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="450" y="81" text-anchor="middle">C</text>
+<rect class="grp-key" x="340" y="110" width="34" height="32" rx="4"/>
+<text class="grp-kv" x="357" y="131" text-anchor="middle">B</text>
+<path class="grp-ar" d="M 376,126 L 394,126" marker-end="url(#grp-a)"/>
+<rect class="grp-cell" x="398" y="110" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="414" y="131" text-anchor="middle">A</text>
+<rect class="grp-cell" x="434" y="110" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="450" y="131" text-anchor="middle">C</text>
+<rect class="grp-key" x="340" y="160" width="34" height="32" rx="4"/>
+<text class="grp-kv" x="357" y="181" text-anchor="middle">C</text>
+<path class="grp-ar" d="M 376,176 L 394,176" marker-end="url(#grp-a)"/>
+<rect class="grp-cell" x="398" y="160" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="414" y="181" text-anchor="middle">A</text>
+<rect class="grp-cell" x="434" y="160" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="450" y="181" text-anchor="middle">B</text>
+<rect class="grp-cell" x="470" y="160" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="486" y="181" text-anchor="middle">D</text>
+<rect class="grp-key" x="340" y="210" width="34" height="32" rx="4"/>
+<text class="grp-kv" x="357" y="231" text-anchor="middle">D</text>
+<path class="grp-ar" d="M 376,226 L 394,226" marker-end="url(#grp-a)"/>
+<rect class="grp-cell" x="398" y="210" width="32" height="32" rx="4"/>
+<text class="grp-cv" x="414" y="231" text-anchor="middle">C</text>
+<text class="grp-s" x="340" y="280">Each vertex lists its neighbors.</text>
+<text class="grp-s" x="340" y="298">8 entries: each edge appears twice.</text>
+<text class="grp-hd" x="584" y="34">ADJACENCY MATRIX</text>
+<text class="grp-mh" x="627" y="70" text-anchor="middle">A</text>
+<text class="grp-mh" x="598" y="102" text-anchor="middle">A</text>
+<rect class="grp-off" x="610" y="80" width="34" height="34"/>
+<text class="grp-offv" x="627" y="102" text-anchor="middle">0</text>
+<rect class="grp-on" x="644" y="80" width="34" height="34"/>
+<text class="grp-onv" x="661" y="102" text-anchor="middle">1</text>
+<rect class="grp-on" x="678" y="80" width="34" height="34"/>
+<text class="grp-onv" x="695" y="102" text-anchor="middle">1</text>
+<rect class="grp-off" x="712" y="80" width="34" height="34"/>
+<text class="grp-offv" x="729" y="102" text-anchor="middle">0</text>
+<text class="grp-mh" x="661" y="70" text-anchor="middle">B</text>
+<text class="grp-mh" x="598" y="136" text-anchor="middle">B</text>
+<rect class="grp-on" x="610" y="114" width="34" height="34"/>
+<text class="grp-onv" x="627" y="136" text-anchor="middle">1</text>
+<rect class="grp-off" x="644" y="114" width="34" height="34"/>
+<text class="grp-offv" x="661" y="136" text-anchor="middle">0</text>
+<rect class="grp-on" x="678" y="114" width="34" height="34"/>
+<text class="grp-onv" x="695" y="136" text-anchor="middle">1</text>
+<rect class="grp-off" x="712" y="114" width="34" height="34"/>
+<text class="grp-offv" x="729" y="136" text-anchor="middle">0</text>
+<text class="grp-mh" x="695" y="70" text-anchor="middle">C</text>
+<text class="grp-mh" x="598" y="170" text-anchor="middle">C</text>
+<rect class="grp-on" x="610" y="148" width="34" height="34"/>
+<text class="grp-onv" x="627" y="170" text-anchor="middle">1</text>
+<rect class="grp-on" x="644" y="148" width="34" height="34"/>
+<text class="grp-onv" x="661" y="170" text-anchor="middle">1</text>
+<rect class="grp-off" x="678" y="148" width="34" height="34"/>
+<text class="grp-offv" x="695" y="170" text-anchor="middle">0</text>
+<rect class="grp-on" x="712" y="148" width="34" height="34"/>
+<text class="grp-onv" x="729" y="170" text-anchor="middle">1</text>
+<text class="grp-mh" x="729" y="70" text-anchor="middle">D</text>
+<text class="grp-mh" x="598" y="204" text-anchor="middle">D</text>
+<rect class="grp-off" x="610" y="182" width="34" height="34"/>
+<text class="grp-offv" x="627" y="204" text-anchor="middle">0</text>
+<rect class="grp-off" x="644" y="182" width="34" height="34"/>
+<text class="grp-offv" x="661" y="204" text-anchor="middle">0</text>
+<rect class="grp-on" x="678" y="182" width="34" height="34"/>
+<text class="grp-onv" x="695" y="204" text-anchor="middle">1</text>
+<rect class="grp-off" x="712" y="182" width="34" height="34"/>
+<text class="grp-offv" x="729" y="204" text-anchor="middle">0</text>
+<text class="grp-s" x="584" y="280">Row A, column B holds 1 if A–B is an edge.</text>
+<text class="grp-s" x="584" y="298">16 cells whatever the edge count.</text>
+</g>
+</svg>

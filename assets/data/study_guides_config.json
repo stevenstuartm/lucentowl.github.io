@@ -247,8 +247,7 @@
           "guides": [
             "oop/oop-fundamentals.md",
             "oop/solid-principles.md",
-            "oop/modern-best-practices.md",
-            "oop/oop-quick-reference.md"
+            "oop/modern-best-practices.md"
           ]
         },
         {

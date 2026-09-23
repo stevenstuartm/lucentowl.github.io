@@ -1,0 +1,75 @@
+---
+title: "One Load Context per Plugin"
+kind: structure
+system: dotnet
+summary: "Two plugins loading different Contoso.Data versions beside a shared contract."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 410" role="img" aria-labelledby="plc-title plc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="plc-title">Plugin isolation with one AssemblyLoadContext per plugin</title>
+<desc id="plc-desc">The default AssemblyLoadContext holds the host executable, the runtime assemblies, and the shared contract assembly Contoso.Plugins.Abstractions. Two plugin contexts, analytics and reporting, each hold their plugin assembly and their own version of Contoso.Data, version 2.0.0 and version 3.0.0. Each plugin context's Load override returns null for the contract, so both resolve the one copy in the default context rather than loading their own. Isolation is by name resolution only, not a security boundary.</desc>
+<style>
+.plc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.plc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.plc-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.plc-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.plc-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.plc-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.plc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.plc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.plc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.plc-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.plc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.plc-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.plc-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.plc-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.plc-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.plc-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.plc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.plc-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.plc-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.plc-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.plc-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.plc-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.plc-dot { fill: var(--color-primary, #1A5F8A); }
+.plc-dot-hot { fill: var(--color-accent, #A5486E); }
+.plc-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.plc-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.plc-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="plc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="plc-px" x="250" y="24" width="460" height="142" rx="8"/>
+<text class="plc-n" x="266" y="48">AssemblyLoadContext.Default</text>
+<rect class="plc-box" x="266" y="62" width="130" height="40" rx="6"/>
+<text class="plc-n" x="278" y="86.0">Host.exe</text>
+<rect class="plc-box" x="410" y="62" width="284" height="40" rx="6"/>
+<text class="plc-n" x="422" y="86.0">runtime assemblies (System.*)</text>
+<rect class="plc-sys" x="266" y="114" width="428" height="40" rx="6"/>
+<text class="plc-n-inv" x="278" y="130.0">Contoso.Plugins.Abstractions</text>
+<text class="plc-k-inv" x="278" y="148.0">shared contract</text>
+<text class="plc-lab" x="40" y="196">Load returns null for the contract,</text>
+<text class="plc-lab" x="40" y="211">so both contexts resolve this one copy</text>
+<rect class="plc-zone" x="40" y="244" width="400" height="132" rx="8"/>
+<text class="plc-n" x="56" y="268">ALC "analytics"</text>
+<rect class="plc-box" x="56" y="282" width="176" height="44" rx="6"/>
+<text class="plc-n" x="68" y="300.0">Analytics.dll</text>
+<text class="plc-k" x="68" y="318.0">the plugin</text>
+<rect class="plc-warn" x="248" y="282" width="176" height="44" rx="6"/>
+<text class="plc-n" x="260" y="300.0">Contoso.Data 2.0.0</text>
+<text class="plc-k" x="260" y="318.0">its private copy</text>
+<text class="plc-lab" x="56" y="358">private dependencies found through its own deps.json</text>
+<rect class="plc-zone" x="520" y="244" width="400" height="132" rx="8"/>
+<text class="plc-n" x="536" y="268">ALC "reporting"</text>
+<rect class="plc-box" x="536" y="282" width="176" height="44" rx="6"/>
+<text class="plc-n" x="548" y="300.0">Reporting.dll</text>
+<text class="plc-k" x="548" y="318.0">the plugin</text>
+<rect class="plc-warn" x="728" y="282" width="176" height="44" rx="6"/>
+<text class="plc-n" x="740" y="300.0">Contoso.Data 3.0.0</text>
+<text class="plc-k" x="740" y="318.0">its private copy</text>
+<text class="plc-lab" x="536" y="358">private dependencies found through its own deps.json</text>
+<path class="plc-flow" d="M300,244 L300,222 L440,222 L440,156" marker-end="url(#plc-a)"/>
+<path class="plc-flow" d="M660,244 L660,222 L520,222 L520,156" marker-end="url(#plc-a)"/>
+</g>
+</svg>

@@ -1,0 +1,72 @@
+---
+title: "What an HttpClient Owns"
+kind: structure
+system: dotnet
+summary: "HttpClient settings over a handler chain over a pool of long-lived connections."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 330" role="img" aria-labelledby="hca-title hca-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="hca-title">The layers under HttpClient down to pooled TCP connections</title>
+<desc id="hca-desc">HttpClient holds settings that apply to every request, such as BaseAddress, Timeout, and DefaultRequestHeaders, and passes each request to a handler chain. Optional delegating handlers for logging, auth, or retries sit in front of SocketsHttpHandler, which owns the connection pool. Each pooled TCP connection resolved the server's IP address when it opened. If DNS later points the name at a new address, open connections keep using the old one until they close, which PooledConnectionLifetime forces.</desc>
+<style>
+.hca-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hca-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.hca-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.hca-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.hca-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.hca-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.hca-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hca-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.hca-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.hca-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.hca-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.hca-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.hca-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.hca-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.hca-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.hca-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.hca-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.hca-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.hca-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.hca-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.hca-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.hca-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.hca-dot { fill: var(--color-primary, #1A5F8A); }
+.hca-dot-hot { fill: var(--color-accent, #A5486E); }
+.hca-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.hca-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.hca-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="hca-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="hca-sys" x="20" y="40" width="190" height="92" rx="6"/>
+<text class="hca-n-inv" x="32" y="66.0">HttpClient</text>
+<text class="hca-k-inv" x="32" y="84.0">BaseAddress, Timeout,</text>
+<text class="hca-k-inv" x="32" y="100.0">DefaultRequestHeaders</text>
+<text class="hca-k-inv" x="32" y="116.0">thin: settings only</text>
+<rect class="hca-px" x="250" y="40" width="190" height="92" rx="6"/>
+<text class="hca-n" x="262" y="74.0">DelegatingHandlers</text>
+<text class="hca-k" x="262" y="92.0">optional: logging,</text>
+<text class="hca-k" x="262" y="108.0">auth, retries</text>
+<rect class="hca-box" x="480" y="40" width="190" height="92" rx="6"/>
+<text class="hca-n" x="492" y="74.0">SocketsHttpHandler</text>
+<text class="hca-k" x="492" y="92.0">owns the pool</text>
+<text class="hca-k" x="492" y="108.0">PooledConnectionLifetime</text>
+<path class="hca-flow" d="M210,86 L248,86" marker-end="url(#hca-a)"/>
+<path class="hca-flow" d="M440,86 L478,86" marker-end="url(#hca-a)"/>
+<rect class="hca-zone" x="480" y="160" width="460" height="150" rx="8"/>
+<text class="hca-n" x="496" y="184">Connection pool</text>
+<path class="hca-flow" d="M575,132 L575,158" marker-end="url(#hca-a)"/>
+<rect class="hca-box" x="496" y="196" width="428" height="46" rx="6"/>
+<text class="hca-n" x="508" y="215.0">TCP connection to api.example.com</text>
+<text class="hca-k" x="508" y="233.0">IP 203.0.113.10, resolved when it opened</text>
+<rect class="hca-box" x="496" y="250" width="428" height="46" rx="6"/>
+<text class="hca-n" x="508" y="269.0">TCP connection to api.example.com</text>
+<text class="hca-k" x="508" y="287.0">IP 203.0.113.10, resolved when it opened</text>
+<text class="hca-em" x="20" y="200">DNS is resolved only when a connection</text>
+<text class="hca-em" x="20" y="218">opens. If api.example.com moves to</text>
+<text class="hca-em" x="20" y="236">203.0.113.20, these connections keep</text>
+<text class="hca-em" x="20" y="254">using the old address until they close.</text>
+</g>
+</svg>

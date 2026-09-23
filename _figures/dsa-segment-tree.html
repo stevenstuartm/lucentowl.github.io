@@ -1,0 +1,99 @@
+---
+title: "A Segment Tree Answering a Range Sum"
+kind: structure
+system: dsa
+summary: "Sum(2, 6) over eight values, answered from three stored sums."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 498" role="img" aria-labelledby="sg-title sg-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="sg-title">A segment tree over eight values answering the sum of indexes 2 to 6</title>
+<desc id="sg-desc">A segment tree over the array 5, 8, 6, 3, 2, 7, 2, 6. Each node holds the sum of a range of indexes. The root covers 0 to 7 with sum 39. Its children cover 0 to 3 with sum 22 and 4 to 7 with sum 17. The next level covers 0 to 1 (13), 2 to 3 (9), 4 to 5 (9), and 6 to 7 (8), and the leaves hold the eight single values. To sum indexes 2 to 6, the query splits at the root, at 0 to 3, at 4 to 7, and at 6 to 7. It uses the stored sums of 2 to 3 (9), 4 to 5 (9), and the single index 6 (2), for a total of 20. The nodes for 0 to 1 and index 7 lie outside the range and return 0, and the leaves under them and under 2 to 3 and 4 to 5 are never visited.</desc>
+<style>
+.sg-use { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.sg-split { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.25; }
+.sg-skip { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.sg-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #CBD5E0); stroke-width: 1; }
+.sg-v { font-size: 15px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.sg-v-inv { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+.sg-v-off { font-size: 15px; font-weight: 700; fill: var(--color-text-light, #4A5568); opacity: 0.6; }
+.sg-r { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.sg-r-inv { font-size: 11px; fill: #FFFFFF; }
+.sg-r-off { font-size: 11px; fill: var(--color-text-light, #4A5568); opacity: 0.6; }
+.sg-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.sg-ed { fill: none; stroke: var(--color-border, #CBD5E0); stroke-width: 1; }
+.sg-br { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.sg-bl { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.sg-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="sg-ed" d="M 118.0,260.0 L 70.0,310.0"/>
+<path class="sg-ed" d="M 118.0,260.0 L 166.0,310.0"/>
+<path class="sg-ed" d="M 310.0,260.0 L 262.0,310.0"/>
+<path class="sg-ed" d="M 310.0,260.0 L 358.0,310.0"/>
+<path class="sg-e" d="M 214.0,170.0 L 118.0,220.0"/>
+<path class="sg-e" d="M 214.0,170.0 L 310.0,220.0"/>
+<path class="sg-ed" d="M 502.0,260.0 L 454.0,310.0"/>
+<path class="sg-ed" d="M 502.0,260.0 L 550.0,310.0"/>
+<path class="sg-e" d="M 694.0,260.0 L 646.0,310.0"/>
+<path class="sg-e" d="M 694.0,260.0 L 742.0,310.0"/>
+<path class="sg-e" d="M 598.0,170.0 L 502.0,220.0"/>
+<path class="sg-e" d="M 598.0,170.0 L 694.0,220.0"/>
+<path class="sg-e" d="M 406.0,80.0 L 214.0,130.0"/>
+<path class="sg-e" d="M 406.0,80.0 L 598.0,130.0"/>
+<rect class="sg-off" x="34.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-off" x="70.0" y="326" text-anchor="middle">[0]</text>
+<text class="sg-v-off" x="70.0" y="343" text-anchor="middle">5</text>
+<rect class="sg-off" x="130.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-off" x="166.0" y="326" text-anchor="middle">[1]</text>
+<text class="sg-v-off" x="166.0" y="343" text-anchor="middle">8</text>
+<rect class="sg-skip" x="82.0" y="220.0" width="72" height="40" rx="6"/>
+<text class="sg-r" x="118.0" y="236" text-anchor="middle">[0..1]</text>
+<text class="sg-v" x="118.0" y="253" text-anchor="middle">13</text>
+<rect class="sg-off" x="226.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-off" x="262.0" y="326" text-anchor="middle">[2]</text>
+<text class="sg-v-off" x="262.0" y="343" text-anchor="middle">6</text>
+<rect class="sg-off" x="322.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-off" x="358.0" y="326" text-anchor="middle">[3]</text>
+<text class="sg-v-off" x="358.0" y="343" text-anchor="middle">3</text>
+<rect class="sg-use" x="274.0" y="220.0" width="72" height="40" rx="6"/>
+<text class="sg-r-inv" x="310.0" y="236" text-anchor="middle">[2..3]</text>
+<text class="sg-v-inv" x="310.0" y="253" text-anchor="middle">9</text>
+<rect class="sg-split" x="178.0" y="130.0" width="72" height="40" rx="6"/>
+<text class="sg-r" x="214.0" y="146" text-anchor="middle">[0..3]</text>
+<text class="sg-v" x="214.0" y="163" text-anchor="middle">22</text>
+<rect class="sg-off" x="418.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-off" x="454.0" y="326" text-anchor="middle">[4]</text>
+<text class="sg-v-off" x="454.0" y="343" text-anchor="middle">2</text>
+<rect class="sg-off" x="514.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-off" x="550.0" y="326" text-anchor="middle">[5]</text>
+<text class="sg-v-off" x="550.0" y="343" text-anchor="middle">7</text>
+<rect class="sg-use" x="466.0" y="220.0" width="72" height="40" rx="6"/>
+<text class="sg-r-inv" x="502.0" y="236" text-anchor="middle">[4..5]</text>
+<text class="sg-v-inv" x="502.0" y="253" text-anchor="middle">9</text>
+<rect class="sg-use" x="610.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r-inv" x="646.0" y="326" text-anchor="middle">[6]</text>
+<text class="sg-v-inv" x="646.0" y="343" text-anchor="middle">2</text>
+<rect class="sg-skip" x="706.0" y="310.0" width="72" height="40" rx="6"/>
+<text class="sg-r" x="742.0" y="326" text-anchor="middle">[7]</text>
+<text class="sg-v" x="742.0" y="343" text-anchor="middle">6</text>
+<rect class="sg-split" x="658.0" y="220.0" width="72" height="40" rx="6"/>
+<text class="sg-r" x="694.0" y="236" text-anchor="middle">[6..7]</text>
+<text class="sg-v" x="694.0" y="253" text-anchor="middle">8</text>
+<rect class="sg-split" x="562.0" y="130.0" width="72" height="40" rx="6"/>
+<text class="sg-r" x="598.0" y="146" text-anchor="middle">[4..7]</text>
+<text class="sg-v" x="598.0" y="163" text-anchor="middle">17</text>
+<rect class="sg-split" x="370.0" y="40.0" width="72" height="40" rx="6"/>
+<text class="sg-r" x="406.0" y="56" text-anchor="middle">[0..7]</text>
+<text class="sg-v" x="406.0" y="73" text-anchor="middle">39</text>
+<path class="sg-br" d="M 226.0,360.0 L 226.0,366.0 L 682.0,366.0 L 682.0,360.0"/>
+<text class="sg-bl" x="454.0" y="384.0" text-anchor="middle">query: sum of indexes 2 to 6</text>
+<rect class="sg-use" x="40" y="407.0" width="22" height="16" rx="3"/>
+<text class="sg-s" x="70" y="420.0">Fully inside: stored sum used</text>
+<rect class="sg-split" x="400" y="407.0" width="22" height="16" rx="3"/>
+<text class="sg-s" x="430" y="420.0">Partly inside: both children asked</text>
+<rect class="sg-skip" x="40" y="433.0" width="22" height="16" rx="3"/>
+<text class="sg-s" x="70" y="446.0">Outside: returns 0</text>
+<rect class="sg-off" x="400" y="433.0" width="22" height="16" rx="3"/>
+<text class="sg-s" x="430" y="446.0">Never visited</text>
+<text class="sg-s" x="40" y="480.0">Sum(2, 6) = 9 + 9 + 2 = 20, read from three stored nodes instead of adding five array values.</text>
+</g>
+</svg>

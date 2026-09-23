@@ -1,0 +1,71 @@
+---
+title: "Breadth-First and Depth-First Visit Order"
+kind: flow
+system: dsa
+summary: "The order BFS and DFS reach the same six vertices."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 450" role="img" aria-labelledby="bfo-title bfo-desc" style="width:100%; min-width:660px; height:auto; display:block;">
+<title id="bfo-title">Breadth-first and depth-first search on the same graph, starting from A</title>
+<desc id="bfo-desc">An undirected graph with edges A–B, A–C, B–D, B–E, C–F, and E–F, searched twice from A, taking neighbors in the order they were added. Breadth-first search visits A, then B and C at distance 1, then D, E, and F at distance 2. It first reaches each vertex along A–B, A–C, B–D, B–E, and C–F, and the edge E–F leads only to a vertex already visited. Depth-first search visits A, B, D, E, F, then C. It goes from A to B, down to D, back up to B, then to E, on to F, and reaches C last through F. The edge A–C leads only to a vertex already visited.</desc>
+<style>
+.bfo-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.bfo-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bfo-b { fill: var(--color-accent, #A5486E); }
+.bfo-bv { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+.bfo-t { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; }
+.bfo-x { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bfo-lv { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.bfo-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bfo-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="bfo-hd" x="40" y="34">BREADTH-FIRST FROM A</text>
+<text class="bfo-lv" x="360" y="94" text-anchor="end">distance 0</text>
+<text class="bfo-lv" x="360" y="184" text-anchor="end">distance 1</text>
+<text class="bfo-lv" x="360" y="284" text-anchor="end">distance 2</text>
+<path class="bfo-t" d="M 188.0,103.5 L 132.0,166.5"/>
+<path class="bfo-t" d="M 212.0,103.5 L 268.0,166.5"/>
+<path class="bfo-t" d="M 112.0,196.1 L 78.0,263.9"/>
+<path class="bfo-t" d="M 128.0,196.1 L 162.0,263.9"/>
+<path class="bfo-t" d="M 280.0,198.0 L 280.0,262.0"/>
+<path class="bfo-x" d="M 188.0,280.0 L 262.0,280.0"/>
+<circle class="bfo-n" cx="200" cy="90" r="18"/><text class="bfo-v" x="200" y="95" text-anchor="middle">A</text>
+<circle class="bfo-b" cx="217" cy="73" r="10"/><text class="bfo-bv" x="217" y="77" text-anchor="middle">1</text>
+<circle class="bfo-n" cx="120" cy="180" r="18"/><text class="bfo-v" x="120" y="185" text-anchor="middle">B</text>
+<circle class="bfo-b" cx="137" cy="163" r="10"/><text class="bfo-bv" x="137" y="167" text-anchor="middle">2</text>
+<circle class="bfo-n" cx="280" cy="180" r="18"/><text class="bfo-v" x="280" y="185" text-anchor="middle">C</text>
+<circle class="bfo-b" cx="297" cy="163" r="10"/><text class="bfo-bv" x="297" y="167" text-anchor="middle">3</text>
+<circle class="bfo-n" cx="70" cy="280" r="18"/><text class="bfo-v" x="70" y="285" text-anchor="middle">D</text>
+<circle class="bfo-b" cx="87" cy="263" r="10"/><text class="bfo-bv" x="87" y="267" text-anchor="middle">4</text>
+<circle class="bfo-n" cx="170" cy="280" r="18"/><text class="bfo-v" x="170" y="285" text-anchor="middle">E</text>
+<circle class="bfo-b" cx="187" cy="263" r="10"/><text class="bfo-bv" x="187" y="267" text-anchor="middle">5</text>
+<circle class="bfo-n" cx="280" cy="280" r="18"/><text class="bfo-v" x="280" y="285" text-anchor="middle">F</text>
+<circle class="bfo-b" cx="297" cy="263" r="10"/><text class="bfo-bv" x="297" y="267" text-anchor="middle">6</text>
+<text class="bfo-s" x="40" y="340">Visits A, B, C, D, E, F: every vertex at distance 1</text>
+<text class="bfo-s" x="40" y="358">before any at distance 2.</text>
+<text class="bfo-hd" x="480" y="34">DEPTH-FIRST FROM A</text>
+<path class="bfo-t" d="M 628.0,103.5 L 572.0,166.5"/>
+<path class="bfo-x" d="M 652.0,103.5 L 708.0,166.5"/>
+<path class="bfo-t" d="M 552.0,196.1 L 518.0,263.9"/>
+<path class="bfo-t" d="M 568.0,196.1 L 602.0,263.9"/>
+<path class="bfo-t" d="M 720.0,198.0 L 720.0,262.0"/>
+<path class="bfo-t" d="M 628.0,280.0 L 702.0,280.0"/>
+<circle class="bfo-n" cx="640" cy="90" r="18"/><text class="bfo-v" x="640" y="95" text-anchor="middle">A</text>
+<circle class="bfo-b" cx="657" cy="73" r="10"/><text class="bfo-bv" x="657" y="77" text-anchor="middle">1</text>
+<circle class="bfo-n" cx="560" cy="180" r="18"/><text class="bfo-v" x="560" y="185" text-anchor="middle">B</text>
+<circle class="bfo-b" cx="577" cy="163" r="10"/><text class="bfo-bv" x="577" y="167" text-anchor="middle">2</text>
+<circle class="bfo-n" cx="720" cy="180" r="18"/><text class="bfo-v" x="720" y="185" text-anchor="middle">C</text>
+<circle class="bfo-b" cx="737" cy="163" r="10"/><text class="bfo-bv" x="737" y="167" text-anchor="middle">6</text>
+<circle class="bfo-n" cx="510" cy="280" r="18"/><text class="bfo-v" x="510" y="285" text-anchor="middle">D</text>
+<circle class="bfo-b" cx="527" cy="263" r="10"/><text class="bfo-bv" x="527" y="267" text-anchor="middle">3</text>
+<circle class="bfo-n" cx="610" cy="280" r="18"/><text class="bfo-v" x="610" y="285" text-anchor="middle">E</text>
+<circle class="bfo-b" cx="627" cy="263" r="10"/><text class="bfo-bv" x="627" y="267" text-anchor="middle">4</text>
+<circle class="bfo-n" cx="720" cy="280" r="18"/><text class="bfo-v" x="720" y="285" text-anchor="middle">F</text>
+<circle class="bfo-b" cx="737" cy="263" r="10"/><text class="bfo-bv" x="737" y="267" text-anchor="middle">5</text>
+<text class="bfo-s" x="480" y="340">Visits A, B, D, E, F, C: it follows one branch as far</text>
+<text class="bfo-s" x="480" y="358">as it goes, reaching C last, through F.</text>
+<path class="bfo-t" d="M 40,400 L 70,400"/><text class="bfo-s" x="80" y="404">Edge that first reached a vertex</text>
+<path class="bfo-x" d="M 440,400 L 470,400"/><text class="bfo-s" x="480" y="404">Edge to a vertex already visited</text>
+<circle class="bfo-b" cx="50" cy="430" r="10"/><text class="bfo-bv" x="50" y="434" text-anchor="middle">1</text><text class="bfo-s" x="80" y="434">Visit order</text>
+</g>
+</svg>

@@ -3,16 +3,14 @@ title: "AAA Scenarios: Applying the Discipline"
 layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
-description: "Real-world scenarios demonstrating how AAA discipline applies to common challenges architects face."
+description: "Four situations architects meet mid-project (a requirement that changes mid-sprint, a demand to deliver sooner, an architecture that fails at scale, a dependency that slips), each with the undisciplined response beside the AAA one, and how to recover from three anti-patterns."
 author: steven-stuart
-tags: [sdlc, aaa-cycle, stakeholder-management, collaboration, practical]
+tags: [practical, aaa-cycle, stakeholder-management, scope-negotiation, dependency-management, anti-patterns]
 ---
 
 ## Overview
 
 These scenarios demonstrate how AAA discipline applies to real challenges architects face. Each scenario shows both the undisciplined response (what teams often do) and the AAA response (what the discipline requires).
-
-For the philosophy and core values behind AAA, see [AAA Cycle: Align-Agree-Apply](aaa-cycle.html).
 
 ---
 
@@ -131,7 +129,7 @@ When you recognize failure patterns mid-project, recovery is possible, but it re
 1. Acknowledge that signatures don't equal understanding
 2. Facilitate a working session (not a presentation) to surface different interpretations
 3. Document the conflicts explicitly: what do people actually disagree about?
-4. Resolve conflicts through the process described in Phase 2 (escalate, vote, or reduce scope to agreed portions)
+4. Resolve conflicts by escalating, voting, or reducing scope to the agreed portions
 5. Create new agreement artifacts that reflect genuine shared understanding, not just compliance
 
 ### Recovering from "Delivery as the Goal"

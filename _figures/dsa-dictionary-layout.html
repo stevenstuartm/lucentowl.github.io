@@ -1,0 +1,90 @@
+---
+title: "Inside Dictionary<TKey,TValue>"
+kind: structure
+system: dsa
+summary: "How a .NET dictionary keeps its chains as integer links inside two arrays instead of as linked nodes."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 376" role="img" aria-labelledby="dl-title dl-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="dl-title">A dictionary's buckets array pointing into its entries array</title>
+<desc id="dl-desc">A dictionary with five buckets and an entries array of five slots. The keys cat, dog, emu, and fox were added in that order and sit in entries 0 to 3; entry 4 is not used yet. Cat and emu both reduce to bucket 2, dog to bucket 0, and fox to bucket 4. Buckets 1 and 3 are empty. Bucket 0 points to entry 1, bucket 2 to entry 2, and bucket 4 to entry 3. Each new entry goes to the head of its chain, so emu's next field holds 0, linking to cat, whose next marks the end of the chain. Looking up cat reads bucket 2, checks emu, and follows the next link to cat. Enumerating the dictionary walks the entries array in index order, which matches insertion order until a removal frees a slot that a later add reuses.</desc>
+<style>
+.dl-cell { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dl-empty { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
+.dl-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dl-e { font-size: 12px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dl-i { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+.dl-th { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.dl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dl-sub { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dl-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.dl-nl { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.dl-ptr { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.dl-next { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+</style>
+<defs>
+<marker id="dl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dl-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dl-hd" x="90" y="40">BUCKETS</text>
+<text class="dl-sub" x="90" y="58">first entry in each chain</text>
+<text class="dl-hd" x="440" y="40">ENTRIES</text>
+<text class="dl-sub" x="440" y="58">each also caches its hash code</text>
+<text class="dl-i" x="80" y="108.0" text-anchor="end">0</text>
+<rect class="dl-cell" x="90" y="86" width="130" height="36"/>
+<text class="dl-t" x="155.0" y="109.0" text-anchor="middle">entry 1</text>
+<text class="dl-i" x="80" y="152.0" text-anchor="end">1</text>
+<rect class="dl-empty" x="90" y="130" width="130" height="36"/>
+<text class="dl-e" x="155.0" y="153.0" text-anchor="middle">empty</text>
+<text class="dl-i" x="80" y="196.0" text-anchor="end">2</text>
+<rect class="dl-cell" x="90" y="174" width="130" height="36"/>
+<text class="dl-t" x="155.0" y="197.0" text-anchor="middle">entry 2</text>
+<text class="dl-i" x="80" y="240.0" text-anchor="end">3</text>
+<rect class="dl-empty" x="90" y="218" width="130" height="36"/>
+<text class="dl-e" x="155.0" y="241.0" text-anchor="middle">empty</text>
+<text class="dl-i" x="80" y="284.0" text-anchor="end">4</text>
+<rect class="dl-cell" x="90" y="262" width="130" height="36"/>
+<text class="dl-t" x="155.0" y="285.0" text-anchor="middle">entry 3</text>
+<text class="dl-th" x="485.0" y="78" text-anchor="middle">key</text>
+<text class="dl-th" x="570.0" y="78" text-anchor="middle">value</text>
+<text class="dl-th" x="650.0" y="78" text-anchor="middle">next</text>
+<text class="dl-i" x="430" y="108.0" text-anchor="end">0</text>
+<rect class="dl-cell" x="440" y="86" width="90" height="36"/>
+<text class="dl-t" x="485.0" y="109.0" text-anchor="middle">"cat"</text>
+<rect class="dl-cell" x="530" y="86" width="80" height="36"/>
+<text class="dl-t" x="570.0" y="109.0" text-anchor="middle">3</text>
+<rect class="dl-cell" x="610" y="86" width="80" height="36"/>
+<text class="dl-e" x="650.0" y="109.0" text-anchor="middle">end</text>
+<text class="dl-i" x="430" y="152.0" text-anchor="end">1</text>
+<rect class="dl-cell" x="440" y="130" width="90" height="36"/>
+<text class="dl-t" x="485.0" y="153.0" text-anchor="middle">"dog"</text>
+<rect class="dl-cell" x="530" y="130" width="80" height="36"/>
+<text class="dl-t" x="570.0" y="153.0" text-anchor="middle">5</text>
+<rect class="dl-cell" x="610" y="130" width="80" height="36"/>
+<text class="dl-e" x="650.0" y="153.0" text-anchor="middle">end</text>
+<text class="dl-i" x="430" y="196.0" text-anchor="end">2</text>
+<rect class="dl-cell" x="440" y="174" width="90" height="36"/>
+<text class="dl-t" x="485.0" y="197.0" text-anchor="middle">"emu"</text>
+<rect class="dl-cell" x="530" y="174" width="80" height="36"/>
+<text class="dl-t" x="570.0" y="197.0" text-anchor="middle">7</text>
+<rect class="dl-cell" x="610" y="174" width="80" height="36"/>
+<text class="dl-t" x="650.0" y="197.0" text-anchor="middle">0</text>
+<text class="dl-i" x="430" y="240.0" text-anchor="end">3</text>
+<rect class="dl-cell" x="440" y="218" width="90" height="36"/>
+<text class="dl-t" x="485.0" y="241.0" text-anchor="middle">"fox"</text>
+<rect class="dl-cell" x="530" y="218" width="80" height="36"/>
+<text class="dl-t" x="570.0" y="241.0" text-anchor="middle">1</text>
+<rect class="dl-cell" x="610" y="218" width="80" height="36"/>
+<text class="dl-e" x="650.0" y="241.0" text-anchor="middle">end</text>
+<text class="dl-i" x="430" y="284.0" text-anchor="end">4</text>
+<rect class="dl-empty" x="440" y="262" width="250" height="36"/>
+<text class="dl-e" x="565" y="285.0" text-anchor="middle">not used yet</text>
+<path class="dl-ptr" d="M 224,192.0 C 310,192.0 340,192.0 414,192.0" marker-end="url(#dl-a)"/>
+<path class="dl-ptr" d="M 224,104.0 C 310,104.0 340,148.0 414,148.0" marker-end="url(#dl-a)"/>
+<path class="dl-ptr" d="M 224,280.0 C 310,280.0 340,236.0 414,236.0" marker-end="url(#dl-a)"/>
+<path class="dl-next" d="M 692,192.0 C 750,192.0 750,104.0 696,104.0" marker-end="url(#dl-b)"/>
+<text class="dl-nl" x="752" y="152.0">same chain</text>
+<text class="dl-s" x="40" y="336">Keys cat and emu both reduce to bucket 2. Each new entry goes to the head of its chain, so bucket 2 names emu, and emu's next names cat.</text>
+<text class="dl-s" x="40" y="356">Looking up cat: bucket 2, then entry 2 (emu, no match), then its next, entry 0 (cat, match).</text>
+</g>
+</svg>

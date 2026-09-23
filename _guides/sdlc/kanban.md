@@ -17,16 +17,9 @@ tags: [practical, kanban, wip-limits, flow-metrics, cycle-time, pull-systems, li
 <p>You don't "do Kanban"; you apply Kanban principles to what you already do.</p>
 </blockquote>
 
-**Core Philosophy:**
-- Start with what you do now
-- Agree to pursue incremental, evolutionary change
-- Respect current roles, responsibilities, and job titles
-- Encourage acts of leadership at all levels
-- Focus on optimizing flow of value through the system
-
 **Key Difference from Frameworks:**
 
-Kanban is not a replacement for your current process. It's a lens through which you visualize, measure, and improve your existing workflow. You don't "do Kanban"; you apply Kanban principles to what you already do.
+Kanban is not a replacement for your current process. It's a lens through which you visualize, measure, and improve your existing workflow, while respecting current roles, responsibilities, and job titles.
 
 ### Why Kanban Emerged
 
@@ -64,7 +57,7 @@ David J. Anderson applied these principles to software development at Microsoft 
 - Measurement of flow (cycle time, throughput)
 - Evolutionary change (improve existing process incrementally)
 
-**Key insight:** Software development is more like maintenance and support (unpredictable arrival of varied work) than manufacturing (predictable production). Kanban's pull-based system handles this variability better than batch-oriented approaches.
+Anderson's argument was that software development is more like maintenance and support (unpredictable arrival of varied work) than manufacturing (predictable production). Kanban's pull-based system handles this variability better than batch-oriented approaches.
 
 ### Kanban vs. Scrum
 
@@ -96,34 +89,6 @@ David J. Anderson applied these principles to software development at Microsoft 
 ---
 
 ## Philosophy and Core Principles
-
-### The Kanban Mindset
-
-**Kanban is about making work visible, limiting WIP, and optimizing flow.**
-
-**Start with what you do now:**
-- Don't disrupt current process with wholesale change
-- Apply Kanban to existing workflow
-- Visualize what actually happens (not idealized process)
-- Improve incrementally from current state
-
-**Evolutionary change:**
-- Small continuous improvements compound
-- Low-risk changes build confidence
-- Learn through experimentation
-- Adapt based on data and feedback
-
-**Respect existing structure:**
-- Keep current roles and job titles
-- Don't impose new organizational structures
-- Work within existing constraints initially
-- Reduce resistance through respect
-
-**Encourage leadership at all levels:**
-- Anyone can suggest improvements
-- Empower team members to solve problems
-- Data-driven decisions (not hierarchy-driven)
-- Collaborative experimentation
 
 ### Principles and Practices Are Different Things
 
@@ -341,9 +306,9 @@ Continue reducing until:
 
 **Typical WIP limits:**
 
-**Per person:** 1-2 items
-**Per team:** 1.5-2x team size
-**Per column:** 2-4 items
+- **Per person:** 1-2 items
+- **Per team:** 1.5-2x team size
+- **Per column:** 2-4 items
 
 **What happens when WIP limit is reached:**
 
@@ -415,35 +380,7 @@ Optimize the movement of work through the system by measuring flow, identifying 
 - Continuous delivery (daily)
 - Optimize end-to-end flow
 
-**Key flow metrics:**
-
-**1. Lead Time**
-
-Time from work request to delivery:
-- Customer-facing metric (how long do they wait?)
-- Includes time in backlog
-- Example: 21 days from idea to production
-
-**2. Cycle Time**
-
-Time from starting work to completion:
-- Internal metric (how long does work take?)
-- Excludes time in backlog
-- Example: 5 days from "In Progress" to "Done"
-
-**3. Throughput**
-
-Number of items completed per time period:
-- Measures delivery rate
-- Example: 12 items per week
-- Higher throughput = more value delivered
-
-**4. Work Item Age**
-
-How long an item has been in the system:
-- Aging items indicate problems
-- Example: Item in "Code Review" for 8 days
-- Triggers intervention
+**Key flow metrics:** lead time, cycle time, throughput, and work item age, each defined under Metrics and Measurement below.
 
 **How to manage flow:**
 
@@ -1253,23 +1190,6 @@ Used against the cycle time distribution, it becomes an alarm. If the 85th perce
 
 ---
 
-**4. Work Item Age**
-
-**Definition:** How long an item has been in current stage
-
-**How to measure:**
-- Track days since entering current column
-- Flag items exceeding threshold (e.g., >5 days)
-- Investigate and unblock aging items
-
-**Example:**
-- Item in Code Review for 1 day: Normal
-- Item in Code Review for 7 days: Flag and investigate
-
-**Target:** Few or no aging items
-
----
-
 **5. Flow Efficiency**
 
 **Definition:** Percentage of time actively adding value vs. waiting
@@ -1317,6 +1237,8 @@ A stacked area chart showing the distribution of work items across workflow stag
 - Jagged bands (inconsistent work arrival or completion)
 - Unpredictable cycle times
 - Difficult to forecast
+
+{% include figure.html id="sdlc-cfd" %}
 
 **Example interpretation:**
 ```

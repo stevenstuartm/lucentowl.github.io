@@ -1,0 +1,94 @@
+---
+title: "Four Wrapper Patterns Compared"
+kind: structure
+system: oop
+summary: "Adapter, Decorator, Proxy, and Facade, by the interfaces each call passes through."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-labelledby="wp-title wp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wp-title">How Adapter, Decorator, Proxy, and Facade wrap other objects</title>
+<desc id="wp-desc">Four small diagrams. Adapter: a client calls the adapter through interface A, and the adapter calls a legacy class through a different interface B. Decorator: a client calls a logging decorator, which calls a retrying decorator, which calls the real object, and every call uses the same interface A, so the decorators stack. Proxy: a client calls a proxy through interface A, and the proxy may or may not forward the call to the real object through the same interface A. Facade: a client calls a facade through one simple interface S, and the facade calls three services, inventory, payments, and shipping.</desc>
+<style>
+.wp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wp-wrap { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.wp-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wp-n-w { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.wp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wp-if { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.wp-call { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wp-cond { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 5 4; }
+.wp-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.wp-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="wp-a" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="wp-a2" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wp-hd" x="30" y="40">ADAPTER</text>
+<rect class="wp-box" x="30" y="110" width="90" height="46"/>
+<text class="wp-n" x="75" y="137.5" text-anchor="middle">Client</text>
+<rect class="wp-wrap" x="190" y="110" width="110" height="46"/>
+<text class="wp-n-w" x="245" y="137.5" text-anchor="middle">Adapter</text>
+<rect class="wp-box" x="370" y="110" width="110" height="46"/>
+<text class="wp-n" x="425" y="137.5" text-anchor="middle">Legacy class</text>
+<path class="wp-call" d="M 120,133 L 187,133" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="154" y="126" text-anchor="middle">A</text>
+<path class="wp-call" d="M 300,133 L 367,133" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="334" y="126" text-anchor="middle">B</text>
+<text class="wp-note" x="30" y="200">Takes calls on interface A and translates them</text>
+<text class="wp-note" x="30" y="217">into interface B, which the legacy class has.</text>
+<text class="wp-hd" x="510" y="40">DECORATOR</text>
+<rect class="wp-box" x="510" y="110" width="76" height="46"/>
+<text class="wp-n" x="548" y="137.5" text-anchor="middle">Client</text>
+<rect class="wp-wrap" x="622" y="110" width="86" height="46"/>
+<text class="wp-n-w" x="665" y="137.5" text-anchor="middle">Logging</text>
+<rect class="wp-wrap" x="744" y="110" width="86" height="46"/>
+<text class="wp-n-w" x="787" y="137.5" text-anchor="middle">Retrying</text>
+<rect class="wp-box" x="866" y="110" width="74" height="46"/>
+<text class="wp-n" x="903" y="137.5" text-anchor="middle">Real</text>
+<path class="wp-call" d="M 586,133 L 619,133" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="602" y="126" text-anchor="middle">A</text>
+<path class="wp-call" d="M 708,133 L 741,133" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="724" y="126" text-anchor="middle">A</text>
+<path class="wp-call" d="M 830,133 L 863,133" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="846" y="126" text-anchor="middle">A</text>
+<text class="wp-note" x="510" y="200">Interface A at every layer, so decorators stack.</text>
+<text class="wp-note" x="510" y="217">Each one adds behavior and forwards the call.</text>
+<text class="wp-hd" x="30" y="290">PROXY</text>
+<rect class="wp-box" x="30" y="360" width="90" height="46"/>
+<text class="wp-n" x="75" y="387.5" text-anchor="middle">Client</text>
+<rect class="wp-wrap" x="190" y="360" width="110" height="46"/>
+<text class="wp-n-w" x="245" y="387.5" text-anchor="middle">Proxy</text>
+<rect class="wp-box" x="370" y="360" width="110" height="46"/>
+<text class="wp-n" x="425" y="387.5" text-anchor="middle">Real object</text>
+<path class="wp-call" d="M 120,383 L 187,383" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="154" y="376" text-anchor="middle">A</text>
+<path class="wp-cond" d="M 300,383 L 367,383" marker-end="url(#wp-a2)"/>
+<text class="wp-if" x="335" y="376" text-anchor="middle">A</text>
+<text class="wp-note" x="30" y="450">Same interface A. The proxy decides whether and</text>
+<text class="wp-note" x="30" y="467">when to forward: lazily, after a check, or not at all.</text>
+<text class="wp-hd" x="510" y="290">FACADE</text>
+<rect class="wp-box" x="510" y="360" width="76" height="46"/>
+<text class="wp-n" x="548" y="387.5" text-anchor="middle">Client</text>
+<rect class="wp-wrap" x="650" y="360" width="96" height="46"/>
+<text class="wp-n-w" x="698" y="387.5" text-anchor="middle">Facade</text>
+<path class="wp-call" d="M 586,383 L 647,383" marker-end="url(#wp-a)"/>
+<text class="wp-if" x="616" y="376" text-anchor="middle">S</text>
+<rect class="wp-box" x="820" y="308" width="120" height="46"/>
+<text class="wp-n" x="880" y="335.5" text-anchor="middle">Inventory</text>
+<path class="wp-call" d="M 746,383 L 817,331" marker-end="url(#wp-a)"/>
+<rect class="wp-box" x="820" y="360" width="120" height="46"/>
+<text class="wp-n" x="880" y="387.5" text-anchor="middle">Payments</text>
+<path class="wp-call" d="M 746,383 L 817,383" marker-end="url(#wp-a)"/>
+<rect class="wp-box" x="820" y="412" width="120" height="46"/>
+<text class="wp-n" x="880" y="439.5" text-anchor="middle">Shipping</text>
+<path class="wp-call" d="M 746,383 L 817,435" marker-end="url(#wp-a)"/>
+<text class="wp-note" x="510" y="485">One simple interface S in front of several services.</text>
+<rect class="wp-wrap" x="30" y="526" width="14" height="14"/>
+<text class="wp-el" x="52" y="537">the wrapper</text>
+<text class="wp-if" x="160" y="537">A, B, S</text>
+<text class="wp-el" x="212" y="537">the interface a call goes through</text>
+<line class="wp-cond" x1="480" y1="533" x2="520" y2="533" marker-end="url(#wp-a2)"/>
+<text class="wp-el" x="530" y="537">forwarded only sometimes</text>
+</g>
+</svg>

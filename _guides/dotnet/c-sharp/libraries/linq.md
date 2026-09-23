@@ -60,12 +60,7 @@ A materialized list copies the elements, not the objects they refer to. A `List<
 
 A chain of deferred operators is a stack of wrappers, each holding the one before it. Enumerating the outermost wrapper pulls one element at a time up through the chain:
 
-```
-foreach  ──asks for next──▶  Select  ──asks──▶  Where  ──asks──▶  source
-         ◀──── 10 ─────────          ◀── 1 ───        ◀── 1 ────
-                                                  ◀── 2 ──── (rejected, asks again)
-         ◀──── 30 ─────────          ◀── 3 ───        ◀── 3 ────
-```
+{% include figure.html id="dn-linq-pull-pipeline" %}
 
 Each element travels the whole chain before the next one is read. Run on .NET 10 with logging in every stage, the order is: read 1, test 1, project 1, deliver 10, read 2, test 2 (rejected), read 3, test 3, project 3, deliver 30. No intermediate list is built between `Where` and `Select`, which is why a deferred pipeline over a large or endless source uses almost no memory, and why `Take(10)` over an endless source finishes.
 
@@ -123,13 +118,9 @@ The two interfaces carry the same operators with different parameter types, and 
 
 When a lambda is passed where an `Expression<Func<...>>` is expected, the compiler builds an expression tree describing the lambda instead of compiling it. Each `Queryable` operator adds its call to a growing tree, and nothing leaves the process until enumeration, when the provider translates the whole tree at once. With EF Core, that means one `Where`, one `OrderBy`, and a `Take` become a single SQL statement with a `WHERE`, an `ORDER BY`, and a row limit, and only the matching rows cross the network.
 
-```
-IQueryable:   Where ─▶ OrderBy ─▶ Take ─▶ [one SQL query] ─▶ database ─▶ 10 rows ─▶ your process
+{% include figure.html id="dn-iqueryable-vs-ienumerable" %}
 
-IEnumerable:  database ─▶ every row ─▶ your process ─▶ Where ─▶ OrderBy ─▶ Take ─▶ 10 rows
-```
-
-Both lines produce the same ten rows. The difference is how much data moved and where the filtering work happened.
+Both paths produce the same ten rows. The difference is how much data moved and where the filtering work happened.
 
 ### The Static-Type Trap
 

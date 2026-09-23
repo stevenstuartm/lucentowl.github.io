@@ -1,0 +1,72 @@
+---
+title: "The Shape of a Memory Leak"
+kind: chart
+system: dotnet
+summary: "Heap size over time, with a level floor when healthy and a rising one when leaking."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="hsw-title hsw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="hsw-title">Managed heap size over time for a healthy process and a leaking one</title>
+<desc id="hsw-desc">Both charts plot managed heap size against time. The heap grows as the process allocates and drops at each garbage collection, making a sawtooth. The dots mark the heap size after each collection. In the healthy process the dots stay at a level floor. In the leaking process the heap still saws up and down, but each collection drops back to a higher floor than the last, because objects that are still referenced survive every collection.</desc>
+<style>
+.hsw-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hsw-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.hsw-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.hsw-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.hsw-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.hsw-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.hsw-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hsw-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.hsw-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.hsw-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.hsw-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.hsw-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.hsw-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.hsw-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.hsw-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.hsw-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.hsw-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.hsw-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.hsw-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.hsw-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.hsw-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.hsw-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.hsw-dot { fill: var(--color-primary, #1A5F8A); }
+.hsw-dot-hot { fill: var(--color-accent, #A5486E); }
+.hsw-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.hsw-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.hsw-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="hsw-hd" x="30" y="34">HEALTHY: FLOOR STAYS LEVEL</text>
+<line class="hsw-axis" x1="60" y1="270" x2="440" y2="270"/>
+<line class="hsw-axis" x1="60" y1="270" x2="60" y2="70"/>
+<text class="hsw-lab" x="440" y="290" text-anchor="end">time</text>
+<text class="hsw-lab" x="50" y="60">heap size</text>
+<path class="hsw-flow" d="M60.0,230 L103.7,140 L107.5,230 M107.5,230 L151.2,140 L155.0,230 M155.0,230 L198.7,140 L202.5,230 M202.5,230 L246.2,140 L250.0,230 M250.0,230 L293.7,140 L297.5,230 M297.5,230 L341.2,140 L345.0,230 M345.0,230 L388.7,140 L392.5,230 M392.5,230 L436.2,140 L440.0,230"/>
+<circle class="hsw-dot-hot" cx="107.5" cy="230" r="4.5"/>
+<circle class="hsw-dot-hot" cx="155.0" cy="230" r="4.5"/>
+<circle class="hsw-dot-hot" cx="202.5" cy="230" r="4.5"/>
+<circle class="hsw-dot-hot" cx="250.0" cy="230" r="4.5"/>
+<circle class="hsw-dot-hot" cx="297.5" cy="230" r="4.5"/>
+<circle class="hsw-dot-hot" cx="345.0" cy="230" r="4.5"/>
+<circle class="hsw-dot-hot" cx="392.5" cy="230" r="4.5"/>
+<path class="hsw-hot" d="M107.5,230 L392.5,230"/>
+<text class="hsw-hd" x="510" y="34">LEAKING: FLOOR KEEPS RISING</text>
+<line class="hsw-axis" x1="540" y1="270" x2="920" y2="270"/>
+<line class="hsw-axis" x1="540" y1="270" x2="540" y2="70"/>
+<text class="hsw-lab" x="920" y="290" text-anchor="end">time</text>
+<text class="hsw-lab" x="530" y="60">heap size</text>
+<path class="hsw-flow" d="M540.0,240 L583.7,170 L587.5,228 M587.5,228 L631.2,158 L635.0,216 M635.0,216 L678.7,146 L682.5,204 M682.5,204 L726.2,134 L730.0,192 M730.0,192 L773.7,122 L777.5,180 M777.5,180 L821.2,110 L825.0,168 M825.0,168 L868.7,98 L872.5,156 M872.5,156 L916.2,86 L920.0,156"/>
+<circle class="hsw-dot-hot" cx="587.5" cy="228" r="4.5"/>
+<circle class="hsw-dot-hot" cx="635.0" cy="216" r="4.5"/>
+<circle class="hsw-dot-hot" cx="682.5" cy="204" r="4.5"/>
+<circle class="hsw-dot-hot" cx="730.0" cy="192" r="4.5"/>
+<circle class="hsw-dot-hot" cx="777.5" cy="180" r="4.5"/>
+<circle class="hsw-dot-hot" cx="825.0" cy="168" r="4.5"/>
+<circle class="hsw-dot-hot" cx="872.5" cy="156" r="4.5"/>
+<path class="hsw-hot" d="M587.5,228 L872.5,156"/>
+<circle class="hsw-dot-hot" cx="40" cy="306" r="4.5"/>
+<text class="hsw-lab" x="52" y="310">heap size after each GC, the dotnet.gc.last_collection.heap.size counter</text>
+</g>
+</svg>

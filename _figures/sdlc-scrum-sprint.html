@@ -1,0 +1,93 @@
+---
+title: "One Scrum Sprint"
+kind: flow
+system: sdlc
+summary: "The events inside a Sprint and the artifacts they produce."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 522" role="img" aria-labelledby="scr-title scr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="scr-title">The Scrum events inside one Sprint, with the artifacts they read and produce</title>
+<desc id="scr-desc">The Product Backlog, with its Product Goal, feeds Sprint Planning, which produces the Sprint Backlog with its Sprint Goal. Inside the Sprint the Daily Scrum repeats every 24 hours, inspecting progress and adapting the plan, and work becomes the Increment, which meets the Definition of Done. The Sprint Review inspects the Increment with stakeholders and its feedback revises the Product Backlog. The Sprint Retrospective follows and produces improvements for the next Sprint, which starts at Planning with no gap.</desc>
+<style>
+.scr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.scr-hub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.scr-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.scr-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.scr-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.scr-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.scr-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.scr-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.scr-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.scr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.scr-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.scr-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.scr-fwd { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.scr-back { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 5; }
+.scr-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.scr-grid { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.scr-c1 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.scr-cbad { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.scr-ideal { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.scr-seg { fill: var(--color-primary, #1A5F8A); stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1; }
+.scr-seg2 { fill: var(--color-primary, #1A5F8A); opacity: 0.55; stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1; }
+.scr-wait { fill: var(--color-accent, #A5486E); opacity: 0.22; stroke: var(--color-accent, #A5486E); stroke-width: 1; }
+.scr-a1 { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.scr-a2 { fill: var(--color-accent, #A5486E); opacity: 0.55; }
+.scr-a3 { fill: var(--color-primary, #1A5F8A); opacity: 0.35; }
+.scr-a4 { fill: var(--color-primary, #1A5F8A); opacity: 0.12; }
+.scr-dim { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.25; }
+</style>
+<defs>
+<marker id="scr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="scr-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="scr-d" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 z" fill="var(--color-text, #2C3E50)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="scr-band" x="220" y="48" width="544" height="400" rx="8"/>
+<text class="scr-hd" x="236" y="70">SPRINT · ONE MONTH OR LESS · THE NEXT BEGINS IMMEDIATELY</text>
+<rect class="scr-hub" x="24" y="64" width="170" height="102" rx="6"/>
+<text class="scr-t" x="36" y="88">Product Backlog</text>
+<text class="scr-k" x="36" y="106">[Product Goal]</text>
+<text class="scr-s" x="36" y="124">ordered by value,</text>
+<text class="scr-s" x="36" y="142">refined continuously</text>
+<rect class="scr-box" x="240" y="86" width="160" height="78" rx="6"/>
+<text class="scr-t" x="252" y="110">Sprint Planning</text>
+<text class="scr-s" x="252" y="128">the Sprint Goal and</text>
+<text class="scr-s" x="252" y="146">a plan to reach it</text>
+<rect class="scr-hub" x="240" y="206" width="160" height="84" rx="6"/>
+<text class="scr-t" x="252" y="230">Sprint Backlog</text>
+<text class="scr-k" x="252" y="248">[Sprint Goal]</text>
+<text class="scr-s" x="252" y="266">selected items</text>
+<text class="scr-s" x="252" y="284">plus the plan</text>
+<rect class="scr-box" x="420" y="206" width="140" height="84" rx="6"/>
+<text class="scr-t" x="432" y="230">Daily Scrum</text>
+<text class="scr-k" x="432" y="248">[every 24 hours]</text>
+<text class="scr-s" x="432" y="266">inspect progress,</text>
+<text class="scr-s" x="432" y="284">adapt the plan</text>
+<rect class="scr-hub" x="580" y="206" width="172" height="84" rx="6"/>
+<text class="scr-t" x="592" y="230">Increment</text>
+<text class="scr-k" x="592" y="248">[Definition of Done]</text>
+<text class="scr-s" x="592" y="266">all Done work</text>
+<text class="scr-s" x="592" y="284">so far</text>
+<rect class="scr-box" x="580" y="86" width="172" height="78" rx="6"/>
+<text class="scr-t" x="592" y="110">Sprint Review</text>
+<text class="scr-s" x="592" y="128">inspect the Increment</text>
+<text class="scr-s" x="592" y="146">with stakeholders</text>
+<rect class="scr-box" x="580" y="332" width="172" height="84" rx="6"/>
+<text class="scr-t" x="592" y="356">Retrospective</text>
+<text class="scr-k" x="592" y="374">[Sprint Retrospective]</text>
+<text class="scr-s" x="592" y="392">improvements for</text>
+<text class="scr-s" x="592" y="410">the next Sprint</text>
+<path class="scr-fwd" d="M 194,115 H 234" marker-end="url(#scr-a)"/>
+<path class="scr-fwd" d="M 320,164 V 200" marker-end="url(#scr-a)"/>
+<path class="scr-fwd" d="M 400,248 H 414" marker-end="url(#scr-a)"/>
+<path class="scr-fwd" d="M 560,248 H 574" marker-end="url(#scr-a)"/>
+<path class="scr-fwd" d="M 666,206 V 170" marker-end="url(#scr-a)"/>
+<path class="scr-fwd" d="M 452,206 C 452,176 528,176 528,200" marker-end="url(#scr-a)"/>
+<path class="scr-fwd" d="M 752,125 H 780 V 374 H 758" marker-end="url(#scr-a)"/>
+<path class="scr-back" d="M 666,86 V 34 H 109 V 58" marker-end="url(#scr-x)"/>
+<text class="scr-n-bad" x="300" y="26">feedback from the Review revises the Product Backlog</text>
+<path class="scr-back" d="M 666,416 V 472 H 206 V 142 H 234" marker-end="url(#scr-x)"/>
+<text class="scr-n-bad" x="300" y="466">the next Sprint starts at Planning, carrying the improvements</text>
+<text class="scr-note" x="24" y="506">Tinted boxes are artifacts, with the commitment each carries in brackets. White boxes are events inside the Sprint.</text>
+</g>
+</svg>

@@ -1,0 +1,88 @@
+---
+title: "How a Deferred Query Pulls Elements"
+kind: dynamic
+system: dotnet
+summary: "Each element travelling the whole chain before the next is read."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="lpp-title lpp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="lpp-title">A foreach pulling elements one at a time through Select and Where</title>
+<desc id="lpp-desc">The foreach asks Select for the next element, Select asks Where, and Where asks the source. The source yields 1, Where accepts it, Select projects it to 10, and foreach receives 10. Then the source yields 2, Where rejects it and asks the source again, and the source yields 3, which Where accepts and Select projects to 30. No list is built between stages, and each element travels the whole chain before the next is read.</desc>
+<style>
+.lpp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.lpp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.lpp-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.lpp-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.lpp-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.lpp-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.lpp-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.lpp-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.lpp-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.lpp-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.lpp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.lpp-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.lpp-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.lpp-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.lpp-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.lpp-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.lpp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.lpp-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.lpp-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.lpp-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.lpp-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.lpp-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.lpp-dot { fill: var(--color-primary, #1A5F8A); }
+.lpp-dot-hot { fill: var(--color-accent, #A5486E); }
+.lpp-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.lpp-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.lpp-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="lpp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="lpp-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="lpp-ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="lpp-sys" x="10" y="20" width="200" height="44" rx="6"/>
+<text class="lpp-n-inv" x="110.0" y="46.0" text-anchor="middle">foreach</text>
+<line class="lpp-rule" x1="110" y1="64" x2="110" y2="380"/>
+<rect class="lpp-box" x="260" y="20" width="200" height="44" rx="6"/>
+<text class="lpp-n" x="360.0" y="46.0" text-anchor="middle">Select(x =&gt; x * 10)</text>
+<line class="lpp-rule" x1="360" y1="64" x2="360" y2="380"/>
+<rect class="lpp-box" x="510" y="20" width="200" height="44" rx="6"/>
+<text class="lpp-n" x="610.0" y="46.0" text-anchor="middle">Where(x =&gt; x % 2 == 1)</text>
+<line class="lpp-rule" x1="610" y1="64" x2="610" y2="380"/>
+<rect class="lpp-box" x="750" y="20" width="200" height="44" rx="6"/>
+<text class="lpp-n" x="850.0" y="46.0" text-anchor="middle">source</text>
+<line class="lpp-rule" x1="850" y1="64" x2="850" y2="380"/>
+<path class="lpp-ctl" d="M114,92 L354,92" marker-end="url(#lpp-ag)"/>
+<path class="lpp-ctl" d="M364,92 L604,92" marker-end="url(#lpp-ag)"/>
+<path class="lpp-ctl" d="M614,92 L844,92" marker-end="url(#lpp-ag)"/>
+<text class="lpp-lab" x="235" y="85" text-anchor="middle">next?</text>
+<path class="lpp-flow" d="M846,118 L616,118" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="730.0" y="111" text-anchor="middle">1</text>
+<path class="lpp-flow" d="M606,140 L366,140" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="485.0" y="133" text-anchor="middle">1</text>
+<path class="lpp-flow" d="M356,162 L116,162" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="235.0" y="155" text-anchor="middle">10</text>
+<text class="lpp-hd" x="30" y="125">ELEMENT 1</text>
+<path class="lpp-ctl" d="M114,200 L354,200" marker-end="url(#lpp-ag)"/>
+<path class="lpp-ctl" d="M364,200 L604,200" marker-end="url(#lpp-ag)"/>
+<path class="lpp-ctl" d="M614,200 L844,200" marker-end="url(#lpp-ag)"/>
+<path class="lpp-flow" d="M846,226 L616,226" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="730.0" y="219" text-anchor="middle">2</text>
+<path class="lpp-hot" d="M616,244 L650,244 L650,266 L844,266" marker-end="url(#lpp-ah)"/>
+<text class="lpp-em" x="660" y="258">rejected, asks again</text>
+<text class="lpp-hd" x="30" y="233">ELEMENT 2</text>
+<path class="lpp-flow" d="M846,300 L616,300" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="730.0" y="293" text-anchor="middle">3</text>
+<path class="lpp-flow" d="M606,322 L366,322" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="485.0" y="315" text-anchor="middle">3</text>
+<path class="lpp-flow" d="M356,344 L116,344" marker-end="url(#lpp-a)"/>
+<text class="lpp-note" x="235.0" y="337" text-anchor="middle">30</text>
+<text class="lpp-hd" x="30" y="312">ELEMENT 3</text>
+<path class="lpp-ctl" d="M30,416 L60,416"/>
+<text class="lpp-lg" x="68" y="420">request for the next element</text>
+<path class="lpp-flow" d="M269.6,416 L299.6,416"/>
+<text class="lpp-lg" x="307.6" y="420">element handed back</text>
+</g>
+</svg>

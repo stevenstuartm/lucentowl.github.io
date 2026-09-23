@@ -1,0 +1,83 @@
+---
+title: "PeriodicTimer Ticks Around Slow Work"
+kind: flow
+system: dotnet
+summary: "A fixed 100 ms cadence where one 350 ms run swallows three ticks."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" role="img" aria-labelledby="ptt-title ptt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ptt-title">Measured PeriodicTimer ticks with a 100 ms period and one 350 ms run</title>
+<desc id="ptt-desc">With a 100 ms period, ticks fall due every 100 ms from creation. Measured ticks came at 110, 204, 569, 601, and 700 ms. The run that started at the 204 ms tick took 350 ms and ended around 555 ms, so the ticks due at 300, 400, and 500 ms collapsed into one pending tick delivered at 569 ms, and the cadence resumed at 600 ms. Two runs never overlap.</desc>
+<style>
+.ptt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ptt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ptt-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.ptt-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.ptt-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.ptt-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.ptt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ptt-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.ptt-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ptt-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.ptt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ptt-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.ptt-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ptt-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.ptt-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.ptt-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.ptt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ptt-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.ptt-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.ptt-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.ptt-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.ptt-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.ptt-dot { fill: var(--color-primary, #1A5F8A); }
+.ptt-dot-hot { fill: var(--color-accent, #A5486E); }
+.ptt-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.ptt-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.ptt-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="ptt-ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="ptt-n" x="30" y="64">due</text>
+<text class="ptt-n" x="30" y="124">tick</text>
+<text class="ptt-n" x="30" y="184">work</text>
+<line class="ptt-axis" x1="100.0" y1="60" x2="974.0" y2="60"/>
+<line class="ptt-axis" x1="100.0" y1="54" x2="100.0" y2="66"/>
+<text class="ptt-lab" x="100.0" y="42" text-anchor="middle">0 ms</text>
+<line class="ptt-axis" x1="215.0" y1="54" x2="215.0" y2="66"/>
+<text class="ptt-lab" x="215.0" y="42" text-anchor="middle">100 ms</text>
+<line class="ptt-axis" x1="330.0" y1="54" x2="330.0" y2="66"/>
+<text class="ptt-lab" x="330.0" y="42" text-anchor="middle">200 ms</text>
+<line class="ptt-axis" x1="445.0" y1="54" x2="445.0" y2="66"/>
+<text class="ptt-lab" x="445.0" y="42" text-anchor="middle">300 ms</text>
+<line class="ptt-axis" x1="560.0" y1="54" x2="560.0" y2="66"/>
+<text class="ptt-lab" x="560.0" y="42" text-anchor="middle">400 ms</text>
+<line class="ptt-axis" x1="675.0" y1="54" x2="675.0" y2="66"/>
+<text class="ptt-lab" x="675.0" y="42" text-anchor="middle">500 ms</text>
+<line class="ptt-axis" x1="790.0" y1="54" x2="790.0" y2="66"/>
+<text class="ptt-lab" x="790.0" y="42" text-anchor="middle">600 ms</text>
+<line class="ptt-axis" x1="905.0" y1="54" x2="905.0" y2="66"/>
+<text class="ptt-lab" x="905.0" y="42" text-anchor="middle">700 ms</text>
+<line class="ptt-rule" x1="100.0" y1="120" x2="974.0" y2="120"/>
+<circle class="ptt-dot" cx="226.5" cy="120" r="6"/>
+<circle class="ptt-dot" cx="334.6" cy="120" r="6"/>
+<circle class="ptt-dot" cx="754.3" cy="120" r="6"/>
+<circle class="ptt-dot" cx="791.1" cy="120" r="6"/>
+<circle class="ptt-dot" cx="905.0" cy="120" r="6"/>
+<circle class="ptt-dot-off" cx="445.0" cy="120" r="6"/>
+<circle class="ptt-dot-off" cx="560.0" cy="120" r="6"/>
+<circle class="ptt-dot-off" cx="675.0" cy="120" r="6"/>
+<rect class="ptt-bar-hot" x="334.6" y="168" width="403.6" height="24" rx="3"/>
+<text class="ptt-n-inv" x="537.0" y="185" text-anchor="middle">one run, 350 ms</text>
+<rect class="ptt-bar" x="226.5" y="168" width="13.8" height="24" rx="2"/>
+<rect class="ptt-bar" x="754.3" y="168" width="13.8" height="24" rx="2"/>
+<rect class="ptt-bar" x="791.1" y="168" width="13.8" height="24" rx="2"/>
+<rect class="ptt-bar" x="905.0" y="168" width="13.8" height="24" rx="2"/>
+<path class="ptt-hot" d="M445.0,132 L445.0,146 L754.3,146 L754.3,130" marker-end="url(#ptt-ah)"/>
+<text class="ptt-em" x="600.2" y="161" text-anchor="middle">300, 400, 500 collapse into one tick</text>
+<text class="ptt-note" x="30" y="232">Ticks keep the cadence measured from creation. Ticks that fall due during a run collapse into one pending tick,</text>
+<text class="ptt-note" x="30" y="250">so the loop runs once, promptly, and never overlaps itself.</text>
+</g>
+</svg>

@@ -1,0 +1,60 @@
+---
+title: "A Topological Order of Build Steps"
+kind: flow
+system: dsa
+summary: "Six build steps with dependencies, ordered so each follows its prerequisites."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 400" role="img" aria-labelledby="tpo-title tpo-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="tpo-title">A directed acyclic graph of build steps and a topological order of them</title>
+<desc id="tpo-desc">Six build steps connected by "must finish before" arrows: restore to compile, compile to test, compile to docs, test to pack, docs to pack, and pack to publish. Restore has in-degree 0, pack has in-degree 2, and the others have in-degree 1. Kahn's algorithm starts with restore, the only step with in-degree 0. Finishing a step lowers the in-degree of each step it points to, and a step becomes ready when its in-degree reaches 0, so pack waits for both test and docs. The order produced is restore, compile, test, docs, pack, publish. Swapping test and docs is also a valid order.</desc>
+<style>
+.tpo-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.tpo-v { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.tpo-i { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.tpo-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; }
+.tpo-b { fill: var(--color-accent, #A5486E); }
+.tpo-bv { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+.tpo-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.tpo-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="tpo-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="tpo-e" d="M 138,150 L 198,150" marker-end="url(#tpo-a)"/>
+<path class="tpo-e" d="M 298,150 L 358,80" marker-end="url(#tpo-a)"/>
+<path class="tpo-e" d="M 298,150 L 358,220" marker-end="url(#tpo-a)"/>
+<path class="tpo-e" d="M 458,80 L 518,150" marker-end="url(#tpo-a)"/>
+<path class="tpo-e" d="M 458,220 L 518,150" marker-end="url(#tpo-a)"/>
+<path class="tpo-e" d="M 618,150 L 678,150" marker-end="url(#tpo-a)"/>
+<rect class="tpo-n" x="42" y="132" width="96" height="36" rx="6"/>
+<text class="tpo-v" x="90" y="155" text-anchor="middle">restore</text>
+<text class="tpo-i" x="90" y="184" text-anchor="middle">in-degree 0</text>
+<circle class="tpo-b" cx="90" cy="118" r="10"/><text class="tpo-bv" x="90" y="122" text-anchor="middle">1</text>
+<rect class="tpo-n" x="202" y="132" width="96" height="36" rx="6"/>
+<text class="tpo-v" x="250" y="155" text-anchor="middle">compile</text>
+<text class="tpo-i" x="250" y="184" text-anchor="middle">in-degree 1</text>
+<circle class="tpo-b" cx="250" cy="118" r="10"/><text class="tpo-bv" x="250" y="122" text-anchor="middle">2</text>
+<rect class="tpo-n" x="362" y="62" width="96" height="36" rx="6"/>
+<text class="tpo-v" x="410" y="85" text-anchor="middle">test</text>
+<text class="tpo-i" x="410" y="114" text-anchor="middle">in-degree 1</text>
+<circle class="tpo-b" cx="410" cy="48" r="10"/><text class="tpo-bv" x="410" y="52" text-anchor="middle">3</text>
+<rect class="tpo-n" x="362" y="202" width="96" height="36" rx="6"/>
+<text class="tpo-v" x="410" y="225" text-anchor="middle">docs</text>
+<text class="tpo-i" x="410" y="254" text-anchor="middle">in-degree 1</text>
+<circle class="tpo-b" cx="410" cy="188" r="10"/><text class="tpo-bv" x="410" y="192" text-anchor="middle">4</text>
+<rect class="tpo-n" x="522" y="132" width="96" height="36" rx="6"/>
+<text class="tpo-v" x="570" y="155" text-anchor="middle">pack</text>
+<text class="tpo-i" x="570" y="184" text-anchor="middle">in-degree 2</text>
+<circle class="tpo-b" cx="570" cy="118" r="10"/><text class="tpo-bv" x="570" y="122" text-anchor="middle">5</text>
+<rect class="tpo-n" x="682" y="132" width="96" height="36" rx="6"/>
+<text class="tpo-v" x="730" y="155" text-anchor="middle">publish</text>
+<text class="tpo-i" x="730" y="184" text-anchor="middle">in-degree 1</text>
+<circle class="tpo-b" cx="730" cy="118" r="10"/><text class="tpo-bv" x="730" y="122" text-anchor="middle">6</text>
+<text class="tpo-hd" x="40" y="34">EACH ARROW MEANS “MUST FINISH BEFORE”</text>
+<text class="tpo-s" x="40" y="300">Only restore starts with in-degree 0. Finishing a step lowers the in-degree of each step it points to,</text>
+<text class="tpo-s" x="40" y="318">and a step becomes ready at 0. pack waits for both test and docs.</text>
+<text class="tpo-s" x="40" y="344"><tspan font-weight="700">One valid order:</tspan> restore, compile, test, docs, pack, publish. Swapping test and docs is also valid.</text>
+<circle class="tpo-b" cx="50" cy="374" r="10"/><text class="tpo-bv" x="50" y="378" text-anchor="middle">1</text><text class="tpo-s" x="68" y="378">Position in the order Kahn’s algorithm produces</text>
+</g>
+</svg>

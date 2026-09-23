@@ -9,7 +9,7 @@ tags: [fundamentals, waterfall, phase-gates, requirements, regulated-industries,
 
 ## What is Waterfall
 
-*The sequential model is usually traced to Winston W. Royce's 1970 paper "Managing the Development of Large Software Systems." Royce presented the single-pass sequential diagram as a flawed process, called testing only at the end "risky and invites failure," and proposed five modifications to remove most of the development risk. The modifications never took hold; the diagram of the flawed process did. Royce never used the word "waterfall," which appears to have entered the literature later.*
+*The sequential model is usually traced to Winston W. Royce's 1970 paper "Managing the Development of Large Software Systems." Royce presented the single-pass sequential diagram as a flawed process, called testing only at the end "risky and invites failure," and proposed five modifications, among them iteration between phases, prototyping, and customer involvement, to remove most of the development risk. The modifications never took hold; the diagram of the flawed process did. Royce never used the word "waterfall," which appears to have entered the literature later.*
 
 **Waterfall** is a sequential software development methodology where each phase must be completed before moving to the next. Progress flows in one direction (like a waterfall), with formal gates between phases.
 
@@ -67,17 +67,9 @@ Early software development adopted this approach because:
 - Clear accountability (phase ownership)
 - Extensive documentation (audit trail)
 
-### Historical Context
+### Adoption and Decline
 
-**Royce's original paper (1970):**
-
-Winston Royce described the waterfall model but **warned against using it**:
-- "I believe in this concept, but the implementation described above is risky and invites failure."
-- Recommended iteration between phases
-- Emphasized prototyping and customer involvement
-- Suggested risk mitigation through incremental approaches
-
-**Despite warnings, waterfall became standard:**
+**Despite Royce's warnings, waterfall became standard:**
 - Managers liked predictability
 - Contractors liked fixed-bid projects
 - Government and military standardized on it (DOD-STD-2167)
@@ -91,15 +83,6 @@ Waterfall fell out of favor due to:
 - Late discovery of problems (testing at end)
 - Rise of Agile methodologies
 - Internet era requires faster iteration
-
-**Modern context:**
-
-Waterfall still used in:
-- Highly regulated industries (FDA, aerospace, defense)
-- Hardware-software integration projects
-- Projects with truly stable requirements
-- Contractual obligations requiring waterfall
-- Organizations with waterfall-mandated processes
 
 ---
 
@@ -137,35 +120,7 @@ Plan the entire project upfront. Know requirements, design, timeline, and budget
 
 Extensive documentation at every phase. Documentation is primary deliverable, not just byproduct.
 
-**Types of documentation:**
-
-**Requirements phase:**
-- Business requirements document (BRD)
-- Functional requirements specification (FRS)
-- Use cases and user stories
-- Acceptance criteria
-
-**Design phase:**
-- System architecture document (SAD)
-- Database design specifications
-- Interface specifications (APIs, UI)
-- Security design
-
-**Implementation phase:**
-- Code documentation (inline comments, API docs)
-- Developer guides
-- Technical specifications
-
-**Testing phase:**
-- Test plans and test cases
-- Test reports and defect logs
-- Traceability matrices
-
-**Deployment phase:**
-- Deployment guides
-- Operations manuals
-- Training materials
-- Maintenance documentation
+Each phase produces its own documents, listed with the phases below and gathered under Documentation and Deliverables.
 
 **Why documentation emphasized:**
 - Knowledge transfer (people leave)

@@ -1,0 +1,81 @@
+---
+title: "A Bounded Channel Pipeline"
+kind: flow
+system: dotnet
+summary: "Four concurrent stages joined by bounded channels that push back when full."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 240" role="img" aria-labelledby="chb-title chb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="chb-title">A multi-stage pipeline of bounded channels with backpressure</title>
+<desc id="chb-desc">Items flow from a source through a parse stage into a channel bounded at 100 items, then a validate stage, a second channel bounded at 100, and a save stage. Every stage runs concurrently as its own task. When a channel is full, the upstream stage's WriteAsync waits until the downstream stage reads, so a slow save stage slows validate, which slows parse, instead of letting items pile up in memory.</desc>
+<style>
+.chb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.chb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.chb-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.chb-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.chb-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.chb-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.chb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.chb-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.chb-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.chb-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.chb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.chb-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.chb-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.chb-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.chb-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.chb-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.chb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.chb-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.chb-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.chb-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.chb-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.chb-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.chb-dot { fill: var(--color-primary, #1A5F8A); }
+.chb-dot-hot { fill: var(--color-accent, #A5486E); }
+.chb-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.chb-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.chb-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="chb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="chb-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="chb-box" x="20" y="90" width="130" height="56" rx="6"/>
+<text class="chb-n" x="85.0" y="114.0" text-anchor="middle">source</text>
+<text class="chb-k" x="85.0" y="132.0" text-anchor="middle">IAsyncEnumerable</text>
+<rect class="chb-box" x="170" y="90" width="130" height="56" rx="6"/>
+<text class="chb-n" x="235.0" y="114.0" text-anchor="middle">parse</text>
+<text class="chb-k" x="235.0" y="132.0" text-anchor="middle">its own task</text>
+<rect class="chb-px" x="320" y="96" width="150" height="44" rx="4"/>
+<rect class="chb-sys" x="330" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-sys" x="352" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-sys" x="374" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-box" x="396" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-box" x="418" y="104" width="16" height="28" rx="2"/>
+<text class="chb-lab" x="395" y="160" text-anchor="middle">bounded 100</text>
+<rect class="chb-box" x="490" y="90" width="130" height="56" rx="6"/>
+<text class="chb-n" x="555.0" y="114.0" text-anchor="middle">validate</text>
+<text class="chb-k" x="555.0" y="132.0" text-anchor="middle">its own task</text>
+<rect class="chb-px" x="640" y="96" width="150" height="44" rx="4"/>
+<rect class="chb-sys" x="650" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-sys" x="672" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-sys" x="694" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-box" x="716" y="104" width="16" height="28" rx="2"/>
+<rect class="chb-box" x="738" y="104" width="16" height="28" rx="2"/>
+<text class="chb-lab" x="715" y="160" text-anchor="middle">bounded 100</text>
+<rect class="chb-box" x="810" y="90" width="130" height="56" rx="6"/>
+<text class="chb-n" x="875.0" y="114.0" text-anchor="middle">save</text>
+<text class="chb-k" x="875.0" y="132.0" text-anchor="middle">its own task</text>
+<path class="chb-flow" d="M150,118 L168,118" marker-end="url(#chb-a)"/>
+<path class="chb-flow" d="M300,118 L318,118" marker-end="url(#chb-a)"/>
+<path class="chb-flow" d="M470,118 L488,118" marker-end="url(#chb-a)"/>
+<path class="chb-flow" d="M620,118 L638,118" marker-end="url(#chb-a)"/>
+<path class="chb-flow" d="M790,118 L808,118" marker-end="url(#chb-a)"/>
+<text class="chb-hd" x="30" y="40">ITEMS FLOW RIGHT</text>
+<path class="chb-back" d="M395,178 L395,200 L235,200 L235,148" marker-end="url(#chb-ag)"/>
+<path class="chb-back" d="M715,178 L715,200 L555,200 L555,148" marker-end="url(#chb-ag)"/>
+<text class="chb-lab" x="315" y="220" text-anchor="middle">WriteAsync waits when full</text>
+<text class="chb-lab" x="635" y="220" text-anchor="middle">WriteAsync waits when full</text>
+</g>
+</svg>

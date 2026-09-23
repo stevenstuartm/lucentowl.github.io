@@ -15,14 +15,7 @@ An **instant** is a single point on the global timeline, the same moment everywh
 
 A **wall-clock time** is what a clock on a particular wall reads, a date and a time of day with no statement about where. "The store opens at 09:00" and "the meeting is at 10:00 on 3 March" are wall-clock times. They only become instants once a time zone is attached, and the same wall-clock reading is a different instant in every zone.
 
-```
-                         one instant: 2026-03-01 12:00:00 UTC
-                                          │
-      ┌───────────────────────────────────┼───────────────────────────────────┐
-      │                                   │                                   │
- New York wall clock              London wall clock                 Tokyo wall clock
- 2026-03-01 07:00 (-05:00)        2026-03-01 12:00 (+00:00)         2026-03-01 21:00 (+09:00)
-```
+{% include figure.html id="dn-instant-wall-clocks" %}
 
 The .NET types differ mainly in which of those two things they can represent without losing information.
 
@@ -119,19 +112,7 @@ DateTime asUtc = TimeZoneInfo.ConvertTimeToUtc(wallClock, tokyo);
 
 Daylight saving transitions make some wall-clock times impossible and others ambiguous. When New York springs forward, clocks jump from 01:59:59 to 03:00, so 02:30 that night never happens. When it falls back, clocks run from 01:00 to 01:59:59 twice, so 01:30 happens twice, an hour apart.
 
-```
-Spring forward, 2026-03-08
-  UTC                 06:00   06:30   07:00   07:30   08:00
-  New York clock      01:00   01:30   03:00   03:30   04:00
-                                     ▲
-                                     02:00-02:59 never shown
-
-Fall back, 2026-11-01
-  UTC                 04:00   05:00   05:30   06:00   06:30   07:00
-  New York clock      00:00   01:00   01:30   01:00   01:30   02:00
-                              └── EDT ──┘     └── EST ──┘
-                              01:00-01:59 shown twice
-```
+{% include figure.html id="dn-dst-transitions" %}
 
 EDT is Eastern Daylight Time (-04:00) and EST is Eastern Standard Time (-05:00). The UTC row never repeats or skips. Only the wall clock does, which is why converting from an instant to a local time always works and converting back sometimes has zero answers or two.
 

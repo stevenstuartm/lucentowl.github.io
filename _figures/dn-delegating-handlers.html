@@ -1,0 +1,64 @@
+---
+title: "The Delegating Handler Chain"
+kind: flow
+system: dotnet
+summary: "Handlers nested in registration order, request inward and response outward."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="dhc-title dhc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dhc-title">Order of delegating handlers registered with AddHttpMessageHandler</title>
+<desc id="dhc-desc">AuthTokenHandler, registered first, is outermost. It wraps TimingHandler, registered second, which wraps SocketsHttpHandler at the bottom of the chain. A request passes inward through AuthTokenHandler, then TimingHandler, then SocketsHttpHandler to the network, and the response passes back outward in reverse order. Because TimingHandler sits inside AuthTokenHandler, it observes every attempt the auth handler sends.</desc>
+<style>
+.dhc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dhc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dhc-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.dhc-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.dhc-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.dhc-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.dhc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dhc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dhc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dhc-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.dhc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dhc-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.dhc-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dhc-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dhc-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dhc-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dhc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dhc-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.dhc-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.dhc-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.dhc-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.dhc-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.dhc-dot { fill: var(--color-primary, #1A5F8A); }
+.dhc-dot-hot { fill: var(--color-accent, #A5486E); }
+.dhc-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.dhc-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.dhc-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="dhc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dhc-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dhc-px" x="150" y="30" width="660" height="240" rx="10"/>
+<text class="dhc-n" x="170" y="56">AuthTokenHandler</text>
+<text class="dhc-k" x="170" y="74">AddHttpMessageHandler first: outermost</text>
+<rect class="dhc-box" x="220" y="90" width="520" height="160" rx="10"/>
+<text class="dhc-n" x="240" y="116">TimingHandler</text>
+<text class="dhc-k" x="240" y="134">added second: sees every attempt the auth handler sends</text>
+<rect class="dhc-sys" x="300" y="158" width="360" height="68" rx="6"/>
+<text class="dhc-n-inv" x="480.0" y="188.0" text-anchor="middle">SocketsHttpHandler</text>
+<text class="dhc-k-inv" x="480.0" y="206.0" text-anchor="middle">bottom of the chain, talks to the network</text>
+<text class="dhc-n" x="20" y="168">request</text>
+<path class="dhc-flow" d="M20,176 L298,176" marker-end="url(#dhc-a)"/>
+<text class="dhc-n" x="20" y="232">response</text>
+<path class="dhc-back" d="M298,210 L20,210" marker-end="url(#dhc-ag)"/>
+<circle class="dhc-dot" cx="150" cy="176" r="4"/>
+<circle class="dhc-dot-off" cx="150" cy="210" r="4"/>
+<circle class="dhc-dot" cx="220" cy="176" r="4"/>
+<circle class="dhc-dot-off" cx="220" cy="210" r="4"/>
+<path class="dhc-flow" d="M660,192 L940,192" marker-end="url(#dhc-a)"/>
+<text class="dhc-n" x="940" y="180" text-anchor="end">network</text>
+</g>
+</svg>

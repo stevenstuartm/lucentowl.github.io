@@ -4,7 +4,7 @@ layout: guide
 category: Data Structures & Algorithms
 subcategory: Core Data Structures
 description: "Why array indexing is O(1), what a dynamic array like List<T> does when it grows and why appending is still O(1) amortized, and the two pointers and sliding window techniques that make array problems linear."
-tags: [arrays, dynamic-arrays, list, amortized-analysis, two-pointers, sliding-window, fundamentals]
+tags: [arrays, dynamic-arrays, amortized-analysis, two-pointers, sliding-window, fundamentals]
 ---
 {% raw %}
 
@@ -29,7 +29,7 @@ Console.WriteLine(numbers.Length);  // 5
 Console.WriteLine(primes[4]);       // 11
 ```
 
-"Growing" a fixed-size array means allocating a larger one and copying the elements across. `Array.Resize` does exactly that, and it costs O(n) every time.
+"Growing" a fixed-size array means allocating a larger one and copying the elements across. `Array.Resize` does exactly that, and whenever the size actually changes it costs O(n) in the new size.
 
 ---
 
@@ -43,6 +43,8 @@ Console.WriteLine(primes[4]);       // 11
 | Insert at the front or middle | Not possible | O(n) | Every later element shifts right |
 | Remove from the end | Not possible | O(1) | Nothing shifts |
 | Remove from the front or middle | Not possible | O(n) | Every later element shifts left |
+
+Amortized means averaged over a long run of operations. Most appends are cheap, an occasional one is expensive, and the average stays constant. The section on appending below shows why.
 
 The O(n) cost of inserting or removing in the middle comes from shifting, not from finding the spot. Removing index 0 from a million-element `List<T>` moves 999,999 elements.
 
@@ -117,12 +119,15 @@ The `(uint)` casts fold "index is negative" and "index is too large" into one co
 
 ### How List&lt;T&gt; Grows
 
-`List<T>` is .NET's dynamic array, and its growth policy is visible in the `dotnet/runtime` source. A new `List<T>` starts with capacity 0 and no backing array to speak of. The first `Add` allocates capacity 4, and every growth after that doubles the capacity, up to the runtime's maximum array length.
+`List<T>` is .NET's dynamic array, and its growth policy is visible in the `dotnet/runtime` source. A new `List<T>` starts with capacity 0 and no backing array to speak of. The first `Add` allocates capacity 4, and every growth that `Add` triggers after that doubles the capacity, up to the runtime's maximum array length. Methods that know how much room they need grow to the larger of the next doubling (4 when empty) and that size. `EnsureCapacity` always knows. `AddRange` and `InsertRange` know only when the source is an `ICollection<T>`, which reports its count. Given a lazy sequence, they add one element at a time and double as they go.
 
-Two members control the copying directly:
+Three members control the copying directly:
 
-- **A starting capacity.** `new List<T>(capacity)` or `EnsureCapacity(n)` allocates once, up front, when the final size is known. Loading a million items into a list created with that capacity skips about 18 grow-and-copy steps.
-- **`TrimExcess()`** shrinks the backing array to fit the count. After growth by doubling, up to about half the capacity can sit unused. `List<T>` never shrinks on its own, even when elements are removed.
+- **The `new List<T>(capacity)` constructor** allocates once, up front, when the final size is known. Loading a million items into a list created with that capacity skips about 18 grow-and-copy steps.
+- **`EnsureCapacity(n)`** does the same for a list that already exists, before a large batch of adds.
+- **`TrimExcess()`** shrinks the backing array to fit the count, unless the list is already more than 90 percent full, in which case it does nothing. Microsoft's documentation notes that the threshold could change. After growth by doubling, up to about half the capacity can sit unused.
+
+`List<T>` never shrinks on its own, even when elements are removed.
 
 ---
 
@@ -136,9 +141,9 @@ Follow a dynamic array that starts at capacity 4 through 33 appends. Appends 5, 
 {% include figure.html id="dsa-dynamic-array-appends" %}
 {% raw %}
 
-The pattern holds at any size. Each copy moves as many elements as the one before it combined, plus the initial capacity, so the copies over n appends always total less than 2n. That keeps the average cost per append below 3 no matter how many appends run, even though the single append that triggers a copy is O(n).
+The pattern holds at any size. Each copy moves as many elements as all the copies before it combined, plus the initial capacity (32 = 4 + 8 + 16 + 4), so the copies over n appends always total less than 2n. That keeps the average cost per append below 3 no matter how many appends run, even though the single append that triggers a copy is O(n).
 
-The growth factor is what makes this work. A dynamic array that grew by a fixed amount, say 10 slots at a time, would copy every 10 appends, and its copies would total about n²/20, which makes each append O(n) amortized. Any constant growth factor above 1 keeps appends O(1) amortized. Doubling is a common choice because it keeps the arithmetic simple and wastes at most half the capacity.
+The growth factor is what makes this work. A dynamic array that grew by a fixed amount, say 10 slots at a time, would copy every 10 appends, and its copies would total about n²/20, which makes each append O(n) amortized. Any constant growth factor above 1 keeps appends O(1) amortized. `List<T>` doubles. Other libraries use smaller factors, such as 1.5 in Java's `ArrayList`, which copy more often and leave less capacity unused.
 
 ---
 
@@ -148,7 +153,7 @@ The two pointers technique walks an array with two indices instead of one, and u
 
 ### Moving Toward Each Other
 
-To find two numbers in a sorted array that add up to a target, the brute-force approach checks every pair. With one index at each end, each comparison rules out a whole row of pairs instead. If the sum is too small, no pair using the left element can reach the target, because the right element is already the largest available, so the left index moves right. If the sum is too large, the right index moves left by the same argument.
+To find two numbers in a sorted array that add up to a target, the brute-force approach checks every pair. With one index at each end, each comparison rules out every remaining pair that uses one of the two elements. If the sum is too small, no pair using the left element can reach the target, because the right element is already the largest available, so the left index moves right. If the sum is too large, the right index moves left by the same argument.
 
 ```csharp
 public static (int, int)? PairWithSum(int[] sorted, int target)
@@ -171,7 +176,7 @@ int[] values = { 1, 3, 4, 6, 8, 11 };
 Console.WriteLine(PairWithSum(values, 10));  // (2, 3): 4 + 6
 ```
 
-Each iteration moves one index one step closer to the other, so the loop runs at most n − 1 times. The approach depends on the array being sorted.
+Each iteration moves one index one step closer to the other, so the loop runs at most n − 1 times. The approach depends on the array being sorted. Unsorted input needs either a sort first, for O(n log n) in total, or a hash set of the values seen so far, for O(n) on average.
 
 ### Moving in the Same Direction
 
@@ -242,6 +247,9 @@ When the window's size depends on its contents, the right edge grows the window 
 ```csharp
 public static int ShortestWindowWithSum(int[] positives, int target)
 {
+    if (target <= 0)
+        throw new ArgumentOutOfRangeException(nameof(target), "The target must be positive.");
+
     int best = int.MaxValue, windowSum = 0, left = 0;
 
     for (int right = 0; right < positives.Length; right++)
@@ -261,7 +269,11 @@ public static int ShortestWindowWithSum(int[] positives, int target)
 Console.WriteLine(ShortestWindowWithSum(new[] { 2, 3, 1, 2, 4, 3 }, 7));  // 2, from 4 + 3
 ```
 
-Shrinking from the left is only safe because every value is positive. If values could be negative, removing an element could raise the sum, and the window's logic would no longer hold.
+{% endraw %}
+{% include figure.html id="dsa-sliding-window-variable" %}
+{% raw %}
+
+Shrinking from the left is only safe because no value is negative, and the method trusts its caller on that. If values could be negative, removing an element could raise the sum, and the window's logic would no longer hold. A target of zero or less would also be met by the empty window, so the method rejects it. With negative values, the usual tool is prefix sums: running totals that make any range's sum one subtraction. For a range that sums to exactly the target, look up the matching earlier total in a hash table. The shortest range with a sum of at least the target takes a more involved technique over the same prefix sums.
 
 ---
 
@@ -285,6 +297,10 @@ for (int i = 0; i < triangle.Length; i++)
     triangle[i] = new int[i + 1];        // Rows of length 1, 2, and 3
 ```
 
+{% endraw %}
+{% include figure.html id="dsa-rectangular-jagged-arrays" %}
+{% raw %}
+
 A rectangular array's element address is still a single calculation, row × column count + column. A jagged array needs two lookups, one to find the row's array and one within it. Because rectangular arrays are stored row by row, a loop that walks each row in order reads memory sequentially, while a loop that walks down columns jumps a full row's width on every step.
 
 ---
@@ -299,7 +315,7 @@ public static void RotateRight(int[] values, int k)
     int n = values.Length;
     if (n == 0) return;
 
-    k %= n;  // Rotating by n is a no-op
+    k = ((k % n) + n) % n;  // Rotating by n is a no-op, and a negative k rotates left
     Reverse(values, 0, n - 1);
     Reverse(values, 0, k - 1);
     Reverse(values, k, n - 1);
@@ -320,13 +336,13 @@ RotateRight(items, 3);
 Console.WriteLine(string.Join(", ", items));  // 5, 6, 7, 1, 2, 3, 4
 ```
 
-Reversing the whole array puts the last k elements at the front, but backward, and the first n − k at the back, also backward. The two smaller reversals put each group back in order. The `Reverse` helper is itself two pointers moving toward each other.
+Reversing the whole array puts the last k elements at the front, but backward, and the first n − k at the back, also backward. The two smaller reversals put each group back in order. With k = 3, the array goes 1234567, then 7654321, then 5674321, then 5671234. The `Reverse` helper is itself two pointers moving toward each other.
 
 ---
 
 ## Arrays in Practice
 
-`List<T>` is the default collection in C# for good reason. It has O(1) indexing, amortized O(1) appends, sequential memory for cache-friendly scans, and a growth policy that is tuned and tested. Plain arrays fit when the size is fixed and known, as with lookup tables, buffers, and interop with native code, or when the extra indirection of `List<T>` measurably matters.
+`List<T>` is the default collection in C# for good reason. It has O(1) indexing, amortized O(1) appends, and sequential memory for cache-friendly scans. Plain arrays fit when the size is fixed and known, as with lookup tables, buffers, and interop with native code, or when the extra indirection of `List<T>` measurably matters.
 
 An array is the wrong choice when the workload inserts or removes near the front or middle of a large collection, because every such operation shifts the elements after it. It is also a poor fit for "is this value present" checks on a large collection, which cost O(n) per lookup in an array and O(1) on average in a hash-based set.
 

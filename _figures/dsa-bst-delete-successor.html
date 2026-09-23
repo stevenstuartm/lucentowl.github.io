@@ -1,0 +1,65 @@
+---
+title: "Deleting a Node with Two Children"
+kind: flow
+system: dsa
+summary: "How a binary search tree replaces a deleted key with its in-order successor and keeps its ordering rule."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 440" role="img" aria-labelledby="bsd-title bsd-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="bsd-title">Deleting 50 from a binary search tree by way of its in-order successor, 60</title>
+<desc id="bsd-desc">Before: a binary search tree with 50 at the root, 30 and 70 below it, 20 and 40 under 30, 60 and 80 under 70, and 65 as 60's right child. Deleting 50, which has two children, starts by finding its in-order successor: one step right to 70, then left as far as possible, to 60. After: 60 has been copied into the root, and the old 60 node has been removed. That removal is the one-child case, because 60 has no left child, so its right child 65 moves up to become 70's left child. The tree is 60 at the root, 30 with 20 and 40 on the left, and 70 with 65 and 80 on the right, and the ordering rule still holds.</desc>
+<style>
+.bsd-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.bsd-del { fill: var(--color-text-light, #4A5568); stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; }
+.bsd-succ { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.bsd-moved { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.25; stroke-dasharray: 4 3; }
+.bsd-v { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bsd-v-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.bsd-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.bsd-ep { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; }
+.bsd-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bsd-lab { font-size: 12px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.bsd-lab2 { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.bsd-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="bsd-hd" x="40" y="36">BEFORE: DELETE 50, WHICH HAS TWO CHILDREN</text>
+<path class="bsd-e" d="M 185.8,102.6 L 124.2,157.4"/>
+<path class="bsd-ep" d="M 214.2,102.6 L 275.8,157.4"/>
+<path class="bsd-e" d="M 100.7,186.6 L 74.3,233.4"/>
+<path class="bsd-e" d="M 119.3,186.6 L 145.7,233.4"/>
+<path class="bsd-ep" d="M 280.7,186.6 L 254.3,233.4"/>
+<path class="bsd-e" d="M 299.3,186.6 L 325.7,233.4"/>
+<path class="bsd-e" d="M 254.3,266.6 L 280.7,313.4"/>
+<circle class="bsd-del" cx="200" cy="90" r="19"/><text class="bsd-v-inv" x="200" y="95" text-anchor="middle">50</text>
+<circle class="bsd-n" cx="110" cy="170" r="19"/><text class="bsd-v" x="110" y="175" text-anchor="middle">30</text>
+<circle class="bsd-n" cx="290" cy="170" r="19"/><text class="bsd-v" x="290" y="175" text-anchor="middle">70</text>
+<circle class="bsd-n" cx="65" cy="250" r="19"/><text class="bsd-v" x="65" y="255" text-anchor="middle">20</text>
+<circle class="bsd-n" cx="155" cy="250" r="19"/><text class="bsd-v" x="155" y="255" text-anchor="middle">40</text>
+<circle class="bsd-succ" cx="245" cy="250" r="19"/><text class="bsd-v-inv" x="245" y="255" text-anchor="middle">60</text>
+<circle class="bsd-n" cx="335" cy="250" r="19"/><text class="bsd-v" x="335" y="255" text-anchor="middle">80</text>
+<circle class="bsd-n" cx="290" cy="330" r="19"/><text class="bsd-v" x="290" y="335" text-anchor="middle">65</text>
+<text class="bsd-lab" x="230" y="72">deleted key</text>
+<text class="bsd-lab2" x="215" y="290" text-anchor="end">successor:</text>
+<text class="bsd-lab2" x="215" y="306" text-anchor="end">right once,</text>
+<text class="bsd-lab2" x="215" y="322" text-anchor="end">then left to the end</text>
+<text class="bsd-hd" x="460" y="36">AFTER</text>
+<path class="bsd-e" d="M 605.8,102.6 L 544.2,157.4"/>
+<path class="bsd-e" d="M 634.2,102.6 L 695.8,157.4"/>
+<path class="bsd-e" d="M 520.7,186.6 L 494.3,233.4"/>
+<path class="bsd-e" d="M 539.3,186.6 L 565.7,233.4"/>
+<path class="bsd-e" d="M 700.7,186.6 L 674.3,233.4"/>
+<path class="bsd-e" d="M 719.3,186.6 L 745.7,233.4"/>
+<circle class="bsd-succ" cx="620" cy="90" r="19"/><text class="bsd-v-inv" x="620" y="95" text-anchor="middle">60</text>
+<circle class="bsd-n" cx="530" cy="170" r="19"/><text class="bsd-v" x="530" y="175" text-anchor="middle">30</text>
+<circle class="bsd-n" cx="710" cy="170" r="19"/><text class="bsd-v" x="710" y="175" text-anchor="middle">70</text>
+<circle class="bsd-n" cx="485" cy="250" r="19"/><text class="bsd-v" x="485" y="255" text-anchor="middle">20</text>
+<circle class="bsd-n" cx="575" cy="250" r="19"/><text class="bsd-v" x="575" y="255" text-anchor="middle">40</text>
+<circle class="bsd-moved" cx="665" cy="250" r="19"/><text class="bsd-v" x="665" y="255" text-anchor="middle">65</text>
+<circle class="bsd-n" cx="755" cy="250" r="19"/><text class="bsd-v" x="755" y="255" text-anchor="middle">80</text>
+<text class="bsd-lab2" x="650" y="72">60 copied into the root</text>
+<text class="bsd-lab" x="665" y="292" text-anchor="middle">65 moved up into</text>
+<text class="bsd-lab" x="665" y="308" text-anchor="middle">60's old place</text>
+<text class="bsd-s" x="40" y="400">60 is the smallest key in 50's right subtree, so it is larger than everything on the left and smaller than the rest on the right.</text>
+<text class="bsd-s" x="40" y="418">Removing 60 from its old spot is the one-child case: it has no left child, and its right child, 65, takes its place.</text>
+</g>
+</svg>

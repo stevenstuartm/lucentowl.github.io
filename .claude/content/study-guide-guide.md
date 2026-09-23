@@ -337,7 +337,7 @@ When writing about software architecture, use correct terminology:
 | --- | --- |
 | Architecture | Foundations, Styles, Patterns, Design, Modeling, Quality & Risk, Governance, Business & Economics |
 | Data Structures & Algorithms | Fundamentals, Core Data Structures, Trees & Heaps, Graphs, Algorithms |
-| Object-Oriented Programming | OOP Foundations, Design Patterns |
+| Programming Patterns | OOP Foundations, GoF Patterns |
 | Security | Security Fundamentals, Application Security, Security Operations, Governance & Risk |
 | Software Development Lifecycle | SDLC Fundamentals, AAA Cycle, SDLC Frameworks, DevOps & Delivery |
 | AI & Machine Learning | Machine Learning, Building with LLMs, AI in Engineering Practice |

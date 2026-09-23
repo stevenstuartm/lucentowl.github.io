@@ -1,0 +1,77 @@
+---
+title: "A Binary Heap as a Tree and as an Array"
+kind: structure
+system: dsa
+summary: "One min-heap drawn as a tree and stored as an array."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 460" role="img" aria-labelledby="hp-title hp-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="hp-title">A min-heap shown as a tree and as the array that stores it</title>
+<desc id="hp-desc">A min-heap holding 1, 3, 6, 5, 9, 8. As a tree, 1 is the root at index 0, its children are 3 at index 1 and 6 at index 2, the children of 3 are 5 and 9 at indexes 3 and 4, and the left child of 6 is 8 at index 5. Every parent is less than or equal to its children. As an array, the same values sit in level order: 1, 3, 6, 5, 9, 8. Arrows from index 1 to indexes 3 and 4 show that the children of index i are at 2i + 1 and 2i + 2, and the parent of i is at (i − 1) / 2.</desc>
+<style>
+.hp-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.hp-root { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.hp-cell { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hp-cell-root { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.hp-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hp-v-inv { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+.hp-i { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.hp-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.hp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.hp-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.hp-arc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.hp-arcl { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+</style>
+<defs>
+<marker id="hp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="hp-e" d="M 284.4,72.5 L 215.6,127.5"/>
+<path class="hp-e" d="M 315.6,72.5 L 384.4,127.5"/>
+<path class="hp-e" d="M 189.4,157.0 L 160.6,203.0"/>
+<path class="hp-e" d="M 210.6,157.0 L 239.4,203.0"/>
+<path class="hp-e" d="M 389.4,157.0 L 360.6,203.0"/>
+<circle class="hp-root" cx="300" cy="60" r="20"/>
+<text class="hp-v-inv" x="300" y="65" text-anchor="middle">1</text>
+<text class="hp-i" x="324" y="44">[0]</text>
+<circle class="hp-n" cx="200" cy="140" r="20"/>
+<text class="hp-v" x="200" y="145" text-anchor="middle">3</text>
+<text class="hp-i" x="224" y="124">[1]</text>
+<circle class="hp-n" cx="400" cy="140" r="20"/>
+<text class="hp-v" x="400" y="145" text-anchor="middle">6</text>
+<text class="hp-i" x="424" y="124">[2]</text>
+<circle class="hp-n" cx="150" cy="220" r="20"/>
+<text class="hp-v" x="150" y="225" text-anchor="middle">5</text>
+<text class="hp-i" x="174" y="204">[3]</text>
+<circle class="hp-n" cx="250" cy="220" r="20"/>
+<text class="hp-v" x="250" y="225" text-anchor="middle">9</text>
+<text class="hp-i" x="274" y="204">[4]</text>
+<circle class="hp-n" cx="350" cy="220" r="20"/>
+<text class="hp-v" x="350" y="225" text-anchor="middle">8</text>
+<text class="hp-i" x="374" y="204">[5]</text>
+<text class="hp-hd" x="40" y="34">AS A TREE: EVERY PARENT ≤ ITS CHILDREN</text>
+<text class="hp-hd" x="40" y="286">AS AN ARRAY: LEVEL BY LEVEL, LEFT TO RIGHT</text>
+<rect class="hp-cell-root" x="160" y="330" width="80" height="44"/>
+<text class="hp-v-inv" x="200.0" y="358" text-anchor="middle">1</text>
+<text class="hp-i" x="200.0" y="394" text-anchor="middle">0</text>
+<rect class="hp-cell" x="240" y="330" width="80" height="44"/>
+<text class="hp-v" x="280.0" y="358" text-anchor="middle">3</text>
+<text class="hp-i" x="280.0" y="394" text-anchor="middle">1</text>
+<rect class="hp-cell" x="320" y="330" width="80" height="44"/>
+<text class="hp-v" x="360.0" y="358" text-anchor="middle">6</text>
+<text class="hp-i" x="360.0" y="394" text-anchor="middle">2</text>
+<rect class="hp-cell" x="400" y="330" width="80" height="44"/>
+<text class="hp-v" x="440.0" y="358" text-anchor="middle">5</text>
+<text class="hp-i" x="440.0" y="394" text-anchor="middle">3</text>
+<rect class="hp-cell" x="480" y="330" width="80" height="44"/>
+<text class="hp-v" x="520.0" y="358" text-anchor="middle">9</text>
+<text class="hp-i" x="520.0" y="394" text-anchor="middle">4</text>
+<rect class="hp-cell" x="560" y="330" width="80" height="44"/>
+<text class="hp-v" x="600.0" y="358" text-anchor="middle">8</text>
+<text class="hp-i" x="600.0" y="394" text-anchor="middle">5</text>
+<text class="hp-el" x="150" y="394" text-anchor="end">index</text>
+<path class="hp-arc" d="M 280.0,330 C 280.0,286 440.0,286 440.0,326" marker-end="url(#hp-a)"/>
+<path class="hp-arc" d="M 280.0,330 C 280.0,276 520.0,276 520.0,326" marker-end="url(#hp-a)"/>
+<text class="hp-arcl" x="160" y="426">children of i: 2i + 1 and 2i + 2</text>
+<text class="hp-arcl" x="160" y="444">parent of i: (i − 1) / 2</text>
+</g>
+</svg>

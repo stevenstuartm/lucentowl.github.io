@@ -15,22 +15,7 @@ When you build a C# project, the compiler does not produce machine code directly
 
 Which stage does the IL-to-native conversion, and when, is the whole of what separates the three compilation strategies this guide covers:
 
-```
-                       BUILD TIME          |          RUN TIME
-                                           |
-                                           |
-  C# source ──► Roslyn ──► IL + metadata ──┼──► JIT ──► native code ──► execution
-                           (assembly)      |    (per method, on first call)
-                                │          |
-                                │          |
-              ReadyToRun        ▼          |
-        ┌── IL + native code in the ───────┼──► precompiled code runs immediately;
-        │        same assembly             |    JIT recompiles hot methods
-        │                                  |
-        │      Native AOT                  |
-        └── native executable, ────────────┼──► execution (no IL, no JIT)
-                 no IL                     |
-```
+{% include figure.html id="dn-build-run-paths" %}
 
 ### Intermediate Language (IL)
 

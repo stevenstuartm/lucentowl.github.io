@@ -3,808 +3,443 @@ title: "Structural Patterns"
 layout: guide
 category: Programming Patterns
 subcategory: GoF Patterns
-description: "Structural design patterns including Adapter, Bridge, Composite, Decorator, Facade, Flyweight, and Proxy for flexible object composition."
-tags: [oop, design-patterns, structural-patterns, adapter, decorator, practical]
+description: "The seven structural patterns for composing objects into larger structures: Adapter, Bridge and the N×M class explosion it prevents, Composite for part-whole trees, Decorator and why wrapping order matters, Facade, Flyweight's intrinsic and extrinsic state, and Proxy. How the four wrapper patterns differ, with C# examples, .NET's own instances, and when not to use each."
+tags: [design-patterns, adapter, bridge, composite, decorator, proxy, practical]
 ---
 
+## What Structural Patterns Solve
+
+Structural patterns are about how objects are assembled: one object wrapping another, a hierarchy split into two, or many small objects arranged into a tree. Each keeps the pieces loosely connected so they can be combined in ways the original classes didn't plan for.
+
+Four of the seven, Adapter, Decorator, Proxy, and Facade, wrap one or more objects and look alike in code. What separates them is intent, and the interface each one shows its caller.
+
+{% include figure.html id="oop-wrapper-patterns" %}
+
+| Pattern | Interface it exposes | Why it wraps |
+|---|---|---|
+| **Adapter** | A different interface from the wrapped object's | To make an existing class fit an interface it doesn't implement |
+| **Decorator** | The same interface as the wrapped object | To add behavior, and decorators can be stacked |
+| **Proxy** | The same interface as the wrapped object | To control access: create it lazily, check permissions, cache, or reach it remotely |
+| **Facade** | A new, simpler interface | To give one entry point to several subsystem objects |
+
 ---
 
-*Structural patterns from the Gang of Four's "Design Patterns" (1994): Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides*
+## Adapter
 
-## Adapter Pattern
+**GoF intent:** "Convert the interface of a class into another interface clients expect. Adapter lets classes work together that couldn't otherwise because of incompatible interfaces."
 
-**Purpose**: Allow incompatible interfaces to work together by wrapping existing functionality.
+The usual case is a class you can't change, such as third-party or legacy code, that does the right work behind the wrong interface.
 
 ```csharp
-// Legacy class we cannot modify
-public class LegacyRectangle
+// The interface the application is written against
+public interface IAppLogger
 {
-    public int X { get; set; }
-    public int Y { get; set; }
-    public int Width { get; set; }
-    public int Height { get; set; }
-
-    public void LegacyDraw()
-    {
-        Console.WriteLine($"Drawing rectangle at ({X},{Y}) with size {Width}x{Height}");
-    }
+    void Info(string message);
+    void Error(string message, Exception exception);
 }
 
-// Modern interface we want to use
-public interface IShape
+// A legacy logger that can't be changed
+public class LegacyEventLog
 {
-    void Draw();
-    void Move(int x, int y);
-    void Resize(int width, int height);
+    public void WriteEntry(int severity, string text) { /* ... */ }
 }
 
-// Adapter that makes LegacyRectangle work with IShape
-public class RectangleAdapter : IShape
+public class LegacyEventLogAdapter : IAppLogger
 {
-    private readonly LegacyRectangle legacyRectangle;
+    private readonly LegacyEventLog log;
 
-    public RectangleAdapter(LegacyRectangle legacyRectangle)
-    {
-        this.legacyRectangle = legacyRectangle;
-    }
+    public LegacyEventLogAdapter(LegacyEventLog log) => this.log = log;
 
-    public void Draw()
-    {
-        legacyRectangle.LegacyDraw();
-    }
+    public void Info(string message) => log.WriteEntry(1, message);
 
-    public void Move(int x, int y)
-    {
-        legacyRectangle.X = x;
-        legacyRectangle.Y = y;
-    }
-
-    public void Resize(int width, int height)
-    {
-        legacyRectangle.Width = width;
-        legacyRectangle.Height = height;
-    }
+    public void Error(string message, Exception exception) =>
+        log.WriteEntry(3, $"{message}: {exception}");
 }
-
-// Usage:
-var legacyRect = new LegacyRectangle { X = 10, Y = 20, Width = 100, Height = 50 };
-IShape shape = new RectangleAdapter(legacyRect);
-shape.Draw();
-shape.Move(30, 40);
 ```
 
-## Bridge Pattern
+The adapter translates each call, including arguments that don't line up one to one, such as severity levels and the exception folded into the text. The GoF book also describes a class adapter that inherits from both sides, but that needs multiple inheritance of classes, so in C# adapters wrap an instance, as here.
 
-<div class="callout callout--note">
-<p class="callout__title">Purpose: Avoid Cartesian Product Explosion</p>
-<p>Bridge pattern separates abstraction from implementation to avoid creating N × M classes when you have N abstractions and M implementations.</p>
-</div>
+In .NET, `StreamReader` presents a byte-oriented `Stream` through the character-oriented `TextReader` interface.
 
-**Purpose**: Separate abstraction from implementation to avoid Cartesian product complexity.
+### When Not to Use It
+
+When you own both sides, change one of them instead. An adapter between two of your own interfaces is a sign that one of the designs should be fixed.
+
+---
+
+## Bridge
+
+**GoF intent:** "Decouple an abstraction from its implementation so that the two can vary independently."
+
+Bridge applies when a class hierarchy varies along two independent dimensions. Shapes might be circles, rectangles, or triangles, and each might be drawn by a vector, raster, or PDF renderer. Modeled with inheritance alone, every combination becomes a class, from `VectorCircle` to `PdfTriangle`. Three shapes and three renderers make nine classes, and each new renderer adds a class per shape. Bridge splits the hierarchy in two and connects them with a reference, so the count is added rather than multiplied.
+
+{% include figure.html id="oop-bridge" %}
 
 ```csharp
-// Implementation interface
+// Implementation side: how to draw
 public interface IRenderer
 {
-    void RenderCircle(float radius);
-    void RenderRectangle(float width, float height);
-}
-
-// Concrete implementations
-public class PixelRenderer : IRenderer
-{
-    public void RenderCircle(float radius)
-    {
-        Console.WriteLine($"Drawing pixels for circle with radius {radius}");
-    }
-
-    public void RenderRectangle(float width, float height)
-    {
-        Console.WriteLine($"Drawing pixels for rectangle {width}x{height}");
-    }
+    void DrawCircle(float x, float y, float radius);
+    void DrawRectangle(float x, float y, float width, float height);
 }
 
 public class VectorRenderer : IRenderer
 {
-    public void RenderCircle(float radius)
-    {
-        Console.WriteLine($"Drawing circle vector with radius {radius}");
-    }
-
-    public void RenderRectangle(float width, float height)
-    {
-        Console.WriteLine($"Drawing rectangle vector {width}x{height}");
-    }
+    public void DrawCircle(float x, float y, float radius) { /* emit SVG */ }
+    public void DrawRectangle(float x, float y, float width, float height) { /* emit SVG */ }
 }
 
-// Abstraction
+public class RasterRenderer : IRenderer
+{
+    public void DrawCircle(float x, float y, float radius) { /* set pixels */ }
+    public void DrawRectangle(float x, float y, float width, float height) { /* set pixels */ }
+}
+
+// Abstraction side: what to draw
 public abstract class Shape
 {
-    protected IRenderer renderer;
+    protected readonly IRenderer renderer; // the bridge
 
-    protected Shape(IRenderer renderer)
-    {
-        this.renderer = renderer;
-    }
+    protected Shape(IRenderer renderer) => this.renderer = renderer;
 
     public abstract void Draw();
 }
 
-// Refined abstractions
 public class Circle : Shape
 {
-    private float radius;
+    private readonly float x, y, radius;
 
-    public Circle(IRenderer renderer, float radius) : base(renderer)
-    {
-        this.radius = radius;
-    }
+    public Circle(IRenderer renderer, float x, float y, float radius) : base(renderer) =>
+        (this.x, this.y, this.radius) = (x, y, radius);
 
-    public override void Draw()
-    {
-        renderer.RenderCircle(radius);
-    }
+    public override void Draw() => renderer.DrawCircle(x, y, radius);
 }
 
 public class Rectangle : Shape
 {
-    private float width, height;
+    private readonly float x, y, width, height;
 
-    public Rectangle(IRenderer renderer, float width, float height) : base(renderer)
-    {
-        this.width = width;
-        this.height = height;
-    }
+    public Rectangle(IRenderer renderer, float x, float y, float width, float height) : base(renderer) =>
+        (this.x, this.y, this.width, this.height) = (x, y, width, height);
 
-    public override void Draw()
-    {
-        renderer.RenderRectangle(width, height);
-    }
-}
-
-// Usage:
-IRenderer pixelRenderer = new PixelRenderer();
-IRenderer vectorRenderer = new VectorRenderer();
-
-var shapes = new Shape[]
-{
-    new Circle(pixelRenderer, 5),
-    new Rectangle(vectorRenderer, 10, 15),
-    new Circle(vectorRenderer, 3)
-};
-
-foreach (var shape in shapes)
-{
-    shape.Draw();
+    public override void Draw() => renderer.DrawRectangle(x, y, width, height);
 }
 ```
 
-## Composite Pattern
+A new shape doesn't touch the renderers, and a new renderer doesn't touch the shapes. Bridge looks like Adapter in code, but it's designed in from the start to keep two hierarchies apart, while Adapter is applied afterward to make existing classes fit.
 
-**Purpose**: Treat individual objects and collections uniformly through a common interface.
+### When Not to Use It
 
-```csharp
-public abstract class GraphicObject
-{
-    public virtual string Name { get; set; } = "Group";
-    public string Color { get; set; }
-
-    private readonly Lazy<List<GraphicObject>> children = new(() => new List<GraphicObject>());
-    public List<GraphicObject> Children => children.Value;
-
-    public virtual void Draw()
-    {
-        Draw(0);
-    }
-
-    protected virtual void Draw(int depth)
-    {
-        Console.WriteLine($"{new string(' ', depth * 2)}{Name} (Color: {Color})");
-        foreach (var child in Children)
-        {
-            child.Draw(depth + 1);
-        }
-    }
-}
-
-public class Circle : GraphicObject
-{
-    public override string Name { get; set; } = "Circle";
-}
-
-public class Square : GraphicObject
-{
-    public override string Name { get; set; } = "Square";
-}
-
-// Modern approach using IEnumerable for extension methods
-public class GraphicGroup : IEnumerable<GraphicObject>
-{
-    private readonly List<GraphicObject> objects = new();
-    public string Name { get; set; } = "Group";
-
-    public void Add(GraphicObject obj) => objects.Add(obj);
-    public void Remove(GraphicObject obj) => objects.Remove(obj);
-
-    public IEnumerator<GraphicObject> GetEnumerator() => objects.GetEnumerator();
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-}
-
-// Extension methods for operations on composites
-public static class GraphicExtensions
-{
-    public static void DrawAll(this IEnumerable<GraphicObject> graphics)
-    {
-        foreach (var graphic in graphics)
-        {
-            graphic.Draw();
-        }
-    }
-
-    public static void SetColor(this IEnumerable<GraphicObject> graphics, string color)
-    {
-        foreach (var graphic in graphics)
-        {
-            graphic.Color = color;
-        }
-    }
-}
-
-// Usage:
-var drawing = new GraphicObject { Name = "My Drawing" };
-drawing.Children.Add(new Square { Color = "Red" });
-drawing.Children.Add(new Circle { Color = "Yellow" });
-
-var group = new GraphicObject { Name = "Group 1" };
-group.Children.Add(new Circle { Color = "Blue" });
-group.Children.Add(new Square { Color = "Green" });
-
-drawing.Children.Add(group);
-drawing.Draw();
-```
-
-## Decorator Pattern
-
-**Purpose**: Add behavior to objects dynamically without altering their structure.
-
-```csharp
-// Component interface
-public interface ICoffee
-{
-    string GetDescription();
-    decimal GetCost();
-}
-
-// Concrete component
-public class SimpleCoffee : ICoffee
-{
-    public string GetDescription() => "Simple coffee";
-    public decimal GetCost() => 2.00m;
-}
-
-// Base decorator
-public abstract class CoffeeDecorator : ICoffee
-{
-    protected ICoffee coffee;
-
-    protected CoffeeDecorator(ICoffee coffee)
-    {
-        this.coffee = coffee;
-    }
-
-    public virtual string GetDescription() => coffee.GetDescription();
-    public virtual decimal GetCost() => coffee.GetCost();
-}
-
-// Concrete decorators
-public class MilkDecorator : CoffeeDecorator
-{
-    public MilkDecorator(ICoffee coffee) : base(coffee) { }
-
-    public override string GetDescription() => $"{coffee.GetDescription()}, milk";
-    public override decimal GetCost() => coffee.GetCost() + 0.50m;
-}
-
-public class SugarDecorator : CoffeeDecorator
-{
-    public SugarDecorator(ICoffee coffee) : base(coffee) { }
-
-    public override string GetDescription() => $"{coffee.GetDescription()}, sugar";
-    public override decimal GetCost() => coffee.GetCost() + 0.25m;
-}
-
-public class WhipDecorator : CoffeeDecorator
-{
-    public WhipDecorator(ICoffee coffee) : base(coffee) { }
-
-    public override string GetDescription() => $"{coffee.GetDescription()}, whip";
-    public override decimal GetCost() => coffee.GetCost() + 0.75m;
-}
-
-// Usage:
-ICoffee coffee = new SimpleCoffee();
-coffee = new MilkDecorator(coffee);
-coffee = new SugarDecorator(coffee);
-coffee = new WhipDecorator(coffee);
-
-Console.WriteLine($"{coffee.GetDescription()} costs ${coffee.GetCost()}");
-// Output: Simple coffee, milk, sugar, whip costs $3.50
-```
-
-**Modern Functional Approach**
-```csharp
-public static class CoffeeExtensions
-{
-    public static ICoffee WithMilk(this ICoffee coffee) => new MilkDecorator(coffee);
-    public static ICoffee WithSugar(this ICoffee coffee) => new SugarDecorator(coffee);
-    public static ICoffee WithWhip(this ICoffee coffee) => new WhipDecorator(coffee);
-}
-
-// Fluent usage:
-var coffee = new SimpleCoffee()
-    .WithMilk()
-    .WithSugar()
-    .WithWhip();
-```
-
-## Facade Pattern
-
-**Purpose**: Provide a simplified interface to complex subsystems.
-
-```csharp
-// Complex subsystem classes
-public class CPU
-{
-    public void Freeze() => Console.WriteLine("CPU: Freezing processor");
-    public void Jump(long position) => Console.WriteLine($"CPU: Jumping to position {position}");
-    public void Execute() => Console.WriteLine("CPU: Executing instructions");
-}
-
-public class Memory
-{
-    public void Load(long position, byte[] data) =>
-        Console.WriteLine($"Memory: Loading {data.Length} bytes at position {position}");
-}
-
-public class HardDrive
-{
-    public byte[] Read(long lba, int size)
-    {
-        Console.WriteLine($"HardDrive: Reading {size} bytes from sector {lba}");
-        return new byte[size];
-    }
-}
-
-// Facade
-public class ComputerFacade
-{
-    private readonly CPU cpu;
-    private readonly Memory memory;
-    private readonly HardDrive hardDrive;
-
-    public ComputerFacade()
-    {
-        cpu = new CPU();
-        memory = new Memory();
-        hardDrive = new HardDrive();
-    }
-
-    public void StartComputer()
-    {
-        Console.WriteLine("Starting computer...");
-        cpu.Freeze();
-        memory.Load(0, hardDrive.Read(0, 1024));
-        cpu.Jump(0);
-        cpu.Execute();
-        Console.WriteLine("Computer started successfully!");
-    }
-}
-
-// Usage:
-var computer = new ComputerFacade();
-computer.StartComputer(); // Simple interface hiding complex operations
-```
-
-## Flyweight Pattern
-
-**Purpose**: Minimize memory usage by sharing efficiently common data among multiple objects.
-
-```csharp
-// Intrinsic state (shared)
-public class CharacterFlyweight
-{
-    private readonly char character;
-    private readonly string fontFamily;
-    private readonly int fontSize;
-
-    public CharacterFlyweight(char character, string fontFamily, int fontSize)
-    {
-        this.character = character;
-        this.fontFamily = fontFamily;
-        this.fontSize = fontSize;
-    }
-
-    // Operation that uses both intrinsic and extrinsic state
-    public void Display(int x, int y, string color) // x, y, color are extrinsic
-    {
-        Console.WriteLine($"Character: {character}, Font: {fontFamily}, Size: {fontSize}, Position: ({x},{y}), Color: {color}");
-    }
-}
-
-// Flyweight factory
-public class CharacterFlyweightFactory
-{
-    private static readonly Dictionary<string, CharacterFlyweight> flyweights = new();
-
-    public static CharacterFlyweight GetFlyweight(char character, string fontFamily, int fontSize)
-    {
-        string key = $"{character}_{fontFamily}_{fontSize}";
-
-        if (!flyweights.ContainsKey(key))
-        {
-            flyweights[key] = new CharacterFlyweight(character, fontFamily, fontSize);
-            Console.WriteLine($"Created new flyweight for: {key}");
-        }
-
-        return flyweights[key];
-    }
-
-    public static int GetFlyweightCount() => flyweights.Count;
-}
-
-// Context that uses flyweights
-public class TextDocument
-{
-    private readonly List<(CharacterFlyweight flyweight, int x, int y, string color)> characters = new();
-
-    public void AddCharacter(char c, string fontFamily, int fontSize, int x, int y, string color)
-    {
-        var flyweight = CharacterFlyweightFactory.GetFlyweight(c, fontFamily, fontSize);
-        characters.Add((flyweight, x, y, color));
-    }
-
-    public void Display()
-    {
-        foreach (var (flyweight, x, y, color) in characters)
-        {
-            flyweight.Display(x, y, color);
-        }
-    }
-}
-
-// Usage:
-var document = new TextDocument();
-
-// Even though we're adding many characters, only unique combinations create flyweights
-document.AddCharacter('H', "Arial", 12, 0, 0, "Black");
-document.AddCharacter('e', "Arial", 12, 10, 0, "Black");
-document.AddCharacter('l', "Arial", 12, 20, 0, "Black");
-document.AddCharacter('l', "Arial", 12, 30, 0, "Black"); // Reuses existing flyweight
-document.AddCharacter('o', "Arial", 12, 40, 0, "Black");
-
-Console.WriteLine($"Total flyweights created: {CharacterFlyweightFactory.GetFlyweightCount()}");
-document.Display();
-```
-
-## Proxy Pattern
-
-**Purpose**: Control access to objects through a surrogate or placeholder.
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Protection Proxy</h4>
-<p>Controls access based on permissions or conditions. Validates access rights before delegating to real object.</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Virtual Proxy</h4>
-<p>Delays expensive object creation until actually needed. Creates real object only on first use (lazy loading).</p>
-</div>
-</div>
-
-**Protection Proxy**
-```csharp
-public interface ICar
-{
-    void Drive();
-}
-
-public class Car : ICar
-{
-    public void Drive()
-    {
-        Console.WriteLine("Car is being driven");
-    }
-}
-
-public class CarProxy : ICar
-{
-    private readonly Car car;
-    private readonly Driver driver;
-
-    public CarProxy(Car car, Driver driver)
-    {
-        this.car = car;
-        this.driver = driver;
-    }
-
-    public void Drive()
-    {
-        if (driver.Age >= 16)
-        {
-            car.Drive();
-        }
-        else
-        {
-            Console.WriteLine("Driver too young to drive");
-        }
-    }
-}
-
-public class Driver
-{
-    public int Age { get; set; }
-}
-
-// Usage:
-var car = new Car();
-var youngDriver = new Driver { Age = 15 };
-var carProxy = new CarProxy(car, youngDriver);
-carProxy.Drive(); // "Driver too young to drive"
-```
-
-**Virtual Proxy (Lazy Loading)**
-```csharp
-public interface IExpensiveObject
-{
-    void Process();
-}
-
-public class ExpensiveObject : IExpensiveObject
-{
-    public ExpensiveObject()
-    {
-        // Simulate expensive initialization
-        Console.WriteLine("ExpensiveObject created with heavy initialization");
-        Thread.Sleep(1000);
-    }
-
-    public void Process()
-    {
-        Console.WriteLine("Processing with ExpensiveObject");
-    }
-}
-
-public class ExpensiveObjectProxy : IExpensiveObject
-{
-    private ExpensiveObject expensiveObject;
-
-    public void Process()
-    {
-        // Lazy initialization - object created only when needed
-        if (expensiveObject == null)
-        {
-            Console.WriteLine("Creating ExpensiveObject on first use...");
-            expensiveObject = new ExpensiveObject();
-        }
-
-        expensiveObject.Process();
-    }
-}
-
-// Usage:
-IExpensiveObject proxy = new ExpensiveObjectProxy();
-// No expensive object created yet
-Console.WriteLine("Proxy created");
-// Object is created only when Process is called
-proxy.Process();
-```
-
-**Caching Proxy**
-```csharp
-public interface IDataService
-{
-    Task<string> GetData(string key);
-}
-
-public class DatabaseService : IDataService
-{
-    public async Task<string> GetData(string key)
-    {
-        // Simulate database call
-        Console.WriteLine($"Fetching data from database for key: {key}");
-        await Task.Delay(1000);
-        return $"Data for {key}";
-    }
-}
-
-public class CachingProxy : IDataService
-{
-    private readonly IDataService dataService;
-    private readonly Dictionary<string, string> cache = new();
-
-    public CachingProxy(IDataService dataService)
-    {
-        this.dataService = dataService;
-    }
-
-    public async Task<string> GetData(string key)
-    {
-        if (cache.TryGetValue(key, out var cachedData))
-        {
-            Console.WriteLine($"Returning cached data for key: {key}");
-            return cachedData;
-        }
-
-        var data = await dataService.GetData(key);
-        cache[key] = data;
-        return data;
-    }
-}
-
-// Usage:
-IDataService dataService = new DatabaseService();
-IDataService proxy = new CachingProxy(dataService);
-
-var data1 = await proxy.GetData("user123"); // Database call
-var data2 = await proxy.GetData("user123"); // Cache hit
-```
-
-## Quick Reference
-
-### Structural Pattern Comparison
-
-| Pattern | Intent | Problem Solved | When to Use | When to Avoid |
-|---------|--------|----------------|-------------|---------------|
-| **Adapter** | Make incompatible interfaces compatible | Legacy code integration, third-party library mismatch | Wrapping existing classes with incompatible interfaces | You control both interfaces (fix design) |
-| **Bridge** | Separate abstraction from implementation | Cartesian product explosion (N × M classes) | Multiple dimensions of variation | Single dimension of variation |
-| **Composite** | Treat individual and composite objects uniformly | Tree structures, hierarchies | File systems, UI components, organizational charts | Flat structures |
-| **Decorator** | Add behavior dynamically without subclassing | Static inheritance limitations | Runtime behavior modification, multiple combinations | Behavior known at compile time |
-| **Facade** | Simplify complex subsystem interfaces | Too many dependencies, complex APIs | Hide complexity, reduce coupling | Subsystem is already simple |
-| **Flyweight** | Share common state to reduce memory | Memory constraints with many similar objects | Large number of fine-grained objects | Few objects or mostly unique state |
-| **Proxy** | Control access to objects | Expensive object creation, access control | Lazy loading, caching, access control, logging | Direct access is simpler |
-
-### Pattern Selection Guide
-
-**Choose Adapter when:**
-- Integrating legacy code
-- Working with third-party libraries with incompatible interfaces
-- Example: Adapting legacy data access to modern repository pattern
-
-**Choose Bridge when:**
-- Abstraction and implementation vary independently
-- Avoiding N × M class explosion
-- Example: Shapes (Circle, Square) × Renderers (Vector, Raster)
-
-**Choose Composite when:**
-- Building tree structures
-- Treating individual and groups uniformly
-- Example: File system (files and folders), UI components (controls and panels)
-
-**Choose Decorator when:**
-- Need to add responsibilities dynamically
-- Subclassing is impractical (too many combinations)
-- Example: Stream decorators (BufferedStream, GZipStream), middleware pipeline
-
-**Choose Facade when:**
-- Simplifying a complex subsystem
-- Decoupling clients from subsystem components
-- Example: Library initialization, complex API simplification
-
-**Choose Flyweight when:**
-- Application uses many similar objects
-- Memory is a concern
-- Extrinsic state can be separated from intrinsic state
-- Example: Text editors (character rendering), game objects (particles)
-
-**Choose Proxy when:**
-- Lazy initialization needed
-- Access control required
-- Caching results
-- Example: ORM lazy loading, image loading, remote service calls
-
-### Modern C# Examples
-
-```csharp
-// Adapter - Common with third-party libraries
-public class LegacySystemAdapter : IModernInterface
-{
-    private readonly LegacySystem legacy = new();
-
-    public void ModernMethod()
-    {
-        legacy.OldMethod();
-    }
-}
-
-// Bridge - Separate concerns
-public abstract class DataSource
-{
-    protected IDataRenderer renderer;
-    protected DataSource(IDataRenderer renderer) => this.renderer = renderer;
-}
-
-// Composite - ASP.NET Core middleware
-public class CompositeMiddleware
-{
-    private readonly List<RequestDelegate> middlewares = new();
-
-    public void Add(RequestDelegate middleware) => middlewares.Add(middleware);
-
-    public async Task Invoke(HttpContext context)
-    {
-        foreach (var middleware in middlewares)
-        {
-            await middleware(context);
-        }
-    }
-}
-
-// Decorator - Extension methods act as lightweight decorators
-public static class StringExtensions
-{
-    public static string ToTitleCase(this string str) => /* ... */;
-    public static string Truncate(this string str, int length) => /* ... */;
-}
-
-// Facade - Simplify complex operations
-public class OrderProcessingFacade
-{
-    private readonly IInventoryService inventory;
-    private readonly IPaymentService payment;
-    private readonly IShippingService shipping;
-    private readonly INotificationService notification;
-
-    public async Task ProcessOrder(Order order)
-    {
-        await inventory.Reserve(order.Items);
-        await payment.Process(order.Total);
-        await shipping.Schedule(order);
-        await notification.SendConfirmation(order.CustomerEmail);
-    }
-}
-
-// Proxy - Entity Framework lazy loading
-public class Order
-{
-    public virtual ICollection<OrderItem> Items { get; set; } // Proxy created on access
-}
-```
-
-### Anti-Patterns to Avoid
-
-**Over-Decoration**:
-```csharp
-// BAD: Too many decorators make code hard to understand
-var stream = new BufferedStream(
-    new GZipStream(
-        new CryptoStream(
-            new FileStream("data.txt", FileMode.Open),
-            encryptor, CryptoStreamMode.Write),
-        CompressionMode.Compress));
-
-// BETTER: Create a facade or pipeline builder
-var stream = new StreamBuilder()
-    .WithFile("data.txt")
-    .WithEncryption(encryptor)
-    .WithCompression()
-    .WithBuffering()
-    .Build();
-```
-
-**Leaky Facade**:
-```csharp
-// BAD: Facade exposes internal complexity
-public class PaymentFacade
-{
-    public CreditCardProcessor GetCreditCardProcessor() { } // Leaking internals
-    public PayPalGateway GetPayPalGateway() { }
-}
-
-// GOOD: Hide implementation details
-public class PaymentFacade
-{
-    public Task<PaymentResult> ProcessPayment(PaymentMethod method, decimal amount) { }
-}
-```
+With only one dimension of variation, Bridge is an interface for no reason. It also requires the implementation interface to cover what every abstraction needs, and if new shapes keep needing new renderer methods, the two sides aren't as independent as the split assumes.
 
 ---
+
+## Composite
+
+**GoF intent:** "Compose objects into tree structures to represent part-whole hierarchies. Composite lets clients treat individual objects and compositions of objects uniformly."
+
+Folders contain files and other folders, a UI panel contains controls and other panels, and an order bundle contains products and other bundles. Composite gives the single item (the leaf) and the container (the composite) one shared interface, so code can ask either for its size without checking which it has.
+
+```csharp
+public interface IFileSystemEntry
+{
+    string Name { get; }
+    long Size();
+}
+
+// Leaf
+public class FileEntry : IFileSystemEntry
+{
+    private readonly long bytes;
+
+    public FileEntry(string name, long bytes) => (Name, this.bytes) = (name, bytes);
+
+    public string Name { get; }
+    public long Size() => bytes;
+}
+
+// Composite
+public class FolderEntry : IFileSystemEntry
+{
+    private readonly List<IFileSystemEntry> children = new();
+
+    public FolderEntry(string name) => Name = name;
+
+    public string Name { get; }
+    public void Add(IFileSystemEntry entry) => children.Add(entry);
+
+    // Delegates to the children, each of which may be a folder itself
+    public long Size() => children.Sum(c => c.Size());
+}
+
+var docs = new FolderEntry("docs");
+docs.Add(new FileEntry("readme.md", 2_000));
+docs.Add(new FileEntry("guide.pdf", 500_000));
+
+var root = new FolderEntry("root");
+root.Add(docs);
+root.Add(new FileEntry("app.exe", 1_200_000));
+
+Console.WriteLine(root.Size()); // 1702000
+```
+
+`root.Size()` asks each child for its size. The `docs` folder asks its own children and returns their sum, and the recursion ends at the files:
+
+```
+root.Size() = 1,702,000
+├─ docs.Size() = 502,000
+│   ├─ readme.md    2,000
+│   └─ guide.pdf  500,000
+└─ app.exe     1,200,000
+```
+
+The caller never distinguishes a file from a folder, and adding a new kind of entry, such as a symbolic link, doesn't touch the traversal.
+
+### Where to Put Add and Remove
+
+The GoF book discusses a real trade-off. Declaring `Add` on the shared interface makes leaves and composites fully interchangeable, but then `FileEntry.Add` has to throw or do nothing. Declaring it only on the composite, as above, keeps leaves honest, but code that builds the tree has to know which type it holds. Most C# code takes the second option.
+
+### When Not to Use It
+
+A flat collection doesn't need it, and neither does a hierarchy whose levels behave differently enough that treating them uniformly hides important distinctions.
+
+---
+
+## Decorator
+
+**GoF intent:** "Attach additional responsibilities to an object dynamically. Decorators provide a flexible alternative to subclassing for extending functionality."
+
+A decorator implements the same interface as the object it wraps, forwards each call, and adds something before or after. Because the result has the same interface, decorators stack.
+
+```csharp
+public interface IMessageSender
+{
+    Task SendAsync(string to, string body);
+}
+
+public class SmtpSender : IMessageSender
+{
+    public Task SendAsync(string to, string body) { /* send */ }
+}
+
+public class LoggingSender : IMessageSender
+{
+    private readonly IMessageSender inner;
+    private readonly ILogger logger;
+
+    public LoggingSender(IMessageSender inner, ILogger logger) => (this.inner, this.logger) = (inner, logger);
+
+    public async Task SendAsync(string to, string body)
+    {
+        logger.LogInformation("Sending to {To}", to);
+        await inner.SendAsync(to, body);
+    }
+}
+
+public class RetryingSender : IMessageSender
+{
+    private readonly IMessageSender inner;
+
+    public RetryingSender(IMessageSender inner) => this.inner = inner;
+
+    public async Task SendAsync(string to, string body)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await inner.SendAsync(to, body);
+                return;
+            }
+            catch (IOException) when (attempt < 3)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(attempt));
+            }
+        }
+    }
+}
+
+// Log once per send, retrying underneath
+IMessageSender sender = new LoggingSender(new RetryingSender(new SmtpSender()), logger);
+```
+
+Subclassing would need a class for every combination: logging, retrying, logging-and-retrying. With decorators, each behavior is written once, and the combination is chosen where the objects are built.
+
+### Wrapping Order Changes Behavior
+
+The outermost decorator runs first. Swap the two above, and every retry is logged instead of every send. Order matters most with .NET's streams, which are the framework's clearest decorators. `GZipStream`, `CryptoStream`, and `BufferedStream` each wrap another `Stream`:
+
+```csharp
+using var file = File.Create("backup.bin");
+using var encrypt = new CryptoStream(file, aes.CreateEncryptor(), CryptoStreamMode.Write);
+using var compress = new GZipStream(encrypt, CompressionLevel.Optimal);
+
+await data.CopyToAsync(compress); // compressed first, then encrypted, then written
+```
+
+Data written to `compress` flows inward, so it's compressed, then encrypted, then written to the file. Reversing the two wrappers would encrypt first, and encrypted bytes look random, so compression would achieve almost nothing.
+
+A C# extension method is sometimes called a lightweight decorator. It isn't one, because it wraps no object and can't change what an existing call does. It only adds a new method at compile time.
+
+### When Not to Use It
+
+Deep stacks are hard to debug, because the object you hold hides several layers of behavior. When the combination never changes at runtime, one class that does all of it may be clearer.
+
+---
+
+## Facade
+
+**GoF intent:** "Provide a unified interface to a set of interfaces in a subsystem. Facade defines a higher-level interface that makes the subsystem easier to use."
+
+```csharp
+public class CheckoutFacade
+{
+    private readonly IInventoryService inventory;
+    private readonly IPaymentService payments;
+    private readonly IShippingService shipping;
+    private readonly INotificationService notifications;
+
+    public CheckoutFacade(IInventoryService inventory, IPaymentService payments,
+        IShippingService shipping, INotificationService notifications) =>
+        (this.inventory, this.payments, this.shipping, this.notifications) =
+            (inventory, payments, shipping, notifications);
+
+    public async Task<OrderConfirmation> PlaceOrderAsync(Order order)
+    {
+        await inventory.ReserveAsync(order.Items);
+        var receipt = await payments.ChargeAsync(order.CustomerId, order.Total);
+        var tracking = await shipping.ScheduleAsync(order);
+        await notifications.SendConfirmationAsync(order.CustomerEmail, tracking);
+        return new OrderConfirmation(receipt.Id, tracking);
+    }
+}
+```
+
+Callers make one call instead of learning four services and their required order. A facade doesn't hide the subsystem. Code that needs finer control can still use the services directly.
+
+### When Not to Use It
+
+A facade over one simple service adds a layer and nothing else. The common failure is a leaky facade, one whose methods return the subsystem's own objects, such as a `GetPaymentGateway()` method, so callers end up coupled to the subsystem anyway. A facade that keeps growing methods for every caller's special case has become a god object.
+
+---
+
+## Flyweight
+
+**GoF intent:** "Use sharing to support large numbers of fine-grained objects efficiently."
+
+When a program needs very many objects that are mostly alike, such as characters in a document, trees in a game map, or particles, storing the same data in each wastes memory. Flyweight splits an object's state in two. **Intrinsic** state is the same across many objects and is stored once in a shared flyweight. **Extrinsic** state differs per use and is passed in by the caller.
+
+```csharp
+// Intrinsic: shared by every use of the same glyph
+public sealed class Glyph
+{
+    public char Character { get; }
+    public string FontFamily { get; }
+    public int FontSize { get; }
+
+    internal Glyph(char character, string fontFamily, int fontSize) =>
+        (Character, FontFamily, FontSize) = (character, fontFamily, fontSize);
+
+    // Extrinsic: position and color come from the caller
+    public void Draw(int x, int y, string color) { /* render */ }
+}
+
+public class GlyphFactory
+{
+    private readonly Dictionary<(char, string, int), Glyph> cache = new();
+
+    public Glyph Get(char character, string fontFamily, int fontSize)
+    {
+        var key = (character, fontFamily, fontSize);
+        if (!cache.TryGetValue(key, out var glyph))
+        {
+            glyph = new Glyph(character, fontFamily, fontSize);
+            cache[key] = glyph;
+        }
+        return glyph;
+    }
+
+    public int Count => cache.Count;
+}
+```
+
+A 100,000-character document in one font needs only as many `Glyph` objects as it has distinct characters, while each position in the document stores just a reference, coordinates, and a color. Flyweights must be immutable, since every user shares them. A factory used from several threads needs a `ConcurrentDictionary` in place of the `Dictionary`.
+
+.NET's string interning is a flyweight. String literals with the same value share one instance, and `string.Intern` extends that to strings built at runtime.
+
+### When Not to Use It
+
+With few objects, or with state that is mostly unique per object, the split adds complexity and saves little. Measure memory before reaching for it.
+
+---
+
+## Proxy
+
+**GoF intent:** "Provide a surrogate or placeholder for another object to control access to it."
+
+A proxy implements the same interface as the real object and stands in for it. Callers can't tell the difference, and the proxy decides when and whether to pass each call through. The GoF book names several kinds by what the control is for:
+
+| Kind | Controls |
+|---|---|
+| **Virtual proxy** | When the real object is created, deferring expensive work until first use |
+| **Protection proxy** | Who may call it, checking permissions first |
+| **Remote proxy** | Where it runs, making an object in another process look local |
+| **Smart reference** | What happens around each access, such as counting references or loading on demand |
+
+Caching proxies, which return stored results instead of calling through, are a common modern addition.
+
+```csharp
+public interface IReportService
+{
+    Task<Report> GetAsync(int id);
+}
+
+// Protection proxy
+public class AuthorizedReportService : IReportService
+{
+    private readonly IReportService inner;
+    private readonly ICurrentUser user;
+
+    public AuthorizedReportService(IReportService inner, ICurrentUser user) => (this.inner, this.user) = (inner, user);
+
+    public Task<Report> GetAsync(int id) =>
+        user.HasPermission("reports.read")
+            ? inner.GetAsync(id)
+            : throw new UnauthorizedAccessException();
+}
+
+// Virtual proxy: the real service is built on first use
+public class LazyReportService : IReportService
+{
+    private readonly Lazy<IReportService> inner;
+
+    public LazyReportService(Func<IReportService> create) => inner = new Lazy<IReportService>(create);
+
+    public Task<Report> GetAsync(int id) => inner.Value.GetAsync(id);
+}
+```
+
+A proxy and a decorator have the same structure. A decorator adds behavior the caller wants, and a proxy manages access the caller shouldn't have to think about.
+
+.NET has several. EF Core's lazy-loading proxies are runtime-generated subclasses of your entities that load a navigation property the first time it's read. A gRPC client is a remote proxy for a service in another process, and `Lazy<T>` is a general-purpose virtual proxy.
+
+### When Not to Use It
+
+Every proxy hides work behind what looks like a plain method call. A lazy-loading proxy that issues a database query from inside a loop is the classic N+1 query problem, and it's invisible in the calling code. Use a proxy when the control is needed, and make expensive access explicit where the cost matters.
+
+---
+
+## Choosing a Structural Pattern
+
+```
+Wrapping existing objects?
+├─ The wrapped class has the wrong interface → Adapter
+├─ Same interface, adding behavior the caller wants → Decorator
+├─ Same interface, controlling creation, permission, location, or caching → Proxy
+└─ Several objects behind one simpler entry point → Facade
+
+Designing a new structure?
+├─ A hierarchy varies along two independent dimensions → Bridge
+├─ Items and groups of items should be treated alike → Composite
+└─ Very many near-identical objects strain memory → Flyweight
+```

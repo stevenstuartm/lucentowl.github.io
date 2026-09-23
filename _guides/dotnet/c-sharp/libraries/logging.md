@@ -11,11 +11,7 @@ tags: [logging, ilogger, structured-logging, loggermessage, serilog, observabili
 
 `Microsoft.Extensions.Logging` separates the code that writes a log entry from the code that decides where it goes. Application code depends on `ILogger<T>`. **Providers**, registered once at startup, receive every entry and write it somewhere, like the console, the debugger output, or a log service:
 
-```
-OrderService ── ILogger<OrderService> ──► logger factory ──► filter rules ──┬──► Console provider ──► stdout
-                  category:                                                ├──► Debug provider
-                  "MyApp.Orders.OrderService"                              └──► other providers
-```
+{% include figure.html id="dn-logging-fanout" %}
 
 ```csharp
 public class OrderService(ILogger<OrderService> logger)

@@ -3,603 +3,373 @@ title: "SOLID Principles"
 layout: guide
 category: Programming Patterns
 subcategory: OOP Foundations
-description: "Deep dive into SOLID principles: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion with practical examples."
-tags: [oop, design-patterns, solid, fundamentals, maintainability, practical]
+description: "The five SOLID principles and how to recognize a violation of each: single responsibility as one actor per module, open-closed through abstractions chosen for the change you expect, Liskov substitution as a contract on preconditions, postconditions, and invariants, interface segregation, and dependency inversion as who owns the interface. Also covers where each came from and when applying them goes too far."
+tags: [solid, single-responsibility, open-closed, liskov-substitution, interface-segregation, dependency-inversion, fundamentals]
 ---
 
+## Where SOLID Came From
+
+Robert C. Martin assembled these principles over the late 1980s and 1990s and wrote them up in a series of articles and in his 2000 paper "Design Principles and Design Patterns". Around 2004, Michael Feathers noticed that reordering them spelled SOLID. Open-closed and Liskov substitution came from other people.
+
+| Principle | Origin |
+|---|---|
+| Single Responsibility | Martin, consolidating earlier work on modularity and cohesion by David Parnas, Edsger Dijkstra, Larry Constantine, Tom DeMarco, and Meilir Page-Jones |
+| Open-Closed | Bertrand Meyer, *Object-Oriented Software Construction* (1988) |
+| Liskov Substitution | Barbara Liskov, OOPSLA keynote "Data Abstraction and Hierarchy" (1987); formalized with Jeannette Wing in 1994 |
+| Interface Segregation | Martin, from consulting work at Xerox, published 1996 |
+| Dependency Inversion | Martin, published 1996 |
+
+All five aim at the same outcome: a change to one part of a system should force as few other parts as possible to change, be recompiled, or be retested.
+
 ---
 
-*SOLID principles introduced and popularized by Robert C. Martin ("Uncle Bob") in the early 2000s, with the acronym coined by Michael Feathers*
+## S: Single Responsibility Principle
 
-**Historical context**: While Martin popularized these under the SOLID acronym, the individual principles have earlier origins:
-- Single Responsibility: Tom DeMarco & Meilir Page-Jones (cohesion concepts, 1970s-80s)
-- Open-Closed: Bertrand Meyer (1988, "Object-Oriented Software Construction")
-- Liskov Substitution: Barbara Liskov (1987, data abstraction keynote)
-- Interface Segregation: Robert C. Martin (1990s)
-- Dependency Inversion: Robert C. Martin (1990s)
+Martin's first wording was "a class should have only one reason to change." Readers took "one reason" to mean "one thing it does", which led to classes split down to a single method. His later wording in *Clean Architecture* (2017) names who the reasons come from: **a module should be responsible to one, and only one, actor.** An actor is a group of people who request changes for the same reason, such as the finance team, the HR team, or the database administrators.
 
-## S - Single Responsibility Principle (SRP)
+### Two Actors Sharing One Class
 
-**Definition**: A class should have only one reason to change, meaning it should have only one job or responsibility.
+Martin's own example is an `Employee` class that serves three actors at once:
 
-**Intent**: Each class should focus on a single concern, making it easier to understand, test, and maintain.
-
-<div class="callout callout--tip">
-<p class="callout__title">Benefits of Single Responsibility</p>
-<ul>
-<li>Easier to test and maintain</li>
-<li>Reduces coupling between components</li>
-<li>Simplifies debugging and troubleshooting</li>
-<li>Clearer code organization</li>
-</ul>
-</div>
-
-**Example Violation**:
 ```csharp
-// BAD: Multiple responsibilities
 public class Employee
 {
-    public string Name { get; set; }
-    public decimal Salary { get; set; }
+    public string Name { get; init; } = "";
+    public List<TimeCard> TimeCards { get; } = new();
 
-    // Responsibility 1: Salary calculation
-    public decimal CalculateSalary()
-    {
-        return Salary * 1.1m; // 10% bonus
-    }
+    // Finance defines how pay is calculated
+    public decimal CalculatePay() => RegularHours() * HourlyRate + OvertimePay();
 
-    // Responsibility 2: Report generation
-    public string GeneratePayrollReport()
-    {
-        return $"Employee: {Name}, Salary: ${CalculateSalary():F2}";
-    }
+    // HR defines how hours are reported
+    public string ReportHours() => $"{Name}: {RegularHours()} regular hours";
 
-    // Responsibility 3: Data persistence
-    public void SaveToDatabase()
-    {
-        // Database logic
-        var connection = new SqlConnection("...");
-        // Save employee data
-    }
+    // DBAs define how employees are stored
+    public void Save() { /* SQL */ }
 
-    // Responsibility 4: Email notifications
-    public void SendPayStub()
-    {
-        // Email sending logic
-        var emailService = new SmtpClient();
-        // Send email
-    }
+    // Shared by finance and HR
+    private decimal RegularHours() => TimeCards.Sum(t => Math.Min(t.Hours, 8));
+
+    // ...
 }
 ```
 
-**Better Approach**:
+Finance asks for a change to how regular hours are counted. A developer edits `RegularHours`, the pay tests pass, and HR's hour report is now wrong, because it silently shared the calculation. Nobody from HR asked for a change, yet their output changed. That coupling between actors is what the principle prevents, and it's why "does this class do one thing" is the wrong test. `CalculatePay` and `ReportHours` are each one thing. The problem is that two different groups own them.
+
+### Separating by Actor
+
 ```csharp
-// GOOD: Single responsibilities
-public class Employee
+public record EmployeeData(string Name, IReadOnlyList<TimeCard> TimeCards);
+
+public class PayCalculator    // finance
 {
-    public string Name { get; set; }
-    public decimal BaseSalary { get; set; }
-    public string Email { get; set; }
+    public decimal CalculatePay(EmployeeData employee) { /* ... */ }
 }
 
-public class SalaryCalculator
+public class HourReporter     // HR
 {
-    public decimal Calculate(Employee employee)
-    {
-        return employee.BaseSalary * 1.1m;
-    }
+    public string ReportHours(EmployeeData employee) { /* ... */ }
 }
 
-public class PayrollReporter
+public class EmployeeRepository  // DBAs
 {
-    private readonly SalaryCalculator calculator;
-
-    public PayrollReporter(SalaryCalculator calculator)
-    {
-        this.calculator = calculator;
-    }
-
-    public string GenerateReport(Employee employee)
-    {
-        var salary = calculator.Calculate(employee);
-        return $"Employee: {employee.Name}, Salary: ${salary:F2}";
-    }
-}
-
-public class EmployeeRepository
-{
-    private readonly string connectionString;
-
-    public EmployeeRepository(string connectionString)
-    {
-        this.connectionString = connectionString;
-    }
-
-    public void Save(Employee employee)
-    {
-        using var connection = new SqlConnection(connectionString);
-        // Save employee data
-    }
-}
-
-public class PayStubNotifier
-{
-    private readonly IEmailService emailService;
-
-    public PayStubNotifier(IEmailService emailService)
-    {
-        this.emailService = emailService;
-    }
-
-    public async Task SendPayStub(Employee employee, string payStubContent)
-    {
-        await emailService.SendAsync(employee.Email, "Pay Stub", payStubContent);
-    }
+    public void Save(EmployeeData employee) { /* ... */ }
 }
 ```
 
-**When to Apply**: Ask "What is the single reason this class would change?" If there are multiple answers, refactor.
+Each class now changes only when its own actor asks. If finance and HR really do need the same definition of regular hours, that's a shared business rule, and it gets its own home that both depend on deliberately rather than by accident.
 
-## O - Open-Closed Principle (OCP)
+To find violations, ask who would request a change to each method. If the answers name more than one group, the class answers to more than one actor.
 
-**Definition**: Software entities should be open for extension but closed for modification.
+---
 
-**Intent**: Design classes so new functionality can be added without changing existing code, reducing risk of bugs.
+## O: Open-Closed Principle
 
-<div class="callout callout--tip">
-<p class="callout__title">Benefits of Open-Closed Principle</p>
-<ul>
-<li>Add new features without changing existing code</li>
-<li>Reduces risk of introducing bugs in working code</li>
-<li>Promotes code reusability</li>
-<li>Supports plugin architectures</li>
-</ul>
-</div>
+Meyer's formulation was that a module should be **open for extension but closed for modification**: it should be possible to add behavior without editing code that already works. Meyer meant extension through inheritance. Martin's version, the one in common use, means extension through an abstraction that new implementations plug into.
 
-**Example Violation**:
+### A Switch That Grows With Every Feature
+
 ```csharp
-// BAD: Must modify class to add new shapes
-public class AreaCalculator
-{
-    public double CalculateArea(object shape)
-    {
-        if (shape is Circle circle)
-        {
-            return Math.PI * circle.Radius * circle.Radius;
-        }
-        else if (shape is Rectangle rectangle)
-        {
-            return rectangle.Width * rectangle.Height;
-        }
-        // Adding Triangle requires modifying this method
-        else if (shape is Triangle triangle)
-        {
-            return 0.5 * triangle.Base * triangle.Height;
-        }
+public enum CustomerType { Regular, Premium, Employee }
 
-        throw new ArgumentException("Unknown shape");
-    }
+public class DiscountCalculator
+{
+    public decimal Discount(CustomerType type, decimal total) => type switch
+    {
+        CustomerType.Regular => 0m,
+        CustomerType.Premium => total * 0.10m,
+        CustomerType.Employee => total * 0.25m,
+        _ => throw new ArgumentOutOfRangeException(nameof(type))
+    };
 }
 ```
 
-**Better Approach**:
+Every new customer type means editing this method and every other `switch` on `CustomerType` elsewhere in the code, and retesting all of them.
+
+### Extending Through an Abstraction
+
 ```csharp
-// GOOD: Open for extension, closed for modification
-public interface IShape
+public interface IDiscountPolicy
 {
-    double CalculateArea();
+    decimal Discount(decimal total);
 }
 
-public class Circle : IShape
+public class NoDiscount : IDiscountPolicy
 {
-    public double Radius { get; set; }
-    public double CalculateArea() => Math.PI * Radius * Radius;
+    public decimal Discount(decimal total) => 0m;
 }
 
-public class Rectangle : IShape
+public class PercentageDiscount : IDiscountPolicy
 {
-    public double Width { get; set; }
-    public double Height { get; set; }
-    public double CalculateArea() => Width * Height;
+    private readonly decimal rate;
+
+    public PercentageDiscount(decimal rate) => this.rate = rate;
+
+    public decimal Discount(decimal total) => total * rate;
 }
 
-public class Triangle : IShape
+public class Checkout
 {
-    public double Base { get; set; }
-    public double Height { get; set; }
-    public double CalculateArea() => 0.5 * Base * Height;
-}
+    private readonly IDiscountPolicy discountPolicy;
 
-// No modification needed when adding new shapes
-public class AreaCalculator
-{
-    public double CalculateTotalArea(IEnumerable<IShape> shapes)
-    {
-        return shapes.Sum(s => s.CalculateArea());
-    }
-}
+    public Checkout(IDiscountPolicy discountPolicy) => this.discountPolicy = discountPolicy;
 
-// New shape can be added without modifying existing code
-public class Hexagon : IShape
-{
-    public double SideLength { get; set; }
-    public double CalculateArea() => (3 * Math.Sqrt(3) / 2) * Math.Pow(SideLength, 2);
+    public decimal Total(decimal subtotal) => subtotal - discountPolicy.Discount(subtotal);
 }
 ```
 
-**When to Apply**: Use abstractions (interfaces/base classes) when you anticipate multiple implementations or variations.
+A seasonal promotion is now a new `IDiscountPolicy` class, and `Checkout` is untouched.
 
-## L - Liskov Substitution Principle (LSP)
+### Closure Is Always Against a Particular Change
 
-*Introduced by Barbara Liskov in her 1987 keynote "Data Abstraction and Hierarchy" at OOPSLA. Formalized with Jeannette Wing in 1994.*
+No design is closed against every change. `Checkout` is closed against new discount rules, but adding tax still means editing it. Martin calls picking the axis *strategic closure*: close the code against the kinds of change you have evidence to expect, usually because that kind of change has already happened once or twice. Abstractions added for changes that never come are cost without benefit.
 
-**Definition**: Objects of a superclass should be replaceable with objects of a subclass without altering the correctness of the program.
+---
 
-**Formal definition** (Liskov & Wing): If S is a subtype of T, then objects of type T may be replaced with objects of type S without breaking the program.
+## L: Liskov Substitution Principle
 
-**Intent**: Subtypes must be substitutable for their base types without breaking functionality.
+A subtype must be usable anywhere its base type is expected, without the caller noticing. Liskov and Wing's 1994 statement is precise: if a property can be proven about objects of type T, it must also hold for objects of any subtype S of T. In practice, that means a subtype must honor the whole contract of its base, not just its method signatures.
 
-<div class="callout callout--tip">
-<p class="callout__title">Benefits of Liskov Substitution</p>
-<ul>
-<li>Ensures polymorphism works correctly</li>
-<li>Maintains contract integrity</li>
-<li>Enables reliable inheritance hierarchies</li>
-<li>Prevents unexpected behavior</li>
-</ul>
-</div>
+### The Contract Rules
 
-<div class="callout callout--warning">
-<p class="callout__title">Key Rule: Subclasses Must</p>
-<ul>
-<li>Strengthen postconditions (can return more specific types)</li>
-<li>Weaken preconditions (can accept more general parameters)</li>
-<li>Preserve invariants (maintain class constraints)</li>
-<li>Not throw new exceptions on base methods</li>
-</ul>
-</div>
+The compiler checks that an override has the right signature. It can't check behavior, so these rules are the developer's job:
 
-**Example Violation**:
+| A subtype may not | Meaning | Example violation |
+|---|---|---|
+| **Strengthen preconditions** | It must accept every input the base accepts | The base accepts any quantity. The override throws for quantities above 100. |
+| **Weaken postconditions** | It must deliver everything the base promises | The base promises a non-null result. The override returns `null`. |
+| **Break invariants** | Rules that always hold for the base still hold | See `Square` below. |
+| **Throw new kinds of exceptions** | Only exceptions the base's contract allows, or subtypes of them | The override throws `NotSupportedException` where the base never did. |
+| **Allow state changes the base forbids** | Liskov and Wing's history constraint | A mutable subtype of a type documented as immutable. |
+
+Going the other way is allowed. A subtype may accept more inputs than its base, promise more in its results, and return a more specific type.
+
+### Rectangle and Square
+
+A square is a rectangle in geometry, so inheritance looks natural:
+
 ```csharp
-// BAD: Violates LSP
-public class Bird
+public class Rectangle
 {
-    public virtual void Fly()
+    public virtual int Width { get; set; }
+    public virtual int Height { get; set; }
+    public int Area => Width * Height;
+}
+
+public class Square : Rectangle
+{
+    public override int Width
     {
-        Console.WriteLine("Flying high!");
+        get => base.Width;
+        set { base.Width = value; base.Height = value; }
+    }
+
+    public override int Height
+    {
+        get => base.Height;
+        set { base.Width = value; base.Height = value; }
     }
 }
 
-public class Sparrow : Bird
+void Stretch(Rectangle r)
 {
-    public override void Fly()
-    {
-        Console.WriteLine("Sparrow flies!");
-    }
-}
-
-public class Penguin : Bird
-{
-    public override void Fly()
-    {
-        // Penguins can't fly - violates LSP!
-        throw new NotSupportedException("Penguins can't fly!");
-    }
-}
-
-// This breaks when using Penguin
-public void MakeBirdFly(Bird bird)
-{
-    bird.Fly(); // Will throw exception for Penguin!
+    r.Width = 5;
+    r.Height = 4;
+    Debug.Assert(r.Area == 20); // fails for a Square: Area is 16
 }
 ```
 
-**Better Approach**:
+`Rectangle` carries an unstated invariant: setting the height leaves the width alone. `Square` breaks it, and `Stretch` fails even though it only uses members `Rectangle` declares. The fix is to stop claiming the subtype relationship. Make both implement a read-only `IShape` with an `Area`, or make them immutable so no caller can set one side at a time.
+
+### .NET's Own Example
+
+Arrays in .NET implement `IList<T>`, and `IList<T>` declares `Add`:
+
 ```csharp
-// GOOD: Follows LSP
-public abstract class Bird
+IList<int> numbers = new int[3];
+numbers.Add(4); // throws NotSupportedException: collection was of a fixed size
+```
+
+.NET keeps this within the letter of the rules by writing the exception into the base contract. `ICollection<T>.Add` is documented to throw `NotSupportedException` when the collection is read-only, and callers can check `IsReadOnly` first. That makes the substitution legal, but it pushes the check onto every caller of every `IList<T>`, which is the cost LSP exists to avoid. `IReadOnlyList<T>`, added later, is the segregated contract a fixed-size array can honor completely.
+
+To find violations, look for overrides that throw `NotSupportedException` or `NotImplementedException`, overrides that do nothing, and callers that check an object's concrete type before using it.
+
+---
+
+## I: Interface Segregation Principle
+
+**Clients should not be forced to depend on methods they don't use.** Martin arrived at it while consulting for Xerox, whose printer software routed nearly every task, from printing to stapling, through a single `Job` class. Any change to that class touched every task that used it.
+
+### A Fat Interface
+
+```csharp
+public interface IMultiFunctionDevice
 {
-    public abstract void Move();
+    void Print(Document document);
+    void Scan(Document document);
+    void Fax(Document document);
 }
 
-public interface IFlyable
+public class BasicPrinter : IMultiFunctionDevice
 {
-    void Fly();
-}
+    public void Print(Document document) { /* ... */ }
 
-public class Sparrow : Bird, IFlyable
-{
-    public override void Move()
-    {
-        Fly();
-    }
-
-    public void Fly()
-    {
-        Console.WriteLine("Sparrow flies!");
-    }
-}
-
-public class Penguin : Bird
-{
-    public override void Move()
-    {
-        Swim();
-    }
-
-    public void Swim()
-    {
-        Console.WriteLine("Penguin swims!");
-    }
-}
-
-// Works correctly with all birds
-public void MakeBirdMove(Bird bird)
-{
-    bird.Move(); // Works for all bird types
-}
-
-// Only works with flyable birds
-public void MakeFlyableFly(IFlyable flyable)
-{
-    flyable.Fly(); // Only accepts birds that can fly
+    // Forced to implement operations it can't perform
+    public void Scan(Document document) => throw new NotSupportedException();
+    public void Fax(Document document) => throw new NotSupportedException();
 }
 ```
 
-**When to Apply**: Ensure derived classes can truly replace base classes without breaking client code.
+`BasicPrinter` now violates Liskov substitution as well. And every client of `IMultiFunctionDevice` depends on `Fax`, so a change to the fax signature touches code that only ever prints.
 
-## I - Interface Segregation Principle (ISP)
+### Interfaces Shaped by Their Clients
 
-**Definition**: Clients should not be forced to depend on interfaces they don't use.
-
-**Intent**: Create small, focused interfaces rather than large, monolithic ones.
-
-<div class="callout callout--tip">
-<p class="callout__title">Benefits of Interface Segregation</p>
-<ul>
-<li>Reduces coupling between components</li>
-<li>Avoids unnecessary dependencies</li>
-<li>Enables more targeted implementations</li>
-<li>Improves code clarity</li>
-</ul>
-</div>
-
-**Example Violation**:
 ```csharp
-// BAD: Fat interface forces implementations to support all methods
-public interface IWorker
+public interface IPrinter { void Print(Document document); }
+public interface IScanner { void Scan(Document document); }
+public interface IFax     { void Fax(Document document); }
+
+public class BasicPrinter : IPrinter
 {
-    void Work();
-    void Eat();
-    void Sleep();
-    void GetPaid();
+    public void Print(Document document) { /* ... */ }
 }
 
-public class HumanWorker : IWorker
+public class OfficeMachine : IPrinter, IScanner, IFax
 {
-    public void Work() { Console.WriteLine("Working..."); }
-    public void Eat() { Console.WriteLine("Eating lunch..."); }
-    public void Sleep() { Console.WriteLine("Sleeping..."); }
-    public void GetPaid() { Console.WriteLine("Getting paid!"); }
+    public void Print(Document document) { /* ... */ }
+    public void Scan(Document document) { /* ... */ }
+    public void Fax(Document document) { /* ... */ }
 }
 
-public class RobotWorker : IWorker
+public class ReportPrinter
 {
-    public void Work() { Console.WriteLine("Working..."); }
+    private readonly IPrinter printer;
 
-    // Forced to implement methods that don't make sense for robots
-    public void Eat() { throw new NotSupportedException(); }
-    public void Sleep() { throw new NotSupportedException(); }
-    public void GetPaid() { throw new NotSupportedException(); }
+    public ReportPrinter(IPrinter printer) => this.printer = printer;
 }
 ```
 
-**Better Approach**:
+Split interfaces along the lines of what callers use together, not one method per interface. `IPrinter` groups operations that printing clients need, and a client that needs to print and scan can depend on both.
+
+The principle applies at the module level too. Referencing a large library for one helper makes the build depend on everything else in it.
+
+---
+
+## D: Dependency Inversion Principle
+
+Martin's principle has two parts:
+
+1. High-level modules should not depend on low-level modules. Both should depend on abstractions.
+2. Abstractions should not depend on details. Details should depend on abstractions.
+
+"High-level" means the policy, the business rules the system exists for. "Low-level" means the mechanisms that carry the policy out, such as email, databases, and file formats.
+
+### The Default Direction
+
 ```csharp
-// GOOD: Segregated interfaces
-public interface IWorkable
+// Infrastructure
+public class SmtpEmailSender
 {
-    void Work();
+    public void Send(string to, string body) { /* SMTP */ }
 }
 
-public interface IEatable
-{
-    void Eat();
-}
-
-public interface ISleepable
-{
-    void Sleep();
-}
-
-public interface IPayable
-{
-    void GetPaid();
-}
-
-public class HumanWorker : IWorkable, IEatable, ISleepable, IPayable
-{
-    public void Work() { Console.WriteLine("Working..."); }
-    public void Eat() { Console.WriteLine("Eating lunch..."); }
-    public void Sleep() { Console.WriteLine("Sleeping..."); }
-    public void GetPaid() { Console.WriteLine("Getting paid!"); }
-}
-
-public class RobotWorker : IWorkable
-{
-    public void Work() { Console.WriteLine("Working tirelessly..."); }
-    // Only implements what makes sense
-}
-
-// Clients depend only on what they need
-public class WorkManager
-{
-    public void ManageWork(IWorkable worker)
-    {
-        worker.Work(); // Only requires IWorkable
-    }
-}
-
-public class PayrollManager
-{
-    public void ProcessPayroll(IPayable employee)
-    {
-        employee.GetPaid(); // Only requires IPayable
-    }
-}
-```
-
-**When to Apply**: When interfaces become large, split them into smaller, focused interfaces based on client needs.
-
-## D - Dependency Inversion Principle (DIP)
-
-**Definition**: High-level modules should not depend on low-level modules. Both should depend on abstractions. Abstractions should not depend on details. Details should depend on abstractions.
-
-**Intent**: Decouple high-level business logic from low-level implementation details.
-
-<div class="callout callout--tip">
-<p class="callout__title">Benefits of Dependency Inversion</p>
-<ul>
-<li>Improves testability through dependency injection</li>
-<li>Reduces coupling between layers</li>
-<li>Enables flexible architecture</li>
-<li>Supports multiple implementations</li>
-</ul>
-</div>
-
-**Example Violation**:
-```csharp
-// BAD: High-level class depends on low-level implementation
-public class EmailNotification
-{
-    public void Send(string to, string message)
-    {
-        // Concrete SMTP implementation
-        var smtpClient = new SmtpClient("smtp.gmail.com");
-        smtpClient.Send(to, message);
-    }
-}
-
+// Business logic
 public class OrderService
 {
-    // Tightly coupled to EmailNotification
-    private readonly EmailNotification emailNotification = new EmailNotification();
+    private readonly SmtpEmailSender emailSender = new();
 
     public void PlaceOrder(Order order)
     {
-        // Process order...
-        emailNotification.Send(order.CustomerEmail, "Order placed!");
+        // ... business rules ...
+        emailSender.Send(order.CustomerEmail, "Order placed");
     }
 }
 ```
 
-**Better Approach**:
+The business rules can't be compiled, reused, or tested without the SMTP code, and replacing email with SMS means editing `OrderService`.
+
+### Inverting It
+
 ```csharp
-// GOOD: Both depend on abstraction
-public interface INotificationService
+// Business module: owns the abstraction
+public interface INotificationSender
 {
     Task SendAsync(string recipient, string message);
 }
 
-// Low-level implementation
-public class EmailNotificationService : INotificationService
-{
-    private readonly string smtpServer;
-
-    public EmailNotificationService(string smtpServer)
-    {
-        this.smtpServer = smtpServer;
-    }
-
-    public async Task SendAsync(string recipient, string message)
-    {
-        var smtpClient = new SmtpClient(smtpServer);
-        await smtpClient.SendMailAsync(recipient, message);
-    }
-}
-
-// Alternative implementation
-public class SmsNotificationService : INotificationService
-{
-    private readonly string apiKey;
-
-    public SmsNotificationService(string apiKey)
-    {
-        this.apiKey = apiKey;
-    }
-
-    public async Task SendAsync(string recipient, string message)
-    {
-        var smsClient = new TwilioClient(apiKey);
-        await smsClient.SendSmsAsync(recipient, message);
-    }
-}
-
-// High-level module depends on abstraction
 public class OrderService
 {
-    private readonly INotificationService notificationService;
+    private readonly INotificationSender notifications;
 
-    // Dependency injected through constructor
-    public OrderService(INotificationService notificationService)
-    {
-        this.notificationService = notificationService;
-    }
+    public OrderService(INotificationSender notifications) => this.notifications = notifications;
 
-    public async Task PlaceOrder(Order order)
+    public async Task PlaceOrderAsync(Order order)
     {
-        // Process order...
-        await notificationService.SendAsync(order.CustomerEmail, "Order placed!");
+        // ... business rules ...
+        await notifications.SendAsync(order.CustomerEmail, "Order placed");
     }
 }
 
-// Configuration
-var emailService = new EmailNotificationService("smtp.gmail.com");
-var orderService = new OrderService(emailService);
+// Infrastructure module: implements it
+public class EmailNotificationSender : INotificationSender
+{
+    public Task SendAsync(string recipient, string message) { /* SMTP */ }
+}
 
-// Easy to swap implementations
-var smsService = new SmsNotificationService("twilio-api-key");
-var orderServiceWithSms = new OrderService(smsService);
+public class SmsNotificationSender : INotificationSender
+{
+    public Task SendAsync(string recipient, string message) { /* SMS gateway */ }
+}
 ```
 
-**When to Apply**: Always depend on abstractions when working across architectural boundaries (layers, services, components).
+The inversion is in who owns the interface. `INotificationSender` lives with `OrderService` and is shaped by what the business rules need, so the only dependency crossing the module boundary points from infrastructure up to business logic. If the interface lived in the infrastructure module, the business module would still depend on infrastructure, and nothing would have been inverted.
 
-## Quick Reference
+{% include figure.html id="oop-dependency-inversion" %}
 
-### SOLID Principles Comparison
+Passing the `INotificationSender` in through the constructor is dependency injection, which is one way to supply the implementation. A factory or a plugin loader would also satisfy the principle, which is about the direction of source dependencies, not about how objects get wired.
 
-| Principle | Focus | Key Question |
-|-----------|-------|--------------|
-| **SRP** | Class cohesion | "Does this class have one reason to change?" |
-| **OCP** | Extension mechanism | "Can I add features without modifying existing code?" |
-| **LSP** | Inheritance contracts | "Can I substitute derived classes for base classes?" |
-| **ISP** | Interface granularity | "Does this interface force unnecessary dependencies?" |
-| **DIP** | Dependency direction | "Am I depending on abstractions or implementations?" |
-
-### Common Violations and Fixes
-
-| Violation | Sign | Fix |
-|-----------|------|-----|
-| **SRP** | "And" in class names, many imports | Extract classes for each responsibility |
-| **OCP** | Long if/switch statements on type | Use polymorphism via interfaces |
-| **LSP** | Throwing exceptions in overrides | Redesign hierarchy or use composition |
-| **ISP** | NotImplementedException in interface methods | Split into smaller interfaces |
-| **DIP** | New keyword everywhere, hard to test | Use dependency injection |
-
-### SOLID in Modern Development
-
-**ASP.NET Core**:
-- **SRP**: Controllers handle HTTP, services handle business logic
-- **OCP**: Middleware pipeline extends via new middleware
-- **LSP**: Custom implementations replace defaults seamlessly
-- **ISP**: Small interfaces like IHostedService, IHealthCheck
-- **DIP**: Built-in dependency injection container
-
-**Testing Benefits**:
-- **SRP**: Test one thing at a time
-- **OCP**: Test new features independently
-- **LSP**: Test base types, trust derived types
-- **ISP**: Mock only what's needed
-- **DIP**: Inject test doubles easily
+Apply DIP at boundaries where the low-level side is volatile or where you need to substitute it, such as external services, storage, and anything slow or nondeterministic in tests. Stable, low-level dependencies like `string`, `List<T>`, or `Math` don't need an abstraction in front of them.
 
 ---
+
+## Recognizing Violations
+
+| Principle | Warning sign | Usual fix |
+|---|---|---|
+| **SRP** | Different teams request changes to the same class; unrelated tests break together | Split by actor |
+| **OCP** | A `switch` or `if` chain on a type code, repeated in several places | Replace the type code with an abstraction |
+| **LSP** | Overrides that throw `NotSupportedException` or do nothing; callers checking concrete types | Remove the inheritance, or narrow the base contract |
+| **ISP** | Implementations stubbing out interface members; clients rebuilt for changes they don't use | Split the interface by client |
+| **DIP** | Business logic calling `new` on infrastructure classes; tests needing a real database or mail server | Define the interface in the business module and inject the implementation |
+
+---
+
+## When SOLID Goes Too Far
+
+Each principle adds indirection, and indirection has a price: more types to read, more files to open, and call chains that no longer show what runs.
+
+- **SRP taken to one method per class** produces many small classes whose interactions are harder to follow than the original. Split by actor, not by verb.
+- **OCP applied speculatively** adds abstractions for variations that never arrive. Wait until a second or third variation exists.
+- **ISP taken to one method per interface** makes every constructor take a long list of narrow dependencies. Group by what clients use together.
+- **DIP applied everywhere** puts an interface with a single implementation in front of every class, including ones with no reason to be replaced.
+
+The principles are heuristics for managing change, not rules to satisfy. Code that no one expects to change, like a small script or a stable utility, gains little from them.

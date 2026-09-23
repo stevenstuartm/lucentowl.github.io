@@ -369,12 +369,6 @@ Failure is information, not waste:
 
 **Knowledge Management Practices:**
 
-**Value Stream Mapping:**
-- Visualize the entire flow from idea to production
-- Identify bottlenecks and waste
-- Measure lead time and cycle time
-- Optimize based on data, not intuition
-
 **Architecture Decision Records (ADRs):**
 - Capture why decisions were made, not just what
 - Preserve context for future developers
@@ -386,14 +380,6 @@ Failure is information, not waste:
 - Focus on systems and processes, not individuals
 - Identify root causes and prevention strategies
 - Share learnings across organization
-
-**How to Create Knowledge:**
-
-- Run small experiments before committing to large projects
-- Deploy MVPs to validate assumptions with real users
-- Conduct retrospectives focused on learning (not blame)
-- Document decisions and rationale (ADRs, runbooks)
-- Measure actual outcomes, not proxy metrics
 
 **Red Flags:**
 - Building features without validating user need
@@ -445,9 +431,9 @@ Instead of committing early, create options and keep them open:
 
 Defer commitment until delaying further would eliminate options or create more risk.
 
-**Too early:** Choosing a database before understanding data access patterns
-**Too late:** Choosing a database after writing thousands of queries
-**Last responsible moment:** Choosing a database after prototyping data model and access patterns, before implementing full schema
+- **Too early:** Choosing a database before understanding data access patterns
+- **Too late:** Choosing a database after writing thousands of queries
+- **Last responsible moment:** Choosing a database after prototyping data model and access patterns, before implementing full schema
 
 **How to Defer Commitment:**
 
@@ -496,14 +482,6 @@ Let design emerge through refactoring:
 **Database Technology:**
 - ❌ Choose database technology based on resume-driven development
 - ✅ Prototype with simple relational DB, evaluate alternatives when patterns emerge
-
-**How to Defer Commitment:**
-
-- Build MVPs and prototypes before committing to full implementation
-- Use abstractions and interfaces to keep options open
-- Evaluate multiple approaches in parallel (set-based design)
-- Make decisions based on validated learning, not speculation
-- Refactor continuously rather than over-design upfront
 
 **Red Flags:**
 - Months of architecture planning before writing code
@@ -564,25 +542,7 @@ Reduce batch size at every stage:
 
 **2. Limit Work in Progress (WIP)**
 
-**Why WIP limits matter:**
-
-High WIP creates:
-- Context switching (cognitive overhead)
-- Longer cycle times (everything takes longer)
-- Hidden bottlenecks (work piles up)
-- Delayed feedback (nothing finishes)
-
-Low WIP creates:
-- Focus (finish before starting new work)
-- Shorter cycle times (work flows faster)
-- Visible bottlenecks (explicit problems)
-- Fast feedback (work finishes quickly)
-
-**How to implement WIP limits:**
-- Set explicit limits per workflow stage
-- "Stop starting, start finishing"
-- Pull new work only when capacity exists
-- Make WIP limits visible (Kanban board)
+Finish before starting, and pull new work only when capacity exists. How to set and enforce the limits is covered under Limiting Work in Progress below.
 
 **3. Fast Feedback Loops**
 
@@ -628,14 +588,6 @@ Identify and eliminate waiting:
 - Waiting for approvals → Empower teams to deploy
 - Waiting for other teams → Cross-functional teams reduce dependencies
 - Waiting for builds → Faster CI infrastructure
-
-**How to Deliver Fast:**
-
-- Reduce batch size (deploy frequently, not quarterly)
-- Set and enforce WIP limits (finish before starting)
-- Automate builds, tests, and deployments (CI/CD)
-- Remove approval gates and handoffs (empower teams)
-- Measure cycle time and lead time (optimize flow)
 
 **Red Flags:**
 - Deployment happens monthly or quarterly
@@ -748,14 +700,6 @@ Empower teams and individuals to make decisions, solve problems, and continuousl
 - Facilitates team success
 - Enables team autonomy
 
-**How to Respect People:**
-
-- Trust teams to make technical decisions within boundaries
-- Provide purpose and context, not detailed instructions
-- Create slack time for learning and improvement (15-20%)
-- Foster psychological safety (blameless culture)
-- Measure team outcomes, not individual activity
-
 **Red Flags:**
 - Managers dictate implementation details
 - No slack time (100% utilization expected)
@@ -836,11 +780,7 @@ Value stream analysis reveals:
 
 **1. Value Stream Mapping**
 
-Visualize the entire flow:
-- Map every step from idea to customer
-- Measure lead time and cycle time at each step
-- Identify wait states and handoffs
-- Calculate value-added time vs. waste
+Map the entire flow from idea to customer, as described under Value Stream Mapping below.
 
 **2. Break Down Silos**
 
@@ -882,19 +822,7 @@ Measure what matters for the whole system:
 
 **5. Continuous Improvement (Kaizen)**
 
-Optimize the system continuously:
-- Regular retrospectives identify improvements
-- Small incremental changes compound
-- Everyone participates in improvement
-- Measure results and iterate
-
-**How to Optimize the Whole:**
-
-- Map your entire value stream (idea to customer)
-- Identify and focus on bottlenecks
-- Create cross-functional teams (reduce handoffs)
-- Measure end-to-end flow (lead time, cycle time)
-- Optimize for flow, not utilization
+Improve the system continuously through small changes, as described under Continuous Improvement below.
 
 **Red Flags:**
 - Teams optimized separately (dev vs. QA vs. ops)
@@ -943,16 +871,7 @@ A visual representation of the flow of work from idea to customer, including all
 
 **Example value stream map:**
 
-```
-Idea → Backlog (21 days wait) → Design (3 days work) →
-Dev Queue (7 days wait) → Development (5 days work) →
-Code Review (4 days wait) → Testing (3 days work) →
-Deploy Queue (10 days wait) → Deployment (1 day work)
-
-Total Lead Time: 54 days
-Total Process Time: 12 days
-Efficiency: 22% (12/54)
-```
+{% include figure.html id="sdlc-value-stream-map" %}
 
 **Insights:**
 - Only 22% of time is spent adding value
@@ -1202,9 +1121,9 @@ Lead Time = Work in Progress / Throughput
 
 **Typical WIP limits:**
 
-**Per person:** 1-2 items
-**Per team:** 1.5-2x team size
-**Per workflow stage:** 2-3 items
+- **Per person:** 1-2 items
+- **Per team:** 1.5-2x team size
+- **Per workflow stage:** 2-3 items
 
 **What happens when WIP limit is reached:**
 

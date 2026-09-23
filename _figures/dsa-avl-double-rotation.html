@@ -1,0 +1,74 @@
+---
+title: "An AVL Double Rotation"
+kind: structure
+system: dsa
+summary: "The left-right case fixed by a left rotation, then a right rotation."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 480" role="img" aria-labelledby="dr-title dr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dr-title">Fixing the left-right case in an AVL tree with two rotations</title>
+<desc id="dr-desc">Step 1: node z is out of balance. Its left child is x, and its right subtree is D. x has left subtree A and right child y, and y has subtrees B and C. The extra height is under x's right child, the left-right case. Step 2: a left rotation at x moves y above x. y becomes z's left child, with x as y's left child holding A and B, and C as y's right subtree. The tall part is now on the outside, a left-left case. Step 3: a right rotation at z makes y the root of this part of the tree, with x as its left child holding A and B, and z as its right child holding C and D. The result is balanced and one level shorter. An in-order walk reads A, x, B, y, C, z, D in all three trees. B and C are the subtrees that change parent.</desc>
+<style>
+.dr-n { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.dr-h { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.dr-v { font-size: 15px; font-weight: 700; font-style: italic; fill: #FFFFFF; }
+.dr-t { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dr-m { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.25; }
+.dr-tl { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.dr-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.dr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dr-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dr-hd" x="30" y="34">1. LEFT-RIGHT CASE AT z</text>
+<path class="dr-e" d="M 138.9,94.2 L 106.1,135.8"/>
+<path class="dr-e" d="M 161.1,94.2 L 205.0,150.0"/>
+<path class="dr-e" d="M 86.1,165.6 L 55.0,220.0"/>
+<path class="dr-e" d="M 103.9,165.6 L 126.1,204.4"/>
+<path class="dr-e" d="M 127.9,236.5 L 105.0,290.0"/>
+<path class="dr-e" d="M 142.1,236.5 L 165.0,290.0"/>
+<circle class="dr-h" cx="150" cy="80" r="18"/><text class="dr-v" x="150" y="86" text-anchor="middle">z</text>
+<circle class="dr-n" cx="95" cy="150" r="18"/><text class="dr-v" x="95" y="156" text-anchor="middle">x</text>
+<circle class="dr-n" cx="135" cy="220" r="18"/><text class="dr-v" x="135" y="226" text-anchor="middle">y</text>
+<path class="dr-t" d="M 205,150 L 185.0,196 L 225.0,196 Z"/><text class="dr-tl" x="205" y="185" text-anchor="middle">D</text>
+<path class="dr-t" d="M 55,220 L 35.0,266 L 75.0,266 Z"/><text class="dr-tl" x="55" y="255" text-anchor="middle">A</text>
+<path class="dr-m" d="M 105,290 L 85.0,336 L 125.0,336 Z"/><text class="dr-tl" x="105" y="325" text-anchor="middle">B</text>
+<path class="dr-m" d="M 165,290 L 145.0,336 L 185.0,336 Z"/><text class="dr-tl" x="165" y="325" text-anchor="middle">C</text>
+<text class="dr-s" x="30" y="370">z’s left side is 2 taller, and the</text>
+<text class="dr-s" x="30" y="388">extra height is under x’s right child.</text>
+<text class="dr-hd" x="290" y="34">2. ROTATE LEFT AT x</text>
+<path class="dr-e" d="M 428.9,94.2 L 396.1,135.8"/>
+<path class="dr-e" d="M 451.1,94.2 L 495.0,150.0"/>
+<path class="dr-e" d="M 376.1,165.6 L 353.9,204.4"/>
+<path class="dr-e" d="M 393.9,165.6 L 425.0,220.0"/>
+<path class="dr-e" d="M 337.9,236.5 L 315.0,290.0"/>
+<path class="dr-e" d="M 352.1,236.5 L 375.0,290.0"/>
+<circle class="dr-h" cx="440" cy="80" r="18"/><text class="dr-v" x="440" y="86" text-anchor="middle">z</text>
+<circle class="dr-n" cx="385" cy="150" r="18"/><text class="dr-v" x="385" y="156" text-anchor="middle">y</text>
+<circle class="dr-n" cx="345" cy="220" r="18"/><text class="dr-v" x="345" y="226" text-anchor="middle">x</text>
+<path class="dr-t" d="M 495,150 L 475.0,196 L 515.0,196 Z"/><text class="dr-tl" x="495" y="185" text-anchor="middle">D</text>
+<path class="dr-m" d="M 425,220 L 405.0,266 L 445.0,266 Z"/><text class="dr-tl" x="425" y="255" text-anchor="middle">C</text>
+<path class="dr-t" d="M 315,290 L 295.0,336 L 335.0,336 Z"/><text class="dr-tl" x="315" y="325" text-anchor="middle">A</text>
+<path class="dr-m" d="M 375,290 L 355.0,336 L 395.0,336 Z"/><text class="dr-tl" x="375" y="325" text-anchor="middle">B</text>
+<text class="dr-s" x="290" y="370">y moves above x. The tall part is</text>
+<text class="dr-s" x="290" y="388">now on the outside, a left-left case.</text>
+<text class="dr-hd" x="580" y="34">3. ROTATE RIGHT AT z</text>
+<path class="dr-e" d="M 698.1,93.5 L 651.9,146.5"/>
+<path class="dr-e" d="M 721.9,93.5 L 768.1,146.5"/>
+<path class="dr-e" d="M 632.0,176.1 L 605.0,230.0"/>
+<path class="dr-e" d="M 648.0,176.1 L 675.0,230.0"/>
+<path class="dr-e" d="M 772.0,176.1 L 745.0,230.0"/>
+<path class="dr-e" d="M 788.0,176.1 L 815.0,230.0"/>
+<circle class="dr-n" cx="710" cy="80" r="18"/><text class="dr-v" x="710" y="86" text-anchor="middle">y</text>
+<circle class="dr-n" cx="640" cy="160" r="18"/><text class="dr-v" x="640" y="166" text-anchor="middle">x</text>
+<circle class="dr-n" cx="780" cy="160" r="18"/><text class="dr-v" x="780" y="166" text-anchor="middle">z</text>
+<path class="dr-t" d="M 605,230 L 585.0,276 L 625.0,276 Z"/><text class="dr-tl" x="605" y="265" text-anchor="middle">A</text>
+<path class="dr-m" d="M 675,230 L 655.0,276 L 695.0,276 Z"/><text class="dr-tl" x="675" y="265" text-anchor="middle">B</text>
+<path class="dr-m" d="M 745,230 L 725.0,276 L 765.0,276 Z"/><text class="dr-tl" x="745" y="265" text-anchor="middle">C</text>
+<path class="dr-t" d="M 815,230 L 795.0,276 L 835.0,276 Z"/><text class="dr-tl" x="815" y="265" text-anchor="middle">D</text>
+<text class="dr-s" x="580" y="370">y takes z’s place with x and z as its</text>
+<text class="dr-s" x="580" y="388">children. Balanced, one level shorter.</text>
+<text class="dr-s" x="30" y="430">In-order reads A, x, B, y, C, z, D in all three trees. y’s subtrees B and C are split between x and z.</text>
+<circle class="dr-h" cx="40" cy="458" r="9"/><text class="dr-s" x="56" y="462">Out of balance</text>
+<path class="dr-m" d="M 180,450 L 172,466 L 188,466 Z"/><text class="dr-s" x="196" y="462">Subtrees that change parent</text>
+</g>
+</svg>

@@ -93,7 +93,7 @@ Two refinement-specific additions:
 ## Process
 
 - **One guide at a time**, no parallel dispatch. The status column in the progress table is the single source of truth for where the pass is.
-- **Per guide:** run the content items, apply the fixes, run the presentation pass, set status to Complete, move to the next row. Don't stop for approval between rows. No Jekyll build — content-only edits don't break the build.
+- **Per guide:** run the content items, apply the fixes, run the presentation pass, then the independent review from [Writing a New Guide](study-guide-guide.md#writing-a-new-guide) (steps 4 and 5), fixing and re-reviewing until a round returns "ready". Then set status to Complete and move to the next row. The review is mandatory for every guide in a depth pass, whether it was lightly corrected or rewritten, and a plan's cadence can't waive it. After three rounds without "ready", bring the open findings to the user. Don't stop for approval between rows. No Jekyll build — content-only edits don't break the build.
 - **Never record what changed.** The progress table tracks status and nothing else, because the corrections are already in the diff and a per-guide changelog is dead weight. The only things that get written down are forward-looking:
   - a finding a *later, not-yet-done* row has to act on goes in **Open pre-flags**;
   - a fact that constrains every remaining guide goes in **Cross-guide facts in force**;
@@ -124,7 +124,7 @@ These are not stylistic preferences. Each one exists because something else in t
 - **Every heading below is present from the start, even when its section is empty.** A pass that never creates an **Unverified, left standing** heading will quietly leave unverified absolutes in the guides instead of softening them, because item 1's fallback has nowhere to write. Same for pre-flags. Create the headings when the plan is created, not when the first entry appears.
 - **Row numbers are assigned once and never reused or renumbered.** Pre-flags, cross-guide facts, and the unverified list all address rows by number, and those references outlive the rows they were written from. If a guide is added mid-pass, give it the next free number at the bottom of the table and note where it belongs in reading order — do not renumber to keep the table in config order.
 - **Status is exactly `Not started`, `In progress`, or `Complete`.** "Status is the single source of truth" only holds if the vocabulary is closed. No `Partial`, no `Done (tags only)` — a guide that had some items run and not others is `In progress`.
-- **`Complete` means the content items ran and the presentation pass finished with `/refine-prose` clean.** Not "the diff looks substantial." Item 1 leaves no trace in a diff, so this status is the only record that it happened; setting it early destroys the information permanently.
+- **`Complete` means the content items ran, the presentation pass finished with `/refine-prose` clean, and an independent review round returned "ready".** Not "the diff looks substantial." Item 1 leaves no trace in a diff, so this status is the only record that it happened; setting it early destroys the information permanently.
 - **A pre-flag names a row number, not just a guide.** Guide names get remembered wrong and don't sort. `| 44 data-architecture |` is the form — number first, name as the human hint.
 - **Cross-guide facts lead with a bolded subject.** The section is read by scanning for a subject, not by reading top to bottom, and it grows past a screenful early in any real pass.
 

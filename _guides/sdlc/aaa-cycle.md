@@ -3,9 +3,9 @@ title: "AAA Cycle: Align-Agree-Apply"
 layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
-description: "A guiding discipline for architects that emphasizes human connection, shared agreement, and value delivery - transcending any specific SDLC methodology."
+description: "A guiding discipline for architects that works inside any SDLC methodology: align with the need through human connection, agree on how to meet it, apply what was agreed, and go back to an earlier phase when reality breaks the agreement."
 author: steven-stuart
-tags: [sdlc, methodology, collaboration, stakeholder-management, leadership, fundamentals]
+tags: [fundamentals, aaa-cycle, stakeholder-management, collaboration, leadership]
 ---
 
 ## Overview
@@ -49,15 +49,11 @@ AAA presents specific activities, deliverables, and decision points, but these a
 
 Understand the problem space before making commitments. Build trust with stakeholders, surface constraints, and establish shared understanding of success. Alignment produces a foundation of mutual understanding with real stakeholder buy-in, not just signatures from people who feel heard.
 
-[→ Phase 1: Align Guide](aaa-phase1-align.html)
-
 ---
 
 ### Phase 2: Agree to the Plan
 
 Transform aligned understanding into concrete, approved technical plans. Design the solution, validate critical assumptions, and secure commitment on approach and resources. Agreement produces authentic commitment because everyone helped shape the path forward.
-
-[→ Phase 2: Agree Guide](aaa-phase2-agree.html)
 
 ---
 
@@ -65,11 +61,9 @@ Transform aligned understanding into concrete, approved technical plans. Design 
 
 Execute the agreed plan with discipline while maintaining continuous alignment. When reality requires changes, return to Align or Agree rather than silently drifting from what was committed. Application produces working software that meets the needs you aligned on, built the way you agreed.
 
-[→ Phase 3: Apply Guide](aaa-phase3-apply.html)
-
 ---
 
-## Visual Journey
+## Going Back to an Earlier Phase
 
 Each phase builds on the previous one. You can't genuinely agree without first aligning, and you can't honor agreements that were never truly made. When new information breaks alignment, go back and re-align. When the plan proves infeasible, go back and re-agree. This isn't failure; it's the discipline of maintaining integrity.
 

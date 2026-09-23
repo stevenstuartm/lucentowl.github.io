@@ -1,0 +1,87 @@
+---
+title: "I2C Bus Versus SPI Chip Selects"
+kind: structure
+system: dotnet
+summary: "One addressed two-wire bus, against shared SPI wires plus a select line per device."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 330" role="img" aria-labelledby="i2s-title i2s-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="i2s-title">How devices attach to an I2C bus and to an SPI bus</title>
+<desc id="i2s-desc">I2C: the Pi's two bus wires, SDA and SCL, are shared by every device, and each device has its own address, such as 0x76, 0x68, and 0x3C, which the controller sends to pick it. Adding a device costs only a free address. SPI: three wires, SCLK, MOSI, and MISO, are shared by every device, and each device also has its own chip-select line from the Pi, CS0 for the ADC and CS1 for the LCD. The controller picks a device by pulling its CS line low, so each added device costs another GPIO pin.</desc>
+<style>
+.i2s-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.i2s-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.i2s-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.i2s-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.i2s-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.i2s-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.i2s-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.i2s-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.i2s-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.i2s-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.i2s-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.i2s-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.i2s-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.i2s-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.i2s-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.i2s-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.i2s-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.i2s-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.i2s-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.i2s-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.i2s-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.i2s-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.i2s-dot { fill: var(--color-primary, #1A5F8A); }
+.i2s-dot-hot { fill: var(--color-accent, #A5486E); }
+.i2s-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.i2s-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.i2s-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="i2s-hd" x="30" y="34">I2C</text>
+<text class="i2s-lab" x="30" y="52">two shared wires; the address picks the device</text>
+<rect class="i2s-sys" x="30" y="80" width="90" height="60" rx="6"/>
+<text class="i2s-n-inv" x="75.0" y="106.0" text-anchor="middle">Pi</text>
+<text class="i2s-k-inv" x="75.0" y="124.0" text-anchor="middle">controller</text>
+<line class="i2s-axis" x1="120" y1="100" x2="440" y2="100"/>
+<line class="i2s-axis" x1="120" y1="120" x2="440" y2="120"/>
+<text class="i2s-lab" x="130" y="94">SDA</text>
+<text class="i2s-lab" x="130" y="134">SCL</text>
+<line class="i2s-axis" x1="220" y1="120" x2="220" y2="200"/>
+<rect class="i2s-box" x="190" y="200" width="76" height="50" rx="6"/>
+<text class="i2s-n" x="228.0" y="221.0" text-anchor="middle">0x76</text>
+<text class="i2s-k" x="228.0" y="239.0" text-anchor="middle">BME280</text>
+<line class="i2s-axis" x1="310" y1="120" x2="310" y2="200"/>
+<rect class="i2s-box" x="280" y="200" width="76" height="50" rx="6"/>
+<text class="i2s-n" x="318.0" y="221.0" text-anchor="middle">0x68</text>
+<text class="i2s-k" x="318.0" y="239.0" text-anchor="middle">MPU-6050</text>
+<line class="i2s-axis" x1="400" y1="120" x2="400" y2="200"/>
+<rect class="i2s-box" x="370" y="200" width="76" height="50" rx="6"/>
+<text class="i2s-n" x="408.0" y="221.0" text-anchor="middle">0x3C</text>
+<text class="i2s-k" x="408.0" y="239.0" text-anchor="middle">SSD1306</text>
+<text class="i2s-note" x="30" y="290">Another device costs a free address.</text>
+<line class="i2s-rule" x1="480" y1="20" x2="480" y2="310"/>
+<text class="i2s-hd" x="510" y="34">SPI</text>
+<text class="i2s-lab" x="510" y="52">three shared wires, plus one chip select per device</text>
+<rect class="i2s-sys" x="510" y="80" width="90" height="60" rx="6"/>
+<text class="i2s-n-inv" x="555.0" y="106.0" text-anchor="middle">Pi</text>
+<text class="i2s-k-inv" x="555.0" y="124.0" text-anchor="middle">controller</text>
+<line class="i2s-axis" x1="600" y1="96" x2="930" y2="96"/>
+<text class="i2s-lab" x="610" y="93">SCLK</text>
+<line class="i2s-axis" x1="600" y1="112" x2="930" y2="112"/>
+<text class="i2s-lab" x="610" y="109">MOSI</text>
+<line class="i2s-axis" x1="600" y1="128" x2="930" y2="128"/>
+<text class="i2s-lab" x="610" y="125">MISO</text>
+<line class="i2s-axis" x1="740" y1="128" x2="740" y2="210"/>
+<rect class="i2s-box" x="700" y="210" width="90" height="50" rx="6"/>
+<text class="i2s-n" x="745.0" y="239.0" text-anchor="middle">ADC</text>
+<line class="i2s-axis" x1="870" y1="128" x2="870" y2="210"/>
+<rect class="i2s-box" x="830" y="210" width="90" height="50" rx="6"/>
+<text class="i2s-n" x="875.0" y="239.0" text-anchor="middle">LCD</text>
+<path class="i2s-hot" d="M540,140 L540,170 L720,170 L720,210"/>
+<text class="i2s-em" x="712" y="185" text-anchor="end">CS0</text>
+<path class="i2s-hot" d="M570,140 L570,190 L850,190 L850,210"/>
+<text class="i2s-em" x="842" y="204" text-anchor="end">CS1</text>
+<text class="i2s-note" x="510" y="290">Another device costs another GPIO pin for its select line.</text>
+</g>
+</svg>

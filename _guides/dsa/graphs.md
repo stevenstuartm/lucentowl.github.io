@@ -3,660 +3,482 @@ title: "Graph Fundamentals & Traversal"
 layout: guide
 category: Data Structures & Algorithms
 subcategory: Graphs
-description: "Complete guide to graphs covering representations, traversal algorithms (BFS/DFS), and applications from social networks to pathfinding problems."
-tags: [data-structures, algorithms, graphs, practical, interview-prep]
+description: "What graphs are and the vocabulary for them, how to store one as an adjacency list or matrix, and how breadth-first and depth-first search work: shortest paths in unweighted graphs, connected components, cycle detection, and grid problems."
+tags: [graphs, bfs, dfs, adjacency-list, connected-components, cycle-detection, fundamentals]
 ---
+{% raw %}
 
 ## Why Graphs Exist
-Model relationships and networks like social networks, maps, dependencies, state machines, and computer networks. Graphs are the most flexible data structure for representing complex relationships between entities.
 
-## When to Use Graphs
+A graph models things and the connections between them, when those connections don't form a neat hierarchy. People and friendships, cities and roads, web pages and links, packages and their dependencies all have this shape. A tree allows each item one parent and no loops. A graph drops both limits, so any item can connect to any other, and following connections can lead back to where it started.
 
-**Use when:**
-- Modeling relationships between entities
-- Pathfinding and navigation problems
-- Network analysis and flow problems
-- Dependency resolution (build systems, package managers)
-- State machines and game AI
-- Social network analysis
-
-**Don't use when:**
-- Simple hierarchical data (use trees)
-- No relationships between data points
-- Linear or simple key-value relationships
-
-**Modern reality:** Critical for many applications. Often use graph databases (Neo4j) or specialized libraries rather than implementing from scratch.
+Once a problem is a graph, a small set of algorithms answers a large set of questions. Can this reach that? What is the fewest hops between them? Which items form separate groups? Is there a loop in these dependencies? This guide covers the representation and the two searches, breadth-first and depth-first, that most of those answers are built on.
 
 ---
 
-## Graph Types and Terminology
+## Graph Vocabulary
 
-### Key Terms
-- **Vertex (Node):** A point in the graph that holds data
-- **Edge:** A connection between two vertices
-- **Adjacent:** Two vertices connected by an edge
-- **Path:** A sequence of edges connecting vertices
-- **Cycle:** A path that begins and ends at the same vertex
-- **Connected Graph:** Every vertex can reach every other vertex
-- **Disconnected Graph:** Some vertices cannot reach others
+A graph is a set of **vertices** (also called nodes) and a set of **edges**, each connecting two vertices. The usual shorthand is V for the number of vertices and E for the number of edges.
 
-### Graph Types
+| Term | Meaning |
+| --- | --- |
+| Adjacent, neighbor | Two vertices joined by an edge are adjacent. Each is the other's neighbor |
+| Degree | The number of edges touching a vertex. In a directed graph, in-degree counts edges arriving and out-degree counts edges leaving |
+| Path | A sequence of vertices where each consecutive pair is joined by an edge. Its length is the number of edges. A simple path never repeats a vertex |
+| Cycle | A path that starts and ends at the same vertex without reusing an edge |
+| Connected | An undirected graph is connected if a path joins every pair of vertices |
+| Connected component | A group of vertices all joined to each other by paths, which can't be extended by adding another vertex. A disconnected graph has several |
+| Self-loop | An edge from a vertex to itself |
+| Sparse, dense | A sparse graph has far fewer edges than the V² maximum. A dense one has close to it |
 
-**Directed vs Undirected:**
-- **Directed (Digraph):** Edges have direction (A → B ≠ B → A)
-- **Undirected:** Edges are bidirectional (A ↔ B)
+Two independent choices describe a graph's edges:
 
-**Weighted vs Unweighted:**
-- **Weighted:** Edges have associated costs/distances
-- **Unweighted:** All edges have equal weight (or weight = 1)
+| | Meaning | Examples |
+| --- | --- | --- |
+| **Undirected** | An edge joins two vertices both ways | Friendships, roads that carry traffic both ways, network cables |
+| **Directed** | An edge points from one vertex to another | Follows on a social network, links between web pages, "must be built before" |
+| **Unweighted** | Every edge counts the same | Friendships, links |
+| **Weighted** | Each edge carries a number, such as a distance, cost, or latency | Road distances, network latency |
 
-**Examples:**
-- **Social Network:** Undirected, unweighted (friendship is mutual)
-- **Twitter Follows:** Directed, unweighted (following isn't mutual)
-- **Road Map:** Undirected, weighted (roads have distances)
-- **Web Pages:** Directed, unweighted (links point one way)
+A directed graph with no cycles is a **directed acyclic graph** (DAG). Build dependencies and course prerequisites are DAGs when they're valid, and a cycle in such a graph is a bug. It means two tasks that each have to finish before the other can start.
 
----
-
-## Graph Representation
-
-### Adjacency List vs Adjacency Matrix
-
-| Aspect | Adjacency List | Adjacency Matrix |
-|--------|----------------|------------------|
-| **Space** | O(V + E) | O(V²) |
-| **Add Vertex** | O(1) | O(V²) |
-| **Add Edge** | O(1) | O(1) |
-| **Check Edge** | O(degree) | O(1) |
-| **Iterate Neighbors** | O(degree) | O(V) |
-| **Best For** | Sparse graphs | Dense graphs |
-
-**Use Adjacency List when:**
-- Sparse graphs (few edges relative to vertices)
-- Need to iterate through neighbors frequently
-- Memory efficiency is important
-
-**Use Adjacency Matrix when:**
-- Dense graphs (many edges)
-- Need fast edge existence checks
-- Simple implementation is preferred
+A tree is a special graph: connected, undirected, and without cycles. Those rules force it to have exactly V − 1 edges and exactly one simple path between any two vertices.
 
 ---
 
-## Graph Implementation
+## Storing a Graph
 
-### C# Implementation
+Besides a plain list of edges, which suits algorithms that process edges one at a time, there are two standard representations. An **adjacency list** keeps, for each vertex, a list of its neighbors. An **adjacency matrix** is a V × V grid where the cell at row u, column v says whether an edge runs from u to v.
 
-#### Adjacency List Representation
+{% endraw %}
+{% include figure.html id="dsa-graph-representations" %}
+{% raw %}
+
+| Operation | Adjacency list | Adjacency matrix |
+| --- | --- | --- |
+| Memory | O(V + E) | O(V²) |
+| Is there an edge from u to v? | O(degree of u), or O(1) on average if neighbors are kept in a `HashSet` | O(1) |
+| List u's neighbors | O(degree of u) | O(V), scanning the whole row |
+| Add an edge | O(1) | O(1) |
+| Add a vertex | O(1) | O(V²), copying into a larger grid |
+| Full BFS or DFS | O(V + E) | O(V²) |
+
+The difference that decides most choices is in the last row. Searches spend their time listing neighbors, and a matrix makes every vertex pay for a full row whether it has 3 neighbors or 3,000. Many real graphs are sparse, such as road networks, where a junction joins a handful of roads, and social networks, where one person knows a tiny fraction of everyone. For those, an adjacency list is the default. A matrix earns its V² memory when the graph is small or dense, or when the main question is "is there an edge between these two vertices?"
+
+For an undirected graph, each edge is stored twice, once in each endpoint's list, and the matrix is symmetric. A weighted graph stores the weight in the list entry or the matrix cell instead of a plain yes or no.
+
+### An Adjacency List in C#
+
+.NET has no graph type in its base library, but a dictionary of lists is all an adjacency list needs:
+
 ```csharp
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-public class Vertex<T>
+public class Graph<T> where T : notnull
 {
-    public T Value { get; set; }
-    public Dictionary<T, int> Edges { get; set; }
+    private readonly Dictionary<T, List<T>> _adjacency = new();
 
-    public Vertex(T value)
+    public Graph(bool directed = false) => IsDirected = directed;
+
+    public bool IsDirected { get; }
+
+    public IEnumerable<T> Vertices => _adjacency.Keys;
+
+    public void AddVertex(T vertex) => _adjacency.TryAdd(vertex, new List<T>());
+
+    public void AddEdge(T from, T to)
     {
-        Value = value;
-        Edges = new Dictionary<T, int>();
+        AddVertex(from);
+        AddVertex(to);
+        _adjacency[from].Add(to);
+        if (!IsDirected)
+            _adjacency[to].Add(from);            // An undirected edge is stored in both lists
     }
 
-    public void AddEdge(T vertex, int weight = 1)
-    {
-        Edges[vertex] = weight;
-    }
-
-    public List<T> GetEdges()
-    {
-        return Edges.Keys.ToList();
-    }
-}
-
-public class Graph<T>
-{
-    private Dictionary<T, Vertex<T>> graphDict;
-    private bool directed;
-
-    public Graph(bool directed = false)
-    {
-        graphDict = new Dictionary<T, Vertex<T>>();
-        this.directed = directed;
-    }
-
-    public void AddVertex(Vertex<T> vertex)
-    {
-        graphDict[vertex.Value] = vertex;
-    }
-
-    public void AddEdge(Vertex<T> fromVertex, Vertex<T> toVertex, int weight = 1)
-    {
-        graphDict[fromVertex.Value].AddEdge(toVertex.Value, weight);
-
-        // For undirected graphs, add edge in both directions
-        if (!directed)
-        {
-            graphDict[toVertex.Value].AddEdge(fromVertex.Value, weight);
-        }
-    }
-
-    public List<T> FindPathBFS(T startVertex, T endVertex)
-    {
-        var queue = new Queue<T>();
-        var visited = new HashSet<T>();
-        var parent = new Dictionary<T, T>();
-
-        queue.Enqueue(startVertex);
-        parent[startVertex] = default(T);
-
-        while (queue.Count > 0)
-        {
-            T currentVertex = queue.Dequeue();
-
-            if (visited.Contains(currentVertex))
-                continue;
-
-            visited.Add(currentVertex);
-            Console.WriteLine($"Visiting {currentVertex}");
-
-            if (currentVertex.Equals(endVertex))
-            {
-                // Reconstruct path
-                var path = new List<T>();
-                var current = currentVertex;
-
-                while (!EqualityComparer<T>.Default.Equals(current, default(T)))
-                {
-                    path.Add(current);
-                    current = parent[current];
-                }
-
-                path.Reverse();
-                return path;
-            }
-
-            // Add unvisited neighbors to queue
-            var neighbors = graphDict[currentVertex].Edges.Keys;
-            foreach (var neighbor in neighbors)
-            {
-                if (!visited.Contains(neighbor) && !parent.ContainsKey(neighbor))
-                {
-                    parent[neighbor] = currentVertex;
-                    queue.Enqueue(neighbor);
-                }
-            }
-        }
-
-        return null; // No path found
-    }
-
-    public List<T> FindPathDFS(T startVertex, T endVertex, HashSet<T> visited = null, List<T> path = null)
-    {
-        if (visited == null)
-            visited = new HashSet<T>();
-        if (path == null)
-            path = new List<T>();
-
-        visited.Add(startVertex);
-        path.Add(startVertex);
-        Console.WriteLine($"Visiting {startVertex}");
-
-        if (startVertex.Equals(endVertex))
-        {
-            return new List<T>(path); // Return copy of path
-        }
-
-        var neighbors = graphDict[startVertex].Edges.Keys;
-        foreach (var neighbor in neighbors)
-        {
-            if (!visited.Contains(neighbor))
-            {
-                var newVisited = new HashSet<T>(visited);
-                var newPath = new List<T>(path);
-                var result = FindPathDFS(neighbor, endVertex, newVisited, newPath);
-                if (result != null)
-                {
-                    return result;
-                }
-            }
-        }
-
-        return null; // No path found
-    }
-
-    public void PrintGraph()
-    {
-        foreach (var kvp in graphDict)
-        {
-            var vertex = kvp.Value;
-            Console.WriteLine($"{vertex.Value} connects to:");
-
-            if (vertex.Edges.Count == 0)
-            {
-                Console.WriteLine("  No connections");
-            }
-            else
-            {
-                foreach (var edge in vertex.Edges)
-                {
-                    Console.WriteLine($"  -> {edge.Key} (weight: {edge.Value})");
-                }
-            }
-        }
-    }
-
-    public IEnumerable<T> GetVertices()
-    {
-        return graphDict.Keys;
-    }
-
-    public IEnumerable<(T neighbor, int weight)> GetNeighbors(T vertex)
-    {
-        if (graphDict.ContainsKey(vertex))
-        {
-            return graphDict[vertex].Edges.Select(kvp => (kvp.Key, kvp.Value));
-        }
-        return Enumerable.Empty<(T, int)>();
-    }
-}
-
-// Example usage
-class Program
-{
-    static void Main(string[] args)
-    {
-        Console.WriteLine("Creating a transportation network:");
-        var graph = new Graph<string>(directed: false);
-
-        // Create vertices (cities)
-        string[] cities = {"New York", "Los Angeles", "Chicago", "Houston", "Phoenix"};
-        var cityVertices = new Dictionary<string, Vertex<string>>();
-
-        foreach (var city in cities)
-        {
-            var vertex = new Vertex<string>(city);
-            cityVertices[city] = vertex;
-            graph.AddVertex(vertex);
-        }
-
-        // Add edges (routes with distances)
-        var routes = new[]
-        {
-            ("New York", "Chicago", 790),
-            ("New York", "Houston", 1630),
-            ("Los Angeles", "Phoenix", 370),
-            ("Los Angeles", "Houston", 1550),
-            ("Chicago", "Houston", 1080),
-            ("Chicago", "Phoenix", 1440)
-        };
-
-        foreach (var (fromCity, toCity, distance) in routes)
-        {
-            graph.AddEdge(cityVertices[fromCity], cityVertices[toCity], distance);
-        }
-
-        graph.PrintGraph();
-
-        // Find paths
-        Console.WriteLine("\nBFS path from New York to Phoenix:");
-        var bfsPath = graph.FindPathBFS("New York", "Phoenix");
-        Console.WriteLine($"Path: {(bfsPath != null ? string.Join(" -> ", bfsPath) : "No path found")}");
-
-        Console.WriteLine("\nDFS path from New York to Phoenix:");
-        var dfsPath = graph.FindPathDFS("New York", "Phoenix");
-        Console.WriteLine($"Path: {(dfsPath != null ? string.Join(" -> ", dfsPath) : "No path found")}");
-    }
+    public IReadOnlyList<T> Neighbors(T vertex) => _adjacency[vertex];
 }
 ```
 
----
+Keying by the vertex itself lets the graph hold strings, IDs, or any type with sensible equality, and `AddVertex` exists separately so a vertex with no edges still belongs to the graph. The rest of this guide uses this class.
 
-## Weighted Graphs
+### Weighted Edges
 
-### Weighted Graph Implementation
+A weighted graph stores each neighbor together with the edge's weight. Otherwise it matches `Graph<T>`:
+
 ```csharp
-public class WeightedGraph
+public class WeightedGraph<T> where T : notnull
 {
-    public class Edge
-    {
-        public int Destination { get; set; }
-        public int Weight { get; set; }
+    private readonly Dictionary<T, List<(T To, int Weight)>> _adjacency = new();
 
-        public Edge(int destination, int weight)
-        {
-            Destination = destination;
-            Weight = weight;
-        }
+    public WeightedGraph(bool directed = false) => IsDirected = directed;
+
+    public bool IsDirected { get; }
+
+    public IEnumerable<T> Vertices => _adjacency.Keys;
+
+    public void AddVertex(T vertex) => _adjacency.TryAdd(vertex, new());
+
+    public void AddEdge(T from, T to, int weight)
+    {
+        AddVertex(from);
+        AddVertex(to);
+        _adjacency[from].Add((to, weight));
+        if (!IsDirected)
+            _adjacency[to].Add((from, weight));  // Undirected: the same weight both ways
     }
 
-    private Dictionary<int, List<Edge>> adjacencyList;
-
-    public WeightedGraph()
-    {
-        adjacencyList = new Dictionary<int, List<Edge>>();
-    }
-
-    public void AddVertex(int vertex)
-    {
-        if (!adjacencyList.ContainsKey(vertex))
-        {
-            adjacencyList[vertex] = new List<Edge>();
-        }
-    }
-
-    public void AddEdge(int source, int destination, int weight, bool bidirectional = true)
-    {
-        AddVertex(source);
-        AddVertex(destination);
-
-        adjacencyList[source].Add(new Edge(destination, weight));
-
-        if (bidirectional)
-        {
-            adjacencyList[destination].Add(new Edge(source, weight));
-        }
-    }
-
-    public List<Edge> GetNeighbors(int vertex)
-    {
-        return adjacencyList.ContainsKey(vertex) ? adjacencyList[vertex] : new List<Edge>();
-    }
+    public IReadOnlyList<(T To, int Weight)> Neighbors(T vertex) => _adjacency[vertex];
 }
 ```
+
+The searches below ignore weights and count edges. That makes their notion of "shortest" wrong for a weighted graph. With edges A–B of weight 4, A–C of weight 1, and C–B of weight 2, breadth-first search reports A → B as the shortest route because it has one edge, though A → C → B costs 3 instead of 4. Weighted shortest paths need different algorithms, such as Dijkstra's.
 
 ---
 
-## Graph Search Algorithms
+## Breadth-First and Depth-First Search
 
-### Depth-First Search (DFS)
+Both searches start at one vertex, visit everything reachable from it exactly once, and keep a set of visited vertices so a cycle can't send them around forever. They differ in which vertex they take next. Both take each vertex's neighbors in the order its edges were added, which is why the figure below visits B before C.
 
-**When to use:**
-- Finding connected components
-- Cycle detection
-- Topological sorting
-- Maze solving
-- Finding any path (not necessarily shortest)
+**Breadth-first search (BFS)** keeps a queue. It visits the start, then all of its neighbors, then all of their unvisited neighbors, spreading out in rings of increasing distance.
 
-**Time Complexity:** O(V + E)
+**Depth-first search (DFS)** keeps a stack, usually the call stack of a recursive function. It follows one neighbor, then that neighbor's first unvisited neighbor, and so on until it reaches a dead end, then backs up to the most recent vertex with an unvisited neighbor and continues from there.
 
-#### DFS Applications
+{% endraw %}
+{% include figure.html id="dsa-bfs-dfs-order" %}
+{% raw %}
 
-##### 1. Detect Cycle in Undirected Graph
+The code in the rest of this guide is written as static methods on a `Traversal` class, all using the `Graph<T>` above. `Neighbors` throws for a vertex that was never added, so each search expects its start vertex to be in the graph. Both searches are O(V + E) on an adjacency list. Each vertex is visited once, and each edge is looked at once from each end in an undirected graph, or once in a directed one. Both use O(V) memory for the visited set.
+
+### Breadth-First Search
+
 ```csharp
-public static bool HasCycleUndirected<T>(Graph<T> graph, T startVertex)
+public static List<T> BreadthFirst<T>(Graph<T> graph, T start) where T : notnull
 {
-    var visited = new HashSet<T>();
-
-    bool DFS(T vertex, T parent)
-    {
-        visited.Add(vertex);
-
-        foreach (var neighbor in graph.GetNeighbors(vertex).Select(n => n.neighbor))
-        {
-            if (!visited.Contains(neighbor))
-            {
-                if (DFS(neighbor, vertex))
-                    return true;
-            }
-            else if (!neighbor.Equals(parent))
-            {
-                // Found back edge (cycle)
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    return DFS(startVertex, default(T));
-}
-```
-
-##### 2. Topological Sort
-```csharp
-public static List<T> TopologicalSort<T>(Graph<T> graph)
-{
-    var visited = new HashSet<T>();
-    var stack = new Stack<T>();
-
-    void DFS(T vertex)
-    {
-        visited.Add(vertex);
-
-        foreach (var neighbor in graph.GetNeighbors(vertex).Select(n => n.neighbor))
-        {
-            if (!visited.Contains(neighbor))
-                DFS(neighbor);
-        }
-
-        stack.Push(vertex); // Add to stack after visiting all children
-    }
-
-    // Visit all vertices
-    foreach (var vertex in graph.GetVertices())
-    {
-        if (!visited.Contains(vertex))
-            DFS(vertex);
-    }
-
-    return stack.ToList(); // Already in topological order
-}
-```
-
-### Breadth-First Search (BFS)
-
-<div class="callout callout--tip">
-<p class="callout__title">When to Use BFS</p>
-<ul>
-<li>Finding shortest path in unweighted graphs</li>
-<li>Level-order traversal</li>
-<li>Finding minimum steps/moves</li>
-<li>Web crawling</li>
-<li>Social network analysis (degrees of separation)</li>
-</ul>
-</div>
-
-**Time Complexity:** O(V + E)
-
-#### BFS Applications
-
-##### 1. Shortest Path in Unweighted Graph
-```csharp
-public static List<T> ShortestPathBFS<T>(Graph<T> graph, T start, T end)
-{
-    var queue = new Queue<(T vertex, List<T> path)>();
     var visited = new HashSet<T> { start };
-
-    queue.Enqueue((start, new List<T> { start }));
+    var order = new List<T>();
+    var queue = new Queue<T>();
+    queue.Enqueue(start);
 
     while (queue.Count > 0)
     {
-        var (vertex, path) = queue.Dequeue();
-
-        if (vertex.Equals(end))
-            return path;
-
-        foreach (var neighbor in graph.GetNeighbors(vertex).Select(n => n.neighbor))
+        T vertex = queue.Dequeue();
+        order.Add(vertex);
+        foreach (T next in graph.Neighbors(vertex))
         {
-            if (!visited.Contains(neighbor))
-            {
-                visited.Add(neighbor);
-                var newPath = new List<T>(path) { neighbor };
-                queue.Enqueue((neighbor, newPath));
-            }
+            if (visited.Add(next))           // Mark when queued, so nothing is queued twice
+                queue.Enqueue(next);
         }
     }
 
-    return null; // No path found
+    return order;
 }
 ```
 
-##### 2. Count Connected Components
+A vertex is marked visited when it enters the queue, not when it leaves. Marking on the way out lets a vertex with several already-queued neighbors be queued several times, which wastes work and can make the queue grow far past V.
+
+### Shortest Paths in an Unweighted Graph
+
+Because BFS finishes every vertex at distance d before it starts on distance d + 1, the first time it reaches a vertex is along a path with the fewest possible edges. Recording which vertex each one was reached from turns that into a route:
+
 ```csharp
-public static int CountConnectedComponents<T>(Graph<T> graph)
+public static List<T>? ShortestPath<T>(Graph<T> graph, T start, T goal) where T : notnull
 {
-    var visited = new HashSet<T>();
-    int components = 0;
+    var cameFrom = new Dictionary<T, T>();   // Each reached vertex -> the vertex it was reached from
+    var visited = new HashSet<T> { start };
+    var queue = new Queue<T>();
+    queue.Enqueue(start);
 
-    void BFS(T startVertex)
+    while (queue.Count > 0)
     {
-        var queue = new Queue<T>();
-        queue.Enqueue(startVertex);
-        visited.Add(startVertex);
-
-        while (queue.Count > 0)
+        T vertex = queue.Dequeue();
+        if (EqualityComparer<T>.Default.Equals(vertex, goal))
         {
-            var vertex = queue.Dequeue();
-
-            foreach (var neighbor in graph.GetNeighbors(vertex).Select(n => n.neighbor))
+            var path = new List<T> { vertex };
+            while (cameFrom.TryGetValue(vertex, out T? previous))
             {
-                if (!visited.Contains(neighbor))
-                {
-                    visited.Add(neighbor);
-                    queue.Enqueue(neighbor);
-                }
+                path.Add(previous);
+                vertex = previous;
+            }
+            path.Reverse();
+            return path;
+        }
+
+        foreach (T next in graph.Neighbors(vertex))
+        {
+            if (visited.Add(next))
+            {
+                cameFrom[next] = vertex;
+                queue.Enqueue(next);
             }
         }
     }
 
-    foreach (var vertex in graph.GetVertices())
+    return null;                             // goal can't be reached from start
+}
+```
+
+For the graph in the visit-order figure, `ShortestPath(graph, "A", "F")` returns A, C, F. The walk back stops at the start because the start is the one reached vertex with no `cameFrom` entry. Using a placeholder value such as `default(T)` to mean "no previous vertex" is a common bug. For a `Graph<int>`, `default(int)` is 0, which may be a real vertex.
+
+Degrees of separation in a social network, the fewest moves to solve a puzzle, and the fewest hops between two routers are all this search. The number of edges in the path, one less than its vertex count, is the distance.
+
+### Depth-First Search
+
+The recursive form is the shortest to write:
+
+```csharp
+public static List<T> DepthFirst<T>(Graph<T> graph, T start) where T : notnull
+{
+    var visited = new HashSet<T>();
+    var order = new List<T>();
+    Visit(start);
+    return order;
+
+    void Visit(T vertex)
     {
-        if (!visited.Contains(vertex))
+        visited.Add(vertex);
+        order.Add(vertex);
+        foreach (T next in graph.Neighbors(vertex))
         {
-            BFS(vertex);
-            components++;
+            if (!visited.Contains(next))
+                Visit(next);
         }
+    }
+}
+```
+
+The recursion can go as deep as the longest path the search follows, up to V calls, and on a large graph that can overflow the stack. An explicit `Stack<T>` avoids the limit:
+
+```csharp
+public static List<T> DepthFirstIterative<T>(Graph<T> graph, T start) where T : notnull
+{
+    var visited = new HashSet<T>();
+    var order = new List<T>();
+    var stack = new Stack<T>();
+    stack.Push(start);
+
+    while (stack.Count > 0)
+    {
+        T vertex = stack.Pop();
+        if (!visited.Add(vertex))
+            continue;                        // Already visited through another path
+        order.Add(vertex);
+
+        // Push in reverse so the first neighbor is popped first, matching the recursive order
+        var neighbors = graph.Neighbors(vertex);
+        for (int i = neighbors.Count - 1; i >= 0; i--)
+        {
+            if (!visited.Contains(neighbors[i]))
+                stack.Push(neighbors[i]);
+        }
+    }
+
+    return order;
+}
+```
+
+This version checks for a visit when a vertex is popped, not when it's pushed, because a vertex pushed early may be reached by a deeper route first. That means a vertex can sit on the stack more than once, so the stack can grow to O(E) entries rather than O(V).
+
+DFS doesn't find shortest paths. In the figure it reaches C through A, B, E, F, though C is A's neighbor. What DFS offers instead is structure. It fully explores everything reachable from a vertex through vertices not yet visited before it finishes that vertex, and the cycle checks below depend on that.
+
+### Choosing Between Them
+
+| The question | Use | Why |
+| --- | --- | --- |
+| Fewest edges from A to B | BFS | It reaches each vertex first by a shortest route |
+| Everything within k hops | BFS | It works outward in rings of distance |
+| Can A reach B at all? | Either | Both visit everything reachable. DFS is often simpler to write |
+| Connected components | Either | Each search from an unvisited vertex covers one component |
+| Is there a cycle? | DFS | In a directed graph it tracks the current path, which is what a cycle closes back onto |
+| Exploring every possibility, as in a maze or puzzle | DFS | It finishes one line before trying the next, and backs up to the most recent choice when a line fails |
+
+---
+
+## Connected Components
+
+Running a search from each vertex that hasn't been visited yet splits an undirected graph into its connected components. Each search covers exactly one component, and everything it reaches is marked, so the next search starts in a component not seen yet.
+
+```csharp
+public static List<List<T>> Components<T>(Graph<T> graph) where T : notnull
+{
+    var visited = new HashSet<T>();
+    var components = new List<List<T>>();
+
+    foreach (T vertex in graph.Vertices)
+    {
+        if (visited.Contains(vertex))
+            continue;
+
+        var component = new List<T>();      // A new component starts at each unvisited vertex
+        var stack = new Stack<T>();
+        stack.Push(vertex);
+        visited.Add(vertex);
+
+        while (stack.Count > 0)
+        {
+            T current = stack.Pop();
+            component.Add(current);
+            foreach (T next in graph.Neighbors(current))
+            {
+                if (visited.Add(next))
+                    stack.Push(next);
+            }
+        }
+
+        components.Add(component);
     }
 
     return components;
 }
 ```
 
+The whole loop is still O(V + E), since every vertex and edge is handled once across all the searches. The inner search uses a stack here but could use a queue. It only needs to reach everything, not in any particular order. Questions like "how many separate friend groups are there" or "which machines can still reach each other after this link fails" are this computation.
+
+In a directed graph, "connected" splits into two ideas. A vertex can reach another without being reachable back, so components of mutual reachability, called strongly connected components, need a more involved algorithm.
+
 ---
 
-## Common Graph Patterns
+## Cycle Detection
 
-### Finding Connected Components
+### In an Undirected Graph
+
+During a DFS of an undirected graph, every neighbor of the current vertex is either unvisited, the vertex the search just came from, or some other visited vertex. The third case means there's a second route to that vertex, and that closes a cycle.
+
 ```csharp
-public static class GraphAnalysis
+public static bool HasCycleUndirected<T>(Graph<T> graph) where T : notnull
 {
-    public static List<List<int>> FindConnectedComponents(Graph graph, List<int> allVertices)
+    var visited = new HashSet<T>();
+
+    foreach (T vertex in graph.Vertices)
     {
-        var visited = new HashSet<int>();
-        var components = new List<List<int>>();
-
-        foreach (int vertex in allVertices)
-        {
-            if (!visited.Contains(vertex))
-            {
-                var component = new List<int>();
-                DFSComponent(graph, vertex, visited, component);
-                components.Add(component);
-            }
-        }
-
-        return components;
+        if (!visited.Contains(vertex) && Visit(vertex, parent: vertex))
+            return true;
     }
+    return false;
 
-    private static void DFSComponent(Graph graph, int vertex, HashSet<int> visited, List<int> component)
+    bool Visit(T vertex, T parent)
     {
         visited.Add(vertex);
-        component.Add(vertex);
-
-        foreach (int neighbor in graph.GetNeighbors(vertex))
+        foreach (T next in graph.Neighbors(vertex))
         {
-            if (!visited.Contains(neighbor))
+            if (!visited.Contains(next))
             {
-                DFSComponent(graph, neighbor, visited, component);
+                if (Visit(next, parent: vertex))
+                    return true;
+            }
+            else if (!EqualityComparer<T>.Default.Equals(next, parent))
+            {
+                return true;                 // A visited vertex other than the one we came from
             }
         }
+        return false;
     }
 }
 ```
 
-### Cycle Detection in Undirected Graph
+The parent check is needed because every undirected edge appears in both lists. Without it, the edge just followed would look like a route back. The outer loop matters too, because a cycle may sit in a component the first search never reaches. Each search starts by passing the vertex as its own parent. The one case that misses is a self-loop on that starting vertex, since the loop looks like the edge back to the parent. A self-loop anywhere else is caught.
+
+### In a Directed Graph
+
+The undirected check fails on directed graphs. With edges A → B, A → C, and C → B, a search from A visits B, then reaches B again from C, though there's no cycle. B was already done, not on the current path from A to C.
+
+The fix is to track three states instead of two. A vertex is unvisited, in progress while the search is still exploring below it, or done. The in-progress vertices are exactly the chain of recursive calls that led to the current vertex. So an edge to an in-progress vertex leads back into that chain and closes a cycle, and an edge to a done vertex doesn't, however many times that vertex is reached.
+
+{% endraw %}
+{% include figure.html id="dsa-directed-cycle-check" %}
+{% raw %}
+
 ```csharp
-public static bool HasCycleUndirected(Graph graph, List<int> allVertices)
+private enum State { Unvisited, InProgress, Done }
+
+public static bool HasCycleDirected<T>(Graph<T> graph) where T : notnull
 {
-    var visited = new HashSet<int>();
+    var state = new Dictionary<T, State>();
 
-    foreach (int vertex in allVertices)
+    foreach (T vertex in graph.Vertices)
     {
-        if (!visited.Contains(vertex))
-        {
-            if (DFSCycleCheck(graph, vertex, -1, visited))
-            {
-                return true;
-            }
-        }
+        if (state.GetValueOrDefault(vertex) == State.Unvisited && Visit(vertex))
+            return true;
     }
-
     return false;
-}
 
-private static bool DFSCycleCheck(Graph graph, int vertex, int parent, HashSet<int> visited)
-{
-    visited.Add(vertex);
-
-    foreach (int neighbor in graph.GetNeighbors(vertex))
+    bool Visit(T vertex)
     {
-        if (!visited.Contains(neighbor))
+        state[vertex] = State.InProgress;
+        foreach (T next in graph.Neighbors(vertex))
         {
-            if (DFSCycleCheck(graph, neighbor, vertex, visited))
-            {
+            State s = state.GetValueOrDefault(next);
+            if (s == State.InProgress)
+                return true;                 // An edge back to a vertex still on the current path
+            if (s == State.Unvisited && Visit(next))
                 return true;
-            }
         }
-        else if (neighbor != parent)
-        {
-            return true; // Found cycle
-        }
+        state[vertex] = State.Done;
+        return false;
     }
-
-    return false;
 }
 ```
+
+This is how a build tool or package manager can tell that a set of dependencies can't be satisfied. A graph that passes the check is a DAG, and a DAG can be put into an order where every vertex comes after everything it depends on, called a topological order.
 
 ---
 
-## Common Interview Problems
+## Worked Problems
 
-### 1. Number of Islands (2D Grid)
+### Course Schedule
+
+Given n courses and a list of pairs `[a, b]` meaning "take b before a", can every course be completed? Each pair is a directed edge from b to a. The courses can all be taken exactly when that graph has no cycle, so the answer is the directed cycle check:
+
 ```csharp
-public static int NumIslands(char[][] grid)
+public static bool CanFinish(int courseCount, int[][] prerequisites)
 {
-    if (grid == null || grid.Length == 0 || grid[0].Length == 0)
-        return 0;
+    var graph = new Graph<int>(directed: true);
+    for (int c = 0; c < courseCount; c++)
+        graph.AddVertex(c);
+    foreach (int[] pair in prerequisites)
+        graph.AddEdge(pair[1], pair[0]);     // Take pair[1] before pair[0]
 
+    return !Traversal.HasCycleDirected(graph);
+}
+```
+
+Adding every course as a vertex first keeps courses with no prerequisites in the graph, so the check covers all of them.
+
+### Number of Islands
+
+A grid of `'1'` (land) and `'0'` (water) is a graph without an adjacency list. Each cell is a vertex, and its neighbors are the cells up, down, left, and right. Counting the islands, the groups of land cells joined side to side, is counting connected components:
+
+```csharp
+public static int CountIslands(char[][] grid)
+{
     int rows = grid.Length;
-    int cols = grid[0].Length;
-    var visited = new HashSet<(int, int)>();
+    int cols = rows == 0 ? 0 : grid[0].Length;
+    var visited = new bool[rows, cols];
     int islands = 0;
-
-    void DFS(int r, int c)
-    {
-        if (visited.Contains((r, c)) || r < 0 || r >= rows ||
-            c < 0 || c >= cols || grid[r][c] == '0')
-            return;
-
-        visited.Add((r, c));
-        // Visit all 4 directions
-        DFS(r + 1, c);
-        DFS(r - 1, c);
-        DFS(r, c + 1);
-        DFS(r, c - 1);
-    }
+    (int, int)[] steps = { (1, 0), (-1, 0), (0, 1), (0, -1) };
 
     for (int r = 0; r < rows; r++)
     {
         for (int c = 0; c < cols; c++)
         {
-            if (grid[r][c] == '1' && !visited.Contains((r, c)))
+            if (grid[r][c] != '1' || visited[r, c])
+                continue;
+
+            islands++;                       // An unvisited land cell starts a new island
+            var queue = new Queue<(int Row, int Col)>();
+            queue.Enqueue((r, c));
+            visited[r, c] = true;
+
+            while (queue.Count > 0)
             {
-                DFS(r, c);
-                islands++;
+                var (row, col) = queue.Dequeue();
+                foreach (var (dr, dc) in steps)
+                {
+                    int nr = row + dr, nc = col + dc;
+                    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols
+                        && grid[nr][nc] == '1' && !visited[nr, nc])
+                    {
+                        visited[nr, nc] = true;
+                        queue.Enqueue((nr, nc));
+                    }
+                }
             }
         }
     }
@@ -665,134 +487,46 @@ public static int NumIslands(char[][] grid)
 }
 ```
 
-### 2. Course Schedule (Cycle Detection)
-```csharp
-public static bool CanFinishCourses(int numCourses, int[][] prerequisites)
-{
-    // Build adjacency list
-    var graph = new List<int>[numCourses];
-    for (int i = 0; i < numCourses; i++)
-        graph[i] = new List<int>();
+The neighbors are computed from coordinates instead of stored, and a `bool[,]` replaces the `HashSet` because cells are already numbered. The search is BFS on purpose. A recursive DFS is shorter, but a single island covering a 2,000 × 2,000 grid would nest millions of calls deep. The queue version handles it with heap memory. It runs in O(rows × cols).
 
-    foreach (var prereq in prerequisites)
-    {
-        int course = prereq[0];
-        int prerequisite = prereq[1];
-        graph[prerequisite].Add(course);
-    }
+### Cloning a Graph
 
-    // 0 = unvisited, 1 = visiting, 2 = visited
-    var state = new int[numCourses];
+Copying a graph of linked nodes means making a new node for every original and wiring the copies together the same way:
 
-    bool HasCycle(int course)
-    {
-        if (state[course] == 1) // Currently visiting - cycle detected
-            return true;
-        if (state[course] == 2) // Already processed
-            return false;
-
-        state[course] = 1; // Mark as visiting
-        foreach (int nextCourse in graph[course])
-        {
-            if (HasCycle(nextCourse))
-                return true;
-        }
-
-        state[course] = 2; // Mark as visited
-        return false;
-    }
-
-    for (int course = 0; course < numCourses; course++)
-    {
-        if (state[course] == 0)
-        {
-            if (HasCycle(course))
-                return false;
-        }
-    }
-
-    return true;
-}
-```
-
-### 3. Clone Graph
 ```csharp
 public class Node
 {
-    public int val;
-    public IList<Node> neighbors;
-
-    public Node() {
-        val = 0;
-        neighbors = new List<Node>();
-    }
-
-    public Node(int _val) {
-        val = _val;
-        neighbors = new List<Node>();
-    }
-
-    public Node(int _val, List<Node> _neighbors) {
-        val = _val;
-        neighbors = _neighbors;
-    }
+    public int Value { get; }
+    public List<Node> Neighbors { get; } = new();
+    public Node(int value) => Value = value;
 }
 
-public static Node CloneGraph(Node node)
+public static Node? Clone(Node? node)
 {
-    if (node == null)
-        return null;
+    if (node == null) return null;
+    var copies = new Dictionary<Node, Node>();
+    return Copy(node);
 
-    var clones = new Dictionary<Node, Node>(); // original -> clone mapping
-
-    Node DFS(Node original)
+    Node Copy(Node original)
     {
-        if (clones.ContainsKey(original))
-            return clones[original];
+        if (copies.TryGetValue(original, out Node? existing))
+            return existing;                 // Already copied: reuse it, which also stops cycles
 
-        var clone = new Node(original.val);
-        clones[original] = clone;
-
-        foreach (var neighbor in original.neighbors)
-        {
-            clone.neighbors.Add(DFS(neighbor));
-        }
-
-        return clone;
+        var copy = new Node(original.Value);
+        copies[original] = copy;             // Record before recursing into neighbors
+        foreach (Node neighbor in original.Neighbors)
+            copy.Neighbors.Add(Copy(neighbor));
+        return copy;
     }
-
-    return DFS(node);
 }
 ```
 
-## Graph Applications in Real World
-
-**Social Networks:** Friend recommendations, influence analysis, community detection
-**Maps & Navigation:** Shortest path, traffic routing, location services  
-## Quick Reference
-
-### Graph Representation
-| Method | Space | Add Edge | Check Edge | Best For |
-|--------|-------|----------|------------|----------|
-| Adjacency List | O(V + E) | O(1) | O(degree) | Sparse graphs |
-| Adjacency Matrix | O(V²) | O(1) | O(1) | Dense graphs, quick lookups |
-
-### Search Algorithms
-| Algorithm | Time | Space | Use Case |
-|-----------|------|-------|----------|
-| **DFS** | O(V + E) | O(V) | Cycle detection, topological sort, connected components |
-| **BFS** | O(V + E) | O(V) | Shortest path (unweighted), level-order traversal |
-
-### Key Patterns
-- **Tree** = Connected acyclic graph with V-1 edges
-- **Cycle detection:** DFS with visited tracking
-- **Shortest path (unweighted):** BFS
-- **Shortest path (weighted):** Dijkstra, Bellman-Ford
-- **All pairs shortest path:** Floyd-Warshall
-
-### C# Libraries
-- Microsoft.Msagl for visualization
-- Neo4j, Amazon Neptune for graph databases
-- QuikGraph for advanced algorithms
+The dictionary from original to copy does two jobs. It is the visited set, and it makes sure every edge to the same original points at the same copy. Recording the copy before visiting the neighbors is what makes cycles work. When the search comes back around to a node, its copy already exists and is reused instead of copied again.
 
 ---
+
+## Graphs in .NET
+
+The base class library has no graph type, so most code builds one from `Dictionary` and `List` as above. That covers traversal, components, and cycle checks in a few dozen lines. For a wider set of algorithms, the open-source [QuikGraph](https://github.com/KeRNeLith/QuikGraph){:target="_blank" rel="noopener noreferrer"} library provides graph types with search, shortest-path, and flow algorithms, though its most recent release, 2.5.0, dates from July 2022. When the data itself is a large, persistent graph that many queries walk, such as a social network or a fraud-detection network, a graph database like Neo4j or Amazon Neptune stores it and runs traversals close to the data.
+
+{% endraw %}

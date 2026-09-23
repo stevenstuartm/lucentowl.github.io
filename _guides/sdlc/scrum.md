@@ -24,14 +24,6 @@ tags: [practical, scrum, agile, sprints, velocity, product-owner, scrum-master]
 - Time-boxed sprints (typically 2 weeks)
 - Regular inspection and adaptation through events
 
-**Key Characteristics:**
-
-Unlike principle-based approaches (Lean, Kanban), Scrum prescribes specific:
-- **Roles**: Product Owner, Scrum Master, Developers
-- **Events**: Sprint Planning, Daily Scrum, Sprint Review, Sprint Retrospective
-- **Artifacts**: Product Backlog, Sprint Backlog, Increment
-- **Time-boxes**: Fixed-length sprints (1-4 weeks, typically 2)
-
 ### Why Scrum Emerged
 
 **The problem Scrum solves:**
@@ -79,7 +71,7 @@ Scrum became the most widely adopted Agile framework because:
 
 ### Empirical Process Control
 
-Scrum is built on empirical process control theory, which asserts that knowledge comes from experience and making decisions based on what is known.
+Scrum is built on empirical process control, which rests on three pillars.
 
 <div class="card-group">
 <div class="content-card content-card--accent">
@@ -154,6 +146,8 @@ This also explains why Scrum is usually described as easy to understand and diff
 
 Scrum is intentionally incomplete, defining only the framework while teams determine practices within it.
 
+Unlike principle-based approaches such as Lean and Kanban, Scrum prescribes specific accountabilities, events and artifacts.
+
 **What Scrum prescribes:**
 - Three accountabilities: Product Owner, Scrum Master, Developers
 - Five events: the Sprint, which is a container for the other four, plus Sprint Planning, the Daily Scrum, the Sprint Review and the Sprint Retrospective
@@ -175,16 +169,13 @@ The commitments were added in the 2020 Scrum Guide, and they are the part most o
 
 **Sprint characteristics:**
 
-- **Fixed duration**: 2 weeks is most common (balance between feedback and overhead)
+- **Fixed duration**: length chosen to balance feedback against overhead
 - **Consistent duration**: Don't change length sprint-to-sprint
 - **Sprint Goal**: Coherent objective providing focus
 - **No changes that endanger sprint goal**: Scope may be renegotiated with Product Owner
 - **Quality doesn't decrease**: Definition of Done remains constant
 
-**Sprint flow:**
-```
-Sprint Planning → Daily Scrums (every day) → Development → Sprint Review → Retrospective → Next Sprint
-```
+{% include figure.html id="sdlc-scrum-sprint" %}
 
 **Why time-boxes matter:**
 
@@ -206,7 +197,7 @@ Sprint Planning → Daily Scrums (every day) → Development → Sprint Review �
 
 ## Scrum Accountabilities
 
-Scrum defines three roles, each with distinct responsibilities.
+Scrum defines three accountabilities, each with distinct responsibilities.
 
 ### Product Owner
 
@@ -221,7 +212,7 @@ Scrum defines three roles, each with distinct responsibilities.
 - Creates and communicates Product Backlog items
 - Orders items by value (not necessarily priority)
 - Ensures backlog is visible, transparent, and clear
-- Ensures Developers understands items sufficiently
+- Ensures Developers understand items sufficiently
 
 **3. Accept or reject work**
 - Validates work meets acceptance criteria
@@ -334,7 +325,7 @@ Scrum Master:
 
 **1. Deliver increment each sprint**
 
-Create "Done" increment that potentially shippable:
+Create a "Done" increment that is potentially shippable:
 - Develop features
 - Test thoroughly
 - Integrate continuously
@@ -389,7 +380,7 @@ Teams in Scrum:
 
 ## Scrum Events
 
-Scrum defines five time-boxed events that provide structure and opportunities for inspection and adaptation.
+The Sprint, described above, contains the other four events, and each is an opportunity for inspection and adaptation. Product Backlog Refinement, covered last, is an ongoing activity rather than an event.
 
 ### Sprint Planning
 
@@ -408,7 +399,7 @@ Product Owner presents highest priority Product Backlog items:
 - What are acceptance criteria?
 - Why is this valuable to build now?
 
-Developers asks clarifying questions:
+Developers ask clarifying questions:
 - What edge cases exist?
 - What does "done" mean for this item?
 - What dependencies or risks exist?
@@ -420,7 +411,7 @@ Team collaboratively selects items:
 
 **Part 2: How will the work be done?**
 
-Developers plans the work:
+Developers plan the work:
 - Break down Product Backlog items into tasks
 - Estimate effort (hours, points, or relative sizing)
 - Identify dependencies and risks
@@ -507,7 +498,7 @@ Walk through items on Sprint Backlog from right to left (focus on finishing):
 
 **1. Present what was accomplished**
 
-Developers demonstrates:
+Developers demonstrate:
 - "Done" work (meets Definition of Done)
 - Working software (not slide decks or demos of incomplete work)
 - How it delivers on sprint goal
@@ -774,7 +765,7 @@ Set of Product Backlog items selected for the sprint, plus a plan for delivering
 
 **Characteristics:**
 
-- **Team commits**: Developers selects items (not assigned by Product Owner)
+- **Team commits**: Developers select items (not assigned by Product Owner)
 - **Detailed plan**: Broken down into tasks with estimates
 - **Living document**: Team updates daily as work progresses
 - **Transparent**: Visible to everyone (physical board or tool)
@@ -954,6 +945,8 @@ Graph showing work remaining (y-axis) over time (x-axis) within a sprint.
 
 **Steep drop at end:** Work completed at last minute (risky pattern)
 
+{% include figure.html id="sdlc-burndown" %}
+
 **How to do this well:**
 
 - Update daily (not end of sprint)
@@ -982,14 +975,16 @@ Stacked area chart showing distribution of work across workflow stages over time
 - **Flow**: Parallel bands indicate smooth flow
 - **WIP**: Width of bands shows work in progress
 
+{% include figure.html id="sdlc-cfd" %}
+
 **Not standard in Scrum**, but useful when combined with Kanban-style workflow visualization.
 
 ---
 
 ### Lead Time and Cycle Time
 
-**Lead Time:** Time from backlog entry to "Done"
-**Cycle Time:** Time from "In Progress" to "Done"
+- **Lead Time:** Time from backlog entry to "Done"
+- **Cycle Time:** Time from "In Progress" to "Done"
 
 **In sprint context:**
 - Lead time: When item enters Product Backlog → Deployed

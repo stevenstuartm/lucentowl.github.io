@@ -1,0 +1,61 @@
+---
+title: "A Trie Holding Four Words"
+kind: structure
+system: dsa
+summary: "car, cart, cat, and dog stored letter by letter, sharing prefixes."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 450" role="img" aria-labelledby="tr-title tr-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="tr-title">A trie storing the words car, cart, cat, and dog</title>
+<desc id="tr-desc">A trie whose root holds no letter. The root has two children, c and d. Under c is a, and under a are r and t. Under r is another t. Under d is o, and under o is g. The nodes r, t under a, g, and the t under r are marked as word ends, spelling car, cat, dog, and cart along the path from the root. The path c then a is shared by car, cart, and cat, so the prefix ca is stored once. The node r marks the end of car and still has a child, because car is also the start of cart.</desc>
+<style>
+.tr-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.tr-w { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.tr-rt { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 4 3; }
+.tr-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.tr-v-inv { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+.tr-rl { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+.tr-wl { font-size: 13px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.tr-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.tr-ep { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; }
+.tr-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="tr-ep" d="M 384.4,68.9 L 275.6,131.1"/>
+<path class="tr-e" d="M 415.6,68.9 L 524.4,131.1"/>
+<path class="tr-ep" d="M 260.0,158.0 L 260.0,202.0"/>
+<path class="tr-e" d="M 540.0,158.0 L 540.0,202.0"/>
+<path class="tr-e" d="M 248.1,233.5 L 201.9,286.5"/>
+<path class="tr-e" d="M 271.9,233.5 L 318.1,286.5"/>
+<path class="tr-e" d="M 540.0,238.0 L 540.0,282.0"/>
+<path class="tr-e" d="M 190.0,318.0 L 190.0,362.0"/>
+<circle class="tr-rt" cx="400" cy="60" r="18"/>
+<text class="tr-rl" x="428" y="64">root (no letter)</text>
+<circle class="tr-n" cx="260" cy="140" r="18"/>
+<text class="tr-v" x="260" y="145" text-anchor="middle">c</text>
+<circle class="tr-n" cx="540" cy="140" r="18"/>
+<text class="tr-v" x="540" y="145" text-anchor="middle">d</text>
+<circle class="tr-n" cx="260" cy="220" r="18"/>
+<text class="tr-v" x="260" y="225" text-anchor="middle">a</text>
+<circle class="tr-n" cx="540" cy="220" r="18"/>
+<text class="tr-v" x="540" y="225" text-anchor="middle">o</text>
+<circle class="tr-w" cx="190" cy="300" r="18"/>
+<text class="tr-v-inv" x="190" y="305" text-anchor="middle">r</text>
+<text class="tr-wl" x="162" y="305" text-anchor="end">“car”</text>
+<circle class="tr-w" cx="330" cy="300" r="18"/>
+<text class="tr-v-inv" x="330" y="305" text-anchor="middle">t</text>
+<text class="tr-wl" x="358" y="305">“cat”</text>
+<circle class="tr-w" cx="540" cy="300" r="18"/>
+<text class="tr-v-inv" x="540" y="305" text-anchor="middle">g</text>
+<text class="tr-wl" x="568" y="305">“dog”</text>
+<circle class="tr-w" cx="190" cy="380" r="18"/>
+<text class="tr-v-inv" x="190" y="385" text-anchor="middle">t</text>
+<text class="tr-wl" x="162" y="385" text-anchor="end">“cart”</text>
+<circle class="tr-w" cx="648" cy="140" r="9"/>
+<text class="tr-s" x="666" y="144">A word ends here</text>
+<circle class="tr-n" cx="648" cy="172" r="9"/>
+<text class="tr-s" x="666" y="176">Letter on a path</text>
+<path class="tr-ep" d="M 638,204 L 658,204"/>
+<text class="tr-s" x="666" y="208">Prefix “ca”, stored once</text>
+<text class="tr-s" x="40" y="428">“car” is a word and also the start of “cart”, so its node is marked and still has a child.</text>
+</g>
+</svg>

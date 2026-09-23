@@ -1,0 +1,83 @@
+---
+title: "How the Diagnostic Tools Reach a Process"
+kind: structure
+system: dotnet
+summary: "Four tools connecting through one diagnostic port into the runtime."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="dpt-title dpt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dpt-title">The .NET diagnostic tools connecting to a process through its diagnostic port</title>
+<desc id="dpt-desc">dotnet-counters, dotnet-trace, dotnet-gcdump, and dotnet-dump run as separate processes on the same machine or in the same container. Each connects to the target process's diagnostic port, a named pipe on Windows or a Unix domain socket elsewhere. Through it, counters and trace ask the runtime to stream metrics and events from EventPipe, gcdump asks for the heap's object graph, which forces a full gen 2 collection, and dump asks the runtime to write the process memory to a file. No debugger, profiler, or code change is needed.</desc>
+<style>
+.dpt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dpt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.dpt-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.dpt-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.dpt-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.dpt-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.dpt-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dpt-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.dpt-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dpt-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.dpt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dpt-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.dpt-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dpt-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dpt-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.dpt-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.dpt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dpt-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.dpt-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.dpt-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.dpt-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.dpt-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.dpt-dot { fill: var(--color-primary, #1A5F8A); }
+.dpt-dot-hot { fill: var(--color-accent, #A5486E); }
+.dpt-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.dpt-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.dpt-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="dpt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="dpt-zone" x="20" y="20" width="300" height="320" rx="8"/>
+<text class="dpt-n" x="36" y="44">Tool processes</text>
+<text class="dpt-k" x="36" y="62">same machine or container, same user</text>
+<rect class="dpt-box" x="36" y="80" width="170" height="44" rx="6"/>
+<text class="dpt-n" x="121.0" y="106.0" text-anchor="middle">dotnet-counters</text>
+<path class="dpt-flow" d="M206,102 L360,102 L360,190 L396,190"/>
+<text class="dpt-lab" x="214" y="96">metrics</text>
+<rect class="dpt-box" x="36" y="142" width="170" height="44" rx="6"/>
+<text class="dpt-n" x="121.0" y="168.0" text-anchor="middle">dotnet-trace</text>
+<path class="dpt-flow" d="M206,164 L360,164 L360,190 L396,190"/>
+<text class="dpt-lab" x="214" y="158">events</text>
+<rect class="dpt-box" x="36" y="204" width="170" height="44" rx="6"/>
+<text class="dpt-n" x="121.0" y="230.0" text-anchor="middle">dotnet-gcdump</text>
+<path class="dpt-flow" d="M206,226 L360,226 L360,190 L396,190"/>
+<text class="dpt-lab" x="214" y="220">heap graph</text>
+<rect class="dpt-box" x="36" y="266" width="170" height="44" rx="6"/>
+<text class="dpt-n" x="121.0" y="292.0" text-anchor="middle">dotnet-dump</text>
+<path class="dpt-flow" d="M206,288 L360,288 L360,190 L396,190"/>
+<text class="dpt-lab" x="214" y="282">memory dump</text>
+<path class="dpt-flow" d="M360,190 L396,190" marker-end="url(#dpt-a)"/>
+<rect class="dpt-px" x="400" y="20" width="540" height="320" rx="8"/>
+<text class="dpt-n" x="416" y="44">Your .NET process</text>
+<text class="dpt-k" x="416" y="62">no debugger or profiler loaded, no restart</text>
+<rect class="dpt-sys" x="416" y="150" width="170" height="80" rx="6"/>
+<text class="dpt-n-inv" x="428" y="178.0">Diagnostic port</text>
+<text class="dpt-k-inv" x="428" y="196.0">named pipe (Windows)</text>
+<text class="dpt-k-inv" x="428" y="212.0">Unix socket (Linux, macOS)</text>
+<rect class="dpt-box" x="640" y="90" width="280" height="50" rx="6"/>
+<text class="dpt-n" x="652" y="111.0">EventPipe</text>
+<text class="dpt-k" x="652" y="129.0">streams events and metrics</text>
+<rect class="dpt-box" x="640" y="165" width="280" height="50" rx="6"/>
+<text class="dpt-n" x="652" y="186.0">GC and heap</text>
+<text class="dpt-k" x="652" y="204.0">walked for a gcdump, forces gen 2</text>
+<rect class="dpt-box" x="640" y="240" width="280" height="50" rx="6"/>
+<text class="dpt-n" x="652" y="261.0">Dump writer</text>
+<text class="dpt-k" x="652" y="279.0">writes process memory to disk</text>
+<path class="dpt-flow" d="M586,190 L612,190 L612,115 L638,115" marker-end="url(#dpt-a)"/>
+<path class="dpt-flow" d="M586,190 L612,190 L612,190 L638,190" marker-end="url(#dpt-a)"/>
+<path class="dpt-flow" d="M586,190 L612,190 L612,265 L638,265" marker-end="url(#dpt-a)"/>
+</g>
+</svg>

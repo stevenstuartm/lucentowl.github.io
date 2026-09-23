@@ -1,0 +1,73 @@
+---
+title: "Reversing a Linked List"
+kind: flow
+system: dsa
+summary: "How the previous and current references flip one Next pointer per pass until the list points the other way."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 478" role="img" aria-labelledby="rv-title rv-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="rv-title">Reversing the list A, B, C one pointer at a time</title>
+<desc id="rv-desc">Four rows show the list A, B, C during reversal. At the start, A points to B, B to C, and C to null, with previous at null and current at A. After one pass, A points to null, and B still points to C; previous is A and current is B, with no link between them. After two passes, B points back to A and A to null, C still points to null; previous is B and current is C. After three passes, C points to B, B to A, and A to null; previous is C, the new head, and current is null. Each pass saves current's Next, points current back at previous, and moves both references one node right. The missing link between the reversed part and the rest is why the next node must be saved before flipping.</desc>
+<style>
+.rv-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.rv-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rv-null { font-size: 12px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rv-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.rv-flip { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.25; }
+.rv-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rv-tp { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rv-tc { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rv-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="rv-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="rv-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="rv-hd" x="40" y="40">START</text>
+<text class="rv-null" x="120" y="75" text-anchor="middle">null</text>
+<text class="rv-null" x="720" y="75" text-anchor="middle">null</text>
+<path class="rv-e" d="M 294,70 L 394,70" marker-end="url(#rv-a)"/>
+<path class="rv-e" d="M 444,70 L 544,70" marker-end="url(#rv-a)"/>
+<path class="rv-e" d="M 594,70 L 698,70" marker-end="url(#rv-a)"/>
+<circle class="rv-n" cx="270" cy="70" r="22"/><text class="rv-v" x="270" y="75" text-anchor="middle">A</text>
+<circle class="rv-n" cx="420" cy="70" r="22"/><text class="rv-v" x="420" y="75" text-anchor="middle">B</text>
+<circle class="rv-n" cx="570" cy="70" r="22"/><text class="rv-v" x="570" y="75" text-anchor="middle">C</text>
+<text class="rv-tp" x="120" y="110" text-anchor="middle">previous</text>
+<text class="rv-tc" x="270" y="110" text-anchor="middle">current</text>
+<text class="rv-hd" x="40" y="136">AFTER ONE PASS</text>
+<text class="rv-null" x="120" y="171" text-anchor="middle">null</text>
+<text class="rv-null" x="720" y="171" text-anchor="middle">null</text>
+<path class="rv-flip" d="M 246,166 L 142,166" marker-end="url(#rv-b)"/>
+<path class="rv-e" d="M 444,166 L 544,166" marker-end="url(#rv-a)"/>
+<path class="rv-e" d="M 594,166 L 698,166" marker-end="url(#rv-a)"/>
+<circle class="rv-n" cx="270" cy="166" r="22"/><text class="rv-v" x="270" y="171" text-anchor="middle">A</text>
+<circle class="rv-n" cx="420" cy="166" r="22"/><text class="rv-v" x="420" y="171" text-anchor="middle">B</text>
+<circle class="rv-n" cx="570" cy="166" r="22"/><text class="rv-v" x="570" y="171" text-anchor="middle">C</text>
+<text class="rv-tp" x="270" y="206" text-anchor="middle">previous</text>
+<text class="rv-tc" x="420" y="206" text-anchor="middle">current</text>
+<text class="rv-hd" x="40" y="232">AFTER TWO PASSES</text>
+<text class="rv-null" x="120" y="267" text-anchor="middle">null</text>
+<text class="rv-null" x="720" y="267" text-anchor="middle">null</text>
+<path class="rv-flip" d="M 246,262 L 142,262" marker-end="url(#rv-b)"/>
+<path class="rv-flip" d="M 396,262 L 296,262" marker-end="url(#rv-b)"/>
+<path class="rv-e" d="M 594,262 L 698,262" marker-end="url(#rv-a)"/>
+<circle class="rv-n" cx="270" cy="262" r="22"/><text class="rv-v" x="270" y="267" text-anchor="middle">A</text>
+<circle class="rv-n" cx="420" cy="262" r="22"/><text class="rv-v" x="420" y="267" text-anchor="middle">B</text>
+<circle class="rv-n" cx="570" cy="262" r="22"/><text class="rv-v" x="570" y="267" text-anchor="middle">C</text>
+<text class="rv-tp" x="420" y="302" text-anchor="middle">previous</text>
+<text class="rv-tc" x="570" y="302" text-anchor="middle">current</text>
+<text class="rv-hd" x="40" y="328">AFTER THREE PASSES: DONE</text>
+<text class="rv-null" x="120" y="363" text-anchor="middle">null</text>
+<text class="rv-null" x="720" y="363" text-anchor="middle">null</text>
+<path class="rv-flip" d="M 246,358 L 142,358" marker-end="url(#rv-b)"/>
+<path class="rv-flip" d="M 396,358 L 296,358" marker-end="url(#rv-b)"/>
+<path class="rv-flip" d="M 546,358 L 446,358" marker-end="url(#rv-b)"/>
+<circle class="rv-n" cx="270" cy="358" r="22"/><text class="rv-v" x="270" y="363" text-anchor="middle">A</text>
+<circle class="rv-n" cx="420" cy="358" r="22"/><text class="rv-v" x="420" y="363" text-anchor="middle">B</text>
+<circle class="rv-n" cx="570" cy="358" r="22"/><text class="rv-v" x="570" y="363" text-anchor="middle">C</text>
+<text class="rv-tp" x="570" y="398" text-anchor="middle">previous</text>
+<text class="rv-tc" x="720" y="398" text-anchor="middle">current</text>
+<text class="rv-s" x="40" y="440">Each pass saves current.Next, points current back at previous, then moves both references one node right.</text>
+<text class="rv-s" x="40" y="458">The gap between the flipped part and the rest is why next must be saved first. Previous ends on C, the new head.</text>
+</g>
+</svg>

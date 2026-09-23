@@ -1,0 +1,84 @@
+---
+title: "Direct Dependency Wins and Cousin Dependencies"
+kind: graph
+system: dotnet
+summary: "Two graph shapes that both resolve Package B to 2.0.0 by different rules."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="ngr-title ngr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ngr-title">NuGet's direct-dependency-wins and cousin-dependency rules</title>
+<desc id="ngr-desc">Left, direct dependency wins: the app references Package A and Package B 2.0.0 or higher directly, and Package A needs Package B 1.0.0 or higher. Both requests sit in the app's subgraph, so the app's direct reference wins and B resolves to 2.0.0, ignoring the 1.0.0 request. Right, cousin dependencies: the app references Package A and Package C, which need Package B 1.0.0 or higher and 2.0.0 or higher respectively. Neither is a direct reference, so NuGet picks the lowest version satisfying both, which is 2.0.0.</desc>
+<style>
+.ngr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ngr-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ngr-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.ngr-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.ngr-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.ngr-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.ngr-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ngr-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.ngr-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ngr-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.ngr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ngr-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.ngr-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ngr-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.ngr-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.ngr-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.ngr-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ngr-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.ngr-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.ngr-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.ngr-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.ngr-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.ngr-dot { fill: var(--color-primary, #1A5F8A); }
+.ngr-dot-hot { fill: var(--color-accent, #A5486E); }
+.ngr-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.ngr-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.ngr-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="ngr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ngr-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="ngr-hd" x="30" y="36">DIRECT DEPENDENCY WINS</text>
+<text class="ngr-lab" x="30" y="54">same subgraph, one request made directly by the app</text>
+<rect class="ngr-sys" x="180" y="76" width="130" height="44" rx="6"/>
+<text class="ngr-n-inv" x="245.0" y="102.0" text-anchor="middle">App</text>
+<rect class="ngr-box" x="50" y="170" width="150" height="44" rx="6"/>
+<text class="ngr-n" x="125.0" y="196.0" text-anchor="middle">Package A</text>
+<rect class="ngr-px" x="290" y="170" width="150" height="48" rx="6"/>
+<text class="ngr-n" x="365.0" y="190.0" text-anchor="middle">Package B</text>
+<text class="ngr-k" x="365.0" y="208.0" text-anchor="middle">&gt;= 2.0.0, direct</text>
+<rect class="ngr-box" x="50" y="264" width="150" height="48" rx="6"/>
+<text class="ngr-n" x="125.0" y="284.0" text-anchor="middle">Package B</text>
+<text class="ngr-k" x="125.0" y="302.0" text-anchor="middle">&gt;= 1.0.0</text>
+<path class="ngr-flow" d="M220,120 L140,168" marker-end="url(#ngr-a)"/>
+<path class="ngr-flow" d="M270,120 L350,168" marker-end="url(#ngr-a)"/>
+<path class="ngr-back" d="M125,214 L125,262" marker-end="url(#ngr-ag)"/>
+<text class="ngr-em" x="220" y="294">ignored</text>
+<text class="ngr-note" x="30" y="346">The app's direct reference wins over anything</text>
+<text class="ngr-note" x="30" y="363">below it in the same subgraph. Result: B 2.0.0.</text>
+<line class="ngr-rule" x1="485" y1="30" x2="485" y2="380"/>
+<text class="ngr-hd" x="520" y="36">COUSIN DEPENDENCIES</text>
+<text class="ngr-lab" x="520" y="54">different subgraphs, neither request made by the app</text>
+<rect class="ngr-sys" x="670" y="76" width="130" height="44" rx="6"/>
+<text class="ngr-n-inv" x="735.0" y="102.0" text-anchor="middle">App</text>
+<rect class="ngr-box" x="540" y="170" width="150" height="44" rx="6"/>
+<text class="ngr-n" x="615.0" y="196.0" text-anchor="middle">Package A</text>
+<rect class="ngr-box" x="780" y="170" width="150" height="44" rx="6"/>
+<text class="ngr-n" x="855.0" y="196.0" text-anchor="middle">Package C</text>
+<rect class="ngr-box" x="540" y="264" width="150" height="48" rx="6"/>
+<text class="ngr-n" x="615.0" y="284.0" text-anchor="middle">Package B</text>
+<text class="ngr-k" x="615.0" y="302.0" text-anchor="middle">&gt;= 1.0.0</text>
+<rect class="ngr-box" x="780" y="264" width="150" height="48" rx="6"/>
+<text class="ngr-n" x="855.0" y="284.0" text-anchor="middle">Package B</text>
+<text class="ngr-k" x="855.0" y="302.0" text-anchor="middle">&gt;= 2.0.0</text>
+<path class="ngr-flow" d="M710,120 L630,168" marker-end="url(#ngr-a)"/>
+<path class="ngr-flow" d="M760,120 L840,168" marker-end="url(#ngr-a)"/>
+<path class="ngr-flow" d="M615,214 L615,262" marker-end="url(#ngr-a)"/>
+<path class="ngr-flow" d="M855,214 L855,262" marker-end="url(#ngr-a)"/>
+<text class="ngr-note" x="520" y="346">No direct reference, so the lowest version that</text>
+<text class="ngr-note" x="520" y="363">satisfies both requests wins. Result: B 2.0.0.</text>
+</g>
+</svg>

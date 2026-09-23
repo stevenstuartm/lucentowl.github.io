@@ -1,0 +1,82 @@
+---
+title: "Entity States in the Change Tracker"
+kind: state
+system: dotnet
+summary: "The five tracking states and the calls that move an entity between them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="cts-title cts-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="cts-title">EF Core change tracker entity states and transitions</title>
+<desc id="cts-desc">A detached entity becomes Unchanged when a tracking query loads it or Attach is called, and Added when Add is called. Remove on an Added entity detaches it. Changing a property of an Unchanged entity makes it Modified once change detection runs. Remove on an Unchanged or Modified entity makes it Deleted. A successful SaveChanges moves Added and Modified entities to Unchanged and Deleted entities to Detached. Added produces an INSERT, Modified an UPDATE of the changed columns, and Deleted a DELETE.</desc>
+<style>
+.cts-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.cts-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.cts-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.cts-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.cts-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.cts-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.cts-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.cts-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.cts-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.cts-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.cts-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.cts-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.cts-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.cts-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.cts-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.cts-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.cts-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.cts-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.cts-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.cts-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.cts-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.cts-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.cts-dot { fill: var(--color-primary, #1A5F8A); }
+.cts-dot-hot { fill: var(--color-accent, #A5486E); }
+.cts-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.cts-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.cts-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="cts-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="cts-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="cts-flow" d="M30,32 L60,32"/>
+<text class="cts-lg" x="68" y="36">your call or a detected change</text>
+<path class="cts-back" d="M282.0,32 L312.0,32"/>
+<text class="cts-lg" x="320.0" y="36">after a successful SaveChanges</text>
+<rect class="cts-box" x="40" y="160" width="150" height="50" rx="6"/>
+<text class="cts-n" x="115.0" y="181.0" text-anchor="middle">Detached</text>
+<text class="cts-k" x="115.0" y="199.0" text-anchor="middle">not tracked</text>
+<rect class="cts-box" x="40" y="330" width="150" height="50" rx="6"/>
+<text class="cts-n" x="115.0" y="351.0" text-anchor="middle">Added</text>
+<text class="cts-k" x="115.0" y="369.0" text-anchor="middle">INSERT on save</text>
+<rect class="cts-sys" x="400" y="60" width="150" height="50" rx="6"/>
+<text class="cts-n-inv" x="475.0" y="81.0" text-anchor="middle">Unchanged</text>
+<text class="cts-k-inv" x="475.0" y="99.0" text-anchor="middle">nothing on save</text>
+<rect class="cts-box" x="760" y="60" width="160" height="50" rx="6"/>
+<text class="cts-n" x="840.0" y="81.0" text-anchor="middle">Modified</text>
+<text class="cts-k" x="840.0" y="99.0" text-anchor="middle">UPDATE changed columns</text>
+<rect class="cts-box" x="560" y="330" width="150" height="50" rx="6"/>
+<text class="cts-n" x="635.0" y="351.0" text-anchor="middle">Deleted</text>
+<text class="cts-k" x="635.0" y="369.0" text-anchor="middle">DELETE on save</text>
+<path class="cts-flow" d="M190,175 L330,175 L330,85 L398,85" marker-end="url(#cts-a)"/>
+<text class="cts-lab" x="200" y="166">tracking query, Attach</text>
+<path class="cts-flow" d="M550,75 L758,75" marker-end="url(#cts-a)"/>
+<text class="cts-lab" x="654" y="67" text-anchor="middle">property changed, detected</text>
+<path class="cts-back" d="M758,97 L552,97" marker-end="url(#cts-ag)"/>
+<text class="cts-lab" x="654" y="115" text-anchor="middle">SaveChanges</text>
+<path class="cts-flow" d="M95,210 L95,328" marker-end="url(#cts-a)"/>
+<text class="cts-lab" x="85" y="275" text-anchor="end">Add</text>
+<path class="cts-flow" d="M135,330 L135,212" marker-end="url(#cts-a)"/>
+<text class="cts-lab" x="145" y="275">Remove</text>
+<path class="cts-back" d="M190,350 L440,350 L440,112" marker-end="url(#cts-ag)"/>
+<text class="cts-lab" x="300" y="342" text-anchor="middle">SaveChanges</text>
+<path class="cts-flow" d="M520,110 L520,250 L620,250 L620,328" marker-end="url(#cts-a)"/>
+<text class="cts-lab" x="530" y="242">Remove</text>
+<path class="cts-flow" d="M840,110 L840,355 L712,355" marker-end="url(#cts-a)"/>
+<text class="cts-lab" x="850" y="240">Remove</text>
+<path class="cts-back" d="M635,380 L635,410 L20,410 L20,185 L38,185" marker-end="url(#cts-ag)"/>
+<text class="cts-lab" x="330" y="402" text-anchor="middle">SaveChanges</text>
+</g>
+</svg>

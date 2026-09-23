@@ -1,5 +1,5 @@
 ---
-title: "ShapeUp Methodology"
+title: "Shape Up Methodology"
 layout: guide
 category: Software Development Lifecycle
 subcategory: SDLC Frameworks
@@ -29,18 +29,11 @@ Common frustrations Shape Up addresses:
 - **Senior people "shape" work** before it's assigned (not designers working alone or product managers writing specs)
 - Give teams **entire projects** with clear boundaries, not individual tasks
 - Teams **figure out implementation details** autonomously
-- **Fixed time, variable scope** - fit the best solution within time constraints
+- **Fixed time, variable scope**: fit the best solution within time constraints
 
 **Key Difference from Scrum:**
 
 Shape Up is not an iterative approach to a final design. Instead, the shaping process defines boundaries and constraints, and teams work within those boundaries to discover the best solution during the cycle. You're not incrementally building toward a known end state; you're exploring within defined constraints.
-
-**The Three Tracks:**
-
-Shape Up runs three parallel tracks:
-1. **Shaping**: Senior staff shape future work (1-2 cycles ahead)
-2. **Betting**: Leadership decides what to build next (every 6 weeks)
-3. **Building**: Teams implement shaped projects (6-week cycles)
 
 ---
 
@@ -126,7 +119,7 @@ Identify parts that could take too long or spiral out of control:
 - **Scope creep risks**: "This could expand to include X, Y, Z" → Explicitly de-scope
 
 **Call out rabbit holes explicitly:**
-- "We're not doing real-time sync - batch updates are fine"
+- "We're not doing real-time sync; batch updates are fine"
 - "If the search algorithm takes more than 2 days, we'll use a library"
 - "Don't worry about mobile version in this cycle"
 
@@ -199,9 +192,9 @@ At the start of each six-week cycle, stakeholders hold a **betting table** meeti
 5. Teams are notified what they'll be working on
 
 **Rules:**
-- **Only bet on work that's been properly shaped** - no betting on vague ideas
-- **Betting is a commitment** - once assigned, teams get the full cycle
-- **Unbet pitches don't accumulate** - they don't go into a backlog
+- **Only bet on work that's been properly shaped**: no betting on vague ideas
+- **Betting is a commitment**: once assigned, teams get the full cycle
+- **Unbet pitches don't accumulate**: they don't go into a backlog
 
 ---
 
@@ -244,11 +237,7 @@ After every six-week cycle, teams get a two-week cool-down:
 - **No new requirements** added during the cycle
 - **No mid-cycle pivots** unless project is completely blocked
 
-**After the cycle:**
-- If work doesn't finish in six weeks, it's **not automatically rolled over**
-- The circuit breaker trips - project dies
-- If it's still valuable, it requires re-shaping and re-betting
-- Forces honest evaluation: Was the shaping good? Is this still a priority?
+**After the cycle:** work that didn't finish is not rolled over. The circuit breaker trips, as described under The Circuit Breaker below.
 
 **What about emergencies?**
 - True emergencies are rare
@@ -438,18 +427,10 @@ Week 3-4: "Mark as read" - backend + frontend + tests
 Week 5-6: "Settings" - backend + frontend + tests
 ```
 
-**Example - Building a Calendar Feature:**
+**Example: Building a Calendar Feature**
 - ❌ Bad: Build entire backend API for calendar, then build entire frontend UI
-  - No integration until week 5
-  - Surprises late in the cycle
-  - Hard to see progress
-  - Can't cut scope cleanly
 
 - ✅ Good: Build "view single day" end-to-end, then "navigate between days", then "create event"
-  - Integration happens immediately
-  - Working software from week 1
-  - Can stop at any slice and ship something
-  - Easy to cut scope (just drop last slice)
 
 **Why:**
 - Integration problems surface immediately (not week 5)
@@ -462,21 +443,38 @@ Week 5-6: "Settings" - backend + frontend + tests
 
 ## When to Use Shape Up
 
-### Shape Up Works Well For:
+### Where Shape Up Works Well
 
-Product development teams building or enhancing features, organizations that value shipping over process, teams of 2-3+ experienced developers who can handle ambiguity, projects with uncertainty requiring exploration, and organizations comfortable making explicit priority decisions and saying no to low-value work.
-
----
-
-### Shape Up May Not Fit:
-
-Brand new teams still learning to work together, strict fixed-scope contracts or highly regulated environments requiring detailed upfront documentation, command-and-control cultures uncomfortable with team autonomy, junior or distributed teams needing detailed task breakdowns, or very short projects (< 2 weeks) better handled during cool-down.
+- Product development teams building or enhancing features
+- Organizations that value shipping over process
+- Teams of 2-3+ experienced developers who can handle ambiguity
+- Projects with uncertainty requiring exploration
+- Organizations comfortable making explicit priority decisions and saying no to low-value work
 
 ---
 
-### Adaptations for Your Context:
+### Where Shape Up May Not Fit
 
-Shape Up is adaptable. Adjust cycle length (4-8 weeks, 6 is standard), cool-down duration (1-2 weeks or flexible), betting table formality (formal meetings, informal discussions, or async), shaping approach (formal pitches or lightweight sketches), team size (1-2 for small projects, 3-4 for larger), and hill charts usage (optional). Mix with other methods; use Shape Up for features, Kanban for maintenance, or hybrid approaches as needed.
+- Brand new teams still learning to work together
+- Strict fixed-scope contracts, or highly regulated environments requiring detailed upfront documentation
+- Command-and-control cultures uncomfortable with team autonomy
+- Junior or distributed teams needing detailed task breakdowns
+- Very short projects (under 2 weeks), which are better handled during cool-down
+
+---
+
+### Adapting It to Your Context
+
+Shape Up is adaptable. Teams commonly adjust:
+
+- **Cycle length:** 4-8 weeks, with 6 as the standard
+- **Cool-down duration:** 1-2 weeks, or flexible
+- **Betting table formality:** formal meetings, informal discussions, or async
+- **Shaping approach:** formal pitches or lightweight sketches
+- **Team size:** 1-2 for small projects, 3-4 for larger
+- **Hill charts:** optional
+
+It also mixes with other methods, such as Shape Up for features and Kanban for maintenance.
 
 ---
 
@@ -520,10 +518,10 @@ Teams get stuck on problems that should've been de-scoped or explored during sha
 - "The performance requirements are way higher than we thought"
 
 **Solution:**
-- **Technical spikes during shaping** - figure out unknowns before betting
-- **Explicit de-scoping** - call out what you're not doing
-- **Risk identification** - what could go wrong? How to mitigate?
-- **Proof of concepts** - validate technical feasibility during shaping
+- **Technical spikes during shaping**: figure out unknowns before betting
+- **Explicit de-scoping**: call out what you're not doing
+- **Risk identification**: what could go wrong? How to mitigate?
+- **Proof of concepts**: validate technical feasibility during shaping
 
 **Example:**
 Bad shaping: "We'll integrate with the payment API"
@@ -540,10 +538,10 @@ Good shaping: "We'll integrate with Stripe (validated we can do this during spik
 - Destroys morale and trust
 
 **Solution:**
-- **Protect cycle time fiercely** - six weeks means six weeks
-- **Use cool-down for urgent work** - most "urgent" things can wait 1-2 weeks
-- **Plan capacity realistically** - don't bet on more work than you have team capacity
-- **Make interruptions explicit exceptions** - if you interrupt, acknowledge it's breaking the process
+- **Protect cycle time fiercely**: six weeks means six weeks
+- **Use cool-down for urgent work**: most "urgent" things can wait 1-2 weeks
+- **Plan capacity realistically**: don't bet on more work than you have team capacity
+- **Make interruptions explicit exceptions**: if you interrupt, acknowledge it's breaking the process
 
 **True emergencies are rare:** Most "urgent" things are just unplanned work that can wait.
 
@@ -558,10 +556,10 @@ Good shaping: "We'll integrate with Stripe (validated we can do this during spik
 - Defeats the purpose of fixed time
 
 **Solution:**
-- **Let the circuit breaker trip** - if it didn't ship, it dies
-- **Re-evaluate priority** - is this still the most valuable thing?
-- **Reshape with reduced scope** - if still valuable, make it smaller
-- **Learn from the failure** - was the shaping poor? Unexpected complexity?
+- **Let the circuit breaker trip**: if it didn't ship, it dies
+- **Re-evaluate priority**: is this still the most valuable thing?
+- **Reshape with reduced scope**: if still valuable, make it smaller
+- **Learn from the failure**: was the shaping poor? Unexpected complexity?
 
 **Questions to ask when work doesn't finish:**
 - Was the shaping poor? (didn't understand the problem)
@@ -580,10 +578,10 @@ Good shaping: "We'll integrate with Stripe (validated we can do this during spik
 - Team spends more time in meetings, not building
 
 **Solution:**
-- **Choose one approach** - Shape Up or Scrum, not both
-- **Or clearly separate contexts** - Shape Up for new features, Scrum for maintenance
-- **Trust the methodology** - Shape Up's autonomy requires fewer ceremonies
-- **Let teams decide** - if they want standups, fine, but don't mandate
+- **Choose one approach**: Shape Up or Scrum, not both
+- **Or clearly separate contexts**: Shape Up for new features, Scrum for maintenance
+- **Trust the methodology**: Shape Up's autonomy requires fewer ceremonies
+- **Let teams decide**: if they want standups, fine, but don't mandate
 
 **It's okay to:**
 - Use Shape Up for project structure and XP for engineering practices (TDD, pair programming)
@@ -602,15 +600,15 @@ Good shaping: "We'll integrate with Stripe (validated we can do this during spik
 
 **Problem:**
 - Betting table arrives, no shaped pitches ready
-- Leadership bets on unshapped work (vague ideas)
+- Leadership bets on unshaped work (vague ideas)
 - Teams get work without clear boundaries
 - Defeats the whole purpose of shaping
 
 **Solution:**
-- **Shape 1-2 cycles ahead** - always have shaped options ready
-- **Use cool-down for shaping** - designers and programmers shape during their cool-down
-- **Maintain a shaping schedule** - shaping is ongoing, not last-minute
-- **Have more shaped pitches than team capacity** - gives betting table options
+- **Shape 1-2 cycles ahead**: always have shaped options ready
+- **Use cool-down for shaping**: designers and programmers shape during their cool-down
+- **Maintain a shaping schedule**: shaping is ongoing, not last-minute
+- **Have more shaped pitches than team capacity**: gives betting table options
 
 **Shaping pipeline:**
 - Cycle N: Team A building, Team B building

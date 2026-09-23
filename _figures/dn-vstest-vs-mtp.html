@@ -1,0 +1,70 @@
+---
+title: "VSTest Versus Microsoft.Testing.Platform"
+kind: flow
+system: dotnet
+summary: "A separate runner loading a test library, against a self-hosting test app."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" role="img" aria-labelledby="vsm-title vsm-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="vsm-title">How tests are launched under VSTest and under Microsoft.Testing.Platform</title>
+<desc id="vsm-desc">VSTest: dotnet test starts vstest.console, a separate runner, which loads the test project's output, MyTests.dll, a library, then discovers and runs its tests. Microsoft.Testing.Platform: the test project builds an executable, MyTests.exe, that contains both the tests and the runner, so dotnet test, dotnet run, or launching the file runs the tests directly with no vstest.console.</desc>
+<style>
+.vsm-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.vsm-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.vsm-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.vsm-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.vsm-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.vsm-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.vsm-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.vsm-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.vsm-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.vsm-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.vsm-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.vsm-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.vsm-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.vsm-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.vsm-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.vsm-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.vsm-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.vsm-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.vsm-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.vsm-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.vsm-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.vsm-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.vsm-dot { fill: var(--color-primary, #1A5F8A); }
+.vsm-dot-hot { fill: var(--color-accent, #A5486E); }
+.vsm-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.vsm-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.vsm-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="vsm-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="vsm-hd" x="30" y="36">VSTEST</text>
+<rect class="vsm-box" x="30" y="54" width="150" height="50" rx="6"/>
+<text class="vsm-n" x="105.0" y="83.0" text-anchor="middle">dotnet test</text>
+<rect class="vsm-px" x="260" y="54" width="200" height="50" rx="6"/>
+<text class="vsm-n" x="360.0" y="75.0" text-anchor="middle">vstest.console</text>
+<text class="vsm-k" x="360.0" y="93.0" text-anchor="middle">separate runner process</text>
+<rect class="vsm-box" x="560" y="54" width="220" height="50" rx="6"/>
+<text class="vsm-n" x="670.0" y="75.0" text-anchor="middle">MyTests.dll</text>
+<text class="vsm-k" x="670.0" y="93.0" text-anchor="middle">a library: tests only</text>
+<path class="vsm-flow" d="M180,79 L258,79" marker-end="url(#vsm-a)"/>
+<text class="vsm-lab" x="219" y="72" text-anchor="middle">starts</text>
+<path class="vsm-flow" d="M460,79 L558,79" marker-end="url(#vsm-a)"/>
+<text class="vsm-lab" x="509" y="72" text-anchor="middle">loads</text>
+<line class="vsm-rule" x1="30" y1="136" x2="930" y2="136"/>
+<text class="vsm-hd" x="30" y="168">MICROSOFT.TESTING.PLATFORM</text>
+<rect class="vsm-box" x="30" y="186" width="150" height="34" rx="6"/>
+<text class="vsm-n" x="105.0" y="207.0" text-anchor="middle">dotnet test</text>
+<rect class="vsm-box" x="30" y="228" width="150" height="34" rx="6"/>
+<text class="vsm-n" x="105.0" y="249.0" text-anchor="middle">dotnet run</text>
+<rect class="vsm-sys" x="560" y="186" width="220" height="76" rx="6"/>
+<text class="vsm-n-inv" x="670.0" y="212.0" text-anchor="middle">MyTests.exe</text>
+<text class="vsm-k-inv" x="670.0" y="230.0" text-anchor="middle">tests and runner in one app,</text>
+<text class="vsm-k-inv" x="670.0" y="246.0" text-anchor="middle">also runs launched directly</text>
+<path class="vsm-flow" d="M180,203 L400,203 L400,224 L558,224" marker-end="url(#vsm-a)"/>
+<path class="vsm-flow" d="M180,245 L400,245 L400,224"/>
+<text class="vsm-lab" x="290" y="196" text-anchor="middle">runs</text>
+</g>
+</svg>

@@ -1,0 +1,70 @@
+---
+title: "Dependency Inversion Flips the Arrow"
+kind: structure
+system: oop
+summary: "Source dependencies between a business module and infrastructure, before and after inversion."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" role="img" aria-labelledby="dip-title dip-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="dip-title">Dependency inversion moves the interface into the business module</title>
+<desc id="dip-desc">Two panels, each with a business module above an infrastructure module. Before: OrderService in the business module uses SmtpEmailSender in the infrastructure module directly, so the source dependency points down from business logic to infrastructure. After: the business module holds both OrderService and the INotificationSender interface, and OrderService uses the interface. In the infrastructure module, EmailNotificationSender and SmsNotificationSender implement INotificationSender, so the only dependencies crossing the module boundary point up, from infrastructure to the business module.</desc>
+<style>
+.dip-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.dip-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dip-if { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.dip-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dip-n-if { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dip-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dip-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dip-bl { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; fill: var(--color-text-light, #4A5568); }
+.dip-use { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.dip-impl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.dip-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.dip-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="dip-a" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="dip-t" markerWidth="14" markerHeight="14" refX="12" refY="6" orient="auto"><path d="M1,1 L12,6 L1,11 z" fill="var(--color-card-bg, #FFFFFF)" stroke="var(--color-accent, #A5486E)" stroke-width="1.5"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dip-hd" x="30" y="32">BEFORE: POLICY DEPENDS ON MECHANISM</text>
+<text class="dip-hd" x="490" y="32">AFTER: THE DEPENDENCY CROSSES UPWARD</text>
+<rect class="dip-band" x="30" y="50" width="410" height="120"/>
+<text class="dip-bl" x="42" y="68">BUSINESS MODULE</text>
+<rect class="dip-band" x="30" y="230" width="410" height="120"/>
+<text class="dip-bl" x="42" y="343">INFRASTRUCTURE MODULE</text>
+<rect class="dip-box" x="130" y="95" width="200" height="50"/>
+<text class="dip-n" x="230" y="117" text-anchor="middle">OrderService</text>
+<text class="dip-k" x="230" y="135" text-anchor="middle">[class]</text>
+<rect class="dip-box" x="130" y="275" width="200" height="50"/>
+<text class="dip-n" x="230" y="297" text-anchor="middle">SmtpEmailSender</text>
+<text class="dip-k" x="230" y="315" text-anchor="middle">[class]</text>
+<path class="dip-use" d="M 230,145 L 230,272" marker-end="url(#dip-a)"/>
+<text class="dip-note" x="30" y="378">Business rules can't compile or be tested</text>
+<text class="dip-note" x="30" y="394">without the SMTP code.</text>
+<rect class="dip-band" x="490" y="50" width="440" height="120"/>
+<text class="dip-bl" x="502" y="68">BUSINESS MODULE</text>
+<rect class="dip-band" x="490" y="230" width="440" height="120"/>
+<text class="dip-bl" x="502" y="343">INFRASTRUCTURE MODULE</text>
+<rect class="dip-box" x="505" y="95" width="160" height="50"/>
+<text class="dip-n" x="585" y="117" text-anchor="middle">OrderService</text>
+<text class="dip-k" x="585" y="135" text-anchor="middle">[class]</text>
+<rect class="dip-if" x="740" y="95" width="180" height="50"/>
+<text class="dip-n-if" x="830" y="117" text-anchor="middle">INotificationSender</text>
+<text class="dip-k" x="830" y="135" text-anchor="middle">[interface]</text>
+<path class="dip-use" d="M 665,120 L 737,120" marker-end="url(#dip-a)"/>
+<rect class="dip-box" x="500" y="275" width="200" height="50"/>
+<text class="dip-n" x="600" y="297" text-anchor="middle">EmailNotificationSender</text>
+<text class="dip-k" x="600" y="315" text-anchor="middle">[class]</text>
+<rect class="dip-box" x="730" y="275" width="190" height="50"/>
+<text class="dip-n" x="825" y="297" text-anchor="middle">SmsNotificationSender</text>
+<text class="dip-k" x="825" y="315" text-anchor="middle">[class]</text>
+<path class="dip-impl" d="M 600,275 L 790,149" marker-end="url(#dip-t)"/>
+<path class="dip-impl" d="M 845,275 L 862,149" marker-end="url(#dip-t)"/>
+<text class="dip-note" x="490" y="378">The interface is owned by the business module, so infrastructure</text>
+<text class="dip-note" x="490" y="394">depends on business logic, not the reverse.</text>
+<line class="dip-use" x1="30" y1="432" x2="70" y2="432" marker-end="url(#dip-a)"/>
+<text class="dip-el" x="80" y="436">uses (source dependency)</text>
+<line class="dip-impl" x1="260" y1="432" x2="300" y2="432" marker-end="url(#dip-t)"/>
+<text class="dip-el" x="312" y="436">implements</text>
+</g>
+</svg>

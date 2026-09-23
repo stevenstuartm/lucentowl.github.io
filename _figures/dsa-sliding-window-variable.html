@@ -1,0 +1,106 @@
+---
+title: "A Variable-Size Sliding Window"
+kind: flow
+system: dsa
+summary: "The windows the shortest-sum scan passes through, edge by edge."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 378" role="img" aria-labelledby="sw-title sw-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="sw-title">The windows a variable-size sliding window passes through while finding the shortest run with sum at least 7</title>
+<desc id="sw-desc">The array 2, 3, 1, 2, 4, 3 at indexes 0 to 5, searched for the shortest run of elements whose sum reaches 7. Each row shows a window the inner loop checks while its sum is at least 7, just before the left edge moves right. Indexes 0 to 3 sum to 8, length 4. Indexes 1 to 4 sum to 10, length 4. Indexes 2 to 4 sum to 7, length 3. Indexes 3 to 5 sum to 9, length 3. Indexes 4 to 5 sum to 7, length 2, the shortest. Elements to the left of each window have already been dropped, and elements to the right have not been reached yet. Both edges only move right, so each element enters and leaves the window at most once. Index 5 never leaves.</desc>
+<style>
+.sw-in { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.25; }
+.sw-best { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.25; }
+.sw-left { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #CBD5E0); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.sw-out { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.sw-v { font-size: 14px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.sw-v-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.sw-i { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.sw-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.sw-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="sw-hd" x="40" y="30">EACH WINDOW THAT REACHES THE TARGET OF 7</text>
+<text class="sw-i" x="176" y="58" text-anchor="middle">0</text>
+<text class="sw-i" x="228" y="58" text-anchor="middle">1</text>
+<text class="sw-i" x="280" y="58" text-anchor="middle">2</text>
+<text class="sw-i" x="332" y="58" text-anchor="middle">3</text>
+<text class="sw-i" x="384" y="58" text-anchor="middle">4</text>
+<text class="sw-i" x="436" y="58" text-anchor="middle">5</text>
+<rect class="sw-in" x="152" y="70" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="176" y="91" text-anchor="middle">2</text>
+<rect class="sw-in" x="204" y="70" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="228" y="91" text-anchor="middle">3</text>
+<rect class="sw-in" x="256" y="70" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="280" y="91" text-anchor="middle">1</text>
+<rect class="sw-in" x="308" y="70" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="332" y="91" text-anchor="middle">2</text>
+<rect class="sw-out" x="360" y="70" width="48" height="32" rx="4"/>
+<text class="sw-v" x="384" y="91" text-anchor="middle">4</text>
+<rect class="sw-out" x="412" y="70" width="48" height="32" rx="4"/>
+<text class="sw-v" x="436" y="91" text-anchor="middle">3</text>
+<text class="sw-s" x="40" y="91">0..3</text>
+<text class="sw-s" x="482" y="91">sum 8, length 4</text>
+<rect class="sw-left" x="152" y="114" width="48" height="32" rx="4"/>
+<text class="sw-v" x="176" y="135" text-anchor="middle">2</text>
+<rect class="sw-in" x="204" y="114" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="228" y="135" text-anchor="middle">3</text>
+<rect class="sw-in" x="256" y="114" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="280" y="135" text-anchor="middle">1</text>
+<rect class="sw-in" x="308" y="114" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="332" y="135" text-anchor="middle">2</text>
+<rect class="sw-in" x="360" y="114" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="384" y="135" text-anchor="middle">4</text>
+<rect class="sw-out" x="412" y="114" width="48" height="32" rx="4"/>
+<text class="sw-v" x="436" y="135" text-anchor="middle">3</text>
+<text class="sw-s" x="40" y="135">1..4</text>
+<text class="sw-s" x="482" y="135">sum 10, length 4</text>
+<rect class="sw-left" x="152" y="158" width="48" height="32" rx="4"/>
+<text class="sw-v" x="176" y="179" text-anchor="middle">2</text>
+<rect class="sw-left" x="204" y="158" width="48" height="32" rx="4"/>
+<text class="sw-v" x="228" y="179" text-anchor="middle">3</text>
+<rect class="sw-in" x="256" y="158" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="280" y="179" text-anchor="middle">1</text>
+<rect class="sw-in" x="308" y="158" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="332" y="179" text-anchor="middle">2</text>
+<rect class="sw-in" x="360" y="158" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="384" y="179" text-anchor="middle">4</text>
+<rect class="sw-out" x="412" y="158" width="48" height="32" rx="4"/>
+<text class="sw-v" x="436" y="179" text-anchor="middle">3</text>
+<text class="sw-s" x="40" y="179">2..4</text>
+<text class="sw-s" x="482" y="179">sum 7, length 3</text>
+<rect class="sw-left" x="152" y="202" width="48" height="32" rx="4"/>
+<text class="sw-v" x="176" y="223" text-anchor="middle">2</text>
+<rect class="sw-left" x="204" y="202" width="48" height="32" rx="4"/>
+<text class="sw-v" x="228" y="223" text-anchor="middle">3</text>
+<rect class="sw-left" x="256" y="202" width="48" height="32" rx="4"/>
+<text class="sw-v" x="280" y="223" text-anchor="middle">1</text>
+<rect class="sw-in" x="308" y="202" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="332" y="223" text-anchor="middle">2</text>
+<rect class="sw-in" x="360" y="202" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="384" y="223" text-anchor="middle">4</text>
+<rect class="sw-in" x="412" y="202" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="436" y="223" text-anchor="middle">3</text>
+<text class="sw-s" x="40" y="223">3..5</text>
+<text class="sw-s" x="482" y="223">sum 9, length 3</text>
+<rect class="sw-left" x="152" y="246" width="48" height="32" rx="4"/>
+<text class="sw-v" x="176" y="267" text-anchor="middle">2</text>
+<rect class="sw-left" x="204" y="246" width="48" height="32" rx="4"/>
+<text class="sw-v" x="228" y="267" text-anchor="middle">3</text>
+<rect class="sw-left" x="256" y="246" width="48" height="32" rx="4"/>
+<text class="sw-v" x="280" y="267" text-anchor="middle">1</text>
+<rect class="sw-left" x="308" y="246" width="48" height="32" rx="4"/>
+<text class="sw-v" x="332" y="267" text-anchor="middle">2</text>
+<rect class="sw-best" x="360" y="246" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="384" y="267" text-anchor="middle">4</text>
+<rect class="sw-best" x="412" y="246" width="48" height="32" rx="4"/>
+<text class="sw-v-inv" x="436" y="267" text-anchor="middle">3</text>
+<text class="sw-s" x="40" y="267">4..5</text>
+<text class="sw-s" x="482" y="267">sum 7, length 2  shortest</text>
+<text class="sw-s" x="40" y="314">Each row is a window the inner loop checks with sum at least 7, just before the left edge moves right.</text>
+<text class="sw-s" x="40" y="332">Both edges only move right, so each element enters the window once and leaves it at most once.</text>
+<rect class="sw-in" x="40" y="350" width="16" height="16" rx="3"/><text class="sw-s" x="64" y="363">In the window</text>
+<rect class="sw-best" x="200" y="350" width="16" height="16" rx="3"/><text class="sw-s" x="224" y="363">Shortest window found</text>
+<rect class="sw-left" x="400" y="350" width="16" height="16" rx="3"/><text class="sw-s" x="424" y="363">Already dropped from the left</text>
+<rect class="sw-out" x="640" y="350" width="16" height="16" rx="3"/><text class="sw-s" x="664" y="363">Not reached yet</text>
+</g>
+</svg>

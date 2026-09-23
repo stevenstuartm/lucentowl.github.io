@@ -1,0 +1,109 @@
+---
+title: "Removing the Minimum from a Heap"
+kind: flow
+system: dsa
+summary: "How a min-heap refills its root and sifts the moved element down one path to restore the order rule."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420" role="img" aria-labelledby="sd-title sd-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="sd-title">Sifting down after removing the minimum from a min-heap</title>
+<desc id="sd-desc">Three steps on the min-heap built from 10, 5, 20, 3, 8, 15, whose array is 3, 5, 15, 10, 8, 20. Step 1: the minimum, 3, is removed and the last element, 20, moves into the root, giving the array 20, 5, 15, 10, 8. The root's children are 5 and 15, and 5 is smaller, so 20 and 5 swap. Step 2: the array is 5, 20, 15, 10, 8, and 20 now has children 10 and 8. 8 is smaller, so 20 and 8 swap. Step 3: the array is 5, 8, 15, 10, 20. 20 is a leaf, every parent is at most its children, and the heap is valid again with 5 at the root. The moved element travelled one path from the root to a leaf, at most the height of the tree.</desc>
+<style>
+.sd-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.sd-mv { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.sd-sw { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.sd-v { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.sd-v-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.sd-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.sd-ep { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; }
+.sd-c { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.sd-cm { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.25; }
+.sd-av { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.sd-av-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.sd-i { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.sd-hd { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; fill: var(--color-text-light, #4A5568); }
+.sd-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="sd-hd" x="30" y="40">1. 3 REMOVED, 20 MOVED TO THE ROOT</text>
+<path class="sd-ep" d="M 138.8,114.1 L 101.2,160.9"/>
+<path class="sd-e" d="M 161.2,114.1 L 198.8,160.9"/>
+<path class="sd-e" d="M 83.3,191.7 L 66.7,233.3"/>
+<path class="sd-e" d="M 96.7,191.7 L 113.3,233.3"/>
+<circle class="sd-mv" cx="150" cy="100" r="18"/><text class="sd-v-inv" x="150" y="105" text-anchor="middle">20</text>
+<circle class="sd-sw" cx="90" cy="175" r="18"/><text class="sd-v" x="90" y="180" text-anchor="middle">5</text>
+<circle class="sd-n" cx="210" cy="175" r="18"/><text class="sd-v" x="210" y="180" text-anchor="middle">15</text>
+<circle class="sd-n" cx="60" cy="250" r="18"/><text class="sd-v" x="60" y="255" text-anchor="middle">10</text>
+<circle class="sd-n" cx="120" cy="250" r="18"/><text class="sd-v" x="120" y="255" text-anchor="middle">8</text>
+<rect class="sd-cm" x="50" y="300" width="40" height="30"/>
+<text class="sd-av-inv" x="70.0" y="320" text-anchor="middle">20</text>
+<text class="sd-i" x="70.0" y="346" text-anchor="middle">0</text>
+<rect class="sd-c" x="90" y="300" width="40" height="30"/>
+<text class="sd-av" x="110.0" y="320" text-anchor="middle">5</text>
+<text class="sd-i" x="110.0" y="346" text-anchor="middle">1</text>
+<rect class="sd-c" x="130" y="300" width="40" height="30"/>
+<text class="sd-av" x="150.0" y="320" text-anchor="middle">15</text>
+<text class="sd-i" x="150.0" y="346" text-anchor="middle">2</text>
+<rect class="sd-c" x="170" y="300" width="40" height="30"/>
+<text class="sd-av" x="190.0" y="320" text-anchor="middle">10</text>
+<text class="sd-i" x="190.0" y="346" text-anchor="middle">3</text>
+<rect class="sd-c" x="210" y="300" width="40" height="30"/>
+<text class="sd-av" x="230.0" y="320" text-anchor="middle">8</text>
+<text class="sd-i" x="230.0" y="346" text-anchor="middle">4</text>
+<text class="sd-s" x="30" y="376">Children 5 and 15: 5 is smaller,</text>
+<text class="sd-s" x="30" y="393">so 20 and 5 swap.</text>
+<text class="sd-hd" x="300" y="40">2. 20 SWAPPED WITH 5</text>
+<path class="sd-e" d="M 408.8,114.1 L 371.2,160.9"/>
+<path class="sd-e" d="M 431.2,114.1 L 468.8,160.9"/>
+<path class="sd-e" d="M 353.3,191.7 L 336.7,233.3"/>
+<path class="sd-ep" d="M 366.7,191.7 L 383.3,233.3"/>
+<circle class="sd-n" cx="420" cy="100" r="18"/><text class="sd-v" x="420" y="105" text-anchor="middle">5</text>
+<circle class="sd-mv" cx="360" cy="175" r="18"/><text class="sd-v-inv" x="360" y="180" text-anchor="middle">20</text>
+<circle class="sd-n" cx="480" cy="175" r="18"/><text class="sd-v" x="480" y="180" text-anchor="middle">15</text>
+<circle class="sd-n" cx="330" cy="250" r="18"/><text class="sd-v" x="330" y="255" text-anchor="middle">10</text>
+<circle class="sd-sw" cx="390" cy="250" r="18"/><text class="sd-v" x="390" y="255" text-anchor="middle">8</text>
+<rect class="sd-c" x="320" y="300" width="40" height="30"/>
+<text class="sd-av" x="340.0" y="320" text-anchor="middle">5</text>
+<text class="sd-i" x="340.0" y="346" text-anchor="middle">0</text>
+<rect class="sd-cm" x="360" y="300" width="40" height="30"/>
+<text class="sd-av-inv" x="380.0" y="320" text-anchor="middle">20</text>
+<text class="sd-i" x="380.0" y="346" text-anchor="middle">1</text>
+<rect class="sd-c" x="400" y="300" width="40" height="30"/>
+<text class="sd-av" x="420.0" y="320" text-anchor="middle">15</text>
+<text class="sd-i" x="420.0" y="346" text-anchor="middle">2</text>
+<rect class="sd-c" x="440" y="300" width="40" height="30"/>
+<text class="sd-av" x="460.0" y="320" text-anchor="middle">10</text>
+<text class="sd-i" x="460.0" y="346" text-anchor="middle">3</text>
+<rect class="sd-c" x="480" y="300" width="40" height="30"/>
+<text class="sd-av" x="500.0" y="320" text-anchor="middle">8</text>
+<text class="sd-i" x="500.0" y="346" text-anchor="middle">4</text>
+<text class="sd-s" x="300" y="376">Children 10 and 8: 8 is smaller,</text>
+<text class="sd-s" x="300" y="393">so 20 and 8 swap.</text>
+<text class="sd-hd" x="570" y="40">3. 20 SWAPPED WITH 8: DONE</text>
+<path class="sd-e" d="M 678.8,114.1 L 641.2,160.9"/>
+<path class="sd-e" d="M 701.2,114.1 L 738.8,160.9"/>
+<path class="sd-e" d="M 623.3,191.7 L 606.7,233.3"/>
+<path class="sd-e" d="M 636.7,191.7 L 653.3,233.3"/>
+<circle class="sd-n" cx="690" cy="100" r="18"/><text class="sd-v" x="690" y="105" text-anchor="middle">5</text>
+<circle class="sd-n" cx="630" cy="175" r="18"/><text class="sd-v" x="630" y="180" text-anchor="middle">8</text>
+<circle class="sd-n" cx="750" cy="175" r="18"/><text class="sd-v" x="750" y="180" text-anchor="middle">15</text>
+<circle class="sd-n" cx="600" cy="250" r="18"/><text class="sd-v" x="600" y="255" text-anchor="middle">10</text>
+<circle class="sd-mv" cx="660" cy="250" r="18"/><text class="sd-v-inv" x="660" y="255" text-anchor="middle">20</text>
+<rect class="sd-c" x="590" y="300" width="40" height="30"/>
+<text class="sd-av" x="610.0" y="320" text-anchor="middle">5</text>
+<text class="sd-i" x="610.0" y="346" text-anchor="middle">0</text>
+<rect class="sd-c" x="630" y="300" width="40" height="30"/>
+<text class="sd-av" x="650.0" y="320" text-anchor="middle">8</text>
+<text class="sd-i" x="650.0" y="346" text-anchor="middle">1</text>
+<rect class="sd-c" x="670" y="300" width="40" height="30"/>
+<text class="sd-av" x="690.0" y="320" text-anchor="middle">15</text>
+<text class="sd-i" x="690.0" y="346" text-anchor="middle">2</text>
+<rect class="sd-c" x="710" y="300" width="40" height="30"/>
+<text class="sd-av" x="730.0" y="320" text-anchor="middle">10</text>
+<text class="sd-i" x="730.0" y="346" text-anchor="middle">3</text>
+<rect class="sd-cm" x="750" y="300" width="40" height="30"/>
+<text class="sd-av-inv" x="770.0" y="320" text-anchor="middle">20</text>
+<text class="sd-i" x="770.0" y="346" text-anchor="middle">4</text>
+<text class="sd-s" x="570" y="376">20 is a leaf now. Every parent</text>
+<text class="sd-s" x="570" y="393">is at most its children again.</text>
+</g>
+</svg>

@@ -1,584 +1,320 @@
 ---
-title: "Modern Best Practices"
+title: "Design Principles Beyond SOLID"
 layout: guide
 category: Programming Patterns
 subcategory: OOP Foundations
-description: "Modern OOP practices including composition over inheritance, dependency injection, immutability, functional programming concepts, and avoiding common antipatterns."
-tags: [oop, best-practices, practical, maintainability, modern]
----
-
+description: "The design heuristics that sit beside SOLID: composition over inheritance and the fragile base class problem, dependency injection by constructor, property, and method, immutability, KISS, YAGNI, and DRY as a rule about knowledge rather than code, the code smells that signal each has been ignored, and how the principles pull against each other."
+tags: [composition-over-inheritance, dependency-injection, immutability, dry, yagni, kiss, practical]
 ---
 
 ## Composition Over Inheritance
 
-**Definition**: Favor object composition over class inheritance to achieve code reuse and flexibility.
+The Gang of Four's *Design Patterns* (1994) put the advice in six words: "Favor object composition over class inheritance." Inheritance reuses code by making a new class a kind of an existing one. Composition reuses code by having one object hold a reference to another and call it. Both get the behavior reused, but they couple the two classes very differently.
 
-<div class="callout callout--note">
-<p class="callout__title">Why This Matters</p>
-<ul>
-<li>Inheritance creates tight coupling between parent and child classes</li>
-<li>Deep inheritance hierarchies become fragile and hard to maintain</li>
-<li>Composition provides better flexibility and testability</li>
-<li>Avoids the "fragile base class" problem</li>
-</ul>
-</div>
+### The Fragile Base Class Problem
 
-**Inheritance Problems**:
+A subclass depends on how its base class is implemented as well as on what it promises, and that dependency is invisible until the base changes. Suppose a subclass wants to count every item saved:
+
 ```csharp
-// BAD: Rigid inheritance hierarchy
-public class Animal
+public class Repository<T>
 {
-    public virtual void Move() => Console.WriteLine("Moving");
-    public virtual void MakeSound() => Console.WriteLine("Some sound");
-}
+    public virtual void Save(T item) { /* write to storage */ }
 
-public class Dog : Animal
-{
-    public override void MakeSound() => Console.WriteLine("Bark!");
-}
-
-public class RobotDog : Dog  // Robot dog inherits ALL dog behavior
-{
-    // Problem: Inherits MakeSound, but robots don't breathe
-    // Stuck with unwanted Animal behaviors
-}
-```
-
-**Composition Solution**:
-```csharp
-// GOOD: Flexible composition
-public interface IMovable
-{
-    void Move();
-}
-
-public interface ISoundMaker
-{
-    void MakeSound();
-}
-
-public class WalkingMovement : IMovable
-{
-    public void Move() => Console.WriteLine("Walking on legs");
-}
-
-public class WheelMovement : IMovable
-{
-    public void Move() => Console.WriteLine("Rolling on wheels");
-}
-
-public class BarkSound : ISoundMaker
-{
-    public void MakeSound() => Console.WriteLine("Bark!");
-}
-
-public class RobotSound : ISoundMaker
-{
-    public void MakeSound() => Console.WriteLine("Beep boop!");
-}
-
-// Compose behaviors as needed
-public class Dog
-{
-    private readonly IMovable movement;
-    private readonly ISoundMaker soundMaker;
-
-    public Dog(IMovable movement, ISoundMaker soundMaker)
+    public virtual void SaveAll(IEnumerable<T> items)
     {
-        this.movement = movement;
-        this.soundMaker = soundMaker;
+        foreach (var item in items)
+            Save(item);
+    }
+}
+
+public class CountingRepository<T> : Repository<T>
+{
+    public int Count { get; private set; }
+
+    public override void Save(T item)
+    {
+        Count++;
+        base.Save(item);
     }
 
-    public void Move() => movement.Move();
-    public void MakeSound() => soundMaker.MakeSound();
+    public override void SaveAll(IEnumerable<T> items)
+    {
+        Count += items.Count();
+        base.SaveAll(items);
+    }
 }
-
-// Easy to create different combinations
-var regularDog = new Dog(new WalkingMovement(), new BarkSound());
-var robotDog = new Dog(new WheelMovement(), new RobotSound());
 ```
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Use Inheritance When</h4>
-<ul>
-<li>True "is-a" relationships</li>
-<li>Shallow hierarchies (1-2 levels)</li>
-<li>Base class provides core functionality</li>
-<li>Derived classes are true specializations</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Use Composition When</h4>
-<ul>
-<li>"Has-a" or "uses-a" relationships</li>
-<li>Behavior combinations needed</li>
-<li>Runtime flexibility required</li>
-<li>Multiple behaviors to mix and match</li>
-</ul>
-</div>
-</div>
+Saving three items with `SaveAll` gives a count of six, because the base `SaveAll` calls `Save`, which counts again. The subclass author could fix that by removing the `SaveAll` override, and it would work until a later version of `Repository` writes batches directly without calling `Save`. Then the count silently drops to zero for batches. The base class changed an implementation detail it never promised, and a subclass it has never seen broke.
+
+### The Same Behavior by Composition
+
+```csharp
+public interface IRepository<T>
+{
+    void Save(T item);
+    void SaveAll(IEnumerable<T> items);
+}
+
+public class CountingRepository<T> : IRepository<T>
+{
+    private readonly IRepository<T> inner;
+
+    public CountingRepository(IRepository<T> inner) => this.inner = inner;
+
+    public int Count { get; private set; }
+
+    public void Save(T item)
+    {
+        Count++;
+        inner.Save(item);
+    }
+
+    public void SaveAll(IEnumerable<T> items)
+    {
+        var list = items.ToList();
+        Count += list.Count;
+        inner.SaveAll(list);
+    }
+}
+```
+
+`CountingRepository` now depends only on the `IRepository<T>` contract. Whether the inner repository's `SaveAll` calls its own `Save` doesn't matter, because those calls go to the inner object and never come back through the counter. The wrapper also works with any repository, and a caller can choose at runtime whether to count at all.
+
+### Choosing Between Them
+
+| Inheritance fits when | Composition fits when |
+|---|---|
+| The subtype really is a kind of the base and can stand in for it everywhere | The goal is to reuse behavior, not to claim a type relationship |
+| The base class was designed for extension and documents what overrides may rely on | The reused class wasn't designed for subclassing, or belongs to someone else |
+| The hierarchy is shallow and changes rarely | Behaviors need to be mixed, swapped, or chosen at runtime |
+
+Composition costs some forwarding code, and a class that only forwards every call to one inner object gains little. It's the default because its failure is visible (a missing forwarding method is a compile error), while inheritance's failure is a behavior change nobody was told about.
+
+---
 
 ## Dependency Injection
 
-**Definition**: Provide dependencies from outside rather than creating them internally, enabling loose coupling and testability.
+Dependency injection means a class receives the objects it depends on instead of creating them. It is the usual way to put dependency inversion into practice: the class names an abstraction, and something outside decides which implementation it gets.
 
-### Constructor Injection
+### Three Ways to Inject
 
-**Purpose**: Inject required dependencies that the class cannot function without.
+**Constructor injection** is for dependencies the class can't work without. The constructor makes them impossible to forget, and `readonly` fields keep them from changing afterward.
 
 ```csharp
 public class OrderService
 {
-    private readonly IOrderRepository orderRepository;
-    private readonly IPaymentProcessor paymentProcessor;
-    private readonly IEmailService emailService;
+    private readonly IOrderRepository orders;
+    private readonly IPaymentProcessor payments;
 
-    // Dependencies required for class to function
-    public OrderService(
-        IOrderRepository orderRepository,
-        IPaymentProcessor paymentProcessor,
-        IEmailService emailService)
+    public OrderService(IOrderRepository orders, IPaymentProcessor payments)
     {
-        this.orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
-        this.paymentProcessor = paymentProcessor ?? throw new ArgumentNullException(nameof(paymentProcessor));
-        this.emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
-    }
-
-    public async Task<Result> ProcessOrder(Order order)
-    {
-        await orderRepository.Save(order);
-        var paymentResult = await paymentProcessor.Process(order.Total);
-
-        if (paymentResult.Success)
-        {
-            await emailService.SendConfirmation(order.CustomerEmail);
-        }
-
-        return paymentResult;
+        this.orders = orders ?? throw new ArgumentNullException(nameof(orders));
+        this.payments = payments ?? throw new ArgumentNullException(nameof(payments));
     }
 }
 ```
 
-### Property Injection
-
-**Purpose**: Inject optional dependencies or provide defaults.
+**Property injection** is for optional dependencies with a sensible default. The default is often a null object, an implementation that does nothing, so the class never has to check for `null`.
 
 ```csharp
 public class ReportGenerator
 {
-    private ILogger logger;
+    public ILogger Logger { get; set; } = NullLogger.Instance;
 
-    // Optional dependency with default
-    public ILogger Logger
+    public string Generate(ReportData data)
     {
-        get => logger ?? NullLogger.Instance;
-        set => logger = value;
-    }
-
-    public string GenerateReport(ReportData data)
-    {
-        Logger.Log("Starting report generation");
-
-        var report = CreateReport(data);
-
-        Logger.Log("Report generation completed");
-        return report;
+        Logger.LogInformation("Generating report");
+        return Render(data);
     }
 }
 ```
 
-### Method Injection
-
-**Purpose**: Inject dependencies needed only for specific operations.
+**Method injection** is for a dependency that varies with each call rather than for the object's lifetime.
 
 ```csharp
 public class DocumentProcessor
 {
-    public void Process(Document document, IValidator validator, IFormatter formatter)
-    {
-        // Dependencies specific to this operation
-        if (validator.Validate(document))
-        {
-            var formatted = formatter.Format(document);
-            Save(formatted);
-        }
-    }
+    public void Process(Document document, IFormatter formatter) =>
+        Save(formatter.Format(document));
 }
 ```
 
-### Dependency Injection Benefits
+Constructor injection should be the default. Property injection hides a dependency from anyone reading the constructor, so it fits only when the class really does work without it.
+
+### Wiring Happens in One Place
+
+If classes receive their dependencies, something still has to create them. That place is the composition root, usually the application's entry point, where the whole object graph is built. In .NET a DI container does the building, but the principle holds with plain `new` calls too. Everything below the composition root stays unaware of which implementations it is using.
+
+The opposite approach, a class asking a global registry for its dependencies from inside its own methods, is the service locator. It still decouples the class from concrete types, but the dependencies disappear from the constructor, so neither readers nor tests can see what the class needs.
+
+### Hidden Dependencies Make Code Hard to Test
+
+Services aren't the only dependencies to inject. Anything the class reaches out and grabs, such as the clock, a random number generator, or the file system, makes its behavior depend on something a test can't control.
 
 ```csharp
-// Testability Example
-public class OrderServiceTests
+// Hard to test: the result depends on when the test runs
+public class SubscriptionService
 {
-    [Fact]
-    public async Task ProcessOrder_ShouldSendEmail_WhenPaymentSucceeds()
-    {
-        // Arrange - Easy to inject test doubles
-        var mockRepository = new Mock<IOrderRepository>();
-        var mockPaymentProcessor = new Mock<IPaymentProcessor>();
-        mockPaymentProcessor.Setup(p => p.Process(It.IsAny<decimal>()))
-            .ReturnsAsync(new Result { Success = true });
+    public bool IsExpired(Subscription s) => DateTime.UtcNow > s.ExpiresAt;
+}
 
-        var mockEmailService = new Mock<IEmailService>();
+// Testable: the clock is a dependency
+public class SubscriptionService
+{
+    private readonly TimeProvider clock;
 
-        var service = new OrderService(
-            mockRepository.Object,
-            mockPaymentProcessor.Object,
-            mockEmailService.Object);
+    public SubscriptionService(TimeProvider clock) => this.clock = clock;
 
-        var order = new Order { Total = 100m, CustomerEmail = "test@example.com" };
-
-        // Act
-        await service.ProcessOrder(order);
-
-        // Assert - Verify email was sent
-        mockEmailService.Verify(e =>
-            e.SendConfirmation("test@example.com"), Times.Once);
-    }
+    public bool IsExpired(Subscription s) => clock.GetUtcNow() > s.ExpiresAt;
 }
 ```
 
-## Clean Code Principles
+.NET 8 added `TimeProvider` for exactly this. Production code passes `TimeProvider.System`, and a test passes a `FakeTimeProvider` from the `Microsoft.Extensions.TimeProvider.Testing` package, set to whatever moment the test needs.
 
-### KISS (Keep It Simple, Stupid)
+---
 
-**Definition**: Choose simple solutions over complex ones. Avoid over-engineering.
+## Immutability
+
+An immutable object can't change after it's constructed. Any "change" produces a new object and leaves the original as it was.
+
+That removes several problems at once. Invariants are checked once, in the constructor, and can never be broken later. An immutable object can be shared between threads with no locking, and handed to other code without a defensive copy, since nobody can modify it. It's also safe as a dictionary key, because its hash code can't drift.
 
 ```csharp
-// BAD: Over-engineered
-public class ComplexCalculator
+public record Money(decimal Amount, string Currency)
 {
-    private readonly ICalculationStrategy strategy;
-    private readonly ICalculationFactory factory;
+    public Money Add(Money other)
+    {
+        if (other.Currency != Currency)
+            throw new InvalidOperationException("Currency mismatch");
+
+        return this with { Amount = Amount + other.Amount };
+    }
+}
+
+var price = new Money(10m, "USD");
+var total = price.Add(new Money(5m, "USD")); // price is still 10 USD
+```
+
+The cost is an allocation for every change, which matters for large objects updated in a hot loop, and some awkwardness for things that really do change over time, like an order moving through its lifecycle. A practical default is to make small value-like types (money, dates, coordinates, settings) immutable and to let entities with identity change through methods that guard their invariants. `with` makes a shallow copy, so a record that holds a mutable list is still mutable through that list.
+
+---
+
+## Simplicity Principles
+
+### KISS: Keep It Simple
+
+The phrase is usually attributed to aircraft engineer Kelly Johnson. In software it means choosing the simplest design that meets the requirement, and treating each extra layer of abstraction as a cost that has to be paid for.
+
+```csharp
+// Over-engineered: three abstractions for one addition
+public class Calculator
+{
+    private readonly IOperationFactory factory;
     private readonly ICalculationValidator validator;
 
     public int Add(int a, int b)
     {
-        var operation = factory.CreateOperation(OperationType.Addition);
-        var context = new CalculationContext(a, b);
-        var validation = validator.Validate(context);
-
-        if (!validation.IsValid)
-            throw new InvalidOperationException();
-
-        return strategy.Execute(operation, context);
+        var operation = factory.Create(OperationType.Addition);
+        validator.Validate(a, b);
+        return operation.Execute(a, b);
     }
 }
 
-// GOOD: Simple and clear
-public class SimpleCalculator
+// Simple
+public static class Calculator
 {
-    public int Add(int a, int b) => a + b;
+    public static int Add(int a, int b) => a + b;
 }
 ```
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>When Simple is Better</h4>
-<ul>
-<li>Straightforward business logic</li>
-<li>One-time use code</li>
-<li>Internal utilities</li>
-<li>Prototypes and MVPs</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>When Complexity is Justified</h4>
-<ul>
-<li>Anticipating multiple variations</li>
-<li>Complex business rules</li>
-<li>Framework/library code</li>
-<li>High reuse scenarios</li>
-</ul>
-</div>
-</div>
+The first version isn't wrong for a system that really does need pluggable, validated operations. It's wrong when nothing requires them. Complexity earns its place when the problem has it: several real variations, rules that change independently, or a library whose callers you can't see.
 
-### YAGNI (You Aren't Gonna Need It)
+### YAGNI: You Aren't Gonna Need It
 
-**Definition**: Don't implement features before they're needed. Focus on current requirements.
+YAGNI comes from Extreme Programming: don't build a capability until a current requirement needs it. Speculative code has to be written, tested, and maintained, and when the real requirement finally arrives, it often differs from the guess.
 
 ```csharp
-// BAD: Speculative generality
+// Speculative: lookups nobody has asked for
 public class UserService
 {
-    // Implementing features "just in case"
-    public Task<User> GetUser(int id) { /* ... */ }
-    public Task<User> GetUserByEmail(string email) { /* Not needed yet */ }
-    public Task<User> GetUserByPhone(string phone) { /* Not needed yet */ }
-    public Task<User> GetUserByExternalId(string id) { /* Not needed yet */ }
-    public Task<List<User>> SearchUsers(UserSearchCriteria criteria) { /* Not needed yet */ }
+    public Task<User> GetById(int id) { /* ... */ }
+    public Task<User> GetByEmail(string email) { /* ... */ }
+    public Task<User> GetByPhone(string phone) { /* ... */ }
+    public Task<User> GetByExternalId(string id) { /* ... */ }
 }
 
-// GOOD: Implement only what's needed now
+// What the current feature needs
 public class UserService
 {
-    // Only implement what current requirements demand
-    public Task<User> GetUser(int id) { /* ... */ }
-
-    // Add other methods when actually needed
+    public Task<User> GetById(int id) { /* ... */ }
 }
 ```
 
-<div class="callout callout--tip">
-<p class="callout__title">Benefits of YAGNI</p>
-<ul>
-<li>Less code to maintain</li>
-<li>Faster initial development</li>
-<li>Easier to understand</li>
-<li>Avoid wrong assumptions about future needs</li>
-</ul>
-</div>
+YAGNI applies to features, not to the practices that keep code easy to change. Clear names, tests, and small classes aren't speculative, because they're what makes adding the email lookup cheap on the day someone asks for it.
 
-### DRY (Don't Repeat Yourself)
+### DRY: Don't Repeat Yourself
 
-**Definition**: Eliminate code duplication through abstraction. Each piece of knowledge should have a single, authoritative representation.
+Andy Hunt and Dave Thomas define DRY in *The Pragmatic Programmer* (1999): "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system." The rule is about knowledge, not text. Two copies of the same business rule will drift apart, because someone will update one and not the other.
 
 ```csharp
-// BAD: Repetitive code
-public class OrderController
+// The rule "an order needs a customer and a positive total" lives in two places
+public IActionResult CreateOrder(CreateOrderRequest request)
 {
-    public IActionResult CreateOrder(CreateOrderRequest request)
-    {
-        if (string.IsNullOrEmpty(request.CustomerName))
-            return BadRequest("Customer name is required");
-        if (request.Total <= 0)
-            return BadRequest("Total must be positive");
-        if (string.IsNullOrEmpty(request.Email))
-            return BadRequest("Email is required");
-
-        // Process order
-    }
-
-    public IActionResult UpdateOrder(UpdateOrderRequest request)
-    {
-        if (string.IsNullOrEmpty(request.CustomerName))
-            return BadRequest("Customer name is required");
-        if (request.Total <= 0)
-            return BadRequest("Total must be positive");
-        if (string.IsNullOrEmpty(request.Email))
-            return BadRequest("Email is required");
-
-        // Update order
-    }
+    if (string.IsNullOrEmpty(request.CustomerName) || request.Total <= 0)
+        return BadRequest();
+    // ...
 }
 
-// GOOD: Extract common logic
-public class OrderController
+public IActionResult UpdateOrder(UpdateOrderRequest request)
 {
-    private IActionResult ValidateOrder(string customerName, decimal total, string email)
-    {
-        if (string.IsNullOrEmpty(customerName))
-            return BadRequest("Customer name is required");
-        if (total <= 0)
-            return BadRequest("Total must be positive");
-        if (string.IsNullOrEmpty(email))
-            return BadRequest("Email is required");
-
-        return null; // Valid
-    }
-
-    public IActionResult CreateOrder(CreateOrderRequest request)
-    {
-        var validationError = ValidateOrder(request.CustomerName, request.Total, request.Email);
-        if (validationError != null)
-            return validationError;
-
-        // Process order
-    }
-
-    public IActionResult UpdateOrder(UpdateOrderRequest request)
-    {
-        var validationError = ValidateOrder(request.CustomerName, request.Total, request.Email);
-        if (validationError != null)
-            return validationError;
-
-        // Update order
-    }
+    if (string.IsNullOrEmpty(request.CustomerName) || request.Total <= 0)
+        return BadRequest();
+    // ...
 }
-```
 
-**Balance DRY with SRP**:
-```csharp
-// BETTER: Separate validation responsibility
+// One authoritative representation
 public class OrderValidator
 {
-    public ValidationResult Validate(OrderData data)
+    public IReadOnlyList<string> Validate(string customerName, decimal total)
     {
         var errors = new List<string>();
-
-        if (string.IsNullOrEmpty(data.CustomerName))
-            errors.Add("Customer name is required");
-        if (data.Total <= 0)
-            errors.Add("Total must be positive");
-        if (string.IsNullOrEmpty(data.Email))
-            errors.Add("Email is required");
-
-        return new ValidationResult(errors);
-    }
-}
-
-public class OrderController
-{
-    private readonly OrderValidator validator;
-
-    public OrderController(OrderValidator validator)
-    {
-        this.validator = validator;
-    }
-
-    public IActionResult CreateOrder(CreateOrderRequest request)
-    {
-        var validation = validator.Validate(request);
-        if (!validation.IsValid)
-            return BadRequest(validation.Errors);
-
-        // Process order
+        if (string.IsNullOrEmpty(customerName)) errors.Add("Customer name is required");
+        if (total <= 0) errors.Add("Total must be positive");
+        return errors;
     }
 }
 ```
 
-## Testing Considerations
-
-### Design for Testability
-
-**SOLID Principles Improve Testing**:
-```csharp
-// Hard to test - tight coupling
-public class OrderProcessor
-{
-    public void Process(Order order)
-    {
-        var repository = new OrderRepository(); // Cannot mock
-        var emailService = new SmtpEmailService(); // Cannot test without SMTP
-
-        repository.Save(order);
-        emailService.Send(order.CustomerEmail, "Order received");
-    }
-}
-
-// Easy to test - dependency injection
-public class OrderProcessor
-{
-    private readonly IOrderRepository repository;
-    private readonly IEmailService emailService;
-
-    public OrderProcessor(IOrderRepository repository, IEmailService emailService)
-    {
-        this.repository = repository;
-        this.emailService = emailService;
-    }
-
-    public void Process(Order order)
-    {
-        repository.Save(order);
-        emailService.Send(order.CustomerEmail, "Order received");
-    }
-}
-```
-
-### Testable Code Characteristics
-
-**1. Single Responsibility**: Easy to test one thing at a time
-```csharp
-// One test per class responsibility
-[Fact]
-public void CalculateTotalPrice_ShouldSumItemPrices()
-{
-    var calculator = new PriceCalculator();
-    var items = new[] { new Item { Price = 10 }, new Item { Price = 20 } };
-
-    var total = calculator.CalculateTotalPrice(items);
-
-    Assert.Equal(30, total);
-}
-```
-
-**2. Dependency Injection**: Mock external dependencies
-```csharp
-[Fact]
-public void ProcessOrder_ShouldCallRepository()
-{
-    var mockRepo = new Mock<IOrderRepository>();
-    var service = new OrderService(mockRepo.Object);
-
-    service.ProcessOrder(new Order());
-
-    mockRepo.Verify(r => r.Save(It.IsAny<Order>()), Times.Once);
-}
-```
-
-**3. No Hidden Dependencies**: All dependencies explicit
-```csharp
-// BAD: Hidden dependency on DateTime.Now
-public class OrderService
-{
-    public void CreateOrder(Order order)
-    {
-        order.CreatedAt = DateTime.Now; // Hard to test specific times
-    }
-}
-
-// GOOD: Inject time provider
-public class OrderService
-{
-    private readonly ITimeProvider timeProvider;
-
-    public OrderService(ITimeProvider timeProvider)
-    {
-        this.timeProvider = timeProvider;
-    }
-
-    public void CreateOrder(Order order)
-    {
-        order.CreatedAt = timeProvider.Now; // Easy to test with mock
-    }
-}
-```
-
-## Quick Reference
-
-### Best Practice Decision Matrix
-
-| Scenario | Best Practice | Why |
-|----------|---------------|-----|
-| Need behavior reuse | Composition | More flexible than inheritance |
-| Need different implementations | Dependency Injection | Enables loose coupling |
-| Simple calculation | KISS | Avoid unnecessary complexity |
-| Feature not yet needed | YAGNI | Don't build what you don't need |
-| Repeated validation logic | DRY | Single source of truth |
-| Testing complex logic | SOLID + DI | Enables mocking and isolation |
-
-### Common Pitfalls
-
-| Anti-Pattern | Problem | Solution |
-|--------------|---------|----------|
-| **God Object** | Class does too much | Apply SRP, split responsibilities |
-| **Premature Optimization** | Complex code "for performance" | KISS: optimize when needed |
-| **Shotgun Surgery** | Changes require editing many files | DRY: centralize logic |
-| **Tight Coupling** | Hard to test and change | DI: depend on abstractions |
-| **Gold Plating** | Over-engineering features | YAGNI: build what's needed |
-
-### Modern Framework Integration
-
-**ASP.NET Core**:
-- Built-in dependency injection container
-- Middleware pattern (composition)
-- Options pattern (configuration)
-- Minimal APIs (KISS)
-
-**Entity Framework**:
-- Repository pattern (abstraction)
-- Unit of Work pattern (transaction management)
-- Lazy loading (proxy pattern)
-- DbContext lifetime management (DI)
-
-**Testing Tools**:
-- xUnit / NUnit / MSTest (test frameworks)
-- Moq / NSubstitute (mocking)
-- FluentAssertions (readable assertions)
-- AutoFixture (test data generation)
+The reverse also holds. Two blocks of code that look alike but encode different knowledge aren't duplication. If the shipping-cost and tax calculations happen to share a formula today, merging them couples two rules owned by different people, and the first change to either one forces the shared code to grow a flag. A common guard is the rule of three: tolerate a second copy, and extract on the third, when the shared shape has shown itself to be real.
 
 ---
+
+## Code Smells
+
+A code smell is a surface sign that one of these principles has been ignored. It's a prompt to look closer, not proof of a problem.
+
+| Smell | What it looks like | Principle it points to |
+|---|---|---|
+| **God object** | One class that knows and does most of the system's work | Single responsibility |
+| **Shotgun surgery** | One change requires small edits in many classes | DRY: the knowledge is scattered |
+| **Speculative generality** | Hooks, parameters, and abstractions for cases that don't exist | YAGNI, KISS |
+| **Pattern overuse** | A factory, a strategy, and an interface wrapped around a single implementation | KISS |
+| **Refused bequest** | A subclass that overrides inherited members to do nothing or throw | Composition over inheritance, Liskov substitution |
+| **Hidden dependencies** | `new`, static calls, or `DateTime.Now` buried inside business logic | Dependency injection |
+| **Premature optimization** | Complex code justified by performance that was never measured | KISS |
+
+Donald Knuth's line from 1974 is the usual reminder for the last row: "premature optimization is the root of all evil." The rest of the sentence matters as much. Knuth was arguing against optimizing the 97% of code where it makes no difference, not against optimizing the critical 3% once measurement finds it.
+
+---
+
+## When the Principles Pull Against Each Other
+
+These heuristics don't form a consistent rulebook, and applying one hard tends to violate another.
+
+- **DRY versus decoupling.** Extracting shared code makes every user of it depend on it. Across service or team boundaries, a little duplication is often cheaper than a shared library that forces everyone to upgrade together.
+- **YAGNI versus open-closed.** Open-closed asks for extension points, and YAGNI asks you not to build what isn't needed. The resolution is to add the extension point when the second variation arrives, not before.
+- **KISS versus dependency injection.** Injecting everything adds constructors, interfaces, and wiring. Inject what varies or what tests need to control, and let stable helpers be called directly.
+- **Composition versus simplicity.** A deep stack of wrappers is as hard to follow as a deep hierarchy. Composition is the better default, not a reason to wrap everything.
+
+Each principle names a cost to avoid, and applying them well means judging which cost is larger in the code in front of you.

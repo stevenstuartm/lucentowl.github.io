@@ -10,7 +10,7 @@ tags: [hash-tables, hashing, dictionary, hashset, collisions, load-factor, funda
 
 ## Why Hash Tables Exist
 
-An array finds an element in O(1) when it knows the element's index. A hash table extends that to keys that aren't small integers, such as strings, IDs, or composite values. It runs the key through a hash function that produces an integer, reduces the integer to an index in an internal array, and stores the entry there. Looking the key up later repeats the same calculation and goes straight to the same slot, so a lookup costs the same whether the table holds ten entries or ten million.
+An array finds an element in O(1) when it knows the element's index. A hash table extends that to keys that aren't small integers, such as strings, IDs, or composite values. It runs the key through a hash function that produces an integer, reduces the integer to an index in an internal array, and stores the entry there. Looking the key up later repeats the same calculation and goes straight to the same slot, so a lookup costs the same on average whether the table holds ten entries or ten million.
 
 The idea goes back to Hans Peter Luhn, who described hashing with chaining in an internal IBM memo in 1953. It now sits under most keyed lookups in software, including language dictionaries and sets, caches, database hash indexes, and compiler symbol tables.
 
@@ -36,14 +36,14 @@ The two main families of hash table differ in where a colliding key goes.
 {% include figure.html id="dsa-hash-collisions" %}
 {% raw %}
 
-**Separate chaining** gives every slot a list, called a chain or bucket, of the entries that landed there. A collision appends to the chain, and a lookup scans only the chain for its slot. Chaining never runs out of room and degrades gradually as chains lengthen. Its cost is the extra references and, when chains are linked nodes, scattered memory.
+**Separate chaining** gives every slot, called a bucket, a list of the entries that landed there, called a chain. A collision adds the entry to the chain, and a lookup scans only the chain for its slot. Chaining never runs out of room and degrades gradually as chains lengthen. Its cost is the extra references and, when chains are linked nodes, scattered memory.
 
-**Open addressing** stores every entry directly in the array. When a key's slot is taken, the table probes other slots in a fixed sequence until it finds a free one. Linear probing tries the next slot, then the one after that. Quadratic probing and double hashing space the probes out further. Keeping everything in one array is cache-friendly, but open addressing has two complications:
+**Open addressing** stores every entry directly in the array. When a key's slot is taken, the table probes other slots in a fixed sequence until it finds a free one. Linear probing tries the next slot, then the one after that. Quadratic probing and double hashing space the probes out further. Keeping everything in one array is cache-friendly, because neighboring slots are loaded from memory together, but open addressing has two complications:
 
-- **Clustering.** With linear probing, occupied slots form runs, and any key hashing into a run has to probe to its end, which makes the run longer still.
-- **Deletion.** Emptying a slot would break the probe sequence of every key that probed past it, so those keys could no longer be found. Deleted slots are marked with a tombstone that lookups skip over and inserts can reuse.
+- **Clustering.** With linear probing, occupied slots form runs, and any new key hashing into a run has to probe to its end, which makes the run longer still.
+- **Deletion.** Emptying a slot would break the probe sequence of every key that probed past it, so those keys could no longer be found. Tables handle this in one of two ways. Some mark the deleted slot with a tombstone that lookups skip over and inserts can reuse. Others, with linear probing, empty the slot and then reinsert or shift back the keys that follow it in the run.
 
-Real implementations use both families. Java's `HashMap` and .NET's `Dictionary<TKey,TValue>` use chaining. CPython's `dict` and many high-performance C++ and Rust tables use open addressing, often with refinements such as Robin Hood hashing, which reorders entries to even out probe lengths.
+Production implementations use both families. Java's `HashMap` and .NET's `Dictionary<TKey,TValue>` use chaining, and since Java 8, `HashMap` converts a chain longer than 8 entries into a small balanced tree once the table has at least 64 slots. CPython's `dict` and many high-performance C++ and Rust tables use open addressing, often with refinements. Robin Hood hashing reorders entries to even out probe lengths. Google's SwissTable design, which Rust's standard `HashMap` has used since Rust 1.36, probes groups of slots at once using a small array of metadata bytes.
 
 ---
 
@@ -53,9 +53,9 @@ The load factor is the number of entries divided by the number of slots. It sets
 
 A hash table keeps the load factor bounded by resizing. When it crosses a threshold, the table allocates a larger array, usually around double the size, and rehashes every entry into it. Every entry has to move, because each new index depends on the new capacity. Like a dynamic array's growth, one resize is O(n), but doubling makes resizes rare enough that inserts stay O(1) amortized.
 
-Open addressing needs the lower thresholds, because probe lengths climb steeply as the table fills. Linear probing is commonly kept below about 0.7. Chaining tolerates load factors near 1 and still works, more slowly, above it.
+Open addressing needs the lower thresholds, because probe lengths climb steeply as the table fills. Linear probing tables commonly resize by the time they are half to two-thirds full. Chaining tolerates load factors near 1 and still works, more slowly, above it.
 
-Resizing also means iteration order in a hash table has no meaning. It follows slot order, which depends on hash codes and capacity, and it can change completely after a resize.
+Resizing also means iteration order in many hash tables has no meaning. When iteration follows slot order, it depends on hash codes and capacity, and it can change completely after a resize. Some tables keep entries in a separate array and iterate that instead. CPython's `dict` does this and guarantees insertion order. .NET's `Dictionary<TKey,TValue>` does something similar, as its section below shows, but its order is still not something code should rely on.
 
 ---
 
@@ -68,7 +68,7 @@ Resizing also means iteration order in a hash table has no meaning. It follows s
 | Iterate over all entries | O(n + capacity) | O(n + capacity) |
 | Find the smallest key, or keys in a range | O(n) | O(n) |
 
-The average case assumes the hash function spreads keys evenly and the load factor stays bounded. The worst case is every key in one slot, which turns each lookup into a linear scan. That can come from a poor hash function or, when an attacker controls the keys, from a deliberate hash flooding attack. In .NET, a string's hash code can differ from one run of a program to the next, and `Dictionary<TKey,TValue>` switches string keys to a randomized hash when any chain grows unusually long, which blunts attacks that depend on predictable hash codes.
+The average case assumes the hash function spreads keys evenly and the load factor stays bounded. The worst case is every key in one slot, which turns each lookup into a linear scan. That can come from a poor hash function or, when an attacker controls the keys, from a deliberate hash flooding attack. In .NET, a string's hash code can differ from one run of a program to the next, so an attacker can't precompute a set of strings that all collide. `Dictionary<TKey,TValue>` adds a further defense for string keys, described in its section below.
 
 The last row is the main thing a hash table cannot do. It keeps no order, so finding a minimum, a successor, or every key between two values means scanning everything. That is the job of a balanced search tree, such as `SortedDictionary<TKey,TValue>`.
 
@@ -76,7 +76,7 @@ The last row is the main thing a hash table cannot do. It keeps no order, so fin
 
 ## A Chaining Hash Table in C#
 
-This implementation uses an array of lists as its buckets and doubles once the load factor passes 1.
+This implementation keeps one list per bucket and doubles once the load factor passes 1.
 
 ```csharp
 public class ChainedHashMap<TKey, TValue> where TKey : notnull
@@ -167,7 +167,7 @@ Console.WriteLine(ages.TryGetValue("carol", out _));                   // False
 Console.WriteLine(ages.Count);                                         // 2
 ```
 
-`TryGetValue` returns a `bool` rather than a default value, because a missing key and a key stored with the default value (`0`, `null`) would otherwise look the same. The index calculation masks off the sign bit instead of calling `Math.Abs`, which throws for `int.MinValue`, a hash code that can legitimately occur.
+`TryGetValue` returns a `bool` rather than a default value, because a missing key and a key stored with the default value (`0`, `null`) would otherwise look the same. .NET's `Dictionary<TKey,TValue>` follows the same pattern, and its indexer throws `KeyNotFoundException` for a missing key instead. The index calculation masks off the sign bit instead of calling `Math.Abs`, which throws for `int.MinValue`, a hash code that can legitimately occur.
 
 ---
 
@@ -175,7 +175,7 @@ Console.WriteLine(ages.Count);                                         // 2
 
 Every hash table in .NET relies on two methods of the key type, and they have to agree:
 
-- **Equal keys must produce equal hash codes.** If `a.Equals(b)` is true, then `a.GetHashCode()` must equal `b.GetHashCode()`. Otherwise the two keys land in different slots and the table never compares them, so a lookup with an equal key fails to find the entry.
+- **Equal keys must produce equal hash codes.** If `a.Equals(b)` is true, then `a.GetHashCode()` must equal `b.GetHashCode()`. Otherwise the two keys usually land in different slots and the table never compares them, so a lookup with an equal key fails to find the entry.
 - **Unequal keys should usually produce different hash codes.** This is a performance goal, not a rule. A `GetHashCode` that returns the same constant for every key is technically legal, and it makes every operation O(n).
 
 Types that override `Equals` must override `GetHashCode` to match. Records and anonymous types generate both from their fields, and `HashCode.Combine` builds a well-mixed hash from several fields for hand-written types:
@@ -193,11 +193,13 @@ public sealed class GridPoint : IEquatable<GridPoint>
     public override int GetHashCode() => HashCode.Combine(X, Y);
 }
 
-// The equivalent record gets Equals and GetHashCode generated from its properties
+// A record struct gets Equals and GetHashCode generated from its properties
 public readonly record struct GridCell(int X, int Y);
 ```
 
-A key must also not change while it is in a hash table. If a mutable key's fields change after insertion, its hash code changes, and the table keeps looking for it in the old slot. The entry is still stored but can no longer be found. Keys should be immutable, or at least never modified while in use as keys.
+Overriding the key type's methods is one way to define equality. The other is to pass an `IEqualityComparer<T>` to the collection's constructor, which leaves the key type alone. `new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)` treats "Alice" and "ALICE" as the same key, and a custom comparer can do the same for a type the code doesn't own.
+
+A key must also not change while it is in a hash table. If a mutable key's fields change after insertion, its hash code changes, so lookups go to a different slot from the one the entry sits in. The entry is still stored but can no longer be found. Keys should be immutable, or at least never modified while in use as keys.
 
 ---
 
@@ -205,7 +207,18 @@ A key must also not change while it is in a hash table. If a mutable key's field
 
 `Dictionary<TKey,TValue>` uses separate chaining, but it stores the chains inside two arrays instead of in linked nodes. One array holds the entries, each with its key, value, cached hash code, and the index of the next entry in its chain. The other array maps each bucket to the first entry in its chain. Entries stay in one contiguous block, which avoids per-entry allocations and keeps memory access tighter than a linked chain would.
 
-Its sizing policy is visible in the `dotnet/runtime` source. Bucket counts are prime numbers. When the entries array is full, meaning the load factor has reached 1, the dictionary resizes to the next prime at least double its current count. For string keys, it starts with a fast hash that is not randomized, and switches to randomized hashing if any chain grows past 100 collisions.
+{% endraw %}
+{% include figure.html id="dsa-dictionary-layout" %}
+{% raw %}
+
+Its sizing policy is visible in the `dotnet/runtime` source. Bucket counts are prime numbers. When the entries array is full, meaning the load factor has reached 1, the dictionary resizes to the next prime at least double its current count. For string keys compared with the default comparer, `StringComparer.Ordinal`, or `StringComparer.OrdinalIgnoreCase`, it starts with a hash that is not randomized, because that one is faster, and switches to randomized hashing if any chain grows past 100 collisions, a sign that someone may be forcing collisions.
+
+Enumeration walks the entries array in index order, and a resize copies that array without reordering it. So a dictionary that has only ever had keys added enumerates them in insertion order. A removal frees its entry slot, and the next add reuses that slot, so the new key appears wherever the removed one was. Microsoft's documentation calls the order undefined, and code should treat it that way.
+
+A few practical points follow from the design:
+
+- **Pre-size when the count is known.** The `new Dictionary<TKey,TValue>(capacity)` constructor and `EnsureCapacity(n)` allocate once instead of resizing and rehashing along the way. `TrimExcess()` shrinks the arrays after a large removal.
+- **Keys can't be null.** Adding or looking up a `null` key throws `ArgumentNullException`. Values can be `null`.
 
 `HashSet<T>` is the same design without values. It answers "have I seen this" in O(1) on average, and adds set operations such as `UnionWith`, `IntersectWith`, and `ExceptWith`. `ConcurrentDictionary<TKey,TValue>` is the thread-safe version. `SortedDictionary<TKey,TValue>` has a similar API but is a balanced tree, trading O(1) average operations for O(log n) operations that keep the keys in order.
 

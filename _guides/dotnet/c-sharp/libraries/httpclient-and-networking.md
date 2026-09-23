@@ -11,14 +11,7 @@ tags: [httpclient, ihttpclientfactory, socketshttphandler, delegatinghandler, re
 
 `HttpClient` is a thin object. It holds settings that apply to every request it sends, like `BaseAddress`, `Timeout`, and `DefaultRequestHeaders`, and it passes each request to a handler. The handler does the network work. Since .NET Core 2.1 the bottom of that chain is `SocketsHttpHandler`, which owns a connection pool:
 
-```
-HttpClient                BaseAddress, Timeout, DefaultRequestHeaders
-  └── handler chain       optional DelegatingHandlers (logging, auth, retries)
-        └── SocketsHttpHandler
-              └── connection pool
-                    ├── TCP connection to api.example.com (IP resolved when it opened)
-                    └── TCP connection to api.example.com
-```
+{% include figure.html id="dn-httpclient-anatomy" %}
 
 Every lifetime rule for `HttpClient` comes from two facts about that pool. A connection is expensive to open and should be reused. And DNS is resolved only when a connection opens, so a connection that never closes never sees a DNS change.
 
@@ -361,10 +354,7 @@ services.AddHttpClient<OrdersClient>()
 
 Handlers run in the order they're added, with the first one outermost:
 
-```
-request  → AuthTokenHandler → TimingHandler → SocketsHttpHandler → network
-response ← AuthTokenHandler ← TimingHandler ← SocketsHttpHandler ←
-```
+{% include figure.html id="dn-delegating-handlers" %}
 
 Order changes what each handler observes. `TimingHandler` sits inside `AuthTokenHandler`, so if the auth handler sends a request twice, the timing handler logs both attempts.
 

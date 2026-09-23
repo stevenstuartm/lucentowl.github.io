@@ -272,10 +272,7 @@ When the goal is only to process a stream's items with limited concurrency, `Par
 
 Chaining channels gives a pipeline in which every stage runs concurrently and each bound limits how far one stage can get ahead of the next:
 
-```
-source ─▶ parse ─▶ [ bounded 100 ] ─▶ validate ─▶ [ bounded 100 ] ─▶ save
-             ◀── waits when full ──            ◀── waits when full ──
-```
+{% include figure.html id="dn-channel-backpressure" %}
 
 ```csharp
 static Task RunStageAsync<TIn, TOut>(ChannelReader<TIn> input, ChannelWriter<TOut> output,

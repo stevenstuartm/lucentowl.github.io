@@ -13,25 +13,15 @@ tags: [practical, xp, tdd, pair-programming, refactoring, continuous-integration
 
 **Extreme Programming (XP)** is an Agile software development methodology that emphasizes technical excellence, engineering discipline, and continuous feedback. XP takes good practices to "extreme" levels: if code reviews are good, do them constantly (pair programming); if testing is good, test everything all the time (TDD).
 
-<blockquote class="pull-quote">
-<p>If code reviews are good, review constantly. If testing is good, test everything all the time.</p>
-</blockquote>
-
 **Core Philosophy:**
 - Technical excellence enables business agility
 - Feedback loops at multiple timescales (seconds to weeks)
 - Embrace change through sustainable practices
 - Simple design that evolves
-- Courage to make big changes when needed
-
-**Key Characteristics:**
-
-XP is distinct because:
-- **Engineering-focused**: Prescribes specific technical practices (TDD, pairing, CI)
-- **Feedback-driven**: Multiple feedback loops from seconds to weeks
-- **Courage-requiring**: Willing to refactor aggressively, make big changes
-- **Customer-centric**: On-site customer involvement daily
-- **Sustainable pace**: the first edition called this the forty-hour week, and the second renamed it *energized work*, on the argument that what matters is hours in which you can think clearly rather than a number on a timesheet
+- Courage to make big changes when needed, including aggressive refactoring
+- Specific technical practices (TDD, pairing, CI), which is what sets XP apart
+- Daily involvement from an on-site customer
+- Sustainable pace, which the first edition called the forty-hour week and the second renamed *energized work*, on the argument that what matters is hours in which you can think clearly rather than a number on a timesheet
 
 ### Why XP Emerged
 
@@ -138,21 +128,7 @@ Do the simplest thing that could possibly work. No speculative complexity. No "w
 - Are we building features nobody asked for?
 - Is this complexity justified by current requirements?
 
-**YAGNI (You Aren't Gonna Need It):**
-- Don't build features before they're needed
-- Don't add flexibility for hypothetical future needs
-- Complexity costs (maintenance, understanding, bugs)
-- Simple code is easier to change when needs actually emerge
-
-<div class="callout callout--tip">
-<p class="callout__title">Simple Design Principles</p>
-<ol>
-<li>Passes all tests</li>
-<li>Reveals intention (clear, readable code)</li>
-<li>No duplication (DRY)</li>
-<li>Minimal classes and methods (no unnecessary abstraction)</li>
-</ol>
-</div>
+The Simple Design practice below turns this value into code, through YAGNI and the four rules of simple design.
 
 **Anti-patterns:**
 - Over-engineering (building for imagined future needs)
@@ -170,30 +146,13 @@ Get feedback at multiple timescales and act on it immediately.
 
 **Feedback loops in XP:**
 
-**Seconds:**
-- Unit tests run continuously
-- Pair programming provides immediate code review
-- IDE feedback (syntax errors, warnings)
-
-**Minutes:**
-- Full test suite runs on every commit
-- Continuous integration detects integration issues
-- Static analysis tools
-
-**Hours:**
-- Customer acceptance tests
-- Code pushed to staging
-- Performance tests
-
-**Days:**
-- Customer feedback on features
-- Iteration retrospectives
-- Velocity and burndown tracking
-
-**Weeks:**
-- Release to production
-- User feedback and analytics
-- Planning game for next iteration
+| Timescale | Feedback |
+| --- | --- |
+| **Seconds** | Unit tests run continuously, pair programming provides immediate code review, IDE feedback (syntax errors, warnings) |
+| **Minutes** | Full test suite runs on every commit, continuous integration detects integration issues, static analysis tools |
+| **Hours** | Customer acceptance tests, code pushed to staging, performance tests |
+| **Days** | Customer feedback on features, iteration retrospectives, velocity and burndown tracking |
+| **Weeks** | Release to production, user feedback and analytics, planning game for next iteration |
 
 **Why fast feedback matters:**
 - Catch mistakes early (cheaper to fix)
@@ -436,6 +395,7 @@ Design only for current requirements. No speculative complexity. Evolve design t
 - Don't build frameworks before second use case
 - Don't add flexibility for imagined future needs
 - Wait for actual requirements before adding complexity
+- Complexity costs (maintenance, understanding, bugs)
 
 **How simple design works with change:**
 - Simple code is easier to change than complex code
@@ -484,13 +444,7 @@ Continuously improving code structure without changing behavior. Refactoring is 
 - Inline (remove unnecessary abstractions)
 - Move method (put methods where they belong)
 
-**Red-Green-Refactor cycle:**
-```
-1. Red: Write failing test
-2. Green: Make test pass (simplest way)
-3. Refactor: Improve design while keeping tests green
-4. Repeat
-```
+Refactoring is the third step of TDD's red-green-refactor cycle, shown under Test-Driven Development below.
 
 **When to refactor:**
 - When you notice duplication (DRY)
@@ -557,13 +511,12 @@ Two developers at one workstation. One types (driver), one thinks ahead (navigat
 
 **Types of pairing:**
 
-**Expert-expert:** Fast progress, best designs
-**Expert-novice:** Fastest knowledge transfer
-**Novice-novice:** Learn together, may need expert help
+- **Expert-expert:** Fast progress, best designs
+- **Expert-novice:** Fastest knowledge transfer
+- **Novice-novice:** Learn together, may need expert help
 
 **How to do this well:**
 - Swap pairs daily (spread knowledge)
-- Switch driver/navigator every 15-30 minutes
 - Take breaks (intense, tiring)
 - Respect different working styles
 - Solo time for research or simple tasks

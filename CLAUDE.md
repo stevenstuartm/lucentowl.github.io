@@ -214,7 +214,7 @@ The `related_*` fields are declared on the resource, never on the guide, case st
 
 ### Figures and Composite Resources
 
-Diagrams are authored as **figures**, one per file in `_figures/<id>.html` (front matter `title`, `kind`, `system`, `summary`, then one `<svg>`). A **composite resource** lists figure ids under `figures:` and the resource layout renders them, each anchored as `#fig-<id>`. Figures never link to the pages that use them. Guides embed a figure in full with `{% include figure.html id="<id>" %}`. There is one embed mode, with no buttons, modal, or script. Never copy a figure's SVG into a page. Run `python .figcheck.py` after adding or embedding a figure. Full rules: [`.claude/content/figure-guide.md`](.claude/content/figure-guide.md).
+Diagrams are authored as **figures**, one per file in `_figures/<id>.html` (front matter `title`, `kind`, `system`, `summary`, then one `<svg>`). A **composite resource** lists figure ids under `figures:` and the resource layout renders them, each anchored as `#fig-<id>`. Figures never link to the pages that use them. Guides embed a figure in full with `{% include figure.html id="<id>" %}`. There is one embed mode, with no buttons, modal, or script. Never copy a figure's SVG into a page. Run `python .figcheck.py` after adding or embedding a figure. Validate each figure's geometry with `python .svgcheck.py _figures/<id>.html`, then look at it with `python .figrender.py <id>` (a headless-Chrome screenshot). Full rules: [`.claude/content/figure-guide.md`](.claude/content/figure-guide.md).
 
 For the Lookup Test (deciding whether content qualifies as a resource), quality standards, and organization guidance, see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
 

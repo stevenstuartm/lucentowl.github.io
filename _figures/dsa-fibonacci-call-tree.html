@@ -1,0 +1,59 @@
+---
+title: "Naive Fibonacci's Repeated Calls"
+kind: structure
+system: dsa
+summary: "The calls F(5) makes, and the ones memoization removes."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 490" role="img" aria-labelledby="fb-title fb-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="fb-title">The call tree of naive recursive Fibonacci for n = 5, with memoization's savings marked</title>
+<desc id="fb-desc">The call tree of FibonacciNaive(5). F(5) calls F(4) and F(3). F(4) calls F(3) and F(2). Each F(3) calls F(2) and F(1), and each F(2) calls F(1) and F(0), for 15 calls in all. F(3) is computed twice and F(2) three times. With memoization, the calls down the left edge compute F(5), F(4), F(3), and F(2) once each and store them, along with the base cases F(1) and F(0) and one more F(1). The second F(2), under F(4), and the second F(3), under F(5), become lookups of stored values, so the 6 calls beneath them never happen. The memoized version makes 9 calls.</desc>
+<style>
+.fb-c { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.fb-b { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.fb-h { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.fb-s { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #CBD5E0); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.fb-v { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.fb-v-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.fb-vs { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); opacity: 0.55; }
+.fb-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.fb-es { fill: none; stroke: var(--color-border, #CBD5E0); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.fb-l { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="fb-e" d="M 430.2,78.2 L 298.3,133.8"/>
+<path class="fb-e" d="M 262.0,154.4 L 197.0,201.6"/>
+<path class="fb-e" d="M 165.8,229.5 L 128.2,270.5"/>
+<path class="fb-e" d="M 103.0,303.9 L 81.0,340.1"/>
+<path class="fb-e" d="M 125.0,303.9 L 147.0,340.1"/>
+<path class="fb-e" d="M 194.2,229.5 L 231.8,270.5"/>
+<path class="fb-e" d="M 296.0,154.4 L 361.0,201.6"/>
+<path class="fb-es" d="M 367.0,231.9 L 345.0,268.1"/>
+<path class="fb-es" d="M 389.0,231.9 L 411.0,268.1"/>
+<path class="fb-e" d="M 468.8,78.2 L 600.7,133.8"/>
+<path class="fb-es" d="M 605.8,157.5 L 568.2,198.5"/>
+<path class="fb-es" d="M 543.0,231.9 L 521.0,268.1"/>
+<path class="fb-es" d="M 565.0,231.9 L 587.0,268.1"/>
+<path class="fb-es" d="M 634.2,157.5 L 671.8,198.5"/>
+<circle class="fb-c" cx="450" cy="70" r="21"/><text class="fb-v-inv" x="450" y="75" text-anchor="middle">F(5)</text>
+<circle class="fb-c" cx="279" cy="142" r="21"/><text class="fb-v-inv" x="279" y="147" text-anchor="middle">F(4)</text>
+<circle class="fb-c" cx="180" cy="214" r="21"/><text class="fb-v-inv" x="180" y="219" text-anchor="middle">F(3)</text>
+<circle class="fb-c" cx="114" cy="286" r="21"/><text class="fb-v-inv" x="114" y="291" text-anchor="middle">F(2)</text>
+<circle class="fb-b" cx="70" cy="358" r="21"/><text class="fb-v" x="70" y="363" text-anchor="middle">F(1)</text>
+<circle class="fb-b" cx="158" cy="358" r="21"/><text class="fb-v" x="158" y="363" text-anchor="middle">F(0)</text>
+<circle class="fb-b" cx="246" cy="286" r="21"/><text class="fb-v" x="246" y="291" text-anchor="middle">F(1)</text>
+<circle class="fb-h" cx="378" cy="214" r="21"/><text class="fb-v-inv" x="378" y="219" text-anchor="middle">F(2)</text>
+<circle class="fb-s" cx="334" cy="286" r="21"/><text class="fb-vs" x="334" y="291" text-anchor="middle">F(1)</text>
+<circle class="fb-s" cx="422" cy="286" r="21"/><text class="fb-vs" x="422" y="291" text-anchor="middle">F(0)</text>
+<circle class="fb-h" cx="620" cy="142" r="21"/><text class="fb-v-inv" x="620" y="147" text-anchor="middle">F(3)</text>
+<circle class="fb-s" cx="554" cy="214" r="21"/><text class="fb-vs" x="554" y="219" text-anchor="middle">F(2)</text>
+<circle class="fb-s" cx="510" cy="286" r="21"/><text class="fb-vs" x="510" y="291" text-anchor="middle">F(1)</text>
+<circle class="fb-s" cx="598" cy="286" r="21"/><text class="fb-vs" x="598" y="291" text-anchor="middle">F(0)</text>
+<circle class="fb-s" cx="686" cy="214" r="21"/><text class="fb-vs" x="686" y="219" text-anchor="middle">F(1)</text>
+<circle class="fb-c" cx="49" cy="416" r="9"/><text class="fb-l" x="64" y="420">Computed once and stored</text>
+<circle class="fb-b" cx="239" cy="416" r="9"/><text class="fb-l" x="254" y="420">Base case, n ≤ 1</text>
+<circle class="fb-h" cx="429" cy="416" r="9"/><text class="fb-l" x="444" y="420">Already stored: a memo hit</text>
+<circle class="fb-s" cx="619" cy="416" r="9"/><text class="fb-l" x="634" y="420">Never called with memoization</text>
+<text class="fb-l" x="40" y="454">The naive version makes all 15 calls. F(3) is computed twice and F(2) three times.</text>
+<text class="fb-l" x="40" y="472">Memoized, it makes 9: the 6 faded calls never happen, because F(3) and F(2) are looked up instead.</text>
+</g>
+</svg>

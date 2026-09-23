@@ -1,0 +1,64 @@
+---
+title: "Parts of a Tree"
+kind: structure
+system: dsa
+summary: "Root, internal nodes, leaves, depth, height, and a subtree in one tree."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 396" role="img" aria-labelledby="tv-title tv-desc" style="width:100%; min-width:580px; height:auto; display:block;">
+<title id="tv-title">A six-node binary tree labelled with tree vocabulary</title>
+<desc id="tv-desc">A binary tree with root A at depth 0. A's children are B and C at depth 1. B's children are D and E, and C has one right child, F, all at depth 2. A is the root. Like B and C, it is also an internal node, because it has children. D, E, and F are leaves. A box around B, D, and E marks the subtree rooted at B. A bracket on the right shows the tree's height is 2, the number of edges from A down to the deepest leaf.</desc>
+<style>
+.tv-root { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.tv-int { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.tv-leaf { fill: var(--color-bg, #F7F9FC); stroke: var(--color-green, #3C8D53); stroke-width: 2; }
+.tv-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.tv-v-inv { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+.tv-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.tv-sub { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.tv-subl { font-size: 11.5px; font-style: italic; fill: var(--color-accent, #A5486E); }
+.tv-d { font-size: 12px; font-weight: 600; fill: var(--color-text-light, #4A5568); }
+.tv-lvl { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
+.tv-br { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.tv-hl { font-size: 13px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.tv-lab { font-size: 12px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.tv-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="tv-sub" x="145" y="140" width="170" height="150" rx="10"/>
+<text class="tv-subl" x="152" y="306">subtree rooted at B</text>
+<path class="tv-e" d="M 315.1,93.4 L 244.9,156.6"/>
+<path class="tv-e" d="M 344.9,93.4 L 415.1,156.6"/>
+<path class="tv-e" d="M 220.3,187.5 L 189.7,242.5"/>
+<path class="tv-e" d="M 239.7,187.5 L 270.3,242.5"/>
+<path class="tv-e" d="M 439.7,187.5 L 470.3,242.5"/>
+<circle class="tv-root" cx="330" cy="80" r="20"/>
+<text class="tv-v-inv" x="330" y="85" text-anchor="middle">A</text>
+<circle class="tv-int" cx="230" cy="170" r="20"/>
+<text class="tv-v" x="230" y="175" text-anchor="middle">B</text>
+<circle class="tv-int" cx="430" cy="170" r="20"/>
+<text class="tv-v" x="430" y="175" text-anchor="middle">C</text>
+<circle class="tv-leaf" cx="180" cy="260" r="20"/>
+<text class="tv-v" x="180" y="265" text-anchor="middle">D</text>
+<circle class="tv-leaf" cx="280" cy="260" r="20"/>
+<text class="tv-v" x="280" y="265" text-anchor="middle">E</text>
+<circle class="tv-leaf" cx="480" cy="260" r="20"/>
+<text class="tv-v" x="480" y="265" text-anchor="middle">F</text>
+<text class="tv-d" x="60" y="85">depth 0</text>
+<path class="tv-lvl" d="M 120,80 H 140"/>
+<text class="tv-d" x="60" y="175">depth 1</text>
+<path class="tv-lvl" d="M 120,170 H 140"/>
+<text class="tv-d" x="60" y="265">depth 2</text>
+<path class="tv-lvl" d="M 120,260 H 140"/>
+<path class="tv-br" d="M 560,80 H 572 V 260 H 560"/>
+<text class="tv-hl" x="582" y="165">height = 2</text>
+<text class="tv-s" x="582" y="182">(edges from A down to the</text>
+<text class="tv-s" x="582" y="197">deepest leaf)</text>
+<text class="tv-lab" x="366" y="62">root</text>
+<text class="tv-lab" x="466" y="150">internal node</text>
+<text class="tv-lab" x="512" y="296">leaf</text>
+<circle class="tv-root" cx="72" cy="352" r="8"/><text class="tv-s" x="86" y="356">root</text>
+<circle class="tv-int" cx="152" cy="352" r="8"/><text class="tv-s" x="166" y="356">internal node (has children)</text>
+<circle class="tv-leaf" cx="372" cy="352" r="8"/><text class="tv-s" x="386" y="356">leaf (no children)</text>
+<text class="tv-s" x="72" y="380">The root has children too, so it is also an internal node.</text>
+</g>
+</svg>

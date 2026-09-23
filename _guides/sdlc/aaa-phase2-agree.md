@@ -3,9 +3,9 @@ title: "AAA Cycle: Phase 2 - Agree to the Plan"
 layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
-description: "Design the solution and secure commitment to the approach."
+description: "The second AAA phase: architecture design and ADRs, validating the design against its top quality attributes, documentation matched to risk, proofs of concept, quality strategy and SLOs, planning to an appetite, and reaching real agreement among stakeholders and with the team."
 author: steven-stuart
-tags: [sdlc, aaa-cycle, planning, architecture, collaboration, practical]
+tags: [practical, aaa-cycle, architecture, adrs, proof-of-concept, slos, stakeholder-management]
 ---
 
 ## Phase Overview
@@ -319,7 +319,7 @@ The team are stakeholders too. Their genuine commitment is as essential as any b
 </ul>
 </div>
 
-For detailed guidance on team dynamics, see [Dev Team Leadership](/study-guides/leadership/dev-team-leadership-foundations.html){:target="_blank" rel="noopener noreferrer"} and [Team Organization](/study-guides/sdlc/team-organization.html){:target="_blank" rel="noopener noreferrer"}.
+For detailed guidance on team dynamics, see [Dev Team Leadership](/study-guides/leadership/dev-team-leadership-foundations.html){:target="_blank" rel="noopener noreferrer"}.
 
 ---
 

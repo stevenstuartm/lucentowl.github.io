@@ -3,537 +3,334 @@ title: "Creational Patterns"
 layout: guide
 category: Programming Patterns
 subcategory: GoF Patterns
-description: "Creational design patterns including Builder, Factory Method, Abstract Factory, Singleton, and Prototype with modern C# implementations and best practices."
-tags: [oop, design-patterns, creational-patterns, factory, singleton, practical]
+description: "What a design pattern is and how the Gang of Four classified their 23, then the five creational patterns: Factory Method and how it differs from a static factory method, Abstract Factory, Builder, Prototype and the deep-versus-shallow copy problem, and Singleton and why a DI container's singleton lifetime usually replaces it. Each with a C# example, its .NET counterparts, and when not to use it."
+tags: [design-patterns, factory-method, abstract-factory, builder, prototype, singleton, practical]
 ---
 
+## What a Design Pattern Is
+
+A design pattern is a named, reusable solution to a problem that keeps recurring in object-oriented design. It isn't a library or a piece of code to copy. It's a description of which objects take part, what each one is responsible for, and how they collaborate, which you then implement in whatever shape your code needs.
+
+The idea came from architecture. Christopher Alexander's *A Pattern Language* (1977) catalogued recurring solutions in building and town design. Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides, the "Gang of Four" (GoF), applied it to software in *Design Patterns: Elements of Reusable Object-Oriented Software* (1994). They described each pattern with four essential elements:
+
+| Element | What it gives you |
+|---|---|
+| **Name** | A shared word for the design, so "wrap it in a decorator" says a paragraph's worth |
+| **Problem** | When the pattern applies, including the conditions that must hold first |
+| **Solution** | The participating classes and objects, their responsibilities, and how they collaborate |
+| **Consequences** | What the pattern costs and what it buys, so you can judge whether it's worth it here |
+
+The book catalogues 23 patterns and sorts them by purpose into three families. **Creational** patterns deal with how objects get created, **structural** patterns with how classes and objects are composed into larger structures, and **behavioral** patterns with how objects divide responsibility and communicate. It also sorts them by scope. Class patterns fix their relationships at compile time through inheritance, and object patterns set them up at runtime through composition. Most of the 23 are object patterns.
+
+Many of the patterns predate the book. Its contribution was to name them and write down their trade-offs, and several are now built into languages and frameworks so thoroughly that using them no longer feels like applying a pattern.
+
 ---
 
-*Design patterns from "Design Patterns: Elements of Reusable Object-Oriented Software" by the Gang of Four (Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides), published 1994*
+## Why Creation Needs Patterns
 
-**Historical note**: While the Gang of Four catalog formalized these patterns, many existed in practice before 1994. The patterns book itself was inspired by Christopher Alexander's "A Pattern Language" (1977) for architecture.
+Writing `new SqlConnection()` hard-codes the exact class into the caller. That's fine until the caller shouldn't know or decide which class it gets: the choice depends on configuration or platform, related objects have to match, construction takes many steps, or there must be only one instance. The creational patterns move that decision out of the caller.
 
-## Builder Pattern
+---
 
-**Purpose**: Construct complex objects step by step, separating construction from representation.
+## Factory Method
 
-**Modern Variations**:
+**GoF intent:** "Define an interface for creating an object, but let subclasses decide which class to instantiate. Factory Method lets a class defer instantiation to subclasses."
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Fluent Builder</h4>
-<p>Method chaining with return of builder instance. Flexible and readable, allowing optional parameters in any order.</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Stepwise Builder</h4>
-<p>Enforces construction order through interfaces. Compile-time safety ensuring all required parameters are set.</p>
-</div>
-</div>
+A base class contains an algorithm that needs to create an object partway through, but the base class shouldn't decide which concrete type. It declares an abstract creation method, and each subclass overrides it.
 
-**Fluent Builder**
 ```csharp
-public class HtmlElement
+public interface IDocumentWriter
 {
-    public string TagName { get; set; }
-    public string Content { get; set; }
-    public Dictionary<string, string> Attributes { get; set; } = new();
-    public List<HtmlElement> Children { get; set; } = new();
+    void WriteHeading(string text);
+    void WriteParagraph(string text);
+    byte[] ToBytes();
 }
 
-public class HtmlBuilder
+public abstract class ReportExporter
 {
-    private readonly HtmlElement element = new();
+    // The factory method
+    protected abstract IDocumentWriter CreateWriter();
 
-    public HtmlBuilder SetTag(string tagName)
+    // The algorithm that uses it is written once
+    public byte[] Export(Report report)
     {
-        element.TagName = tagName;
-        return this;
+        var writer = CreateWriter();
+        writer.WriteHeading(report.Title);
+        foreach (var section in report.Sections)
+            writer.WriteParagraph(section);
+        return writer.ToBytes();
     }
-
-    public HtmlBuilder AddClass(string className)
-    {
-        element.Attributes["class"] = element.Attributes.ContainsKey("class")
-            ? $"{element.Attributes["class"]} {className}"
-            : className;
-        return this;
-    }
-
-    public HtmlBuilder AddContent(string content)
-    {
-        element.Content = content;
-        return this;
-    }
-
-    public HtmlElement Build() => element;
 }
 
-// Usage:
-var html = new HtmlBuilder()
-    .SetTag("div")
-    .AddClass("container")
-    .AddContent("Hello World")
-    .Build();
+public class PdfReportExporter : ReportExporter
+{
+    protected override IDocumentWriter CreateWriter() => new PdfWriter();
+}
+
+public class HtmlReportExporter : ReportExporter
+{
+    protected override IDocumentWriter CreateWriter() => new HtmlWriter();
+}
 ```
 
-**Stepwise Builder**
+`Export` never names `PdfWriter` or `HtmlWriter`. Adding Markdown export means one new exporter subclass and one new writer, with the export algorithm untouched.
+
+### Static Factory Methods Are a Different Idiom
+
+"Factory method" is also used for a static method that creates an instance of its own class, such as `TimeSpan.FromSeconds(30)` or `Guid.NewGuid()`. These are named constructors. They don't involve subclasses and aren't the GoF pattern, but they're common and useful for three reasons:
+
 ```csharp
-public interface ICarType
+public class Connection
 {
-    IWheelSize OfType(string carType);
-}
+    private Connection(string connectionString) { /* ... */ }
 
-public interface IWheelSize
-{
-    IBuildable WithWheels(int wheelSize);
-}
+    // 1. A name that says what kind of instance you get
+    public static Connection ForReadReplica(string host) => new($"Server={host};ApplicationIntent=ReadOnly");
 
-public interface IBuildable
-{
-    Car Build();
-}
-
-public class CarBuilder : ICarType, IWheelSize, IBuildable
-{
-    private readonly Car car = new();
-
-    public static ICarType Create() => new CarBuilder();
-
-    public IWheelSize OfType(string carType)
+    // 2. Async construction, which a constructor can't do
+    public static async Task<Connection> OpenAsync(string connectionString)
     {
-        car.Type = carType;
-        return this;
+        var connection = new Connection(connectionString);
+        await connection.InitializeAsync();
+        return connection;
     }
 
-    public IBuildable WithWheels(int wheelSize)
-    {
-        car.WheelSize = wheelSize;
-        return this;
-    }
-
-    public Car Build() => car;
+    private Task InitializeAsync() { /* ... */ }
 }
-
-// Usage: CarBuilder.Create().OfType("SUV").WithWheels(18).Build()
 ```
 
-**Functional Builder**
+The third reason is freedom to return a cached instance or a subtype, which a constructor can't do either.
+
+### When Not to Use It
+
+Subclassing just to choose a product type creates a class per product. When nothing else varies between the subclasses, pass the writer in (dependency injection) or pass a `Func<IDocumentWriter>`. Factory Method earns its place when the subclasses already exist for other reasons and creation is one of the things they vary.
+
+---
+
+## Abstract Factory
+
+**GoF intent:** "Provide an interface for creating families of related or dependent objects without specifying their concrete classes."
+
+Factory Method creates one product. Abstract Factory creates a family of products that must be used together, and guarantees they come from the same family.
+
 ```csharp
-public class PersonBuilder
-{
-    private readonly List<Action<Person>> actions = new();
+public interface IButton { void Render(); }
+public interface ICheckbox { void Render(); }
 
-    public PersonBuilder Called(string name)
-    {
-        actions.Add(p => p.Name = name);
-        return this;
-    }
-
-    public PersonBuilder WorksAs(string position)
-    {
-        actions.Add(p => p.Position = position);
-        return this;
-    }
-
-    public PersonBuilder Earning(decimal salary)
-    {
-        actions.Add(p => p.Salary = salary);
-        return this;
-    }
-
-    public Person Build()
-    {
-        var person = new Person();
-        actions.ForEach(a => a(person));
-        return person;
-    }
-}
-
-// Usage:
-var person = new PersonBuilder()
-    .Called("John")
-    .WorksAs("Developer")
-    .Earning(75000)
-    .Build();
-```
-
-## Factory Patterns
-
-**Factory Method**
-```csharp
-public class Person
-{
-    public string Name { get; set; }
-    public string Role { get; set; }
-    public decimal Salary { get; set; }
-
-    private Person() { } // Private constructor
-
-    public static Person NewCustomer(string name)
-    {
-        return new Person { Name = name, Role = "Customer", Salary = 0 };
-    }
-
-    public static Person NewEmployee(string name, decimal salary)
-    {
-        return new Person { Name = name, Role = "Employee", Salary = salary };
-    }
-}
-
-// Usage:
-var customer = Person.NewCustomer("Alice");
-var employee = Person.NewEmployee("Bob", 50000);
-```
-
-**Abstract Factory**
-```csharp
-// Abstract products
-public interface IButton
-{
-    void Render();
-}
-
-public interface ICheckbox
-{
-    void Render();
-}
-
-// Concrete products for Windows
-public class WindowsButton : IButton
-{
-    public void Render() => Console.WriteLine("Rendering Windows button");
-}
-
-public class WindowsCheckbox : ICheckbox
-{
-    public void Render() => Console.WriteLine("Rendering Windows checkbox");
-}
-
-// Concrete products for Mac
-public class MacButton : IButton
-{
-    public void Render() => Console.WriteLine("Rendering Mac button");
-}
-
-public class MacCheckbox : ICheckbox
-{
-    public void Render() => Console.WriteLine("Rendering Mac checkbox");
-}
-
-// Abstract factory
-public interface IUIFactory
+public interface IWidgetFactory
 {
     IButton CreateButton();
     ICheckbox CreateCheckbox();
 }
 
-// Concrete factories
-public class WindowsUIFactory : IUIFactory
+public class WindowsWidgetFactory : IWidgetFactory
 {
     public IButton CreateButton() => new WindowsButton();
     public ICheckbox CreateCheckbox() => new WindowsCheckbox();
 }
 
-public class MacUIFactory : IUIFactory
+public class MacWidgetFactory : IWidgetFactory
 {
     public IButton CreateButton() => new MacButton();
     public ICheckbox CreateCheckbox() => new MacCheckbox();
 }
 
-// Usage:
-IUIFactory factory = Environment.OSVersion.Platform == PlatformID.Win32NT
-    ? new WindowsUIFactory()
-    : new MacUIFactory();
+// The platform is decided once
+IWidgetFactory factory = OperatingSystem.IsWindows()
+    ? new WindowsWidgetFactory()
+    : new MacWidgetFactory();
 
+// Everything built from it matches
 var button = factory.CreateButton();
 var checkbox = factory.CreateCheckbox();
 ```
 
-**Async Factory**
-```csharp
-public class DatabaseConnection
-{
-    private string connectionString;
+Code that receives an `IWidgetFactory` can't accidentally put a Mac checkbox next to a Windows button, because it never names a concrete class.
 
-    private DatabaseConnection(string connectionString)
-    {
-        this.connectionString = connectionString;
-    }
+.NET's `DbProviderFactory` is this pattern. `SqlClientFactory.Instance` and `NpgsqlFactory.Instance` each create a matching connection, command, and parameter, so data access code written against `DbProviderFactory` works with either database.
 
-    public static async Task<DatabaseConnection> CreateAsync(string server, string database)
-    {
-        // Simulate async connection validation
-        await Task.Delay(100);
+### When Not to Use It
 
-        var connectionString = $"Server={server};Database={database}";
-        var connection = new DatabaseConnection(connectionString);
-
-        // Additional async initialization
-        await connection.InitializeAsync();
-        return connection;
-    }
-
-    private async Task InitializeAsync()
-    {
-        // Async initialization logic
-        await Task.Delay(50);
-    }
-}
-
-// Usage:
-var connection = await DatabaseConnection.CreateAsync("localhost", "MyDB");
-```
-
-## Singleton Pattern
-
-*One of the original Gang of Four patterns (1994), but now controversial in modern software development*
-
-<div class="callout callout--warning">
-<p class="callout__title">Modern Warning</p>
-<p>Traditional singleton implementations are difficult to test and violate dependency inversion. Many consider Singleton an anti-pattern in modern development due to:</p>
-<ul>
-<li>Global state (hidden dependencies)</li>
-<li>Testing difficulties (can't mock easily)</li>
-<li>Violates Single Responsibility (manages own lifecycle + business logic)</li>
-<li>Thread-safety complexity in some languages</li>
-</ul>
-<p><strong>Modern consensus</strong>: Use dependency injection with singleton lifetime instead of static Singleton pattern.</p>
-</div>
-
-**Traditional Singleton (Avoid)**
-```csharp
-public sealed class Database
-{
-    private static readonly Lazy<Database> instance = new(() => new Database());
-    public static Database Instance => instance.Value;
-
-    private Database() { }
-
-    public void Query(string sql) { /* implementation */ }
-}
-
-// Problem: Hard to test, violates DI
-```
-
-**Recommended Approaches**:
-
-**Dependency Injection (Preferred)**
-```csharp
-public interface IDatabase
-{
-    void Query(string sql);
-}
-
-public class Database : IDatabase
-{
-    public void Query(string sql) { /* implementation */ }
-}
-
-// In Startup.cs or Program.cs
-services.AddSingleton<IDatabase, Database>();
-
-// In consuming class
-public class UserService
-{
-    private readonly IDatabase database;
-
-    public UserService(IDatabase database)
-    {
-        this.database = database;
-    }
-}
-```
-
-**Thread-Safe Lazy Initialization**
-```csharp
-public class ConfigurationManager
-{
-    private static readonly Lazy<ConfigurationManager> instance =
-        new(() => new ConfigurationManager());
-
-    public static ConfigurationManager Instance => instance.Value;
-
-    private readonly Dictionary<string, string> settings = new();
-
-    private ConfigurationManager()
-    {
-        LoadConfiguration();
-    }
-
-    private void LoadConfiguration()
-    {
-        // Load from file, database, etc.
-    }
-
-    public string GetSetting(string key) => settings.TryGetValue(key, out var value) ? value : "";
-}
-```
-
-**Alternative Patterns**:
-
-**Per-Thread Singleton**
-```csharp
-public class ThreadLocalSingleton
-{
-    private static readonly ThreadLocal<ThreadLocalSingleton> instance =
-        new(() => new ThreadLocalSingleton());
-
-    public static ThreadLocalSingleton Instance => instance.Value;
-
-    private ThreadLocalSingleton() { }
-}
-```
-
-**Ambient Context**
-```csharp
-public class DatabaseContext : IDisposable
-{
-    private static readonly Stack<DatabaseContext> contexts = new();
-
-    public static DatabaseContext Current => contexts.Count > 0 ? contexts.Peek() : null;
-
-    public DatabaseContext()
-    {
-        contexts.Push(this);
-    }
-
-    public void Dispose()
-    {
-        if (contexts.Count > 0 && contexts.Peek() == this)
-            contexts.Pop();
-    }
-}
-
-// Usage:
-using (new DatabaseContext())
-{
-    var current = DatabaseContext.Current; // Gets the current context
-    // Nested contexts work automatically
-    using (new DatabaseContext())
-    {
-        var nested = DatabaseContext.Current; // Gets the nested context
-    }
-    // Back to original context
-}
-```
-
-## Prototype Pattern
-
-**Purpose**: Create new objects by copying existing instances rather than creating from scratch.
-
-```csharp
-public interface IPrototype<T>
-{
-    T Clone();
-}
-
-public class Person : IPrototype<Person>
-{
-    public string Name { get; set; }
-    public int Age { get; set; }
-    public Address Address { get; set; }
-
-    // Deep clone implementation
-    public Person Clone()
-    {
-        return new Person
-        {
-            Name = this.Name,
-            Age = this.Age,
-            Address = this.Address?.Clone() // Assuming Address also implements IPrototype
-        };
-    }
-}
-
-public class Address : IPrototype<Address>
-{
-    public string Street { get; set; }
-    public string City { get; set; }
-
-    public Address Clone()
-    {
-        return new Address
-        {
-            Street = this.Street,
-            City = this.City
-        };
-    }
-}
-
-// Modern JSON-based approach (simpler but requires serializable types)
-public static class PrototypeHelper
-{
-    public static T DeepClone<T>(this T source) where T : class
-    {
-        var serialized = JsonSerializer.Serialize(source);
-        return JsonSerializer.Deserialize<T>(serialized);
-    }
-}
-
-// Usage:
-var original = new Person { Name = "John", Age = 30, Address = new Address { Street = "123 Main St", City = "NYC" } };
-var clone1 = original.Clone(); // Using interface
-var clone2 = original.DeepClone(); // Using JSON serialization
-```
-
-## Quick Reference
-
-### Creational Pattern Comparison
-
-| Pattern | Intent | Problem Solved | When to Use | When to Avoid |
-|---------|--------|----------------|-------------|---------------|
-| **Factory Method** | Define object creation interface | Multiple ways to create objects | Subclasses determine which class to instantiate | Simple constructor is sufficient |
-| **Abstract Factory** | Create families of related objects | Need consistent object families | Cross-platform UIs, themed components | Only one product family |
-| **Builder** | Construct complex objects step-by-step | Objects with many optional parameters | Immutable objects, fluent APIs, complex construction | Simple objects with few properties |
-| **Prototype** | Clone existing objects | Expensive object creation | Object templates, reducing initialization cost | Objects are cheap to create |
-| **Singleton** | Single instance globally | Shared resource access | Config, logging (**prefer DI instead**) | Almost always (use DI) |
-
-### Pattern Selection Guide
-
-**Choose Factory Method when:**
-- You have multiple construction approaches
-- Subclasses should decide what to instantiate
-- Example: `Person.NewCustomer()`, `Person.NewEmployee()`
-
-**Choose Abstract Factory when:**
-- You need families of related objects
-- Products must be used together
-- Example: UI controls for Windows vs Mac
-
-**Choose Builder when:**
-- Object has many optional parameters (>3)
-- Object construction is complex
-- Creating immutable objects
-- Example: Building complex queries, HTML elements
-
-**Choose Prototype when:**
-- Object creation is expensive (database loads, complex initialization)
-- You need independent copies with similar state
-- Example: Cloning configuration templates
-
-**Avoid Singleton when:**
-- Testing is important (hard to mock)
-- You need multiple instances later
-- **Use dependency injection instead**
-
-### Modern C# Alternatives
-
-```csharp
-// Instead of Singleton - use DI
-services.AddSingleton<IConfigurationManager, ConfigurationManager>();
-
-// Instead of Factory Method - use static factory methods
-public static User CreateCustomer(string name) => new User { Name = name, Role = "Customer" };
-
-// Instead of Builder - use object initializers for simple cases
-var user = new User
-{
-    Name = "John",
-    Email = "john@example.com",
-    Age = 30
-};
-
-// Instead of Prototype - use with expressions for records
-var clone = original with { Name = "NewName" };
-```
+With only one family, the factory interface is ceremony. Adding a new product kind is also expensive, since every factory interface and implementation gains a method. Abstract Factory suits a fixed set of product kinds with a growing set of families, and it suits the opposite poorly.
 
 ---
+
+## Builder
+
+**GoF intent:** "Separate the construction of a complex object from its representation so that the same construction process can create different representations."
+
+The GoF version has a *director* that runs a fixed sequence of construction steps against a builder interface, so the same steps can produce different outputs, such as one director walking a document and driving either a PDF builder or a plain-text builder. The form most C# developers meet is simpler: a fluent builder that collects settings one call at a time and produces the object at the end.
+
+```csharp
+public sealed class HttpRequestSpec
+{
+    public required string Url { get; init; }
+    public string Method { get; init; } = "GET";
+    public TimeSpan Timeout { get; init; }
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>();
+}
+
+public class HttpRequestBuilder
+{
+    private string? url;
+    private string method = "GET";
+    private TimeSpan timeout = TimeSpan.FromSeconds(30);
+    private readonly Dictionary<string, string> headers = new();
+
+    public HttpRequestBuilder To(string url) { this.url = url; return this; }
+    public HttpRequestBuilder Using(string method) { this.method = method; return this; }
+    public HttpRequestBuilder WithTimeout(TimeSpan timeout) { this.timeout = timeout; return this; }
+    public HttpRequestBuilder WithHeader(string name, string value) { headers[name] = value; return this; }
+
+    public HttpRequestSpec Build()
+    {
+        if (url is null)
+            throw new InvalidOperationException("A URL is required");
+
+        return new HttpRequestSpec
+        {
+            Url = url,
+            Method = method,
+            Timeout = timeout,
+            Headers = new Dictionary<string, string>(headers)
+        };
+    }
+}
+
+var request = new HttpRequestBuilder()
+    .To("https://api.example.com/orders")
+    .Using("POST")
+    .WithHeader("Accept", "application/json")
+    .Build();
+```
+
+The builder is mutable while the result is immutable, and `Build` is the one place that checks the combination is valid. That split is the builder's main value in modern C#.
+
+.NET uses the pattern throughout. `WebApplication.CreateBuilder()` collects services and configuration before `Build()` produces the app, `UriBuilder` assembles a `Uri` from parts, and `StringBuilder` accumulates text before `ToString()`.
+
+### Enforcing Order With a Stepwise Builder
+
+When some steps are required and must come in order, each step can return a different interface that exposes only the next step:
+
+```csharp
+public interface INeedsUrl { INeedsMethod To(string url); }
+public interface INeedsMethod { ICanBuild Using(string method); }
+public interface ICanBuild { HttpRequestSpec Build(); }
+
+// RequestBuilder.Create().To(url).Using("GET").Build() compiles.
+// RequestBuilder.Create().Build() does not.
+```
+
+This moves the "URL is required" check from runtime to compile time, at the cost of an interface per step.
+
+### When Not to Use It
+
+For an object with a few optional properties, C# object initializers with `required` and `init` members do the same job with no extra class. The `HttpRequestSpec` above could be created directly with an initializer, and the builder pays off only when validation spans several properties, the steps are spread across different code, or the same construction has to produce different representations.
+
+---
+
+## Prototype
+
+**GoF intent:** "Specify the kinds of objects to create using a prototypical instance, and create new objects by copying this prototype."
+
+When an object is expensive to set up, or the caller only has an existing instance and doesn't know its concrete class, copying that instance is easier than constructing a new one.
+
+```csharp
+public class ReportTemplate
+{
+    public string Title { get; set; } = "";
+    public List<string> Sections { get; set; } = new();
+    public PageSettings Page { get; set; } = new();
+
+    public ReportTemplate DeepClone() => new()
+    {
+        Title = Title,
+        Sections = new List<string>(Sections),
+        Page = Page.Clone()
+    };
+}
+
+var monthly = LoadTemplateFromDatabase("monthly"); // expensive
+var march = monthly.DeepClone();
+march.Title = "March";
+march.Sections.Add("Q1 summary"); // doesn't touch the template
+```
+
+### Deep or Shallow Is the Whole Problem
+
+A shallow copy duplicates the object but shares everything it references. If `DeepClone` had copied the `Sections` reference instead of the list, adding a section to `march` would add it to the template too. `Object.MemberwiseClone()` and a record's `with` expression both copy shallowly.
+
+.NET's own `ICloneable` doesn't say which kind of copy `Clone()` makes, and its documentation recommends against implementing it in public APIs for that reason. Name the method for what it does, as in `DeepClone`.
+
+Serializing to JSON and back is a common shortcut for deep copies. It is slow, it skips anything the serializer can't see, such as private fields, and it fails on reference cycles unless configured for them, so it suits tests and tools more than hot paths.
+
+### When Not to Use It
+
+If construction is cheap, `new` is clearer than a copy. And for immutable objects there's nothing to protect, so a `with` expression that changes a few properties is all a "clone" needs to be.
+
+---
+
+## Singleton
+
+**GoF intent:** "Ensure a class only has one instance, and provide a global point of access to it."
+
+In C#, `Lazy<T>` makes the classic implementation short and thread-safe:
+
+```csharp
+public sealed class AppSettings
+{
+    private static readonly Lazy<AppSettings> instance = new(() => new AppSettings());
+
+    public static AppSettings Instance => instance.Value;
+
+    private AppSettings() { /* load settings */ }
+
+    public string Get(string key) { /* ... */ }
+}
+```
+
+The private constructor stops anyone else from creating one, and `Lazy<T>` creates the instance on first use. By default it guarantees that only one thread runs the factory.
+
+### Why It Fell Out of Favor
+
+The pattern bundles two separate ideas: "there is one instance" and "anyone can reach it through a static property". The first is often reasonable. The second causes the trouble.
+
+- **Hidden dependencies.** A class that calls `AppSettings.Instance` inside a method depends on it without saying so in its constructor.
+- **Hard to test.** Tests can't substitute a fake, and state left in the instance by one test leaks into the next.
+- **Global mutable state.** Any code anywhere can change it, which makes bugs hard to trace.
+- **The class controls its own lifetime.** When a second instance becomes necessary later, such as one per tenant, every caller has to change.
+
+### The Modern Replacement
+
+A DI container keeps the "one instance" part and drops the global access:
+
+```csharp
+builder.Services.AddSingleton<IAppSettings, AppSettings>();
+
+public class InvoiceService
+{
+    private readonly IAppSettings settings;
+
+    public InvoiceService(IAppSettings settings) => this.settings = settings;
+}
+```
+
+The container creates one `AppSettings` and hands it to everyone who asks, `AppSettings` is an ordinary class with a public constructor, and tests pass in whatever they like. Keep the hand-written singleton for code with no container, such as a small library that must not impose one.
+
+---
+
+## Choosing a Creational Pattern
+
+```
+Is building the object the hard part?
+├─ YES: many optional parts, cross-field validation, or a required order → Builder
+├─ YES: an existing configured instance is cheaper to copy than to rebuild → Prototype
+└─ NO: is deciding which class to create the hard part?
+    ├─ YES: several related objects must come from the same family → Abstract Factory
+    ├─ YES: a base class's algorithm creates one object and subclasses pick its type → Factory Method
+    ├─ YES: the type depends on configuration, with no subclasses involved → inject the object or a factory delegate
+    └─ NO: you only want a descriptive name or async construction → static factory method
+
+Need exactly one shared instance?
+└─ Register it as a singleton in the DI container. Hand-write Singleton only where no container exists.
+```

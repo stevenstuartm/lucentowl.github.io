@@ -3,9 +3,9 @@ title: "AAA Cycle: Phase 1 - Align with the Need"
 layout: guide
 category: Software Development Lifecycle
 subcategory: AAA Cycle
-description: "Understand the problem before committing to a solution."
+description: "The first AAA phase: stakeholder discovery, requirements and architectural characteristics, constraints and risks, a Go, Pivot, or No-Go call built from an effort estimate and a risk tier, the project charter, and the test that alignment is real before moving to Agree."
 author: steven-stuart
-tags: [sdlc, aaa-cycle, requirements, stakeholder-management, collaboration, practical]
+tags: [practical, aaa-cycle, requirements, stakeholder-management, project-charter, risk-management, estimation]
 ---
 
 ## Phase Overview
@@ -190,7 +190,7 @@ Keep the two axes separate when scoring them. A single blended score lets a stro
 Check the effort estimate against your actual constraints (timeline, budget, staffing, dependencies), then combine that with the risk tier into one call:
 
 - **Go**: The estimate fits your constraints and the risk tier is Low or Medium
-- **Pivot**: The estimate doesn't fit, or the tier is High: cut scope, extend the timeline, add resources, or resolve the novelty with a targeted POC before re-estimating (see [Technical Proof of Concept](aaa-phase2-agree.html#4-technical-proof-of-concept){:target="_blank" rel="noopener noreferrer"})
+- **Pivot**: The estimate doesn't fit, or the tier is High: cut scope, extend the timeline, add resources, or resolve the novelty with a targeted POC before re-estimating
 - **No-Go**: The tier is Extreme, or no combination of scope, timeline, and resource adjustments brings the estimate inside your constraints: recommend cancellation, or fund a small discovery spike as its own project before chartering the real one
 
 The recommendation is a starting position for the conversation with stakeholders, not a substitute for it. A Go they don't actually believe in is worse than an honest No-Go.
@@ -276,8 +276,8 @@ During Align, visualization serves discovery. The goal is to ensure stakeholders
 - Critical success factors
 
 #### 2. Scope Definition
-**In-Scope**: Clear deliverables and capabilities
-**Out-of-Scope** (equally important): What you're explicitly NOT doing
+- **In-Scope**: Clear deliverables and capabilities
+- **Out-of-Scope** (equally important): What you're explicitly NOT doing
 
 Example:
 ```
@@ -321,7 +321,7 @@ Success =
 - How decisions will be documented
 
 #### 6. Risk Register (Top 5-10)
-Open with the Scope & Novelty tier as the headline entry, then list supporting risks beneath it.
+Open with the risk tier from sizing as the headline entry, then list supporting risks beneath it.
 - Risk description, likelihood, impact
 - Mitigation strategy and owner
 
@@ -332,8 +332,8 @@ Open with the Scope & Novelty tier as the headline entry, then list supporting r
 
 ### Minimum vs. Maximum
 
-**Small Projects**: 3-5 pages, simple scope, basic risks
-**Large Projects**: 15-20 pages, detailed scope, comprehensive risk register, governance structure
+- **Small Projects**: 3-5 pages, simple scope, basic risks
+- **Large Projects**: 15-20 pages, detailed scope, comprehensive risk register, governance structure
 
 ### Getting Real Approval
 

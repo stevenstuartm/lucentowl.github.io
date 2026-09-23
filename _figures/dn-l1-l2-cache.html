@@ -1,0 +1,79 @@
+---
+title: "Local and Distributed Cache Layers"
+kind: structure
+system: dotnet
+summary: "A private cache per instance over one shared store over the source."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="llc-title llc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="llc-title">Two-level caching across several application instances</title>
+<desc id="llc-desc">Instances A, B, and C each have a local in-memory cache, the L1 layer, which is fast, private to that instance, and lost on restart. All three read through to one shared distributed cache such as Redis or SQL Server, the L2 layer, which is serialized and one network hop away, and which falls back to the database or API. When instance A removes an entry, the removal reaches L2, but the copies already in B's and C's local caches stay until they expire.</desc>
+<style>
+.llc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.llc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.llc-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.llc-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.llc-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.llc-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.llc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.llc-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.llc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.llc-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.llc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.llc-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.llc-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.llc-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.llc-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.llc-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.llc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.llc-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.llc-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.llc-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.llc-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.llc-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.llc-dot { fill: var(--color-primary, #1A5F8A); }
+.llc-dot-hot { fill: var(--color-accent, #A5486E); }
+.llc-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.llc-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.llc-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="llc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="llc-ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="llc-zone" x="40" y="20" width="260" height="110" rx="8"/>
+<text class="llc-n" x="54" y="42">Instance A</text>
+<rect class="llc-box" x="54" y="54" width="232" height="60" rx="6"/>
+<text class="llc-n" x="66" y="72.0">Local cache (L1)</text>
+<text class="llc-k" x="66" y="90.0">IMemoryCache: fast, private,</text>
+<text class="llc-k" x="66" y="106.0">lost on restart</text>
+<path class="llc-flow" d="M170,130 L170,160 L490,160 L490,208" marker-end="url(#llc-a)"/>
+<rect class="llc-zone" x="360" y="20" width="260" height="110" rx="8"/>
+<text class="llc-n" x="374" y="42">Instance B</text>
+<rect class="llc-warn" x="374" y="54" width="232" height="60" rx="6"/>
+<text class="llc-n" x="386" y="72.0">Local cache (L1)</text>
+<text class="llc-k" x="386" y="90.0">IMemoryCache: fast, private,</text>
+<text class="llc-k" x="386" y="106.0">lost on restart</text>
+<path class="llc-flow" d="M490,130 L490,208" marker-end="url(#llc-a)"/>
+<rect class="llc-zone" x="680" y="20" width="260" height="110" rx="8"/>
+<text class="llc-n" x="694" y="42">Instance C</text>
+<rect class="llc-warn" x="694" y="54" width="232" height="60" rx="6"/>
+<text class="llc-n" x="706" y="72.0">Local cache (L1)</text>
+<text class="llc-k" x="706" y="90.0">IMemoryCache: fast, private,</text>
+<text class="llc-k" x="706" y="106.0">lost on restart</text>
+<path class="llc-flow" d="M810,130 L810,160 L490,160 L490,208" marker-end="url(#llc-a)"/>
+<rect class="llc-sys" x="340" y="210" width="300" height="64" rx="6"/>
+<text class="llc-n-inv" x="490.0" y="238.0" text-anchor="middle">Redis or SQL Server (L2)</text>
+<text class="llc-k-inv" x="490.0" y="256.0" text-anchor="middle">shared, serialized, one network hop</text>
+<rect class="llc-box" x="340" y="320" width="300" height="56" rx="6"/>
+<text class="llc-n" x="490.0" y="344.0" text-anchor="middle">Database or API</text>
+<text class="llc-k" x="490.0" y="362.0" text-anchor="middle">the source of truth</text>
+<path class="llc-flow" d="M490,274 L490,318" marker-end="url(#llc-a)"/>
+<path class="llc-hot" d="M110,130 L110,242 L338,242" marker-end="url(#llc-ah)"/>
+<text class="llc-em" x="40" y="272">A removes an entry:</text>
+<text class="llc-em" x="40" y="289">the removal reaches L2</text>
+<text class="llc-em" x="660" y="300">B and C still serve their own</text>
+<text class="llc-em" x="660" y="317">L1 copies until those expire.</text>
+<text class="llc-em" x="660" y="334">Nothing tells them to drop it.</text>
+</g>
+</svg>

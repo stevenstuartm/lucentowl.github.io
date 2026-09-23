@@ -23,15 +23,7 @@ Parallelism has a cost that async doesn't: every work item pays for scheduling a
 
 Almost everything in this guide runs on the .NET thread pool, a process-wide set of worker threads that the runtime creates, reuses, and sizes on its own. Creating a thread per work item would cost far more than most items take to run, so work is queued and picked up by whichever pool thread is free.
 
-```
-                 ┌──────────────── global queue (FIFO) ◀── work queued from non-pool threads
-                 │
-   worker 1      │ worker 2              worker 3
- [local queue] ◀─┴─▶ [local queue]        [local queue]  ◀── work queued by a pool thread
-      ▲                   │                    ▲             goes to that thread's own queue
-      └──── steals ───────┘                    │
-                          idle workers steal from others' local queues
-```
+{% include figure.html id="dn-thread-pool-queues" %}
 
 Each worker takes work from its own local queue first, most recent item first, which keeps related data warm in that core's cache. When its queue is empty it takes from the global queue, and then steals from other workers' queues. This work stealing is what keeps all cores busy when items vary in size.
 

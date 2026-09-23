@@ -3,101 +3,64 @@ title: "MQTTnet for IoT Communication"
 layout: guide
 category: ".NET & C#"
 subcategory: "IoT & Embedded"
-description: "Building MQTT clients and brokers in C# with MQTTnet, covering publish/subscribe patterns, QoS levels, TLS security, topic hierarchies, and IoT-specific messaging patterns."
-tags: [iot, dotnet, mqtt, real-time, practical, protocols, telemetry]
+description: "Building MQTT clients and an embedded broker in C# with MQTTnet 5: connecting over TLS, sessions under MQTT 5, publishing and subscribing, device status with last will and birth messages, request/response, keeping a connection alive in a hosted service, and buffering while offline."
+tags: [practical, mqtt, mqttnet, iot, messaging, telemetry, tls]
 ---
 
 ## What Is MQTTnet
 
-[MQTTnet](https://github.com/dotnet/MQTTnet){:target="_blank" rel="noopener noreferrer"} is the leading MQTT library for .NET, now maintained under the official dotnet GitHub organization. It provides both MQTT client and broker (server) functionality in pure C#, so you can build either side of an MQTT connection without depending on external tools.
+[MQTTnet](https://github.com/dotnet/MQTTnet){:target="_blank" rel="noopener noreferrer"} is an MQTT library for .NET, maintained under the dotnet GitHub organization. It provides both an MQTT client and an MQTT broker in C#, so either side of a connection can be .NET code.
 
-The library supports MQTT 3.1.1 and MQTT 5.0, runs on .NET 8+, .NET Framework, and .NET nanoFramework (for microcontrollers), and benchmarks at roughly 150,000 messages per second on modest hardware. That throughput makes it suitable for demanding IoT workloads where many devices are reporting sensor data at high frequency.
+MQTT is a publish/subscribe protocol: clients publish messages to topic strings on a broker, and the broker forwards each message to every client subscribed to a matching topic filter. Publishers and subscribers never address each other. This guide covers how MQTTnet exposes the protocol's features in C#. The protocol's own design choices, such as QoS levels, retained messages, last will, and topic design, are only summarized where the code needs them.
 
-Install MQTTnet from NuGet:
+Version 5 is current, and its packages target .NET 8 and later. The client is in the `MQTTnet` package and the broker in a separate `MQTTnet.Server` package:
 
 ```bash
 dotnet add package MQTTnet
+dotnet add package MQTTnet.Server   # only if you host a broker
 ```
 
-The [NuGet package page](https://www.nuget.org/packages/MQTTnet){:target="_blank" rel="noopener noreferrer"} lists the current stable version. For MQTT 5.0 features like message expiry, shared subscriptions, and request/response correlation, use version 4.x or later.
+Version 5 changed the API in ways that break most older samples. The `MQTTnet.Client` namespace is gone and everything client-side lives in `MQTTnet`. `MqttFactory` became `MqttClientFactory` and `MqttServerFactory`. The managed client from `MQTTnet.Extensions.ManagedClient`, which reconnected and queued messages for you, was not carried forward, so reconnection and buffering are now your code. A sample that uses any of those names was written for version 4.
+
+MQTTnet targets full .NET. On a microcontroller running .NET nanoFramework, MQTT comes from that platform's own `nanoFramework.M2Mqtt` package instead.
 
 ---
 
-## MQTT Concepts Worth Knowing First
+## Connecting a Client
 
-MQTT is a lightweight publish/subscribe protocol designed for constrained devices and unreliable networks. A broker sits in the middle: publishers send messages to the broker tagged with a topic string, and subscribers tell the broker which topics they care about. The broker routes messages between them without publishers and subscribers ever knowing about each other directly.
-
-Three quality-of-service (QoS) levels control delivery guarantees:
-
-| QoS | Name | Delivery Guarantee | Use Case |
-|-----|------|--------------------|----------|
-| 0 | At most once | Fire and forget; message may be lost | High-frequency telemetry where occasional loss is acceptable |
-| 1 | At least once | Delivered at least once; duplicates possible | Commands and alerts where loss is unacceptable |
-| 2 | Exactly once | Delivered exactly once | Financial transactions, critical state changes |
-
-Topics are hierarchical strings like `devices/sensor-42/telemetry/temperature`. Wildcards let subscribers match patterns: `+` matches a single level (so `devices/+/telemetry/temperature` matches any device), and `#` matches zero or more levels (so `devices/#` matches everything under devices).
-
----
-
-## Creating and Connecting an MQTT Client
-
-The entry point for client usage is `MqttClientFactory`. You use it to create a client instance and then build connection options separately:
+`MqttClientFactory` creates clients, and `MqttClientOptionsBuilder` describes the connection:
 
 ```csharp
 using MQTTnet;
-using MQTTnet.Client;
 
 var factory = new MqttClientFactory();
 using var client = factory.CreateMqttClient();
 
 var options = new MqttClientOptionsBuilder()
-    .WithTcpServer("broker.example.com", 1883)
+    .WithTcpServer("broker.example.com", 8883)
+    .WithTlsOptions(tls => tls.UseTls())
     .WithClientId("device-sensor-42")
-    .WithCleanSession(true)
+    .WithCredentials("my-username", "my-password")
     .Build();
 
-var result = await client.ConnectAsync(options);
+MqttClientConnectResult result = await client.ConnectAsync(options);
 Console.WriteLine($"Connected: {result.ResultCode}");
 ```
 
-`WithCleanSession(true)` means the broker discards any queued messages from a previous session when the client reconnects. Set it to `false` if the device needs to receive messages that arrived while it was offline, which requires QoS 1 or 2 subscriptions.
+The client ID identifies the session on the broker and must be unique across every client connected to it. When a second client connects with the same ID, the broker disconnects the first, and two devices sharing an ID knock each other offline in a loop.
 
-### Connecting with WebSockets
+MQTTnet 5 connects with MQTT 5.0 unless you call `WithProtocolVersion`. The MQTT 5.0 features later in this guide (message expiry, content type, response topics, shared subscriptions) need it, and an old broker that only speaks MQTT 3.1.1 needs `WithProtocolVersion(MqttProtocolVersion.V311)` instead.
 
-Some environments block raw TCP on port 1883 but allow WebSocket traffic on port 443. Switch transports by replacing `WithTcpServer` with `WithWebSocketServer`:
+### TLS and Certificates
 
-```csharp
-var options = new MqttClientOptionsBuilder()
-    .WithWebSocketServer(o => o.WithUri("wss://broker.example.com/mqtt"))
-    .WithClientId("device-sensor-42")
-    .Build();
-```
+Port 8883 is the conventional port for MQTT over TLS, and 1883 for plain TCP. Use TLS for anything that leaves a lab network, because MQTT credentials otherwise cross the network in clear text.
 
-The same client code handles both transports; only the options differ.
+`UseTls()` with no validation handler validates the broker's certificate against the operating system's trust store, which is what you want for a broker with a publicly trusted certificate. Supply `WithCertificateValidationHandler` only when the broker uses a private CA, and have the handler check the chain against that CA rather than returning `true`, which accepts any server.
 
-### TLS and Secure Connections
-
-For production deployments, always use TLS. Port 8883 is the standard MQTT-over-TLS port:
+For mutual TLS, where the device proves its identity with its own certificate rather than a password, add the client certificate:
 
 ```csharp
-var options = new MqttClientOptionsBuilder()
-    .WithTcpServer("broker.example.com", 8883)
-    .WithClientId("device-sensor-42")
-    .WithTlsOptions(tls => tls
-        .UseTls()
-        .WithCertificateValidationHandler(context =>
-        {
-            // Validate the server certificate here.
-            // For production, use the default chain validation.
-            return context.SslPolicyErrors == System.Net.Security.SslPolicyErrors.None;
-        }))
-    .Build();
-```
-
-For mutual TLS authentication using a client certificate (common in industrial IoT and Azure IoT Hub device authentication):
-
-```csharp
-var clientCertificate = new X509Certificate2("device.pfx", "certificate-password");
+var clientCertificate = X509CertificateLoader.LoadPkcs12FromFile("device.pfx", "certificate-password");
 
 var options = new MqttClientOptionsBuilder()
     .WithTcpServer("broker.example.com", 8883)
@@ -108,71 +71,42 @@ var options = new MqttClientOptionsBuilder()
     .Build();
 ```
 
-### Authentication with Username and Password
+`X509CertificateLoader` (.NET 9) replaces the `X509Certificate2` constructors that take a file, which are obsolete from .NET 9.
 
-Many brokers use username/password authentication as a simpler alternative to certificates:
+### WebSockets
+
+Some networks block port 8883 but allow HTTPS on 443. Brokers that support MQTT over WebSockets accept the same protocol wrapped in a WebSocket connection:
 
 ```csharp
 var options = new MqttClientOptionsBuilder()
-    .WithTcpServer("broker.example.com", 1883)
+    .WithWebSocketServer(o => o.WithUri("wss://broker.example.com/mqtt"))
     .WithClientId("device-sensor-42")
-    .WithCredentials("my-username", "my-password")
     .Build();
 ```
 
----
+Only the options change. Publishing, subscribing, and message handling are identical over either transport.
 
-## Reconnection Strategies
+### Sessions
 
-Network connectivity is unreliable in IoT environments. Devices lose signal, brokers restart, and network partitions happen. MQTTnet handles disconnection events through callbacks:
-
-```csharp
-client.DisconnectedAsync += async e =>
-{
-    Console.WriteLine($"Disconnected: {e.Reason}");
-
-    if (e.ClientWasConnected)
-    {
-        // Apply exponential backoff before reconnecting.
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        await client.ReconnectAsync();
-    }
-};
-```
-
-For a more robust backoff strategy:
+A session is the broker's memory of a client between connections: its subscriptions, and the QoS 1 and 2 messages that arrived for it while it was offline. `WithCleanSession(true)`, the default, starts every connection with no session. A device that must receive commands sent while it was disconnected needs a persistent session. Under MQTT 5.0, that takes two settings:
 
 ```csharp
-client.DisconnectedAsync += async e =>
-{
-    if (!e.ClientWasConnected)
-        return;
-
-    var delay = TimeSpan.FromSeconds(1);
-    var maxDelay = TimeSpan.FromMinutes(2);
-
-    while (!client.IsConnected)
-    {
-        try
-        {
-            await Task.Delay(delay);
-            await client.ReconnectAsync();
-        }
-        catch
-        {
-            delay = delay * 2 < maxDelay ? delay * 2 : maxDelay;
-        }
-    }
-};
+var options = new MqttClientOptionsBuilder()
+    .WithTcpServer("broker.example.com", 8883)
+    .WithTlsOptions(tls => tls.UseTls())
+    .WithClientId("device-sensor-42")
+    .WithCleanSession(false)            // resume the existing session
+    .WithSessionExpiryInterval(86400)   // keep it for 24 hours after disconnect
+    .Build();
 ```
 
-This doubles the wait time on each failed reconnection attempt, up to a ceiling of two minutes, which prevents the device from hammering a broker that is already under stress.
+The expiry interval defaults to 0, which under MQTT 5.0 means the session ends the moment the connection closes. So `WithCleanSession(false)` alone looks correct and queues nothing. Only messages published at QoS 1 or 2 to a subscription made at QoS 1 or 2 are queued; QoS 0 messages sent while the client is away are dropped.
 
 ---
 
 ## Publishing Messages
 
-Publishing requires a topic, a payload, and a QoS level. The simplest form:
+A message is a topic, a payload, and a QoS level:
 
 ```csharp
 var message = new MqttApplicationMessageBuilder()
@@ -181,50 +115,55 @@ var message = new MqttApplicationMessageBuilder()
     .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtMostOnce)
     .Build();
 
-await client.PublishAsync(message);
+MqttClientPublishResult result = await client.PublishAsync(message);
 ```
 
-### Choosing the Right QoS
+`PublishAsync` completes when the delivery step for the chosen QoS finishes: once the packet is written for QoS 0, and when the broker's acknowledgment arrives for QoS 1 and 2. `result.IsSuccess` is `false` when the broker rejects the message, for example because the client isn't authorized for the topic.
 
-QoS 0 is appropriate for high-frequency telemetry like temperature readings every 500ms. Losing one reading is acceptable because the next one arrives shortly. QoS 1 is appropriate for commands, alerts, or any message where the recipient must receive it. QoS 2 is appropriate for critical state changes where receiving the message twice would cause incorrect behavior.
+### Choosing a QoS
 
-Using QoS 2 for everything is a common mistake. Each QoS 2 message requires four network round-trips to complete the handshake, which adds latency and increases broker load considerably. Use it only when exactly-once semantics genuinely matter.
+| QoS | Guarantee | Packets per message | Typical use |
+|-----|-----------|---------------------|-------------|
+| 0, `AtMostOnce` | May be lost | 1 | Frequent telemetry, where the next reading replaces a lost one |
+| 1, `AtLeastOnce` | Arrives, possibly more than once | 2 | Commands, alerts, state changes |
+| 2, `ExactlyOnce` | Arrives exactly once | 4 | Rare; when a duplicate would do harm and the receiver can't deduplicate |
 
-### Serializing Payloads
+QoS 2's four-packet handshake is two round trips per message, plus state held on both sides until it completes. Using it for all traffic multiplies broker load for no benefit on telemetry. Most systems use QoS 1 and make receivers idempotent, which costs half the packets and handles duplicates in one place.
 
-Raw strings work for simple values, but JSON is common for structured telemetry:
+The guarantee covers each hop separately. A message published at QoS 1 and delivered to a subscriber who subscribed at QoS 0 arrives at QoS 0, because delivery uses the lower of the two.
+
+### JSON Payloads and Content Type
+
+Payloads are bytes, and JSON is the common format for structured telemetry:
 
 ```csharp
-var telemetry = new
+var payload = JsonSerializer.SerializeToUtf8Bytes(new
 {
     DeviceId = "sensor-42",
     Temperature = 22.5,
     Humidity = 58.3,
     Timestamp = DateTimeOffset.UtcNow
-};
-
-var payload = JsonSerializer.SerializeToUtf8Bytes(telemetry);
+});
 
 var message = new MqttApplicationMessageBuilder()
     .WithTopic("devices/sensor-42/telemetry")
     .WithPayload(payload)
-    .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtMostOnce)
-    .WithContentType("application/json")  // MQTT 5.0 property
+    .WithContentType("application/json")  // MQTT 5.0
     .Build();
 
 await client.PublishAsync(message);
 ```
 
-`WithContentType` is an MQTT 5.0 property that helps consumers understand the payload format without inspecting the topic hierarchy. For binary protocols like Protocol Buffers, serialize the message to a byte array the same way and omit the content type hint or set it to `application/protobuf`.
+`WithContentType` sets an MQTT 5.0 property that tells consumers how to decode the payload without inferring it from the topic. For Protocol Buffers or another binary format, serialize to a byte array the same way and set the matching content type.
 
 ### Retained Messages
 
-A retained message is stored by the broker and delivered immediately to any new subscriber that matches the topic. This is useful for publishing the current state of a device so consumers get the latest value the moment they subscribe, without waiting for the next publish cycle:
+A retained message is stored by the broker, one per topic, and delivered to each new subscriber as soon as it subscribes. That makes it the right tool for current state, such as a device's configuration or online status, which a dashboard needs the moment it connects rather than at the device's next publish:
 
 ```csharp
 var stateMessage = new MqttApplicationMessageBuilder()
-    .WithTopic("devices/sensor-42/state")
-    .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new { Online = true, FirmwareVersion = "2.1.4" }))
+    .WithTopic("devices/sensor-42/config")
+    .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new { SampleIntervalSeconds = 30, FirmwareVersion = "2.1.4" }))
     .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
     .WithRetainFlag(true)
     .Build();
@@ -232,83 +171,69 @@ var stateMessage = new MqttApplicationMessageBuilder()
 await client.PublishAsync(stateMessage);
 ```
 
-To clear a retained message, publish an empty payload with the retain flag set to the same topic.
+Each retained publish replaces the previous one on that topic. To delete it, publish an empty payload with the retain flag set.
 
 ### Message Expiry (MQTT 5.0)
 
-MQTT 5.0 allows setting an expiry interval in seconds. The broker discards the message if it has not been delivered to a subscriber within that window:
+An expiry interval, in seconds, tells the broker to discard a message it hasn't delivered within that window, whether it is queued for an offline subscriber or retained:
 
 ```csharp
 var message = new MqttApplicationMessageBuilder()
     .WithTopic("devices/sensor-42/alerts/motion-detected")
     .WithPayload("true")
     .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-    .WithMessageExpiryInterval(30)  // 30 seconds
+    .WithMessageExpiryInterval(30)
     .Build();
-
-await client.PublishAsync(message);
 ```
 
-This prevents stale alerts from being delivered to a subscriber that reconnects long after the event occurred.
+This keeps a subscriber that reconnects an hour later from acting on a motion alert that no longer means anything.
 
 ---
 
-## Subscribing to Topics
+## Subscribing and Handling Messages
 
-Subscribe after connecting by specifying one or more topic filters:
+Register the message handler before subscribing, and before connecting when the session is persistent, because queued messages arrive as soon as the connection opens:
 
 ```csharp
+client.ApplicationMessageReceivedAsync += async e =>
+{
+    string topic = e.ApplicationMessage.Topic;
+    string payload = e.ApplicationMessage.ConvertPayloadToString();
+
+    Console.WriteLine($"Received on {topic}: {payload}");
+    await Task.CompletedTask;
+};
+
 var subscribeOptions = factory.CreateSubscribeOptionsBuilder()
-    .WithTopicFilter("devices/+/commands/#")
+    .WithTopicFilter("devices/sensor-42/commands/#", MqttQualityOfServiceLevel.AtLeastOnce)
     .Build();
 
 await client.SubscribeAsync(subscribeOptions);
 ```
 
-The `+` wildcard matches a single topic level, so `devices/+/commands/#` matches topics like `devices/sensor-42/commands/reboot` or `devices/gateway-1/commands/update-config/section`.
+In a topic filter, `+` matches exactly one level and `#` matches any number of remaining levels. So `devices/+/commands/#` matches `devices/sensor-42/commands/reboot` and `devices/gateway-1/commands/update-config/network`.
 
-### Handling Incoming Messages
-
-Register a callback before connecting so you don't miss messages that arrive immediately after the subscription is acknowledged:
+`e.ApplicationMessage.Payload` is a `ReadOnlySequence<byte>`. For JSON, deserialize from its bytes:
 
 ```csharp
-client.ApplicationMessageReceivedAsync += async e =>
-{
-    var topic = e.ApplicationMessage.Topic;
-    var payload = e.ApplicationMessage.ConvertPayloadToString();
-
-    Console.WriteLine($"Received on {topic}: {payload}");
-
-    // Acknowledge that processing is complete (important for QoS 2).
-    e.IsHandled = true;
-
-    await Task.CompletedTask;
-};
+var command = JsonSerializer.Deserialize<DeviceCommand>(e.ApplicationMessage.Payload.ToArray());
 ```
 
-For JSON payloads, deserialize inside the handler:
+### How Handlers Run and When Messages Are Acknowledged
 
-```csharp
-client.ApplicationMessageReceivedAsync += async e =>
-{
-    if (e.ApplicationMessage.Topic.Contains("/commands/"))
-    {
-        var command = JsonSerializer.Deserialize<DeviceCommand>(
-            e.ApplicationMessage.PayloadSegment);
+The client processes received messages one at a time, in arrival order. It awaits your handler, and only when the handler returns does it send the QoS 1 or 2 acknowledgment to the broker. Two consequences follow.
 
-        await ExecuteCommandAsync(command);
-    }
-};
-```
+First, a slow handler delays every message behind it. A handler that writes to a database or calls an HTTP API on each message falls behind whenever messages arrive faster than it completes. Keep the handler short: copy what you need into a `Channel<T>` and process it elsewhere.
+
+Second, an exception in the handler doesn't stop the client. The client logs it, skips the acknowledgment for that message, and moves on to the next one. The broker won't resend the unacknowledged message on the live connection. It redelivers only after a reconnect, and only if the session persisted, so under a clean session the message is simply lost. Catch exceptions inside the handler and decide per message. For explicit control, set `e.AutoAcknowledge = false` and call `await e.AcknowledgeAsync(cancellationToken)` yourself once processing succeeds.
+
+`e.IsHandled` is a flag for your own code, useful when several handlers are attached to the event. It has no effect on acknowledgment.
 
 ### Shared Subscriptions (MQTT 5.0)
 
-Shared subscriptions let multiple consumers share the load of a single subscription group. The broker delivers each message to exactly one consumer in the group, distributing messages round-robin or by its own load-balancing strategy. This is useful when a single consumer cannot keep up with message throughput.
-
-The topic filter for a shared subscription uses a special prefix:
+A shared subscription spreads one subscription's messages across a group of consumers, with each message going to exactly one member of the group. Every instance of a scaled-out back-end service subscribes with the same group name:
 
 ```csharp
-// Each consumer in the "telemetry-processors" group receives a subset of messages.
 var subscribeOptions = factory.CreateSubscribeOptionsBuilder()
     .WithTopicFilter("$share/telemetry-processors/devices/+/telemetry")
     .Build();
@@ -316,7 +241,7 @@ var subscribeOptions = factory.CreateSubscribeOptionsBuilder()
 await client.SubscribeAsync(subscribeOptions);
 ```
 
-Deploy multiple instances of the consumer with the same shared subscription filter and the broker handles distribution automatically.
+The `$share/<group>/` prefix marks the subscription as shared. How the broker picks a member, whether round-robin, random, or least loaded, is up to the broker.
 
 ### Unsubscribing
 
@@ -330,215 +255,90 @@ await client.UnsubscribeAsync(unsubscribeOptions);
 
 ---
 
-## Building an MQTT Broker
+## IoT Messaging Patterns
 
-MQTTnet includes a full MQTT broker implementation called `MqttServer`. A custom broker is worth considering when you need to authenticate clients against your own user store, apply routing logic, or run a broker embedded within a .NET application without deploying a separate Mosquitto or EMQX instance.
+### Topic Layout
 
-```csharp
-using MQTTnet;
-using MQTTnet.Server;
-
-var factory = new MqttServerFactory();
-
-var serverOptions = new MqttServerOptionsBuilder()
-    .WithDefaultEndpoint()                    // Listens on port 1883
-    .WithDefaultEndpointPort(1883)
-    .Build();
-
-using var server = factory.CreateMqttServer(serverOptions);
-await server.StartAsync(serverOptions);
-
-Console.WriteLine("Broker running. Press Enter to stop.");
-Console.ReadLine();
-
-await server.StopAsync();
-```
-
-### Client Authentication
-
-Validate connecting clients by handling the `ValidatingConnectionAsync` event:
-
-```csharp
-server.ValidatingConnectionAsync += e =>
-{
-    if (e.UserName != "expected-user" || e.Password != "expected-password")
-    {
-        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-    }
-
-    return Task.CompletedTask;
-};
-```
-
-For certificate-based authentication, inspect `e.ClientCertificate` in the same handler. Returning without setting a reason code (or setting `MqttConnectReasonCode.Success`) allows the connection.
-
-### Intercepting Published Messages
-
-The broker can inspect or modify every message before routing it to subscribers:
-
-```csharp
-server.InterceptingPublishAsync += e =>
-{
-    var topic = e.ApplicationMessage.Topic;
-    var clientId = e.ClientId;
-
-    // Log all publishes for auditing.
-    Console.WriteLine($"Client '{clientId}' published to '{topic}'");
-
-    // Reject messages to topics the client is not authorized for.
-    if (topic.StartsWith("admin/") && !IsAdminClient(clientId))
-    {
-        e.Response.ReasonCode = MqttPubAckReasonCode.NotAuthorized;
-    }
-
-    return Task.CompletedTask;
-};
-```
-
-This interception point is also where you would bridge messages to another system, such as forwarding device telemetry to a database or event bus.
-
-### When a Custom Broker Makes Sense
-
-A custom `MqttServer` is a good fit for scenarios like embedding a broker inside a .NET gateway device, writing integration tests without depending on an external broker, or when client authentication must run against an existing .NET identity system.
-
-For large-scale production deployments, purpose-built brokers like [Eclipse Mosquitto](https://mosquitto.org){:target="_blank" rel="noopener noreferrer"} or [EMQX](https://www.emqx.io){:target="_blank" rel="noopener noreferrer"} offer clustering, persistence, and operational tooling that `MqttServer` does not provide out of the box. Cloud services like Azure IoT Hub expose an MQTT endpoint and handle the broker concerns entirely.
-
----
-
-## IoT-Specific Messaging Patterns
-
-### Device Telemetry
-
-Structure telemetry topics to reflect the physical hierarchy of your deployment. A common convention:
+Put the device identity near the front of the topic and the kind of data after it:
 
 ```
-devices/{deviceId}/telemetry/{sensorType}
+devices/{deviceId}/telemetry/{measurement}
+devices/{deviceId}/commands/{commandName}
+devices/{deviceId}/status
 ```
 
-For example:
-- `devices/building-a-floor-3-room-12/telemetry/temperature`
-- `devices/building-a-floor-3-room-12/telemetry/co2`
-- `devices/building-a-floor-3-room-12/telemetry/occupancy`
+With this shape, one wildcard subscription selects any slice a back end needs. `devices/+/telemetry/temperature` collects temperatures from every device, and `devices/sensor-42/#` follows one device. Validate the ID before building a topic string: a null or empty ID produces `devices//telemetry/temperature`, a valid topic that no subscriber is watching.
 
-This hierarchy lets back-end services subscribe with wildcards at any level, so `devices/building-a/#` captures everything from that building while `devices/+/telemetry/temperature` captures temperature readings from all devices.
-
-A device publishing periodic telemetry:
-
-```csharp
-public async Task PublishTelemetryAsync(
-    IMqttClient client,
-    string deviceId,
-    double temperature,
-    CancellationToken cancellationToken)
-{
-    var payload = JsonSerializer.SerializeToUtf8Bytes(new
-    {
-        Temperature = temperature,
-        Unit = "celsius",
-        Timestamp = DateTimeOffset.UtcNow
-    });
-
-    var message = new MqttApplicationMessageBuilder()
-        .WithTopic($"devices/{deviceId}/telemetry/temperature")
-        .WithPayload(payload)
-        .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtMostOnce)
-        .Build();
-
-    await client.PublishAsync(message, cancellationToken);
-}
-```
+A device that publishes to its telemetry topics and subscribes to `devices/#` receives its own messages back. Subscribe to the narrowest filter the device needs, usually its own `commands/#` subtree.
 
 ### Command Handling
 
-A device subscribes to a command topic and executes actions when commands arrive:
+A device subscribes to its command subtree at QoS 1 and dispatches on the last topic level:
 
 ```csharp
-// Subscribe to commands for this device.
-var subscribeOptions = factory.CreateSubscribeOptionsBuilder()
-    .WithTopicFilter($"devices/{deviceId}/commands/#",
-        MqttQualityOfServiceLevel.AtLeastOnce)
-    .Build();
+await client.SubscribeAsync(factory.CreateSubscribeOptionsBuilder()
+    .WithTopicFilter($"devices/{deviceId}/commands/#", MqttQualityOfServiceLevel.AtLeastOnce)
+    .Build());
 
-await client.SubscribeAsync(subscribeOptions);
-
-// Handle incoming commands.
 client.ApplicationMessageReceivedAsync += async e =>
 {
-    var topic = e.ApplicationMessage.Topic;
-    var segments = topic.Split('/');
+    string[] segments = e.ApplicationMessage.Topic.Split('/');
 
-    // Expecting: devices/{deviceId}/commands/{commandName}
+    // devices/{deviceId}/commands/{commandName}
     if (segments.Length >= 4 && segments[2] == "commands")
     {
-        var commandName = segments[3];
-        var payload = e.ApplicationMessage.ConvertPayloadToString();
-
-        await DispatchCommandAsync(commandName, payload);
+        await DispatchCommandAsync(segments[3], e.ApplicationMessage.ConvertPayloadToString());
     }
 };
 ```
 
-Use QoS 1 for command subscriptions. Losing a command is usually worse than receiving a duplicate, and the device-side code should be idempotent where possible.
+QoS 1 can deliver a command twice, so a command handler must be safe to run twice. "Set the sample interval to 30 seconds" is naturally idempotent; "increment the counter" is not, and needs an ID in the payload that the device remembers.
 
-### Last Will and Testament
+### Online Status: Last Will and Birth Messages
 
-Last Will and Testament (LWT) is a message the broker sends automatically if the client disconnects unexpectedly without sending a proper DISCONNECT packet. This allows monitoring services to detect offline devices without polling:
+A **last will** is a message the client registers with the broker at connect time. The broker publishes it on the client's behalf if the connection ends without a clean DISCONNECT, which covers a crash, a power cut, or a network drop detected by the keep-alive timeout. A **birth message** is the opposite: a retained message the device publishes itself right after connecting.
+
+Both write to the same retained status topic, so the topic always holds the latest state and a monitoring service that subscribes at any time learns it immediately:
 
 ```csharp
-var willMessage = new MqttApplicationMessageBuilder()
+var options = new MqttClientOptionsBuilder()
+    .WithTcpServer("broker.example.com", 8883)
+    .WithTlsOptions(tls => tls.UseTls())
+    .WithClientId(deviceId)
+    .WithWillTopic($"devices/{deviceId}/status")
+    .WithWillPayload("""{"online":false}""")
+    .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+    .WithWillRetain(true)
+    .Build();
+
+await client.ConnectAsync(options);
+
+// Birth message, published after every successful connect
+await client.PublishAsync(new MqttApplicationMessageBuilder()
     .WithTopic($"devices/{deviceId}/status")
-    .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new { Online = false, LastSeen = DateTimeOffset.UtcNow }))
+    .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new { Online = true, FirmwareVersion = "2.1.4" }))
     .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
     .WithRetainFlag(true)
-    .Build();
-
-var options = new MqttClientOptionsBuilder()
-    .WithTcpServer("broker.example.com", 1883)
-    .WithClientId(deviceId)
-    .WithWillMessage(willMessage)
-    .Build();
+    .Build());
 ```
 
-### Birth Messages
+The will's payload is fixed at connect time, so it can't carry a "last seen" timestamp for the moment the device dropped. A consumer that needs that time records when the offline status arrived. A clean `DisconnectAsync` suppresses the will, so a device shutting down on purpose should publish its own offline status first.
 
-A birth message is a retained message the device publishes immediately after connecting to signal that it is online. Combined with LWT, this creates a reliable online/offline tracking system:
+### Request/Response (MQTT 5.0)
 
-```csharp
-client.ConnectedAsync += async e =>
-{
-    var birthMessage = new MqttApplicationMessageBuilder()
-        .WithTopic($"devices/{deviceId}/status")
-        .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            Online = true,
-            FirmwareVersion = "2.1.4",
-            ConnectedAt = DateTimeOffset.UtcNow
-        }))
-        .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-        .WithRetainFlag(true)
-        .Build();
-
-    await client.PublishAsync(birthMessage);
-};
-```
-
-Because both the birth message and the LWT message write to the same retained topic with the retain flag, monitoring services receive the current status immediately upon subscribing, regardless of when they connect.
-
-### Request/Response with Correlation IDs (MQTT 5.0)
-
-MQTT is inherently one-way, but MQTT 5.0 adds `ResponseTopic` and `CorrelationData` message properties to support request/response patterns without building your own correlation layer:
+MQTT delivers messages in one direction. MQTT 5.0 adds two properties that let a requester ask for a reply without inventing a protocol: `ResponseTopic` names where the reply should go, and `CorrelationData` carries an ID the responder echoes back.
 
 ```csharp
-var correlationId = Guid.NewGuid().ToByteArray();
-var responseTopic = $"devices/{deviceId}/responses/{Guid.NewGuid()}";
+string responseTopic = $"devices/{deviceId}/responses";
+byte[] correlationId = Guid.NewGuid().ToByteArray();
 
-// Subscribe to the response topic before sending the request.
+// Subscribe to the response topic once, before sending any request
 await client.SubscribeAsync(factory.CreateSubscribeOptionsBuilder()
     .WithTopicFilter(responseTopic)
     .Build());
 
 var request = new MqttApplicationMessageBuilder()
-    .WithTopic($"services/config-service/requests")
+    .WithTopic("services/config-service/requests")
     .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new { Action = "get-config", DeviceId = deviceId }))
     .WithResponseTopic(responseTopic)
     .WithCorrelationData(correlationId)
@@ -546,90 +346,95 @@ var request = new MqttApplicationMessageBuilder()
     .Build();
 
 await client.PublishAsync(request);
-
-// The service responds to responseTopic with the same CorrelationData.
-// Match the incoming message's CorrelationData to resolve the pending request.
 ```
 
-The responder reads `ResponseTopic` and `CorrelationData` from the incoming request and echoes the correlation data back in the response. The requester matches the correlation data to identify which pending request the response belongs to.
+The responder reads `ResponseTopic` and `CorrelationData` from the request and publishes its reply to that topic with the same correlation data. The requester keeps a dictionary of pending requests keyed by correlation ID, completes the matching `TaskCompletionSource` when a reply arrives, and times out requests that never get one. One response topic per client, subscribed once, is enough. A new topic per request costs a subscribe round trip each time.
 
 ---
 
-## Running as a Hosted Service in ASP.NET Core
+## Hosting a Client in a Long-Running Service
 
-In a typical .NET application, you want the MQTT client running as a background service that starts with the application and shuts down gracefully. `IHostedService` is the right abstraction:
+### Reconnecting
+
+A connection to a broker drops sooner or later, from a broker restart, a network change, or a missed keep-alive. MQTTnet 5 doesn't reconnect by itself.
+
+MQTTnet's samples warn that reconnecting from inside the `DisconnectedAsync` event risks deadlocks, and recommend a separate loop that checks the connection with `TryPingAsync` and connects when it fails. The loop also performs the first connect, so there is one place where connecting, subscribing, and publishing the birth message happen:
 
 ```csharp
-public class MqttClientService : IHostedService, IDisposable
+public sealed class MqttConnectionService(
+    IMqttClient client,
+    MqttClientOptions options,
+    ILogger<MqttConnectionService> logger) : BackgroundService
 {
-    private readonly IMqttClient _client;
-    private readonly MqttClientOptions _options;
-    private readonly ILogger<MqttClientService> _logger;
-
-    public MqttClientService(ILogger<MqttClientService> logger)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger = logger;
-        var factory = new MqttClientFactory();
-        _client = factory.CreateMqttClient();
+        var delay = TimeSpan.FromSeconds(1);
+        var maxDelay = TimeSpan.FromMinutes(2);
 
-        _options = new MqttClientOptionsBuilder()
-            .WithTcpServer("broker.example.com", 1883)
-            .WithClientId("my-service")
-            .WithCleanSession(false)
-            .Build();
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (!await client.TryPingAsync(stoppingToken))
+                {
+                    await client.ConnectAsync(options, stoppingToken);
+                    await SubscribeAndAnnounceAsync(stoppingToken); // subscriptions, birth message
+                    logger.LogInformation("MQTT connected");
+                }
 
-        _client.ApplicationMessageReceivedAsync += OnMessageReceived;
-        _client.DisconnectedAsync += OnDisconnected;
+                delay = TimeSpan.FromSeconds(1);
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "MQTT connect failed; retrying in {Delay}", delay);
+                await Task.Delay(delay + TimeSpan.FromMilliseconds(Random.Shared.Next(1000)), stoppingToken);
+                delay = delay * 2 < maxDelay ? delay * 2 : maxDelay;
+            }
+        }
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _client.ConnectAsync(_options, cancellationToken);
+        await base.StopAsync(cancellationToken);
 
-        await _client.SubscribeAsync(
-            new MqttClientSubscribeOptionsBuilder()
-                .WithTopicFilter("devices/+/telemetry/#")
-                .Build(),
-            cancellationToken);
-
-        _logger.LogInformation("MQTT client connected and subscribed.");
-    }
-
-    public async Task StopAsync(CancellationToken cancellationToken)
-    {
-        await _client.DisconnectAsync(
-            new MqttClientDisconnectOptionsBuilder()
+        if (client.IsConnected)
+        {
+            await client.DisconnectAsync(new MqttClientDisconnectOptionsBuilder()
                 .WithReason(MqttClientDisconnectOptionsReason.NormalDisconnection)
-                .Build(),
-            cancellationToken);
+                .Build(), cancellationToken);
+        }
     }
-
-    private Task OnMessageReceived(MqttApplicationMessageReceivedEventArgs e)
-    {
-        _logger.LogInformation("Received: {Topic}", e.ApplicationMessage.Topic);
-        return Task.CompletedTask;
-    }
-
-    private async Task OnDisconnected(MqttClientDisconnectedEventArgs e)
-    {
-        _logger.LogWarning("Disconnected: {Reason}. Reconnecting...", e.Reason);
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        await _client.ReconnectAsync();
-    }
-
-    public void Dispose() => _client.Dispose();
 }
 ```
 
-Register it in `Program.cs`:
+The delay doubles after each failed attempt up to two minutes and resets after a success. The random jitter matters when a broker restarts under a fleet: without it, every device retries on the same schedule and the broker is hit by the whole fleet at once on every retry.
+
+Subscriptions are re-sent after every connect because a clean session starts with none. With a persistent session the broker still has them, and re-subscribing is harmless.
+
+### Sharing One Client
+
+Register one `IMqttClient` and its options as singletons, and have the connection service and any publishing code share that instance. A client is one connection, and one connection per process is almost always what you want:
 
 ```csharp
-builder.Services.AddHostedService<MqttClientService>();
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddSingleton(_ => new MqttClientFactory().CreateMqttClient());
+builder.Services.AddSingleton(_ => new MqttClientOptionsBuilder()
+    .WithTcpServer("broker.example.com", 8883)
+    .WithTlsOptions(tls => tls.UseTls())
+    .WithClientId("telemetry-service")
+    .Build());
+
+builder.Services.AddSingleton<IMqttPublisher, MqttPublisher>();
+builder.Services.AddHostedService<MqttConnectionService>();
 ```
 
-### Dependency Injection
-
-If you need to publish messages from other parts of the application (controllers, other services), expose the client through a scoped or singleton interface:
+Other code publishes through a small interface of your own, which keeps the rest of the application free of MQTTnet types and lets tests substitute a fake:
 
 ```csharp
 public interface IMqttPublisher
@@ -637,12 +442,8 @@ public interface IMqttPublisher
     Task PublishAsync(string topic, object payload, CancellationToken cancellationToken = default);
 }
 
-public class MqttPublisher : IMqttPublisher
+public sealed class MqttPublisher(IMqttClient client) : IMqttPublisher
 {
-    private readonly IMqttClient _client;
-
-    public MqttPublisher(IMqttClient client) => _client = client;
-
     public async Task PublishAsync(string topic, object payload, CancellationToken cancellationToken = default)
     {
         var message = new MqttApplicationMessageBuilder()
@@ -651,152 +452,116 @@ public class MqttPublisher : IMqttPublisher
             .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
             .Build();
 
-        await _client.PublishAsync(message, cancellationToken);
+        await client.PublishAsync(message, cancellationToken);
     }
 }
 ```
 
-Register both the client and publisher as singletons, since `IMqttClient` maintains a single persistent connection:
+Several threads can call `PublishAsync` on the same client at once. The client serializes packet writes to the connection internally, so concurrent publishes queue rather than interleave.
+
+### Buffering While Disconnected
+
+`PublishAsync` throws when the client isn't connected, so a device that keeps sampling through an outage needs somewhere to put readings. For telemetry, where recent readings matter more than old ones, a bounded channel that drops the oldest entry when full keeps memory fixed:
 
 ```csharp
-builder.Services.AddSingleton<IMqttClient>(_ =>
-{
-    var factory = new MqttClientFactory();
-    return factory.CreateMqttClient();
-});
-
-builder.Services.AddSingleton<IMqttPublisher, MqttPublisher>();
-```
-
----
-
-## Bridging to Azure IoT Hub
-
-Azure IoT Hub exposes an MQTT endpoint that devices can connect to directly. IoT Hub acts as the broker, and you use a device connection string to derive the credentials:
-
-```csharp
-var deviceConnectionString = "HostName=my-hub.azure-devices.net;DeviceId=sensor-42;SharedAccessKey=...";
-var builder = IotHubConnectionStringBuilder.Create(deviceConnectionString);
-
-var sasToken = GenerateSasToken(
-    resourceUri: $"{builder.HostName}/devices/{builder.DeviceId}",
-    key: builder.SharedAccessKey,
-    expiry: TimeSpan.FromHours(1));
-
-var options = new MqttClientOptionsBuilder()
-    .WithTcpServer(builder.HostName, 8883)
-    .WithClientId(builder.DeviceId)
-    .WithCredentials($"{builder.HostName}/{builder.DeviceId}/?api-version=2021-04-12", sasToken)
-    .WithTlsOptions(tls => tls.UseTls())
-    .Build();
-
-await client.ConnectAsync(options);
-
-// IoT Hub telemetry topic format.
-await client.PublishAsync(new MqttApplicationMessageBuilder()
-    .WithTopic($"devices/{builder.DeviceId}/messages/events/")
-    .WithPayload(JsonSerializer.SerializeToUtf8Bytes(new { Temperature = 22.5 }))
-    .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-    .Build());
-```
-
-IoT Hub uses specific topic conventions for device-to-cloud messages, cloud-to-device commands, and direct method invocations. The [Azure IoT Hub MQTT documentation](https://learn.microsoft.com/en-us/azure/iot-hub/iot-hub-mqtt-support){:target="_blank" rel="noopener noreferrer"} covers the exact topic formats. In practice, the [Azure IoT SDK for .NET](https://github.com/Azure/azure-iot-sdk-csharp){:target="_blank" rel="noopener noreferrer"} wraps these conventions so you rarely need to construct them manually; using MQTTnet directly makes sense mainly for constrained devices where the full SDK is too heavy.
-
----
-
-## Error Handling and Resilience
-
-### Automatic Reconnection with Bounded Backoff
-
-The reconnection handler shown earlier works for simple cases. For production services, wrap reconnection in a policy that respects the application's cancellation token:
-
-```csharp
-private async Task ReconnectWithBackoffAsync(CancellationToken cancellationToken)
-{
-    var delay = TimeSpan.FromSeconds(1);
-    var maxDelay = TimeSpan.FromMinutes(5);
-
-    while (!cancellationToken.IsCancellationRequested && !_client.IsConnected)
-    {
-        try
-        {
-            await Task.Delay(delay, cancellationToken);
-            await _client.ReconnectAsync(cancellationToken);
-            _logger.LogInformation("Reconnected successfully.");
-            return;
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Reconnection failed. Retrying in {Delay}.", delay);
-            delay = delay * 2 < maxDelay ? delay * 2 : maxDelay;
-        }
-    }
-}
-```
-
-### Message Buffering During Disconnection
-
-When publishing fails because the connection is down, you have several options. For telemetry where the latest reading is more valuable than older readings, a bounded channel that drops the oldest entry on overflow is appropriate:
-
-```csharp
-var channel = Channel.CreateBounded<MqttApplicationMessage>(new BoundedChannelOptions(1000)
+var outbox = Channel.CreateBounded<MqttApplicationMessage>(new BoundedChannelOptions(1000)
 {
     FullMode = BoundedChannelFullMode.DropOldest
 });
 
-// Producer: sensor reading loop.
-await channel.Writer.WriteAsync(message);
+// Producer: the sensor loop writes and never blocks
+await outbox.Writer.WriteAsync(message, cancellationToken);
 
-// Consumer: send when connected.
-await foreach (var msg in channel.Reader.ReadAllAsync(cancellationToken))
+// Consumer: waits for a connection, then drains in order
+await foreach (var msg in outbox.Reader.ReadAllAsync(cancellationToken))
 {
-    if (_client.IsConnected)
-        await _client.PublishAsync(msg, cancellationToken);
-    // If disconnected, the message is simply dropped here,
-    // which is acceptable for high-frequency telemetry.
+    while (!client.IsConnected)
+        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+
+    await client.PublishAsync(msg, cancellationToken);
 }
 ```
 
-For commands where loss is unacceptable, persist messages to a local store (SQLite, for example) and replay them after reconnection. This is more complex but guarantees delivery even across power cycles.
+A publish can still fail if the connection drops between the check and the send, and that message is lost. For telemetry that is usually fine. For messages that must survive a power cycle, write them to local storage such as SQLite, delete each one only after its QoS 1 publish succeeds, and replay the rest after reconnecting.
 
-### Logging and Diagnostics
+### Logging
 
-MQTTnet uses the standard `Microsoft.Extensions.Logging` abstractions when you configure them:
+MQTTnet has its own logging abstraction rather than `Microsoft.Extensions.Logging`. Pass an `MqttNetEventLogger` to the factory and forward its events to your `ILogger`:
 
 ```csharp
-var factory = new MqttClientFactory(new MqttNetEventLogger());
+var mqttLogger = new MqttNetEventLogger();
+mqttLogger.LogMessagePublished += (_, e) =>
+    logger.LogDebug("MQTTnet {Source}: {Message}", e.LogMessage.Source, e.LogMessage.Message);
+
+var factory = new MqttClientFactory(mqttLogger);
 ```
 
-For structured logging in a hosted service, inject `ILogger<T>` and log inside event handlers. Log connection events, disconnections, and message receipt with appropriate log levels so you can trace issues in production without overwhelming the log stream with every message payload.
+The library's internal messages are verbose, so route them at `Debug` and turn them on only while diagnosing connection problems. Log connects, disconnects with their reason, and failed publishes from your own code at `Information` or `Warning`.
 
 ---
 
-## Common Mistakes and How to Avoid Them
+## Hosting a Broker
 
-**Using QoS 2 for everything.** Each QoS 2 message completes a four-packet handshake, which is expensive when publishing thousands of telemetry readings per minute. Audit your QoS choices: telemetry generally belongs at QoS 0, commands at QoS 1, and QoS 2 only for cases where exactly-once semantics genuinely matter.
+The `MQTTnet.Server` package contains a complete MQTT broker, `MqttServer`, that runs inside a .NET process:
 
-**Publishing to topics the client is also subscribed to.** If a device publishes to `devices/+/commands` and also subscribes with `devices/#`, it will receive its own messages back. Design topic hierarchies so publishers and subscribers use separate subtrees, or filter by client ID in the message handler.
+```csharp
+using MQTTnet.Server;
 
-**Forgetting the retain flag on status messages.** Without a retained status message, a monitoring service that connects after a device has already come online will not know the device is online until the device publishes again. Combine a retained birth message with LWT to give any subscriber an immediate view of device state.
+var factory = new MqttServerFactory();
 
-**Not handling backpressure in message handlers.** If `ApplicationMessageReceivedAsync` performs slow I/O (database writes, HTTP calls), it can block the receive pipeline and cause the client to fall behind. Offload processing to a channel or background queue and return from the handler quickly.
+var serverOptions = new MqttServerOptionsBuilder()
+    .WithDefaultEndpoint()           // plain TCP
+    .WithDefaultEndpointPort(1883)
+    .Build();
 
-**Sharing a single client across threads without synchronization.** `IMqttClient` is not thread-safe for publishing from multiple threads simultaneously. Use a dedicated publishing queue or wrap `PublishAsync` calls in a `SemaphoreSlim` if concurrent publishing is required.
+using var server = factory.CreateMqttServer(serverOptions);
+await server.StartAsync();
 
-**Missing articles in topic paths that include variables.** Topic strings like `devices//telemetry/temperature` (with an empty segment) occur when a device ID is null or empty. Validate input before constructing topic strings to avoid publishing to malformed topics that are difficult to debug.
+Console.WriteLine("Broker running. Press Enter to stop.");
+Console.ReadLine();
 
----
+await server.StopAsync();
+```
 
-## Key Takeaways
+### Authenticating Clients
 
-MQTTnet covers the full range of MQTT scenarios in .NET: lightweight device clients, back-end consumers, and custom embedded brokers, all within a single library. The patterns here follow the same structure regardless of scale.
+`ValidatingConnectionAsync` runs for each connection attempt. Setting a failure reason code rejects the client, and leaving it at the default accepts it:
 
-For device code, the priority order is: connect with TLS and appropriate authentication, subscribe to command topics with QoS 1, publish telemetry with QoS 0, configure LWT before connecting, and publish a birth message immediately after connecting. That sequence gives you reliable state tracking and secure communication without over-engineering the messaging layer.
+```csharp
+server.ValidatingConnectionAsync += e =>
+{
+    if (!credentialStore.IsValid(e.ClientId, e.UserName, e.Password))
+    {
+        e.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+    }
 
-For back-end services consuming device data, the hosted service pattern with a reconnection loop and a bounded channel for buffering covers most production requirements. Shared subscriptions handle horizontal scaling when a single consumer instance cannot keep up with throughput.
+    return Task.CompletedTask;
+};
+```
 
-The [MQTTnet documentation and samples](https://github.com/dotnet/MQTTnet/tree/master/Samples){:target="_blank" rel="noopener noreferrer"} on GitHub cover additional scenarios including managed clients with built-in reconnection logic and the full MQTT 5.0 feature set.
+This is the hook for checking clients against an existing .NET identity store rather than a broker's own password file.
+
+### Intercepting Publishes
+
+`InterceptingPublishAsync` sees every message before the broker routes it, which makes it the place for per-topic authorization, auditing, or forwarding messages to a database or event bus:
+
+```csharp
+server.InterceptingPublishAsync += e =>
+{
+    if (e.ApplicationMessage.Topic.StartsWith("admin/") && !IsAdminClient(e.ClientId))
+    {
+        e.ProcessPublish = false;  // don't route it
+        e.Response.ReasonCode = MqttPubAckReasonCode.NotAuthorized;  // tell an MQTT 5.0 publisher why
+    }
+
+    return Task.CompletedTask;
+};
+```
+
+`ProcessPublish = false` is what stops the message. The reason code only goes back to the publisher in its acknowledgment, and only MQTT 5.0 clients receive reason codes at all.
+
+### When an Embedded Broker Fits
+
+An in-process broker suits a gateway that aggregates local devices and forwards to the cloud, integration tests that need a real broker without external infrastructure, and small deployments where client authentication must use an existing .NET user store.
+
+For a large fleet, a dedicated broker such as [Eclipse Mosquitto](https://mosquitto.org){:target="_blank" rel="noopener noreferrer"} or [EMQX](https://www.emqx.io){:target="_blank" rel="noopener noreferrer"} brings clustering, persistent session storage, and operational tooling that `MqttServer` leaves to you. Managed cloud services also expose MQTT endpoints and run the broker entirely. The client code in this guide works against any of them.

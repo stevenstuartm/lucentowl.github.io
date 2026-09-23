@@ -1,0 +1,69 @@
+---
+title: "A Reverse Edge Undoing a Poor Choice"
+kind: flow
+system: dsa
+summary: "How a residual reverse edge lets a later path reroute earlier flow."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 320" role="img" aria-labelledby="mf-title mf-desc" style="width:100%; min-width:660px; height:auto; display:block;">
+<title id="mf-title">Maximum flow found by pushing flow back along a reverse edge</title>
+<desc id="mf-desc">A network with source s, sink t, and vertices a and b. Every edge has capacity 1: s to a, s to b, a to b, a to t, and b to t. Step 1: a first path chosen without breadth-first search is s to a to b to t, carrying 1. After it, every path from s to t in the original edges runs into a full edge. Step 2, showing only the edges the second path uses: spare capacity remains on s to b and a to t, and using a to b created a reverse edge from b to a with capacity 1. The path s to b to a to t uses that reverse edge. Step 3: the final flow sends 1 along s to a to t and 1 along s to b to t, and a to b carries nothing, because the second path cancelled the first path's use of it. The maximum flow is 2.</desc>
+<style>
+.mf-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.mf-v { font-size: 15px; font-weight: 700; font-style: italic; fill: var(--color-primary, #1A5F8A); }
+.mf-f { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 3; }
+.mf-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mf-f2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; }
+.mf-r { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; stroke-dasharray: 6 4; }
+.mf-l { font-size: 12px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.mf-lr { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mf-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mf-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="mf-af" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mf-ae" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="mf-af2" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="mf-ar" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="mf-hd" x="40" y="30">1. A POOR FIRST PATH: s → a → b → t</text>
+<path class="mf-f" d="M 74.6,111.3 L 142.9,70.3" marker-end="url(#mf-af)"/><text class="mf-l" x="98" y="84" text-anchor="middle">1/1</text>
+<path class="mf-f" d="M 160.0,77.0 L 160.0,160.0" marker-end="url(#mf-af)"/>
+<path class="mf-f" d="M 174.6,171.3 L 242.9,130.3" marker-end="url(#mf-af)"/><text class="mf-l" x="222" y="168" text-anchor="middle">1/1</text>
+<text class="mf-l" x="172" y="124">1/1</text>
+<path class="mf-e" d="M 74.6,128.7 L 142.9,169.7" marker-end="url(#mf-ae)"/><text class="mf-l" x="98" y="168" text-anchor="middle">0/1</text>
+<path class="mf-e" d="M 174.6,68.7 L 242.9,109.7" marker-end="url(#mf-ae)"/><text class="mf-l" x="222" y="84" text-anchor="middle">0/1</text>
+<circle class="mf-n" cx="60" cy="120" r="17"/><text class="mf-v" x="60" y="125" text-anchor="middle">s</text>
+<circle class="mf-n" cx="160" cy="60" r="17"/><text class="mf-v" x="160" y="65" text-anchor="middle">a</text>
+<circle class="mf-n" cx="160" cy="180" r="17"/><text class="mf-v" x="160" y="185" text-anchor="middle">b</text>
+<circle class="mf-n" cx="260" cy="120" r="17"/><text class="mf-v" x="260" y="125" text-anchor="middle">t</text>
+<text class="mf-s" x="40" y="245">Flow 1. Every path left from s to t</text>
+<text class="mf-s" x="40" y="263">now runs into a full edge.</text>
+<text class="mf-hd" x="320" y="30">2. THE SECOND PATH</text>
+<path class="mf-f2" d="M 354.6,128.7 L 422.9,169.7" marker-end="url(#mf-af2)"/><text class="mf-l" x="378" y="168" text-anchor="middle">1</text>
+<path class="mf-f2" d="M 454.6,68.7 L 522.9,109.7" marker-end="url(#mf-af2)"/><text class="mf-l" x="502" y="84" text-anchor="middle">1</text>
+<path class="mf-r" d="M 434.1,164.0 Q 418.0,120.0 433.1,78.8" marker-end="url(#mf-ar)"/><text class="mf-lr" x="438" y="142">1 back</text>
+<circle class="mf-n" cx="340" cy="120" r="17"/><text class="mf-v" x="340" y="125" text-anchor="middle">s</text>
+<circle class="mf-n" cx="440" cy="60" r="17"/><text class="mf-v" x="440" y="65" text-anchor="middle">a</text>
+<circle class="mf-n" cx="440" cy="180" r="17"/><text class="mf-v" x="440" y="185" text-anchor="middle">b</text>
+<circle class="mf-n" cx="540" cy="120" r="17"/><text class="mf-v" x="540" y="125" text-anchor="middle">t</text>
+<text class="mf-s" x="320" y="245">Using a → b created spare capacity</text>
+<text class="mf-s" x="320" y="263">b → a. Path s → b → a → t uses it.</text>
+<text class="mf-hd" x="600" y="30">3. FINAL FLOW</text>
+<path class="mf-f" d="M 634.6,111.3 L 702.9,70.3" marker-end="url(#mf-af)"/><text class="mf-l" x="658" y="84" text-anchor="middle">1/1</text>
+<path class="mf-f" d="M 634.6,128.7 L 702.9,169.7" marker-end="url(#mf-af)"/><text class="mf-l" x="658" y="168" text-anchor="middle">1/1</text>
+<path class="mf-f" d="M 734.6,68.7 L 802.9,109.7" marker-end="url(#mf-af)"/><text class="mf-l" x="782" y="84" text-anchor="middle">1/1</text>
+<path class="mf-f" d="M 734.6,171.3 L 802.9,130.3" marker-end="url(#mf-af)"/><text class="mf-l" x="782" y="168" text-anchor="middle">1/1</text>
+<path class="mf-e" d="M 720.0,77.0 L 720.0,160.0" marker-end="url(#mf-ae)"/>
+<text class="mf-l" x="732" y="124">0/1</text>
+<circle class="mf-n" cx="620" cy="120" r="17"/><text class="mf-v" x="620" y="125" text-anchor="middle">s</text>
+<circle class="mf-n" cx="720" cy="60" r="17"/><text class="mf-v" x="720" y="65" text-anchor="middle">a</text>
+<circle class="mf-n" cx="720" cy="180" r="17"/><text class="mf-v" x="720" y="185" text-anchor="middle">b</text>
+<circle class="mf-n" cx="820" cy="120" r="17"/><text class="mf-v" x="820" y="125" text-anchor="middle">t</text>
+<text class="mf-s" x="600" y="245">Flow 2. The second path cancelled</text>
+<text class="mf-s" x="600" y="263">the first path’s use of a → b.</text>
+<path class="mf-f" d="M 40,300 L 70,300"/><text class="mf-s" x="80" y="304">Carrying flow (flow/capacity)</text>
+<path class="mf-f2" d="M 300,300 L 330,300"/><text class="mf-s" x="340" y="304">Spare capacity on the second path</text>
+<path class="mf-r" d="M 580,300 L 610,300"/><text class="mf-s" x="620" y="304">Reverse edge</text>
+</g>
+</svg>

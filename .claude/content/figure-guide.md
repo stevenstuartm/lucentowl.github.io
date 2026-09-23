@@ -44,10 +44,24 @@ summary: "The five steps of one tick, in order."
 The form rules in [domain-map-guide.md](domain-map-guide.md) apply: inline SVG, bands and grids, lines between boxes, line style encoding edge class with a legend on the canvas, site CSS variables with hex fallbacks, `role="img"` with `<title>` and `<desc>`. Figures add these:
 
 - **Self-contained.** Each SVG carries its own `<style>` and `<defs>`, because it can appear alone on any page.
-- **Unique ids per figure.** Prefix every `id` (title, desc, markers) with a short figure tag such as `gc3-`. Two figures on one page must not share ids.
+- **Unique ids and classes per figure.** Prefix every `id` (title, desc, markers) and every CSS class with a short figure tag such as `gc3-`, and pick a tag no other figure uses. Two figures on one page must not share ids, and an SVG's `<style>` applies to the whole page, so two figures sharing a class prefix restyle each other. A composite resource puts a whole system's figures on one page, so check the tag against every figure, not just the neighbors.
 - **C4 box convention** for structural views: the name in bold, the kind and technology in italics as `[Container: Go process]`, then one line of responsibility.
 - **No Liquid braces.** Jekyll runs Liquid over a figure's content when it is included, so a literal double brace in a label would be evaluated. Write "variables unfilled", not a template placeholder.
-- **Validate and look.** Run `python .svgcheck.py _figures/<id>.html` for geometry, then render it and look at it. The checker catches overflow and collisions but not a line that crosses a label.
+- **Validate and look.** Run `python .svgcheck.py _figures/<id>.html` for geometry, then `python .figrender.py <id>` and open the PNG it prints. The checker catches overflow and collisions but not a line that crosses a label, an arrowhead pointing at a label instead of a box, two parallel lines where one was meant, or a layout that reads in the wrong order. Only looking catches those, so look at every figure after every change.
+
+### Rendering a Figure
+
+`.figrender.py` screenshots one or more figures with headless Chrome, Chromium, or Edge. It strips the front matter, wraps the SVG in a page that loads Raleway, and sizes the window to the SVG's aspect ratio.
+
+```bash
+python .figrender.py dn-di-scopes dn-await-timeline      # ids or paths
+python .figrender.py dn-di-scopes --width 700            # check a narrow layout
+```
+
+- PNGs go to `<system temp>/figrender/` unless you pass `--out`. Never write them into the repo.
+- CSS variables are unset in that page, so what you see is the hex fallbacks. A missing or wrong fallback shows up here as a wrong colour.
+- When drafting, render after each fix rather than batching several fixes, because fixing one collision often creates another.
+- If no browser is found, add its path to `BROWSERS` at the top of the script.
 
 ### Granularity
 
@@ -95,7 +109,7 @@ This renders the full diagram in a bordered container with its kind badge, title
 
 ## Workflow
 
-1. Draw the figure in `_figures/<id>.html` and validate it with `.svgcheck.py`.
+1. Draw the figure in `_figures/<id>.html`, validate it with `.svgcheck.py`, and look at it with `.figrender.py`.
 2. Add its id to the composite's `figures:` list, creating the composite resource if the system has none, and register a new composite in `assets/data/resources_config.json`.
 3. Embed it in the guides that explain it.
 4. Run `python .figcheck.py`. It reports unknown ids, missing front matter, unused figures, and figures missing from every composite, and prints where each figure is used.

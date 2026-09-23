@@ -1,0 +1,133 @@
+---
+title: "Four Pipeline Patterns"
+kind: flow
+system: sdlc
+summary: "Sequential, parallel, fan-out and branch-based pipeline shapes."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 582" role="img" aria-labelledby="pip-title pip-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="pip-title">Four CI/CD pipeline patterns shown as small flow diagrams</title>
+<desc id="pip-desc">Sequential: build, test, package, deploy and verify run one after another. Parallel: after build, unit tests, integration tests, a security scan and linting run at once, then join into package and deploy. Fan-out and fan-in: a package deploys to regions A, B and C at the same time, the results are aggregated, then verified. Branch-based: a feature branch runs a PR pipeline of build, test and security scan; the main branch runs the full pipeline including deployment to staging; a release tag runs the production pipeline that deploys to production.</desc>
+<style>
+.pip-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.pip-hub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pip-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.pip-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pip-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.pip-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.pip-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.pip-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.pip-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.pip-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.pip-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.pip-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.pip-fwd { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.pip-back { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 5; }
+.pip-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.pip-grid { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.pip-c1 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.pip-cbad { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.pip-ideal { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.pip-seg { fill: var(--color-primary, #1A5F8A); stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1; }
+.pip-seg2 { fill: var(--color-primary, #1A5F8A); opacity: 0.55; stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1; }
+.pip-wait { fill: var(--color-accent, #A5486E); opacity: 0.22; stroke: var(--color-accent, #A5486E); stroke-width: 1; }
+.pip-a1 { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.pip-a2 { fill: var(--color-accent, #A5486E); opacity: 0.55; }
+.pip-a3 { fill: var(--color-primary, #1A5F8A); opacity: 0.35; }
+.pip-a4 { fill: var(--color-primary, #1A5F8A); opacity: 0.12; }
+.pip-dim { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.25; }
+</style>
+<defs>
+<marker id="pip-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="pip-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="pip-d" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 z" fill="var(--color-text, #2C3E50)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="pip-band" x="20" y="20" width="450" height="262" rx="8"/>
+<text class="pip-hd" x="36" y="46">SEQUENTIAL</text>
+<rect class="pip-band" x="490" y="20" width="450" height="262" rx="8"/>
+<text class="pip-hd" x="506" y="46">PARALLEL</text>
+<rect class="pip-band" x="20" y="300" width="450" height="262" rx="8"/>
+<text class="pip-hd" x="36" y="326">FAN-OUT / FAN-IN</text>
+<rect class="pip-band" x="490" y="300" width="450" height="262" rx="8"/>
+<text class="pip-hd" x="506" y="326">BRANCH-BASED</text>
+<rect class="pip-box" x="44" y="140" width="66" height="36" rx="5"/>
+<text class="pip-n" x="77" y="162" text-anchor="middle">Build</text>
+<rect class="pip-box" x="126" y="140" width="66" height="36" rx="5"/>
+<text class="pip-n" x="159" y="162" text-anchor="middle">Test</text>
+<path class="pip-fwd" d="M 110,158 H 124" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="208" y="140" width="66" height="36" rx="5"/>
+<text class="pip-n" x="241" y="162" text-anchor="middle">Package</text>
+<path class="pip-fwd" d="M 192,158 H 206" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="290" y="140" width="66" height="36" rx="5"/>
+<text class="pip-n" x="323" y="162" text-anchor="middle">Deploy</text>
+<path class="pip-fwd" d="M 274,158 H 288" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="372" y="140" width="66" height="36" rx="5"/>
+<text class="pip-n" x="405" y="162" text-anchor="middle">Verify</text>
+<path class="pip-fwd" d="M 356,158 H 370" marker-end="url(#pip-a)"/>
+<text class="pip-s" x="44" y="230">One stage after another. Simple to follow and debug.</text>
+<rect class="pip-box" x="510" y="140" width="60" height="36" rx="5"/>
+<text class="pip-n" x="540" y="162" text-anchor="middle">Build</text>
+<rect class="pip-box" x="600" y="66" width="134" height="32" rx="5"/>
+<text class="pip-n" x="667" y="86" text-anchor="middle">Unit tests</text>
+<path class="pip-fwd" d="M 570,158 C 584,158 584,82 598,82" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 734,82 C 750,82 750,158 760,158"/>
+<rect class="pip-box" x="600" y="110" width="134" height="32" rx="5"/>
+<text class="pip-n" x="667" y="130" text-anchor="middle">Integration tests</text>
+<path class="pip-fwd" d="M 570,158 C 584,158 584,126 598,126" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 734,126 C 750,126 750,158 760,158"/>
+<rect class="pip-box" x="600" y="154" width="134" height="32" rx="5"/>
+<text class="pip-n" x="667" y="174" text-anchor="middle">Security scan</text>
+<path class="pip-fwd" d="M 570,158 C 584,158 584,170 598,170" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 734,170 C 750,170 750,158 760,158"/>
+<rect class="pip-box" x="600" y="198" width="134" height="32" rx="5"/>
+<text class="pip-n" x="667" y="218" text-anchor="middle">Linting</text>
+<path class="pip-fwd" d="M 570,158 C 584,158 584,214 598,214" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 734,214 C 750,214 750,158 760,158"/>
+<path class="pip-fwd" d="M 760,158 H 770" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="774" y="140" width="74" height="36" rx="5"/>
+<text class="pip-n" x="811" y="162" text-anchor="middle">Package</text>
+<rect class="pip-box" x="794" y="202" width="60" height="32" rx="5"/>
+<text class="pip-n" x="824" y="222" text-anchor="middle">Deploy</text>
+<path class="pip-fwd" d="M 811,176 V 198" marker-end="url(#pip-a)"/>
+<text class="pip-s" x="510" y="262">Independent checks run at once. Faster, more resources.</text>
+<rect class="pip-box" x="40" y="422" width="72" height="36" rx="5"/>
+<text class="pip-n" x="76" y="444" text-anchor="middle">Package</text>
+<rect class="pip-box" x="148" y="356" width="150" height="32" rx="5"/>
+<text class="pip-n" x="223" y="376" text-anchor="middle">Deploy to region A</text>
+<path class="pip-fwd" d="M 112,440 C 128,440 128,372 146,372" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 298,372 C 316,372 316,440 326,440"/>
+<rect class="pip-box" x="148" y="412" width="150" height="32" rx="5"/>
+<text class="pip-n" x="223" y="432" text-anchor="middle">Deploy to region B</text>
+<path class="pip-fwd" d="M 112,440 C 128,440 128,428 146,428" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 298,428 C 316,428 316,440 326,440"/>
+<rect class="pip-box" x="148" y="468" width="150" height="32" rx="5"/>
+<text class="pip-n" x="223" y="488" text-anchor="middle">Deploy to region C</text>
+<path class="pip-fwd" d="M 112,440 C 128,440 128,484 146,484" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 298,484 C 316,484 316,440 326,440"/>
+<path class="pip-fwd" d="M 326,440 H 330" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="334" y="422" width="116" height="36" rx="5"/>
+<text class="pip-n" x="392" y="444" text-anchor="middle">Aggregate results</text>
+<rect class="pip-box" x="356" y="486" width="72" height="30" rx="5"/>
+<text class="pip-n" x="392" y="505" text-anchor="middle">Verify</text>
+<path class="pip-fwd" d="M 392,458 V 482" marker-end="url(#pip-a)"/>
+<text class="pip-s" x="40" y="540">Deploy to several targets at once, then collect the results.</text>
+<rect class="pip-box" x="508" y="348" width="116" height="34" rx="5"/>
+<text class="pip-n" x="566" y="369" text-anchor="middle">Feature branch</text>
+<rect class="pip-hub" x="650" y="348" width="276" height="34" rx="5"/>
+<text class="pip-el" x="662" y="369">PR pipeline: build, test, security scan</text>
+<path class="pip-fwd" d="M 624,365 H 646" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="508" y="410" width="116" height="34" rx="5"/>
+<text class="pip-n" x="566" y="431" text-anchor="middle">Main branch</text>
+<rect class="pip-hub" x="650" y="410" width="276" height="34" rx="5"/>
+<text class="pip-el" x="662" y="431">Full pipeline: build, test, scan, staging</text>
+<path class="pip-fwd" d="M 624,427 H 646" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 566,382 V 406" marker-end="url(#pip-a)"/>
+<rect class="pip-box" x="508" y="472" width="116" height="34" rx="5"/>
+<text class="pip-n" x="566" y="493" text-anchor="middle">Release tag</text>
+<rect class="pip-hub" x="650" y="472" width="276" height="34" rx="5"/>
+<text class="pip-el" x="662" y="493">Production pipeline: deploy to prod</text>
+<path class="pip-fwd" d="M 624,489 H 646" marker-end="url(#pip-a)"/>
+<path class="pip-fwd" d="M 566,444 V 468" marker-end="url(#pip-a)"/>
+<text class="pip-s" x="508" y="548">More validation as code moves toward production.</text>
+</g>
+</svg>

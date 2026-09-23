@@ -1,0 +1,52 @@
+---
+title: "Kruskal's Algorithm Building a Minimum Spanning Tree"
+kind: flow
+system: dsa
+summary: "Edges taken cheapest first, skipping any that would close a cycle."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 360" role="img" aria-labelledby="ms-title ms-desc" style="width:100%; min-width:660px; height:auto; display:block;">
+<title id="ms-title">Kruskal's algorithm on a five-vertex weighted graph</title>
+<desc id="ms-desc">The same weighted graph: A–B 4, A–C 2, B–C 1, B–D 5, C–D 8, C–E 7, and D–E 2. Kruskal's algorithm takes edges in order of weight. It takes B–C (1), A–C (2), and D–E (2). It skips A–B (4) because A and B are already joined through C. It takes B–D (5), which joins the two pieces. It skips C–E (7) and C–D (8) because their ends are already connected. The four edges taken join all five vertices with total weight 10.</desc>
+<style>
+.ms-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.ms-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ms-x { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ms-t { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; }
+.ms-w { font-size: 12px; font-weight: 600; fill: var(--color-text-light, #4A5568); }
+.ms-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ms-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.ms-sk { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="ms-x" d="M 107.4,160.2 L 232.6,89.8"/>
+<text class="ms-w" x="160" y="115" text-anchor="middle">4</text>
+<path class="ms-t" d="M 107.4,179.8 L 232.6,250.2"/>
+<text class="ms-w" x="160" y="231" text-anchor="middle">2</text>
+<path class="ms-t" d="M 250.0,100.0 L 250.0,240.0"/>
+<text class="ms-w" x="236" y="175" text-anchor="middle">1</text>
+<path class="ms-t" d="M 270.0,80.0 L 410.0,80.0"/>
+<text class="ms-w" x="340" y="70" text-anchor="middle">5</text>
+<path class="ms-x" d="M 264.1,245.9 L 415.9,94.1"/>
+<text class="ms-w" x="326" y="164" text-anchor="middle">8</text>
+<path class="ms-x" d="M 270.0,260.0 L 410.0,260.0"/>
+<text class="ms-w" x="340" y="280" text-anchor="middle">7</text>
+<path class="ms-t" d="M 430.0,100.0 L 430.0,240.0"/>
+<text class="ms-w" x="444" y="175" text-anchor="middle">2</text>
+<circle class="ms-n" cx="90" cy="170" r="20"/><text class="ms-v" x="90" y="175" text-anchor="middle">A</text>
+<circle class="ms-n" cx="250" cy="80" r="20"/><text class="ms-v" x="250" y="85" text-anchor="middle">B</text>
+<circle class="ms-n" cx="250" cy="260" r="20"/><text class="ms-v" x="250" y="265" text-anchor="middle">C</text>
+<circle class="ms-n" cx="430" cy="80" r="20"/><text class="ms-v" x="430" y="85" text-anchor="middle">D</text>
+<circle class="ms-n" cx="430" cy="260" r="20"/><text class="ms-v" x="430" y="265" text-anchor="middle">E</text>
+<text class="ms-hd" x="520" y="44">EDGES IN WEIGHT ORDER</text>
+<text class="ms-s" x="520" y="74"><tspan font-weight="700">B–C</tspan> (1) take</text>
+<text class="ms-s" x="520" y="98"><tspan font-weight="700">A–C</tspan> (2) take</text>
+<text class="ms-s" x="520" y="122"><tspan font-weight="700">D–E</tspan> (2) take</text>
+<text class="ms-sk" x="520" y="146"><tspan font-weight="700">A–B</tspan> (4) skip: A and B already joined</text>
+<text class="ms-s" x="520" y="170"><tspan font-weight="700">B–D</tspan> (5) take</text>
+<text class="ms-sk" x="520" y="194"><tspan font-weight="700">C–E</tspan> (7) skip: C and E already joined</text>
+<text class="ms-sk" x="520" y="218"><tspan font-weight="700">C–D</tspan> (8) skip: C and D already joined</text>
+<text class="ms-s" x="520" y="264">4 edges join all 5 vertices. Total weight 10.</text>
+<path class="ms-t" d="M 40,330 L 70,330"/><text class="ms-s" x="80" y="334">In the tree</text>
+<path class="ms-x" d="M 200,330 L 230,330"/><text class="ms-s" x="240" y="334">Skipped: its ends were already connected, so it would close a cycle</text>
+</g>
+</svg>

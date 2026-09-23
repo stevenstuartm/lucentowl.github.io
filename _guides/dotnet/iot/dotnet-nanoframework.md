@@ -3,98 +3,59 @@ title: ".NET nanoFramework"
 layout: guide
 category: ".NET & C#"
 subcategory: "IoT & Embedded"
-description: "Running C# on bare-metal microcontrollers with .NET nanoFramework, covering supported hardware like ESP32 and STM32, programming model differences, built-in libraries, and constrained device patterns."
-tags: [iot, dotnet, embedded, microcontrollers, fundamentals, practical, firmware]
+description: "Running C# on microcontrollers with .NET nanoFramework: how it differs from .NET on a Linux board, flashing firmware and deploying code, the subset of .NET it provides, allocation and threading discipline, deep sleep, Wi-Fi and MQTT, and keeping an unattended device alive."
+tags: [practical, iot, nanoframework, microcontrollers, esp32, deep-sleep, embedded]
 ---
 
 ## What .NET nanoFramework Is
 
-[.NET nanoFramework](https://www.nanoframework.net){:target="_blank" rel="noopener noreferrer"} is a free, open-source platform that lets you write C# code to run directly on microcontrollers. Unlike a Raspberry Pi, which runs a full Linux operating system with gigabytes of RAM and a relatively powerful CPU, microcontrollers operate on kilobytes of RAM and run code on bare metal without any OS underneath them. nanoFramework bridges that gap by providing a C# runtime and a carefully chosen subset of .NET APIs that fit within those severe resource constraints.
+[.NET nanoFramework](https://www.nanoframework.net){:target="_blank" rel="noopener noreferrer"} is a free, open-source platform for running C# directly on microcontrollers. A Raspberry Pi runs a full Linux operating system with gigabytes of RAM. A microcontroller has a few hundred kilobytes of RAM and runs code on bare metal, or on a small real-time kernel, with no general-purpose OS underneath. nanoFramework bridges that gap with a compact runtime and a subset of the .NET class library small enough to fit.
 
-The project is community-driven with backing from Microsoft, and it hosts its source code on [GitHub](https://github.com/nanoframework){:target="_blank" rel="noopener noreferrer"}. Packages are distributed through [NuGet](https://www.nuget.org/packages?q=nanoFramework){:target="_blank" rel="noopener noreferrer"} under the `nanoFramework.*` namespace. Because it runs the CLR (Common Language Runtime) in a stripped-down form on the chip itself, you write normal C# in Visual Studio, deploy it over USB, and debug it with breakpoints just as you would a desktop application.
+The source lives on [GitHub](https://github.com/nanoframework){:target="_blank" rel="noopener noreferrer"}, and libraries ship as NuGet packages with the `nanoFramework.` prefix. You write C# in Visual Studio or VS Code, deploy over USB, and debug with breakpoints on the device itself.
 
-### The Critical Distinction from .NET IoT Libraries
+### nanoFramework vs .NET on a Linux Board
 
-Before going further, it helps to understand where nanoFramework sits in the broader .NET embedded ecosystem, because the two options are frequently confused.
+The two ways to run C# on hardware are often confused, and the difference decides almost everything else in this guide.
 
-**.NET IoT Libraries** target single-board computers (SBCs) like the Raspberry Pi. Those boards run Linux, and your C# application runs as a full .NET process on top of that OS. You get the complete .NET runtime, LINQ, async/await, System.Text.Json, and everything else you expect. The Linux OS handles hardware access, and .NET IoT Libraries provide convenient abstractions over the GPIO, SPI, and I2C interfaces that the OS exposes.
+With **.NET on a single-board computer** such as a Raspberry Pi, the board runs Linux, and your application runs as an ordinary .NET process on top of it. You get the complete runtime: LINQ, async/await, System.Text.Json, and all of NuGet. Linux owns the hardware, and the .NET IoT libraries wrap the GPIO, I2C, and SPI interfaces it exposes.
 
-**.NET nanoFramework** targets microcontrollers (MCUs) such as the ESP32 or STM32 family. There is no operating system at all. The nanoFramework firmware is flashed directly onto the chip, and your C# assembly runs within that firmware. You give up the full .NET API surface in exchange for a device that costs a few dollars, consumes milliwatts of power, boots in milliseconds, and can run for months on a small battery.
+With **nanoFramework on a microcontroller** such as an ESP32 or an STM32, there is no Linux. You flash the nanoFramework firmware onto the chip, and that firmware contains the runtime. Your compiled C# is deployed separately and runs inside it. You give up most of the .NET API surface in exchange for a device that costs a few dollars, draws milliwatts while running and microamps while asleep, and can run for months on a battery.
 
-| Dimension | .NET nanoFramework | .NET IoT Libraries |
-|-----------|--------------------|--------------------|
-| **Target hardware** | Microcontrollers (ESP32, STM32) | SBCs (Raspberry Pi, etc.) |
-| **Operating system** | None (bare metal) | Linux |
-| **RAM requirement** | 256 KB to a few MB | 512 MB+ typical |
-| **Power consumption** | Milliwatts, deep sleep support | Watts |
-| **Device cost** | $2 to $15 USD | $15 to $80+ USD |
-| **Full .NET runtime** | No (subset only) | Yes |
-| **LINQ / async / JSON** | Very limited or absent | Full support |
-| **Best for** | Battery-powered sensors, mass deployment | Prototyping, complex local processing |
+The code also runs differently. The compiler produces normal IL, a post-build step converts it into nanoFramework's compact format, and the firmware **interprets** it. There is no JIT. So CPU-heavy work runs far slower than the chip's clock speed suggests, and the time-critical parts of a driver live in the firmware's native code, not in C#.
 
 ---
 
-## Supported Hardware
+## Hardware and Firmware
 
-### ESP32 Family
+### Choosing a Target
 
-The ESP32 line from Espressif is the most popular target for nanoFramework projects because the chips include integrated WiFi and Bluetooth, the development boards are inexpensive, and the community tooling is mature. Several variants are supported.
+ESP32 boards from Espressif are the most common nanoFramework target. The chips integrate Wi-Fi and Bluetooth, development boards are inexpensive, and the ESP32 gets the broadest library coverage and the most community attention. Several ESP32 variants are supported. Boards with external PSRAM give the managed heap megabytes to work with instead of a couple of hundred kilobytes.
 
-**ESP32-WROOM** is the baseline module. It features a dual-core 240 MHz Xtensa LX6 processor, 520 KB of internal SRAM, and up to 16 MB of external flash depending on the board. WiFi (802.11 b/g/n) and Bluetooth Classic plus BLE are built in. Most ESP32 development boards such as the popular 30-pin and 38-pin DevKitC variants use this module. Price is typically $3 to $8 for bare modules and $8 to $15 for complete development boards.
+STM32 microcontrollers from STMicroelectronics are the other large family, supported on a set of ST's Nucleo and Discovery boards. Most lack integrated Wi-Fi, so networking goes through Ethernet or an external radio module. Texas Instruments and NXP boards are also supported, with thinner library coverage.
 
-**ESP32-WROVER** adds a PSRAM chip alongside the standard flash, bringing addressable RAM up to 4 MB or 8 MB. This matters when your application needs to buffer larger payloads, such as compressed sensor data or display framebuffers. The programming model in nanoFramework is identical to the WROOM, and the extra RAM is available through the standard allocation mechanisms.
+Which boards and chip variants are supported changes release by release, so check the [reference and community targets](https://docs.nanoframework.net/content/reference-targets/index.html){:target="_blank" rel="noopener noreferrer"} in the documentation before buying hardware. Confirm that the specific peripherals you need, such as I2C, SPI, deep sleep, or Wi-Fi, are implemented and recently maintained for that target. A board outside the supported list means building custom firmware, which is a C/C++ and toolchain project, not a C# one.
 
-**ESP32-S3** is a newer variant with a more capable dual-core Xtensa LX7 running at 240 MHz, native USB support, and improved AI acceleration instructions. It also supports larger PSRAM configurations. nanoFramework support is available and maturing. The S3 is a sensible choice for devices that need faster data processing or a native USB HID interface.
+### Flashing the Firmware
 
-**ESP32-C3** uses a single-core RISC-V processor rather than the Xtensa architecture, which simplifies the toolchain. It retains WiFi and BLE but drops Bluetooth Classic. It is less capable than the original ESP32 but draws less power at idle, making it appealing for battery-powered designs where you spend most of the time sleeping.
+Before any C# can run, the nanoFramework firmware has to be flashed onto the chip. This replaces whatever the board shipped with and installs the runtime.
 
-### STM32 Family
+The [nano Firmware Flasher (`nanoff`)](https://github.com/nanoframework/nanoFirmwareFlasher){:target="_blank" rel="noopener noreferrer"} is a .NET global tool that handles this for ESP32, STM32, and TI targets. You connect the board, name the target, and it downloads the matching firmware image and writes it over serial, DFU, or JTAG depending on the chip. After a reboot the device waits for a connection from the IDE.
 
-STM32 microcontrollers from STMicroelectronics use ARM Cortex-M cores and are widely used in commercial products. nanoFramework supports several Nucleo and Discovery evaluation boards from ST, including boards based on the STM32F7, STM32H7, and STM32L4 series. These chips generally lack integrated WiFi, so network connectivity requires an external module or Ethernet PHY. They excel in deterministic real-time behavior and have strong support for industrial communication protocols.
+### Firmware and Package Versions
 
-### Other Supported Targets
-
-Texas Instruments CC3220SF and CC1352 boards are supported, covering WiFi and sub-GHz radio applications respectively. NXP's i.MX RT1060 is a high-performance Cortex-M7 at 600 MHz with large on-chip SRAM, useful for demanding embedded workloads. Support quality varies across these targets; ESP32 boards consistently have the broadest library coverage and the most active community.
-
-### Hardware Comparison
-
-| Board | CPU | RAM | Flash | Connectivity | Price (approx) | Best Use Case |
-|-------|-----|-----|-------|-------------|----------------|---------------|
-| **ESP32-WROOM DevKit** | Dual Xtensa LX6 @ 240 MHz | 520 KB | 4 MB | WiFi + BT + BLE | $8-15 | General IoT sensor, prototyping |
-| **ESP32-WROVER DevKit** | Dual Xtensa LX6 @ 240 MHz | 520 KB + 4/8 MB PSRAM | 4-16 MB | WiFi + BT + BLE | $10-18 | Buffered telemetry, display projects |
-| **ESP32-S3 DevKit** | Dual Xtensa LX7 @ 240 MHz | 512 KB + PSRAM | 8 MB+ | WiFi + BLE + USB | $10-20 | USB HID, faster processing |
-| **ESP32-C3 DevKit** | Single RISC-V @ 160 MHz | 400 KB | 4 MB | WiFi + BLE | $5-10 | Low-power battery devices |
-| **STM32 Nucleo-F746ZG** | Cortex-M7 @ 216 MHz | 320 KB | 1 MB | Ethernet (no WiFi) | $20-30 | Industrial, real-time control |
-| **NXP i.MX RT1060** | Cortex-M7 @ 600 MHz | 1 MB on-chip | 256 KB + ext flash | Ethernet | $50+ | High-performance embedded |
-
-### Flashing nanoFramework Firmware
-
-Before you write any C# code, the nanoFramework firmware itself must be flashed onto the target chip. This replaces whatever factory firmware is on the device and installs the nanoFramework CLR. The process differs by chip family.
-
-For ESP32 boards, the [nanoff tool](https://github.com/nanoframework/nanoFirmwareFlasher){:target="_blank" rel="noopener noreferrer"} (nanoFramework Firmware Flasher) automates the process. You connect the board over USB, run the tool with the target board identifier, and it downloads the correct firmware image from GitHub releases and flashes it to the chip. The tool handles erasing, writing, and verifying the firmware in a single step.
-
-For STM32 boards, the STM32 Cube Programmer can write the nanoFramework firmware image directly over USB DFU or ST-Link. The nanoFramework GitHub releases section provides pre-built firmware images for supported boards.
-
-Once the firmware is flashed, the chip reboots and immediately begins listening for nanoFramework deployment connections over USB. At that point, Visual Studio can discover the device and deploy your application to it.
+Many nanoFramework packages are two halves: a managed assembly from NuGet and a native implementation compiled into the firmware. Deployment checks that the native half on the device is the version the managed half expects, and fails when they don't match. When a package update breaks deployment, update the firmware with `nanoff` to a release that matches, or pin the package to the version the firmware supports. The IDE's device explorer shows the firmware version and native assemblies on the connected device.
 
 ---
 
 ## Development Environment
 
-### Visual Studio and the nanoFramework Extension
+### IDE, Projects, and Packages
 
-nanoFramework development uses Visual Studio (not VS Code) with the [.NET nanoFramework Extension](https://marketplace.visualstudio.com/items?itemName=nanoframework.vscode-nanoframework){:target="_blank" rel="noopener noreferrer"} installed from the Visual Studio Marketplace. The extension adds project templates, a device explorer panel, and deployment and debugging capabilities. Visual Studio Community edition is free and fully sufficient.
+nanoFramework supports Visual Studio on Windows with the [.NET nanoFramework extension](https://github.com/nanoframework/nf-Visual-Studio-extension){:target="_blank" rel="noopener noreferrer"}, and VS Code on Windows, macOS, and Linux with the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=nanoframework.vscode-nanoframework){:target="_blank" rel="noopener noreferrer"}. Both add project templates, device discovery, deployment, and on-device debugging. The Visual Studio extension is the more complete of the two, and the VS Code extension's README lists its current debugging limitations.
 
-The extension communicates with the connected device over a serial protocol called WIRE Protocol, which runs over the USB connection. When you click Debug, Visual Studio compiles your code to a managed assembly, transfers it to the device over USB, and starts the remote debugging session. You can set breakpoints in your C# code, inspect variables, and step through execution just as you would with a desktop application, though the stepping speed is slower due to the serial communication latency.
+Projects use a `.nfproj` file, an old-style project format with nanoFramework-specific additions, rather than an SDK-style `.csproj`. Only packages built for nanoFramework work, and packages built for `net8.0` or `netstandard2.0` don't, since they assume the full .NET class library. Search NuGet for the `nanoFramework.` prefix for the platform's own libraries, and the [nanoFramework.IoT.Device](https://github.com/nanoframework/nanoFramework.IoT.Device){:target="_blank" rel="noopener noreferrer"} repository for sensor and display bindings.
 
-### Project Structure
-
-A nanoFramework solution looks structurally similar to any other .NET solution, with a `.sln` file and one or more `.csproj` projects. The key difference is the target framework moniker in the project file, which uses `netnano1.0` or a hardware-specific variant like `netnano1.0_ESP32`. NuGet packages in the `nanoFramework.*` namespace are built against these target frameworks.
-
-A minimal project contains:
-- A `.csproj` referencing `nanoFramework.CoreLibrary` and any hardware-specific packages
-- A `Program.cs` with a `Main` method as the entry point
-- No async `Main`, no top-level statements (those require newer runtime features not available in nanoFramework)
+The template's entry point is a classic `Program` class with a static `Main`:
 
 ```csharp
 using System;
@@ -106,7 +67,6 @@ namespace MyDevice
     {
         public static void Main()
         {
-            // Device entry point. No async, no top-level statements.
             while (true)
             {
                 Console.WriteLine("Alive");
@@ -117,192 +77,194 @@ namespace MyDevice
 }
 ```
 
-### NuGet Packages
+`Main` should never return on a device that is meant to keep working. An always-on application loops forever, and a battery-powered one ends each cycle in deep sleep, as described below.
 
-All nanoFramework libraries are distributed as NuGet packages with the `nanoFramework.` prefix. When you add a NuGet reference in a nanoFramework project, the package manager filters to packages targeting the `netnano` framework monikers, so standard .NET packages will not appear or install correctly.
+### Debugging
 
-Common packages include `nanoFramework.Hardware.Esp32`, `nanoFramework.Device.Gpio`, `nanoFramework.System.Net.Http`, and `nanoFramework.M2Mqtt`. Each package version is tied to a firmware version, and mismatches between the firmware on the device and the package version in your project cause deployment failures. The device explorer panel in Visual Studio shows the firmware version on the connected device, which helps you select the right package versions.
+The IDE talks to the device over nanoFramework's Wire Protocol, carried over the USB serial connection. Starting a debug session builds the project, deploys it, and attaches, so breakpoints, variable inspection, and stepping work on the chip. Each step is a round trip over serial, which makes stepping through a tight loop slow. For timing-sensitive code, instrument with `Debug.WriteLine`, let the device run freely, and read the output in the IDE. Keep the step debugger for logic problems where line-by-line execution is worth the wait.
 
 ---
 
 ## Programming Model Differences
 
-Writing C# for a microcontroller requires a different mindset than writing C# for a web service or desktop application. The same language, the same Visual Studio, but the constraints reshape every habit.
+The language is the same C#, but the constraints change most habits carried over from server or desktop code.
 
 ### What Is Available
 
-The nanoFramework runtime provides a solid subset of the core .NET types. Primitive types like `bool`, `byte`, `int`, `long`, `float`, `double`, and `char` work as expected. `String` and `StringBuilder` are available. Basic collections like `ArrayList` and `Hashtable` are present, though not their generic `List<T>` and `Dictionary<TKey, TValue>` counterparts from `System.Collections.Generic`. The `Thread` class and basic synchronization primitives like `ManualResetEvent` and `Mutex` are available. Hardware access APIs for GPIO, SPI, I2C, UART, PWM, and ADC are provided through separate NuGet packages.
+The core library covers the primitive types, `string`, arrays, exceptions, `DateTime` and `TimeSpan`, and basic threading: `Thread`, `Monitor` (so `lock` works), `Interlocked`, `ManualResetEvent`, `AutoResetEvent`, and `System.Threading.Timer`. `ArrayList` is in the core library; `Hashtable` comes from the `nanoFramework.System.Collections` package, and `StringBuilder` from `nanoFramework.System.Text`. Hardware access (GPIO, I2C, SPI, PWM, ADC, serial) comes from separate `nanoFramework.System.Device.*` packages.
+
+Reflection is available as a subset. `Assembly.GetTypes`, `Type.GetMethods`, `MethodBase.Invoke`, and `GetCustomAttributes` all exist, which is how the `nanoFramework.Json` serializer reads your types. What's missing is the heavier surface: there are no properties in the reflection model and no code generation.
 
 ### What Is Not Available
 
-Several features that .NET developers rely on daily are absent or severely restricted.
+**Generic collections.** The core library contains only a handful of generic types, the `Action`, `Func`, and `EventHandler<T>` delegates. There is no `List<T>` or `Dictionary<TKey, TValue>`, so collections are the non-generic `ArrayList` and `Hashtable`, with a cast on every read.
 
-**LINQ** is not available. There is no `System.Linq` namespace. Filtering, projecting, and aggregating collections requires explicit loops.
+**LINQ.** There is no `System.Linq`. Filtering, projecting, and aggregating are explicit loops.
 
-**async/await** is absent. The `Task` type and `Task.Delay` do not exist. Asynchronous patterns use threads and blocking calls with `Thread.Sleep` instead. Some newer nanoFramework versions have limited task support, but it is not reliable across all targets and should not be counted on for production code.
+**async/await.** There is no `Task`, no `Task.Delay`, and no async `Main`. Concurrency uses threads, and waiting uses `Thread.Sleep` or a wait handle.
 
-**Reflection** is severely limited. You cannot enumerate types, invoke methods by name, or use attributes for runtime behavior in the way that frameworks like ASP.NET rely on.
+**System.Text.Json and Newtonsoft.Json.** Neither runs. Use the `nanoFramework.Json` package, or build small payloads by hand.
 
-**System.Text.Json** and Newtonsoft.Json do not work. JSON serialization requires either a nanoFramework-specific serializer or manual string construction for simple payloads.
+**Most of NuGet.** Any package that targets full .NET assumes APIs the platform doesn't have. When a dependency has no nanoFramework equivalent, the options are porting the part you need, if it is small and self-contained, or changing the design so the device doesn't need it.
 
-**Most standard NuGet packages** will not install or run because they target `net6.0`, `net8.0`, or `netstandard2.0` rather than `netnano1.0`. Only packages built specifically for nanoFramework will work.
+### Memory and Allocation Discipline
 
-### Memory Constraints and Allocation Discipline
+An ESP32 without PSRAM has about 520 KB of SRAM, shared between the firmware, its network stack, thread stacks, and the managed heap. What remains for your objects is often around a hundred kilobytes, and the exact figure depends on the firmware build. Check it on your own device, as shown under Measuring Free Memory below.
 
-An ESP32-WROOM has 520 KB of SRAM shared between the firmware, the CLR heap, stack frames, and your application. In practice, your application might have 100 to 200 KB of usable managed heap. This sounds extreme compared to a web server, but it is workable if you think carefully about allocations.
+The managed heap has a garbage collector, and on this hardware a collection is slow and blocks everything else while it runs. The habit to build is not allocating in code that runs repeatedly, such as a sensor loop that fires every second.
 
-The managed heap in nanoFramework has a garbage collector, but GC pressure on constrained hardware is costly and can cause noticeable pauses. The discipline to develop is avoiding allocations in hot paths such as sensor reading loops that run every second or faster.
-
-String concatenation is a common source of hidden allocations. Each `+` operation on strings creates a new string object. In a loop that runs thousands of times, this generates thousands of short-lived objects that stress the GC. Use `StringBuilder` when building strings iteratively, and reuse the builder across iterations when possible.
+Building strings is the most common hidden allocation. A concatenation such as `"{\"temp\":" + t.ToString("F1") + ",\"hum\":" + h.ToString("F1") + "}"` creates each number's string, then the combined string. A `StringBuilder` created once and cleared on each pass appends into the same buffer:
 
 ```csharp
-// Avoid: creates a new string object on every iteration
-while (true)
-{
-    string message = "Temp: " + temperature.ToString();
-    Publish(message);
-    Thread.Sleep(5000);
-}
-
-// Prefer: reuse a StringBuilder to reduce allocations
 var builder = new StringBuilder();
+
 while (true)
 {
     builder.Clear();
-    builder.Append("Temp: ");
-    builder.Append(temperature);
-    Publish(builder.ToString());
-    Thread.Sleep(5000);
+    builder.Append("{\"temp\":");
+    builder.Append(ReadTemperature().ToString("F1"));
+    builder.Append(",\"hum\":");
+    builder.Append(ReadHumidity().ToString("F1"));
+    builder.Append("}");
+
+    byte[] payload = Encoding.UTF8.GetBytes(builder.ToString());
+    mqttClient.Publish("sensors/env", payload);
+
+    Thread.Sleep(30000);
 }
 ```
 
-Object pooling is another useful pattern. If your telemetry loop needs a buffer to format data before sending it, allocate the buffer once before the loop begins and reuse it on every iteration rather than allocating a new one each time.
-
-```csharp
-// Allocate once outside the loop
-byte[] sendBuffer = new byte[128];
-
-while (true)
-{
-    int length = FormatTelemetry(sendBuffer, temperature, humidity);
-    mqttClient.Publish("sensors/env", sendBuffer, 0, length);
-    Thread.Sleep(10000);
-}
-```
+The final `ToString` and `GetBytes` still allocate once per message, but none of the intermediate strings do. The same rule applies to buffers: allocate a byte array for bus reads once, outside the loop, and read into it on every pass.
 
 ### Threading Model
 
-Without async/await, concurrent behavior uses the `Thread` class directly. A typical device runs a main loop and one or more background threads for tasks like monitoring a button, watching a network connection, or sampling a sensor at a different rate than the publish interval.
+Without async/await, concurrency is `Thread` directly. The runtime schedules managed threads itself inside the interpreter. A typical device runs a main loop plus one or two background threads, for example to sample a sensor faster than the publish interval:
 
 ```csharp
-// Background thread for sensor sampling
-var sensorThread = new Thread(() =>
+private static readonly object _sync = new object();
+private static float _latestTemperature;
+
+public static void Main()
 {
+    var sensorThread = new Thread(() =>
+    {
+        while (true)
+        {
+            float reading = ReadTemperature();
+            lock (_sync) { _latestTemperature = reading; }
+            Thread.Sleep(1000); // sample every second
+        }
+    });
+    sensorThread.Start();
+
     while (true)
     {
-        latestTemperature = ReadTemperature();
-        Thread.Sleep(1000); // sample every second
+        float snapshot;
+        lock (_sync) { snapshot = _latestTemperature; }
+        PublishTelemetry(snapshot);
+        Thread.Sleep(30000); // publish every 30 seconds
     }
-});
-sensorThread.IsBackground = true;
-sensorThread.Start();
-
-// Main thread handles publishing at a slower cadence
-while (true)
-{
-    PublishTelemetry(latestTemperature);
-    Thread.Sleep(30000); // publish every 30 seconds
 }
 ```
 
-Shared state between threads requires synchronization. `lock` works in nanoFramework, as does `ManualResetEvent` for signaling between threads.
+Every thread costs a stack out of the same small RAM, so keep the count low. Signal between threads with `ManualResetEvent` or `AutoResetEvent` rather than polling a flag.
 
 ---
 
 ## Built-in Libraries
 
-### Hardware Access: GPIO and PWM
+### GPIO
 
-The `nanoFramework.Device.Gpio` package provides the `GpioController` class for reading and writing digital pins. This is the fundamental API for controlling LEDs, reading button states, toggling relays, and communicating with simple sensors.
+The `nanoFramework.System.Device.Gpio` package provides a `GpioController` in the `System.Device.Gpio` namespace, deliberately shaped like the one in .NET's IoT libraries. `OpenPin` returns a `GpioPin` you read and write directly:
 
 ```csharp
-using nanoFramework.Hardware.Esp32;
 using System.Device.Gpio;
 
 var gpio = new GpioController();
 
-// Configure a pin as output and drive it high
-var led = gpio.OpenPin(2, PinMode.Output);
+// Output: drive the on-board LED (GPIO 2 on many ESP32 dev boards)
+GpioPin led = gpio.OpenPin(2, PinMode.Output);
 led.Write(PinValue.High);
 
-// Configure a pin as input with an internal pull-up resistor
-var button = gpio.OpenPin(0, PinMode.InputPullUp);
+// Input with the internal pull-up; the button pulls the pin to ground
+GpioPin button = gpio.OpenPin(0, PinMode.InputPullUp);
 bool pressed = button.Read() == PinValue.Low;
 ```
 
-PWM output for controlling servo motors or LED brightness uses the `nanoFramework.Device.Pwm` package, which provides a `PwmChannel` abstraction.
+`GpioPin` also has a `ValueChanged` event for edge-driven input and a `DebounceTimeout` property that filters out a mechanical button's bounce.
 
-### I2C and SPI
+### I2C, SPI, and PWM
 
-Sensors often communicate over I2C or SPI buses. The `nanoFramework.Device.I2c` and `nanoFramework.Device.Spi` packages provide controller classes that manage the bus and perform read/write operations. Many common sensors (temperature, pressure, IMU, display controllers) have community-written device libraries in the nanoFramework repository that wrap these bus APIs with convenient, sensor-specific interfaces.
+The `nanoFramework.System.Device.I2c`, `nanoFramework.System.Device.Spi`, and `nanoFramework.System.Device.Pwm` packages provide the bus and PWM classes. On an ESP32, most peripherals can be routed to almost any pin, so you usually assign pins in code with the `Configuration` class from `nanoFramework.Hardware.Esp32` before opening the bus. Sensor and display drivers from nanoFramework.IoT.Device wrap these buses in device-specific classes, and many are ports of .NET's own IoT bindings.
 
-### ESP32-Specific Hardware
+### Deep Sleep on ESP32
 
-The `nanoFramework.Hardware.Esp32` package exposes capabilities specific to the ESP32 family.
+`nanoFramework.Hardware.Esp32` exposes ESP32-specific features, and the most important is deep sleep. In deep sleep the CPU and most of the chip power down, current falls from tens of milliamps to microamps, and only a small low-power domain stays on to wake the chip. A sensor that reports every five minutes and spends the rest of the time asleep lasts orders of magnitude longer on a battery than one that stays awake.
 
-**Deep sleep** is a power management mode where the processor stops executing and draws microamps rather than milliamps. The device can wake from deep sleep after a timer interval or when an external GPIO pin changes state. On a battery-powered sensor that reads temperature every five minutes, the device might spend 99% of its time in deep sleep, extending battery life from hours to months.
+Waking from deep sleep is a reboot. RAM is lost, and execution starts again from `Main`. So a deep-sleep device isn't a loop with a pause in it. Each boot is one complete cycle:
 
 ```csharp
 using nanoFramework.Hardware.Esp32;
 
-// Sleep for 5 minutes (in microseconds), then reboot and run Main() again
-Sleep.EnableWakeupByTimer(TimeSpan.FromMinutes(5));
+public static void Main()
+{
+    // Tells a timer wake apart from a power-on or a pin wake
+    Sleep.WakeupCause cause = Sleep.GetWakeupCause();
+
+    ConnectToWifi();
+    PublishReading(ReadTemperatureSensor());
+
+    Sleep.EnableWakeupByTimer(TimeSpan.FromMinutes(5));
+    Sleep.StartDeepSleep();
+    // Nothing after StartDeepSleep runs
+}
+```
+
+Anything that must survive between cycles, such as a reading counter or the time of the last successful upload, has to be written to flash before sleeping and read back at startup.
+
+A device can also sleep until a pin changes rather than for a fixed time. A door sensor should wake when the door opens, not poll:
+
+```csharp
+// Wake when GPIO 33 goes low (the door opening pulls the pin to ground)
+Sleep.EnableWakeupByPin(Sleep.WakeupGpioPin.Pin33, 0);
 Sleep.StartDeepSleep();
-// Code after this point does not execute; the device halts.
 ```
 
-Each wake from deep sleep restarts execution from `Main()`. If you need to persist state across sleep cycles (such as a reading counter or a WiFi credential), write it to the non-volatile storage before sleeping and read it at startup.
+### Wi-Fi
 
-**The watchdog timer** protects against hangs. If your code gets stuck in a loop or blocks indefinitely, the watchdog fires and resets the chip. You enable the watchdog with a timeout, and then your main loop must call the watchdog's reset method regularly to prevent a forced reboot.
+On ESP32, the `nanoFramework.System.Device.Wifi` package provides `WifiNetworkHelper`, which connects, waits for an address, and can wait for the clock to be set:
 
 ```csharp
-// Configure a 30-second watchdog timeout
-var watchdog = new nanoFramework.Hardware.Esp32.Watchdog(30000);
-watchdog.Enable();
+using System.Threading;
+using nanoFramework.Networking;
 
-while (true)
+var cts = new CancellationTokenSource(60000);
+
+bool connected = WifiNetworkHelper.ConnectDhcp(
+    "MySSID",
+    "MyPassword",
+    reconnectionKind: WifiReconnectionKind.Automatic,
+    requiresDateTime: true,
+    token: cts.Token);
+
+if (!connected)
 {
-    DoWork();
-    watchdog.Reset(); // must call before 30 seconds elapse
-    Thread.Sleep(5000);
+    // Inspect WifiNetworkHelper.Status and HelperException, then retry or sleep
 }
 ```
 
-### Networking
+The call blocks until the connection is up or the token expires. `WifiReconnectionKind.Automatic` has the firmware rejoin the network after it drops. `requiresDateTime: true` matters more than it looks, because the device has no battery-backed clock by default. Until the time is set over the network, `DateTime.UtcNow` returns a date near the start of the epoch, which breaks TLS certificate validation and every timestamp you send.
 
-The `nanoFramework.System.Net` package provides an HTTP client for making web requests. SSL/TLS is supported on ESP32, though you may need to supply the root CA certificate for your endpoint depending on the firmware build. The client API is synchronous, reflecting the threading model.
-
-WiFi connection management on ESP32 uses the `Wireless80211` class from `nanoFramework.Hardware.Esp32`. Connecting to a network is a blocking operation, and handling reconnection after signal loss requires checking the connection state in a loop or background thread.
-
-```csharp
-using nanoFramework.Hardware.Esp32;
-
-Wireless80211.Configure("MySSID", "MyPassword");
-var result = Wireless80211.Connect();
-
-if (result != WiFiConnectionStatus.Success)
-{
-    // Handle connection failure: retry, log, or enter deep sleep
-}
-```
+HTTP comes from the `nanoFramework.System.Net.Http` package, which provides an `HttpClient` with a synchronous API. TLS needs the server's root CA certificate on the device, supplied either in code or through the device's stored configuration.
 
 ### MQTT
 
-MQTT is the dominant protocol for IoT telemetry because it is lightweight and designed for unreliable networks. The `nanoFramework.M2Mqtt` package provides an MQTT client that works on ESP32 with both plain TCP and TLS connections.
+The `nanoFramework.M2Mqtt` package provides an MQTT client that works over plain TCP or TLS:
 
 ```csharp
-using nanoFramework.M2Mqtt;
 using System.Text;
+using nanoFramework.M2Mqtt;
+using nanoFramework.M2Mqtt.Messages;
 
 var client = new MqttClient("mqtt.broker.local");
 client.Connect("device-001");
@@ -311,7 +273,7 @@ client.Connect("device-001");
 byte[] payload = Encoding.UTF8.GetBytes("{\"temp\":22.5}");
 client.Publish("sensors/temperature", payload);
 
-// Subscribe to a command topic
+// Receive commands
 client.MqttMsgPublishReceived += (sender, args) =>
 {
     string command = new string(Encoding.UTF8.GetChars(args.Message));
@@ -320,74 +282,24 @@ client.MqttMsgPublishReceived += (sender, args) =>
 client.Subscribe(new[] { "devices/device-001/commands" }, new[] { MqttQoSLevel.AtLeastOnce });
 ```
 
-### Azure IoT Hub
+Like the rest of the platform, the client is synchronous: `Connect` and `Publish` block the calling thread, and received messages arrive on a thread the client owns. Keep command formats simple, such as a short string like `restart` or `sleep`, so the device doesn't need to parse JSON at all.
 
-For devices that report directly to Azure, the `nanoFramework.Azure.Devices` package provides a device client for Azure IoT Hub. It handles the underlying MQTT or AMQP connection, device-to-cloud telemetry, cloud-to-device commands, and device twin synchronization.
-
-```csharp
-using nanoFramework.Azure.Devices.Client;
-
-var deviceClient = new DeviceClient(
-    iotHubHostName: "myhub.azure-devices.net",
-    deviceId: "my-device-001",
-    sasKey: "base64-encoded-key");
-
-deviceClient.Open();
-
-// Send telemetry
-var message = new Message("{\"temp\":22.5}");
-deviceClient.SendMessage(message);
-
-deviceClient.Close();
-```
+For Azure IoT Hub, the `nanoFramework.Azure.Devices.Client` package provides a `DeviceClient` that connects over MQTT with a SAS key or an X.509 certificate. It sends telemetry with `SendMessage`, and it supports device twins and direct methods.
 
 ---
 
-## Common Patterns
+## Keeping an Unattended Device Alive
 
-### Sensor Reading Loop
+### Reconnect Before Every Publish
 
-The most common pattern in nanoFramework devices is a loop that reads a sensor, formats the data, sends it somewhere, and then sleeps. The sleep interval depends on how frequently the application needs data and how aggressively it needs to conserve power.
-
-```csharp
-public static void Main()
-{
-    ConnectToWifi();
-    var mqttClient = ConnectToMqtt();
-
-    var builder = new StringBuilder();
-
-    while (true)
-    {
-        float temperature = ReadTemperatureSensor();
-        float humidity = ReadHumiditySensor();
-
-        builder.Clear();
-        builder.Append("{\"temp\":");
-        builder.Append(temperature.ToString("F1"));
-        builder.Append(",\"hum\":");
-        builder.Append(humidity.ToString("F1"));
-        builder.Append("}");
-
-        byte[] payload = Encoding.UTF8.GetBytes(builder.ToString());
-        mqttClient.Publish("sensors/env", payload);
-
-        Thread.Sleep(30000);
-    }
-}
-```
-
-### WiFi Reconnection
-
-WiFi connections on battery-powered or mobile devices drop unexpectedly. A robust device checks the connection state before each publish attempt and reconnects when needed, rather than assuming the connection established at startup will persist.
+Wi-Fi and broker connections drop, and a device that assumes its startup connection is still up will fail silently from then on. Check both before each publish and reconnect when needed:
 
 ```csharp
 private static void EnsureConnected(MqttClient client)
 {
-    if (!Wireless80211.IsConnected)
+    if (WifiNetworkHelper.Status != NetworkHelperStatus.NetworkIsReady)
     {
-        Wireless80211.Connect();
-        Thread.Sleep(5000); // Allow DHCP to complete
+        WifiNetworkHelper.Reconnect(requiresDateTime: true, token: new CancellationTokenSource(30000).Token);
     }
 
     if (!client.IsConnected)
@@ -397,139 +309,46 @@ private static void EnsureConnected(MqttClient client)
 }
 ```
 
-### Deep Sleep with Timer Wake
+A deep-sleep device mostly avoids this problem, because it connects fresh on every wake.
 
-A temperature sensor that only needs to report every five minutes gains nothing by staying awake between readings. Deep sleep reduces current draw from around 100-240 mA (active) to roughly 10-150 microamps depending on the chip configuration. Over time this difference is the gap between a battery lasting days and lasting months.
+### Recovering From Hangs
 
-```csharp
-public static void Main()
-{
-    // Read wakeup cause to differentiate first boot from timer wakeup
-    var wakeupCause = Sleep.GetWakeupCause();
+A device in a cupboard or on a pole can't be power-cycled by hand, and a network call or a sensor read that never returns leaves it stuck until someone does. The standard defence is a watchdog: a hardware timer that resets the chip unless the application keeps proving it's alive.
 
-    // Read sensor, connect WiFi, publish reading
-    ConnectToWifi();
-    float temperature = ReadTemperatureSensor();
-    PublishReading(temperature);
-    DisconnectWifi();
+nanoFramework's ESP32 library doesn't expose the chip's watchdog timers to C#, so a C# application has to build this itself or add it in hardware. Two approaches work:
 
-    // Schedule next wakeup and sleep
-    Sleep.EnableWakeupByTimer(TimeSpan.FromMinutes(5));
-    Sleep.StartDeepSleep();
-}
-```
+- **A software supervisor.** Record a timestamp at the end of each successful loop iteration. A separate thread checks it periodically and calls `Power.RebootDevice()` from `nanoFramework.Runtime.Native` when it's too old. This recovers from a hung managed call, but not from a fault that stops the runtime itself.
+- **An external watchdog.** A supervisor chip or a power-management IC with a watchdog, which a GPIO pin or a bus write resets on each loop. This covers every kind of hang, at the cost of a part on the board.
 
-Each call to `Main()` is a complete cycle: wake, sense, send, sleep. The device keeps no long-running state; anything that needs to persist across cycles goes into non-volatile storage before sleeping.
+Wrap each loop iteration in a catch-all `try`/`catch` as well, so that one bad reading is logged and skipped rather than ending `Main`.
 
-### External Interrupt Wake
+### Measuring Free Memory
 
-Some applications need to wake on an event rather than a timer. A door sensor, for example, should wake and send an alert when the door opens rather than polling on a schedule. GPIO wakeup assigns a pin as the wakeup source, and the device sleeps until that pin changes state.
+An `OutOfMemoryException`, or erratic behaviour that grows worse the longer the device runs, usually means the heap is being exhausted. `nanoFramework.Runtime.Native.GC.Run` forces a collection and returns the free heap in bytes, which makes it easy to watch during development:
 
 ```csharp
-// Wake on GPIO 33 going low (door opens, pulling pin to ground)
-Sleep.EnableWakeupByPin(Sleep.WakeupGPIOPin.Pin33, 0);
-Sleep.StartDeepSleep();
-```
-
-### Watchdog-Protected Main Loop
-
-Any production device running unattended should have a watchdog timer. Network calls, sensor reads, and MQTT publishes can all hang indefinitely if something goes wrong, and without a watchdog the device locks up until someone physically resets it.
-
-```csharp
-public static void Main()
-{
-    var watchdog = new nanoFramework.Hardware.Esp32.Watchdog(60000); // 60-second timeout
-    watchdog.Enable();
-
-    ConnectToWifi();
-
-    while (true)
-    {
-        try
-        {
-            float reading = ReadSensor();
-            PublishReading(reading);
-        }
-        catch (Exception ex)
-        {
-            // Log the error to non-volatile storage if needed
-            Debug.WriteLine("Error: " + ex.Message);
-        }
-
-        watchdog.Reset();
-        Thread.Sleep(10000);
-    }
-}
-```
-
----
-
-## When to Use nanoFramework vs .NET IoT Libraries
-
-The choice between these two approaches comes down to what the device needs to do and the constraints it must operate within.
-
-**Choose nanoFramework when** the device is battery-powered and needs to last weeks or months on a charge, when you are deploying dozens or hundreds of identical sensors where per-unit cost matters, when the device has a single focused job such as reading a sensor and publishing data, or when you need the device to boot and begin operating within a second or two of power-on.
-
-**Choose .NET IoT Libraries when** you are prototyping and want the full .NET ecosystem available without thinking about memory budgets, when the device needs to run multiple services or complex logic concurrently, when the device is permanently mains-powered and power consumption is not a concern, or when you need libraries that only exist for full .NET such as ML.NET inference or advanced image processing.
-
-| Consideration | nanoFramework (MCU) | .NET IoT Libraries (SBC) |
-|---------------|---------------------|--------------------------|
-| **Battery life** | Months to years with deep sleep | Hours to days at best |
-| **Device cost** | $3 to $15 | $15 to $80+ |
-| **API surface** | Subset of .NET | Full .NET |
-| **NuGet ecosystem** | nanoFramework packages only | All of NuGet |
-| **Development iteration speed** | Slower (flash + deploy cycle) | Fast (run on Pi, edit in place) |
-| **Debugging experience** | Works but slower over serial | Full local debugging speed |
-| **Mass deployment suitability** | High | Low to medium |
-| **Complex processing** | Constrained | Unconstrained |
-| **Boot time** | Seconds | 30+ seconds (Linux boot) |
-| **Production reliability** | High (no OS layer) | Moderate (OS can interfere) |
-
----
-
-## Limitations and Workarounds
-
-### Incompatible NuGet Packages
-
-The most common frustration when starting with nanoFramework is discovering that a NuGet package you rely on will not install. Packages targeting `net6.0`, `net8.0`, or `netstandard2.0` are incompatible because they assume a full CLR with a runtime API surface that nanoFramework does not provide.
-
-The workaround is to search for nanoFramework-specific alternatives in the `nanoFramework.*` namespace on NuGet. If no package exists for the library you need, you have the option of porting the relevant portion yourself (for small, self-contained libraries) or rethinking whether a different approach avoids the dependency.
-
-### JSON Without System.Text.Json
-
-Since standard JSON serializers are unavailable, device code typically handles small JSON payloads manually with `StringBuilder` for output and simple string parsing for input, or uses the `nanoFramework.Json` package which provides basic serialization for simple types.
-
-For telemetry that flows in one direction (device to cloud), hand-building the JSON string is usually straightforward and avoids any serializer dependency:
-
-```csharp
-builder.Clear();
-builder.Append("{\"deviceId\":\"sensor-01\",\"temp\":");
-builder.Append(temp.ToString("F2"));
-builder.Append(",\"ts\":\"");
-builder.Append(DateTime.UtcNow.ToString("o"));
-builder.Append("\"}");
-```
-
-For inbound commands from the cloud, keeping the command format simple (a short string like `"restart"` or `"sleep"`) avoids the need for a JSON parser entirely.
-
-### Debugging Latency
-
-Stepping through code in the Visual Studio debugger over USB serial is noticeably slower than debugging desktop .NET code. Each step involves a round-trip over WIRE Protocol, which can make debugging tight loops tedious. The practical approach is to instrument code with `Debug.WriteLine` calls, run the device freely, and observe the output in the Output window. Reserve the step debugger for investigating specific logic problems where line-by-line execution is worth the wait.
-
-### Uneven Board Support
-
-Not all supported boards have the same level of library coverage or firmware stability. ESP32 boards have by far the most community attention and the broadest library ecosystem. STM32 boards have solid support for the boards that are officially listed, but adding an unsupported STM32 variant requires building custom firmware, which is an advanced undertaking. TI and NXP targets receive less community contribution and may have gaps in peripheral support.
-
-Before committing to a board for a production design, check the nanoFramework GitHub repository to confirm that the specific peripherals you need (I2C, SPI, deep sleep, WiFi) are supported and recently maintained for that target.
-
-### Memory Profiling
-
-When a device starts throwing `OutOfMemoryException` or behaving erratically under load, the usual culprit is heap exhaustion. nanoFramework exposes `GC.Run(true)` to force a collection and returns the available heap through `nanoFramework.Runtime.Native.GC.Run(false)` (which runs GC but also returns heap size). Instrumenting the main loop to log available heap at each iteration makes it straightforward to identify where allocations are accumulating.
-
-```csharp
-// Log available heap for diagnostics during development
-uint freeBytes = nanoFramework.Runtime.Native.GC.Run(false);
+// Force a collection (true also compacts) and report free heap
+uint freeBytes = nanoFramework.Runtime.Native.GC.Run(true);
 Debug.WriteLine("Free heap: " + freeBytes.ToString() + " bytes");
 ```
 
-Remove or disable this logging before production deployment, since the GC call itself has a small overhead cost.
+Log it once per loop iteration. A number that drifts steadily down points at something accumulating, and one that dips at the same point every cycle shows where the large allocation is. Remove the call from production builds, since forcing a collection costs time and blocks the device while it runs.
+
+---
+
+## When to Use nanoFramework vs .NET on a Linux Board
+
+**Choose nanoFramework** when the device runs on a battery for weeks or months, when you are deploying many identical units and per-unit cost matters, or when the device has one focused job such as reading a sensor and publishing the value.
+
+**Choose .NET on a Linux board** when you are prototyping and don't want to budget memory, when the device runs several services or complex logic, when it has mains power, or when you need libraries that exist only for full .NET, such as ML inference or image processing.
+
+| Consideration | nanoFramework (microcontroller) | .NET on a Linux board |
+|---------------|---------------------|--------------------------|
+| **Operating system** | None, or a small real-time kernel inside the firmware | Linux |
+| **RAM** | Hundreds of KB, a few MB with PSRAM | Hundreds of MB to several GB |
+| **Code execution** | Interpreted | JIT or ahead-of-time compiled |
+| **Power** | Milliwatts running, microwatts in deep sleep | Watts |
+| **API surface** | Subset of .NET, no generic collections, LINQ, or async | Full .NET |
+| **Packages** | nanoFramework packages only | All of NuGet |
+| **Startup** | Seconds or less from power-on | Tens of seconds for Linux to boot |
+| **Unit cost** | A few dollars for the chip | Tens of dollars for the board |

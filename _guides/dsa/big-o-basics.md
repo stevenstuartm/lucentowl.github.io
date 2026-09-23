@@ -4,7 +4,7 @@ layout: guide
 category: Data Structures & Algorithms
 subcategory: Fundamentals
 description: "How to state and compare what an algorithm costs: the growth-rate ladder from O(1) to O(n!), what O, Ω, and Θ bound, why bounds are not best or worst cases, and how space and amortized costs are analyzed."
-tags: [complexity-analysis, big-o, asymptotic-notation, amortized-analysis, space-complexity, fundamentals]
+tags: [complexity-analysis, big-o, recursion-tree, amortized-analysis, space-complexity, fundamentals]
 ---
 {% raw %}
 
@@ -47,6 +47,8 @@ The cost doesn't depend on the input size. Reading an array element by index tak
 ```csharp
 public static int GetFirst(int[] array)
 {
+    if (array.Length == 0)
+        throw new ArgumentException("The array is empty.", nameof(array));
     return array[0];  // Same cost regardless of array size
 }
 ```
@@ -97,7 +99,7 @@ public static int FindMax(int[] array)
 
 ### O(n log n): Linearithmic Time
 
-This is the typical cost of divide-and-conquer algorithms that split the input in half and do linear work to combine the halves. Merge sort is the standard example. It is also the floor for sorting by comparison. A comparison-based sort has to tell apart all n! possible orderings of its input, which takes at least log₂(n!) comparisons on its hardest input, and log₂(n!) grows like n log₂ n. So merge sort, and heap sort (which sorts using a heap, a tree kept inside an array), are as good as comparison sorting gets, up to constant factors.
+This is the typical cost of divide-and-conquer algorithms that split the input in half and do linear work to combine the halves. Merge sort is the standard example. It is also the floor for sorting by comparison. A comparison-based sort has to tell apart all n! possible orderings of its input, which takes at least log₂(n!) comparisons on its hardest input, and log₂(n!) grows like n log₂ n. So merge sort and heap sort are as good as comparison sorting gets, up to constant factors.
 
 ```csharp
 // Merge sort's recursive structure (the Merge step is omitted)
@@ -185,16 +187,18 @@ A bound (O, Ω, Θ) and a case (best, worst, average) are separate choices. A co
 
 - **Worst case** is the most work over all inputs of size n. It is the usual default, because it is a guarantee.
 - **Best case** is the least work over all inputs of size n. It is rarely useful alone, since almost every algorithm has some easy input.
-- **Average case**, also called expected case, is the expected work over a stated distribution of inputs, or over the algorithm's own random choices. It means nothing until the distribution is named.
+- **Average case** is the expected work over a stated distribution of inputs. It means nothing until the distribution is named.
+
+A fourth measure applies to algorithms that make random choices of their own. Their **expected running time** averages over those choices for a fixed input, so it holds for every input, with no assumption about how inputs are distributed.
 
 | Algorithm | Best case | Average case | Worst case |
 | --- | --- | --- | --- |
 | Linear search | Θ(1), target is first | Θ(n), target at a uniformly random position | Θ(n), target is last or absent |
 | Insertion sort | Θ(n), input already sorted | Θ(n²), input in random order | Θ(n²), input reverse-sorted |
-| Quicksort (splits the input around one chosen element, the pivot, then sorts each side) | Θ(n log n) | Θ(n log n), input in random order or pivots chosen at random | Θ(n²), every split maximally uneven |
+| Quicksort | Θ(n log n) | Θ(n log n), input in random order | Θ(n²), every split maximally uneven |
 | Hash table lookup | Θ(1) | Θ(1), keys spread evenly and the table resized to keep it from filling | Θ(n), every key in the same slot |
 
-Quicksort shows why the case has to be named. "Quicksort is O(n log n)" is true of its average case and false of its worst.
+Quicksort splits the input around one chosen element, the pivot, then sorts each side. It shows why the case has to be named. "Quicksort is O(n log n)" is true of its average case and false of its worst. Choosing the pivot at random changes the kind of guarantee rather than the worst case. The expected running time becomes Θ(n log n) on every input, though an unlucky run can still take Θ(n²).
 
 ---
 
@@ -225,6 +229,25 @@ for (int i = 0; i < n; i++)
 for (int i = n; i > 1; i /= 2) { /* constant work */ }
 ```
 
+The assumption breaks more often than it looks, because a library call can hide a loop. `List<T>.Contains`, `IndexOf`, and `Insert(0, item)` each scan or shift the whole list, so one inside a loop makes the loop O(n²). Building a string with `+=` in a loop does the same, since each concatenation copies everything built so far.
+
+```csharp
+// Looks like one loop, but Contains scans the list each time: O(n²)
+var unique = new List<int>();
+foreach (int x in items)
+    if (!unique.Contains(x))
+        unique.Add(x);
+
+// The same result in O(n) on average: HashSet<T>.Add is O(1) on average
+var seen = new HashSet<int>();
+var uniqueFast = new List<int>();
+foreach (int x in items)
+    if (seen.Add(x))                         // Add returns false if x was already present
+        uniqueFast.Add(x);
+```
+
+Most .NET collection methods state their cost in the documentation's Remarks section, so check it for anything called inside a loop.
+
 ### Give Different Inputs Different Variables
 
 Two inputs of independent sizes need two variables. The loops below are O(a × b), not O(n²), and treating them as O(n²) hides the fact that a small `arrayA` keeps the cost low however large `arrayB` grows.
@@ -241,7 +264,7 @@ for (int i = 0; i < arrayA.Length; i++)      // a iterations
 
 ### Sum a Recursion Level by Level
 
-A recursive function's calls form a recursion tree: the first call at the top, and below each call the calls it makes. When every call does the same constant amount of work, the cost is just the number of calls. When the work per call varies, sum the work one level of the tree at a time instead.
+A recursive function's calls form a recursion tree. The first call sits at the top, and below each call are the calls it makes. When every call does the same constant amount of work, the cost is just the number of calls. When the work per call varies, sum the work one level of the tree at a time instead.
 
 Merge sort is the standard case. Each call splits its input in half and makes two calls, so the input size halves at each level and the tree has log₂ n levels of merging. The calls on one level split the whole input between them, so the merges on each level handle n elements in total. log₂ n levels of n work each give O(n log n). Multiplying the number of calls (about 2n) by the largest work per call (n) would give O(n²), a correct but badly loose bound.
 
@@ -297,15 +320,15 @@ public static long Factorial(int n)
 
 Some operations are usually cheap and occasionally expensive. Amortized analysis bounds the total cost of a worst-case sequence of operations and divides by the number of operations. It involves no probability. Unlike average-case analysis, it assumes nothing about how inputs are distributed, so an amortized bound is a guarantee.
 
-A dynamic array that doubles its capacity when full is the standard example. Most appends write one element. An append that finds the array full first copies every element into a new array twice the size. Over n appends starting from capacity 1, the copies total 1 + 2 + 4 + ... up to n, which is less than 2n. So n appends cost O(n) in total and O(1) amortized each, even though one append can cost O(n).
+A dynamic array that doubles its capacity when full is the standard example. An append that finds the array full copies every element first, so one append can cost O(n). But the copies across n appends add up to less than 2n, so n appends cost O(n) in total and O(1) amortized each.
 
 There are three standard ways to reach an amortized bound:
 
 | Method | How it assigns cost |
 | --- | --- |
 | Aggregate | Bound the total cost of n operations, then divide by n. The doubling argument above is an aggregate argument. |
-| Accounting | Charge each cheap operation a little more than it costs and bank the surplus as credit that pays for later expensive operations. |
-| Potential | Define a potential function Φ over the structure's state. The amortized cost of an operation is its actual cost plus the change in Φ. |
+| Accounting | Charge each cheap operation a little more than it costs and bank the surplus as credit that pays for later expensive operations. The bank must never go negative. For the doubling array, charging 3 per append works: 1 writes the element, and 2 are banked to pay for copying it and one older element at the next doubling. |
+| Potential | Define a potential function Φ, a number computed from the structure's state that never falls below its starting value. The amortized cost of an operation is its actual cost plus the change in Φ. For a doubling array that starts empty and grows to capacities 1, 2, 4, and so on, Φ = 2 × count − capacity rises by 2 on each cheap append and drops to pay for each copy, so every append costs 3 amortized. |
 
 ---
 
@@ -327,7 +350,7 @@ Growth rate translates into a rough ceiling on input size. The table assumes a b
 
 ## Common Misconceptions
 
-- **A better growth rate always wins.** For small n, a simple O(n²) algorithm can beat an O(n log n) one because its constant factor is smaller. .NET's built-in sort switches to insertion sort, which is O(n²) in the worst case, for subarrays of 16 elements or fewer for this reason.
+- **A better growth rate always wins.** For small n, a simple O(n²) algorithm can beat an O(n log n) one because its constant factor is smaller. `Array.Sort` and `List<T>.Sort` switch to insertion sort, which is O(n²) in the worst case, for subarrays of 16 elements or fewer for this reason.
 - **O(n log n) is much slower than O(n).** log₂ n is about 20 at a million items, so the gap is a factor of about 20, and constant factors often matter as much.
 - **Two algorithms with the same Big O are equally fast.** Big O drops constant factors, so two O(n) algorithms can differ in speed by a factor of 100.
 

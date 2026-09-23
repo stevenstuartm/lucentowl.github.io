@@ -1,0 +1,173 @@
+---
+title: "Binary Search Step by Step"
+kind: flow
+system: dsa
+summary: "How binary search halves the range it still has to check with each comparison until it finds a match or the range is empty."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 408" role="img" aria-labelledby="bs2-title bs2-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="bs2-title">Binary search for 63 in a sorted array of 15 values</title>
+<desc id="bs2-desc">A sorted array of 15 values, 3, 8, 12, 17, 21, 25, 30, 34, 41, 47, 52, 58, 63, 70, 77, at indexes 0 to 14, searched for 63. Step 1: the range is 0 to 14, the middle is index 7, and 34 is less than 63, so the left half is ruled out and left becomes 8. Step 2: the range is 8 to 14, the middle is index 11, and 58 is less than 63, so left becomes 12. Step 3: the range is 12 to 14, the middle is index 13, and 70 is more than 63, so right becomes 12. Step 4: the range is just index 12, which holds 63, a match. Four comparisons cover 15 values, because each one rules out half of what remains.</desc>
+<style>
+.bs2-in { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.bs2-out { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.bs2-mid { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.25; }
+.bs2-hit { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.25; }
+.bs2-v { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bs2-vo { font-size: 13px; fill: var(--color-text-light, #4A5568); }
+.bs2-v-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.bs2-i { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.bs2-st { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.bs2-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bs2-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="bs2-hd" x="40" y="30">SEARCHING FOR 63 IN 15 SORTED VALUES</text>
+<text class="bs2-i" x="132.0" y="58" text-anchor="middle">0</text>
+<text class="bs2-i" x="176.0" y="58" text-anchor="middle">1</text>
+<text class="bs2-i" x="220.0" y="58" text-anchor="middle">2</text>
+<text class="bs2-i" x="264.0" y="58" text-anchor="middle">3</text>
+<text class="bs2-i" x="308.0" y="58" text-anchor="middle">4</text>
+<text class="bs2-i" x="352.0" y="58" text-anchor="middle">5</text>
+<text class="bs2-i" x="396.0" y="58" text-anchor="middle">6</text>
+<text class="bs2-i" x="440.0" y="58" text-anchor="middle">7</text>
+<text class="bs2-i" x="484.0" y="58" text-anchor="middle">8</text>
+<text class="bs2-i" x="528.0" y="58" text-anchor="middle">9</text>
+<text class="bs2-i" x="572.0" y="58" text-anchor="middle">10</text>
+<text class="bs2-i" x="616.0" y="58" text-anchor="middle">11</text>
+<text class="bs2-i" x="660.0" y="58" text-anchor="middle">12</text>
+<text class="bs2-i" x="704.0" y="58" text-anchor="middle">13</text>
+<text class="bs2-i" x="748.0" y="58" text-anchor="middle">14</text>
+<text class="bs2-st" x="40" y="89">step 1</text>
+<rect class="bs2-in" x="112" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="132.0" y="89" text-anchor="middle">3</text>
+<rect class="bs2-in" x="156" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="176.0" y="89" text-anchor="middle">8</text>
+<rect class="bs2-in" x="200" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="220.0" y="89" text-anchor="middle">12</text>
+<rect class="bs2-in" x="244" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="264.0" y="89" text-anchor="middle">17</text>
+<rect class="bs2-in" x="288" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="308.0" y="89" text-anchor="middle">21</text>
+<rect class="bs2-in" x="332" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="352.0" y="89" text-anchor="middle">25</text>
+<rect class="bs2-in" x="376" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="396.0" y="89" text-anchor="middle">30</text>
+<rect class="bs2-mid" x="420" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v-inv" x="440.0" y="89" text-anchor="middle">34</text>
+<rect class="bs2-in" x="464" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="484.0" y="89" text-anchor="middle">41</text>
+<rect class="bs2-in" x="508" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="528.0" y="89" text-anchor="middle">47</text>
+<rect class="bs2-in" x="552" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="572.0" y="89" text-anchor="middle">52</text>
+<rect class="bs2-in" x="596" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="616.0" y="89" text-anchor="middle">58</text>
+<rect class="bs2-in" x="640" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="660.0" y="89" text-anchor="middle">63</text>
+<rect class="bs2-in" x="684" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="704.0" y="89" text-anchor="middle">70</text>
+<rect class="bs2-in" x="728" y="68" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="748.0" y="89" text-anchor="middle">77</text>
+<text class="bs2-s" x="110" y="119">left 0, right 14, mid 7. sorted[7] is 34, less than 63, so left = 8.</text>
+<text class="bs2-st" x="40" y="163">step 2</text>
+<rect class="bs2-out" x="112" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="132.0" y="163" text-anchor="middle">3</text>
+<rect class="bs2-out" x="156" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="176.0" y="163" text-anchor="middle">8</text>
+<rect class="bs2-out" x="200" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="220.0" y="163" text-anchor="middle">12</text>
+<rect class="bs2-out" x="244" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="264.0" y="163" text-anchor="middle">17</text>
+<rect class="bs2-out" x="288" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="308.0" y="163" text-anchor="middle">21</text>
+<rect class="bs2-out" x="332" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="352.0" y="163" text-anchor="middle">25</text>
+<rect class="bs2-out" x="376" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="396.0" y="163" text-anchor="middle">30</text>
+<rect class="bs2-out" x="420" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="440.0" y="163" text-anchor="middle">34</text>
+<rect class="bs2-in" x="464" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="484.0" y="163" text-anchor="middle">41</text>
+<rect class="bs2-in" x="508" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="528.0" y="163" text-anchor="middle">47</text>
+<rect class="bs2-in" x="552" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="572.0" y="163" text-anchor="middle">52</text>
+<rect class="bs2-mid" x="596" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v-inv" x="616.0" y="163" text-anchor="middle">58</text>
+<rect class="bs2-in" x="640" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="660.0" y="163" text-anchor="middle">63</text>
+<rect class="bs2-in" x="684" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="704.0" y="163" text-anchor="middle">70</text>
+<rect class="bs2-in" x="728" y="142" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="748.0" y="163" text-anchor="middle">77</text>
+<text class="bs2-s" x="110" y="193">left 8, right 14, mid 11. sorted[11] is 58, less than 63, so left = 12.</text>
+<text class="bs2-st" x="40" y="237">step 3</text>
+<rect class="bs2-out" x="112" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="132.0" y="237" text-anchor="middle">3</text>
+<rect class="bs2-out" x="156" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="176.0" y="237" text-anchor="middle">8</text>
+<rect class="bs2-out" x="200" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="220.0" y="237" text-anchor="middle">12</text>
+<rect class="bs2-out" x="244" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="264.0" y="237" text-anchor="middle">17</text>
+<rect class="bs2-out" x="288" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="308.0" y="237" text-anchor="middle">21</text>
+<rect class="bs2-out" x="332" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="352.0" y="237" text-anchor="middle">25</text>
+<rect class="bs2-out" x="376" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="396.0" y="237" text-anchor="middle">30</text>
+<rect class="bs2-out" x="420" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="440.0" y="237" text-anchor="middle">34</text>
+<rect class="bs2-out" x="464" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="484.0" y="237" text-anchor="middle">41</text>
+<rect class="bs2-out" x="508" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="528.0" y="237" text-anchor="middle">47</text>
+<rect class="bs2-out" x="552" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="572.0" y="237" text-anchor="middle">52</text>
+<rect class="bs2-out" x="596" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="616.0" y="237" text-anchor="middle">58</text>
+<rect class="bs2-in" x="640" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="660.0" y="237" text-anchor="middle">63</text>
+<rect class="bs2-mid" x="684" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-v-inv" x="704.0" y="237" text-anchor="middle">70</text>
+<rect class="bs2-in" x="728" y="216" width="40" height="32" rx="3"/>
+<text class="bs2-v" x="748.0" y="237" text-anchor="middle">77</text>
+<text class="bs2-s" x="110" y="267">left 12, right 14, mid 13. sorted[13] is 70, more than 63, so right = 12.</text>
+<text class="bs2-st" x="40" y="311">step 4</text>
+<rect class="bs2-out" x="112" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="132.0" y="311" text-anchor="middle">3</text>
+<rect class="bs2-out" x="156" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="176.0" y="311" text-anchor="middle">8</text>
+<rect class="bs2-out" x="200" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="220.0" y="311" text-anchor="middle">12</text>
+<rect class="bs2-out" x="244" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="264.0" y="311" text-anchor="middle">17</text>
+<rect class="bs2-out" x="288" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="308.0" y="311" text-anchor="middle">21</text>
+<rect class="bs2-out" x="332" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="352.0" y="311" text-anchor="middle">25</text>
+<rect class="bs2-out" x="376" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="396.0" y="311" text-anchor="middle">30</text>
+<rect class="bs2-out" x="420" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="440.0" y="311" text-anchor="middle">34</text>
+<rect class="bs2-out" x="464" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="484.0" y="311" text-anchor="middle">41</text>
+<rect class="bs2-out" x="508" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="528.0" y="311" text-anchor="middle">47</text>
+<rect class="bs2-out" x="552" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="572.0" y="311" text-anchor="middle">52</text>
+<rect class="bs2-out" x="596" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="616.0" y="311" text-anchor="middle">58</text>
+<rect class="bs2-hit" x="640" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-v-inv" x="660.0" y="311" text-anchor="middle">63</text>
+<rect class="bs2-out" x="684" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="704.0" y="311" text-anchor="middle">70</text>
+<rect class="bs2-out" x="728" y="290" width="40" height="32" rx="3"/>
+<text class="bs2-vo" x="748.0" y="311" text-anchor="middle">77</text>
+<text class="bs2-s" x="110" y="341">left 12, right 12, mid 12. sorted[12] is 63: found at index 12.</text>
+<rect class="bs2-in" x="40" y="372" width="16" height="16" rx="3"/><text class="bs2-s" x="64" y="385">Still in range</text>
+<rect class="bs2-mid" x="190" y="372" width="16" height="16" rx="3"/><text class="bs2-s" x="214" y="385">Middle, compared</text>
+<rect class="bs2-hit" x="350" y="372" width="16" height="16" rx="3"/><text class="bs2-s" x="374" y="385">Match</text>
+<rect class="bs2-out" x="450" y="372" width="16" height="16" rx="3"/><text class="bs2-s" x="474" y="385">Ruled out</text>
+</g>
+</svg>

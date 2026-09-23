@@ -1,0 +1,54 @@
+---
+title: "Path Compression in Union-Find"
+kind: structure
+system: dsa
+summary: "One Find flattening the path it walked to the root."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 404" role="img" aria-labelledby="uf-title uf-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="uf-title">A union-find tree before and after Find(1) with path compression</title>
+<desc id="uf-desc">Before: a set stored as a tree of parent pointers with root 4, a shape that forms without union by rank. Vertices 3 and 6 point to 4, 2 points to 3, and 1 points to 2. Find(1) follows 1 to 2 to 3 to 4 to reach the root. After: path compression has made 1, 2, and 3 point straight at 4, and 6 still points at 4, so the next Find on 1, 2, or 3 takes one step.</desc>
+<style>
+.uf-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.uf-hot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.uf-root { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.uf-v { font-size: 15px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.uf-v-inv { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+.uf-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.uf-ep { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.uf-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.uf-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="uf-a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="uf-ap" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="uf-hd" x="40" y="30">BEFORE Find(1)</text>
+<path class="uf-ep" d="M 129.9,126.2 L 158.4,86.3" marker-end="url(#uf-ap)"/>
+<path class="uf-e" d="M 210.1,126.2 L 181.6,86.3" marker-end="url(#uf-a)"/>
+<path class="uf-ep" d="M 96.7,194.4 L 112.1,158.4" marker-end="url(#uf-ap)"/>
+<path class="uf-ep" d="M 66.7,264.4 L 82.1,228.4" marker-end="url(#uf-ap)"/>
+<circle class="uf-root" cx="170" cy="70" r="17"/><text class="uf-v-inv" x="170" y="75" text-anchor="middle">4</text>
+<circle class="uf-hot" cx="120" cy="140" r="17"/><text class="uf-v" x="120" y="145" text-anchor="middle">3</text>
+<circle class="uf-n" cx="220" cy="140" r="17"/><text class="uf-v" x="220" y="145" text-anchor="middle">6</text>
+<circle class="uf-hot" cx="90" cy="210" r="17"/><text class="uf-v" x="90" y="215" text-anchor="middle">2</text>
+<circle class="uf-hot" cx="60" cy="280" r="17"/><text class="uf-v" x="60" y="285" text-anchor="middle">1</text>
+<text class="uf-s" x="40" y="330">Find(1) follows 1 → 2 → 3 → 4 to reach the root.</text>
+<text class="uf-s" x="40" y="348">A chain this long forms without union by rank.</text>
+<text class="uf-hd" x="450" y="30">AFTER Find(1)</text>
+<path class="uf-ep" d="M 513.1,179.1 L 604.6,102.8" marker-end="url(#uf-ap)"/>
+<path class="uf-ep" d="M 577.6,174.8 L 611.1,107.9" marker-end="url(#uf-ap)"/>
+<path class="uf-ep" d="M 636.7,173.3 L 623.9,109.6" marker-end="url(#uf-ap)"/>
+<path class="uf-e" d="M 698.6,177.4 L 633.4,104.9" marker-end="url(#uf-a)"/>
+<circle class="uf-root" cx="620" cy="90" r="17"/><text class="uf-v-inv" x="620" y="95" text-anchor="middle">4</text>
+<circle class="uf-hot" cx="500" cy="190" r="17"/><text class="uf-v" x="500" y="195" text-anchor="middle">1</text>
+<circle class="uf-hot" cx="570" cy="190" r="17"/><text class="uf-v" x="570" y="195" text-anchor="middle">2</text>
+<circle class="uf-hot" cx="640" cy="190" r="17"/><text class="uf-v" x="640" y="195" text-anchor="middle">3</text>
+<circle class="uf-n" cx="710" cy="190" r="17"/><text class="uf-v" x="710" y="195" text-anchor="middle">6</text>
+<text class="uf-s" x="450" y="330">Every vertex on that path now points straight at 4,</text>
+<text class="uf-s" x="450" y="348">so the next Find on 1, 2, or 3 takes one step.</text>
+<path class="uf-e" d="M 40,384 L 70,384" marker-end="url(#uf-a)"/><text class="uf-s" x="80" y="388">Parent pointer</text>
+<circle class="uf-root" cx="250" cy="384" r="9"/><text class="uf-s" x="266" y="388">Root, which names the set</text>
+<circle class="uf-hot" cx="470" cy="384" r="9"/><text class="uf-s" x="486" y="388">On the Find path</text>
+</g>
+</svg>

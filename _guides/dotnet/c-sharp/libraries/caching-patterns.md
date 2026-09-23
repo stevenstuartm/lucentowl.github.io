@@ -41,22 +41,7 @@ The copy can be wrong. From the moment it's stored, the source can change and th
 
 In a deployment of several instances behind a load balancer, the layers look like this:
 
-```
-  Instance A                 Instance B                 Instance C
-  ┌──────────────┐           ┌──────────────┐           ┌──────────────┐
-  │ local cache  │           │ local cache  │           │ local cache  │   L1: fast, private,
-  └──────┬───────┘           └──────┬───────┘           └──────┬───────┘       lost on restart
-         │                          │                          │
-         └──────────────────────────┼──────────────────────────┘
-                                    ▼
-                         ┌─────────────────────┐
-                         │ Redis / SQL Server  │                            L2: shared, serialized,
-                         └──────────┬──────────┘                                one network hop
-                                    ▼
-                         ┌─────────────────────┐
-                         │  database or API    │
-                         └─────────────────────┘
-```
+{% include figure.html id="dn-l1-l2-cache" %}
 
 `IMemoryCache` alone is the L1 layer, which works well for one instance or for data where each instance holding its own copy is fine. `IDistributedCache` alone is the L2 layer. Every instance sees the same entry and an invalidation reaches all of them, at the cost of a network call and serialization on every read. `HybridCache` combines them, and is the default choice for new code that needs both.
 

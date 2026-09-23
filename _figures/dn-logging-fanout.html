@@ -1,0 +1,75 @@
+---
+title: "From ILogger to Providers"
+kind: flow
+system: dotnet
+summary: "One logging call passing through a category and filter rules to several providers."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 380" role="img" aria-labelledby="lgf-title lgf-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="lgf-title">How an ILogger entry reaches its providers</title>
+<desc id="lgf-desc">OrderService depends on ILogger of OrderService, whose category is the full type name MyApp.Orders.OrderService. Each entry goes to the logger factory, where filter rules pick a minimum level by provider and category, preferring a provider-specific rule. The entry then fans out to every provider whose rule lets it through: the console provider writes to stdout, the debug provider to the debugger output, the EventSource provider to EventPipe, and other providers such as Serilog or OpenTelemetry to their own destinations.</desc>
+<style>
+.lgf-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.lgf-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.lgf-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.lgf-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.lgf-band { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.lgf-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.lgf-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.lgf-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.lgf-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.lgf-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.lgf-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.lgf-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.lgf-em { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.lgf-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.lgf-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.lgf-mono { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2C3E50); }
+.lgf-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.lgf-ctl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.lgf-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.lgf-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.lgf-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.lgf-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.lgf-dot { fill: var(--color-primary, #1A5F8A); }
+.lgf-dot-hot { fill: var(--color-accent, #A5486E); }
+.lgf-dot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.lgf-bar { fill: var(--color-primary, #1A5F8A); opacity: 0.85; }
+.lgf-bar-hot { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+</style>
+<defs>
+<marker id="lgf-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="lgf-box" x="20" y="130" width="150" height="60" rx="6"/>
+<text class="lgf-n" x="95.0" y="156.0" text-anchor="middle">OrderService</text>
+<text class="lgf-k" x="95.0" y="174.0" text-anchor="middle">your code</text>
+<rect class="lgf-box" x="200" y="130" width="190" height="60" rx="6"/>
+<text class="lgf-n" x="212" y="148.0">ILogger&lt;OrderService&gt;</text>
+<text class="lgf-k" x="212" y="166.0">category: MyApp.Orders</text>
+<text class="lgf-k" x="212" y="182.0">.OrderService</text>
+<rect class="lgf-sys" x="420" y="130" width="150" height="60" rx="6"/>
+<text class="lgf-n-inv" x="432" y="148.0">Logger factory</text>
+<text class="lgf-k-inv" x="432" y="166.0">filter rules by</text>
+<text class="lgf-k-inv" x="432" y="182.0">provider and category</text>
+<path class="lgf-flow" d="M170,160 L198,160" marker-end="url(#lgf-a)"/>
+<path class="lgf-flow" d="M390,160 L418,160" marker-end="url(#lgf-a)"/>
+<rect class="lgf-box" x="640" y="30" width="170" height="50" rx="6"/>
+<text class="lgf-n" x="652" y="59.0">Console provider</text>
+<text class="lgf-k" x="824" y="60">stdout</text>
+<path class="lgf-flow" d="M570,160 L605,160 L605,55 L638,55" marker-end="url(#lgf-a)"/>
+<rect class="lgf-box" x="640" y="104" width="170" height="50" rx="6"/>
+<text class="lgf-n" x="652" y="133.0">Debug provider</text>
+<text class="lgf-k" x="824" y="134">debugger output</text>
+<path class="lgf-flow" d="M570,160 L605,160 L605,129 L638,129" marker-end="url(#lgf-a)"/>
+<rect class="lgf-box" x="640" y="178" width="170" height="50" rx="6"/>
+<text class="lgf-n" x="652" y="207.0">EventSource provider</text>
+<text class="lgf-k" x="824" y="208">EventPipe, dotnet-trace</text>
+<path class="lgf-flow" d="M570,160 L605,160 L605,203 L638,203" marker-end="url(#lgf-a)"/>
+<rect class="lgf-box" x="640" y="252" width="170" height="50" rx="6"/>
+<text class="lgf-n" x="652" y="281.0">Other providers</text>
+<text class="lgf-k" x="824" y="282">Serilog, OpenTelemetry</text>
+<path class="lgf-flow" d="M570,160 L605,160 L605,277 L638,277" marker-end="url(#lgf-a)"/>
+<text class="lgf-note" x="20" y="336">Each provider applies its own matching rule, so the console can show Information while a</text>
+<text class="lgf-note" x="20" y="354">log service receives Debug. The host registers Console, Debug, EventSource, and EventLog (Windows).</text>
+</g>
+</svg>

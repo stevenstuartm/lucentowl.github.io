@@ -234,24 +234,7 @@ Restore flattens the whole dependency graph, resolves every conflict up front, a
 
 Fix that shape in your head before reading the rules. A **subgraph** is everything reachable from one node: your application is the root of the whole graph, and each direct dependency is the root of a subgraph inside it. The last two rules differ only in whether the two competing versions sit in the same subgraph or in different ones.
 
-```
-  DIRECT DEPENDENCY WINS              COUSIN DEPENDENCIES
-  (same subgraph, one of them         (different subgraphs, neither
-   referenced directly by the app)     referenced directly by the app)
-
-        App                                   App
-         ├──────────────┐                      ├────────────┐
-         │              │                      │            │
-      Package A      Package B              Package A    Package C
-         │            >= 2.0.0                 │            │
-         ▼                                     ▼            ▼
-      Package B                             Package B    Package B
-       >= 1.0.0                              >= 1.0.0     >= 2.0.0
-
-   App's direct reference wins.         No direct reference, so the
-   Result: B 2.0.0, and 1.0.0 is        lowest version satisfying BOTH
-   ignored along with that branch.      constraints wins. Result: B 2.0.0.
-```
+{% include figure.html id="dn-nuget-resolution" %}
 
 Both examples land on 2.0.0, and that coincidence is instructive. The same answer arrives by two different routes, and the routes behave differently once you change the numbers. On the left, lowering the app's direct reference to 1.0.0 downgrades B and breaks Package A. On the right, no such override exists, and a constraint that cannot be satisfied fails restore instead.
 
@@ -483,20 +466,7 @@ The one-version rule becomes a problem in exactly one architecture: plugins. Two
 
 Creating a separate `AssemblyLoadContext` per plugin gives each its own name-to-assembly dictionary:
 
-```
-                    AssemblyLoadContext.Default
-                    ├── Host.exe
-                    ├── Contoso.Plugins.Abstractions.dll   (shared contract)
-                    └── runtime assemblies
-                              │
-                 shared by ───┴─── reference, not copy
-                     │                        │
-        ┌────────────┴───────────┐  ┌─────────┴──────────────┐
-        │  ALC "analytics"       │  │  ALC "reporting"       │
-        │  Analytics.dll         │  │  Reporting.dll         │
-        │  Contoso.Data v2.0.0   │  │  Contoso.Data v3.0.0   │
-        └────────────────────────┘  └────────────────────────┘
-```
+{% include figure.html id="dn-plugin-load-contexts" %}
 
 Two things in that picture carry the whole design.
 

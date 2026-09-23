@@ -1,0 +1,57 @@
+---
+title: "Detecting a Cycle in a Directed Graph"
+kind: flow
+system: dsa
+summary: "An edge to a finished vertex versus an edge back into the current path."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 410" role="img" aria-labelledby="dc-title dc-desc" style="width:100%; min-width:660px; height:auto; display:block;">
+<title id="dc-title">Two moments in a depth-first cycle check on a directed graph</title>
+<desc id="dc-desc">Left: a directed graph with edges A to B, A to C, and C to B, searched from A. The search has already explored B, which is done. It is now at C, reached from A, so A and C are in progress. The edge C to B leads to a done vertex, so it closes no cycle. Right: a directed graph with edges A to B, B to C, and C to A, searched from A. A, B, and C are all in progress on the current chain of calls. The edge C to A leads back to an in-progress vertex, closing the cycle A to B to C to A.</desc>
+<style>
+.dc-p { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.dc-d { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.dc-v { font-size: 15px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.dc-v-inv { font-size: 15px; font-weight: 700; fill: #FFFFFF; }
+.dc-ch { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.dc-old { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.dc-chk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 5 4; }
+.dc-hit { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 3; stroke-dasharray: 5 4; }
+.dc-el { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+.dc-hl { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.dc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dc-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.dc-r { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="dc-aa" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="dc-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dc-hd" x="40" y="34">EDGES A → B, A → C, C → B</text>
+<path class="dc-old" d="M 159.5,97.0 L 102.1,190.4" marker-end="url(#dc-ag)"/>
+<path class="dc-ch" d="M 180.5,97.0 L 237.9,190.4" marker-end="url(#dc-aa)"/>
+<path class="dc-chk" d="M 230.0,210.0 L 113.0,210.0" marker-end="url(#dc-ag)"/>
+<circle class="dc-p" cx="170" cy="80" r="20"/><text class="dc-v" x="170" y="85" text-anchor="middle">A</text>
+<circle class="dc-d" cx="90" cy="210" r="20"/><text class="dc-v-inv" x="90" y="215" text-anchor="middle">B</text>
+<circle class="dc-p" cx="250" cy="210" r="20"/><text class="dc-v" x="250" y="215" text-anchor="middle">C</text>
+<text class="dc-el" x="170" y="238" text-anchor="middle">checking C → B</text>
+<text class="dc-s" x="40" y="290">B finished before the search reached C.</text>
+<text class="dc-s" x="40" y="308">An edge to a done vertex closes nothing.</text>
+<text class="dc-r" x="40" y="336">No cycle</text>
+<text class="dc-hd" x="470" y="34">EDGES A → B, B → C, C → A</text>
+<path class="dc-ch" d="M 589.5,97.0 L 532.1,190.4" marker-end="url(#dc-aa)"/>
+<path class="dc-ch" d="M 540.0,210.0 L 657.0,210.0" marker-end="url(#dc-aa)"/>
+<path class="dc-hit" d="M 669.5,193.0 L 612.1,99.6" marker-end="url(#dc-aa)"/>
+<circle class="dc-p" cx="600" cy="80" r="20"/><text class="dc-v" x="600" y="85" text-anchor="middle">A</text>
+<circle class="dc-p" cx="520" cy="210" r="20"/><text class="dc-v" x="520" y="215" text-anchor="middle">B</text>
+<circle class="dc-p" cx="680" cy="210" r="20"/><text class="dc-v" x="680" y="215" text-anchor="middle">C</text>
+<text class="dc-hl" x="660" y="130">checking C → A</text>
+<text class="dc-s" x="470" y="290">A, B, and C are all on the current chain of calls.</text>
+<text class="dc-s" x="470" y="308">An edge back to A closes the loop A → B → C → A.</text>
+<text class="dc-r" x="470" y="336">Cycle</text>
+<circle class="dc-p" cx="50" cy="380" r="10"/><text class="dc-s" x="68" y="384">In progress</text>
+<circle class="dc-d" cx="180" cy="380" r="10"/><text class="dc-s" x="198" y="384">Done</text>
+<path class="dc-ch" d="M 270,380 L 300,380"/><text class="dc-s" x="310" y="384">Current chain of calls</text>
+<path class="dc-old" d="M 480,380 L 510,380"/><text class="dc-s" x="520" y="384">Explored earlier</text>
+</g>
+</svg>

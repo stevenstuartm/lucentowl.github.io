@@ -30,16 +30,6 @@ Treat security policies, configurations, and infrastructure as code that can be 
 **2. Shift-Left Security**
 Move security considerations earlier in the development process to catch issues when they're cheaper and easier to fix.
 
-<div class="callout callout--tip">
-<p class="callout__title">Why Shift-Left Matters</p>
-<ul>
-<li>Finding vulnerabilities during development is 10-100x cheaper than in production</li>
-<li>Developers can fix issues while context is fresh</li>
-<li>Security influences design from the start</li>
-<li>Reduces risk of vulnerabilities reaching production</li>
-</ul>
-</div>
-
 **3. Continuous Security**
 Integrate security checks into automated pipelines for ongoing validation throughout the development and deployment process.
 
@@ -132,38 +122,19 @@ Security integrated at every phase
 
 **Shift-left approach:** Security considerations are integrated from the very beginning, with every team member playing a role.
 
-### Benefits of Shift-Left Security
+### What Shifting Left Adds
+
+The general benefits are listed under Why DevSecOps Matters above. Two are specific to moving the work earlier.
 
 **Lower Cost:**
 - Fixing a vulnerability during development costs far less than fixing it in production
 - Industry estimates: 10-100x cost difference depending on the phase
 - Less rework and fewer emergency patches
 
-**Faster Remediation:**
-- Developers fix issues while the code is fresh in their minds
-- Immediate feedback from automated tools
-- No waiting weeks for security review results
-
 **Better Design:**
 - Security considerations influence architecture from the start
 - Threat modeling reveals design flaws before implementation
 - Prevents building systems with fundamental security weaknesses
-
-**Reduced Risk:**
-- Fewer vulnerabilities make it to production
-- Smaller attack surface
-- Better security outcomes overall
-
-**Developer Empowerment:**
-- Developers gain security skills and knowledge
-- Security champions emerge within teams
-- Shared ownership improves quality
-- Less adversarial relationship with security team
-
-**Faster Time to Market:**
-- No waiting for end-of-cycle security reviews
-- Security checks happen in parallel with development
-- Automated security validation doesn't slow down deployments
 
 ---
 
@@ -512,7 +483,7 @@ When security incidents occur, focus on learning and improvement rather than bla
 
 ## Making Security Easy and Accessible
 
-One of the key tenets of DevSecOps is that security should be easy to do correctly. If secure practices are difficult or time-consuming, developers will find workarounds.
+DevSecOps holds that security should be easy to do correctly. If secure practices are difficult or time-consuming, developers will find workarounds.
 
 ### Provide Secure Defaults
 
@@ -630,7 +601,7 @@ One of the key tenets of DevSecOps is that security should be easy to do correct
 
 ### Which Scanner Runs Where
 
-Each class of scanner needs something different to exist before it can run, and that requirement decides its place in the pipeline more than any preference does. What each class actually catches and misses is a security testing topic in its own right; what matters here is where it fits and what it costs the pipeline.
+Each class of scanner needs something different to exist before it can run, and that requirement decides its place in the pipeline more than any preference does.
 
 | Class | Needs | Stage | Typical cost |
 | --- | --- | --- | --- |
@@ -647,7 +618,7 @@ Two placement rules follow from the table.
 
 **DAST cannot gate a merge.** It needs a running system and it takes too long, so treating it as a build gate either slows every change unacceptably or, more commonly, gets it quietly disabled. It belongs after deployment to a test environment, gating promotion rather than integration.
 
-What each tool class finds, what it systematically misses, and how the classes overlap belongs to security testing. Read that before deciding how much to trust a clean scan, because a scanner's silence is only as meaningful as the class of defect it was ever able to see.
+What each class finds, what it systematically misses, and how the classes overlap is a security testing topic in its own right. Know it before trusting a clean scan, because a scanner's silence is only as meaningful as the class of defect it was ever able to see.
 
 ### Security Gate Strategy
 
@@ -724,7 +695,7 @@ What each tool class finds, what it systematically misses, and how the classes o
 ### Secrets Management Best Practices
 
 <div class="callout callout--warning">
-<p class="callout__title">Never Commit Secrets to Version Control</p>
+<p class="callout__title">1. Never Commit Secrets to Version Control</p>
 <ul>
 <li>Use <code>.gitignore</code> to exclude config files with secrets</li>
 <li>Use environment variables or secret management tools</li>
@@ -1182,7 +1153,6 @@ compliance_check:
 - Celebrate improvements
 - Involve teams in defining and tracking metrics
 - Focus on outcomes, not just outputs
-
 
 ---
 

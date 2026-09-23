@@ -1,0 +1,63 @@
+---
+title: "A Rotated Sorted Array"
+kind: chart
+system: dsa
+summary: "A rotated sorted array cut at its first midpoint, with the sorted half marked."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 418" role="img" aria-labelledby="ra-title ra-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="ra-title">The values of a rotated sorted array plotted against their indexes, cut at the midpoint</title>
+<desc id="ra-desc">The array 40, 50, 60, 10, 20, 30 plotted as value against index 0 to 5. The points form two rising runs: 40, 50, 60 at indexes 0 to 2, then a drop, then 10, 20, 30 at indexes 3 to 5. A vertical line marks the first midpoint, index 2, holding 60. The part from index 0 to the midpoint is shaded as the sorted half, since 40 is at most 60. The part from the midpoint on holds the drop. A target between 40 and 60, if present, must be in the sorted half, and any other target must be in the other half. Because there is only one drop, it lies on one side of any midpoint, so the other side is always one ascending run.</desc>
+<style>
+.ra-sorted { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.ra-ax { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.ra-run { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.25; }
+.ra-drop { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 5 4; }
+.ra-mid { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.ra-p { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ra-pm { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.ra-v { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ra-i { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+.ra-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ra-lab { font-size: 12px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.ra-lab2 { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.ra-midl { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.ra-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="ra-hd" x="40" y="30">THE ROTATED ARRAY 40, 50, 60, 10, 20, 30, VALUE BY INDEX</text>
+<rect class="ra-sorted" x="116" y="60" width="214" height="248" rx="6"/>
+<text class="ra-lab" x="124" y="80">sorted half: 40 to 60</text>
+<text class="ra-lab2" x="374" y="80">other half holds the drop</text>
+<path class="ra-ax" d="M 100,308 H 650"/>
+<text class="ra-i" x="150" y="328" text-anchor="middle">0</text>
+<text class="ra-i" x="240" y="328" text-anchor="middle">1</text>
+<text class="ra-i" x="330" y="328" text-anchor="middle">2</text>
+<text class="ra-i" x="420" y="328" text-anchor="middle">3</text>
+<text class="ra-i" x="510" y="328" text-anchor="middle">4</text>
+<text class="ra-i" x="600" y="328" text-anchor="middle">5</text>
+<text class="ra-i" x="100" y="328" text-anchor="end">index</text>
+<path class="ra-run" d="M 150,172.0 L 240,140.0"/>
+<path class="ra-run" d="M 240,140.0 L 330,108.0"/>
+<path class="ra-run" d="M 420,268.0 L 510,236.0"/>
+<path class="ra-run" d="M 510,236.0 L 600,204.0"/>
+<path class="ra-drop" d="M 330,108.0 L 420,268.0"/>
+<text class="ra-lab2" x="385.0" y="188.0">the drop</text>
+<path class="ra-mid" d="M 330,56 V 308"/>
+<text class="ra-midl" x="330" y="50" text-anchor="middle">mid = 2</text>
+<circle class="ra-p" cx="150" cy="172.0" r="7"/>
+<text class="ra-v" x="150" y="158.0" text-anchor="middle">40</text>
+<circle class="ra-p" cx="240" cy="140.0" r="7"/>
+<text class="ra-v" x="240" y="126.0" text-anchor="middle">50</text>
+<circle class="ra-pm" cx="330" cy="108.0" r="7"/>
+<text class="ra-v" x="318" y="100.0" text-anchor="end">60</text>
+<circle class="ra-p" cx="420" cy="268.0" r="7"/>
+<text class="ra-v" x="434" y="273.0">10</text>
+<circle class="ra-p" cx="510" cy="236.0" r="7"/>
+<text class="ra-v" x="510" y="222.0" text-anchor="middle">20</text>
+<circle class="ra-p" cx="600" cy="204.0" r="7"/>
+<text class="ra-v" x="600" y="190.0" text-anchor="middle">30</text>
+<text class="ra-s" x="40" y="362">values[0] = 40 is at most values[2] = 60, so the left half is sorted. A target from 40 up to 60, if present,</text>
+<text class="ra-s" x="40" y="380">must be there, and any other target must be on the right. Wherever the midpoint falls, the drop can be</text>
+<text class="ra-s" x="40" y="398">on only one side of it, so the other side is always one ascending run.</text>
+</g>
+</svg>

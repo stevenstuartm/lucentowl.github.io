@@ -1,0 +1,64 @@
+---
+title: "Direct Links Versus a Mediator"
+kind: graph
+system: oop
+summary: "Five objects linked pairwise, and the same five linked through one mediator."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="md-title md-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="md-title">A mediator replaces pairwise links with links to one hub</title>
+<desc id="md-desc">Left: five objects, A to E, where every object refers to every other, which takes ten links, and each new object adds a link to all the others. Right: the same five objects each linked only to a central mediator, which takes five links, and each new object adds one.</desc>
+<style>
+.md-node { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.md-hub { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.md-n { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.md-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.md-link { stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.md-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.md-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="md-hd" x="30" y="32">DIRECT REFERENCES: 10 LINKS</text>
+<text class="md-hd" x="510" y="32">THROUGH A MEDIATOR: 5 LINKS</text>
+<line class="md-link" x1="249.4" y1="99.1" x2="310.4" y2="143.4"/>
+<line class="md-link" x1="237.4" y1="107.8" x2="284.3" y2="252.1"/>
+<line class="md-link" x1="222.6" y1="107.8" x2="175.7" y2="252.1"/>
+<line class="md-link" x1="210.6" y1="99.1" x2="149.6" y2="143.4"/>
+<line class="md-link" x1="322.4" y1="180.4" x2="299.1" y2="252.1"/>
+<line class="md-link" x1="310.4" y1="171.7" x2="187.7" y2="260.8"/>
+<line class="md-link" x1="305.9" y1="157.6" x2="154.1" y2="157.6"/>
+<line class="md-link" x1="267.7" y1="274.9" x2="192.3" y2="274.9"/>
+<line class="md-link" x1="272.3" y1="260.8" x2="149.6" y2="171.7"/>
+<line class="md-link" x1="160.9" y1="252.1" x2="137.6" y2="180.4"/>
+<circle class="md-node" cx="230.0" cy="85.0" r="22"/>
+<text class="md-n" x="230.0" y="90.0" text-anchor="middle">A</text>
+<circle class="md-node" cx="329.9" cy="157.6" r="22"/>
+<text class="md-n" x="329.9" y="162.6" text-anchor="middle">B</text>
+<circle class="md-node" cx="291.7" cy="274.9" r="22"/>
+<text class="md-n" x="291.7" y="279.9" text-anchor="middle">C</text>
+<circle class="md-node" cx="168.3" cy="274.9" r="22"/>
+<text class="md-n" x="168.3" y="279.9" text-anchor="middle">D</text>
+<circle class="md-node" cx="130.1" cy="157.6" r="22"/>
+<text class="md-n" x="130.1" y="162.6" text-anchor="middle">E</text>
+<line class="md-link" x1="710.0" y1="109.0" x2="710.0" y2="162.0"/>
+<circle class="md-node" cx="710.0" cy="85.0" r="22"/>
+<text class="md-n" x="710.0" y="90.0" text-anchor="middle">A</text>
+<line class="md-link" x1="787.0" y1="165.0" x2="753.2" y2="175.9"/>
+<circle class="md-node" cx="809.9" cy="157.6" r="22"/>
+<text class="md-n" x="809.9" y="162.6" text-anchor="middle">B</text>
+<line class="md-link" x1="757.6" y1="255.5" x2="728.8" y2="215.9"/>
+<circle class="md-node" cx="771.7" cy="274.9" r="22"/>
+<text class="md-n" x="771.7" y="279.9" text-anchor="middle">C</text>
+<line class="md-link" x1="662.4" y1="255.5" x2="691.2" y2="215.9"/>
+<circle class="md-node" cx="648.3" cy="274.9" r="22"/>
+<text class="md-n" x="648.3" y="279.9" text-anchor="middle">D</text>
+<line class="md-link" x1="633.0" y1="165.0" x2="666.8" y2="175.9"/>
+<circle class="md-node" cx="610.1" cy="157.6" r="22"/>
+<text class="md-n" x="610.1" y="162.6" text-anchor="middle">E</text>
+<ellipse class="md-hub" cx="710" cy="190" rx="50" ry="28"/>
+<text class="md-n-inv" x="710" y="195" text-anchor="middle">Mediator</text>
+<text class="md-note" x="30" y="350">Every object knows every other. A sixth object</text>
+<text class="md-note" x="30" y="367">adds five links, one to each existing object.</text>
+<text class="md-note" x="510" y="350">Each object knows only the mediator. A sixth</text>
+<text class="md-note" x="510" y="367">object adds one link.</text>
+</g>
+</svg>

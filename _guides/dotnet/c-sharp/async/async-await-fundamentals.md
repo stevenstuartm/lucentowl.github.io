@@ -37,17 +37,7 @@ public async Task<Customer> GetCustomerAsync(int id)
 
 Calling the method runs it **synchronously, on the caller's thread, up to the first `await` whose operation isn't already complete.** At that point the method registers its continuation and returns an incomplete `Task<Customer>` to the caller. The thread is then free. When the HTTP call finishes, the continuation runs, the method finishes, and the task completes with the result.
 
-```
-caller thread     GetCustomerAsync()
-  │── call ──────▶ Log("starting")
-  │               await GetStringAsync ── not complete: register continuation
-  │◀── Task ───── return an incomplete Task
-  │   (thread free for other work)
-  │
-  │               ... the HTTP response arrives ...
-  │
-continuation      Deserialize → return → Task completes → anyone awaiting it resumes
-```
+{% include figure.html id="dn-await-timeline" %}
 
 Two consequences follow. If the awaited task is already complete, as with a cache hit, `await` doesn't pause at all and the method carries on synchronously. And the "pause" never blocks anything: there is no thread sitting in the method while it waits.
 

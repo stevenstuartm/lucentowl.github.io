@@ -119,8 +119,6 @@ Cloud infrastructure and containerization accelerated DevOps adoption:
 
 ### DevOps Culture
 
-**DevOps is a cultural transformation, not a technical one.**
-
 **Traditional IT culture:**
 - Silos (Dev vs. Ops vs. QA vs. Security)
 - Blame when things fail
@@ -485,8 +483,8 @@ Practice of merging code changes frequently (multiple times per day) and automat
 
 ### Continuous Delivery / Continuous Deployment (CD)
 
-**Continuous Delivery:** Every change can be deployed to production (with manual approval)
-**Continuous Deployment:** Every change is automatically deployed to production (no manual gate)
+- **Continuous Delivery:** Every change can be deployed to production (with manual approval)
+- **Continuous Deployment:** Every change is automatically deployed to production (no manual gate)
 
 **What it is:**
 
@@ -576,18 +574,7 @@ Proactive notification of issues:
 - Alert fatigue (too many alerts → ignored)
 - On-call rotations (shared responsibility)
 
-**Key metrics to track:**
-
-**DORA metrics (Four Keys):**
-1. Deployment frequency
-2. Lead time for changes
-3. Time to restore service
-4. Change failure rate
-
-**SLIs (Service Level Indicators):**
-- Availability (% uptime)
-- Latency (response time)
-- Error rate (% of failed requests)
+**Key metrics to track:** the DORA delivery metrics, and the SLIs (availability, latency, error rate) behind your SLOs. Both are covered under Metrics and Measurement below.
 
 **How to do this well:**
 - Monitor from user perspective (real user monitoring)
@@ -698,14 +685,16 @@ DevOps Research and Assessment publishes a set of software delivery performance 
 
 Two of the names have also moved. What was "time to restore service" is now failed deployment recovery time, and "change failure rate" is change fail rate. The benchmark bands below come from the State of DevOps reports and shift between years, so treat them as orientation rather than as a fixed scale.
 
+| Metric | Elite | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Deployment frequency | Multiple deploys per day | Between once per day and once per week | Between once per week and once per month | Fewer than once per month |
+| Lead time for changes | Less than one hour | Between one day and one week | Between one week and one month | More than one month |
+| Failed deployment recovery time | Less than one hour | Less than one day | Between one day and one week | More than one week |
+| Change fail rate | 0-15% | 16-30% | 16-30% | 16-30% |
+
 **1. Deployment Frequency**
 
 **What it measures:** How often organization deploys to production
-
-**Elite:** Multiple deploys per day
-**High:** Between once per day and once per week
-**Medium:** Between once per week and once per month
-**Low:** Fewer than once per month
 
 **Why it matters:**
 - Indicates ability to respond quickly to market
@@ -716,11 +705,6 @@ Two of the names have also moved. What was "time to restore service" is now fail
 
 **What it measures:** Time from commit to running in production
 
-**Elite:** Less than one hour
-**High:** Between one day and one week
-**Medium:** Between one week and one month
-**Low:** More than one month
-
 **Why it matters:**
 - Indicates efficiency of delivery process
 - Faster feedback enables faster learning
@@ -730,11 +714,6 @@ Two of the names have also moved. What was "time to restore service" is now fail
 
 **What it measures:** How quickly service is restored after a deployment causes a failure
 
-**Elite:** Less than one hour
-**High:** Less than one day
-**Medium:** Between one day and one week
-**Low:** More than one week
-
 **Why it matters:**
 - Resilience matters more than perfection
 - Fast recovery reduces customer impact
@@ -743,11 +722,6 @@ Two of the names have also moved. What was "time to restore service" is now fail
 **4. Change Fail Rate**
 
 **What it measures:** Percentage of deployments causing a production failure
-
-**Elite:** 0-15%
-**High:** 16-30%
-**Medium:** 16-30%
-**Low:** 16-30%
 
 *Note: change fail rate has not consistently separated High, Medium and Low performers across DORA's State of DevOps reports. Some years show these tiers in the same band, and the 2024 report found Medium performers outperforming High performers on it. Treat it as a directional signal rather than a precise ranking tool.*
 

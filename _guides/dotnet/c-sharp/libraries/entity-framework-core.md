@@ -383,16 +383,7 @@ Every entity a tracking query returns, or that you pass to `Add`, `Attach`, `Upd
 | `Deleted` | Marked for removal | `DELETE` |
 | `Detached` | Not tracked by this context | Nothing |
 
-```
-                 query, Attach                    property changed
-   Detached ──────────────────────▶ Unchanged ─────────────────────▶ Modified
-      │                              ▲    │                             │
-      │ Add                          │    │ Remove                      │ Remove
-      ▼                              │    ▼                             ▼
-    Added ─────── SaveChanges ───────┘  Deleted ◀───────────────────────┘
-                  (Modified also                │
-                   returns here)                └── SaveChanges ──▶ Detached
-```
+{% include figure.html id="dn-change-tracker-states" %}
 
 When a tracking query loads an entity, EF Core stores a snapshot of its original values. Changing a property doesn't notify anything. Instead, `SaveChanges` (and a call to `Entry`) runs change detection, which compares every tracked entity with its snapshot and marks the ones that differ. After a successful save, added and modified entities become `Unchanged` with a new snapshot, and deleted ones become `Detached`.
 

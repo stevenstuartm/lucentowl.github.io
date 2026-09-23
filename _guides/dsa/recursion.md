@@ -27,6 +27,8 @@ Factorial shows all three:
 ```csharp
 public static long Factorial(int n)
 {
+    if (n < 0)
+        throw new ArgumentOutOfRangeException(nameof(n), "Factorial is undefined for negative n.");
     if (n <= 1)                   // Base case
         return 1;
 
@@ -37,7 +39,7 @@ Console.WriteLine(Factorial(5));  // 120
 Console.WriteLine(Factorial(0));  // 1
 ```
 
-The return type is `long` because factorials outgrow `int` quickly: 13! is already beyond `int.MaxValue`. `long` holds up to 20!, and 21! overflows it too.
+The return type is `long` because factorials outgrow `int` quickly. 13! is already beyond `int.MaxValue`. `long` holds up to 20!. 21! overflows it too, and silently, because C# integer arithmetic is unchecked by default. `Factorial(21)` returns a negative number rather than throwing.
 
 ---
 
@@ -57,7 +59,7 @@ Because every frame waiting for a result stays on the stack, a recursion's memor
 
 ### Stack Overflow
 
-The call stack has a fixed size. On .NET, a thread's default maximum stack size comes from the executable's header, and Microsoft's documentation gives 1 MB as the default. Frame sizes vary with the method's parameters and locals, so there is no fixed call limit, but a recursion whose depth grows with the input will exhaust the stack at some input size.
+The call stack has a fixed size. Microsoft's documentation gives the default for .NET apps as 1.5 MB on Windows and macOS and 8 MB on Linux. A host process can set its own, and from .NET 10 the `System.Threading.DefaultStackSize` runtime setting overrides it for threads the runtime creates. Frame sizes vary with the method's parameters and locals, so there is no fixed call limit, but a recursion whose depth grows with the input will exhaust the stack at some input size.
 
 When it does, .NET throws a `StackOverflowException`, and it cannot be caught. A `try`/`catch` block does not intercept it, and the process is terminated. So a recursion whose depth depends on the input has to be bounded by design: either the depth is logarithmic, the input size is known to be small, or the recursion is converted to iteration.
 
@@ -79,7 +81,11 @@ public static long FibonacciNaive(int n)
 
 `FibonacciNaive(n)` makes 2 × F(n + 1) − 1 calls, where F(n + 1) is itself a Fibonacci number, so the call count grows exponentially. `FibonacciNaive(10)` makes 177 calls, `FibonacciNaive(30)` makes about 2.7 million, and `FibonacciNaive(40)` makes about 331 million.
 
-There are only n + 1 distinct values to compute. Memoization stores each result the first time it is computed and returns the stored value on every later call. That makes the running time O(n), because each value is computed once. This is the top-down form of dynamic programming.
+There are only n + 1 distinct values to compute. Memoization stores each result the first time it is computed and returns the stored value on every later call. That makes the running time O(n), because each value is computed once, at the cost of O(n) extra memory for the stored results. This is the top-down form of dynamic programming.
+
+{% endraw %}
+{% include figure.html id="dsa-fibonacci-call-tree" %}
+{% raw %}
 
 ```csharp
 public static long FibonacciMemo(int n, Dictionary<int, long>? memo = null)
@@ -121,7 +127,7 @@ public class TreeNode
 public static int TreeHeight(TreeNode? node)
 {
     if (node == null)
-        return 0;
+        return -1;                // Empty tree: height -1, so a single node has height 0
 
     return 1 + Math.Max(TreeHeight(node.Left), TreeHeight(node.Right));
 }
@@ -135,7 +141,7 @@ public static int TreeSum(TreeNode? node)
 }
 ```
 
-The recursion depth equals the tree's height. That is about log₂ n for a balanced tree, but n for a tree that has degenerated into a chain, which is where recursive tree code overflows the stack.
+Height here counts edges, so a single node has height 0. The recursion depth grows with the tree's height, which is about log₂ n for a balanced tree but n − 1 for a tree that has degenerated into a chain. That chain is where recursive tree code overflows the stack.
 
 ---
 
@@ -143,17 +149,23 @@ The recursion depth equals the tree's height. That is about log₂ n for a balan
 
 | Shape | What it does | Example | Cost |
 | --- | --- | --- | --- |
-| Linear | At most one recursive call per call | Factorial, summing an array | O(n) calls, O(n) depth |
+| Linear | One recursive call, on an input one step smaller | Factorial, summing an array | O(n) calls, O(n) depth |
 | Halving | One call on half the input | Recursive binary search, fast exponentiation | O(log n) calls and depth |
-| Branching (tree) | Two or more calls per call | Naive Fibonacci, tree traversal | Up to exponential calls; depth is the longest branch |
-| Tail | The recursive call is the last thing the function does | Euclid's GCD | Same as linear |
+| Divide and conquer | Two or more calls on separate parts of the input, then combine the results | Merge sort | O(n) calls, O(log n) depth when the parts are halves |
+| Branching (tree) | Two or more calls per call, possibly on overlapping inputs | Naive Fibonacci, tree traversal | Up to exponential calls. Depth is the longest branch |
+| Tail | The recursive call is the last thing the function does | Factorial with an accumulator, Euclid's GCD | Tail position doesn't change the shape: linear for factorial, O(log min(a, b)) calls for GCD |
 | Mutual | Two or more functions call each other | `IsEven` and `IsOdd`, recursive-descent parsers | Depends on the functions |
+
+Euclid's GCD finds the greatest common divisor with gcd(a, b) = gcd(b, a mod b), stopping when b is 0. A recursive-descent parser has one function per grammar rule, and the functions call each other the way the rules refer to each other.
+
+Backtracking is branching recursion that explores choices one at a time and undoes each choice that leads nowhere, as in solving a maze or placing queens on a chessboard.
 
 Branching recursion over a tree touches each node once and is O(n). Branching recursion over overlapping subproblems, like naive Fibonacci, is where exponential cost comes from.
 
-Mutual recursion looks like this. Each function makes progress by passing a smaller n to the other:
+Mutual recursion looks like this. For non-negative n, each function makes progress by passing a smaller n to the other:
 
 ```csharp
+// Both assume n >= 0. A negative n never reaches 0 and recurses until the stack overflows.
 public static bool IsEven(int n) => n == 0 || IsOdd(n - 1);
 public static bool IsOdd(int n) => n != 0 && IsEven(n - 1);
 ```
@@ -164,9 +176,9 @@ public static bool IsOdd(int n) => n != 0 && IsEven(n - 1);
 
 ### Tail Recursion Becomes a Loop
 
-A function is tail recursive when the recursive call is the very last operation, with nothing left to do after it returns. Some languages guarantee that a tail call reuses the current frame instead of pushing a new one, which makes tail recursion run in constant stack space. C# makes no such guarantee. The C# compiler doesn't emit the IL instruction that requests a tail call, and the JIT removes tail calls only in some builds and circumstances. So tail-recursive C# still overflows on deep input.
+A function is tail recursive when the recursive call is the very last operation, with nothing left to do after it returns. Some languages guarantee that a tail call reuses the current frame instead of pushing a new one, which makes tail recursion run in constant stack space. C# makes no such guarantee. The C# compiler doesn't emit the tail-call instruction in the intermediate language (IL) it produces. The just-in-time (JIT) compiler, which turns IL into machine code, removes tail calls only in some builds and circumstances. So tail-recursive C# can still overflow on deep input, and code can't rely on it not to.
 
-A tail-recursive function converts mechanically into a loop. The accumulator parameter becomes a local variable, and the recursive call becomes an update of the loop variables:
+A tail-recursive function converts mechanically into a loop. The accumulator parameter, `acc` below, which carries the result built so far, becomes a local variable, and the recursive call becomes an update of the loop variables:
 
 ```csharp
 // Tail recursive: the multiplication happens before the call, not after
@@ -193,7 +205,7 @@ public static long FactorialIterative(int n)
 
 ### Branching Recursion Needs an Explicit Stack
 
-When a function makes more than one recursive call, a single loop variable can't hold the pending work. The fix is to keep the pending work on a `Stack<T>` that the code manages itself. That stack lives on the heap, which is far larger than the call stack, so the depth limit goes away.
+When a function makes more than one recursive call, a single loop variable can't hold the pending work. The fix is to keep the pending work on a `Stack<T>` that the code manages itself. That stack lives on the managed heap, the memory where .NET allocates objects, which is far larger than the call stack, so the depth limit goes away.
 
 ```csharp
 public static int TreeSumIterative(TreeNode? root)
@@ -241,6 +253,8 @@ Computing baseⁿ by multiplying n times is O(n). Squaring the result for n/2 ha
 ```csharp
 public static long Power(long baseNum, int exp)
 {
+    if (exp < 0)
+        throw new ArgumentOutOfRangeException(nameof(exp), "A negative exponent needs a fractional result.");
     if (exp == 0)
         return 1;
 
@@ -250,6 +264,8 @@ public static long Power(long baseNum, int exp)
 
 Console.WriteLine(Power(2, 10));  // 1024
 ```
+
+Like `Factorial`, it overflows `long` silently once the result passes about 9.2 × 10¹⁸.
 
 ### Palindrome Check Without Copying
 

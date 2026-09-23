@@ -1,0 +1,60 @@
+---
+title: "A Tree Rotation"
+kind: structure
+system: dsa
+summary: "A right rotation at y lifts x without breaking search order."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 440" role="img" aria-labelledby="trr-title trr-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="trr-title">A right rotation and its inverse, a left rotation</title>
+<desc id="trr-desc">Before: node y has left child x and right subtree C. Node x has left subtree A and right subtree B. A right rotation at y makes x the root of this part of the tree, with A as its left subtree and y as its right child. Subtree B moves across to become y's left subtree, and C stays y's right subtree. A left rotation at x reverses the change. In both trees an in-order walk reads A, x, B, y, C, so the binary search tree order is preserved. A moves up one level, C moves down one level, and B keeps its depth under a new parent.</desc>
+<style>
+.trr-n { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.75; }
+.trr-v { font-size: 16px; font-weight: 700; font-style: italic; fill: #FFFFFF; }
+.trr-t { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.trr-tm { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.trr-tl { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.trr-tl-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.trr-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.trr-em { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.trr-ar { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.trr-ar2 { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.trr-al { font-size: 12px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.trr-al2 { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+.trr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.trr-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="trr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="trr-a2" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="trr-hd" x="40" y="34">BEFORE</text>
+<path class="trr-e" d="M 186.7,94.9 L 133.3,155.1"/>
+<path class="trr-e" d="M 213.3,94.9 L 280.0,170.0"/>
+<path class="trr-e" d="M 110.3,187.5 L 70.0,260.0"/>
+<path class="trr-em" d="M 129.7,187.5 L 170.0,260.0"/>
+<circle class="trr-n" cx="200" cy="80" r="20"/><text class="trr-v" x="200" y="86" text-anchor="middle">y</text>
+<circle class="trr-n" cx="120" cy="170" r="20"/><text class="trr-v" x="120" y="176" text-anchor="middle">x</text>
+<path class="trr-t" d="M 280,170 L 254.0,228 L 306.0,228 Z"/><text class="trr-tl" x="280" y="214" text-anchor="middle">C</text>
+<path class="trr-t" d="M 70,260 L 44.0,318 L 96.0,318 Z"/><text class="trr-tl" x="70" y="304" text-anchor="middle">A</text>
+<path class="trr-tm" d="M 170,260 L 144.0,318 L 196.0,318 Z"/><text class="trr-tl-inv" x="170" y="304" text-anchor="middle">B</text>
+<text class="trr-s" x="40" y="360">x is y’s left child. B is x’s right subtree.</text>
+<path class="trr-ar" d="M 360,150 L 450,150" marker-end="url(#trr-a)"/>
+<text class="trr-al" x="405" y="138" text-anchor="middle">rotate right at y</text>
+<path class="trr-ar2" d="M 450,190 L 360,190" marker-end="url(#trr-a2)"/>
+<text class="trr-al2" x="405" y="212" text-anchor="middle">rotate left at x</text>
+<text class="trr-hd" x="490" y="34">AFTER</text>
+<path class="trr-e" d="M 606.7,94.9 L 540.0,170.0"/>
+<path class="trr-e" d="M 633.3,94.9 L 686.7,155.1"/>
+<path class="trr-em" d="M 690.3,187.5 L 650.0,260.0"/>
+<path class="trr-e" d="M 709.7,187.5 L 750.0,260.0"/>
+<circle class="trr-n" cx="620" cy="80" r="20"/><text class="trr-v" x="620" y="86" text-anchor="middle">x</text>
+<circle class="trr-n" cx="700" cy="170" r="20"/><text class="trr-v" x="700" y="176" text-anchor="middle">y</text>
+<path class="trr-t" d="M 540,170 L 514.0,228 L 566.0,228 Z"/><text class="trr-tl" x="540" y="214" text-anchor="middle">A</text>
+<path class="trr-tm" d="M 650,260 L 624.0,318 L 676.0,318 Z"/><text class="trr-tl-inv" x="650" y="304" text-anchor="middle">B</text>
+<path class="trr-t" d="M 750,260 L 724.0,318 L 776.0,318 Z"/><text class="trr-tl" x="750" y="304" text-anchor="middle">C</text>
+<text class="trr-s" x="490" y="360">x takes y’s place. B becomes y’s left subtree.</text>
+<text class="trr-s" x="40" y="400">In both trees an in-order walk reads A, x, B, y, C, so the search-tree order holds.</text>
+<text class="trr-s" x="40" y="420">A moves up one level, C moves down one, and B keeps its depth under a new parent.</text>
+</g>
+</svg>

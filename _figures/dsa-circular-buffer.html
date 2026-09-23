@@ -4,59 +4,59 @@ kind: structure
 system: dsa
 summary: "Head and tail indices wrapping around a fixed array."
 ---
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 330" role="img" aria-labelledby="cb-title cb-desc" style="width:100%; min-width:600px; height:auto; display:block;">
-<title id="cb-title">Queue stored in a circular buffer of eight slots</title>
-<desc id="cb-desc">An array of eight slots, indexed 0 to 7. Slots 5, 6, and 7 hold A, B, and C, and slots 0 and 1 hold D and E. Slots 2, 3, and 4 are empty. The head index is 5, where the next dequeue reads, and the tail index is 2, where the next enqueue writes. An arrow from the end of the array back to the start shows that the index after 7 is 0, computed as index plus one modulo the capacity. The queue's order from front to back is A, B, C, D, E.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 330" role="img" aria-labelledby="cbf-title cbf-desc" style="width:100%; min-width:600px; height:auto; display:block;">
+<title id="cbf-title">Queue stored in a circular buffer of eight slots</title>
+<desc id="cbf-desc">An array of eight slots, indexed 0 to 7. Slots 5, 6, and 7 hold A, B, and C, and slots 0 and 1 hold D and E. Slots 2, 3, and 4 are empty. The head index is 5, where the next dequeue reads, and the tail index is 2, where the next enqueue writes. An arrow from the end of the array back to the start shows that the index after 7 is 0, computed as index plus one modulo the capacity. The queue's order from front to back is A, B, C, D, E.</desc>
 <style>
-.cb-full { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
-.cb-empty { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
-.cb-v { font-size: 17px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
-.cb-i { font-size: 12px; fill: var(--color-text-light, #4A5568); }
-.cb-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
-.cb-s { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
-.cb-lbl { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
-.cb-lbl2 { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
-.cb-wl { font-size: 12px; font-weight: 600; fill: var(--color-secondary, #2D5A85); }
-.cb-ptr { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
-.cb-ptr2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
-.cb-wrap { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.cbf-full { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.cbf-empty { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; }
+.cbf-v { font-size: 17px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.cbf-i { font-size: 12px; fill: var(--color-text-light, #4A5568); }
+.cbf-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.cbf-s { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.cbf-lbl { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.cbf-lbl2 { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.cbf-wl { font-size: 12px; font-weight: 600; fill: var(--color-secondary, #2D5A85); }
+.cbf-ptr { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.cbf-ptr2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.cbf-wrap { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.75; stroke-dasharray: 6 4; }
 </style>
 <defs>
-<marker id="cb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
-<marker id="cb-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
-<marker id="cb-w" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+<marker id="cbf-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="cbf-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="cbf-w" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
 </defs>
 <g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-<rect class="cb-full" x="80" y="110" width="80" height="54"/>
-<text class="cb-v" x="120.0" y="143" text-anchor="middle">D</text>
-<text class="cb-i" x="120.0" y="186" text-anchor="middle">0</text>
-<rect class="cb-full" x="160" y="110" width="80" height="54"/>
-<text class="cb-v" x="200.0" y="143" text-anchor="middle">E</text>
-<text class="cb-i" x="200.0" y="186" text-anchor="middle">1</text>
-<rect class="cb-empty" x="240" y="110" width="80" height="54"/>
-<text class="cb-i" x="280.0" y="186" text-anchor="middle">2</text>
-<rect class="cb-empty" x="320" y="110" width="80" height="54"/>
-<text class="cb-i" x="360.0" y="186" text-anchor="middle">3</text>
-<rect class="cb-empty" x="400" y="110" width="80" height="54"/>
-<text class="cb-i" x="440.0" y="186" text-anchor="middle">4</text>
-<rect class="cb-full" x="480" y="110" width="80" height="54"/>
-<text class="cb-v" x="520.0" y="143" text-anchor="middle">A</text>
-<text class="cb-i" x="520.0" y="186" text-anchor="middle">5</text>
-<rect class="cb-full" x="560" y="110" width="80" height="54"/>
-<text class="cb-v" x="600.0" y="143" text-anchor="middle">B</text>
-<text class="cb-i" x="600.0" y="186" text-anchor="middle">6</text>
-<rect class="cb-full" x="640" y="110" width="80" height="54"/>
-<text class="cb-v" x="680.0" y="143" text-anchor="middle">C</text>
-<text class="cb-i" x="680.0" y="186" text-anchor="middle">7</text>
-<text class="cb-el" x="70" y="186" text-anchor="end">index</text>
-<path class="cb-ptr" d="M 520.0,72 V 106" marker-end="url(#cb-a)"/>
-<text class="cb-lbl" x="520.0" y="64" text-anchor="middle">head = 5</text>
-<text class="cb-s" x="520.0" y="48" text-anchor="middle">next Dequeue reads here</text>
-<path class="cb-ptr2" d="M 280.0,72 V 106" marker-end="url(#cb-b)"/>
-<text class="cb-lbl2" x="280.0" y="64" text-anchor="middle">tail = 2</text>
-<text class="cb-s" x="280.0" y="48" text-anchor="middle">next Enqueue writes here</text>
-<path class="cb-wrap" d="M 680.0,194 C 680.0,230 640,230 400.0,230 S 120.0,230 120.0,198" marker-end="url(#cb-w)"/>
-<text class="cb-wl" x="400.0" y="250" text-anchor="middle">after index 7, the next index is 0: (index + 1) % capacity</text>
-<text class="cb-el" x="80" y="290">Queue order, front to back: A, B, C, D, E. Count = 5, capacity = 8.</text>
+<rect class="cbf-full" x="80" y="110" width="80" height="54"/>
+<text class="cbf-v" x="120.0" y="143" text-anchor="middle">D</text>
+<text class="cbf-i" x="120.0" y="186" text-anchor="middle">0</text>
+<rect class="cbf-full" x="160" y="110" width="80" height="54"/>
+<text class="cbf-v" x="200.0" y="143" text-anchor="middle">E</text>
+<text class="cbf-i" x="200.0" y="186" text-anchor="middle">1</text>
+<rect class="cbf-empty" x="240" y="110" width="80" height="54"/>
+<text class="cbf-i" x="280.0" y="186" text-anchor="middle">2</text>
+<rect class="cbf-empty" x="320" y="110" width="80" height="54"/>
+<text class="cbf-i" x="360.0" y="186" text-anchor="middle">3</text>
+<rect class="cbf-empty" x="400" y="110" width="80" height="54"/>
+<text class="cbf-i" x="440.0" y="186" text-anchor="middle">4</text>
+<rect class="cbf-full" x="480" y="110" width="80" height="54"/>
+<text class="cbf-v" x="520.0" y="143" text-anchor="middle">A</text>
+<text class="cbf-i" x="520.0" y="186" text-anchor="middle">5</text>
+<rect class="cbf-full" x="560" y="110" width="80" height="54"/>
+<text class="cbf-v" x="600.0" y="143" text-anchor="middle">B</text>
+<text class="cbf-i" x="600.0" y="186" text-anchor="middle">6</text>
+<rect class="cbf-full" x="640" y="110" width="80" height="54"/>
+<text class="cbf-v" x="680.0" y="143" text-anchor="middle">C</text>
+<text class="cbf-i" x="680.0" y="186" text-anchor="middle">7</text>
+<text class="cbf-el" x="70" y="186" text-anchor="end">index</text>
+<path class="cbf-ptr" d="M 520.0,72 V 106" marker-end="url(#cbf-a)"/>
+<text class="cbf-lbl" x="520.0" y="64" text-anchor="middle">head = 5</text>
+<text class="cbf-s" x="520.0" y="48" text-anchor="middle">next Dequeue reads here</text>
+<path class="cbf-ptr2" d="M 280.0,72 V 106" marker-end="url(#cbf-b)"/>
+<text class="cbf-lbl2" x="280.0" y="64" text-anchor="middle">tail = 2</text>
+<text class="cbf-s" x="280.0" y="48" text-anchor="middle">next Enqueue writes here</text>
+<path class="cbf-wrap" d="M 680.0,194 C 680.0,230 640,230 400.0,230 S 120.0,230 120.0,198" marker-end="url(#cbf-w)"/>
+<text class="cbf-wl" x="400.0" y="250" text-anchor="middle">after index 7, the next index is 0: (index + 1) % capacity</text>
+<text class="cbf-el" x="80" y="290">Queue order, front to back: A, B, C, D, E. Count = 5, capacity = 8.</text>
 </g>
 </svg>
