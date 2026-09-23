@@ -24,7 +24,7 @@ The failure it exists to prevent: polishing prose on an argument that is about t
 | --- | --- |
 | Raw or half-formed material | A draft that knows what it is |
 | Restructures the draft, marks new argument | Outputs a report, then edits the file |
-| Never writes unmarked argument | Ends with a prose reduction pass |
+| Never writes unmarked argument | Ends with a resolution pass over every finding |
 | Asks "is this argument complete?" | Asks "is this argument well-said?" |
 | Presents options, author decides | Applies fixes directly |
 
