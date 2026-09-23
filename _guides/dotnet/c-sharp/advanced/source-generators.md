@@ -3,315 +3,261 @@ title: "C# Source Generators"
 layout: guide
 category: ".NET & C#"
 subcategory: "Advanced Topics"
-description: "Compile-time code generation for boilerplate reduction, performance optimization, and metaprogramming without runtime reflection."
-tags: [c-sharp, dotnet, source-generators, metaprogramming, compilation, advanced]
+description: "How Roslyn source generators add code at compile time: why they replace reflection, the partial-declaration contract, the built-in generators, writing an incremental generator with ForAttributeWithMetadataName and equatable models, project setup, viewing generated code, and when a generator isn't worth it."
+tags: [source-generators, iincrementalgenerator, roslyn, metaprogramming, native-aot, partial-classes, advanced]
 ---
+{% raw %}
 
 ## The Problem Source Generators Solve
 
-Programming involves a lot of repetitive code. Consider these common scenarios:
+A lot of code is mechanical: a `ToString` that lists every property, serialization that reads and writes each field, `INotifyPropertyChanged` raised from every setter, a service registration per class. There have been two ways to avoid writing it by hand, and each has a cost.
 
-- Writing `ToString()` methods that list every property
-- Creating serialization logic that converts objects to and from JSON
-- Implementing `INotifyPropertyChanged` with the same pattern for every property
-- Registering dozens of service classes with dependency injection
-- Writing HTTP client methods that follow identical patterns
+| Approach | How it works | Cost |
+|---|---|---|
+| Hand-written | You write and maintain every line | Adding a property means remembering every place that lists properties |
+| Runtime reflection | The program inspects its own types while running | Work repeated at every startup, and metadata the trimmer and Native AOT can't always see |
+| Source generator | A compiler plug-in writes the code during the build | Build-time complexity, and a generator to maintain or depend on |
 
-Developers have traditionally solved this repetition in two ways, and both have significant drawbacks.
+A source generator is a component loaded by the C# compiler. During compilation it can inspect everything the compiler knows about your code, and it adds new C# files that are compiled into the same assembly. The result behaves as if you had written the code by hand, with no run-time discovery.
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Hand-Written Boilerplate</h4>
-<ul>
-<li>Tedious and error-prone</li>
-<li>Maintenance burden grows</li>
-<li>Easy to forget updates</li>
-<li>No runtime cost</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Runtime Reflection</h4>
-<ul>
-<li>Automatic and convenient</li>
-<li>No code to maintain</li>
-<li>Always stays synchronized</li>
-<li>Slow startup and execution</li>
-</ul>
-</div>
-</div>
+## How a Generator Fits Into Compilation
 
-**Approach 1: Write it by hand.** This is tedious, error-prone, and creates maintenance burden. When you add a property to a class, you have to remember to update the `ToString()`, the serialization logic, and everywhere else that needs to know about it.
+The compiler parses your source and builds a semantic model of it: types, members, attributes, and what each name refers to. Generators receive that model, read-only, and return additional source text. The compiler then compiles your code and the generated code together.
 
-**Approach 2: Use reflection at runtime.** Your program can inspect itself while running, discovering what properties a class has, what attributes are applied, and so on. This works, but reflection is slow. Every time your program runs, it spends time figuring out what it could have known at compile time.
+Two constraints follow from that design:
 
-Source generators offer a third approach: **generate the repetitive code automatically at compile time**. The compiler runs your generator, which examines your code and writes additional C# source files. These generated files compile alongside your handwritten code, producing a final program with no runtime overhead.
+- **Generators only add.** A generator can't edit or remove your code. It can't change a method body or add an attribute to your class.
+- **Generators can't see each other's output.** Every generator receives the same original compilation, so one generator's code can't trigger another.
 
-## Why This Matters
+### Why `partial` Is Everywhere
 
-Understanding source generators matters for three reasons:
-
-**Performance without sacrifice.** Reflection-based approaches like traditional JSON serialization or dependency injection scanning have measurable runtime costs. Source generators eliminate this cost entirely. The generated code is identical to what you would write by hand, and the compiler cannot tell the difference.
-
-**You already use them.** If you use `System.Text.Json` with the `[JsonSerializable]` attribute, regex with `[GeneratedRegex]`, or high-performance logging with `[LoggerMessage]`, you're using source generators. Understanding how they work helps you use these features effectively and debug issues when they arise.
-
-**AOT compilation requires them.** Ahead-of-time (AOT) compiled applications cannot use runtime reflection in the same way. If you're building for platforms that require AOT (like iOS, or .NET Native AOT deployment), source generators become essential rather than optional.
-
-## How Source Generators Work
-
-Before diving into specific generators, understanding the underlying mechanism helps everything else make sense.
-
-When you compile a C# project, the compiler goes through several phases: parsing your source files into syntax trees, building a semantic model that understands types and symbols, and finally generating IL code. Source generators plug into this pipeline between the semantic analysis and code generation phases.
-
-```
-Your Code → Parse → Semantic Analysis → [Source Generators Run Here] → Code Generation → Assembly
-```
-
-A source generator receives read-only access to everything the compiler knows about your code: every class, method, property, and attribute. It analyzes this information and emits new C# source files. These generated files then get compiled alongside your original code as if you had written them yourself.
-
-Two constraints shape how generators work:
-
-<div class="callout callout--note">
-<p class="callout__title">Generators Add, Never Modify</p>
-<p>Source generators cannot change your existing code. They can only create new files. This is why <code>partial class</code> is everywhere: the generator adds a new partial definition that merges with your original.</p>
-</div>
-
-**Generators can only add code, never modify existing code.** If you have a `Person` class, a generator cannot change that class. It can only create new files. This is why you see `partial class` everywhere in generated code: the generator creates a new partial definition that the compiler merges with your original.
-
-**Generators must be deterministic and fast.** The compiler runs generators on every keystroke in an IDE. A slow generator makes IntelliSense lag. A non-deterministic generator causes confusing behavior. Modern generators use an "incremental" API that caches results and only regenerates when relevant code changes.
-
-## Built-in Generators You Should Know
-
-.NET includes several source generators that handle common scenarios. Understanding these serves two purposes: you can use them effectively in your own code, and studying how they work illustrates patterns for the broader concept.
-
-### JSON Serialization
-
-Traditional JSON serialization uses reflection. When you call `JsonSerializer.Serialize(person)`, the serializer inspects the `Person` type at runtime to discover its properties, then figures out how to convert each one to JSON. This happens every time your application starts.
-
-The JSON source generator moves this work to compile time. You declare which types need serialization, and the generator writes custom serialization code for each one.
+Since a generator can't modify your class, it needs your permission to add to it, and `partial` is that permission. A `partial` type may be declared in several files, and the compiler merges them. You write one part, the generator writes another:
 
 ```csharp
-// You write this:
-[JsonSerializable(typeof(Person))]
-public partial class AppJsonContext : JsonSerializerContext { }
-
-// The generator creates optimized serialization code for Person.
-// At runtime, no reflection occurs—the generated code runs directly.
-
-string json = JsonSerializer.Serialize(person, AppJsonContext.Default.Person);
-```
-
-The practical benefits are faster application startup (no reflection cost), smaller deployments (unused reflection code can be trimmed), and compatibility with AOT compilation where reflection may not work at all.
-
-### Regex Generation
-
-Regular expressions normally compile their pattern into an internal state machine when you create a `Regex` object. The `[GeneratedRegex]` attribute moves this compilation to build time.
-
-```csharp
-public partial class Validators
+// You write
+public partial class Patterns
 {
-    [GeneratedRegex(@"^[\w\.-]+@[\w\.-]+\.\w+$", RegexOptions.IgnoreCase)]
-    public static partial Regex EmailRegex();
+    [GeneratedRegex(@"^[0-9]+\z")]
+    public static partial Regex Digits();
+}
+
+// The generator writes, in a file of its own
+public partial class Patterns
+{
+    public static partial Regex Digits() => /* generated implementation */;
 }
 ```
 
-The generator produces actual C# code implementing the regex matching logic, not an interpreted pattern, but compiled IL instructions. This runs significantly faster than runtime-compiled regex for patterns used repeatedly.
+A `partial` method or property with no body is a declaration the generator must implement. Forget `partial` on the method or on any enclosing type, and the build fails, because there's nothing for the generated part to merge with.
 
-### Logging Generation
+## The Built-in Generators
 
-High-performance logging has an awkward requirement: you want to avoid allocating strings and boxing value types when the log level is disabled. Writing this by hand is tedious:
+.NET ships several generators, each triggered by an attribute on a `partial` declaration:
+
+| Attribute | Generates | Why it beats the reflection path |
+|---|---|---|
+| `[JsonSerializable]` on a `JsonSerializerContext` | Serialization metadata and fast-path writers for System.Text.Json | Works under trimming and Native AOT; removes per-type startup cost |
+| `[GeneratedRegex]` | C# source implementing the pattern's matching logic | No run-time `Reflection.Emit`; invalid patterns fail the build |
+| `[LoggerMessage]` | Logging methods with the level check and cached parsing of the template | No template parsing or `object[]` allocation per call |
+| `[LibraryImport]` | P/Invoke marshalling code | Marshalling is visible C#, and works under Native AOT |
+| Configuration binding (`EnableConfigurationBindingGenerator`) | `Bind` and `Get<T>` implementations | Binding without reflection for trimmed apps |
+
+Each is ordinary source you can open and step through. Generated regex code, for instance, is plain C# with comments explaining which part of the pattern each block matches.
+
+### Native AOT and Trimming
+
+Native AOT compiles the whole application to machine code at publish time, and trimming removes code that static analysis doesn't see used. Reflection itself still works under both, but two things break. Anything that generates code at run time, which means `Reflection.Emit`, has nothing to run it. And a type reached only through reflection, such as a property discovered by name, may have been trimmed away. Native AOT always trims, so both problems apply to it.
+
+A reflection-based serializer or DI scanner hits both limits, which is why the libraries offer a generator. The generator decides at build time which members are used, and the trimmer sees that code as ordinary references. That is the most common reason a project adopts a generator it didn't write.
+
+## Writing an Incremental Generator
+
+Most developers consume generators rather than write them. A custom generator earns its place when a rule-driven pattern repeats across many types in a codebase, and its output would otherwise be maintained by hand or discovered by reflection.
+
+The example below implements `ToString` for every class marked `[AutoToString]`.
+
+### Project Setup
+
+A generator is a separate project, loaded by the compiler rather than referenced by your code:
+
+```xml
+<!-- AutoToString.Generator.csproj -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
+```
+
+```xml
+<!-- The consuming project -->
+<ItemGroup>
+  <ProjectReference Include="..\AutoToString.Generator\AutoToString.Generator.csproj"
+                    OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+</ItemGroup>
+```
+
+- **`netstandard2.0`** because the generator runs inside whichever compiler hosts it, including hosts on .NET Framework. `LangVersion` can still be current, since that controls the generator's own syntax, not its runtime. Some newer features need a polyfill on this target: records and `init` fail with error CS0518 until the project declares `namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }`.
+- **The `Microsoft.CodeAnalysis.CSharp` version sets the oldest compiler that can load the generator.** Referencing 4.14 means an SDK or IDE with an older Roslyn won't run it.
+- **`EnforceExtendedAnalyzerRules`** turns on analyzers that flag APIs a generator mustn't use, such as file I/O.
+- **`OutputItemType="Analyzer"` with `ReferenceOutputAssembly="false"`** loads the project into the compiler without making it a run-time dependency.
+
+To ship a generator in a NuGet package, place the assembly under `analyzers/dotnet/cs` in the package rather than `lib`.
+
+### The Generator
+
+A generator implements `IIncrementalGenerator`. Its `Initialize` method doesn't generate anything directly. It builds a pipeline, and the compiler runs that pipeline, caching each stage's output and skipping stages whose inputs haven't changed:
 
 ```csharp
-// Manual high-performance logging pattern
-if (_logger.IsEnabled(LogLevel.Information))
+[Generator]
+public sealed class AutoToStringGenerator : IIncrementalGenerator
 {
-    _logger.Log(LogLevel.Information, "Processing order {OrderId}", orderId);
+    private const string AttributeSource = """
+        namespace AutoToString
+        {
+            [global::Microsoft.CodeAnalysis.EmbeddedAttribute]
+            [global::System.AttributeUsage(global::System.AttributeTargets.Class)]
+            internal sealed class AutoToStringAttribute : global::System.Attribute { }
+        }
+        """;
+
+    public void Initialize(IncrementalGeneratorInitializationContext context)
+    {
+        // 1. Add the marker attribute to every consuming compilation
+        context.RegisterPostInitializationOutput(ctx =>
+        {
+            ctx.AddEmbeddedAttributeDefinition();
+            ctx.AddSource("AutoToStringAttribute.g.cs", AttributeSource);
+        });
+
+        // 2. Find classes carrying the attribute and extract an equatable model
+        IncrementalValuesProvider<ClassModel> classes = context.SyntaxProvider.ForAttributeWithMetadataName(
+            "AutoToString.AutoToStringAttribute",
+            predicate: static (node, _) => node is ClassDeclarationSyntax,
+            transform: static (ctx, _) =>
+            {
+                var type = (INamedTypeSymbol)ctx.TargetSymbol;
+                string properties = string.Join(",", type.GetMembers()
+                    .OfType<IPropertySymbol>()
+                    .Where(p => p.DeclaredAccessibility == Accessibility.Public && !p.IsStatic)
+                    .Select(p => p.Name));
+
+                return new ClassModel(
+                    type.ContainingNamespace.IsGlobalNamespace ? null : type.ContainingNamespace.ToDisplayString(),
+                    type.Name,
+                    properties);
+            });
+
+        // 3. Emit one file per class
+        context.RegisterSourceOutput(classes, static (ctx, model) =>
+            ctx.AddSource($"{model.Name}.ToString.g.cs", Render(model)));
+    }
+
+    private static string Render(ClassModel model)
+    {
+        var sb = new StringBuilder();
+        if (model.Namespace is not null)
+            sb.AppendLine($"namespace {model.Namespace};");
+
+        sb.AppendLine($"partial class {model.Name}");
+        sb.AppendLine("{");
+        sb.AppendLine("    public override string ToString() =>");
+        sb.Append($"        \"{model.Name} {{ \"");
+        string[] names = model.Properties.Length == 0 ? [] : model.Properties.Split(',');
+        for (int i = 0; i < names.Length; i++)
+            sb.Append($" + \"{(i > 0 ? ", " : "")}{names[i]} = \" + {names[i]}");
+        sb.AppendLine(" + \" }\";");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    // A record gives value equality, so an unchanged class produces an equal model and no re-emit
+    private sealed record ClassModel(string? Namespace, string Name, string Properties);
 }
 ```
 
-The logging source generator automates this pattern:
+Applied to a class, it produces a second part:
 
 ```csharp
-public static partial class Log
-{
-    [LoggerMessage(Level = LogLevel.Information,
-                   Message = "Processing order {OrderId}")]
-    public static partial void OrderProcessing(ILogger logger, int orderId);
-}
-
-// Usage - no allocation if Information level is disabled
-Log.OrderProcessing(_logger, 123);
-```
-
-The generated code includes the enabled check and avoids boxing value types, giving you high-performance logging without writing boilerplate.
-
-## The Partial Keyword Connection
-
-You may have noticed that all the examples above use `partial` classes and `partial` methods. This is fundamental to how source generators work.
-
-When you write `partial class AppJsonContext`, you're telling the compiler that this class definition is incomplete, and other parts exist elsewhere. The source generator creates another file with `partial class AppJsonContext` containing the generated implementation. The compiler merges these partial definitions into a single class.
-
-Similarly, `partial` methods declare a method signature without implementation. The generator provides the implementation in a generated file. If you write:
-
-```csharp
-public static partial Regex EmailRegex();
-```
-
-The generator creates:
-
-```csharp
-public static partial Regex EmailRegex() => /* generated implementation */;
-```
-
-This explains why forgetting the `partial` keyword causes source generator features to fail. Without it, the compiler cannot merge your declaration with the generated implementation.
-
-## Writing Your Own Generator
-
-Most developers will consume existing generators rather than write new ones. However, understanding how to build a generator deepens your understanding of how they work and prepares you for the occasional situation where a custom generator makes sense.
-
-A custom generator is appropriate when you have a pattern repeated across many classes that follows predictable rules. Common examples include generating builder patterns, implementing `INotifyPropertyChanged`, creating strongly-typed wrappers, or automating service registration.
-
-### The Structure of a Generator
-
-A source generator lives in its own project, separate from the code it generates for. This project targets `netstandard2.0` (for broad compatibility) and references the Roslyn compiler APIs.
-
-The generator implements `IIncrementalGenerator`, which has a single method: `Initialize`. This method sets up a pipeline that:
-
-1. **Filters** syntax nodes to find relevant code (classes with certain attributes, interfaces, etc.)
-2. **Transforms** those nodes into simple data objects containing what you need to generate
-3. **Outputs** generated source files based on that data
-
-Here's the conceptual flow:
-
-```
-All Syntax Nodes → Filter (predicate) → Transform (extract info) → Generate (emit code)
-```
-
-The incremental API ensures that if a user edits an unrelated file, the generator doesn't re-run. Only changes to relevant code trigger regeneration.
-
-### A Concrete Example: Auto-ToString
-
-To illustrate the pattern, consider a generator that automatically implements `ToString()` for any class marked with an `[AutoToString]` attribute.
-
-First, you define the marker attribute (in a shared project, not the generator project):
-
-```csharp
-namespace MyNamespace;
-
-[AttributeUsage(AttributeTargets.Class)]
-public class AutoToStringAttribute : Attribute { }
-```
-
-Users apply it to their classes:
-
-```csharp
+// You write
 [AutoToString]
 public partial class Person
 {
     public string Name { get; set; } = "";
     public int Age { get; set; }
 }
-```
 
-The generator finds classes with this attribute, extracts their property names, and generates a `ToString()` implementation:
-
-```csharp
-// Generated file: Person.g.cs
+// Generated: Person.ToString.g.cs
+namespace Demo;
 partial class Person
 {
-    public override string ToString()
-    {
-        return $"Person { Name = {Name}, Age = {Age} }";
-    }
+    public override string ToString() =>
+        "Person { " + "Name = " + Name + ", Age = " + Age + " }";
 }
 ```
 
-The user gets automatic `ToString()` that stays synchronized with their properties. Add a property, and the next build updates `ToString()` automatically.
+`new Person { Name = "Ada", Age = 36 }.ToString()` returns `Person { Name = Ada, Age = 36 }`, and adding a property updates it on the next build.
 
-## Common Patterns in Source Generators
+### The Three Stages
 
-When you encounter source generators in the wild or consider writing one, you'll see several recurring patterns.
+**The marker attribute** comes from `RegisterPostInitializationOutput`, which adds source before anything else runs, so user code can apply the attribute without referencing another assembly. `AddEmbeddedAttributeDefinition` and the `[Embedded]` marker make the attribute private to each consuming assembly. Without them, two projects that both use the generator, one referencing the other, each define `AutoToString.AutoToStringAttribute` and produce conflicting-type warnings.
 
-### Marker Attributes
+**Finding targets** uses `ForAttributeWithMetadataName`, which the compiler can answer from an index of attribute usages rather than by examining every syntax node. The Roslyn team's measurements put it at usually around 99 times more efficient than a hand-written `CreateSyntaxProvider` scan. The predicate is a cheap syntax check, and the transform runs only on nodes that pass it.
 
-The most common pattern uses an attribute to mark types that need generation. The `[JsonSerializable]`, `[GeneratedRegex]`, and `[LoggerMessage]` attributes all follow this pattern. You mark something with an attribute, and the generator finds it and generates corresponding code.
+**The model** is where incremental generators succeed or fail. Each stage's output is compared with the previous run's, and when it's equal, later stages are skipped. That comparison uses `Equals`, so the model must have value equality:
 
-This pattern works well because attributes are explicit. Developers opt in deliberately, and the generator has a clear, narrow scope of what to process.
+- **Never put symbols, syntax nodes, or the `Compilation` in the model.** They are never equal across edits, so every keystroke reruns everything downstream, and they keep old compilations alive in memory.
+- **Use records, but watch their collections.** A record compares an array or `List<T>` field by reference, which defeats caching just as a symbol does. Flatten it, as `ClassModel.Properties` does, or wrap it in a collection type that implements value equality.
+- **Extract early.** Copy the names and flags you need out of the symbol in the transform, and let everything after it work on plain data.
 
-### Interface-to-Implementation
+A generator whose model isn't equatable still produces correct output. It just reruns in full on every edit, which appears as IDE lag in the projects that use it.
 
-Some generators take an interface definition and generate an implementation. You might define an interface describing your HTTP API, and a generator creates the actual HTTP client code. The Refit library uses this pattern: you declare an interface with route attributes, and generated code handles the HTTP calls.
+### Reporting Problems
 
-This separates the contract (what operations exist) from the implementation details (how HTTP calls are made), and keeps the repetitive HTTP boilerplate out of your codebase.
+A generator can't throw to report a user mistake. An exception disables it for the compilation and surfaces as warning CS8785, which names the generator and not the user's code. Report a diagnostic instead, such as "class must be partial", with `ctx.ReportDiagnostic` in the output stage, pointing at the declaration. Carry the location in the model as data, not as a syntax node.
 
-### Assembly Scanning
+## Viewing Generated Code
 
-Rather than marking individual types, some generators scan all types in an assembly looking for patterns. A dependency injection generator might find every class implementing `IService` and generate registration code automatically. This eliminates the need to manually register each service.
+Generated files don't appear in the project folder. The IDE shows them under the project's **Dependencies → Analyzers → *generator name*** node in Visual Studio, or in a similar node in Rider, and Go to Definition on a generated member opens its file.
 
-The tradeoff is less explicit control. You have to understand what the generator looks for, and accidentally matching the pattern creates unexpected behavior.
-
-## Viewing and Debugging Generated Code
-
-One initial challenge with source generators is that the generated code is invisible by default. You mark a class with an attribute, and methods magically appear. When something goes wrong, you need to see what the generator actually produced.
-
-### Seeing the Generated Files
-
-Add these properties to your project file to write generated code to disk:
+To write them to disk, for code review or a diff between builds:
 
 ```xml
 <PropertyGroup>
   <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-  <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
 </PropertyGroup>
 ```
 
-After building, look in `obj/Generated/` for the actual C# files the generator created. You can read them, understand what was generated, and spot issues.
+Files then appear under `obj/<configuration>/<target framework>/generated/<generator assembly>/<generator type>/`. `CompilerGeneratedFilesOutputPath` moves them elsewhere.
 
-Most IDEs also let you navigate to generated code directly. In Visual Studio, you can expand "Analyzers" under Dependencies to see generated files. In Rider, generated sources appear in the project tree.
+When a build fails with errors inside a `.g.cs` file, the generator produced invalid code for your input. Read the generated file first, since the fault is usually visible there, and then look for an input shape the generator doesn't handle, such as a nested or generic class.
 
-### Understanding Generator Errors
+## When a Generator Isn't Worth It
 
-When a generator fails, the error messages come from the generator itself, not from your code directly. Well-designed generators report diagnostics explaining what went wrong, for example, "Class 'Foo' must be partial to use this generator."
+- **Code you'll edit afterwards.** A generator rewrites its output on every build. For one-time scaffolding, use a template or a `dotnet new` template.
+- **A handful of types.** Writing `ToString` by hand for three classes costs less than building, testing, and versioning a generator.
+- **Behaviour that depends on run-time information.** A generator knows only the compilation. Plugins loaded at run time, or types chosen by configuration, still need reflection.
+- **Logic that belongs in a library.** If the generated code would be the same for every type apart from a few names, a generic method or base class may express it without generating anything.
 
-If you see cryptic errors during compilation that mention generator assemblies, the generated code likely has a bug, or your code doesn't match what the generator expects. Viewing the generated files usually reveals the problem.
+The cost that's easiest to underestimate is maintenance. A generator is a compiler extension, pinned to a Roslyn version, running in every developer's IDE. Its bugs appear as build errors in someone else's project, and it needs its own tests, usually by running it against sample source and comparing the output to a stored snapshot.
 
-## When Source Generators Make Sense
+## Key Takeaways
 
-Source generators are powerful, but they're not the right tool for every situation.
+**Generators add source at compile time and never modify yours.** `partial` is how your declaration and the generated implementation meet.
 
-**Good fits for source generators:**
+**Prefer the built-in generators** for JSON, regex, logging, and interop. They're what make those libraries work under trimming and Native AOT.
 
-- **Eliminating reflection costs.** If you're using reflection for serialization, dependency injection scanning, or type inspection, a source generator can move that work to compile time.
-- **Reducing boilerplate that follows patterns.** When you find yourself writing the same code structure repeatedly with minor variations, a generator can automate it.
-- **AOT compilation requirements.** If you're targeting platforms where runtime reflection is limited or unavailable, source generators become necessary rather than optional.
+**Native AOT's limit is run-time code generation and trimmed metadata,** not reflection as such. Generators solve both by doing the work at build time.
 
-**Poor fits for source generators:**
+**Write incremental generators with `ForAttributeWithMetadataName` and value-equal models.** Symbols or arrays in the model make every edit rerun the pipeline.
 
-- **One-time code scaffolding.** If you need to generate code once and then modify it by hand, use a CLI tool or T4 template instead. Generators regenerate on every build; they're not for code you intend to edit.
-- **Situations requiring runtime flexibility.** If the code's behavior genuinely needs to change based on runtime conditions, reflection may be appropriate. Generators only know what's available at compile time.
-- **Simple cases.** If you have three classes that need the same pattern, writing it by hand three times is probably simpler than creating and maintaining a generator.
+**Report user errors as diagnostics,** and target `netstandard2.0` with an explicit Roslyn version.
 
-## Practical Implications
-
-Understanding source generators changes how you approach certain problems:
-
-**When you see `partial` in modern C# code, look for generated counterparts.** The keyword is a signal that code exists somewhere else, often from a generator.
-
-**Startup time improvements often come from source generators.** If an application using reflection-based JSON or DI feels slow to start, source-generated alternatives can help.
-
-**Build errors from generators can be confusing.** When compilation fails with unfamiliar errors mentioning generator assemblies, enable `EmitCompilerGeneratedFiles` and examine what was actually generated.
-
-**AOT and trimming compatibility usually requires source generators.** If you're building for deployment scenarios that don't support runtime code generation, you'll need source-generated alternatives for serialization, DI, and similar concerns.
-
-## Summary
-
-Source generators are compiler plugins that write C# code during compilation. They solve the problem of repetitive boilerplate by automating code generation, and they solve the problem of reflection overhead by moving type inspection from runtime to compile time.
-
-The key concepts to remember:
-
-- Generators **add** code; they cannot modify existing code
-- The `partial` keyword enables merging generated code with your handwritten code
-- Built-in generators for JSON, Regex, and Logging cover common high-performance scenarios
-- Generated code is real C# code—debuggable, readable, and type-checked
-- AOT compilation and application trimming often require source generators
-
-For most developers, using existing generators like `[JsonSerializable]` and `[GeneratedRegex]` effectively is more valuable than writing custom generators. Understanding the underlying mechanism helps you use these tools well and troubleshoot issues when they arise.
+**Build a custom generator only for a pattern repeated across many types,** and budget for testing and maintaining it.
+{% endraw %}

@@ -2,7 +2,7 @@
 title: "Sorting Algorithms"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Hash Tables & Algorithms
+subcategory: Algorithms
 description: "Comprehensive guide to sorting algorithms from bubble sort to quick sort, with complexity comparisons, stability analysis, and practical selection criteria."
 tags: [algorithms, sorting, complexity-analysis, practical, interview-prep]
 ---

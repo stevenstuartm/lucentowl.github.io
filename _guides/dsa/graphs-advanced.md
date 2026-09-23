@@ -387,6 +387,71 @@ public static List<MinimumSpanningTree.Edge> PrimMST(WeightedGraph graph, List<i
 
 ---
 
+## Topological Sort
+
+### Dependency Resolution
+```csharp
+public static class DependencyResolver
+{
+    public static List<int> TopologicalSort(Graph dependencyGraph, List<int> allTasks)
+    {
+        var inDegree = new Dictionary<int, int>();
+        var result = new List<int>();
+        var queue = new Queue<int>();
+
+        // Initialize in-degree count
+        foreach (int task in allTasks)
+        {
+            inDegree[task] = 0;
+        }
+
+        // Calculate in-degrees
+        foreach (int task in allTasks)
+        {
+            foreach (int dependent in dependencyGraph.GetNeighbors(task))
+            {
+                inDegree[dependent]++;
+            }
+        }
+
+        // Find tasks with no dependencies
+        foreach (var kvp in inDegree)
+        {
+            if (kvp.Value == 0)
+            {
+                queue.Enqueue(kvp.Key);
+            }
+        }
+
+        // Process tasks
+        while (queue.Count > 0)
+        {
+            int current = queue.Dequeue();
+            result.Add(current);
+
+            foreach (int dependent in dependencyGraph.GetNeighbors(current))
+            {
+                inDegree[dependent]--;
+                if (inDegree[dependent] == 0)
+                {
+                    queue.Enqueue(dependent);
+                }
+            }
+        }
+
+        // Check for cycles
+        if (result.Count != allTasks.Count)
+        {
+            throw new InvalidOperationException("Circular dependency detected!");
+        }
+
+        return result;
+    }
+}
+```
+
+---
+
 ## Advanced Graph Problems
 
 ### Strongly Connected Components (Kosaraju's Algorithm)

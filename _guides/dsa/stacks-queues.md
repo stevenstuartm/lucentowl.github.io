@@ -2,706 +2,308 @@
 title: "Stacks & Queues"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Linear Data Structures
-description: "Master stack (LIFO) and queue (FIFO) data structures with implementations, common applications like BFS, and variations including priority queues and circular queues."
-tags: [data-structures, algorithms, fundamentals, practical, interview-prep]
+subcategory: Core Data Structures
+description: "Stacks (last in, first out) and queues (first in, first out) as contracts, how each is built on an array, why a queue needs a circular buffer, what .NET's Stack<T> and Queue<T> do, and the problems each order solves: matching brackets, evaluating expressions, and processing work in arrival order."
+tags: [stacks, queues, lifo, fifo, circular-buffer, deque, fundamentals]
+---
+{% raw %}
+
+## Stacks and Queues Are Contracts
+
+A stack and a queue are abstract data types: each is defined by the operations it allows, not by how it stores anything. Both hold a sequence of elements, and both restrict where elements come in and go out.
+
+| | Stack | Queue |
+| --- | --- | --- |
+| Order | Last in, first out (LIFO) | First in, first out (FIFO) |
+| Add | `Push` onto the top | `Enqueue` at the back |
+| Remove | `Pop` from the top | `Dequeue` from the front |
+| Look without removing | `Peek` at the top | `Peek` at the front |
+| Everyday picture | A stack of plates | A line at a checkout |
+
+The restriction is the point. Code that uses a stack cannot reach into the middle, so it cannot get the order wrong, and the implementation is free to make every allowed operation fast.
+
+Because they are contracts, costs belong to an implementation, not to the idea. A stack or queue built on a linked list (with a tail reference, for a queue), or on an array used the right way, makes all four operations O(1), amortized when an array has to grow. A queue built naively on an array does not, as the queue section shows.
+
 ---
 
-## Overview
-Two fundamental abstract data types that restrict how elements are added and removed, creating specific behavioral patterns useful for many algorithms and system designs.
+## Stacks
 
----
+### How a Stack Works
 
-## Stacks (LIFO - Last In, First Out)
+A stack only ever touches one end, the top. `Push` places an element on top, `Pop` removes and returns the top element, and `Peek` returns it without removing it. The element popped is always the one pushed most recently, so a stack reverses the order it receives: push A, B, C and pop them back as C, B, A.
 
-### Why Stacks Exist
-LIFO behavior mirrors natural problem patterns like function calls, undo operations, parsing nested structures, and backtracking algorithms.
+### Building a Stack on an Array
 
-### When to Use Stacks
+An array whose end serves as the top gives O(1) push and pop, because adding or removing at the end of an array never shifts anything. The array grows by doubling when it fills, so push is O(1) amortized.
 
-**Use when:**
-- Expression evaluation (parentheses matching, postfix notation)
-- Function call management (call stack)
-- Undo functionality in applications
-- Backtracking algorithms (maze solving, N-queens)
-- Parsing nested structures (JSON, XML, code)
-- Depth-first search implementations
-
-**Don't use when:**
-- Need to access middle elements
-- FIFO behavior is required
-- Need to process elements in insertion order
-
-**Modern reality:** Most languages provide built-in stacks. In interviews, often implement with arrays or linked lists to show understanding.
-
-### Time Complexity
-- **Push:** O(1)
-- **Pop:** O(1)  
-- **Peek/Top:** O(1)
-- **Search:** O(n)
-
-### C# Implementation
 ```csharp
-// Node class for linked implementation
-public class Node<T>
+public class ArrayStack<T>
 {
-    public T Value { get; set; }
-    public Node<T> LinkNode { get; set; }
+    private T[] _items = new T[4];
+    private int _count;
 
-    public Node(T value, Node<T> linkNode = null)
+    public int Count => _count;
+
+    public void Push(T item)
     {
-        Value = value;
-        LinkNode = linkNode;
+        if (_count == _items.Length)
+            Array.Resize(ref _items, _items.Length * 2);
+
+        _items[_count++] = item;
     }
 
-    public void SetLinkNode(Node<T> linkNode) => LinkNode = linkNode;
-    public Node<T> GetLinkNode() => LinkNode;
-    public T GetValue() => Value;
-}
-
-public class Stack<T>
-{
-    private Node<T> topItem;
-    private int size;
-    private int limit;
-    
-    public Stack(int limit = 1000)
-    {
-        this.limit = limit;
-        size = 0;
-        topItem = null;
-    }
-    
-    public void Push(T value)
-    {
-        if (HasSpace())
-        {
-            var item = new Node<T>(value);
-            item.SetLinkNode(topItem);
-            topItem = item;
-            size++;
-            Console.WriteLine($"Pushed {value} onto stack");
-        }
-        else
-        {
-            Console.WriteLine($"Stack overflow! No room for {value}");
-        }
-    }
-    
     public T Pop()
     {
-        if (!IsEmpty())
-        {
-            var itemToRemove = topItem;
-            topItem = itemToRemove.GetLinkNode();
-            size--;
-            var value = itemToRemove.GetValue();
-            Console.WriteLine($"Popped {value} from stack");
-            return value;
-        }
-        else
-        {
-            Console.WriteLine("Stack underflow! Stack is empty");
-            return default(T);
-        }
+        if (_count == 0)
+            throw new InvalidOperationException("The stack is empty.");
+
+        T item = _items[--_count];
+        _items[_count] = default!;  // Release the reference for the garbage collector
+        return item;
     }
-    
+
     public T Peek()
     {
-        if (!IsEmpty())
-        {
-            return topItem.GetValue();
-        }
-        else
-        {
-            Console.WriteLine("Nothing to peek at!");
-            return default(T);
-        }
-    }
-    
-    public bool HasSpace() => limit > size;
-    public bool IsEmpty() => size == 0;
-    public int Size => size;
-}
+        if (_count == 0)
+            throw new InvalidOperationException("The stack is empty.");
 
-// Example usage
-var stack = new Stack<string>(5);
-stack.Push("First");
-stack.Push("Second");
-stack.Push("Third");
-Console.WriteLine($"Top item: {stack.Peek()}");  // Third
-Console.WriteLine($"Popped: {stack.Pop()}");     // Third
-Console.WriteLine($"Popped: {stack.Pop()}");     // Second
-Console.WriteLine($"Size: {stack.Size}");        // 1
+        return _items[_count - 1];
+    }
+}
 ```
 
-### Common Queue Applications
+A linked list whose head serves as the top also works, since adding and removing at the head is O(1). The array version is usually faster in practice, because it allocates only when it grows and keeps its elements contiguous.
 
-#### 1. Breadth-First Search
+### `Stack<T>` in .NET
+
+.NET's `Stack<T>` is the array version. It allocates capacity 4 on the first push and doubles from there. `Pop` and `Peek` throw `InvalidOperationException` on an empty stack, and `TryPop` and `TryPeek` return `false` instead.
+
+### Where Stacks Appear
+
+A stack fits any problem where the most recent unfinished thing must be finished first:
+
+- **Method calls.** The runtime's call stack holds one frame per active call, and a return always resumes the most recent caller.
+- **Undo.** Each action is pushed as it happens, and undo pops the most recent one.
+- **Nesting.** Brackets, HTML or XML tags, and nested expressions all close in the reverse of the order they opened.
+- **Backtracking and depth-first search.** The stack holds the path taken so far, and backing up means popping.
+
+### Worked Example: Matching Brackets
+
+In a valid string of brackets, every closer matches the most recent opener that hasn't been closed yet. That is exactly what a stack's top holds. Push each opener, and when a closer arrives, pop and check that it matches.
+
 ```csharp
-public static bool BFS(Dictionary<int, List<int>> graph, int startNode, int target)
+public static bool BracketsBalanced(string text)
 {
-    var queue = new Queue<int>();
-    var visited = new HashSet<int>();
+    var open = new Stack<char>();
 
-    queue.Enqueue(startNode);
-    visited.Add(startNode);
-
-    while (queue.Count > 0)
+    foreach (char c in text)
     {
-        int currentNode = queue.Dequeue();
-
-        if (currentNode == target)
-            return true;
-
-        foreach (int neighbor in graph[currentNode])
+        switch (c)
         {
-            if (!visited.Contains(neighbor))
-            {
-                visited.Add(neighbor);
-                queue.Enqueue(neighbor);
-            }
+            case '(' or '[' or '{':
+                open.Push(c);
+                break;
+            case ')' or ']' or '}':
+                if (!open.TryPop(out char opener))
+                    return false;  // A closer with nothing open
+                if ((opener, c) is not (('(', ')') or ('[', ']') or ('{', '}')))
+                    return false;  // Closer doesn't match the most recent opener
+                break;
         }
     }
 
-    return false;
+    return open.Count == 0;  // Anything left open is unbalanced
 }
+
+Console.WriteLine(BracketsBalanced("{[()()]}"));  // True
+Console.WriteLine(BracketsBalanced("([)]"));      // False: ) closes [
+Console.WriteLine(BracketsBalanced("(("));        // False: never closed
 ```
 
-#### 2. Level-Order Tree Traversal
+Each character is pushed or popped at most once, so the check is O(n).
+
+### Worked Example: Evaluating Postfix Expressions
+
+Postfix notation writes each operator after its two operands, so `3 4 + 2 *` means (3 + 4) × 2. It needs no parentheses and no precedence rules, which makes it convenient for stack-based calculators and for evaluating expressions inside interpreters. A stack evaluates it in one pass: push numbers, and on each operator pop two operands, apply it, and push the result.
+
 ```csharp
-public static List<T> LevelOrderTraversal<T>(TreeNode<T> root)
+public static double EvaluatePostfix(string expression)
 {
-    if (root == null)
-        return new List<T>();
+    var operands = new Stack<double>();
 
-    var queue = new Queue<TreeNode<T>>();
-    var result = new List<T>();
-
-    queue.Enqueue(root);
-
-    while (queue.Count > 0)
+    foreach (string token in expression.Split(' ', StringSplitOptions.RemoveEmptyEntries))
     {
-        var node = queue.Dequeue();
-        result.Add(node.Value);
-
-        if (node.Left != null)
-            queue.Enqueue(node.Left);
-        if (node.Right != null)
-            queue.Enqueue(node.Right);
-    }
-
-    return result;
-}
-```
-
-#### 3. Producer-Consumer with Queue
-```csharp
-using System.Collections.Concurrent;
-using System.Threading.Tasks;
-
-public static class ProducerConsumer
-{
-    public static async Task RunProducerConsumer()
-    {
-        var queue = new ConcurrentQueue<string>();
-        var items = new[] { "task1", "task2", "task3", "task4" };
-
-        var producerTask = Task.Run(() => Producer(queue, items));
-        var consumerTask = Task.Run(() => Consumer(queue));
-
-        await Task.WhenAll(producerTask, consumerTask);
-    }
-
-    private static void Producer(ConcurrentQueue<string> queue, string[] items)
-    {
-        foreach (var item in items)
+        if (double.TryParse(token, out double number))
         {
-            Console.WriteLine($"Producing {item}");
-            queue.Enqueue(item);
-            Thread.Sleep(100);
+            operands.Push(number);
+            continue;
         }
-    }
 
-    private static void Consumer(ConcurrentQueue<string> queue)
-    {
-        while (true)
+        double right = operands.Pop();  // The second operand is on top
+        double left = operands.Pop();
+
+        operands.Push(token switch
         {
-            if (queue.TryDequeue(out string item))
-            {
-                Console.WriteLine($"Consuming {item}");
-            }
-            else
-            {
-                Thread.Sleep(10); // Brief pause if queue is empty
-                if (queue.IsEmpty)
-                    break;
-            }
-        }
+            "+" => left + right,
+            "-" => left - right,
+            "*" => left * right,
+            "/" => left / right,
+            _ => throw new ArgumentException($"Unknown operator '{token}'.")
+        });
     }
+
+    return operands.Pop();
 }
+
+Console.WriteLine(EvaluatePostfix("3 4 + 2 *"));  // 14
+Console.WriteLine(EvaluatePostfix("10 2 8 * + 3 -"));  // 23
 ```
 
-## Advanced Variations
+The order of the two pops matters for subtraction and division. The right-hand operand was pushed last, so it comes off first.
 
-### Deque (Double-Ended Queue)
-Supports insertion and deletion at both ends.
+---
 
-```csharp
-// Using C#'s LinkedList for deque-like behavior
-var deque = new LinkedList<int>(new[] { 1, 2, 3 });
-deque.AddFirst(0);    // Add to front: [0, 1, 2, 3]
-deque.AddLast(4);     // Add to back: [0, 1, 2, 3, 4]
-deque.RemoveFirst();  // Remove from front: [1, 2, 3, 4]
-deque.RemoveLast();   // Remove from back: [1, 2, 3]
-```
+## Queues
 
-### Priority Queue
-Elements are served based on priority rather than insertion order.
+### How a Queue Works
 
-```csharp
-// Using .NET 6+ PriorityQueue
-public static class PriorityQueueExample
-{
-    public static void DemonstratePriorityQueue()
-    {
-        var pq = new PriorityQueue<string, int>();
+A queue adds at one end, the back, and removes from the other, the front. The element dequeued is always the one that has waited longest, so a queue preserves the order it receives: enqueue A, B, C and dequeue them as A, B, C.
 
-        pq.Enqueue("Low priority task", 3);
-        pq.Enqueue("High priority task", 1);
-        pq.Enqueue("Medium priority task", 2);
+### Why a Plain Array Makes a Poor Queue
 
-        while (pq.Count > 0)
-        {
-            Console.WriteLine(pq.Dequeue());
-        }
-        // Output: High priority task, Medium priority task, Low priority task
-    }
-}
-```
+Enqueueing at the end of an array is O(1) amortized, but dequeueing from the front is not. Removing index 0 of a `List<T>` shifts every remaining element left, so each dequeue is O(n), and draining a queue of n elements this way costs O(n²).
 
-### Circular Queue (Ring Buffer)
-Fixed-size queue that wraps around when full.
+Leaving the front slot empty and moving a start index forward avoids the shift. But then the used region crawls steadily toward the end of the array, leaving dead space behind it, and the array eventually fills even though it holds only a few live elements.
+
+### The Circular Buffer
+
+A circular buffer, also called a ring buffer, treats the array as if its end joined its beginning. The queue keeps two indices, a head where the next dequeue reads and a tail where the next enqueue writes. Both only ever move forward, and when either passes the last slot it wraps to slot 0. The freed slots at the start get reused, so no element ever moves and both operations are O(1).
+
+{% endraw %}
+{% include figure.html id="dsa-circular-buffer" %}
+{% raw %}
 
 ```csharp
 public class CircularQueue<T>
 {
-    private T[] queue;
-    private int head;
-    private int tail;
-    private int count;
-    private int size;
+    private T[] _items;
+    private int _head;   // Index of the front element
+    private int _tail;   // Index where the next element goes
+    private int _count;
 
-    public CircularQueue(int size)
-    {
-        this.size = size;
-        queue = new T[size];
-        head = 0;
-        tail = 0;
-        count = 0;
-    }
+    public CircularQueue(int capacity = 4) => _items = new T[capacity];
 
-    public bool Enqueue(T item)
-    {
-        if (count < size)
-        {
-            queue[tail] = item;
-            tail = (tail + 1) % size;
-            count++;
-            return true;
-        }
-        return false; // Queue is full
-    }
-
-    public T Dequeue()
-    {
-        if (count > 0)
-        {
-            T item = queue[head];
-            queue[head] = default(T);
-            head = (head + 1) % size;
-            count--;
-            return item;
-        }
-        return default(T); // Queue is empty
-    }
-
-    public bool IsFull() => count == size;
-    public bool IsEmpty() => count == 0;
-}
-
-// Usage
-var cq = new CircularQueue<string>(3);
-cq.Enqueue("A");
-cq.Enqueue("B");
-cq.Enqueue("C");
-Console.WriteLine(cq.Enqueue("D")); // False - queue is full
-Console.WriteLine(cq.Dequeue());   // "A"
-cq.Enqueue("D");                   // Now succeeds
-```
-
-## Interview Problems
-
-### 1. Implement Queue Using Stacks
-```csharp
-public class QueueUsingStacks<T>
-{
-    private Stack<T> stack1; // For enqueue
-    private Stack<T> stack2; // For dequeue
-
-    public QueueUsingStacks()
-    {
-        stack1 = new Stack<T>();
-        stack2 = new Stack<T>();
-    }
+    public int Count => _count;
 
     public void Enqueue(T item)
     {
-        stack1.Push(item);
+        if (_count == _items.Length)
+            Grow();
+
+        _items[_tail] = item;
+        _tail = (_tail + 1) % _items.Length;  // Wrap past the end
+        _count++;
     }
 
     public T Dequeue()
     {
-        if (stack2.Count == 0)
-        {
-            // Move all elements from stack1 to stack2
-            while (stack1.Count > 0)
-            {
-                stack2.Push(stack1.Pop());
-            }
-        }
+        if (_count == 0)
+            throw new InvalidOperationException("The queue is empty.");
 
-        if (stack2.Count > 0)
-            return stack2.Pop();
+        T item = _items[_head];
+        _items[_head] = default!;
+        _head = (_head + 1) % _items.Length;
+        _count--;
+        return item;
+    }
 
-        return default(T);
+    private void Grow()
+    {
+        // Copy in queue order, front first, so the wrapped part lands after the rest
+        var larger = new T[Math.Max(_items.Length * 2, 4)];  // A zero-capacity queue still grows
+        for (int i = 0; i < _count; i++)
+            larger[i] = _items[(_head + i) % _items.Length];
+
+        _items = larger;
+        _head = 0;
+        _tail = _count;
     }
 }
 ```
 
-### 2. Implement Stack Using Queues
-```csharp
-public class StackUsingQueues<T>
-{
-    private Queue<T> queue1;
-    private Queue<T> queue2;
+Growing is the one subtle step. When the buffer is full and wrapped, the front of the queue sits in the middle of the array. Copying the array as-is would keep the elements in slot order, not queue order, so `Grow` copies them front to back and resets the head to 0.
 
-    public StackUsingQueues()
-    {
-        queue1 = new Queue<T>();
-        queue2 = new Queue<T>();
-    }
+A fixed-capacity circular buffer that never grows is common in its own right. It either rejects new items when full or overwrites the oldest one, which suits logs of recent events, audio and network buffers, and anything that should keep the last N values in bounded memory.
 
-    public void Push(T item)
-    {
-        // Add to queue2, move all from queue1 to queue2, then swap
-        queue2.Enqueue(item);
-        while (queue1.Count > 0)
-        {
-            queue2.Enqueue(queue1.Dequeue());
-        }
+### `Queue<T>` in .NET
 
-        // Swap queues
-        var temp = queue1;
-        queue1 = queue2;
-        queue2 = temp;
-    }
+.NET's `Queue<T>` is a circular buffer, and its source says so. `Enqueue` and `Dequeue` are O(1), with `Enqueue` O(1) amortized because a full buffer grows. It grows by a factor of 2, by at least 4 slots. Like `Stack<T>`, it offers `TryDequeue` and `TryPeek` alongside the throwing versions.
 
-    public T Pop()
-    {
-        if (queue1.Count > 0)
-            return queue1.Dequeue();
+`Queue<T>` is not safe for concurrent use. When one thread produces work and another consumes it, `ConcurrentQueue<T>` is safe for concurrent enqueues and dequeues, and `System.Threading.Channels` adds waiting for items to arrive and limits on queue length.
 
-        return default(T);
-    }
-}
-```
+### Where Queues Appear
 
-### 3. Valid Parentheses (Stack Application)
-```csharp
-public static bool IsValidParentheses(string s)
-{
-    var stack = new Stack<char>();
-    var mapping = new Dictionary<char, char>
-    {
-        {')', '('},
-        {'}', '{'},
-        {']', '['}
-    };
+A queue fits any problem where work should be handled in the order it arrived, or where a producer and a consumer run at different speeds:
 
-    foreach (char c in s)
-    {
-        if (mapping.ContainsKey(c))
-        {
-            if (stack.Count == 0 || stack.Pop() != mapping[c])
-                return false;
-        }
-        else
-        {
-            stack.Push(c);
-        }
-    }
-
-    return stack.Count == 0;
-}
-
-// Test cases
-Console.WriteLine(IsValidParentheses("()"));       // True
-Console.WriteLine(IsValidParentheses("()[]{}"));   // True
-Console.WriteLine(IsValidParentheses("(]"));       // False
-```
-
-## Modern Usage
-
-**C#:**
-- Use `Stack<T>` for stack operations
-- Use `Queue<T>` for queue operations
-- Use `PriorityQueue<TElement, TPriority>` (.NET 6+)
-- Use `ConcurrentQueue<T>` for thread-safety
-
-## Key Takeaways
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Stacks are Perfect For</h4>
-<ul>
-<li>Reversing things</li>
-<li>Keeping track of state/history</li>
-<li>Parsing nested structures</li>
-<li>Recursive algorithm implementations</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Queues are Perfect For</h4>
-<ul>
-<li>Processing in order</li>
-<li>Buffering between producers and consumers</li>
-<li>Breadth-first algorithms</li>
-<li>Scheduling and task management</li>
-</ul>
-</div>
-</div>
-
-**Interview focus:** Understand when to use each, how to implement with arrays or linked lists, and common applications like expression evaluation and tree traversal. Stack Applications
-
-#### 1. Parentheses Matching
-```csharp
-public static bool IsBalanced(string expression)
-{
-    var stack = new Stack<char>();
-    var pairs = new Dictionary<char, char>
-    {
-        {'(', ')'},
-        {'[', ']'},
-        {'{', '}'}
-    };
-
-    foreach (char c in expression)
-    {
-        if (pairs.ContainsKey(c)) // Opening bracket
-        {
-            stack.Push(c);
-        }
-        else if (pairs.ContainsValue(c)) // Closing bracket
-        {
-            if (stack.Count == 0)
-                return false;
-            if (pairs[stack.Pop()] != c)
-                return false;
-        }
-    }
-
-    return stack.Count == 0;
-}
-
-// Test cases
-Console.WriteLine(IsBalanced("()[]{}"));   // True
-Console.WriteLine(IsBalanced("([{}])"));   // True
-Console.WriteLine(IsBalanced("([)]"));     // False
-```
-
-#### 2. Postfix Expression Evaluation
-```csharp
-public static double EvaluatePostfix(string expression)
-{
-    var stack = new Stack<double>();
-    var operators = new HashSet<string> {"+", "-", "*", "/"};
-
-    foreach (string token in expression.Split(' '))
-    {
-        if (operators.Contains(token))
-        {
-            double b = stack.Pop();
-            double a = stack.Pop();
-
-            double result = token switch
-            {
-                "+" => a + b,
-                "-" => a - b,
-                "*" => a * b,
-                "/" => a / b,
-                _ => throw new InvalidOperationException($"Unknown operator: {token}")
-            };
-
-            stack.Push(result);
-        }
-        else
-        {
-            stack.Push(double.Parse(token));
-        }
-    }
-
-    return stack.Peek();
-}
-
-// Example: "3 4 + 2 *" = (3 + 4) * 2 = 14
-Console.WriteLine(EvaluatePostfix("3 4 + 2 *")); // 14.0
-```
+- **Work and message queues.** Requests, jobs, and messages wait their turn, and the queue absorbs bursts the consumer can't handle immediately.
+- **Buffers.** Keystrokes, network packets, and audio samples are consumed in the order they were produced.
+- **Breadth-first search.** A queue makes a search visit everything one step away before anything two steps away, which is how it finds shortest paths in unweighted graphs.
 
 ---
 
-## Queues (FIFO - First In, First Out)
+## Deques and Priority Queues
 
-### Why Queues Exist
-FIFO behavior matches real-world scenarios like waiting lines, task scheduling, breadth-first processing, and producer-consumer systems.
+### Deques
 
-### When to Use Queues
+A deque (a double-ended queue, pronounced "deck") allows adding and removing at both ends in O(1), so it can act as a stack, a queue, or both at once. A capped history list is a simple example. New entries are added at the back and undone from the back, like a stack, but when the history reaches its limit, the oldest entry drops off the front, like a queue.
 
-**Use when:**
-- Task scheduling and job processing
-- Breadth-first search algorithms
-- Handling requests in order (web servers, print queues)
-- Producer-consumer scenarios
-- Buffer for streaming data
-- Level-order tree traversal
+The .NET base class library has no dedicated deque type. `LinkedList<T>` provides O(1) `AddFirst`, `AddLast`, `RemoveFirst`, and `RemoveLast`, at the cost of one heap allocation per element. A circular buffer extended to move its head backward as well as its tail forward gives the same operations on an array.
 
-**Don't use when:**
-- Need random access to elements
-- LIFO behavior is required
-- Priority matters more than insertion order (use priority queue)
+### Priority Queues
 
-**Modern reality:** Built into most languages. Use `Queue<T>` in C#.
+A priority queue serves elements by priority instead of arrival order. `Dequeue` always returns the highest-priority element, whenever it arrived. Despite the name, it is a different contract from a queue, and it is usually implemented with a heap rather than an array or a list. .NET provides it as `PriorityQueue<TElement, TPriority>`, which treats the smallest priority value as the highest priority.
 
-### Time Complexity
-- **Enqueue (add):** O(1)
-- **Dequeue (remove):** O(1)
-- **Front/Peek:** O(1)
-- **Search:** O(n)
+---
 
-### C# Implementation  
+## Building a Queue from Two Stacks
+
+A queue can be built from two stacks, which is a common exercise and a clean example of amortized cost. Enqueue pushes onto an inbox stack. Dequeue pops from an outbox stack, and only when the outbox is empty does it move everything from the inbox to the outbox. Moving reverses the order, which turns the inbox's LIFO order into FIFO.
+
 ```csharp
-public class Queue<T>
+public class TwoStackQueue<T>
 {
-    private Node<T> head;
-    private Node<T> tail;
-    private int? maxSize;
-    private int size;
-    
-    public Queue(int? maxSize = null)
-    {
-        this.maxSize = maxSize;
-        size = 0;
-        head = null;
-        tail = null;
-    }
-    
-    public void Enqueue(T value)
-    {
-        if (HasSpace())
-        {
-            var itemToAdd = new Node<T>(value);
-            Console.WriteLine($"Adding {value} to the queue");
-            
-            if (IsEmpty())
-            {
-                head = itemToAdd;
-                tail = itemToAdd;
-            }
-            else
-            {
-                tail.SetLinkNode(itemToAdd);
-                tail = itemToAdd;
-            }
-            
-            size++;
-        }
-        else
-        {
-            Console.WriteLine("Queue is full! Cannot add more items");
-        }
-    }
-    
+    private readonly Stack<T> _inbox = new();
+    private readonly Stack<T> _outbox = new();
+
+    public void Enqueue(T item) => _inbox.Push(item);
+
     public T Dequeue()
     {
-        if (GetSize() > 0)
+        if (_outbox.Count == 0)
         {
-            var itemToRemove = head;
-            Console.WriteLine($"{itemToRemove.GetValue()} is being served!");
-            
-            if (GetSize() == 1)
-            {
-                head = null;
-                tail = null;
-            }
-            else
-            {
-                head = head.GetLinkNode();
-            }
-            
-            size--;
-            return itemToRemove.GetValue();
+            while (_inbox.Count > 0)
+                _outbox.Push(_inbox.Pop());  // Reversal puts the oldest on top
         }
-        else
-        {
-            Console.WriteLine("The queue is empty!");
-            return default(T);
-        }
+
+        return _outbox.Pop();  // Throws if both stacks are empty
     }
-    
-    public T Peek()
-    {
-        if (size > 0)
-        {
-            return head.GetValue();
-        }
-        else
-        {
-            Console.WriteLine("No items in queue!");
-            return default(T);
-        }
-    }
-    
-    public int GetSize() => size;
-    
-    public bool HasSpace()
-    {
-        if (maxSize == null)
-            return true;
-        else
-            return maxSize > GetSize();
-    }
-    
-    public bool IsEmpty() => size == 0;
-}
-
-// Example usage
-Console.WriteLine("Creating a deli queue with max 5 orders...");
-var deliLine = new Queue<string>(5);
-
-// Add orders
-string[] orders = {"Sandwich", "Soup", "Salad", "Pizza", "Burger"};
-foreach (var order in orders)
-{
-    deliLine.Enqueue(order);
-}
-
-Console.WriteLine($"\nNext order up: {deliLine.Peek()}");
-
-// Serve orders
-while (!deliLine.IsEmpty())
-{
-    deliLine.Dequeue();
 }
 ```
 
-### Common
+A single dequeue can move n elements, but each element is pushed and popped at most twice over its whole life: once into the inbox, once across to the outbox. So n operations cost O(n) in total, and each dequeue is O(1) amortized.
+
+---
+
+## Choosing Between Them
+
+| Situation | Structure | .NET type |
+| --- | --- | --- |
+| The most recent item must be handled first | Stack | `Stack<T>` |
+| Items must be handled in arrival order | Queue | `Queue<T>`, or `ConcurrentQueue<T>` and channels across threads |
+| Items are added or removed at both ends | Deque | `LinkedList<T>`, or a custom circular buffer |
+| The most important item must be handled first | Priority queue | `PriorityQueue<TElement, TPriority>` |
+| Only the last N items matter | Fixed-size circular buffer | A custom circular buffer |
+
+None of these structures supports efficient search or access by position. If the code needs either, the problem is not really a stack or a queue.
+
+{% endraw %}

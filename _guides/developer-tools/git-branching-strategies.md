@@ -3,23 +3,8 @@ title: "Git Branching Strategies"
 layout: guide
 category: Developer Tools
 subcategory: Git Fundamentals
-description: "Branching models and workflows for teams of every size, from trunk-based development to GitFlow, with decision frameworks for choosing the right strategy."
-tags: [git, version-control, workflow, collaboration, devops, practical]
----
-
-## Table of Contents
-
-- [Why Branching Strategy Matters](#why-branching-strategy-matters)
-- [Branches as Cheap Pointers](#branches-as-cheap-pointers)
-- [Trunk-Based Development](#trunk-based-development)
-- [GitHub Flow](#github-flow)
-- [GitFlow](#gitflow)
-- [Release Branching for Slower Teams](#release-branching-for-slower-teams)
-- [Feature Flags as a Branching Alternative](#feature-flags-as-a-branching-alternative)
-- [Choosing a Strategy](#choosing-a-strategy)
-- [Common Anti-Patterns](#common-anti-patterns)
-- [Merging Hygiene](#merging-hygiene)
-
+description: "Branching models for teams of every size, from trunk-based development and GitHub Flow to GitFlow and release branches, with feature flags, a framework for choosing, common anti-patterns, and how merge commits, squash, and rebase shape history."
+tags: [practical, branching, trunk-based-development, gitflow, feature-flags, merge-strategies, workflow]
 ---
 
 ## Why Branching Strategy Matters
@@ -28,13 +13,13 @@ Most teams don't think about branching strategy until something goes wrong. A de
 
 Branching strategy is, at its core, an agreement about how work flows from an individual developer's machine to production. That agreement needs to account for a few things that vary widely between teams: how frequently the team releases, how much risk the team can tolerate in production at any given moment, how large the team is and how often developers' work collides, and whether there are regulatory or compliance constraints that demand a paper trail before any code reaches users.
 
-A solo developer shipping a personal project has very different needs from a 50-person team maintaining a SaaS product with a weekly release window. A team under PCI-DSS compliance can't treat every push to main as a potential production deploy. These aren't abstract concerns; they shape which branching model actually fits, and picking the wrong one creates friction that compounds over time. Long integration cycles, merge conflicts that burn whole days, or deploys that require heroic manual coordination are almost always symptoms of a branching model that doesn't match the team's actual constraints.
+A solo developer shipping a personal project has very different needs from a 50-person team maintaining a SaaS product with a weekly release window. A team under PCI-DSS compliance can't treat every push to main as a potential production deploy. These constraints shape which branching model actually fits, and picking the wrong one creates friction that compounds over time. Long integration cycles, merge conflicts that burn whole days, or deploys that require heroic manual coordination are almost always symptoms of a branching model that doesn't match the team's actual constraints.
 
 ---
 
 ## Branches as Cheap Pointers
 
-Before comparing strategies, it helps to understand what a branch actually is. In Git, a branch is nothing more than a lightweight pointer to a specific commit. Creating one costs almost nothing in terms of storage or performance. This is a meaningful difference from older version control systems like SVN, where branching was expensive and merging was painful enough that most teams avoided it.
+Because a Git branch is only a named pointer to a commit, creating one costs almost nothing in storage or time. In older version control systems like SVN, branching was expensive and merging was painful enough that many teams avoided both, so every workflow below depends on this difference.
 
 ```bash
 # List all local branches
@@ -43,10 +28,7 @@ git branch
 # List all branches including remotes
 git branch -a
 
-# Create a new branch and switch to it (classic syntax)
-git checkout -b feature/user-authentication
-
-# Create a new branch and switch to it (modern syntax, Git 2.23+)
+# Create a new branch and switch to it
 git switch -c feature/user-authentication
 
 # Switch to an existing branch
@@ -62,7 +44,7 @@ git branch -d feature/user-authentication
 git branch -D feature/user-authentication
 ```
 
-The low cost of branching is what makes the various workflow models practical. You can create a branch for a one-hour task, merge it, and delete it without any meaningful overhead. The cost that does exist isn't technical; it's cognitive and social. Every active branch represents work in progress that eventually needs to integrate with everything else, and the longer branches live in isolation, the harder that integration becomes.
+The low cost of branching is what makes the various workflow models practical. You can create a branch for a one-hour task, merge it, and delete it without any meaningful overhead. The cost that does exist isn't technical. It's cognitive and social. Every active branch represents work in progress that eventually needs to integrate with everything else, and the longer branches live in isolation, the harder that integration becomes.
 
 ---
 
@@ -90,7 +72,7 @@ git push origin feature/add-payment-retry
 
 The discipline this requires is significant. Every commit that lands on main needs to be safe to ship. That means tests pass, the build is green, and no partially-implemented work is visible to users. Feature flags (covered below) are what make this viable when features take weeks or months to build: the code lands in the trunk early and often, but the functionality is hidden behind a flag until it's ready.
 
-Trunk-based development works best when the team has strong automated testing, a fast CI pipeline, and a culture where small, focused commits are the norm. It pays off in dramatically reduced merge conflicts and a codebase that's always in a known good state. It's the model used by teams like Google and Meta at enormous scale, and it's the approach most consistent with continuous integration's original intent.
+Trunk-based development works best when the team has strong automated testing, a fast CI pipeline, and a culture where small, focused commits are the norm. It pays off in dramatically reduced merge conflicts and a codebase that's always in a known good state. Large engineering organizations such as Google run it at enormous scale on a single shared trunk, and it's the approach most consistent with continuous integration's original intent, which was that everyone integrates into the mainline at least daily.
 
 Where it struggles is with teams that need formal gates before production, teams where junior developers need more structured review time before code reaches main, or teams working on long-horizon features where the work genuinely can't be decomposed into small daily increments.
 
@@ -98,16 +80,18 @@ Where it struggles is with teams that need formal gates before production, teams
 
 ## GitHub Flow
 
-GitHub Flow emerged as a simplified workflow for teams practicing continuous deployment. It's trunk-based in spirit but adds one formal step: all work happens on feature branches and merges to main through a pull request.
+GitHub Flow emerged as a simplified workflow for teams practicing continuous deployment. It's trunk-based in spirit but makes one step mandatory: all work happens on short-lived branches and reaches main only through a pull request.
 
-The workflow has six steps:
+GitHub's documentation describes six steps:
 
 1. Create a branch from main with a descriptive name
-2. Add commits as work progresses
-3. Open a pull request when the branch is ready for review (or even earlier, as a draft PR to share work in progress)
-4. Discuss and review; make additional commits in response to feedback
-5. Deploy the branch to a staging environment to verify behavior before merging
-6. Merge to main, deploy to production
+2. Make changes, committing as work progresses
+3. Open a pull request when the branch is ready for review, or earlier as a draft to share work in progress
+4. Address review comments with additional commits
+5. Merge the pull request
+6. Delete the branch
+
+Many teams add a deployment step before the merge, deploying the branch to a staging or preview environment so reviewers can verify behavior. GitHub's own description no longer includes it, and the flow works either way, as long as main stays deployable.
 
 ```bash
 # Step 1: Branch from main
@@ -123,8 +107,8 @@ git commit -m "add tests for CSV export edge cases"
 # Step 3-4: Push and open a PR on GitHub
 git push -u origin feature/export-csv-reports
 
-# Step 6: After PR approval, merge via GitHub UI or CLI
-# gh pr merge --squash (using GitHub CLI)
+# Step 5: After PR approval, merge via the GitHub UI or the GitHub CLI
+gh pr merge --squash --delete-branch
 ```
 
 The PR is the center of gravity in GitHub Flow. It's where discussion happens, where CI results are visible, and where the decision to merge gets made. The branch names serve as living documentation of what work is in flight.
@@ -135,15 +119,15 @@ GitHub Flow works exceptionally well for teams deploying frequently from a singl
 
 ## GitFlow
 
-GitFlow was [introduced by Vincent Driessen in 2010](https://nvie.com/posts/a-successful-git-branching-model/){:target="_blank" rel="noopener noreferrer"} and became one of the most widely adopted branching models of the 2010s. It was designed for software with explicit versioned releases, and its structure reflects that: there are five branch types, each with a specific role, and the rules about which branches can merge into which are strict.
+GitFlow was [introduced by Vincent Driessen in 2010](https://nvie.com/posts/a-successful-git-branching-model/){:target="_blank" rel="noopener noreferrer"} and became one of the most widely adopted branching models of the 2010s. It was designed for software with explicit versioned releases, and its structure reflects that. There are five branch types, each with a specific role, and the rules about which branches can merge into which are strict.
 
-The five branch types are:
-
-- **main**: contains only released code; every commit on main is a production release, tagged with a version number
-- **develop**: the integration branch; completed features merge here
-- **feature/\***: created from develop, merged back to develop when complete
-- **release/\***: created from develop when a release is being prepared; only bug fixes go here, not new features; merges to both main and develop when the release ships
-- **hotfix/\***: created from main to fix critical production bugs; merges to both main and develop
+| Branch | Created from | Merges into | Holds |
+| --- | --- | --- | --- |
+| **main** | (permanent) | (receives merges) | Released code only. Every commit is a production release, tagged with a version number |
+| **develop** | (permanent) | (receives merges) | The integration branch, where completed features accumulate |
+| **feature/\*** | develop | develop | One feature in progress |
+| **release/\*** | develop | main and develop | Stabilization for an upcoming release: bug fixes only, no new features |
+| **hotfix/\*** | main | main and develop | An urgent fix to a production release |
 
 ```
   hotfix/*          main              release/*         develop           feature/*
@@ -221,19 +205,17 @@ The pattern is simpler than GitFlow's full ceremony. Development happens on the 
 # Cut a release branch when the feature freeze begins
 git switch -c release/3.2 main
 
-# Only bug fixes and release-specific changes go here
+# Fix the bug on main first, then copy that one commit to the release branch
 git switch release/3.2
-git cherry-pick abc1234   # pick a specific fix from main
+git cherry-pick abc1234   # abc1234 is the fix commit already merged to main
 
 # Tag when releasing
 git tag -a v3.2.0 -m "Release 3.2.0"
-
-# Backport the fix to main so it isn't lost
-git switch main
-git cherry-pick abc1234
 ```
 
-The key discipline is keeping release branches narrowly focused. A release branch that accumulates new features during the stabilization period defeats its purpose. The team needs to agree upfront: once the release branch is cut, only fixes go on it, and every fix that goes on the release branch also gets backported to main.
+The key discipline is keeping release branches narrowly focused. A release branch that accumulates new features during the stabilization period defeats its purpose. The team needs to agree upfront that once the release branch is cut, only fixes go on it, and that no fix lives only on the release branch.
+
+There are two ways to honor that second rule. Fixing on main first and cherry-picking the fix to the release branch, as above, guarantees main never misses a fix, and it's the default in trunk-based teams. Fixing on the release branch first and then merging or cherry-picking the fix back to main suits cases where the bug only reproduces on the release code, but it relies on someone remembering the second step.
 
 Teams maintaining multiple concurrent releases (like an enterprise software vendor supporting v2.x, v3.x, and v4.x simultaneously) end up with long-lived release branches that receive security and critical bug fix updates for years. This is manageable as long as the team has clear policies about which fixes go to which branches and who is responsible for those backports.
 
@@ -256,17 +238,17 @@ git commit -m "add new checkout flow behind ENABLE_NEW_CHECKOUT flag"
 git add src/Checkout/NewCheckoutService.cs
 git commit -m "implement payment step in new checkout flow"
 
-# PR, review, merge to main — feature is invisible to users
+# PR, review, merge to main: the feature is invisible to users
 git push origin feature/new-checkout-flow
 
 # When the feature is ready, enable the flag in configuration
 # (environment variable, LaunchDarkly, Azure App Configuration, etc.)
-# No code change or new deployment required
+# No code change is required, and with a flag service no redeployment either
 ```
 
 Feature flags enable trunk-based development for work that spans weeks. They allow gradual rollouts (enable for 1% of users, then 10%, then everyone), A/B testing, and the ability to kill a feature instantly in production without a rollback deployment. They're how large teams run continuous deployment for complex, long-horizon work.
 
-The cost is code complexity. Every flag creates a conditional path that needs to be tested in both states. Flags that live too long accumulate in the codebase as dead weight. Teams that adopt feature flags need a process for retiring them after the feature is fully launched; a codebase littered with old flags for features that shipped two years ago is a maintenance liability.
+The cost is code complexity. Every flag creates a conditional path that needs to be tested in both states. Flags that live too long accumulate in the codebase as dead weight. Teams that adopt feature flags need a process for retiring them after the feature is fully launched. A codebase littered with old flags for features that shipped two years ago is a maintenance liability.
 
 Services like [LaunchDarkly](https://launchdarkly.com){:target="_blank" rel="noopener noreferrer"} and [Unleash](https://www.getunleash.io){:target="_blank" rel="noopener noreferrer"} provide flag management infrastructure, including targeting rules, audit trails, and flag lifecycle management. For simpler needs, environment variables or a configuration file managed by something like Azure App Configuration or AWS AppConfig work fine.
 
@@ -293,19 +275,21 @@ The most common mistake is adopting GitFlow because it sounds serious and profes
 
 ## Common Anti-Patterns
 
-Several patterns look reasonable at first but create predictable problems.
-
 **Long-lived feature branches** are the most common source of merge pain. A branch that diverges from main for three weeks accumulates a growing conflict surface. The longer a branch lives, the more the rest of the codebase has changed around the code on that branch, and the harder the eventual merge becomes. If a feature requires more than a few days of work, decompose it into smaller pieces that can be merged independently (with a feature flag to hide the incomplete work), or plan for frequent syncs with main.
 
 ```bash
 # Don't wait weeks to sync. Rebase regularly to stay current.
 git fetch origin
 git rebase origin/main
+
+# A rebased branch that was already pushed needs a force push.
+# --force-with-lease refuses if someone else pushed to it in the meantime.
+git push --force-with-lease
 ```
 
 **Merge-day chaos** happens when a team lets everyone work in isolation for a sprint and then tries to integrate all the branches at once. This is sometimes called "big bang integration" and it reliably produces a painful afternoon of resolving conflicts, broken tests, and finger-pointing. The fix is continuous integration: merge to the shared branch frequently, not at the end of the sprint.
 
-**Branch-per-environment** is a pattern where branches represent environments ("staging branch", "qa branch", "production branch") and code is promoted by merging between them. This sounds intuitive but creates situations where the branches diverge, fixes applied directly to the production branch get lost, and nobody is quite sure what's actually in any environment. Environments should be managed by CI/CD pipelines that deploy specific commits or tags to specific environments; branches should represent work, not infrastructure state.
+**Branch-per-environment** is a pattern where branches represent environments ("staging branch", "qa branch", "production branch") and code is promoted by merging between them. This sounds intuitive but creates situations where the branches diverge, fixes applied directly to the production branch get lost, and nobody is quite sure what's actually in any environment. CI/CD pipelines should manage environments by deploying specific commits or tags to each one, so branches represent work rather than infrastructure state.
 
 **Too many active branches** create cognitive load. If a repository has 40 open branches and most of them haven't been touched in weeks, the team has lost track of what's in progress and what's abandoned. Regular branch hygiene keeps the working set manageable: delete merged branches, close abandoned PRs, and set an expectation that stale branches need either a comment explaining the delay or a closure.
 
@@ -332,7 +316,7 @@ When a branch is ready to integrate, the team has three options for how to recor
 
   ┌─ Rebase and Merge ─────────────────────────────────────────┐
   │  main: ... ── X ── A' ── B' ── C' ── D' (replayed commits)│
-  │  Result: Linear history, all commits preserved, new SHAs   │
+  │  Result: Linear history, all commits preserved, new hashes │
   └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -368,7 +352,7 @@ git switch main
 git merge feature/user-authentication  # fast-forward, no merge commit
 ```
 
-Rebase-and-merge is appealing because the history is linear and easy to follow with `git log`. The problem is that rebasing rewrites history: the commits on the feature branch get new SHA hashes. This is fine for private branches, but it means the branch's history in the remote is incompatible after a rebase, requiring a force push. Teams that use rebase-and-merge need to have clear rules about when rebasing is and isn't allowed.
+Rebase-and-merge is appealing because the history is linear and easy to follow with `git log`. The cost is that rebasing rewrites history, so the commits that land on main have new hashes and no longer match the ones on the feature branch. When a hosting platform's rebase-and-merge button does the rewrite, that mostly means the merged branch should be deleted rather than reused. When developers rebase shared branches by hand, anyone who based work on the old commits has to recover, and the rebased branch needs a force push. Teams that use rebase-and-merge need clear rules about when rebasing is and isn't allowed.
 
 Most teams are best served by picking either squash-and-merge (for clean main history) or merge commits (for preserved branch history) and standardizing on one. Mixing strategies makes `git log` harder to reason about and creates confusion when tracing a bug to a specific change.
 
@@ -379,16 +363,4 @@ git log --oneline main..feature/foo   # commits on feature not yet on main
 git log --follow -p src/Payments.cs   # full history of a file including renames
 ```
 
-The choice of merge strategy doesn't change the code that ends up on main; it only changes the story that the commit history tells. That story matters most when something goes wrong and you're using `git bisect` to find a regression, or when you're trying to understand why a particular decision was made six months ago. A history that's been thoughtfully maintained with meaningful commit messages and a consistent merge strategy is a meaningful artifact of the team's work. A history full of "WIP", "fix", and "asdf" commits merged from a dozen different strategies tells you almost nothing.
-
-```bash
-# git bisect helps find the commit that introduced a regression
-git bisect start
-git bisect bad                     # current commit is broken
-git bisect good v2.3.0             # this tag was working
-# Git checks out commits for you to test; mark each as good or bad
-git bisect good
-git bisect bad
-# Git narrows down to the offending commit
-git bisect reset                   # return to original HEAD when done
-```
+The choice of merge strategy doesn't change the code that ends up on main. It changes the story that the commit history tells, and that story matters most when something goes wrong and you're using `git bisect` to binary-search the history for the commit that introduced a regression, or when you're trying to understand why a particular decision was made six months ago. A history kept with meaningful commit messages and a consistent merge strategy answers those questions directly. A history full of "WIP", "fix", and "asdf" commits merged from a dozen different strategies tells you almost nothing.

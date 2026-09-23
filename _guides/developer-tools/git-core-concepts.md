@@ -3,15 +3,15 @@ title: "Git Core Concepts"
 layout: guide
 category: Developer Tools
 subcategory: Git Fundamentals
-description: "How Git works under the hood, from the object model and DAG to refs, staging, remotes, and the mechanics that make version control reliable and powerful."
-tags: [git, version-control, fundamentals, developer-tools]
+description: "How Git works under the hood and in daily use: the object model and commit graph, refs and HEAD, the staging area, remotes and pulling, merging and resolving conflicts, tags, .gitignore, configuration scopes, and why lost commits are usually recoverable."
+tags: [fundamentals, version-control, object-model, staging-area, remotes, merge-conflicts, gitignore]
 ---
 
 ## What Git Is and Why It Matters
 
-Most developers use Git every day without thinking much about how it actually works. That is a reasonable state of affairs for routine tasks like committing and pushing, but it leaves you helpless when things go wrong, and blind to the features that could make your work significantly better.
+Most developers use Git every day without thinking much about how it actually works. Routine tasks like committing and pushing don't need that knowledge, but it's what gets you out of trouble when things go wrong, and it's what reveals the features that could make your work significantly better.
 
-Git is a distributed version control system, which is a phrase worth unpacking. "Version control" means Git records snapshots of your project over time so you can retrieve any past state. "Distributed" means every developer has a complete copy of the entire project history on their machine, not just a checkout of the current files. There is no single server that holds the authoritative copy. When you clone a repository, you clone everything: all commits, all branches, all tags, the full history going back to the first commit.
+Git is a distributed version control system. "Version control" means Git records snapshots of your project over time so you can retrieve any past state. "Distributed" means every developer has a complete copy of the entire project history on their machine, not just a checkout of the current files. There is no single server that holds the authoritative copy. When you clone a repository, you clone everything: all commits, all branches, all tags, the full history going back to the first commit.
 
 This is a meaningful difference from older centralized systems like SVN and Perforce, where all history lived on a server and developers checked out working copies. With a centralized system, losing the server means losing history. Working offline means no commits. Creating branches is expensive because it involves server operations. Git was designed with these limitations in mind. Linus Torvalds created Git in 2005 specifically for Linux kernel development, where thousands of contributors needed to work independently and merge large patches reliably without depending on a central server.
 
@@ -21,9 +21,22 @@ The distributed model has practical consequences for daily work. You can commit,
 
 ## The Object Model
 
-Git stores everything as objects in a content-addressable key-value store inside the `.git` directory. Every object is identified by the SHA-1 hash of its contents. If you change even one byte of an object's content, the hash changes, and Git treats it as a completely different object. This design gives Git several strong properties: objects are deduplicated automatically (two files with identical content have the same hash and are stored once), and you can detect corruption because a hash mismatch means the data changed.
+Git stores everything as objects in a content-addressable key-value store inside the `.git` directory. Every object is identified by a hash of its contents. If you change even one byte of an object's content, the hash changes, and Git treats it as a completely different object. Two properties follow from that design. Objects are deduplicated automatically, because two files with identical content have the same hash and are stored once. Corruption is detectable, because a hash mismatch means the data changed.
 
-There are four object types, and every commit, file, and tag in Git reduces to these primitives.
+Repositories have historically used SHA-1, which produces the 40-character hashes you see throughout Git's output. Git also supports SHA-256 repositories, and Git 3.0 is planned to make SHA-256 the default for newly created repositories. Existing repositories keep the format they were created with. The examples in this guide show SHA-1 hashes because that is what most repositories still use.
+
+There are four object types, and every commit, file, and tag in Git reduces to these primitives. A commit points to one tree, the tree lists blobs and subtrees, and the same blob or subtree can be shared by many trees:
+
+```
+  commit 7a1c…
+    │  tree ────────► tree 4fd5… (project root)
+    │                   ├── blob a8c7…  .gitignore
+    │                   ├── blob e3a1…  README.md
+    │                   └── tree 0577…  src/
+    │                         └── blob 9b2e…  Program.cs
+    └  parent ──────► commit 3e9f… (its own tree, which may reuse
+                                     unchanged blobs and subtrees)
+```
 
 ### Blobs
 
@@ -42,7 +55,7 @@ git cat-file -p e69de29
 
 ### Trees
 
-A tree is Git's equivalent of a directory. It contains a list of entries, where each entry has a mode (file permissions), an object type, a SHA-1, and a name. A tree entry can point to either a blob (a file) or another tree (a subdirectory).
+A tree is Git's equivalent of a directory. It contains a list of entries, where each entry has a mode (file permissions), an object type, a hash, and a name. A tree entry can point to either a blob (a file) or another tree (a subdirectory).
 
 ```bash
 # List the tree at a given commit
@@ -76,7 +89,7 @@ Because a commit contains the hash of its tree, and that tree recursively contai
 
 ### Tags
 
-A tag object (an "annotated tag") stores a reference to another object (usually a commit), a tagger's name and date, and a message. It can also include a GPG signature. Annotated tags are stored as their own objects with their own SHA-1. Lightweight tags, which are discussed in the Tags section below, are just references and not objects.
+A tag object stores a reference to another object (usually a commit), a tagger's name and date, a message, and optionally a signature. Only annotated tags create one. The Tags section below covers how annotated tags differ from lightweight ones and when to use each.
 
 ---
 
@@ -100,45 +113,47 @@ Each arrow points from child to parent, showing how Git stores parent references
                 └── E ◄── F─┘    (G has two parents: D and F)
 ```
 
-Git's DAG also explains why rebase rewrites history. When you rebase `feature` onto `main`, Git replays commits E and F on top of D, creating new commits E' and F' with different parent chains (and therefore different SHA-1 hashes), while discarding the originals:
+Git's DAG also explains why rebase rewrites history. When you rebase `feature` onto `main`, Git replays commits E and F on top of D, creating new commits E' and F' with different parent chains (and therefore different hashes), while discarding the originals:
 
 ```
   A ◄── B ◄── C ◄── D ◄── E' ◄── F'    (feature, after rebase)
 ```
 
-The original E and F still exist in the object store temporarily but are no longer reachable from any ref.
+The original E and F still exist in the object store for a while, but no branch points to them anymore. The last section of this guide covers how long they survive and how to get them back.
 
 ---
 
 ## Refs, HEAD, and Branches
 
-Git objects are permanent and immutable once created, but how does Git know which commit is "the current version"? Through references, or refs. A ref is simply a named pointer to a SHA-1 hash stored in a text file under `.git/refs/`.
+Git objects are permanent and immutable once created, but how does Git know which commit is "the current version"? Through references, or refs. A ref is a named pointer to a commit hash.
 
 ### Branches
 
-A branch is not a copy of the codebase. A branch is a ref: a file containing a single 40-character SHA-1 hash pointing to a commit. Creating a branch is nearly instantaneous because Git just writes a new file. This is the key reason branching in Git is so much cheaper than in older version control systems.
+A branch is not a copy of the codebase. A branch is a ref: a name that stores a single commit hash. Creating a branch is nearly instantaneous because Git only records one new name and one hash, which is why branching in Git is so much cheaper than in older version control systems.
 
 ```bash
 # Create a new branch
 git branch feature/my-work
 
-# See what that branch actually is
-cat .git/refs/heads/feature/my-work
+# See the commit the branch points to
+git rev-parse feature/my-work
 # Output: 4fd5ab1f2e3a12ec8a9b3c4d5e6f7a8b9c0d1e2f
 ```
+
+A freshly created branch is usually stored as a small file under `.git/refs/heads/`, but Git packs refs into `.git/packed-refs` over time, and repositories using the newer reftable backend store them in a binary format. `git rev-parse` reads a ref correctly in every case, so prefer it over reading files under `.git/` directly.
 
 When you commit on a branch, Git creates the commit object and then moves the branch ref forward to point to the new commit. Branches are mutable. They follow you as you commit.
 
 ### HEAD
 
-HEAD is a special ref that tells Git which branch you are currently on. Usually, HEAD contains the name of a branch rather than a SHA-1 directly:
+HEAD is a special ref that tells Git which branch you are currently on. Usually, HEAD contains the name of a branch rather than a commit hash:
 
 ```bash
 cat .git/HEAD
 # Output: ref: refs/heads/main
 ```
 
-When you check out a branch, HEAD is updated to point to that branch. When you commit, Git uses HEAD to determine which branch to advance.
+When you switch to a branch, HEAD is updated to point to that branch. When you commit, Git uses HEAD to determine which branch to advance.
 
 ```
   HEAD                    refs/heads/main           Commit Object
@@ -153,10 +168,11 @@ When you check out a branch, HEAD is updated to point to that branch. When you c
   └─────────────────┘
 ```
 
-If you check out a commit directly by its SHA-1 (instead of a branch name), Git enters "detached HEAD" state. HEAD then contains a SHA-1 directly:
+If you switch to a commit directly by its hash instead of a branch name, Git enters "detached HEAD" state, and HEAD then contains a commit hash directly:
 
 ```bash
-git checkout 4fd5ab1
+git switch --detach 4fd5ab1
+# The older equivalent is: git checkout 4fd5ab1
 
 cat .git/HEAD
 # Output: 4fd5ab1f2e3a12ec8a9b3c4d5e6f7a8b9c0d1e2f
@@ -165,16 +181,11 @@ cat .git/HEAD
 In detached HEAD state, commits you make are not attached to any branch. If you switch away without creating a branch first, those commits become unreachable and will eventually be cleaned up by Git's garbage collector. This is a common source of confusion for developers who check out old commits to look around.
 
 ```bash
-# Recover from detached HEAD by creating a branch at current position
-git branch my-recovery-branch
-git checkout my-recovery-branch
-# Or with a single command:
-git checkout -b my-recovery-branch
+# Recover from detached HEAD by creating a branch at the current position
+git switch -c my-recovery-branch
 ```
 
-### Tags as Refs
-
-Tags are also refs, but unlike branches they are intended to be permanent pointers. A lightweight tag is just a ref file, similar to a branch but stored under `.git/refs/tags/` and never moved. Annotated tags additionally create a tag object, discussed further in the Tags section.
+This guide uses `git switch` for changing branches and `git restore` for discarding or unstaging changes. Both arrived in Git 2.23 to split up the older `git checkout`, which does both jobs and is still fully supported. You will see `checkout` in older documentation and scripts, and it behaves the same way.
 
 ---
 
@@ -188,7 +199,7 @@ The three trees are:
 - **Index (staging area)**: A snapshot of what will go into the next commit
 - **HEAD**: The snapshot of the last commit (the current tip of the branch)
 
-Most version control systems record the difference between the old file and the new file and commit that diff. Git does not work this way. Git commits snapshots, not diffs. A commit records a complete picture of all tracked files at a moment in time.
+Many older version control systems store each file as a series of diffs against its previous version. Git's model is different. A commit records a complete snapshot of all tracked files at a moment in time, and unchanged files cost nothing because the new tree simply reuses their existing blobs. (For storage efficiency, Git's packfiles do compress similar objects as deltas of each other, but that is an implementation detail beneath the snapshot model you work with.)
 
 The index sits between the working directory and HEAD. When you run `git add`, Git takes the current version of the file from your working directory and writes it to the index. When you run `git commit`, Git takes everything currently in the index and creates a new commit object from it. Nothing in the working directory goes directly into a commit. It must pass through the index first.
 
@@ -269,7 +280,7 @@ git commit -m "Add user authentication to the login endpoint"
 git commit -am "Fix null reference in payment processor"
 ```
 
-Write commit messages in the imperative mood ("Add feature", not "Added feature" or "Adding feature"). A good message describes what the commit does, not what you did. The subject line should be under 72 characters. If more context is needed, add a blank line after the subject and write a body explaining the why.
+Write commit messages in the imperative mood ("Add feature", not "Added feature" or "Adding feature"). A good message describes what the commit does, not what you did. The common convention is a subject line of around 50 characters, then a blank line and a body wrapped at 72 characters that explains why the change was made. Tools like `git log --oneline` and hosting UIs show only the subject, so it has to stand on its own.
 
 ### Viewing History
 
@@ -305,12 +316,17 @@ git diff --staged
 # Compare two commits
 git diff abc1234 def5678
 
-# Compare two branches
-git diff main..feature/my-work
+# Compare the tips of two branches
+git diff main feature/my-work
+
+# Show only what feature/my-work changed since it branched from main
+git diff main...feature/my-work
 
 # Show only which files changed, not the content
-git diff --name-only main..feature/my-work
+git diff --name-only main...feature/my-work
 ```
+
+The three-dot form compares the feature branch against the point where it diverged from `main`, so commits that landed on `main` in the meantime don't show up as reversed changes. It's usually the form you want when reviewing what a branch actually did.
 
 ### Undoing Things
 
@@ -373,12 +389,15 @@ git push -u origin feature/my-work
 # Download all changes from origin without merging anything
 git fetch origin
 
-# Download and merge (or rebase) into the current branch
-# git pull is essentially "git fetch" followed by "git merge" (or "git rebase --onto")
+# Download and integrate into the current branch
+# git pull runs "git fetch" followed by "git merge" or "git rebase"
 git pull
 
-# Pull with rebase instead of merge (keeps a cleaner linear history)
+# Pull with rebase, replaying your local commits on top of the remote's
 git pull --rebase
+
+# Pull with a merge commit when the branches have diverged
+git pull --no-rebase
 
 # Push the current branch to origin
 git push
@@ -390,7 +409,9 @@ git push origin feature/my-work:feature/my-work
 git push origin --delete feature/old-branch
 ```
 
-`git fetch` is the safe operation. It never changes your working directory or your local branches. It just updates the remote-tracking branches. `git pull` is a convenience command that runs fetch and then automatically merges (or rebases) the remote changes into your current branch. If you want more control, use `git fetch` and then decide what to do with the fetched changes.
+`git fetch` is the safe operation. It never changes your working directory or your local branches. It just updates the remote-tracking branches. `git pull` is a convenience command that runs fetch and then integrates the remote changes into your current branch.
+
+How `git pull` integrates depends on configuration. When your branch has no local commits the remote lacks, it simply fast-forwards. When both sides have new commits, current Git versions refuse to guess. By default the pull fails and asks you to choose between merging and rebasing, either per pull with `--no-rebase` or `--rebase`, or permanently with the `pull.rebase` setting shown under Git Configuration below. If you want full control, run `git fetch` and then decide what to do with the fetched changes.
 
 ---
 
@@ -407,7 +428,7 @@ If the branch you are merging into has not diverged from the branch you are merg
 # main:    A -- B -- C
 # feature:           C -- D -- E
 
-git checkout main
+git switch main
 git merge feature
 
 # After merge (fast-forward):
@@ -432,33 +453,54 @@ When the two branches have diverged (both have commits the other does not have),
 # main:    A -- B -- C -- D
 # feature:      B -- E -- F
 
-git checkout main
+git switch main
 git merge feature
-
-# If there are conflicts:
-# 1. Git marks conflicting files with conflict markers (<<<<<<, =======, >>>>>>>)
-# 2. You edit the files to resolve the conflicts
-# 3. Stage the resolved files
-git add src/ConflictingFile.cs
-# 4. Complete the merge
-git commit
-# (Git prepopulates the merge commit message)
 ```
 
-### Choosing Between Merge and Rebase
+Rebase is the other way to integrate diverged branches. It replays one branch's commits on top of the other instead of joining them with a merge commit, which rewrites those commits' hashes, as the DAG section showed.
 
-Rebase is an alternative to merge. Instead of creating a merge commit, rebase replays your branch's commits on top of the target branch, resulting in a linear history. The tradeoff:
+### Resolving Merge Conflicts
 
-- **Merge** preserves accurate history (including when and where branches diverged) but can create a complex graph
-- **Rebase** produces a clean linear history but rewrites commit hashes, which causes problems if others have already based work on your original commits
+A conflict happens when both branches changed the same lines of a file since their common ancestor, or when one side edited a file the other deleted. Git merges everything it can, stops, and leaves the conflicting files in the working directory with markers around each disputed region:
 
-The general rule: rebase local branches that nobody else is using; merge shared branches.
+```text
+<<<<<<< HEAD
+var timeout = TimeSpan.FromSeconds(30);
+=======
+var timeout = TimeSpan.FromSeconds(60);
+>>>>>>> feature
+```
+
+The section between `<<<<<<<` and `=======` is the version on the branch you are merging into (HEAD), and the section after it is the incoming branch. Resolving the conflict means editing the file into the content you actually want, which might be either side, a combination, or something new, and deleting the markers.
+
+```bash
+# See which files still have conflicts
+git status
+
+# After editing each file, mark it resolved by staging it
+git add src/PaymentClient.cs
+
+# Once every conflict is staged, finish the merge
+git commit
+# (Git prepopulates the merge commit message)
+
+# Or give up and return to the state before the merge started
+git merge --abort
+```
+
+When the two sides alone don't make the right answer obvious, it helps to see what the line looked like before either branch touched it. Setting `merge.conflictStyle` to `zdiff3` adds a third section showing the common ancestor's version between the two sides:
+
+```bash
+git config --global merge.conflictStyle zdiff3
+```
+
+The same markers appear when a rebase, cherry-pick, or stash pop hits a conflict. The resolution step is identical, and only the command that continues or aborts the operation differs.
 
 ---
 
 ## Tags
 
-Tags mark specific points in history as significant. They are most commonly used to mark release versions, such as `v1.0.0` or `release-2024-Q1`.
+Tags mark specific points in history as significant. They are most commonly used to mark release versions, such as `v1.0.0` or `release-2024-Q1`. Like a branch, a tag is a ref stored under `refs/tags/`, but it is meant to stay put: committing never moves it.
 
 ### Lightweight Tags
 
@@ -478,17 +520,17 @@ git tag
 git tag -l "v1.*"
 ```
 
-Lightweight tags are appropriate for temporary markers or local bookmarks. They should not be used for public releases.
+Lightweight tags suit temporary markers and local bookmarks. Git's own documentation reserves annotated tags for releases.
 
 ### Annotated Tags
 
-An annotated tag is a full object in the Git database. It stores the tagger's name and email, the date, a message, and can be signed with GPG. Annotated tags are checksummed independently of the commit they point to.
+An annotated tag is a full object in the Git database. It stores the tagger's name and email, the date, a message, and optionally a signature. Annotated tags have their own hash, separate from the commit they point to.
 
 ```bash
 # Create an annotated tag
-git tag -a v1.0.0 -m "Release version 1.0.0 - first stable release"
+git tag -a v1.0.0 -m "Release version 1.0.0, first stable release"
 
-# Create a signed annotated tag (requires GPG setup)
+# Create a signed annotated tag (requires a GPG or SSH signing key)
 git tag -s v1.0.0 -m "Release version 1.0.0"
 
 # Show the tag object details (including the tagger and message)
@@ -511,6 +553,9 @@ git push origin v1.0.0
 # Push all local tags that do not exist on the remote
 git push origin --tags
 
+# Push commits plus only the annotated tags that point at them
+git push --follow-tags
+
 # Delete a tag locally
 git tag -d v1.0.0
 
@@ -522,16 +567,15 @@ git push origin --delete v1.0.0
 
 ## .gitignore
 
-`.gitignore` tells Git which untracked files to ignore. Git never ignores files that are already tracked; if you want Git to stop tracking a file, you must untrack it explicitly with `git rm --cached` and then add it to `.gitignore`.
+`.gitignore` tells Git which untracked files to ignore. Git never ignores files that are already tracked. To make Git stop tracking a file, untrack it explicitly with `git rm --cached` and then add it to `.gitignore`.
 
 ### Pattern Syntax
 
 Patterns in `.gitignore` follow these rules:
 
 - A blank line or a line beginning with `#` is ignored
-- A pattern without a slash applies to files anywhere in the repository
-- A pattern with a slash is relative to the location of the `.gitignore` file
-- A leading `/` anchors the pattern to the directory containing the `.gitignore`
+- A pattern with no slash, or only a trailing slash, matches at any depth below the `.gitignore` file
+- A slash at the start or in the middle anchors the pattern to the directory containing the `.gitignore`
 - A trailing `/` matches only directories
 - `*` matches anything except a slash
 - `**` matches across directories
@@ -576,22 +620,27 @@ Beyond `.gitignore`, Git supports two other ignore mechanisms. `.git/info/exclud
 
 ## Git Configuration
 
-Git configuration follows a three-level hierarchy, where each level overrides the one above it.
+Git configuration follows a layered hierarchy, where each level overrides the one above it. Every `git config` command that writes a value targets one of these levels, so the flag you pass decides who the setting affects.
 
-| Level | Location | Scope |
-|-------|----------|-------|
-| **System** | `/etc/gitconfig` (Linux/macOS) or `%PROGRAMDATA%\Git\config` (Windows) | All users on the machine |
-| **Global** | `~/.gitconfig` or `~/.config/git/config` | All repositories for the current user |
-| **Local** | `.git/config` (inside the repository) | That repository only |
+| Level | Flag | Location | Scope |
+|-------|------|----------|-------|
+| **System** | `--system` | `/etc/gitconfig` (Linux/macOS), or `etc\gitconfig` under the Git for Windows install directory | All users on the machine |
+| **Global** | `--global` | `~/.gitconfig` or `~/.config/git/config` | All repositories for the current user |
+| **Local** | `--local` (the default when writing) | `.git/config` (inside the repository) | That repository only |
+| **Worktree** | `--worktree` | `.git/config.worktree`, when `extensions.worktreeConfig` is enabled | One linked worktree of the repository |
+
+A value passed on the command line with `git -c key=value` overrides all of them for that one command.
 
 ```bash
 # Set your identity (required before committing)
 git config --global user.name "Steven Stuart"
+git config --global user.email "steven@example.com"
 
 # Set the default editor for commit messages
 git config --global core.editor "code --wait"
 
 # Set the default branch name for new repositories
+# (Git's built-in default is still "master"; Git 3.0 is planned to switch it to "main")
 git config --global init.defaultBranch main
 
 # Automatically set upstream tracking when pushing a new branch
@@ -618,13 +667,11 @@ Beyond identity, a few global settings meaningfully improve daily workflow:
 # Always rebase when pulling (prevents accidental merge commits)
 git config --global pull.rebase true
 
-# Enable colored output
-git config --global color.ui auto
+# Show the common ancestor in conflict markers
+git config --global merge.conflictStyle zdiff3
 
-# Show a summary of changes after each checkout
-git config --global checkout.showStats true
-
-# Correct minor typos in commands automatically
+# Correct minor typos in commands, running the guess after 1 second
+# (the value is in tenths of a second; "prompt" asks first instead)
 git config --global help.autocorrect 10
 
 # Use a consistent line ending strategy (important on teams mixing OS)
@@ -642,9 +689,9 @@ An alternative approach that is more explicit is to commit a [`.gitattributes`](
 
 ## How the Object Store Keeps History Safe
 
-It is worth pausing on what "losing" commits in Git actually means. Git objects are permanent once created. Nothing you do with branches, resets, or rebases deletes objects from the object store. What those operations change is which objects are reachable, meaning connected to the current branch tips through parent chains.
+"Losing" commits in Git rarely means what it sounds like. Objects are immutable once created, and branch operations like resets and rebases don't delete anything from the object store. What those operations change is which objects are reachable, meaning connected to a branch or tag through parent chains.
 
-Git provides `git reflog` as a safety net. The reflog records every change to a ref (including HEAD) for approximately 90 days by default:
+Git provides `git reflog` as a safety net. The reflog records every change to a ref, including HEAD, in your local repository. Entries are kept for 90 days by default, but entries for commits that are no longer reachable from any branch expire after 30 days (the `gc.reflogExpire` and `gc.reflogExpireUnreachable` settings), and the reflog is never shared with a remote:
 
 ```bash
 # Show the reflog for HEAD
@@ -660,6 +707,6 @@ git reflog
 git branch recovery-branch e3a12ec
 ```
 
-If you reset a branch to an earlier commit and "lose" recent commits, they are still in the object store. The reflog shows the SHA-1 of the commits that were on the branch before the reset. Create a branch there and the work is recovered.
+If you reset a branch to an earlier commit and "lose" recent commits, they are still in the object store. The reflog shows the hashes of the commits that were on the branch before the reset. Create a branch there and the work is recovered.
 
-Git's garbage collector (`git gc`) eventually prunes unreachable objects that are older than the reflog retention period, but for day-to-day development, you can almost always recover from mistakes if you act promptly. The hash-based object model that makes history tamper-evident is the same property that makes it hard to truly destroy work.
+Git's garbage collector (`git gc`, which Git also runs automatically from time to time) eventually deletes objects that nothing references anymore, neither a branch, a tag, nor a reflog entry, once they are older than two weeks by default. In practice that gives you about a month to recover a commit you walked away from, which covers most day-to-day mistakes if you act promptly. It does not cover uncommitted work: changes that were never staged or committed never became objects, so a destructive `git restore` or `git reset --hard` loses them for good.

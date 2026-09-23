@@ -2,7 +2,7 @@
 title: "Algorithm Design Paradigms"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Fundamentals
+subcategory: Algorithms
 description: "Master four fundamental algorithm design approaches: dynamic programming, greedy algorithms, divide-and-conquer, and backtracking with practical examples and complexity analysis."
 tags: [algorithms, problem-solving, design-patterns, advanced, optimization]
 ---

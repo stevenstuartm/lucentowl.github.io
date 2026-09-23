@@ -1,0 +1,60 @@
+---
+title: "The Call Stack During Factorial(4)"
+kind: dynamic
+system: dsa
+summary: "Four stack frames pushed by the calls, then popped by the returns."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-labelledby="cs-title cs-desc" style="width:100%; min-width:600px; height:auto; display:block;">
+<title id="cs-title">Call stack for a recursive factorial of 4</title>
+<desc id="cs-desc">A caller invokes Factorial(4), which calls Factorial(3), then Factorial(2), then Factorial(1). Each call pushes a new frame on top of the stack, and each waiting frame holds its own n. Factorial(1) is the base case and returns 1. The returns then pop the frames in reverse order: Factorial(2) returns 2, Factorial(3) returns 6, and Factorial(4) returns 24 to the caller.</desc>
+<style>
+.cs-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.cs-base { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.cs-base + text, .cs-base + text + text { fill: #FFFFFF; }
+.cs-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.cs-n { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.cs-n-mute { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.cs-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.cs-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-primary, #1A5F8A); }
+.cs-hd-r { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-accent, #A5486E); }
+.cs-el { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.cs-rl { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.cs-call { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.cs-ret { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="cs-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="cs-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="cs-base" x="250" y="60" width="300" height="54" rx="6"/>
+<text class="cs-n" x="266" y="83">Factorial(1)</text>
+<text class="cs-s" x="266" y="102">base case: returns 1</text>
+<rect class="cs-box" x="250" y="140" width="300" height="54" rx="6"/>
+<text class="cs-n" x="266" y="163">Factorial(2)</text>
+<text class="cs-s" x="266" y="182">n = 2, waiting on 2 × Factorial(1)</text>
+<rect class="cs-box" x="250" y="220" width="300" height="54" rx="6"/>
+<text class="cs-n" x="266" y="243">Factorial(3)</text>
+<text class="cs-s" x="266" y="262">n = 3, waiting on 3 × Factorial(2)</text>
+<rect class="cs-box" x="250" y="300" width="300" height="54" rx="6"/>
+<text class="cs-n" x="266" y="323">Factorial(4)</text>
+<text class="cs-s" x="266" y="342">n = 4, waiting on 4 × Factorial(3)</text>
+<rect class="cs-ext" x="250" y="380" width="300" height="44" rx="6"/>
+<text class="cs-n-mute" x="266" y="407">Caller of Factorial(4)</text>
+<path class="cs-call" d="M 250,162 H 220 V 100 H 246" marker-end="url(#cs-a)"/>
+<path class="cs-call" d="M 250,242 H 220 V 180 H 246" marker-end="url(#cs-a)"/>
+<path class="cs-call" d="M 250,322 H 220 V 260 H 246" marker-end="url(#cs-a)"/>
+<path class="cs-call" d="M 250,402 H 220 V 340 H 246" marker-end="url(#cs-a)"/>
+<path class="cs-ret" d="M 550,87.0 H 580 V 158 H 554" marker-end="url(#cs-r)"/>
+<text class="cs-rl" x="590" y="126">returns 1</text>
+<path class="cs-ret" d="M 550,167.0 H 580 V 238 H 554" marker-end="url(#cs-r)"/>
+<text class="cs-rl" x="590" y="206">returns 2</text>
+<path class="cs-ret" d="M 550,247.0 H 580 V 318 H 554" marker-end="url(#cs-r)"/>
+<text class="cs-rl" x="590" y="286">returns 6</text>
+<path class="cs-ret" d="M 550,327.0 H 580 V 398 H 554" marker-end="url(#cs-r)"/>
+<text class="cs-rl" x="590" y="366">returns 24</text>
+<text class="cs-hd" x="210" y="36" text-anchor="end">CALLS PUSH FRAMES</text>
+<text class="cs-hd-r" x="590" y="36">RETURNS POP FRAMES</text>
+<text class="cs-el" x="210" y="56" text-anchor="end">top of stack</text>
+</g>
+</svg>

@@ -2,7 +2,7 @@
 title: "Search Algorithms"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Hash Tables & Algorithms
+subcategory: Algorithms
 description: "Compare linear and binary search algorithms with complexity analysis, when to use each approach, and implementing efficient search strategies."
 tags: [algorithms, searching, complexity-analysis, practical, interview-prep]
 ---

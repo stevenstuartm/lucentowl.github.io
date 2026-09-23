@@ -1,0 +1,88 @@
+---
+title: "Two Ways to Resolve a Collision"
+kind: structure
+system: dsa
+summary: "Chaining and linear probing placing two keys that share a slot."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 430" role="img" aria-labelledby="hc-title hc-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="hc-title">Separate chaining compared with linear probing</title>
+<desc id="hc-desc">Four keys hash into an eight-slot table: cat to slot 2, dog to 5, emu to 2, and fox to 6, so cat and emu collide. With separate chaining, slot 2 holds cat and a chain that links on to emu, and every other key sits in its own slot. With open addressing and linear probing, every key sits in the table itself: slot 2 is already taken by cat, so emu probes the next slot and lands in slot 3.</desc>
+<style>
+.hc-slot { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.hc-e { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.hc-col { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.hc-k { font-size: 13.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.hc-i { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.hc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.hc-s { font-size: 13px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.hc-note { font-size: 11.5px; font-style: italic; fill: var(--color-accent, #A5486E); }
+.hc-ptr2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.hc-probe { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 5 3; }
+</style>
+<defs>
+<marker id="hc-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="hc-hd" x="40" y="34">KEYS AND THEIR SLOTS: hash(key) % 8</text>
+<text class="hc-s" x="40" y="56">cat → 2</text>
+<text class="hc-s" x="190" y="56">dog → 5</text>
+<text class="hc-s" x="340" y="56">emu → 2</text>
+<text class="hc-s" x="490" y="56">fox → 6</text>
+<text class="hc-hd" x="40" y="92">SEPARATE CHAINING</text>
+<rect class="hc-slot" x="70" y="110" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="130" text-anchor="end">0</text>
+<rect class="hc-slot" x="70" y="148" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="168" text-anchor="end">1</text>
+<rect class="hc-slot" x="70" y="186" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="206" text-anchor="end">2</text>
+<rect class="hc-slot" x="70" y="224" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="244" text-anchor="end">3</text>
+<rect class="hc-slot" x="70" y="262" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="282" text-anchor="end">4</text>
+<rect class="hc-slot" x="70" y="300" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="320" text-anchor="end">5</text>
+<rect class="hc-slot" x="70" y="338" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="358" text-anchor="end">6</text>
+<rect class="hc-slot" x="70" y="376" width="92" height="30" rx="3"/>
+<text class="hc-i" x="62" y="396" text-anchor="end">7</text>
+<rect class="hc-e" x="70" y="186" width="92" height="30" rx="3"/>
+<text class="hc-k" x="116" y="206" text-anchor="middle">cat</text>
+<rect class="hc-e" x="70" y="300" width="92" height="30" rx="3"/>
+<text class="hc-k" x="116" y="320" text-anchor="middle">dog</text>
+<rect class="hc-e" x="70" y="338" width="92" height="30" rx="3"/>
+<text class="hc-k" x="116" y="358" text-anchor="middle">fox</text>
+<rect class="hc-col" x="210" y="186" width="92" height="30" rx="3"/>
+<text class="hc-k" x="256" y="206" text-anchor="middle">emu</text>
+<path class="hc-ptr2" d="M 164,201 L 208,201" marker-end="url(#hc-b)"/>
+<text class="hc-note" x="210" y="234">emu collides with cat and</text>
+<text class="hc-note" x="210" y="249">joins slot 2's chain</text>
+<text class="hc-hd" x="420" y="92">OPEN ADDRESSING, LINEAR PROBING</text>
+<rect class="hc-slot" x="450" y="110" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="130" text-anchor="end">0</text>
+<rect class="hc-slot" x="450" y="148" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="168" text-anchor="end">1</text>
+<rect class="hc-slot" x="450" y="186" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="206" text-anchor="end">2</text>
+<rect class="hc-slot" x="450" y="224" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="244" text-anchor="end">3</text>
+<rect class="hc-slot" x="450" y="262" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="282" text-anchor="end">4</text>
+<rect class="hc-slot" x="450" y="300" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="320" text-anchor="end">5</text>
+<rect class="hc-slot" x="450" y="338" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="358" text-anchor="end">6</text>
+<rect class="hc-slot" x="450" y="376" width="92" height="30" rx="3"/>
+<text class="hc-i" x="442" y="396" text-anchor="end">7</text>
+<rect class="hc-e" x="450" y="186" width="92" height="30" rx="3"/>
+<text class="hc-k" x="496" y="206" text-anchor="middle">cat</text>
+<rect class="hc-e" x="450" y="300" width="92" height="30" rx="3"/>
+<text class="hc-k" x="496" y="320" text-anchor="middle">dog</text>
+<rect class="hc-e" x="450" y="338" width="92" height="30" rx="3"/>
+<text class="hc-k" x="496" y="358" text-anchor="middle">fox</text>
+<rect class="hc-col" x="450" y="224" width="92" height="30" rx="3"/>
+<text class="hc-k" x="496" y="244" text-anchor="middle">emu</text>
+<path class="hc-probe" d="M 544,201 C 580,201 580,239 546,239" marker-end="url(#hc-b)"/>
+<text class="hc-note" x="580" y="216">slot 2 is taken, so emu</text>
+<text class="hc-note" x="580" y="231">probes the next slot, 3</text>
+</g>
+</svg>

@@ -2,258 +2,273 @@
 title: "Hash Tables"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Hash Tables & Algorithms
-description: "Master hash tables with O(1) average lookups, collision resolution strategies, hash function design, and practical applications from caching to frequency counting."
-tags: [data-structures, algorithms, hash-tables, performance, practical, fundamentals]
+subcategory: Core Data Structures
+description: "How a hash table turns a key into an array index for O(1) average lookups, how chaining and open addressing handle collisions, why the load factor and resizing keep it fast, what a correct GetHashCode needs, and how Dictionary<TKey,TValue> and HashSet<T> work in .NET."
+tags: [hash-tables, hashing, dictionary, hashset, collisions, load-factor, fundamentals]
 ---
+{% raw %}
 
 ## Why Hash Tables Exist
 
-*Concept pioneered by Hans Peter Luhn at IBM (1953), formalized as "hash tables" in the 1960s*
+An array finds an element in O(1) when it knows the element's index. A hash table extends that to keys that aren't small integers, such as strings, IDs, or composite values. It runs the key through a hash function that produces an integer, reduces the integer to an index in an internal array, and stores the entry there. Looking the key up later repeats the same calculation and goes straight to the same slot, so a lookup costs the same whether the table holds ten entries or ten million.
 
-Provides average O(1) lookups by trading space for time using mathematical hashing. This is the fundamental trade-off that powers most modern software, from database indexes to compiler symbol tables.
+The idea goes back to Hans Peter Luhn, who described hashing with chaining in an internal IBM memo in 1953. It now sits under most keyed lookups in software, including language dictionaries and sets, caches, database hash indexes, and compiler symbol tables.
 
-## When to Use Hash Tables
+---
 
-**✅ Use when:**
-- Need fast lookups by key
-- Counting frequencies of items
-- Caching computed results
-- Implementing sets (unique values)
-- Building lookup tables or indexes
+## From Key to Slot
 
-**❌ Don't use when:**
-- Need to maintain ordering of elements
-- Memory is extremely constrained
-- Keys don't hash well (cause many collisions)
-- Need to iterate in sorted order
+A lookup takes three steps:
 
-**🏢 Modern reality:** Your go-to data structure. Use `Dictionary<K,V>` in C#. Hash tables power most modern software: databases, caches, compilers, and more.
+1. **Hash the key.** A hash function turns the key into an integer, its hash code. In .NET, every object provides one through `GetHashCode()`.
+2. **Reduce the hash code to an index.** The table maps the hash code onto its array, commonly with a remainder (`hash % capacity`) or, when the capacity is a power of two, by keeping the low bits.
+3. **Compare keys.** Different keys can land in the same slot, so the table checks the stored key with `Equals` before trusting the match.
 
-## Time Complexity
-- **Average case:** O(1) for all operations (lookup, insert, delete)
-- **Worst case:** O(n) when many collisions occur
-- **Space:** O(n) for storing key-value pairs
+The third step is not optional. A hash code is an integer drawn from a limited range, while the set of possible keys, such as all strings, is effectively unlimited. So different keys must sometimes share a hash code, and more often they share a slot after the reduction step. Two keys landing in the same slot is called a collision. The pigeonhole principle guarantees collisions once there are more keys than slots, and in practice they appear long before that.
 
-## How Hash Tables Work
+---
 
-1. **Hash Function:** Converts key to array index
-2. **Compression:** Map hash code to array size using modulo
-3. **Collision Handling:** Deal with multiple keys mapping to same index
+## Resolving Collisions
 
-## Collision Resolution Strategies
+The two main families of hash table differ in where a colliding key goes.
 
-<div class="callout callout--note">
-<p class="callout__title">The Collision Problem</p>
-<p>Multiple keys may hash to the same index. With n items and m slots, by the pigeonhole principle, collisions are inevitable when n > m.</p>
-</div>
+{% endraw %}
+{% include figure.html id="dsa-hash-collisions" %}
+{% raw %}
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Separate Chaining (Most Common)</h4>
-<ul>
-<li>Each array slot holds a linked list (or dynamic array) of key-value pairs</li>
-<li><strong>Pros:</strong> Simple, never "full", handles high load factors (even > 1.0)</li>
-<li><strong>Cons:</strong> Extra memory for pointers, poor cache locality</li>
-<li><strong>Used by:</strong> Java's HashMap, Python's dict (historically)</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Open Addressing (Linear Probing)</h4>
-<ul>
-<li>When collision occurs, probe next slot(s) until finding empty space</li>
-<li><strong>Pros:</strong> Better cache performance, no pointer overhead, all data in one array</li>
-<li><strong>Cons:</strong> Clustering issues, table can become full, deletions tricky</li>
-<li><strong>Variants:</strong> Linear probing, Quadratic probing, Double hashing</li>
-</ul>
-</div>
-</div>
+**Separate chaining** gives every slot a list, called a chain or bucket, of the entries that landed there. A collision appends to the chain, and a lookup scans only the chain for its slot. Chaining never runs out of room and degrades gradually as chains lengthen. Its cost is the extra references and, when chains are linked nodes, scattered memory.
 
-### Modern Approach
-Many modern implementations use hybrid strategies or sophisticated open addressing:
-- **Robin Hood Hashing:** Minimizes variance in probe lengths
-- **Cuckoo Hashing:** Uses multiple hash functions and tables for guaranteed O(1) worst-case lookup
+**Open addressing** stores every entry directly in the array. When a key's slot is taken, the table probes other slots in a fixed sequence until it finds a free one. Linear probing tries the next slot, then the one after that. Quadratic probing and double hashing space the probes out further. Keeping everything in one array is cache-friendly, but open addressing has two complications:
 
-## C# Implementation
+- **Clustering.** With linear probing, occupied slots form runs, and any key hashing into a run has to probe to its end, which makes the run longer still.
+- **Deletion.** Emptying a slot would break the probe sequence of every key that probed past it, so those keys could no longer be found. Deleted slots are marked with a tombstone that lookups skip over and inserts can reuse.
+
+Real implementations use both families. Java's `HashMap` and .NET's `Dictionary<TKey,TValue>` use chaining. CPython's `dict` and many high-performance C++ and Rust tables use open addressing, often with refinements such as Robin Hood hashing, which reorders entries to even out probe lengths.
+
+---
+
+## Load Factor and Resizing
+
+The load factor is the number of entries divided by the number of slots. It sets the average chain length under chaining, and the average probe length under open addressing, so it is what keeps operations O(1) or lets them drift toward O(n).
+
+A hash table keeps the load factor bounded by resizing. When it crosses a threshold, the table allocates a larger array, usually around double the size, and rehashes every entry into it. Every entry has to move, because each new index depends on the new capacity. Like a dynamic array's growth, one resize is O(n), but doubling makes resizes rare enough that inserts stay O(1) amortized.
+
+Open addressing needs the lower thresholds, because probe lengths climb steeply as the table fills. Linear probing is commonly kept below about 0.7. Chaining tolerates load factors near 1 and still works, more slowly, above it.
+
+Resizing also means iteration order in a hash table has no meaning. It follows slot order, which depends on hash codes and capacity, and it can change completely after a resize.
+
+---
+
+## Operation Costs
+
+| Operation | Average case | Worst case |
+| --- | --- | --- |
+| Look up, insert, or remove by key | O(1) | O(n) |
+| Insert including resizes | O(1) amortized | O(n) for the insert that resizes |
+| Iterate over all entries | O(n + capacity) | O(n + capacity) |
+| Find the smallest key, or keys in a range | O(n) | O(n) |
+
+The average case assumes the hash function spreads keys evenly and the load factor stays bounded. The worst case is every key in one slot, which turns each lookup into a linear scan. That can come from a poor hash function or, when an attacker controls the keys, from a deliberate hash flooding attack. In .NET, a string's hash code can differ from one run of a program to the next, and `Dictionary<TKey,TValue>` switches string keys to a randomized hash when any chain grows unusually long, which blunts attacks that depend on predictable hash codes.
+
+The last row is the main thing a hash table cannot do. It keeps no order, so finding a minimum, a successor, or every key between two values means scanning everything. That is the job of a balanced search tree, such as `SortedDictionary<TKey,TValue>`.
+
+---
+
+## A Chaining Hash Table in C#
+
+This implementation uses an array of lists as its buckets and doubles once the load factor passes 1.
 
 ```csharp
-public class HashMap<TKey, TValue>
+public class ChainedHashMap<TKey, TValue> where TKey : notnull
 {
-    private int arraySize;
-    private (TKey key, TValue value)?[] array;
-    
-    public HashMap(int arraySize)
+    private List<KeyValuePair<TKey, TValue>>?[] _buckets = new List<KeyValuePair<TKey, TValue>>?[8];
+    private readonly IEqualityComparer<TKey> _comparer = EqualityComparer<TKey>.Default;
+
+    public int Count { get; private set; }
+
+    private int IndexFor(TKey key, int capacity)
     {
-        this.arraySize = arraySize;
-        array = new (TKey key, TValue value)?[arraySize];
+        int hash = _comparer.GetHashCode(key) & 0x7FFFFFFF;  // Clear the sign bit so the index is never negative
+        return hash % capacity;
     }
-    
-    private int Hash(TKey key, int countCollisions = 0)
+
+    public void Set(TKey key, TValue value)
     {
-        int hashCode = key.GetHashCode();
-        return Math.Abs(hashCode + countCollisions);
-    }
-    
-    private int Compressor(int hashCode)
-    {
-        return hashCode % arraySize;
-    }
-    
-    public void Assign(TKey key, TValue value)
-    {
-        int arrayIndex = Compressor(Hash(key));
-        var currentArrayValue = array[arrayIndex];
-        
-        // Empty slot - insert directly
-        if (!currentArrayValue.HasValue)
+        var bucket = _buckets[IndexFor(key, _buckets.Length)] ??= new();
+
+        for (int i = 0; i < bucket.Count; i++)
         {
-            array[arrayIndex] = (key, value);
-            return;
-        }
-        
-        // Key already exists - update value
-        if (EqualityComparer<TKey>.Default.Equals(currentArrayValue.Value.key, key))
-        {
-            array[arrayIndex] = (key, value);
-            return;
-        }
-        
-        // Collision - use linear probing
-        int numberCollisions = 1;
-        while (!EqualityComparer<TKey>.Default.Equals(currentArrayValue.Value.key, key))
-        {
-            int newHashCode = Hash(key, numberCollisions);
-            int newArrayIndex = Compressor(newHashCode);
-            currentArrayValue = array[newArrayIndex];
-            
-            if (!currentArrayValue.HasValue)
+            if (_comparer.Equals(bucket[i].Key, key))
             {
-                array[newArrayIndex] = (key, value);
+                bucket[i] = new(key, value);  // Existing key: replace the value
                 return;
             }
-            
-            if (EqualityComparer<TKey>.Default.Equals(currentArrayValue.Value.key, key))
-            {
-                array[newArrayIndex] = (key, value);
-                return;
-            }
-            
-            numberCollisions++;
-            
-            // Prevent infinite loop if table is full
-            if (numberCollisions >= arraySize)
-            {
-                throw new InvalidOperationException("HashMap is full");
-            }
         }
+
+        bucket.Add(new(key, value));
+        Count++;
+
+        if (Count > _buckets.Length)  // Load factor above 1
+            Resize();
     }
-    
-    public TValue Retrieve(TKey key)
+
+    public bool TryGetValue(TKey key, out TValue value)
     {
-        int arrayIndex = Compressor(Hash(key));
-        var possibleReturnValue = array[arrayIndex];
-        
-        if (!possibleReturnValue.HasValue)
+        var bucket = _buckets[IndexFor(key, _buckets.Length)];
+        if (bucket != null)
         {
-            return default(TValue);
-        }
-        
-        if (EqualityComparer<TKey>.Default.Equals(possibleReturnValue.Value.key, key))
-        {
-            return possibleReturnValue.Value.value;
-        }
-        
-        // Handle collision case
-        int retrievalCollisions = 1;
-        while (possibleReturnValue.HasValue && 
-               !EqualityComparer<TKey>.Default.Equals(possibleReturnValue.Value.key, key))
-        {
-            int newHashCode = Hash(key, retrievalCollisions);
-            int retrievingArrayIndex = Compressor(newHashCode);
-            possibleReturnValue = array[retrievingArrayIndex];
-            
-            if (!possibleReturnValue.HasValue)
+            foreach (var entry in bucket)
             {
-                return default(TValue);
-            }
-            
-            if (EqualityComparer<TKey>.Default.Equals(possibleReturnValue.Value.key, key))
-            {
-                return possibleReturnValue.Value.value;
-            }
-            
-            retrievalCollisions++;
-            
-            // Prevent infinite loop
-            if (retrievalCollisions >= arraySize)
-            {
-                break;
+                if (_comparer.Equals(entry.Key, key))
+                {
+                    value = entry.Value;
+                    return true;
+                }
             }
         }
-        
-        return default(TValue);
+
+        value = default!;
+        return false;
+    }
+
+    public bool Remove(TKey key)
+    {
+        var bucket = _buckets[IndexFor(key, _buckets.Length)];
+        if (bucket == null)
+            return false;
+
+        int removed = bucket.RemoveAll(entry => _comparer.Equals(entry.Key, key));
+        Count -= removed;
+        return removed > 0;
+    }
+
+    private void Resize()
+    {
+        var larger = new List<KeyValuePair<TKey, TValue>>?[_buckets.Length * 2];
+
+        foreach (var bucket in _buckets)
+        {
+            if (bucket == null) continue;
+            foreach (var entry in bucket)
+                (larger[IndexFor(entry.Key, larger.Length)] ??= new()).Add(entry);  // Every entry gets a new index
+        }
+
+        _buckets = larger;
     }
 }
 
-// Example usage
-var hashMap = new HashMap<string, string>(16);
-hashMap.Assign("name", "Alice");
-hashMap.Assign("age", "25");
-hashMap.Assign("city", "NYC");
+var ages = new ChainedHashMap<string, int>();
+ages.Set("alice", 34);
+ages.Set("bob", 29);
+ages.Set("alice", 35);  // Replaces the earlier value
 
-Console.WriteLine(hashMap.Retrieve("name"));    // "Alice"
-Console.WriteLine(hashMap.Retrieve("age"));     // "25"  
-Console.WriteLine(hashMap.Retrieve("missing")); // null or default
+Console.WriteLine(ages.TryGetValue("alice", out int age) ? age : -1);  // 35
+Console.WriteLine(ages.TryGetValue("carol", out _));                   // False
+Console.WriteLine(ages.Count);                                         // 2
 ```
 
-## Common Hash Table Applications
-
-### Frequency Counting
-
-### Caching/Memoization
-
-### Two-Sum Problem (Interview Classic)
-
-## Performance Considerations
-
-**Load Factor:** Ratio of filled slots to total slots
-- Keep load factor < 0.7 for good performance
-- Resize table when load factor gets too high
-
-**Hash Function Quality:**
-- Good distribution reduces collisions
-- C# has optimized hash functions for built-in types via `GetHashCode()`
-
-**Collision Strategy Impact:**
-- Linear probing: Good cache performance but clustering issues
-- Separate chaining: More memory overhead but handles high load factors better
-
-## Interview Tips
-
-**Common Questions:**
-1. Implement basic hash table operations
-2. Handle collisions gracefully  
-3. Explain time complexity trade-offs
-4. Solve problems using hash tables (two-sum, anagrams, etc.)
-
-## Quick Reference
-
-### Hash Table Operations
-| Operation | Average | Worst Case | Notes |
-|-----------|---------|------------|-------|
-| Insert | O(1) | O(n) | Amortized with resizing |
-| Search | O(1) | O(n) | Depends on collisions |
-| Delete | O(1) | O(n) | Same as search |
-
-### Collision Handling
-- **Chaining:** Use linked lists at each bucket (flexible, handles any load)
-- **Open Addressing:** Find next empty slot (better cache, fixed size)
-
-### C# Built-ins
-- `Dictionary<K,V>` - Standard hash table
-- `HashSet<T>` - Set operations, unique values
-- `ConcurrentDictionary<K,V>` - Thread-safe
-
-**Key Trade-off:** Memory for speed: O(1) operations at cost of O(n) space
+`TryGetValue` returns a `bool` rather than a default value, because a missing key and a key stored with the default value (`0`, `null`) would otherwise look the same. The index calculation masks off the sign bit instead of calling `Math.Abs`, which throws for `int.MinValue`, a hash code that can legitimately occur.
 
 ---
+
+## Writing a Correct GetHashCode
+
+Every hash table in .NET relies on two methods of the key type, and they have to agree:
+
+- **Equal keys must produce equal hash codes.** If `a.Equals(b)` is true, then `a.GetHashCode()` must equal `b.GetHashCode()`. Otherwise the two keys land in different slots and the table never compares them, so a lookup with an equal key fails to find the entry.
+- **Unequal keys should usually produce different hash codes.** This is a performance goal, not a rule. A `GetHashCode` that returns the same constant for every key is technically legal, and it makes every operation O(n).
+
+Types that override `Equals` must override `GetHashCode` to match. Records and anonymous types generate both from their fields, and `HashCode.Combine` builds a well-mixed hash from several fields for hand-written types:
+
+```csharp
+public sealed class GridPoint : IEquatable<GridPoint>
+{
+    public int X { get; }
+    public int Y { get; }
+
+    public GridPoint(int x, int y) => (X, Y) = (x, y);
+
+    public bool Equals(GridPoint? other) => other is not null && X == other.X && Y == other.Y;
+    public override bool Equals(object? obj) => Equals(obj as GridPoint);
+    public override int GetHashCode() => HashCode.Combine(X, Y);
+}
+
+// The equivalent record gets Equals and GetHashCode generated from its properties
+public readonly record struct GridCell(int X, int Y);
+```
+
+A key must also not change while it is in a hash table. If a mutable key's fields change after insertion, its hash code changes, and the table keeps looking for it in the old slot. The entry is still stored but can no longer be found. Keys should be immutable, or at least never modified while in use as keys.
+
+---
+
+## Dictionary&lt;TKey,TValue&gt; and HashSet&lt;T&gt; in .NET
+
+`Dictionary<TKey,TValue>` uses separate chaining, but it stores the chains inside two arrays instead of in linked nodes. One array holds the entries, each with its key, value, cached hash code, and the index of the next entry in its chain. The other array maps each bucket to the first entry in its chain. Entries stay in one contiguous block, which avoids per-entry allocations and keeps memory access tighter than a linked chain would.
+
+Its sizing policy is visible in the `dotnet/runtime` source. Bucket counts are prime numbers. When the entries array is full, meaning the load factor has reached 1, the dictionary resizes to the next prime at least double its current count. For string keys, it starts with a fast hash that is not randomized, and switches to randomized hashing if any chain grows past 100 collisions.
+
+`HashSet<T>` is the same design without values. It answers "have I seen this" in O(1) on average, and adds set operations such as `UnionWith`, `IntersectWith`, and `ExceptWith`. `ConcurrentDictionary<TKey,TValue>` is the thread-safe version. `SortedDictionary<TKey,TValue>` has a similar API but is a balanced tree, trading O(1) average operations for O(log n) operations that keep the keys in order.
+
+---
+
+## What Hash Tables Solve
+
+Most uses come down to replacing a repeated O(n) search with an O(1) lookup.
+
+### Counting Frequencies
+
+One pass over the input counts every distinct value, where comparing every element with every other would be O(n²):
+
+```csharp
+public static Dictionary<string, int> CountWords(IEnumerable<string> words)
+{
+    var counts = new Dictionary<string, int>();
+    foreach (string word in words)
+        counts[word] = counts.GetValueOrDefault(word) + 1;
+    return counts;
+}
+
+var counts = CountWords("the cat saw the dog chase the cat".Split(' '));
+Console.WriteLine(counts["the"]);  // 3
+Console.WriteLine(counts["cat"]);  // 2
+```
+
+### Finding a Pair with a Given Sum
+
+Checking every pair of numbers for one that sums to a target is O(n²). Remembering each number's index as the scan goes turns the search for its partner into a lookup, which makes the whole scan O(n) on average:
+
+```csharp
+public static (int, int)? TwoSum(int[] numbers, int target)
+{
+    var seen = new Dictionary<int, int>();  // Value → index where it appeared
+
+    for (int i = 0; i < numbers.Length; i++)
+    {
+        if (seen.TryGetValue(target - numbers[i], out int j))
+            return (j, i);
+
+        seen[numbers[i]] = i;
+    }
+
+    return null;
+}
+
+Console.WriteLine(TwoSum(new[] { 2, 7, 11, 15 }, 9));  // (0, 1)
+```
+
+Unlike the two-pointer approach for this problem, which needs sorted input, the hash table version works on unsorted input and returns the original indices.
+
+### Grouping, Deduplication, and Caching
+
+The same move covers other common patterns. Grouping records by a key builds a dictionary from key to list. Removing duplicates adds each item to a `HashSet<T>` and keeps the ones `Add` accepts. Caching or memoizing a function stores each argument's result so a repeated call is a lookup instead of a recomputation.
+
+---
+
+## When Not to Use a Hash Table
+
+- **Ordered data.** Sorted iteration, minimum and maximum, range queries, and "next larger key" need a sorted structure, such as a balanced search tree or a sorted array.
+- **Small collections.** For a handful of items, a linear scan of an array can beat hashing, because computing a hash and comparing keys has a fixed overhead that a short scan doesn't pay.
+- **Tight memory.** Empty slots, cached hash codes, and bucket arrays make a hash table larger than an array of the same entries.
+- **Predictable worst-case latency.** An individual operation can hit a long chain or trigger a resize. Code with hard per-operation deadlines may need a structure with guaranteed bounds.
+
+{% endraw %}

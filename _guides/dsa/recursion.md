@@ -2,74 +2,72 @@
 title: "Recursion"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Hash Tables & Algorithms
-description: "Master recursive thinking with base cases, recursive cases, common patterns, memoization techniques, and converting between recursive and iterative solutions."
-tags: [algorithms, recursion, fundamentals, problem-solving, interview-prep]
+subcategory: Fundamentals
+description: "How recursive functions work: base and recursive cases, how the call stack runs them and why deep recursion overflows it, memoization for repeated subproblems, the common recursive shapes, and converting recursion to iteration in C#."
+tags: [recursion, call-stack, memoization, tail-recursion, stack-overflow, fundamentals]
 ---
+{% raw %}
 
 ## Why Recursion Exists
-Some problems are naturally self-similar, such as tree traversal, mathematical sequences, and divide-and-conquer algorithms. Recursion provides an elegant way to express solutions that work on progressively smaller versions of the same problem.
 
-## When to Use Recursion
-
-**Use when:**
-- Problem has self-similar subproblems
-- Working with recursive data structures (trees, graphs)
-- Divide-and-conquer algorithms
-- Backtracking problems (N-queens, sudoku)
-- Mathematical sequences and calculations
-- Parsing nested structures
-
-**Don't use when:**
-- Simple iteration suffices
-- Stack space is limited (embedded systems)
-- Performance is critical and iterative solution exists
-- Deep recursion might cause stack overflow
-
-**Modern reality:** Essential for interviews and certain algorithms, but iterative solutions are often preferred in production for performance and stack safety.
+Some problems contain smaller copies of themselves. A tree is a node whose children are trees, a directory holds directories, and n! is n times (n − 1)!. A recursive function solves such a problem by solving a smaller copy of it and building on the answer. For self-similar problems, the code then mirrors the problem's own definition, which is usually shorter and easier to check than the equivalent loop.
 
 ---
 
-## Essential Recursion Components
+## The Three Parts of a Recursive Function
 
-<div class="callout callout--warning">
-<p class="callout__title">Critical: The Base Case</p>
-<p>The base case stops recursion. Without it, you get infinite recursion and stack overflow. Every recursive function must have at least one base case that doesn't call itself.</p>
-</div>
+Every correct recursive function has three parts:
 
-### 1. Base Case
-The condition that stops recursion. Without it, you get infinite recursion and stack overflow.
+- **A base case** that answers directly without calling itself. Without one, the function never stops calling itself.
+- **A recursive case** that calls the function on a smaller input and combines the result.
+- **Progress toward the base case.** Each call's input must be strictly closer to a base case, or the recursion never ends even though a base case exists.
 
-### 2. Recursive Case
-The function calls itself with a modified (usually smaller) input that moves toward the base case.
+Factorial shows all three:
 
-### 3. Progress Toward Base Case
-Each recursive call must get "closer" to the base case to ensure termination.
-
----
-
-## Classic Examples
-
-### Factorial
 ```csharp
-public static int Factorial(int n)
+public static long Factorial(int n)
 {
-    // Base case
-    if (n <= 1)
+    if (n <= 1)                   // Base case
         return 1;
 
-    // Recursive case: n! = n * (n-1)!
-    return n * Factorial(n - 1);
+    return n * Factorial(n - 1);  // Recursive case; n - 1 moves toward the base case
 }
 
-// Example usage
-Console.WriteLine(Factorial(5)); // 120
-Console.WriteLine(Factorial(0)); // 1
+Console.WriteLine(Factorial(5));  // 120
+Console.WriteLine(Factorial(0));  // 1
 ```
 
-### Fibonacci Sequence
+The return type is `long` because factorials outgrow `int` quickly: 13! is already beyond `int.MaxValue`. `long` holds up to 20!, and 21! overflows it too.
+
+---
+
+## How the Call Stack Runs a Recursion
+
+Each method call gets a stack frame, a block of memory on the thread's call stack that holds the call's parameters, local variables, and the point to return to. A recursive call is an ordinary call, so it pushes a new frame on top of the caller's frame. The caller's frame stays on the stack, paused mid-expression, until the call it made returns.
+
+For `Factorial(4)`, the calls push four frames, each with its own `n` and each waiting to multiply. Only when `Factorial(1)` hits the base case does anything return. Then the frames pop in reverse order, each finishing its multiplication with the value it receives.
+
+{% endraw %}
+{% include figure.html id="dsa-call-stack" %}
+{% raw %}
+
+### Recursion Depth Is Memory
+
+Because every frame waiting for a result stays on the stack, a recursion's memory use is proportional to its maximum depth, even when it allocates nothing else. `Factorial(n)` uses O(n) stack space. A recursion that halves its input each call, such as recursive binary search, is only O(log n) deep.
+
+### Stack Overflow
+
+The call stack has a fixed size. On .NET, a thread's default maximum stack size comes from the executable's header, and Microsoft's documentation gives 1 MB as the default. Frame sizes vary with the method's parameters and locals, so there is no fixed call limit, but a recursion whose depth grows with the input will exhaust the stack at some input size.
+
+When it does, .NET throws a `StackOverflowException`, and it cannot be caught. A `try`/`catch` block does not intercept it, and the process is terminated. So a recursion whose depth depends on the input has to be bounded by design: either the depth is logarithmic, the input size is known to be small, or the recursion is converted to iteration.
+
+---
+
+## Repeated Work and Memoization
+
+Naive recursive Fibonacci makes two calls per call, and the two branches recompute the same values over and over:
+
 ```csharp
-// Naive recursive fibonacci - exponential time complexity
 public static long FibonacciNaive(int n)
 {
     if (n <= 1)
@@ -77,375 +75,113 @@ public static long FibonacciNaive(int n)
 
     return FibonacciNaive(n - 1) + FibonacciNaive(n - 2);
 }
-
-// This is inefficient for large n due to repeated calculations
-Console.WriteLine(FibonacciNaive(10)); // 55, but slow for n > 30
 ```
 
-### Optimized Fibonacci with Memoization
+`FibonacciNaive(n)` makes 2 × F(n + 1) − 1 calls, where F(n + 1) is itself a Fibonacci number, so the call count grows exponentially. `FibonacciNaive(10)` makes 177 calls, `FibonacciNaive(30)` makes about 2.7 million, and `FibonacciNaive(40)` makes about 331 million.
+
+There are only n + 1 distinct values to compute. Memoization stores each result the first time it is computed and returns the stored value on every later call. That makes the running time O(n), because each value is computed once. This is the top-down form of dynamic programming.
+
 ```csharp
-public static class Fibonacci
+public static long FibonacciMemo(int n, Dictionary<int, long>? memo = null)
 {
-    private static Dictionary<int, long> memo = new Dictionary<int, long>();
+    memo ??= new Dictionary<int, long>();
 
-    public static long FibonacciMemo(int n)
-    {
-        if (memo.ContainsKey(n))
-            return memo[n];
+    if (n <= 1)
+        return n;
 
-        if (n <= 1)
-            return n;
+    if (memo.TryGetValue(n, out long cached))
+        return cached;
 
-        memo[n] = FibonacciMemo(n - 1) + FibonacciMemo(n - 2);
-        return memo[n];
-    }
-
-    // Alternative with explicit memo parameter
-    public static long FibonacciMemoExplicit(int n, Dictionary<int, long> memo = null)
-    {
-        if (memo == null)
-            memo = new Dictionary<int, long>();
-
-        if (memo.ContainsKey(n))
-            return memo[n];
-
-        if (n <= 1)
-            return n;
-
-        memo[n] = FibonacciMemoExplicit(n - 1, memo) + FibonacciMemoExplicit(n - 2, memo);
-        return memo[n];
-    }
+    long result = FibonacciMemo(n - 1, memo) + FibonacciMemo(n - 2, memo);
+    memo[n] = result;
+    return result;
 }
 
-// Much faster for large n
-Console.WriteLine(Fibonacci.FibonacciMemo(50)); // 12586269025
+Console.WriteLine(FibonacciMemo(50));  // 12586269025
+```
+
+Memoization fixes the repeated work but not the depth. `FibonacciMemo(n)` still recurses n levels deep, so a large enough n still overflows the stack.
+
+---
+
+## Recursion on Recursive Data
+
+Recursion fits data that is defined recursively. A binary tree node has two children, each of which is a binary tree or `null`, so a function over a tree handles the `null` case and then recurses into both children.
+
+```csharp
+public class TreeNode
+{
+    public int Value { get; set; }
+    public TreeNode? Left { get; set; }
+    public TreeNode? Right { get; set; }
+
+    public TreeNode(int value) => Value = value;
+}
+
+public static int TreeHeight(TreeNode? node)
+{
+    if (node == null)
+        return 0;
+
+    return 1 + Math.Max(TreeHeight(node.Left), TreeHeight(node.Right));
+}
+
+public static int TreeSum(TreeNode? node)
+{
+    if (node == null)
+        return 0;
+
+    return node.Value + TreeSum(node.Left) + TreeSum(node.Right);
+}
+```
+
+The recursion depth equals the tree's height. That is about log₂ n for a balanced tree, but n for a tree that has degenerated into a chain, which is where recursive tree code overflows the stack.
+
+---
+
+## Common Recursive Shapes
+
+| Shape | What it does | Example | Cost |
+| --- | --- | --- | --- |
+| Linear | At most one recursive call per call | Factorial, summing an array | O(n) calls, O(n) depth |
+| Halving | One call on half the input | Recursive binary search, fast exponentiation | O(log n) calls and depth |
+| Branching (tree) | Two or more calls per call | Naive Fibonacci, tree traversal | Up to exponential calls; depth is the longest branch |
+| Tail | The recursive call is the last thing the function does | Euclid's GCD | Same as linear |
+| Mutual | Two or more functions call each other | `IsEven` and `IsOdd`, recursive-descent parsers | Depends on the functions |
+
+Branching recursion over a tree touches each node once and is O(n). Branching recursion over overlapping subproblems, like naive Fibonacci, is where exponential cost comes from.
+
+Mutual recursion looks like this. Each function makes progress by passing a smaller n to the other:
+
+```csharp
+public static bool IsEven(int n) => n == 0 || IsOdd(n - 1);
+public static bool IsOdd(int n) => n != 0 && IsEven(n - 1);
 ```
 
 ---
 
-## Tree Recursion
+## Converting Recursion to Iteration
 
-### Tree Traversal
+### Tail Recursion Becomes a Loop
+
+A function is tail recursive when the recursive call is the very last operation, with nothing left to do after it returns. Some languages guarantee that a tail call reuses the current frame instead of pushing a new one, which makes tail recursion run in constant stack space. C# makes no such guarantee. The C# compiler doesn't emit the IL instruction that requests a tail call, and the JIT removes tail calls only in some builds and circumstances. So tail-recursive C# still overflows on deep input.
+
+A tail-recursive function converts mechanically into a loop. The accumulator parameter becomes a local variable, and the recursive call becomes an update of the loop variables:
+
 ```csharp
-public class TreeNode<T>
-{
-    public T Value { get; set; }
-    public TreeNode<T> Left { get; set; }
-    public TreeNode<T> Right { get; set; }
-
-    public TreeNode(T value)
-    {
-        Value = value;
-        Left = null;
-        Right = null;
-    }
-}
-
-public static class TreeRecursion
-{
-    // In-order: left -> root -> right
-    public static List<T> InorderTraversal<T>(TreeNode<T> node)
-    {
-        if (node == null)
-            return new List<T>();
-
-        var result = new List<T>();
-        result.AddRange(InorderTraversal(node.Left));  // Left subtree
-        result.Add(node.Value);                        // Root
-        result.AddRange(InorderTraversal(node.Right)); // Right subtree
-
-        return result;
-    }
-
-    // Calculate height of tree
-    public static int TreeHeight<T>(TreeNode<T> node)
-    {
-        if (node == null)
-            return 0;
-
-        int leftHeight = TreeHeight(node.Left);
-        int rightHeight = TreeHeight(node.Right);
-
-        return 1 + Math.Max(leftHeight, rightHeight);
-    }
-
-    // Sum all values in tree
-    public static int TreeSum(TreeNode<int> node)
-    {
-        if (node == null)
-            return 0;
-
-        return node.Value + TreeSum(node.Left) + TreeSum(node.Right);
-    }
-}
-
-// Example usage
-var root = new TreeNode<int>(1);
-root.Left = new TreeNode<int>(2);
-root.Right = new TreeNode<int>(3);
-root.Left.Left = new TreeNode<int>(4);
-root.Left.Right = new TreeNode<int>(5);
-
-var inorder = TreeRecursion.InorderTraversal(root);
-Console.WriteLine($"Inorder: [{string.Join(", ", inorder)}]"); // [4, 2, 5, 1, 3]
-Console.WriteLine($"Height: {TreeRecursion.TreeHeight(root)}"); // 3
-Console.WriteLine($"Sum: {TreeRecursion.TreeSum(root)}");       // 15
-```
-
----
-
-## Backtracking with Recursion
-
-### N-Queens Problem
-```csharp
-public static class NQueens
-{
-    public static List<List<int>> SolveNQueens(int n)
-    {
-        bool IsSafe(int[] board, int row, int col)
-        {
-            // Check column
-            for (int i = 0; i < row; i++)
-            {
-                if (board[i] == col)
-                    return false;
-            }
-
-            // Check diagonals
-            for (int i = 0; i < row; i++)
-            {
-                if (Math.Abs(board[i] - col) == Math.Abs(i - row))
-                    return false;
-            }
-
-            return true;
-        }
-
-        List<List<int>> Backtrack(int[] board, int row)
-        {
-            if (row == n)
-            {
-                return new List<List<int>> { new List<int>(board) }; // Found solution
-            }
-
-            var solutions = new List<List<int>>();
-            for (int col = 0; col < n; col++)
-            {
-                if (IsSafe(board, row, col))
-                {
-                    board[row] = col;                     // Place queen
-                    solutions.AddRange(Backtrack(board, row + 1)); // Recurse
-                    // No need to remove queen - we overwrite board[row] in next iteration
-                }
-            }
-
-            return solutions;
-        }
-
-        var board = new int[n]; // board[i] = column position of queen in row i
-        for (int i = 0; i < n; i++)
-            board[i] = -1;
-
-        return Backtrack(board, 0);
-    }
-}
-
-// Example usage
-var solutions = NQueens.SolveNQueens(4);
-Console.WriteLine($"Found {solutions.Count} solutions for 4-Queens");
-for (int i = 0; i < solutions.Count; i++)
-{
-    Console.WriteLine($"Solution {i + 1}: [{string.Join(", ", solutions[i])}]");
-}
-```
-
-### Generate All Subsets
-```csharp
-public static class Backtracking
-{
-    // Generate all possible subsets using recursion
-    public static List<List<int>> GenerateSubsets(int[] nums)
-    {
-        var result = new List<List<int>>();
-
-        void Backtrack(int start, List<int> currentSubset)
-        {
-            // Add current subset to results
-            result.Add(new List<int>(currentSubset)); // Make a copy
-
-            // Try adding each remaining element
-            for (int i = start; i < nums.Length; i++)
-            {
-                currentSubset.Add(nums[i]);         // Choose
-                Backtrack(i + 1, currentSubset);   // Explore
-                currentSubset.RemoveAt(currentSubset.Count - 1); // Unchoose (backtrack)
-            }
-        }
-
-        Backtrack(0, new List<int>());
-        return result;
-    }
-}
-
-// Example usage
-int[] nums = {1, 2, 3};
-var subsets = Backtracking.GenerateSubsets(nums);
-Console.WriteLine("All subsets:");
-foreach (var subset in subsets)
-{
-    Console.WriteLine($"[{string.Join(", ", subset)}]");
-}
-// Output: [], [1], [1,2], [1,2,3], [1,3], [2], [2,3], [3]
-```
-
----
-
-## Divide and Conquer
-
-### Merge Sort (Recursive)
-```csharp
-public static class MergeSort
-{
-    // Recursive merge sort implementation
-    public static int[] MergeSortArray(int[] arr)
-    {
-        // Base case
-        if (arr.Length <= 1)
-            return arr;
-
-        // Divide
-        int mid = arr.Length / 2;
-        int[] left = new int[mid];
-        int[] right = new int[arr.Length - mid];
-
-        Array.Copy(arr, 0, left, 0, mid);
-        Array.Copy(arr, mid, right, 0, arr.Length - mid);
-
-        left = MergeSortArray(left);
-        right = MergeSortArray(right);
-
-        // Conquer (merge)
-        return Merge(left, right);
-    }
-
-    // Merge two sorted arrays
-    private static int[] Merge(int[] left, int[] right)
-    {
-        var result = new List<int>();
-        int i = 0, j = 0;
-
-        while (i < left.Length && j < right.Length)
-        {
-            if (left[i] <= right[j])
-            {
-                result.Add(left[i]);
-                i++;
-            }
-            else
-            {
-                result.Add(right[j]);
-                j++;
-            }
-        }
-
-        // Add remaining elements
-        while (i < left.Length)
-        {
-            result.Add(left[i]);
-            i++;
-        }
-
-        while (j < right.Length)
-        {
-            result.Add(right[j]);
-            j++;
-        }
-
-        return result.ToArray();
-    }
-}
-
-// Example usage
-int[] arr = {64, 34, 25, 12, 22, 11, 90};
-int[] sortedArr = MergeSort.MergeSortArray(arr);
-Console.WriteLine($"Original: [{string.Join(", ", arr)}]");
-Console.WriteLine($"Sorted: [{string.Join(", ", sortedArr)}]");
-```
-
-### Binary Search (Recursive)
-```csharp
-public static class BinarySearch
-{
-    // Recursive binary search
-    public static int BinarySearchRecursive(int[] arr, int target, int left = 0, int right = -1)
-    {
-        if (right == -1)
-            right = arr.Length - 1;
-
-        // Base case: not found
-        if (left > right)
-            return -1;
-
-        int mid = (left + right) / 2;
-
-        if (arr[mid] == target)
-            return mid;
-        else if (arr[mid] > target)
-            return BinarySearchRecursive(arr, target, left, mid - 1);
-        else
-            return BinarySearchRecursive(arr, target, mid + 1, right);
-    }
-}
-
-// Example usage
-int[] sortedArr = {1, 3, 5, 7, 9, 11, 13, 15};
-int index = BinarySearch.BinarySearchRecursive(sortedArr, 7);
-Console.WriteLine($"Found 7 at index: {index}"); // Found 7 at index: 3
-```
-
----
-
-## Recursion vs Iteration
-
-### When to Choose Each
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Recursion is Better When</h4>
-<ul>
-<li>Problem naturally recursive (trees, fractals)</li>
-<li>Code is much cleaner and easier to understand</li>
-<li>Stack depth is reasonable</li>
-<li>Performance is not critical</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Iteration is Better When</h4>
-<ul>
-<li>Simple loops suffice</li>
-<li>Memory is limited</li>
-<li>Performance is critical</li>
-<li>Stack overflow is a concern</li>
-</ul>
-</div>
-</div>
-
-### Converting Recursion to Iteration
-
-#### Tail Recursion → Loop
-```csharp
-// Tail recursive (easy to convert)
-public static int FactorialTailRecursive(int n, int acc = 1)
+// Tail recursive: the multiplication happens before the call, not after
+public static long FactorialTail(int n, long acc = 1)
 {
     if (n <= 1)
         return acc;
-    return FactorialTailRecursive(n - 1, n * acc);
+
+    return FactorialTail(n - 1, n * acc);
 }
 
-// Iterative equivalent
-public static int FactorialIterative(int n)
+// The same computation as a loop
+public static long FactorialIterative(int n)
 {
-    int acc = 1;
+    long acc = 1;
     while (n > 1)
     {
         acc *= n;
@@ -455,227 +191,75 @@ public static int FactorialIterative(int n)
 }
 ```
 
-#### General Recursion → Stack
+### Branching Recursion Needs an Explicit Stack
+
+When a function makes more than one recursive call, a single loop variable can't hold the pending work. The fix is to keep the pending work on a `Stack<T>` that the code manages itself. That stack lives on the heap, which is far larger than the call stack, so the depth limit goes away.
+
 ```csharp
-// Recursive tree traversal
-public static List<T> InorderRecursive<T>(TreeNode<T> node)
+public static int TreeSumIterative(TreeNode? root)
 {
-    if (node == null)
-        return new List<T>();
+    int sum = 0;
+    var pending = new Stack<TreeNode>();
+    if (root != null)
+        pending.Push(root);
 
-    var result = new List<T>();
-    result.AddRange(InorderRecursive(node.Left));
-    result.Add(node.Value);
-    result.AddRange(InorderRecursive(node.Right));
-    return result;
-}
-
-// Iterative using explicit stack
-public static List<T> InorderIterative<T>(TreeNode<T> root)
-{
-    var stack = new Stack<TreeNode<T>>();
-    var result = new List<T>();
-    var current = root;
-
-    while (stack.Count > 0 || current != null)
+    while (pending.Count > 0)
     {
-        // Go to leftmost node
-        while (current != null)
-        {
-            stack.Push(current);
-            current = current.Left;
-        }
+        TreeNode node = pending.Pop();
+        sum += node.Value;
 
-        // Process current node
-        current = stack.Pop();
-        result.Add(current.Value);
-
-        // Move to right subtree
-        current = current.Right;
+        if (node.Left != null) pending.Push(node.Left);
+        if (node.Right != null) pending.Push(node.Right);
     }
 
-    return result;
+    return sum;
 }
 ```
+
+The iterative version is longer and less obviously correct than the three-line recursive one, which is the usual trade.
 
 ---
 
-## Common Recursion Patterns
+## Choosing Recursion or Iteration
 
-### 1. Linear Recursion
-Each function calls itself at most once.
-```csharp
-public static int SumArray(int[] arr, int index = 0)
-{
-    if (index >= arr.Length)
-        return 0;
-    return arr[index] + SumArray(arr, index + 1);
-}
-```
+| Prefer recursion when | Prefer iteration when |
+| --- | --- |
+| The data or problem is recursive, such as trees, nested structures, or divide and conquer | A simple loop expresses the problem as clearly |
+| The depth is bounded, such as a balanced tree or a halving algorithm | The depth grows with the input and the input size is not controlled |
+| The recursive version is clearly shorter and easier to verify | The code runs in a hot path, where per-call overhead adds up |
 
-### 2. Tree Recursion
-Function calls itself multiple times.
-```csharp
-public static int Fibonacci(int n)
-{
-    if (n <= 1)
-        return n;
-    return Fibonacci(n - 1) + Fibonacci(n - 2); // Two recursive calls
-}
-```
-
-### 3. Tail Recursion
-Recursive call is the last operation.
-```csharp
-public static int GCD(int a, int b)
-{
-    if (b == 0)
-        return a;
-    return GCD(b, a % b); // Last operation is recursive call
-}
-```
-
-### 4. Mutual Recursion
-Functions call each other.
-```csharp
-public static bool IsEven(int n)
-{
-    if (n == 0)
-        return true;
-    return IsOdd(n - 1);
-}
-
-public static bool IsOdd(int n)
-{
-    if (n == 0)
-        return false;
-    return IsEven(n - 1);
-}
-```
+A `StackOverflowException` ends the process rather than failing one request, so input-controlled recursion depth is a reliability risk in server code, not only a performance concern.
 
 ---
 
-## Recursion Debugging Tips
+## Worked Examples
 
-### 1. Print Trace
+### Fast Exponentiation
+
+Computing baseⁿ by multiplying n times is O(n). Squaring the result for n/2 halves the problem at every call, which makes it O(log n):
+
 ```csharp
-public static int FactorialDebug(int n, int depth = 0)
-{
-    string indent = new string(' ', depth * 2);
-    Console.WriteLine($"{indent}factorial({n})");
-
-    if (n <= 1)
-    {
-        Console.WriteLine($"{indent}-> returning 1");
-        return 1;
-    }
-
-    int result = n * FactorialDebug(n - 1, depth + 1);
-    Console.WriteLine($"{indent}-> returning {result}");
-    return result;
-}
-
-FactorialDebug(4);
-```
-
-### 2. Visualize Call Stack
-```csharp
-public static int FibonacciTrace(int n, List<string> callStack = null)
-{
-    if (callStack == null)
-        callStack = new List<string>();
-
-    callStack.Add($"fib({n})");
-    Console.WriteLine(string.Join(" -> ", callStack));
-
-    int result;
-    if (n <= 1)
-    {
-        result = n;
-    }
-    else
-    {
-        int left = FibonacciTrace(n - 1, new List<string>(callStack));
-        int right = FibonacciTrace(n - 2, new List<string>(callStack));
-        result = left + right;
-    }
-
-    callStack.RemoveAt(callStack.Count - 1);
-    return result;
-}
-```
-
-### 3. Count Function Calls
-```csharp
-public class CallCounter
-{
-    public int Calls { get; set; } = 0;
-}
-
-public static int FibonacciWithCounter(int n, CallCounter counter)
-{
-    counter.Calls++;
-
-    if (n <= 1)
-        return n;
-
-    return FibonacciWithCounter(n - 1, counter) +
-           FibonacciWithCounter(n - 2, counter);
-}
-
-// Usage
-var counter = new CallCounter();
-int result = FibonacciWithCounter(10, counter);
-Console.WriteLine($"Result: {result}, Function calls: {counter.Calls}");
-```
-
----
-
-## Interview Problems
-
-### 1. Power Calculation
-```csharp
-// Calculate base^exp using recursion
-public static long Power(int baseNum, int exp)
+public static long Power(long baseNum, int exp)
 {
     if (exp == 0)
         return 1;
-    if (exp == 1)
-        return baseNum;
 
-    // Optimize by using exp/2
-    long halfPower = Power(baseNum, exp / 2);
-    if (exp % 2 == 0)
-        return halfPower * halfPower;
-    else
-        return baseNum * halfPower * halfPower;
+    long half = Power(baseNum, exp / 2);
+    return exp % 2 == 0 ? half * half : baseNum * half * half;
 }
 
-Console.WriteLine(Power(2, 10)); // 1024
+Console.WriteLine(Power(2, 10));  // 1024
 ```
 
-### 2. Reverse String
+### Palindrome Check Without Copying
+
+Recursion on strings can hide a cost. A version that recurses on `s.Substring(1, s.Length - 2)` allocates a new string at every level, which makes it O(n²) in time and memory. Passing indices instead keeps each call O(1):
+
 ```csharp
-// Reverse string using recursion
-public static string ReverseString(string s)
+public static bool IsPalindrome(string s) => IsPalindrome(s, 0, s.Length - 1);
+
+private static bool IsPalindrome(string s, int left, int right)
 {
-    if (s.Length <= 1)
-        return s;
-
-    return ReverseString(s.Substring(1)) + s[0];
-}
-
-Console.WriteLine(ReverseString("hello")); // "olleh"
-```
-
-### 3. Palindrome Check
-```csharp
-// Check if string is palindrome using recursion
-public static bool IsPalindrome(string s, int left = 0, int right = -1)
-{
-    if (right == -1)
-        right = s.Length - 1;
-
     if (left >= right)
         return true;
 
@@ -685,42 +269,29 @@ public static bool IsPalindrome(string s, int left = 0, int right = -1)
     return IsPalindrome(s, left + 1, right - 1);
 }
 
-Console.WriteLine(IsPalindrome("racecar")); // True
-Console.WriteLine(IsPalindrome("hello"));   // False
+Console.WriteLine(IsPalindrome("racecar"));  // True
+Console.WriteLine(IsPalindrome("hello"));    // False
 ```
 
-## Performance Considerations
-
-## Quick Reference
-
-### Recursion Checklist
-✓ **Base case**: When to stop
-✓ **Progress**: Move toward base case
-✓ **Recursive call**: Solve smaller problem
-✓ **Combine**: Use subproblem results
-
-### Time Complexity Patterns
-| Pattern | Complexity | Example |
-|---------|------------|---------|
-| Single recursive call | O(n) | Factorial, sum |
-| Two calls (binary) | O(2ⁿ) | Fibonacci (naive) |
-| Divide & conquer | O(n log n) | Merge sort |
-| With memoization | O(n) often | Fibonacci (cached) |
-
-### Space Complexity
-- **Recursion depth:** O(d) stack space
-- **Each call:** Variables stored on stack
-- **Risk:** Stack overflow with deep recursion
-
-### When to Use Recursion
-✓ Tree/graph traversals
-✓ Divide and conquer
-✓ Backtracking
-✓ Mathematical sequences
-
-### When to Avoid
-✗ Simple loops suffice
-✗ Deep recursion (use iteration)
-✗ Performance critical (unless tail-optimized)
-
 ---
+
+## Debugging Recursion
+
+A debugger's Call Stack window shows every active frame and its parameter values, which is usually the fastest way to see where a recursion went wrong. Without a debugger, printing each call indented by its depth shows the same shape:
+
+```csharp
+public static long FactorialTrace(int n, int depth = 0)
+{
+    string indent = new string(' ', depth * 2);
+    Console.WriteLine($"{indent}Factorial({n})");
+
+    long result = n <= 1 ? 1 : n * FactorialTrace(n - 1, depth + 1);
+
+    Console.WriteLine($"{indent}returns {result}");
+    return result;
+}
+```
+
+The most common bugs show up in that trace. A base case that is never reached, often an off-by-one or a missing negative-input check, produces a trace that keeps growing. A combine step that uses the wrong value produces correct calls with wrong returns.
+
+{% endraw %}

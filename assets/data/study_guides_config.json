@@ -195,51 +195,46 @@
       "subcategories": [
         {
           "name": "Fundamentals",
-          "description": "Core data structures and complexity analysis",
+          "description": "Complexity analysis and recursion",
           "guides": [
             "dsa/big-o-basics.md",
-            "dsa/asymptotic-notation.md",
-            "dsa/complexity-cheatsheet.md",
-            "dsa/decision-guide.md",
-            "dsa/algorithm-design.md"
+            "dsa/recursion.md"
           ]
         },
         {
-          "name": "Linear Data Structures",
-          "description": "Arrays, lists, stacks, and queues",
+          "name": "Core Data Structures",
+          "description": "Arrays, linked lists, stacks, queues, and hash tables",
           "guides": [
             "dsa/arrays-lists.md",
             "dsa/linked-lists.md",
-            "dsa/stacks-queues.md"
+            "dsa/stacks-queues.md",
+            "dsa/hash-tables.md"
           ]
         },
         {
           "name": "Trees & Heaps",
-          "description": "Tree structures and heap-based data structures",
+          "description": "Binary search trees, heaps, and specialized trees",
           "guides": [
-            "dsa/trees-basics.md",
             "dsa/trees.md",
-            "dsa/trees-advanced.md",
-            "dsa/heaps.md"
+            "dsa/heaps.md",
+            "dsa/trees-advanced.md"
           ]
         },
         {
           "name": "Graphs",
-          "description": "Graph structures and algorithms",
+          "description": "Graph representation, traversal, and weighted graph algorithms",
           "guides": [
-            "dsa/graphs-basics.md",
             "dsa/graphs.md",
             "dsa/graphs-advanced.md"
           ]
         },
         {
-          "name": "Hash Tables & Algorithms",
-          "description": "Hashing, searching, sorting, and recursion",
+          "name": "Algorithms",
+          "description": "Searching, sorting, and algorithm design paradigms",
           "guides": [
-            "dsa/hash-tables.md",
             "dsa/search-algorithms.md",
             "dsa/sorting-algorithms.md",
-            "dsa/recursion.md"
+            "dsa/algorithm-design.md"
           ]
         }
       ]
@@ -866,7 +861,6 @@
           "name": "Git Fundamentals",
           "description": "Core Git concepts, workflows, and version control mastery",
           "guides": [
-            "developer-tools/git-quick-reference.md",
             "developer-tools/git-core-concepts.md",
             "developer-tools/git-branching-strategies.md",
             "developer-tools/git-advanced-operations.md"
@@ -876,7 +870,6 @@
           "name": "GitHub",
           "description": "Platform features for collaboration, automation, and governance",
           "guides": [
-            "developer-tools/github-quick-reference.md",
             "developer-tools/github-collaboration.md",
             "developer-tools/github-actions.md",
             "developer-tools/github-administration-security.md"

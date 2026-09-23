@@ -3,787 +3,379 @@ title: "Trees & Binary Search Trees"
 layout: guide
 category: Data Structures & Algorithms
 subcategory: Trees & Heaps
-description: "Comprehensive guide to binary search trees covering implementation, traversal algorithms, search operations, and understanding when to use tree structures."
-tags: [data-structures, algorithms, trees, practical, interview-prep]
+description: "Tree vocabulary, general and binary trees, the four traversal orders and what each is for, and binary search trees: how search, insert, and delete work, why the tree's height decides their cost, and the .NET types that keep a tree balanced for you."
+tags: [trees, binary-trees, binary-search-trees, tree-traversal, sorteddictionary, fundamentals]
 ---
+{% raw %}
 
 ## Why Trees Exist
-Hierarchical relationships are everywhere: file systems, decision making, organizing data for fast searches, and representing mathematical expressions. Trees provide a natural way to model and efficiently traverse these relationships.
+
+Many things are hierarchies: folders inside folders, an org chart, the nested structure of HTML or of a parsed expression. A tree models that shape directly, with each item holding the items beneath it. Trees also do a second job that has nothing to do with hierarchy. Arranged by a sorting rule, a tree can keep data in order while still allowing fast inserts and deletes, which neither a sorted array (slow inserts) nor a hash table (no order) manages on its own.
+
+---
+
+## Tree Vocabulary
+
+A tree is a set of nodes connected by edges, where one node is the root and every other node has exactly one parent. That rule means a tree has no cycles and exactly one path between any two nodes.
+
+| Term | Meaning |
+| --- | --- |
+| Root | The one node with no parent |
+| Parent, child | A node directly above or below another |
+| Leaf | A node with no children |
+| Internal node | A node with at least one child |
+| Subtree | A node together with everything below it |
+| Depth of a node | The number of edges from the root down to it. The root has depth 0 |
+| Level | All the nodes at one depth |
+| Height of a tree | The number of edges on the longest path from the root down to a leaf |
+
+This guide counts height in edges, so a single node has height 0 and an empty tree height −1. Some sources count nodes instead, which gives one more. Either convention works if it is used consistently, and the difference never changes a Big O result.
 
 ---
 
 ## General Trees
 
-### When to Use Trees
+In a general tree, a node can have any number of children, so each node keeps a list of them. A file system is the familiar example: a directory holds any number of files and directories.
 
-**Use when:**
-- Data has natural hierarchy (organizational charts, file systems)
-- Need efficient searching with dynamic insertions/deletions
-- Representing decision trees or game states
-- Parsing expressions or syntax trees
-
-**Don't use when:**
-- Data is flat with no relationships
-- Simple sequential access is all that's needed
-- Memory fragmentation is a major concern
-
-**Modern reality:** Most databases use B-trees internally. You'll implement binary trees in interviews but rarely build custom tree structures in production.
-
-### Basic Tree Implementation
 ```csharp
-public class TreeNode<T>
+public class FileSystemNode
 {
-    public T Value { get; set; }
-    public List<TreeNode<T>> Children { get; set; }
-    
-    public TreeNode(T value)
+    public string Name { get; }
+    public long Size { get; }                        // Files only
+    public List<FileSystemNode> Children { get; } = new();
+    public bool IsDirectory { get; }
+
+    public FileSystemNode(string name, bool isDirectory, long size = 0) =>
+        (Name, IsDirectory, Size) = (name, isDirectory, size);
+
+    public long TotalSize()
     {
-        Value = value;
-        Children = new List<TreeNode<T>>();
-    }
-    
-    public void AddChild(TreeNode<T> childNode)
-    {
-        Console.WriteLine($"Adding {childNode.Value} as child of {Value}");
-        Children.Add(childNode);
-    }
-    
-    public void RemoveChild(TreeNode<T> childNode)
-    {
-        Console.WriteLine($"Removing {childNode.Value} from {Value}");
-        Children.RemoveAll(child => ReferenceEquals(child, childNode));
-    }
-    
-    public void TraverseDepthFirst()
-    {
-        Console.WriteLine(Value);
+        if (!IsDirectory)
+            return Size;
+
+        long total = 0;
         foreach (var child in Children)
-        {
-            child.TraverseDepthFirst();
-        }
-    }
-    
-    public void TraverseBreadthFirst()
-    {
-        var queue = new Queue<TreeNode<T>>();
-        queue.Enqueue(this);
-        
-        while (queue.Count > 0)
-        {
-            var currentNode = queue.Dequeue();
-            Console.WriteLine(currentNode.Value);
-            
-            foreach (var child in currentNode.Children)
-            {
-                queue.Enqueue(child);
-            }
-        }
-    }
-    
-    public TreeNode<T> FindNode(T targetValue)
-    {
-        if (EqualityComparer<T>.Default.Equals(Value, targetValue))
-        {
-            return this;
-        }
-        
-        foreach (var child in Children)
-        {
-            var result = child.FindNode(targetValue);
-            if (result != null)
-            {
-                return result;
-            }
-        }
-        
-        return null;
+            total += child.TotalSize();              // Children first, then this directory
+        return total;
     }
 }
 
-// Example usage
-var root = new TreeNode<string>("CEO");
-var vpEngineering = new TreeNode<string>("VP Engineering");
-var vpMarketing = new TreeNode<string>("VP Marketing");
+var root = new FileSystemNode("/", isDirectory: true);
+var docs = new FileSystemNode("docs", isDirectory: true);
+docs.Children.Add(new FileSystemNode("notes.txt", isDirectory: false, size: 1_200));
+docs.Children.Add(new FileSystemNode("plan.pdf", isDirectory: false, size: 48_000));
+root.Children.Add(docs);
+root.Children.Add(new FileSystemNode("readme.md", isDirectory: false, size: 800));
 
-root.AddChild(vpEngineering);
-root.AddChild(vpMarketing);
-
-var engineer1 = new TreeNode<string>("Senior Engineer");
-var engineer2 = new TreeNode<string>("Junior Engineer");
-vpEngineering.AddChild(engineer1);
-vpEngineering.AddChild(engineer2);
-
-Console.WriteLine("Depth-first traversal:");
-root.TraverseDepthFirst();
-
-Console.WriteLine("\nBreadth-first traversal:");
-root.TraverseBreadthFirst();
+Console.WriteLine(root.TotalSize());  // 50000
 ```
+
+`TotalSize` has to finish every child before it can report a directory's size. That "children before parent" order is a post-order traversal, described next.
 
 ---
 
-## Binary Search Trees (BST)
+## Binary Trees and Traversal Orders
 
-### When to Use Binary Search Trees
+A binary tree limits every node to at most two children, called left and right. Most algorithmic trees are binary, including binary search trees and heaps. This guide's examples use a node with integer values:
 
-**Use when:**
-- Need sorted data with fast insertion/deletion/search
-- Want to iterate through data in sorted order
-- Building other data structures (heaps, balanced trees)
-- Educational purposes or interviews
-
-**Don't use when:**
-- Data doesn't have a natural ordering
-- Need guaranteed balanced performance (use AVL or Red-Black trees)
-- Simple array operations are sufficient
-
-**Modern reality:** Use balanced variants (AVL, Red-Black) or language built-ins like C#'s `SortedDictionary`. Implement BSTs in interviews to show understanding.
-
-### Time Complexity
-- **Average case:** O(log n) for all operations
-- **Worst case:** O(n) when tree becomes skewed (effectively a linked list)
-- **Space complexity:** O(n)
-
-### Binary Search Tree Properties
-1. Left subtree contains only nodes with values less than parent
-2. Right subtree contains only nodes with values greater than parent
-3. Both left and right subtrees are also BSTs
-4. No duplicate values (typically)
-
-### C# Implementation
 ```csharp
-public class BinarySearchTree<T> where T : IComparable<T>
+public class TreeNode
 {
-    public T Value { get; set; }
-    public int Depth { get; set; }
-    public BinarySearchTree<T> Left { get; set; }
-    public BinarySearchTree<T> Right { get; set; }
-    
-    public BinarySearchTree(T value, int depth = 1)
-    {
-        Value = value;
-        Depth = depth;
-        Left = null;
-        Right = null;
-    }
-    
-    public void Insert(T value)
-    {
-        int comparison = value.CompareTo(Value);
-        
-        if (comparison < 0)
-        {
-            if (Left == null)
-            {
-                Left = new BinarySearchTree<T>(value, Depth + 1);
-                Console.WriteLine($"Inserted {value} to the left of {Value} at depth {Depth + 1}");
-            }
-            else
-            {
-                Left.Insert(value);
-            }
-        }
-        else if (comparison > 0)
-        {
-            if (Right == null)
-            {
-                Right = new BinarySearchTree<T>(value, Depth + 1);
-                Console.WriteLine($"Inserted {value} to the right of {Value} at depth {Depth + 1}");
-            }
-            else
-            {
-                Right.Insert(value);
-            }
-        }
-        else
-        {
-            Console.WriteLine($"Value {value} already exists in the tree");
-        }
-    }
-    
-    public BinarySearchTree<T> Search(T value)
-    {
-        int comparison = value.CompareTo(Value);
-        
-        if (comparison == 0)
-        {
-            return this;
-        }
-        else if (comparison < 0 && Left != null)
-        {
-            return Left.Search(value);
-        }
-        else if (comparison > 0 && Right != null)
-        {
-            return Right.Search(value);
-        }
-        else
-        {
-            return null;
-        }
-    }
-    
-    public List<T> InorderTraversal()
-    {
-        var result = new List<T>();
-        
-        if (Left != null)
-            result.AddRange(Left.InorderTraversal());
-        
-        result.Add(Value);
-        
-        if (Right != null)
-            result.AddRange(Right.InorderTraversal());
-        
-        return result;
-    }
-    
-    public List<T> PreorderTraversal()
-    {
-        var result = new List<T> { Value };
-        
-        if (Left != null)
-            result.AddRange(Left.PreorderTraversal());
-        
-        if (Right != null)
-            result.AddRange(Right.PreorderTraversal());
-        
-        return result;
-    }
-    
-    public List<T> PostorderTraversal()
-    {
-        var result = new List<T>();
-        
-        if (Left != null)
-            result.AddRange(Left.PostorderTraversal());
-        
-        if (Right != null)
-            result.AddRange(Right.PostorderTraversal());
-        
-        result.Add(Value);
-        
-        return result;
-    }
-    
-    public T FindMin()
-    {
-        if (Left == null)
-            return Value;
-        return Left.FindMin();
-    }
-    
-    public T FindMax()
-    {
-        if (Right == null)
-            return Value;
-        return Right.FindMax();
-    }
-    
-    public BinarySearchTree<T> Delete(T value)
-    {
-        int comparison = value.CompareTo(Value);
-        
-        if (comparison < 0)
-        {
-            if (Left != null)
-                Left = Left.Delete(value);
-        }
-        else if (comparison > 0)
-        {
-            if (Right != null)
-                Right = Right.Delete(value);
-        }
-        else  // Found the node to delete
-        {
-            // Case 1: No children (leaf node)
-            if (Left == null && Right == null)
-                return null;
-            
-            // Case 2: One child
-            if (Left == null)
-                return Right;
-            if (Right == null)
-                return Left;
-            
-            // Case 3: Two children
-            // Replace with inorder successor
-            T minRight = Right.FindMin();
-            Value = minRight;
-            Right = Right.Delete(minRight);
-        }
-        
-        return this;
-    }
-}
+    public int Value { get; set; }
+    public TreeNode? Left { get; set; }
+    public TreeNode? Right { get; set; }
 
-// Example usage
-Console.WriteLine("Creating BST with root value 15:");
-var bst = new BinarySearchTree<int>(15);
-
-// Insert values
-int[] values = {10, 20, 8, 12, 25, 6, 11, 13, 27};
-foreach (var value in values)
-{
-    bst.Insert(value);
-}
-
-Console.WriteLine($"\nIn-order traversal (sorted): [{string.Join(", ", bst.InorderTraversal())}]");
-Console.WriteLine($"Pre-order traversal: [{string.Join(", ", bst.PreorderTraversal())}]");
-Console.WriteLine($"Post-order traversal: [{string.Join(", ", bst.PostorderTraversal())}]");
-
-Console.WriteLine($"\nMin value: {bst.FindMin()}");
-Console.WriteLine($"Max value: {bst.FindMax()}");
-
-// Search for values
-int[] searchValues = {12, 99, 25};
-foreach (var value in searchValues)
-{
-    var result = bst.Search(value);
-    Console.WriteLine($"Search for {value}: {(result != null ? "Found" : "Not found")}");
+    public TreeNode(int value) => Value = value;
 }
 ```
 
-## Tree Traversal Methods
+A traversal visits every node once. The four standard orders differ only in when a node is visited relative to its children:
 
-### When to Use Each Traversal
+| Order | Visit sequence | Typical use |
+| --- | --- | --- |
+| Pre-order | Node, then left subtree, then right subtree | Copying or serializing a tree, since a parent is written before its children |
+| In-order | Left subtree, then node, then right subtree | Reading a binary search tree's keys in sorted order |
+| Post-order | Left subtree, then right subtree, then node | Anything that needs the children's results first: directory sizes, deleting a tree, evaluating an expression tree |
+| Level-order | All of depth 0, then depth 1, and so on | Processing a tree level by level, or finding the shallowest node that meets a condition |
 
-**In-order (Left → Root → Right):**
-- **Use for:** Getting sorted output from BST, expression evaluation
-- **BST property:** Always produces sorted sequence
+The three depth-first orders are the same recursion with the visit placed differently:
 
-**Pre-order (Root → Left → Right):**
-- **Use for:** Copying tree structure, prefix notation, serialization
-- **Pattern:** Process node before children
-
-**Post-order (Left → Right → Root):**
-- **Use for:** Deleting tree, calculating directory sizes, postfix notation
-- **Pattern:** Process children before node
-
-**Level-order (Breadth-first):**
-- **Use for:** Level-by-level processing, finding shortest path in tree
-- **Implementation:** Uses queue for traversal
-
-### Level-Order Traversal Implementation
 ```csharp
-public static List<List<T>> LevelOrderTraversal<T>(BinarySearchTree<T> root) where T : IComparable<T>
+public static void PreOrder(TreeNode? node, List<int> output)
 {
-    if (root == null)
-        return new List<List<T>>();
-    
-    var result = new List<List<T>>();
-    var queue = new Queue<BinarySearchTree<T>>();
+    if (node == null) return;
+    output.Add(node.Value);
+    PreOrder(node.Left, output);
+    PreOrder(node.Right, output);
+}
+
+public static void InOrder(TreeNode? node, List<int> output)
+{
+    if (node == null) return;
+    InOrder(node.Left, output);
+    output.Add(node.Value);
+    InOrder(node.Right, output);
+}
+
+public static void PostOrder(TreeNode? node, List<int> output)
+{
+    if (node == null) return;
+    PostOrder(node.Left, output);
+    PostOrder(node.Right, output);
+    output.Add(node.Value);
+}
+```
+
+Passing one output list down, instead of having each call return and concatenate its own list, keeps each traversal O(n). Concatenating lists at every level copies elements repeatedly, which costs up to O(n²) on a deep tree. The recursion depth equals the tree's height, so on a very deep tree these can overflow the stack, and an explicit `Stack<T>` replaces the recursion.
+
+Level-order traversal uses a queue instead of recursion. Counting the queue's length at the start of each level separates the levels:
+
+```csharp
+public static List<List<int>> LevelOrder(TreeNode? root)
+{
+    var levels = new List<List<int>>();
+    if (root == null) return levels;
+
+    var queue = new Queue<TreeNode>();
     queue.Enqueue(root);
-    
+
     while (queue.Count > 0)
     {
-        int levelSize = queue.Count;
-        var currentLevel = new List<T>();
-        
+        int levelSize = queue.Count;  // Everything queued now is on the current level
+        var level = new List<int>(levelSize);
+
         for (int i = 0; i < levelSize; i++)
         {
-            var node = queue.Dequeue();
-            currentLevel.Add(node.Value);
-            
-            if (node.Left != null)
-                queue.Enqueue(node.Left);
-            if (node.Right != null)
-                queue.Enqueue(node.Right);
+            TreeNode node = queue.Dequeue();
+            level.Add(node.Value);
+            if (node.Left != null) queue.Enqueue(node.Left);
+            if (node.Right != null) queue.Enqueue(node.Right);
         }
-        
-        result.Add(currentLevel);
+
+        levels.Add(level);
     }
-    
-    return result;
-}
 
-// Example with BST
-var bst = new BinarySearchTree<int>(15);
-int[] values = {10, 20, 8, 12, 25, 6};
-foreach (var val in values)
-{
-    bst.Insert(val);
-}
-
-var levels = LevelOrderTraversal(bst);
-Console.WriteLine("Level-order traversal:");
-for (int i = 0; i < levels.Count; i++)
-{
-    Console.WriteLine($"Level {i}: [{string.Join(", ", levels[i])}]");
+    return levels;
 }
 ```
 
-## Common Interview Problems
+All four traversals are O(n) time. The depth-first orders use O(h) extra space for the recursion, where h is the height. Level-order uses space proportional to the widest level, which is up to about n/2 for a complete tree.
 
-### 1. Validate Binary Search Tree
+---
+
+## Binary Search Trees
+
+A binary search tree (BST) is a binary tree that keeps one rule at every node: every key in the left subtree is smaller than the node's key, and every key in the right subtree is larger. The rule applies to the entire subtree, not just the immediate children. A tree whose root is 10 cannot have a 12 anywhere in its left subtree, even as a right child several levels down.
+
+The rule makes searching work like binary search. At each node, one comparison says whether the target is here, to the left, or to the right, and the other side of the tree is never examined. It also means an in-order traversal returns the keys sorted.
+
+### Search and Insert
+
+Search walks down from the root, going left or right by comparison, until it finds the key or falls off the tree. Insert follows the same path and attaches the new node where the search fell off.
+
 ```csharp
-public static bool IsValidBST<T>(BinarySearchTree<T> node, T minVal = default(T), T maxVal = default(T))
-    where T : IComparable<T>
+public static TreeNode? Search(TreeNode? node, int key)
 {
-    if (node == null)
-        return true;
+    while (node != null && node.Value != key)
+        node = key < node.Value ? node.Left : node.Right;
 
-    // Handle default values for min/max
-    bool hasMinConstraint = !EqualityComparer<T>.Default.Equals(minVal, default(T));
-    bool hasMaxConstraint = !EqualityComparer<T>.Default.Equals(maxVal, default(T));
-
-    if (hasMinConstraint && node.Value.CompareTo(minVal) <= 0)
-        return false;
-
-    if (hasMaxConstraint && node.Value.CompareTo(maxVal) >= 0)
-        return false;
-
-    return IsValidBST(node.Left, minVal, node.Value) &&
-           IsValidBST(node.Right, node.Value, maxVal);
+    return node;
 }
 
-// Alternative implementation using nullable for numeric types
-public static bool IsValidBST(BinarySearchTree<int> node, int? minVal = null, int? maxVal = null)
+public static TreeNode Insert(TreeNode? node, int key)
 {
     if (node == null)
-        return true;
+        return new TreeNode(key);
 
-    if (minVal.HasValue && node.Value <= minVal.Value)
-        return false;
+    if (key < node.Value)
+        node.Left = Insert(node.Left, key);
+    else if (key > node.Value)
+        node.Right = Insert(node.Right, key);
+    // Equal keys are ignored: this tree stores each key once
 
-    if (maxVal.HasValue && node.Value >= maxVal.Value)
-        return false;
-
-    return IsValidBST(node.Left, minVal, node.Value) &&
-           IsValidBST(node.Right, node.Value, maxVal);
+    return node;
 }
 ```
 
-### 2. Find Lowest Common Ancestor
+The smallest key is found by following left children from the root until there are none, and the largest by following right children.
+
+### Delete
+
+Deleting a node has three cases, depending on how many children it has:
+
+1. **No children.** Remove it.
+2. **One child.** Replace the node with its child. The child's whole subtree moves up one level, and the ordering rule still holds.
+3. **Two children.** Find the node's in-order successor, the smallest key in its right subtree. Copy that key into the node, then delete the successor from the right subtree. The successor has no left child (otherwise that child would be smaller), so its own deletion is always case 1 or 2.
+
 ```csharp
-public static BinarySearchTree<T> FindLCA<T>(BinarySearchTree<T> root, T p, T q)
-    where T : IComparable<T>
+public static TreeNode? Delete(TreeNode? node, int key)
 {
-    if (root == null)
+    if (node == null)
         return null;
 
-    // Both nodes are in left subtree
-    if (p.CompareTo(root.Value) < 0 && q.CompareTo(root.Value) < 0)
-        return FindLCA(root.Left, p, q);
+    if (key < node.Value)
+        node.Left = Delete(node.Left, key);
+    else if (key > node.Value)
+        node.Right = Delete(node.Right, key);
+    else if (node.Left == null)
+        return node.Right;               // Cases 1 and 2: zero children or only a right child
+    else if (node.Right == null)
+        return node.Left;                // Case 2: only a left child
+    else
+    {
+        TreeNode successor = node.Right; // Case 3: find the smallest key in the right subtree
+        while (successor.Left != null)
+            successor = successor.Left;
 
-    // Both nodes are in right subtree
-    if (p.CompareTo(root.Value) > 0 && q.CompareTo(root.Value) > 0)
-        return FindLCA(root.Right, p, q);
+        node.Value = successor.Value;
+        node.Right = Delete(node.Right, successor.Value);
+    }
 
-    // Nodes are on different sides (or one is root)
-    return root;
+    return node;
 }
 ```
 
-### 3. Convert Sorted Array to BST
-```csharp
-public static BinarySearchTree<T> SortedArrayToBST<T>(T[] nums) where T : IComparable<T>
-{
-    return SortedArrayToBSTHelper(nums, 0, nums.Length - 1);
-}
+The successor is the right choice because it is larger than everything in the left subtree and smaller than everything else in the right subtree, so it can take the deleted key's place without breaking the rule. The in-order predecessor, the largest key in the left subtree, works equally well.
 
-private static BinarySearchTree<T> SortedArrayToBSTHelper<T>(T[] nums, int start, int end)
-    where T : IComparable<T>
+---
+
+## Height Decides the Cost
+
+Search, insert, and delete each follow one path from the root downward, so each costs O(h), where h is the tree's height. The height depends on the order the keys arrived in.
+
+{% endraw %}
+{% include figure.html id="dsa-bst-shapes" %}
+{% raw %}
+
+A tree whose levels are full has height about log₂ n, so a million keys fit in about 20 levels and every operation is O(log n). Keys inserted in random order produce a tree whose expected height is also O(log n). But keys inserted in sorted order, a common case with IDs, timestamps, and already-sorted files, make every new key the right child of the previous one. The tree becomes a chain of height n − 1, and every operation degrades to O(n), no better than a linked list.
+
+| Operation | Balanced BST | Unbalanced BST, worst case |
+| --- | --- | --- |
+| Search | O(log n) | O(n) |
+| Insert | O(log n) | O(n) |
+| Delete | O(log n) | O(n) |
+| Minimum or maximum | O(log n) | O(n) |
+| In-order traversal | O(n) | O(n) |
+
+A plain BST makes no promise about its shape, so it cannot promise O(log n). Self-balancing trees, such as AVL trees and red-black trees, restructure themselves after inserts and deletes to keep their height O(log n) whatever order the keys arrive in. That guarantee is why production code uses them instead of the plain BST shown here.
+
+---
+
+## Worked Problems
+
+### Validating a Binary Search Tree
+
+The obvious check, comparing each node with its two children, is wrong. It accepts a tree where 12 sits as the right child of 5, which is the left child of 10. Every parent-child pair looks fine, but 12 is in 10's left subtree. The correct check passes down the range of values each subtree is allowed to hold:
+
+```csharp
+public static bool IsValidBst(TreeNode? node, long min = long.MinValue, long max = long.MaxValue)
+{
+    if (node == null)
+        return true;
+
+    if (node.Value <= min || node.Value >= max)
+        return false;
+
+    return IsValidBst(node.Left, min, node.Value)    // Left subtree: below this key
+        && IsValidBst(node.Right, node.Value, max);  // Right subtree: above this key
+}
+```
+
+The bounds are `long` so that nodes holding `int.MinValue` or `int.MaxValue` are still inside the starting range. An equivalent approach runs an in-order traversal and confirms each key is larger than the one before.
+
+### Lowest Common Ancestor in a BST
+
+The lowest common ancestor of two keys is the deepest node that has both in its subtree. In a BST, the ordering rule finds it directly. While both keys are smaller than the current node, the answer is in the left subtree, and while both are larger, it is in the right. The first node where they split, or where one of them matches, is the answer.
+
+```csharp
+public static TreeNode? LowestCommonAncestor(TreeNode? node, int a, int b)
+{
+    while (node != null)
+    {
+        if (a < node.Value && b < node.Value)
+            node = node.Left;
+        else if (a > node.Value && b > node.Value)
+            node = node.Right;
+        else
+            return node;  // The keys split here, or one of them is this node
+    }
+
+    return null;
+}
+```
+
+This assumes both keys are in the tree, and it runs in O(h).
+
+### Building a Balanced BST from Sorted Data
+
+A sorted array can be turned into a tree of minimum height by making the middle element the root and building each half the same way. This is the right way to load sorted data into a BST, since inserting it in order produces the chain shown earlier.
+
+```csharp
+public static TreeNode? FromSorted(int[] sorted, int start, int end)
 {
     if (start > end)
         return null;
 
     int mid = start + (end - start) / 2;
-    var root = new BinarySearchTree<T>(nums[mid]);
-
-    root.Left = SortedArrayToBSTHelper(nums, start, mid - 1);
-    root.Right = SortedArrayToBSTHelper(nums, mid + 1, end);
-
-    return root;
-}
-```
-
-## Balanced Tree Concepts
-
-### Why Balancing Matters
-Unbalanced BSTs can degrade to O(n) operations. Balanced trees guarantee O(log n).
-
-**Self-balancing tree types:**
-- **AVL Trees:** Strictly balanced, height difference ≤ 1
-- **Red-Black Trees:** Looser balance constraints, used in many libraries
-- **B-Trees:** Multi-way trees, used in databases
-
-### When Tree Becomes Skewed
-```csharp
-// This creates a skewed tree (effectively a linked list)
-var skewedBST = new BinarySearchTree<int>(1);
-for (int i = 2; i < 8; i++)
-{
-    skewedBST.Insert(i);  // Always goes right
+    return new TreeNode(sorted[mid])
+    {
+        Left = FromSorted(sorted, start, mid - 1),
+        Right = FromSorted(sorted, mid + 1, end)
+    };
 }
 
-// Height = n, operations become O(n)
-var result = skewedBST.InorderTraversal();
-Console.WriteLine($"[{string.Join(", ", result)}]");  // [1, 2, 3, 4, 5, 6, 7]
-```
-
-## Tries (Prefix Trees)
-
-### Why Tries Exist
-Efficiently store and search strings with shared prefixes. Tries provide fast prefix-based operations and are essential for autocomplete, spell checkers, and IP routing tables where prefix matching is crucial.
-
-### When to Use Tries
-
-**Use when:**
-- Need fast prefix-based searches
-- Implementing autocomplete or spell check
-- Storing dictionaries with prefix queries
-- IP routing or URL routing systems
-- Need to find all words with a given prefix
-
-**Don't use when:**
-- Only need exact string matching (use hash table)
-- Memory usage is critical (tries can be space-intensive)
-- Working with non-string data
-- Simple substring search is sufficient
-
-### Time Complexity
-- **Insert:** O(m) where m is key length
-- **Search:** O(m) where m is key length
-- **Delete:** O(m) where m is key length
-- **Prefix search:** O(p + k) where p is prefix length, k is number of results
-- **Space:** O(ALPHABET_SIZE × N × M) in worst case
-
-### Trie Implementation
-
-```csharp
-public class TrieNode
-{
-    public Dictionary<char, TrieNode> Children { get; set; }
-    public bool IsEndOfWord { get; set; }
-    public string Word { get; set; }  // Optional: store the actual word
-
-    public TrieNode()
-    {
-        Children = new Dictionary<char, TrieNode>();
-        IsEndOfWord = false;
-        Word = null;
-    }
-}
-
-public class Trie
-{
-    private TrieNode root;
-
-    public Trie()
-    {
-        root = new TrieNode();
-    }
-
-    public void Insert(string word)
-    {
-        TrieNode current = root;
-
-        foreach (char c in word)
-        {
-            if (!current.Children.ContainsKey(c))
-            {
-                current.Children[c] = new TrieNode();
-            }
-            current = current.Children[c];
-        }
-
-        current.IsEndOfWord = true;
-        current.Word = word;
-    }
-
-    public bool Search(string word)
-    {
-        TrieNode node = SearchNode(word);
-        return node != null && node.IsEndOfWord;
-    }
-
-    public bool StartsWith(string prefix)
-    {
-        return SearchNode(prefix) != null;
-    }
-
-    private TrieNode SearchNode(string prefix)
-    {
-        TrieNode current = root;
-
-        foreach (char c in prefix)
-        {
-            if (!current.Children.ContainsKey(c))
-            {
-                return null;
-            }
-            current = current.Children[c];
-        }
-
-        return current;
-    }
-
-    public List<string> GetWordsWithPrefix(string prefix)
-    {
-        var result = new List<string>();
-        TrieNode prefixNode = SearchNode(prefix);
-
-        if (prefixNode != null)
-        {
-            DfsCollectWords(prefixNode, result);
-        }
-
-        return result;
-    }
-
-    private void DfsCollectWords(TrieNode node, List<string> result)
-    {
-        if (node.IsEndOfWord)
-        {
-            result.Add(node.Word);
-        }
-
-        foreach (var child in node.Children.Values)
-        {
-            DfsCollectWords(child, result);
-        }
-    }
-
-    public bool Delete(string word)
-    {
-        return DeleteHelper(root, word, 0);
-    }
-
-    private bool DeleteHelper(TrieNode current, string word, int index)
-    {
-        if (index == word.Length)
-        {
-            // We've reached the end of the word
-            if (!current.IsEndOfWord)
-            {
-                return false; // Word doesn't exist
-            }
-
-            current.IsEndOfWord = false;
-            current.Word = null;
-
-            // If current has no children, it can be deleted
-            return current.Children.Count == 0;
-        }
-
-        char c = word[index];
-        if (!current.Children.ContainsKey(c))
-        {
-            return false; // Word doesn't exist
-        }
-
-        TrieNode node = current.Children[c];
-        bool shouldDeleteChild = DeleteHelper(node, word, index + 1);
-
-        if (shouldDeleteChild)
-        {
-            current.Children.Remove(c);
-            // Return true if current has no children and is not end of another word
-            return current.Children.Count == 0 && !current.IsEndOfWord;
-        }
-
-        return false;
-    }
-}
-
-// Example usage
-var trie = new Trie();
-
-// Insert words
-string[] words = {"cat", "cats", "dog", "doggy", "dogs", "dodge", "car", "card"};
-foreach (string word in words)
-{
-    trie.Insert(word);
-}
-
-// Search operations
-Console.WriteLine(trie.Search("cat"));      // True
-Console.WriteLine(trie.Search("car"));      // True
-Console.WriteLine(trie.Search("care"));     // False
-
-// Prefix operations
-Console.WriteLine(trie.StartsWith("do"));   // True
-Console.WriteLine(trie.StartsWith("bat"));  // False
-
-// Get all words with prefix
-var wordsWithDog = trie.GetWordsWithPrefix("dog");
-Console.WriteLine($"Words starting with 'dog': [{string.Join(", ", wordsWithDog)}]");
-// Output: [dog, doggy, dogs]
-```
-
-### Autocomplete Implementation
-
-```csharp
-public class AutoComplete
-{
-    private Trie trie;
-
-    public AutoComplete()
-    {
-        trie = new Trie();
-    }
-
-    public void AddWord(string word)
-    {
-        trie.Insert(word.ToLower());
-    }
-
-    public List<string> GetSuggestions(string prefix, int maxSuggestions = 10)
-    {
-        var suggestions = trie.GetWordsWithPrefix(prefix.ToLower());
-        return suggestions.Take(maxSuggestions).ToList();
-    }
-
-    // Example usage for building autocomplete
-    public static void DemonstrateAutocomplete()
-    {
-        var autocomplete = new AutoComplete();
-
-        // Add vocabulary
-        string[] dictionary = {
-            "apple", "application", "apply", "approach", "appropriate",
-            "banana", "band", "bandana", "bank", "banner",
-            "car", "card", "care", "career", "careful"
-        };
-
-        foreach (string word in dictionary)
-        {
-            autocomplete.AddWord(word);
-        }
-
-        // Get suggestions
-        Console.WriteLine("Autocomplete for 'app':");
-        var suggestions = autocomplete.GetSuggestions("app", 5);
-        foreach (string suggestion in suggestions)
-        {
-            Console.WriteLine($"  {suggestion}");
-        }
-        // Output: apple, application, apply, approach, appropriate
-    }
-}
+TreeNode? balanced = FromSorted(new[] { 1, 2, 3, 4, 5, 6, 7 }, 0, 6);  // Root 4, height 2
 ```
 
 ---
 
-## Quick Reference
+## Expression Trees
 
-### BST Operations Complexity
-| Operation | Average | Worst Case | Balanced |
-|-----------|---------|------------|----------|
-| Search | O(log n) | O(n) | O(log n) |
-| Insert | O(log n) | O(n) | O(log n) |
-| Delete | O(log n) | O(n) | O(log n) |
-| Min/Max | O(log n) | O(n) | O(log n) |
+An arithmetic expression is a tree. Each operator is an internal node with its operands as children, and each number is a leaf. `(3 + 4) * 2` has `*` at the root, with the subtree for `3 + 4` on the left and the leaf `2` on the right. Parentheses disappear, because the tree's shape already records what is grouped with what.
 
-### Key Properties
-- **In-order traversal** of BST gives sorted order
-- **Worst case** O(n) occurs when tree becomes skewed (like a linked list)
-- **Balanced BST** (AVL, Red-Black) guarantees O(log n)
+Evaluating the tree is a post-order traversal, because an operator needs both operand values first. An in-order traversal with parentheses added around each operator prints the familiar infix form, and a post-order traversal prints postfix.
 
-### C# Built-ins
-- `SortedDictionary<K,V>` - Red-Black tree implementation
-- `SortedSet<T>` - Balanced tree set
-- Use these in production unless specific requirements demand custom implementation
+```csharp
+public record ExprNode(string Token, ExprNode? Left = null, ExprNode? Right = null);
+
+public static double Evaluate(ExprNode node)
+{
+    if (node.Left == null || node.Right == null)
+        return double.Parse(node.Token);  // A leaf holds a number
+
+    double left = Evaluate(node.Left);    // Children first: post-order
+    double right = Evaluate(node.Right);
+
+    return node.Token switch
+    {
+        "+" => left + right,
+        "-" => left - right,
+        "*" => left * right,
+        "/" => left / right,
+        _ => throw new InvalidOperationException($"Unknown operator '{node.Token}'.")
+    };
+}
+
+var expression = new ExprNode("*", new ExprNode("+", new("3"), new("4")), new("2"));
+Console.WriteLine(Evaluate(expression));  // 14
+```
+
+Compilers and interpreters build trees like this, called abstract syntax trees, for whole programs.
 
 ---
+
+## Trees in .NET
+
+.NET has no general-purpose public binary tree type, but its sorted collections are balanced binary search trees:
+
+| Type | Structure | Use it for |
+| --- | --- | --- |
+| `SortedSet<T>` | Red-black tree | A set kept in sorted order, with `Min`, `Max`, and range queries through `GetViewBetween` |
+| `SortedDictionary<TKey,TValue>` | Red-black tree of key-value pairs | A dictionary whose keys stay sorted, with O(log n) inserts and removals |
+| `SortedList<TKey,TValue>` | Two sorted arrays with binary search | Sorted data that is mostly read. Lookups are O(log n), but inserts shift elements and are O(n) |
+
+A red-black tree keeps its height at most 2 log₂(n + 1), so these types guarantee O(log n) operations regardless of insertion order.
+
+The choice against a hash table comes down to order. `Dictionary<TKey,TValue>` is faster on average, O(1) against O(log n), but it keeps no order. When code needs sorted iteration, the smallest or largest key, or every key in a range, a sorted tree is the right structure.
+
+{% endraw %}

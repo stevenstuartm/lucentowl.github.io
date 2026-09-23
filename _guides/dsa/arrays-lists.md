@@ -2,712 +2,332 @@
 title: "Arrays & Dynamic Arrays"
 layout: guide
 category: Data Structures & Algorithms
-subcategory: Linear Data Structures
-description: "Master static and dynamic arrays with O(1) access, amortized analysis, common techniques like two pointers and sliding window, and essential interview problems."
-tags: [data-structures, algorithms, fundamentals, practical, interview-prep]
+subcategory: Core Data Structures
+description: "Why array indexing is O(1), what a dynamic array like List<T> does when it grows and why appending is still O(1) amortized, and the two pointers and sliding window techniques that make array problems linear."
+tags: [arrays, dynamic-arrays, list, amortized-analysis, two-pointers, sliding-window, fundamentals]
 ---
+{% raw %}
 
-## Why Arrays Exist
+## Why Array Indexing Is O(1)
 
-Direct memory access enables O(1) lookups by index. Arrays store elements in contiguous memory locations, providing the fastest possible access to data when you know the position. Dynamic arrays solve the fixed-size limitation while maintaining the performance benefits.
+An array stores its elements side by side in one contiguous block of memory, and every element has the same size. So the address of element i is a single calculation: the start of the block plus i times the element size. Reading `numbers[500_000]` costs the same arithmetic as reading `numbers[0]`, and nothing is searched or followed along the way.
 
-## When to Use Arrays
-
-**Use when:**
-- Need random access by index
-- Cache performance matters (sequential memory access)
-- Simple sequential processing
-- Memory usage predictability is important
-- Working with numerical computations
-
-**Don't use when:**
-- Frequent insertions/deletions in middle (use linked structures)
-- Unknown maximum size with strict memory constraints
-- Need complex relationships between elements (use graphs)
-
-**Modern reality:** Your default choice for most problems. Use `List<T>` in C#. These are dynamic arrays optimized by language developers.
+Contiguity also makes arrays fast in practice, beyond their Big O. A CPU reads memory in fixed-size chunks called cache lines, commonly 64 bytes, and keeps recently read lines in a small, fast cache. When code walks an array in order, one memory read brings in the next several elements too, so a sequential scan rarely waits on main memory. Structures that scatter their elements across memory, like linked lists, lose this advantage even when their Big O is the same.
 
 ---
 
-## Static Arrays vs Dynamic Arrays
+## Fixed-Size Arrays in C#
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Static Arrays</h4>
-<ul>
-<li><strong>Fixed size</strong> at creation time</li>
-<li><strong>Contiguous memory</strong> allocation</li>
-<li><strong>No resizing</strong> capability</li>
-<li><strong>Lower overhead</strong> (no extra capacity)</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Dynamic Arrays</h4>
-<ul>
-<li><strong>Resizable</strong> during runtime</li>
-<li><strong>Contiguous memory</strong> with growth capability</li>
-<li><strong>Amortized O(1)</strong> insertion at end</li>
-<li><strong>Slight overhead</strong> for growth management</li>
-</ul>
-</div>
-</div>
+A C# array such as `int[]` has a length fixed when it is created. It lives on the managed heap, its elements start at their default value (0 for `int`, `null` for reference types), and every index is bounds-checked. An out-of-range index throws `IndexOutOfRangeException` instead of reading whatever memory lies past the end.
 
----
-
-## Time Complexity
-
-| Operation | Static Array | Dynamic Array | Notes |
-|-----------|-------------|---------------|-------|
-| **Access by index** | O(1) | O(1) | Direct memory calculation |
-| **Search** | O(n) | O(n) | Must check each element |
-| **Insert at end** | N/A | O(1) amortized | Occasionally O(n) for resize |
-| **Insert at beginning** | N/A | O(n) | Shifts all elements |
-| **Insert at position** | N/A | O(n) | Shifts elements after position |
-| **Delete at end** | N/A | O(1) | No shifting required |
-| **Delete at beginning** | N/A | O(n) | Shifts all elements |
-| **Delete at position** | N/A | O(n) | Shifts elements after position |
-
----
-
-## Static Arrays
-
-### C# Implementation
 ```csharp
-{% raw %}// C# has true static arrays
-public class StaticArrayExample
-{
-    public static void DemonstrateStaticArrays()
-    {
-        // Static array declaration and initialization
-        int[] numbers = new int[5];  // Fixed size of 5
-        
-        // Initialize with values
-        int[] initialized = {1, 2, 3, 4, 5};
-        
-        // Or using array initializer syntax
-        int[] another = new int[] {10, 20, 30};
-        
-        // Access and modify
-        numbers[0] = 100;
-        numbers[4] = 500;
-        
-        Console.WriteLine($"Length: {numbers.Length}");  // 5
-        Console.WriteLine($"First: {numbers[0]}");       // 100
-        Console.WriteLine($"Last: {numbers[4]}");        // 500
-        
-        // Iterate through array
-        for (int i = 0; i < numbers.Length; i++)
-        {
-            Console.WriteLine($"numbers[{i}] = {numbers[i]}");
-        }
-        
-        // Enhanced for loop
-        foreach (int num in initialized)
-        {
-            Console.WriteLine(num);
-        }
-    }
-}
+int[] numbers = new int[5];        // [0, 0, 0, 0, 0]
+int[] primes = { 2, 3, 5, 7, 11 };  // Length fixed at 5
 
-// Custom static array class
-public class StaticArray<T>
-{
-    private T[] data;
-    private int size;
-    
-    public StaticArray(int size)
-    {
-        this.size = size;
-        this.data = new T[size];
-    }
-    
-    public T Get(int index)
-    {
-        if (index >= 0 && index < size)
-            return data[index];
-        throw new IndexOutOfRangeException("Index out of bounds");
-    }
-    
-    public void Set(int index, T value)
-    {
-        if (index >= 0 && index < size)
-            data[index] = value;
-        else
-            throw new IndexOutOfRangeException("Index out of bounds");
-    }
-    
-    public int Length => size;
-    
-    public override string ToString()
-    {
-        return $"StaticArray[{string.Join(", ", data)}]";
-    }
-}
-{% endraw %}
+numbers[0] = 100;
+Console.WriteLine(numbers.Length);  // 5
+Console.WriteLine(primes[4]);       // 11
 ```
+
+"Growing" a fixed-size array means allocating a larger one and copying the elements across. `Array.Resize` does exactly that, and it costs O(n) every time.
+
+---
+
+## Operation Costs
+
+| Operation | Fixed-size array | Dynamic array (`List<T>`) | Why |
+| --- | --- | --- | --- |
+| Read or write by index | O(1) | O(1) | Address arithmetic |
+| Search an unsorted array | O(n) | O(n) | Every element may need checking |
+| Append at the end | Not possible | O(1) amortized, O(n) worst case | A full array must be copied first |
+| Insert at the front or middle | Not possible | O(n) | Every later element shifts right |
+| Remove from the end | Not possible | O(1) | Nothing shifts |
+| Remove from the front or middle | Not possible | O(n) | Every later element shifts left |
+
+The O(n) cost of inserting or removing in the middle comes from shifting, not from finding the spot. Removing index 0 from a million-element `List<T>` moves 999,999 elements.
 
 ---
 
 ## Dynamic Arrays
 
-### C# Implementation
+A dynamic array keeps a fixed-size array internally, called its backing array, that is usually larger than the number of elements stored. The count is how many slots are in use, and the capacity is the backing array's length. Appending writes into the next free slot. When no slot is free, the dynamic array allocates a larger backing array, copies every element into it, and discards the old one.
+
 ```csharp
-{% raw %}public class DynamicArray<T>
+public class DynamicArray<T>
 {
-    private T[] data;
-    private int size;
-    private int capacity;
-    
-    public DynamicArray(int initialCapacity = 4)
-    {
-        capacity = initialCapacity;
-        size = 0;
-        data = new T[capacity];
-    }
-    
-    public int Count => size;
-    public int Capacity => capacity;
-    
+    private T[] _items = new T[4];
+    private int _count;
+
+    public int Count => _count;
+    public int Capacity => _items.Length;
+
     public T this[int index]
     {
         get
         {
-            if (index >= 0 && index < size)
-                return data[index];
-            throw new IndexOutOfRangeException("Index out of bounds");
+            if ((uint)index >= (uint)_count) throw new ArgumentOutOfRangeException(nameof(index));
+            return _items[index];
         }
         set
         {
-            if (index >= 0 && index < size)
-                data[index] = value;
-            else
-                throw new IndexOutOfRangeException("Index out of bounds");
+            if ((uint)index >= (uint)_count) throw new ArgumentOutOfRangeException(nameof(index));
+            _items[index] = value;
         }
     }
-    
+
     public void Add(T value)
     {
-        if (size >= capacity)
-            Resize();
-        
-        data[size] = value;
-        size++;
+        if (_count == _items.Length)
+            Grow();
+
+        _items[_count++] = value;
     }
-    
+
     public void Insert(int index, T value)
     {
-        if (index < 0 || index > size)
-            throw new IndexOutOfRangeException("Index out of bounds");
-        
-        if (size >= capacity)
-            Resize();
-        
-        // Shift elements to the right
-        for (int i = size; i > index; i--)
-        {
-            data[i] = data[i - 1];
-        }
-        
-        data[index] = value;
-        size++;
+        if ((uint)index > (uint)_count) throw new ArgumentOutOfRangeException(nameof(index));
+
+        if (_count == _items.Length)
+            Grow();
+
+        Array.Copy(_items, index, _items, index + 1, _count - index);  // Shift right
+        _items[index] = value;
+        _count++;
     }
-    
-    public T RemoveAt(int index)
+
+    public void RemoveAt(int index)
     {
-        if (index < 0 || index >= size)
-            throw new IndexOutOfRangeException("Index out of bounds");
-        
-        T removedValue = data[index];
-        
-        // Shift elements to the left
-        for (int i = index; i < size - 1; i++)
-        {
-            data[i] = data[i + 1];
-        }
-        
-        size--;
-        data[size] = default(T); // Clear reference
-        
-        return removedValue;
+        if ((uint)index >= (uint)_count) throw new ArgumentOutOfRangeException(nameof(index));
+
+        _count--;
+        Array.Copy(_items, index + 1, _items, index, _count - index);  // Shift left
+        _items[_count] = default!;  // Release the reference so the GC can collect it
     }
-    
-    public bool Remove(T value)
+
+    private void Grow()
     {
-        for (int i = 0; i < size; i++)
-        {
-            if (EqualityComparer<T>.Default.Equals(data[i], value))
-            {
-                RemoveAt(i);
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    private void Resize()
-    {
-        int oldCapacity = capacity;
-        capacity *= 2;
-        T[] newData = new T[capacity];
-        
-        Array.Copy(data, newData, size);
-        data = newData;
-        
-        Console.WriteLine($"Resized from {oldCapacity} to {capacity}");
-    }
-    
-    public override string ToString()
-    {
-        var elements = new string[size];
-        for (int i = 0; i < size; i++)
-        {
-            elements[i] = data[i]?.ToString() ?? "null";
-        }
-        return $"DynamicArray([{string.Join(", ", elements)}])";
+        var larger = new T[_items.Length * 2];
+        Array.Copy(_items, larger, _count);
+        _items = larger;
     }
 }
-
-// Example usage
-var arr = new DynamicArray<string>();
-Console.WriteLine($"Initial: {arr}, capacity: {arr.Capacity}");
-
-// Add elements
-for (int i = 0; i < 10; i++)
-{
-    arr.Add($"item_{i}");
-    if (i == 3 || i == 7) // Show resize points
-        Console.WriteLine($"After adding {i+1} items: {arr}");
-}
-
-Console.WriteLine($"Final: {arr}");
-
-// Insert and remove
-arr.Insert(0, "first");
-arr.Insert(5, "middle");
-Console.WriteLine($"After insertions: {arr}");
-
-arr.Remove("item_3");
-arr.RemoveAt(0);
-Console.WriteLine($"After removals: {arr}");
-{% endraw %}
 ```
+
+The `(uint)` casts fold "index is negative" and "index is too large" into one comparison, because a negative `int` becomes a very large `uint`. `List<T>` uses the same trick.
+
+### How List&lt;T&gt; Grows
+
+`List<T>` is .NET's dynamic array, and its growth policy is visible in the `dotnet/runtime` source. A new `List<T>` starts with capacity 0 and no backing array to speak of. The first `Add` allocates capacity 4, and every growth after that doubles the capacity, up to the runtime's maximum array length.
+
+Two members control the copying directly:
+
+- **A starting capacity.** `new List<T>(capacity)` or `EnsureCapacity(n)` allocates once, up front, when the final size is known. Loading a million items into a list created with that capacity skips about 18 grow-and-copy steps.
+- **`TrimExcess()`** shrinks the backing array to fit the count. After growth by doubling, up to about half the capacity can sit unused. `List<T>` never shrinks on its own, even when elements are removed.
 
 ---
 
-## Amortized Analysis of Dynamic Arrays
+## Why Appending Is O(1) Amortized
 
-### Why O(1) Amortized?
+An append that finds the backing array full costs O(n), because it copies every element. Appending is still O(1) amortized, because doubling makes those copies rare and each copy pays for many cheap appends that follow it.
 
-<div class="callout callout--note">
-<p class="callout__title">Amortized Analysis Explained</p>
-<p>When a dynamic array needs to resize:</p>
-<ol>
-<li><strong>Allocate</strong> new array (usually 2x size)</li>
-<li><strong>Copy</strong> all existing elements</li>
-<li><strong>Update</strong> pointer to new array</li>
-</ol>
-<p>Individual operations: Most appends are O(1), resize append is O(n). But resizing happens infrequently enough that the average cost per operation is O(1).</p>
-</div>
+Follow a dynamic array that starts at capacity 4 through 33 appends. Appends 5, 9, 17, and 33 each find the array full and copy 4, 8, 16, and 32 elements first. Every other append writes one element. The copies total 4 + 8 + 16 + 32 = 60, so all 33 appends cost 33 writes plus 60 copies, which is 93, or about 2.8 per append.
 
-Individual operations:
-- Most appends: O(1)
-- Resize append: O(n)
-
-But resizing happens infrequently:
-- Resize at sizes: 4, 8, 16, 32, 64, ...
-- Between size n/2 and n, we do n/2 O(1) operations
-- Total cost for n operations: O(n)
-- Average cost per operation: O(1)
-
-### Visual Example
-```
-{% raw %}Capacity: 4 -> 8 -> 16 -> 32
-Operations to get to 32 elements:
-- 32 individual O(1) appends
-- 3 resize operations: O(4) + O(8) + O(16) = O(28)
-- Total: O(32 + 28) = O(60) = O(n)
-- Average per operation: O(60/32) ≈ O(1)
 {% endraw %}
-```
+{% include figure.html id="dsa-dynamic-array-appends" %}
+{% raw %}
+
+The pattern holds at any size. Each copy moves as many elements as the one before it combined, plus the initial capacity, so the copies over n appends always total less than 2n. That keeps the average cost per append below 3 no matter how many appends run, even though the single append that triggers a copy is O(n).
+
+The growth factor is what makes this work. A dynamic array that grew by a fixed amount, say 10 slots at a time, would copy every 10 appends, and its copies would total about n²/20, which makes each append O(n) amortized. Any constant growth factor above 1 keeps appends O(1) amortized. Doubling is a common choice because it keeps the arithmetic simple and wastes at most half the capacity.
 
 ---
 
-## Common Array Operations
+## Two Pointers
 
-### Searching
+The two pointers technique walks an array with two indices instead of one, and uses what it knows about the array, usually that it is sorted, to move one index at a time. Many problems whose obvious solution checks every pair in O(n²) drop to O(n) this way.
+
+### Moving Toward Each Other
+
+To find two numbers in a sorted array that add up to a target, the brute-force approach checks every pair. With one index at each end, each comparison rules out a whole row of pairs instead. If the sum is too small, no pair using the left element can reach the target, because the right element is already the largest available, so the left index moves right. If the sum is too large, the right index moves left by the same argument.
+
 ```csharp
-{% raw %}public static class ArraySearching
+public static (int, int)? PairWithSum(int[] sorted, int target)
 {
-    public static int LinearSearch<T>(T[] arr, T target) where T : IEquatable<T>
+    int left = 0, right = sorted.Length - 1;
+
+    while (left < right)
     {
-        for (int i = 0; i < arr.Length; i++)
-        {
-            if (arr[i].Equals(target))
-                return i;
-        }
-        return -1;
+        int sum = sorted[left] + sorted[right];
+
+        if (sum == target) return (left, right);
+        if (sum < target) left++;
+        else right--;
     }
 
-    public static List<int> FindAllOccurrences<T>(T[] arr, T target) where T : IEquatable<T>
-    {
-        var indices = new List<int>();
-        for (int i = 0; i < arr.Length; i++)
-        {
-            if (arr[i].Equals(target))
-                indices.Add(i);
-        }
-        return indices;
-    }
-
-    // Example usage
-    public static void DemonstrateSearching()
-    {
-        int[] arr = {1, 3, 7, 3, 9, 3};
-
-        Console.WriteLine(LinearSearch(arr, 3));           // 1 (first occurrence)
-        Console.WriteLine(FindAllOccurrences(arr, 3).Count); // 3 (total occurrences)
-        Console.WriteLine(Array.IndexOf(arr, 3));          // 1 (built-in method)
-        Console.WriteLine(arr.Contains(3));                // True (membership test)
-    }
+    return null;
 }
-{% endraw %}
+
+int[] values = { 1, 3, 4, 6, 8, 11 };
+Console.WriteLine(PairWithSum(values, 10));  // (2, 3): 4 + 6
 ```
 
-### Two Pointers Technique
+Each iteration moves one index one step closer to the other, so the loop runs at most n − 1 times. The approach depends on the array being sorted.
+
+### Moving in the Same Direction
+
+A read index and a write index can move in the same direction to rewrite an array in place. Removing duplicates from a sorted array keeps a write index at the end of the unique prefix and copies each new value there as the read index finds it:
+
 ```csharp
-{% raw %}public static class TwoPointers
+public static int RemoveDuplicatesSorted(int[] sorted)
 {
-    public static void ReverseArray<T>(T[] arr)
+    if (sorted.Length == 0)
+        return 0;
+
+    int write = 1;
+
+    for (int read = 1; read < sorted.Length; read++)
     {
-        int left = 0, right = arr.Length - 1;
-
-        while (left < right)
-        {
-            // Swap elements
-            T temp = arr[left];
-            arr[left] = arr[right];
-            arr[right] = temp;
-
-            left++;
-            right--;
-        }
+        if (sorted[read] != sorted[read - 1])
+            sorted[write++] = sorted[read];
     }
 
-    public static int RemoveDuplicatesSorted<T>(T[] arr) where T : IEquatable<T>
-    {
-        if (arr.Length == 0)
-            return 0;
-
-        int writeIndex = 1;
-
-        for (int readIndex = 1; readIndex < arr.Length; readIndex++)
-        {
-            if (!arr[readIndex].Equals(arr[readIndex - 1]))
-            {
-                arr[writeIndex] = arr[readIndex];
-                writeIndex++;
-            }
-        }
-
-        return writeIndex; // New length
-    }
-
-    // Example usage
-    public static void DemonstrateTwoPointers()
-    {
-        int[] numbers = {1, 2, 3, 4, 5};
-        ReverseArray(numbers);
-        Console.WriteLine(string.Join(", ", numbers)); // [5, 4, 3, 2, 1]
-
-        int[] sortedWithDups = {1, 1, 2, 2, 2, 3, 4, 4, 5};
-        int newLength = RemoveDuplicatesSorted(sortedWithDups);
-        Console.WriteLine(string.Join(", ", sortedWithDups.Take(newLength))); // [1, 2, 3, 4, 5]
-    }
+    return write;  // Length of the unique prefix
 }
-{% endraw %}
+
+int[] data = { 1, 1, 2, 2, 2, 3, 4, 4, 5 };
+int length = RemoveDuplicatesSorted(data);
+Console.WriteLine(string.Join(", ", data.Take(length)));  // 1, 2, 3, 4, 5
 ```
 
-### Sliding Window Technique
-```csharp
-{% raw %}public static class SlidingWindow
-{
-    public static int? MaxSumSubarray(int[] arr, int k)
-    {
-        if (arr.Length < k)
-            return null;
-
-        // Calculate sum of first window
-        int windowSum = 0;
-        for (int i = 0; i < k; i++)
-        {
-            windowSum += arr[i];
-        }
-
-        int maxSum = windowSum;
-
-        // Slide the window
-        for (int i = k; i < arr.Length; i++)
-        {
-            windowSum = windowSum - arr[i - k] + arr[i];
-            maxSum = Math.Max(maxSum, windowSum);
-        }
-
-        return maxSum;
-    }
-
-    // Example usage
-    public static void DemonstrateSlidingWindow()
-    {
-        int[] arr = {2, 1, 5, 1, 3, 2};
-        Console.WriteLine(MaxSumSubarray(arr, 3)); // 9 (subarray [5, 1, 3])
-    }
-}
-{% endraw %}
-```
+This is O(n) time and O(1) extra space. Merging two sorted arrays works the same way, with one read index per input and a write index into the output.
 
 ---
 
-## Multi-dimensional Arrays
+## Sliding Window
+
+A sliding window is a special case of two pointers where the two indices mark the start and end of a contiguous range. The window moves across the array while the code keeps a running summary of what is inside it, updating that summary as elements enter and leave instead of recomputing it from scratch.
+
+### Fixed-Size Windows
+
+The largest sum of k consecutive elements needs k additions for the first window. After that, each slide adds the element entering on the right and subtracts the one leaving on the left, which takes O(n) in total instead of O(n × k).
 
 ```csharp
-{% raw %}// 2D arrays in C#
-public static class Matrix2D
+public static int? MaxSumOfWindow(int[] values, int k)
 {
-    public static void Demonstrate2DArrays()
+    if (k <= 0 || values.Length < k)
+        return null;
+
+    int windowSum = 0;
+    for (int i = 0; i < k; i++)
+        windowSum += values[i];
+
+    int maxSum = windowSum;
+
+    for (int i = k; i < values.Length; i++)
     {
-        // Rectangular array (true 2D array)
-        int[,] matrix1 = new int[3, 4];
-        int[,] matrix2 = {{1, 2, 3}, {4, 5, 6}};
-        
-        // Jagged array (array of arrays)
-        int[][] jaggedArray = new int[3][];
-        jaggedArray[0] = new int[4];
-        jaggedArray[1] = new int[3];
-        jaggedArray[2] = new int[2];
-        
-        // Initialize and access
-        matrix1[0, 0] = 1;
-        matrix1[1, 2] = 5;
-        
-        Console.WriteLine($"Rows: {matrix1.GetLength(0)}");
-        Console.WriteLine($"Cols: {matrix1.GetLength(1)}");
-        
-        // Iterate through 2D array
-        for (int i = 0; i < matrix1.GetLength(0); i++)
-        {
-            for (int j = 0; j < matrix1.GetLength(1); j++)
-            {
-                Console.Write($"{matrix1[i, j]} ");
-            }
-            Console.WriteLine();
-        }
+        windowSum += values[i] - values[i - k];  // Add the entering element, drop the leaving one
+        maxSum = Math.Max(maxSum, windowSum);
     }
-    
-    public static int[,] MatrixAdd(int[,] a, int[,] b)
-    {
-        int rows = a.GetLength(0);
-        int cols = a.GetLength(1);
-        int[,] result = new int[rows, cols];
-        
-        for (int i = 0; i < rows; i++)
-        {
-            for (int j = 0; j < cols; j++)
-            {
-                result[i, j] = a[i, j] + b[i, j];
-            }
-        }
-        
-        return result;
-    }
+
+    return maxSum;
 }
-{% endraw %}
+
+Console.WriteLine(MaxSumOfWindow(new[] { 2, 1, 5, 1, 3, 2 }, 3));  // 9, from 5 + 1 + 3
 ```
+
+### Variable-Size Windows
+
+When the window's size depends on its contents, the right edge grows the window and the left edge shrinks it whenever a condition breaks. Finding the shortest run of positive numbers whose sum reaches a target works this way. Neither edge ever moves backward, so each element enters and leaves the window at most once, and the whole scan is O(n).
+
+```csharp
+public static int ShortestWindowWithSum(int[] positives, int target)
+{
+    int best = int.MaxValue, windowSum = 0, left = 0;
+
+    for (int right = 0; right < positives.Length; right++)
+    {
+        windowSum += positives[right];
+
+        while (windowSum >= target)
+        {
+            best = Math.Min(best, right - left + 1);
+            windowSum -= positives[left++];
+        }
+    }
+
+    return best == int.MaxValue ? 0 : best;  // 0 means no window reaches the target
+}
+
+Console.WriteLine(ShortestWindowWithSum(new[] { 2, 3, 1, 2, 4, 3 }, 7));  // 2, from 4 + 3
+```
+
+Shrinking from the left is only safe because every value is positive. If values could be negative, removing an element could raise the sum, and the window's logic would no longer hold.
 
 ---
 
-## Interview Problems
+## Multi-Dimensional Arrays
 
-### 1. Rotate Array
+C# has two kinds of multi-dimensional array, and they are laid out differently in memory.
+
+| Kind | Declaration | Layout | Rows |
+| --- | --- | --- | --- |
+| Rectangular | `int[,] grid = new int[3, 4];` | One contiguous block, stored row by row | All the same length |
+| Jagged | `int[][] rows = new int[3][];` | An array of references to separate one-dimensional arrays | Each row can have its own length |
+
 ```csharp
-{% raw %}public static class ArrayRotation
-{
-    public static int[] RotateArrayRight(int[] arr, int k)
-    {
-        if (arr.Length == 0)
-            return arr;
+int[,] grid = { { 1, 2, 3 }, { 4, 5, 6 } };
+Console.WriteLine(grid[1, 2]);           // 6
+Console.WriteLine(grid.GetLength(0));    // 2 rows
+Console.WriteLine(grid.GetLength(1));    // 3 columns
 
-        int n = arr.Length;
-        k = k % n; // Handle k > n
-
-        // Method 1: Using extra space
-        int[] result = new int[n];
-        for (int i = 0; i < n; i++)
-        {
-            result[(i + k) % n] = arr[i];
-        }
-
-        return result;
-    }
-
-    public static void RotateArrayInPlace(int[] arr, int k)
-    {
-        if (arr.Length == 0)
-            return;
-
-        int n = arr.Length;
-        k = k % n;
-
-        // Reverse entire array
-        Reverse(arr, 0, n - 1);
-        // Reverse first k elements
-        Reverse(arr, 0, k - 1);
-        // Reverse remaining elements
-        Reverse(arr, k, n - 1);
-    }
-
-    private static void Reverse(int[] arr, int start, int end)
-    {
-        while (start < end)
-        {
-            int temp = arr[start];
-            arr[start] = arr[end];
-            arr[end] = temp;
-            start++;
-            end--;
-        }
-    }
-
-    // Example usage
-    public static void DemonstrateRotation()
-    {
-        int[] arr1 = {1, 2, 3, 4, 5, 6, 7};
-        int[] rotated = RotateArrayRight(arr1, 3);
-        Console.WriteLine(string.Join(", ", rotated)); // [5, 6, 7, 1, 2, 3, 4]
-
-        int[] arr2 = {1, 2, 3, 4, 5, 6, 7};
-        RotateArrayInPlace(arr2, 3);
-        Console.WriteLine(string.Join(", ", arr2)); // [5, 6, 7, 1, 2, 3, 4]
-    }
-}
-{% endraw %}
+int[][] triangle = new int[3][];
+for (int i = 0; i < triangle.Length; i++)
+    triangle[i] = new int[i + 1];        // Rows of length 1, 2, and 3
 ```
 
-### 2. Merge Sorted Arrays
+A rectangular array's element address is still a single calculation, row × column count + column. A jagged array needs two lookups, one to find the row's array and one within it. Because rectangular arrays are stored row by row, a loop that walks each row in order reads memory sequentially, while a loop that walks down columns jumps a full row's width on every step.
+
+---
+
+## Worked Example: Rotate an Array in Place
+
+Rotating an array right by k positions moves the last k elements to the front. The direct approach copies into a new array, which is O(n) extra space. Three reversals do it in place with O(1) extra space: reverse the whole array, then reverse the first k elements, then reverse the rest.
+
 ```csharp
-{% raw %}public static class ArrayMerging
+public static void RotateRight(int[] values, int k)
 {
-    public static int[] MergeSortedArrays(int[] arr1, int[] arr2)
+    int n = values.Length;
+    if (n == 0) return;
+
+    k %= n;  // Rotating by n is a no-op
+    Reverse(values, 0, n - 1);
+    Reverse(values, 0, k - 1);
+    Reverse(values, k, n - 1);
+}
+
+private static void Reverse(int[] values, int start, int end)
+{
+    while (start < end)
     {
-        var result = new List<int>();
-        int i = 0, j = 0;
-
-        while (i < arr1.Length && j < arr2.Length)
-        {
-            if (arr1[i] <= arr2[j])
-            {
-                result.Add(arr1[i]);
-                i++;
-            }
-            else
-            {
-                result.Add(arr2[j]);
-                j++;
-            }
-        }
-
-        // Add remaining elements
-        while (i < arr1.Length)
-        {
-            result.Add(arr1[i]);
-            i++;
-        }
-
-        while (j < arr2.Length)
-        {
-            result.Add(arr2[j]);
-            j++;
-        }
-
-        return result.ToArray();
-    }
-
-    // Example usage
-    public static void DemonstrateMerging()
-    {
-        int[] arr1 = {1, 3, 5, 7};
-        int[] arr2 = {2, 4, 6, 8, 9};
-        int[] merged = MergeSortedArrays(arr1, arr2);
-        Console.WriteLine(string.Join(", ", merged)); // [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        (values[start], values[end]) = (values[end], values[start]);
+        start++;
+        end--;
     }
 }
-{% endraw %}
+
+int[] items = { 1, 2, 3, 4, 5, 6, 7 };
+RotateRight(items, 3);
+Console.WriteLine(string.Join(", ", items));  // 5, 6, 7, 1, 2, 3, 4
 ```
 
-### 3. Find Peak Element
-```csharp
-{% raw %}public static class PeakFinding
-{
-    public static int FindPeakElement(int[] arr)
-    {
-        int n = arr.Length;
-        if (n == 1)
-            return 0;
+Reversing the whole array puts the last k elements at the front, but backward, and the first n − k at the back, also backward. The two smaller reversals put each group back in order. The `Reverse` helper is itself two pointers moving toward each other.
 
-        // Check first element
-        if (arr[0] > arr[1])
-            return 0;
+---
 
-        // Check last element
-        if (arr[n - 1] > arr[n - 2])
-            return n - 1;
+## Arrays in Practice
 
-        // Check middle elements
-        for (int i = 1; i < n - 1; i++)
-        {
-            if (arr[i] > arr[i - 1] && arr[i] > arr[i + 1])
-                return i;
-        }
+`List<T>` is the default collection in C# for good reason. It has O(1) indexing, amortized O(1) appends, sequential memory for cache-friendly scans, and a growth policy that is tuned and tested. Plain arrays fit when the size is fixed and known, as with lookup tables, buffers, and interop with native code, or when the extra indirection of `List<T>` measurably matters.
 
-        return -1; // No peak found
-    }
+An array is the wrong choice when the workload inserts or removes near the front or middle of a large collection, because every such operation shifts the elements after it. It is also a poor fit for "is this value present" checks on a large collection, which cost O(n) per lookup in an array and O(1) on average in a hash-based set.
 
-    // Binary search approach for better performance
-    public static int FindPeakBinary(int[] arr)
-    {
-        int left = 0, right = arr.Length - 1;
-
-        while (left < right)
-        {
-            int mid = left + (right - left) / 2;
-
-            if (arr[mid] > arr[mid + 1])
-                right = mid;
-            else
-                left = mid + 1;
-        }
-
-        return left;
-    }
-
-    // Example usage
-    public static void DemonstratePeakFinding()
-    {
-        int[] peaks = {1, 2, 3, 1};
-        Console.WriteLine(FindPeakElement(peaks)); // 2 (element 3 is peak)
-        Console.WriteLine(FindPeakBinary(peaks));  // 2
-    }
-}
 {% endraw %}
-```
-
-## Modern Usage
-
-**C#:** Use `List<T>` for dynamic behavior, arrays for fixed-size scenarios
-**Performance:** Built-in implementations are heavily optimized with native code
-
-**Key Takeaways:**
-- Arrays are the foundation of most data structures
-- Understand the difference between static and dynamic arrays
-- Know when O(1) amortized means and why it matters
-- Master common patterns: two pointers, sliding window, array manipulation
-- Use language built-ins in production, implement from scratch in interviews

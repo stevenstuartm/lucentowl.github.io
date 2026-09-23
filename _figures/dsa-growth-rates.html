@@ -1,0 +1,62 @@
+---
+title: "How Common Growth Rates Compare"
+kind: chart
+system: dsa
+summary: "Operations performed as input size grows, for six growth rates."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 450" role="img" aria-labelledby="gr-title gr-desc" style="width:100%; min-width:620px; height:auto; display:block;">
+<title id="gr-title">Growth of six common complexity classes</title>
+<desc id="gr-desc">A line chart of operations against input size n from 0 to 20, with the vertical axis capped at 100 operations. O(2ⁿ) leaves the chart before n reaches 7 and O(n²) at n equals 10. O(n log n) reaches about 86 at n equals 20. O(n) reaches 20, O(log n) about 4, and O(1) stays at 1. Constant factors are ignored.</desc>
+<style>
+.gr-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.gr-grid { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.gr-tick { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.gr-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.gr-lab { font-size: 12.5px; font-weight: 700; }
+.gr-c1 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.gr-c2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.gr-c3 { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; stroke-dasharray: 3 3; }
+.gr-c4 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.gr-c5 { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.gr-c6 { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; stroke-dasharray: 5 4; }
+.gr-c1-t, .gr-c2-t { fill: var(--color-accent, #A5486E); }
+.gr-c3-t { fill: var(--color-secondary, #2D5A85); }
+.gr-c4-t { fill: var(--color-primary, #1A5F8A); }
+.gr-c5-t { fill: var(--color-green, #3C8D53); }
+.gr-c6-t { fill: var(--color-text-light, #4A5568); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="gr-grid" d="M 242.5,50 V 390"/>
+<text class="gr-tick" x="242.5" y="410" text-anchor="middle">5</text>
+<path class="gr-grid" d="M 395.0,50 V 390"/>
+<text class="gr-tick" x="395.0" y="410" text-anchor="middle">10</text>
+<path class="gr-grid" d="M 547.5,50 V 390"/>
+<text class="gr-tick" x="547.5" y="410" text-anchor="middle">15</text>
+<path class="gr-grid" d="M 700.0,50 V 390"/>
+<text class="gr-tick" x="700.0" y="410" text-anchor="middle">20</text>
+<path class="gr-grid" d="M 90,305.0 H 700"/>
+<text class="gr-tick" x="80" y="309.0" text-anchor="end">25</text>
+<path class="gr-grid" d="M 90,220.0 H 700"/>
+<text class="gr-tick" x="80" y="224.0" text-anchor="end">50</text>
+<path class="gr-grid" d="M 90,135.0 H 700"/>
+<text class="gr-tick" x="80" y="139.0" text-anchor="end">75</text>
+<path class="gr-grid" d="M 90,50.0 H 700"/>
+<text class="gr-tick" x="80" y="54.0" text-anchor="end">100</text>
+<text class="gr-tick" x="90" y="410" text-anchor="middle">0</text>
+<path class="gr-axis" d="M 90,50 V 390 H 700"/>
+<text class="gr-el" x="395" y="436" text-anchor="middle">input size n</text>
+<text class="gr-el" x="90" y="24" text-anchor="middle">operations</text>
+<path class="gr-c6" d="M 90.0,386.6 L 97.6,386.6 L 105.2,386.6 L 112.9,386.6 L 120.5,386.6 L 128.1,386.6 L 135.8,386.6 L 143.4,386.6 L 151.0,386.6 L 158.6,386.6 L 166.2,386.6 L 173.9,386.6 L 181.5,386.6 L 189.1,386.6 L 196.8,386.6 L 204.4,386.6 L 212.0,386.6 L 219.6,386.6 L 227.2,386.6 L 234.9,386.6 L 242.5,386.6 L 250.1,386.6 L 257.8,386.6 L 265.4,386.6 L 273.0,386.6 L 280.6,386.6 L 288.2,386.6 L 295.9,386.6 L 303.5,386.6 L 311.1,386.6 L 318.8,386.6 L 326.4,386.6 L 334.0,386.6 L 341.6,386.6 L 349.2,386.6 L 356.9,386.6 L 364.5,386.6 L 372.1,386.6 L 379.8,386.6 L 387.4,386.6 L 395.0,386.6 L 402.6,386.6 L 410.2,386.6 L 417.9,386.6 L 425.5,386.6 L 433.1,386.6 L 440.8,386.6 L 448.4,386.6 L 456.0,386.6 L 463.6,386.6 L 471.2,386.6 L 478.9,386.6 L 486.5,386.6 L 494.1,386.6 L 501.8,386.6 L 509.4,386.6 L 517.0,386.6 L 524.6,386.6 L 532.2,386.6 L 539.9,386.6 L 547.5,386.6 L 555.1,386.6 L 562.8,386.6 L 570.4,386.6 L 578.0,386.6 L 585.6,386.6 L 593.2,386.6 L 600.9,386.6 L 608.5,386.6 L 616.1,386.6 L 623.8,386.6 L 631.4,386.6 L 639.0,386.6 L 646.6,386.6 L 654.2,386.6 L 661.9,386.6 L 669.5,386.6 L 677.1,386.6 L 684.8,386.6 L 692.4,386.6 L 700.0,386.6"/>
+<text class="gr-lab gr-c6-t" x="710" y="396.0">O(1)</text>
+<path class="gr-c5" d="M 120.5,390.0 L 128.1,388.9 L 135.8,388.0 L 143.4,387.3 L 151.0,386.6 L 158.6,386.0 L 166.2,385.5 L 173.9,385.0 L 181.5,384.6 L 189.1,384.2 L 196.8,383.9 L 204.4,383.5 L 212.0,383.2 L 219.6,382.9 L 227.2,382.6 L 234.9,382.4 L 242.5,382.1 L 250.1,381.9 L 257.8,381.6 L 265.4,381.4 L 273.0,381.2 L 280.6,381.0 L 288.2,380.8 L 295.9,380.6 L 303.5,380.5 L 311.1,380.3 L 318.8,380.1 L 326.4,380.0 L 334.0,379.8 L 341.6,379.6 L 349.2,379.5 L 356.9,379.4 L 364.5,379.2 L 372.1,379.1 L 379.8,379.0 L 387.4,378.8 L 395.0,378.7 L 402.6,378.6 L 410.2,378.5 L 417.9,378.4 L 425.5,378.2 L 433.1,378.1 L 440.8,378.0 L 448.4,377.9 L 456.0,377.8 L 463.6,377.7 L 471.2,377.6 L 478.9,377.5 L 486.5,377.4 L 494.1,377.3 L 501.8,377.2 L 509.4,377.1 L 517.0,377.1 L 524.6,377.0 L 532.2,376.9 L 539.9,376.8 L 547.5,376.7 L 555.1,376.6 L 562.8,376.6 L 570.4,376.5 L 578.0,376.4 L 585.6,376.3 L 593.2,376.2 L 600.9,376.2 L 608.5,376.1 L 616.1,376.0 L 623.8,376.0 L 631.4,375.9 L 639.0,375.8 L 646.6,375.8 L 654.2,375.7 L 661.9,375.6 L 669.5,375.6 L 677.1,375.5 L 684.8,375.4 L 692.4,375.4 L 700.0,375.3"/>
+<text class="gr-lab gr-c5-t" x="710" y="375.0">O(log n)</text>
+<path class="gr-c4" d="M 90.0,390.0 L 97.6,389.1 L 105.2,388.3 L 112.9,387.4 L 120.5,386.6 L 128.1,385.8 L 135.8,384.9 L 143.4,384.1 L 151.0,383.2 L 158.6,382.4 L 166.2,381.5 L 173.9,380.6 L 181.5,379.8 L 189.1,378.9 L 196.8,378.1 L 204.4,377.2 L 212.0,376.4 L 219.6,375.6 L 227.2,374.7 L 234.9,373.9 L 242.5,373.0 L 250.1,372.1 L 257.8,371.3 L 265.4,370.4 L 273.0,369.6 L 280.6,368.8 L 288.2,367.9 L 295.9,367.1 L 303.5,366.2 L 311.1,365.4 L 318.8,364.5 L 326.4,363.6 L 334.0,362.8 L 341.6,361.9 L 349.2,361.1 L 356.9,360.2 L 364.5,359.4 L 372.1,358.6 L 379.8,357.7 L 387.4,356.9 L 395.0,356.0 L 402.6,355.1 L 410.2,354.3 L 417.9,353.4 L 425.5,352.6 L 433.1,351.8 L 440.8,350.9 L 448.4,350.1 L 456.0,349.2 L 463.6,348.4 L 471.2,347.5 L 478.9,346.6 L 486.5,345.8 L 494.1,344.9 L 501.8,344.1 L 509.4,343.2 L 517.0,342.4 L 524.6,341.6 L 532.2,340.7 L 539.9,339.9 L 547.5,339.0 L 555.1,338.1 L 562.8,337.3 L 570.4,336.4 L 578.0,335.6 L 585.6,334.8 L 593.2,333.9 L 600.9,333.1 L 608.5,332.2 L 616.1,331.4 L 623.8,330.5 L 631.4,329.6 L 639.0,328.8 L 646.6,327.9 L 654.2,327.1 L 661.9,326.2 L 669.5,325.4 L 677.1,324.6 L 684.8,323.7 L 692.4,322.9 L 700.0,322.0"/>
+<text class="gr-lab gr-c4-t" x="710" y="326.0">O(n)</text>
+<path class="gr-c3" d="M 120.5,390.0 L 128.1,388.6 L 135.8,387.0 L 143.4,385.2 L 151.0,383.2 L 158.6,381.1 L 166.2,378.8 L 173.9,376.4 L 181.5,373.8 L 189.1,371.2 L 196.8,368.5 L 204.4,365.7 L 212.0,362.8 L 219.6,359.8 L 227.2,356.8 L 234.9,353.7 L 242.5,350.5 L 250.1,347.3 L 257.8,344.0 L 265.4,340.7 L 273.0,337.3 L 280.6,333.8 L 288.2,330.3 L 295.9,326.8 L 303.5,323.2 L 311.1,319.6 L 318.8,315.9 L 326.4,312.2 L 334.0,308.4 L 341.6,304.6 L 349.2,300.8 L 356.9,296.9 L 364.5,293.0 L 372.1,289.1 L 379.8,285.1 L 387.4,281.1 L 395.0,277.1 L 402.6,273.0 L 410.2,268.9 L 417.9,264.8 L 425.5,260.6 L 433.1,256.4 L 440.8,252.2 L 448.4,248.0 L 456.0,243.7 L 463.6,239.4 L 471.2,235.1 L 478.9,230.8 L 486.5,226.4 L 494.1,222.1 L 501.8,217.7 L 509.4,213.2 L 517.0,208.8 L 524.6,204.3 L 532.2,199.8 L 539.9,195.3 L 547.5,190.7 L 555.1,186.2 L 562.8,181.6 L 570.4,177.0 L 578.0,172.4 L 585.6,167.8 L 593.2,163.1 L 600.9,158.4 L 608.5,153.7 L 616.1,149.0 L 623.8,144.3 L 631.4,139.6 L 639.0,134.8 L 646.6,130.0 L 654.2,125.2 L 661.9,120.4 L 669.5,115.6 L 677.1,110.7 L 684.8,105.9 L 692.4,101.0 L 700.0,96.1"/>
+<text class="gr-lab gr-c3-t" x="710" y="100.1">O(n log n)</text>
+<path class="gr-c2" d="M 90.0,390.0 L 97.6,389.8 L 105.2,389.1 L 112.9,388.1 L 120.5,386.6 L 128.1,384.7 L 135.8,382.4 L 143.4,379.6 L 151.0,376.4 L 158.6,372.8 L 166.2,368.8 L 173.9,364.3 L 181.5,359.4 L 189.1,354.1 L 196.8,348.4 L 204.4,342.2 L 212.0,335.6 L 219.6,328.6 L 227.2,321.1 L 234.9,313.3 L 242.5,305.0 L 250.1,296.3 L 257.8,287.1 L 265.4,277.6 L 273.0,267.6 L 280.6,257.2 L 288.2,246.3 L 295.9,235.1 L 303.5,223.4 L 311.1,211.3 L 318.8,198.8 L 326.4,185.8 L 334.0,172.4 L 341.6,158.6 L 349.2,144.3 L 356.9,129.7 L 364.5,114.6 L 372.1,99.1 L 379.8,83.1 L 387.4,66.8 L 395.0,50.0 L 395.0,50.0"/>
+<text class="gr-lab gr-c2-t" x="395.0" y="40" text-anchor="middle">O(n²)</text>
+<path class="gr-c1" d="M 90.0,386.6 L 97.6,386.0 L 105.2,385.2 L 112.9,384.3 L 120.5,383.2 L 128.1,381.9 L 135.8,380.4 L 143.4,378.6 L 151.0,376.4 L 158.6,373.8 L 166.2,370.8 L 173.9,367.1 L 181.5,362.8 L 189.1,357.7 L 196.8,351.5 L 204.4,344.3 L 212.0,335.6 L 219.6,325.3 L 227.2,313.1 L 234.9,298.5 L 242.5,281.2 L 250.1,260.6 L 257.8,236.1 L 265.4,207.0 L 273.0,172.4 L 280.6,131.2 L 288.2,82.3 L 292.6,50.0"/>
+<text class="gr-lab gr-c1-t" x="292.6" y="40" text-anchor="middle">O(2ⁿ)</text>
+</g>
+</svg>

@@ -1,0 +1,93 @@
+---
+title: "Singly and Doubly Linked Lists"
+kind: structure
+system: dsa
+summary: "Nodes joined by pointers, and an insertion that changes two of them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 430" role="img" aria-labelledby="ll-title ll-desc" style="width:100%; min-width:560px; height:auto; display:block;">
+<title id="ll-title">Singly linked, doubly linked, and inserting a node</title>
+<desc id="ll-desc">Three rows. First, a singly linked list: head points to node A, A points to B, B points to C, and C points to null. Each node holds a value and one pointer to the next node. Second, a doubly linked list of A, B, and C where each node also points back to the previous node, with head at A and tail at C. Third, inserting X after A in a singly linked list: first X's next pointer is set to B, which A currently points to, then A's next pointer is changed to X. The old link from A to B is replaced, and no other node moves.</desc>
+<style>
+.ll-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ll-new { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.ll-div { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.ll-dot { fill: var(--color-primary, #1A5F8A); }
+.ll-v { font-size: 15px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ll-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ll-lbl { font-size: 12.5px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.ll-null { font-size: 12px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ll-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.ll-step { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.ll-oldl { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ll-ptr { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.ll-back { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.ll-np { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.ll-old { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 3 4; }
+</style>
+<defs>
+<marker id="ll-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ll-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+<marker id="ll-n" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="ll-hd" x="40" y="48" text-anchor="start">SINGLY LINKED: EACH NODE POINTS TO THE NEXT</text>
+<text class="ll-lbl" x="40" y="95" text-anchor="start">head</text>
+<path class="ll-ptr" d="M 78,90 L 118,90" marker-end="url(#ll-a)"/>
+<rect class="ll-box" x="120" y="70" width="84" height="40" rx="5"/>
+<path class="ll-div" d="M 178,70 V 110"/>
+<text class="ll-v" x="149" y="96" text-anchor="middle">A</text>
+<circle class="ll-dot" cx="191" cy="90" r="3.5"/>
+<path class="ll-ptr" d="M 195,90 L 258,90" marker-end="url(#ll-a)"/>
+<rect class="ll-box" x="260" y="70" width="84" height="40" rx="5"/>
+<path class="ll-div" d="M 318,70 V 110"/>
+<text class="ll-v" x="289" y="96" text-anchor="middle">B</text>
+<circle class="ll-dot" cx="331" cy="90" r="3.5"/>
+<path class="ll-ptr" d="M 335,90 L 398,90" marker-end="url(#ll-a)"/>
+<rect class="ll-box" x="400" y="70" width="84" height="40" rx="5"/>
+<path class="ll-div" d="M 458,70 V 110"/>
+<text class="ll-v" x="429" y="96" text-anchor="middle">C</text>
+<circle class="ll-dot" cx="471" cy="90" r="3.5"/>
+<path class="ll-ptr" d="M 475,90 L 530,90" marker-end="url(#ll-a)"/>
+<text class="ll-null" x="536" y="95" text-anchor="start">null</text>
+<text class="ll-hd" x="40" y="158" text-anchor="start">DOUBLY LINKED: EACH NODE ALSO POINTS BACK</text>
+<text class="ll-lbl" x="40" y="205" text-anchor="start">head</text>
+<path class="ll-ptr" d="M 78,200 L 118,200" marker-end="url(#ll-a)"/>
+<rect class="ll-box" x="120" y="180" width="110" height="40" rx="5"/>
+<path class="ll-div" d="M 146,180 V 220 M 204,180 V 220"/>
+<text class="ll-v" x="175" y="206" text-anchor="middle">A</text>
+<circle class="ll-dot" cx="133" cy="200" r="3.5"/><circle class="ll-dot" cx="217" cy="200" r="3.5"/>
+<path class="ll-ptr" d="M 221,194 L 288,194" marker-end="url(#ll-a)"/>
+<path class="ll-back" d="M 299,207 L 232,207" marker-end="url(#ll-b)"/>
+<rect class="ll-box" x="290" y="180" width="110" height="40" rx="5"/>
+<path class="ll-div" d="M 316,180 V 220 M 374,180 V 220"/>
+<text class="ll-v" x="345" y="206" text-anchor="middle">B</text>
+<circle class="ll-dot" cx="303" cy="200" r="3.5"/><circle class="ll-dot" cx="387" cy="200" r="3.5"/>
+<path class="ll-ptr" d="M 391,194 L 458,194" marker-end="url(#ll-a)"/>
+<path class="ll-back" d="M 469,207 L 402,207" marker-end="url(#ll-b)"/>
+<rect class="ll-box" x="460" y="180" width="110" height="40" rx="5"/>
+<path class="ll-div" d="M 486,180 V 220 M 544,180 V 220"/>
+<text class="ll-v" x="515" y="206" text-anchor="middle">C</text>
+<circle class="ll-dot" cx="473" cy="200" r="3.5"/><circle class="ll-dot" cx="557" cy="200" r="3.5"/>
+<text class="ll-lbl" x="650" y="205" text-anchor="start">tail</text>
+<path class="ll-ptr" d="M 644,200 L 574,200" marker-end="url(#ll-a)"/>
+<text class="ll-hd" x="40" y="278" text-anchor="start">INSERTING X AFTER A: TWO POINTER CHANGES, NOTHING SHIFTS</text>
+<rect class="ll-box" x="120" y="300" width="84" height="40" rx="5"/>
+<path class="ll-div" d="M 178,300 V 340"/>
+<text class="ll-v" x="149" y="326" text-anchor="middle">A</text>
+<circle class="ll-dot" cx="191" cy="320" r="3.5"/>
+<rect class="ll-box" x="420" y="300" width="84" height="40" rx="5"/>
+<path class="ll-div" d="M 478,300 V 340"/>
+<text class="ll-v" x="449" y="326" text-anchor="middle">B</text>
+<circle class="ll-dot" cx="491" cy="320" r="3.5"/>
+<path class="ll-old" d="M 195,320 L 418,320"/>
+<text class="ll-oldl" x="306" y="314" text-anchor="middle">old link</text>
+<rect class="ll-new" x="270" y="370" width="84" height="40" rx="5"/>
+<path class="ll-div" d="M 328,370 V 410"/>
+<text class="ll-v" x="299" y="396" text-anchor="middle">X</text>
+<circle class="ll-dot" cx="341" cy="390" r="3.5"/>
+<path class="ll-np" d="M 191,326 L 272,384" marker-end="url(#ll-n)"/>
+<path class="ll-np" d="M 345,390 L 430,342" marker-end="url(#ll-n)"/>
+<text class="ll-step" x="170" y="404" text-anchor="middle">2. A.Next = X</text>
+<text class="ll-step" x="430" y="404" text-anchor="start">1. X.Next = A.Next (B)</text>
+</g>
+</svg>

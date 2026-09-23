@@ -1,0 +1,58 @@
+---
+title: "Upper, Lower, and Tight Bounds"
+kind: chart
+system: dsa
+summary: "O, Ω, and Θ as curves that hold f(n) in from n₀ onward."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="bd-title bd-desc" style="width:100%; min-width:660px; height:auto; display:block;">
+<title id="bd-title">Big O, Big Omega, and Big Theta as bounding curves</title>
+<desc id="bd-desc">Three small charts of the same wavy cost function f(n). In the first, a line c times g(n) lies above f(n) for every n from a point n₀ onward, although f(n) is above it at small n: f(n) is O(g(n)). In the second, a line c times g(n) lies below f(n) from n₀ onward: f(n) is Omega(g(n)). In the third, f(n) stays between a lower line c₁ times g(n) and an upper line c₂ times g(n) from n₀ onward: f(n) is Theta(g(n)). Shapes are illustrative.</desc>
+<style>
+.bd-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.bd-n0 { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bd-f { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.bd-g { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 4; }
+.bd-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-fl { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bd-gl { font-size: 12px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.bd-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bd-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="bd-t" x="60" y="36">f(n) = O(g(n))</text>
+<path class="bd-axis" d="M 60,60 V 250 H 290"/>
+<path class="bd-n0" d="M 164.7,60 V 250"/>
+<text class="bd-el" x="164.7" y="266" text-anchor="middle">n₀</text>
+<text class="bd-el" x="290" y="266" text-anchor="end">n</text>
+<path class="bd-g" d="M 60.0,250.0 L 290.0,71.9"/>
+<text class="bd-gl" x="286.0" y="65.9" text-anchor="end">c · g(n)</text>
+<path class="bd-f" d="M 60.0,214.4 L 62.3,212.0 L 64.6,209.7 L 66.9,207.5 L 69.2,205.5 L 71.5,203.6 L 73.8,202.0 L 76.1,200.7 L 78.4,199.7 L 80.7,198.9 L 83.0,198.4 L 85.3,198.2 L 87.6,198.2 L 89.9,198.4 L 92.2,198.7 L 94.5,199.1 L 96.8,199.6 L 99.1,200.0 L 101.4,200.4 L 103.7,200.7 L 106.0,200.8 L 108.3,200.6 L 110.6,200.3 L 112.9,199.6 L 115.2,198.7 L 117.5,197.5 L 119.8,196.0 L 122.1,194.2 L 124.4,192.3 L 126.7,190.1 L 129.0,187.9 L 131.3,185.5 L 133.6,183.1 L 135.9,180.8 L 138.2,178.6 L 140.5,176.4 L 142.8,174.5 L 145.1,172.8 L 147.4,171.4 L 149.7,170.2 L 152.0,169.3 L 154.3,168.7 L 156.6,168.4 L 158.9,168.3 L 161.2,168.4 L 163.5,168.7 L 165.8,169.1 L 168.1,169.5 L 170.4,170.0 L 172.7,170.4 L 175.0,170.8 L 177.3,170.9 L 179.6,170.9 L 181.9,170.6 L 184.2,170.1 L 186.5,169.2 L 188.8,168.2 L 191.1,166.8 L 193.4,165.1 L 195.7,163.3 L 198.0,161.2 L 200.3,159.0 L 202.6,156.7 L 204.9,154.3 L 207.2,151.9 L 209.5,149.6 L 211.8,147.5 L 214.1,145.4 L 216.4,143.7 L 218.7,142.1 L 221.0,140.8 L 223.3,139.8 L 225.6,139.1 L 227.9,138.6 L 230.2,138.5 L 232.5,138.5 L 234.8,138.7 L 237.1,139.1 L 239.4,139.5 L 241.7,140.0 L 244.0,140.4 L 246.3,140.8 L 248.6,141.0 L 250.9,141.1 L 253.2,140.9 L 255.5,140.5 L 257.8,139.8 L 260.1,138.8 L 262.4,137.5 L 264.7,136.0 L 267.0,134.2 L 269.3,132.2 L 271.6,130.1 L 273.9,127.8 L 276.2,125.4 L 278.5,123.1 L 280.8,120.7 L 283.1,118.5 L 285.4,116.4 L 287.7,114.5 L 290.0,112.9"/>
+<text class="bd-fl" x="294.0" y="116.9">f(n)</text>
+<text class="bd-s" x="60" y="290">f(n) stays below c · g(n)</text>
+<text class="bd-s" x="60" y="306">for every n ≥ n₀</text>
+<text class="bd-t" x="340" y="36">f(n) = Ω(g(n))</text>
+<path class="bd-axis" d="M 340,60 V 250 H 570"/>
+<path class="bd-n0" d="M 363.0,60 V 250"/>
+<text class="bd-el" x="363.0" y="266" text-anchor="middle">n₀</text>
+<text class="bd-el" x="570" y="266" text-anchor="end">n</text>
+<path class="bd-g" d="M 340.0,250.0 L 570.0,196.6"/>
+<text class="bd-gl" x="574.0" y="238" text-anchor="end">c · g(n)</text>
+<path class="bd-f" d="M 340.0,214.4 L 342.3,212.0 L 344.6,209.7 L 346.9,207.5 L 349.2,205.5 L 351.5,203.6 L 353.8,202.0 L 356.1,200.7 L 358.4,199.7 L 360.7,198.9 L 363.0,198.4 L 365.3,198.2 L 367.6,198.2 L 369.9,198.4 L 372.2,198.7 L 374.5,199.1 L 376.8,199.6 L 379.1,200.0 L 381.4,200.4 L 383.7,200.7 L 386.0,200.8 L 388.3,200.6 L 390.6,200.3 L 392.9,199.6 L 395.2,198.7 L 397.5,197.5 L 399.8,196.0 L 402.1,194.2 L 404.4,192.3 L 406.7,190.1 L 409.0,187.9 L 411.3,185.5 L 413.6,183.1 L 415.9,180.8 L 418.2,178.6 L 420.5,176.4 L 422.8,174.5 L 425.1,172.8 L 427.4,171.4 L 429.7,170.2 L 432.0,169.3 L 434.3,168.7 L 436.6,168.4 L 438.9,168.3 L 441.2,168.4 L 443.5,168.7 L 445.8,169.1 L 448.1,169.5 L 450.4,170.0 L 452.7,170.4 L 455.0,170.8 L 457.3,170.9 L 459.6,170.9 L 461.9,170.6 L 464.2,170.1 L 466.5,169.2 L 468.8,168.2 L 471.1,166.8 L 473.4,165.1 L 475.7,163.3 L 478.0,161.2 L 480.3,159.0 L 482.6,156.7 L 484.9,154.3 L 487.2,151.9 L 489.5,149.6 L 491.8,147.5 L 494.1,145.4 L 496.4,143.7 L 498.7,142.1 L 501.0,140.8 L 503.3,139.8 L 505.6,139.1 L 507.9,138.6 L 510.2,138.5 L 512.5,138.5 L 514.8,138.7 L 517.1,139.1 L 519.4,139.5 L 521.7,140.0 L 524.0,140.4 L 526.3,140.8 L 528.6,141.0 L 530.9,141.1 L 533.2,140.9 L 535.5,140.5 L 537.8,139.8 L 540.1,138.8 L 542.4,137.5 L 544.7,136.0 L 547.0,134.2 L 549.3,132.2 L 551.6,130.1 L 553.9,127.8 L 556.2,125.4 L 558.5,123.1 L 560.8,120.7 L 563.1,118.5 L 565.4,116.4 L 567.7,114.5 L 570.0,112.9"/>
+<text class="bd-fl" x="574.0" y="116.9">f(n)</text>
+<text class="bd-s" x="340" y="290">f(n) stays above c · g(n)</text>
+<text class="bd-s" x="340" y="306">for every n ≥ n₀</text>
+<text class="bd-t" x="620" y="36">f(n) = Θ(g(n))</text>
+<path class="bd-axis" d="M 620,60 V 250 H 850"/>
+<path class="bd-n0" d="M 724.6,60 V 250"/>
+<text class="bd-el" x="724.6" y="266" text-anchor="middle">n₀</text>
+<text class="bd-el" x="850" y="266" text-anchor="end">n</text>
+<path class="bd-g" d="M 620.0,250.0 L 850.0,71.9"/>
+<text class="bd-gl" x="846.0" y="65.9" text-anchor="end">c₂ · g(n)</text>
+<path class="bd-g" d="M 620.0,250.0 L 850.0,196.6"/>
+<text class="bd-gl" x="854.0" y="238" text-anchor="end">c₁ · g(n)</text>
+<path class="bd-f" d="M 620.0,214.4 L 622.3,212.0 L 624.6,209.7 L 626.9,207.5 L 629.2,205.5 L 631.5,203.6 L 633.8,202.0 L 636.1,200.7 L 638.4,199.7 L 640.7,198.9 L 643.0,198.4 L 645.3,198.2 L 647.6,198.2 L 649.9,198.4 L 652.2,198.7 L 654.5,199.1 L 656.8,199.6 L 659.1,200.0 L 661.4,200.4 L 663.7,200.7 L 666.0,200.8 L 668.3,200.6 L 670.6,200.3 L 672.9,199.6 L 675.2,198.7 L 677.5,197.5 L 679.8,196.0 L 682.1,194.2 L 684.4,192.3 L 686.7,190.1 L 689.0,187.9 L 691.3,185.5 L 693.6,183.1 L 695.9,180.8 L 698.2,178.6 L 700.5,176.4 L 702.8,174.5 L 705.1,172.8 L 707.4,171.4 L 709.7,170.2 L 712.0,169.3 L 714.3,168.7 L 716.6,168.4 L 718.9,168.3 L 721.2,168.4 L 723.5,168.7 L 725.8,169.1 L 728.1,169.5 L 730.4,170.0 L 732.7,170.4 L 735.0,170.8 L 737.3,170.9 L 739.6,170.9 L 741.9,170.6 L 744.2,170.1 L 746.5,169.2 L 748.8,168.2 L 751.1,166.8 L 753.4,165.1 L 755.7,163.3 L 758.0,161.2 L 760.3,159.0 L 762.6,156.7 L 764.9,154.3 L 767.2,151.9 L 769.5,149.6 L 771.8,147.5 L 774.1,145.4 L 776.4,143.7 L 778.7,142.1 L 781.0,140.8 L 783.3,139.8 L 785.6,139.1 L 787.9,138.6 L 790.2,138.5 L 792.5,138.5 L 794.8,138.7 L 797.1,139.1 L 799.4,139.5 L 801.7,140.0 L 804.0,140.4 L 806.3,140.8 L 808.6,141.0 L 810.9,141.1 L 813.2,140.9 L 815.5,140.5 L 817.8,139.8 L 820.1,138.8 L 822.4,137.5 L 824.7,136.0 L 827.0,134.2 L 829.3,132.2 L 831.6,130.1 L 833.9,127.8 L 836.2,125.4 L 838.5,123.1 L 840.8,120.7 L 843.1,118.5 L 845.4,116.4 L 847.7,114.5 L 850.0,112.9"/>
+<text class="bd-fl" x="854.0" y="116.9">f(n)</text>
+<text class="bd-s" x="620" y="290">f(n) stays between c₁ · g(n) and c₂ · g(n)</text>
+<text class="bd-s" x="620" y="306">for every n ≥ n₀</text>
+</g>
+</svg>

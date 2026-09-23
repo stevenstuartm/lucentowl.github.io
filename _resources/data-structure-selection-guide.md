@@ -1,10 +1,16 @@
 ---
-title: "Practical Decision Guide"
-layout: guide
-category: Data Structures & Algorithms
-subcategory: Fundamentals
-description: "Practical guide for choosing the right data structure and algorithm for your problem, comparing interview practices with production best practices."
-tags: [algorithms, data-structures, decision-making, practical, reference]
+title: "Data Structure and Algorithm Selection Guide"
+layout: resource
+type: reference
+category: "Data Structures & Algorithms"
+description: "Selection tables and decision trees for picking a data structure or algorithm, and when to use a .NET built-in instead of writing your own."
+last_updated: 2026-09-23
+tags: [decision-making, data-structures, algorithm-selection, dotnet-collections]
+related_guides:
+  - /study-guides/dsa/big-o-basics.html
+  - /study-guides/dsa/hash-tables.html
+  - /study-guides/dsa/sorting-algorithms.html
+  - /study-guides/dsa/graphs-advanced.html
 ---
 
 ## Quick Data Structure Selection
@@ -32,6 +38,40 @@ tags: [algorithms, data-structures, decision-making, practical, reference]
 | **Shortest path (weighted)** | Dijkstra's | A* with heuristic | BFS on weighted |
 | **Finding any path** | DFS | BFS | Complex pathfinding |
 | **Tree traversal** | Built-in iterator | Recursive DFS/BFS | Manual stack |
+
+## Decision Tree for Algorithm Selection
+
+### Sorting
+```
+Is data nearly sorted?
+├─ Yes → Insertion Sort O(n) best case
+└─ No → Is stability required?
+   ├─ Yes → Merge Sort O(n log n) guaranteed stable
+   └─ No → Is space limited?
+      ├─ Yes → Heap Sort O(n log n), O(1) space
+      └─ No → Quick Sort O(n log n) average, fast in practice
+```
+
+### Searching
+```
+Is data sorted?
+├─ Yes → Binary Search O(log n)
+└─ No → Multiple searches on same data?
+   ├─ Yes → Build hash table O(n), then O(1) searches
+   └─ No → Linear Search O(n)
+```
+
+### Graph Traversal
+```
+Need shortest path?
+├─ Yes → Weights?
+│  ├─ Positive → Dijkstra O((V+E) log V)
+│  ├─ None → BFS O(V+E)
+│  └─ Negative → Bellman-Ford O(VE)
+└─ No → Any path?
+   ├─ DFS O(V+E) - uses less memory
+   └─ BFS O(V+E) - level-by-level
+```
 
 ## Modern Reality Check
 
@@ -99,22 +139,6 @@ tags: [algorithms, data-structures, decision-making, practical, reference]
 - **Use libraries** for complex graph algorithms (QuikGraph, Microsoft.Msagl for C#)
 - **Common in:** Social networks, maps, dependency management, game AI
 
-## Interview vs Production Mindset
-
-### In Interviews:
-1. **Start with brute force**: Get working solution first
-2. **Optimize iteratively**: Identify bottlenecks, improve step by step
-3. **Implement from scratch**: Show algorithmic thinking
-4. **State complexity**: Always analyze time/space trade-offs
-5. **Consider edge cases**: Empty input, single element, duplicates
-
-### In Production:
-1. **Use well-tested libraries**: Don't reinvent wheels
-2. **Profile before optimizing**: Measure actual bottlenecks
-3. **Prioritize readability**: Maintainable code beats clever code
-4. **Consider total cost**: Development time, maintenance, bug risk
-5. **Plan for scale**: But don't over-engineer for problems you don't have
-
 ## Red Flags - When You're Probably Overthinking
 
 - **Implementing your own hash table** (unless writing a database)
@@ -130,9 +154,3 @@ tags: [algorithms, data-structures, decision-making, practical, reference]
 - **Domain-specific constraints** (memory, real-time, embedded systems)
 - **Algorithm doesn't exist** in standard libraries for your use case
 - **Learning exercise** to understand concepts deeply
-
-## Bottom Line Philosophy
-
-**Modern software development** is about choosing the right abstraction and using well-tested libraries. **Understanding algorithms deeply** makes you better at recognizing patterns and solving new problems, even when you use existing implementations.
-
-**Focus your learning** on understanding when and why to use different approaches, rather than memorizing implementation details you can look up.

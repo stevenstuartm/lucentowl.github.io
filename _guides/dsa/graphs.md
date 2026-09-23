@@ -1,5 +1,5 @@
 ---
-title: "Graphs & Graph Algorithms"
+title: "Graph Fundamentals & Traversal"
 layout: guide
 category: Data Structures & Algorithms
 subcategory: Graphs
@@ -313,6 +313,61 @@ class Program
 
 ---
 
+## Weighted Graphs
+
+### Weighted Graph Implementation
+```csharp
+public class WeightedGraph
+{
+    public class Edge
+    {
+        public int Destination { get; set; }
+        public int Weight { get; set; }
+
+        public Edge(int destination, int weight)
+        {
+            Destination = destination;
+            Weight = weight;
+        }
+    }
+
+    private Dictionary<int, List<Edge>> adjacencyList;
+
+    public WeightedGraph()
+    {
+        adjacencyList = new Dictionary<int, List<Edge>>();
+    }
+
+    public void AddVertex(int vertex)
+    {
+        if (!adjacencyList.ContainsKey(vertex))
+        {
+            adjacencyList[vertex] = new List<Edge>();
+        }
+    }
+
+    public void AddEdge(int source, int destination, int weight, bool bidirectional = true)
+    {
+        AddVertex(source);
+        AddVertex(destination);
+
+        adjacencyList[source].Add(new Edge(destination, weight));
+
+        if (bidirectional)
+        {
+            adjacencyList[destination].Add(new Edge(source, weight));
+        }
+    }
+
+    public List<Edge> GetNeighbors(int vertex)
+    {
+        return adjacencyList.ContainsKey(vertex) ? adjacencyList[vertex] : new List<Edge>();
+    }
+}
+```
+
+---
+
 ## Graph Search Algorithms
 
 ### Depth-First Search (DFS)
@@ -481,261 +536,90 @@ public static int CountConnectedComponents<T>(Graph<T> graph)
 
 ---
 
-## Advanced Graph Algorithms
+## Common Graph Patterns
 
-### Dijkstra's Algorithm (Shortest Path with Weights)
-
-**When to use:**
-- Finding shortest path in weighted graphs with non-negative weights
-- GPS navigation systems
-- Network routing protocols
-- Cost optimization problems
-
-**Time Complexity:** O((V + E) log V) with binary heap
-
-
-#### C# Implementation
+### Finding Connected Components
 ```csharp
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-public static class Dijkstra
+public static class GraphAnalysis
 {
-    public static (Dictionary<T, double> distances, Dictionary<T, T> previous)
-        FindShortestPaths<T>(Graph<T> graph, T startVertex)
+    public static List<List<int>> FindConnectedComponents(Graph graph, List<int> allVertices)
     {
-        var distances = new Dictionary<T, double>();
-        var previous = new Dictionary<T, T>();
-        var priorityQueue = new SortedSet<(double distance, T vertex)>();
-        var visited = new HashSet<T>();
+        var visited = new HashSet<int>();
+        var components = new List<List<int>>();
 
-        // Initialize distances
-        foreach (var vertex in graph.GetVertices())
+        foreach (int vertex in allVertices)
         {
-            distances[vertex] = double.PositiveInfinity;
-            previous[vertex] = default(T);
-        }
-        distances[startVertex] = 0;
-
-        priorityQueue.Add((0, startVertex));
-
-        while (priorityQueue.Count > 0)
-        {
-            var (currentDistance, currentVertex) = priorityQueue.Min;
-            priorityQueue.Remove(priorityQueue.Min);
-
-            if (visited.Contains(currentVertex))
-                continue;
-
-            visited.Add(currentVertex);
-
-            // Check all neighbors
-            var neighbors = graph.GetNeighbors(currentVertex);
-            foreach (var (neighbor, weight) in neighbors)
+            if (!visited.Contains(vertex))
             {
-                double distance = currentDistance + weight;
-
-                if (distance < distances[neighbor])
-                {
-                    distances[neighbor] = distance;
-                    previous[neighbor] = currentVertex;
-                    priorityQueue.Add((distance, neighbor));
-                }
+                var component = new List<int>();
+                DFSComponent(graph, vertex, visited, component);
+                components.Add(component);
             }
         }
 
-        return (distances, previous);
+        return components;
     }
 
-    public static List<T> GetShortestPath<T>(Dictionary<T, T> previous, T start, T end)
+    private static void DFSComponent(Graph graph, int vertex, HashSet<int> visited, List<int> component)
     {
-        var path = new List<T>();
-        var current = end;
+        visited.Add(vertex);
+        component.Add(vertex);
 
-        while (!EqualityComparer<T>.Default.Equals(current, default(T)))
+        foreach (int neighbor in graph.GetNeighbors(vertex))
         {
-            path.Add(current);
-            current = previous[current];
-        }
-
-        if (!path[path.Count - 1].Equals(start))
-            return null; // No path exists
-
-        path.Reverse();
-        return path;
-    }
-}
-
-// Example usage with weighted graph
-class DijkstraExample
-{
-    static void RunExample()
-    {
-        var weightedGraph = new Graph<string>(directed: false);
-        string[] cities = {"A", "B", "C", "D", "E"};
-
-        var cityVertices = new Dictionary<string, Vertex<string>>();
-        foreach (var city in cities)
-        {
-            var vertex = new Vertex<string>(city);
-            cityVertices[city] = vertex;
-            weightedGraph.AddVertex(vertex);
-        }
-
-        // Add weighted edges
-        var edges = new[]
-        {
-            ("A", "B", 4), ("A", "C", 2), ("B", "C", 1), ("B", "D", 5),
-            ("C", "D", 8), ("C", "E", 10), ("D", "E", 2)
-        };
-
-        foreach (var (fromCity, toCity, weight) in edges)
-        {
-            weightedGraph.AddEdge(cityVertices[fromCity], cityVertices[toCity], weight);
-        }
-
-        var (distances, previous) = Dijkstra.FindShortestPaths(weightedGraph, "A");
-        Console.WriteLine("Shortest distances from A:");
-
-        foreach (var (vertex, distance) in distances)
-        {
-            var path = Dijkstra.GetShortestPath(previous, "A", vertex);
-            Console.WriteLine($"  To {vertex}: {distance} via {(path != null ? string.Join(" -> ", path) : "No path")}");
+            if (!visited.Contains(neighbor))
+            {
+                DFSComponent(graph, neighbor, visited, component);
+            }
         }
     }
 }
 ```
 
-### A* Algorithm (Heuristic Search)
-
-**When to use:**
-- Pathfinding with known goal location
-- Game AI movement
-- GPS navigation with traffic considerations
-- Robotics path planning
-
-A* uses a heuristic function to guide search toward the goal, making it more efficient than Dijkstra for single-target searches.
-
-#### C# Implementation
+### Cycle Detection in Undirected Graph
 ```csharp
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-public static class AStar
+public static bool HasCycleUndirected(Graph graph, List<int> allVertices)
 {
-    public delegate double HeuristicFunction((int x, int y) pos1, (int x, int y) pos2);
+    var visited = new HashSet<int>();
 
-    public static double ManhattanDistance((int x, int y) pos1, (int x, int y) pos2)
+    foreach (int vertex in allVertices)
     {
-        return Math.Abs(pos1.x - pos2.x) + Math.Abs(pos1.y - pos2.y);
-    }
-
-    public static double EuclideanDistance((int x, int y) pos1, (int x, int y) pos2)
-    {
-        return Math.Sqrt(Math.Pow(pos1.x - pos2.x, 2) + Math.Pow(pos1.y - pos2.y, 2));
-    }
-
-    public static List<T> FindPath<T>(Graph<T> graph, T start, T goal,
-        Dictionary<T, (int x, int y)> positions, HeuristicFunction heuristic = null)
-    {
-        if (heuristic == null)
-            heuristic = ManhattanDistance;
-
-        var openSet = new SortedSet<(double f, T vertex)>();
-        var cameFrom = new Dictionary<T, T>();
-
-        var gScore = new Dictionary<T, double>();
-        var fScore = new Dictionary<T, double>();
-
-        foreach (var vertex in graph.GetVertices())
+        if (!visited.Contains(vertex))
         {
-            gScore[vertex] = double.PositiveInfinity;
-            fScore[vertex] = double.PositiveInfinity;
-        }
-
-        gScore[start] = 0;
-        fScore[start] = heuristic(positions[start], positions[goal]);
-        openSet.Add((fScore[start], start));
-
-        while (openSet.Count > 0)
-        {
-            var (_, current) = openSet.Min;
-            openSet.Remove(openSet.Min);
-
-            if (current.Equals(goal))
+            if (DFSCycleCheck(graph, vertex, -1, visited))
             {
-                // Reconstruct path
-                var path = new List<T>();
-                while (cameFrom.ContainsKey(current))
-                {
-                    path.Add(current);
-                    current = cameFrom[current];
-                }
-                path.Add(start);
-                path.Reverse();
-                return path;
-            }
-
-            foreach (var (neighbor, weight) in graph.GetNeighbors(current))
-            {
-                double tentativeGScore = gScore[current] + weight;
-
-                if (tentativeGScore < gScore[neighbor])
-                {
-                    cameFrom[neighbor] = current;
-                    gScore[neighbor] = tentativeGScore;
-                    fScore[neighbor] = gScore[neighbor] + heuristic(positions[neighbor], positions[goal]);
-                    openSet.Add((fScore[neighbor], neighbor));
-                }
+                return true;
             }
         }
-
-        return null; // No path found
     }
+
+    return false;
 }
 
-// Example usage for grid pathfinding
-class AStarExample
+private static bool DFSCycleCheck(Graph graph, int vertex, int parent, HashSet<int> visited)
 {
-    static void RunExample()
+    visited.Add(vertex);
+
+    foreach (int neighbor in graph.GetNeighbors(vertex))
     {
-        var gridGraph = new Graph<string>(directed: false);
-        var positions = new Dictionary<string, (int x, int y)>
+        if (!visited.Contains(neighbor))
         {
-            {"A", (0, 0)}, {"B", (1, 0)}, {"C", (2, 0)},
-            {"D", (0, 1)}, {"E", (1, 1)}, {"F", (2, 1)},
-            {"G", (0, 2)}, {"H", (1, 2)}, {"I", (2, 2)}
-        };
-
-        var vertices = new Dictionary<string, Vertex<string>>();
-        foreach (var (pos, _) in positions)
-        {
-            var vertex = new Vertex<string>(pos);
-            vertices[pos] = vertex;
-            gridGraph.AddVertex(vertex);
+            if (DFSCycleCheck(graph, neighbor, vertex, visited))
+            {
+                return true;
+            }
         }
-
-        // Add edges between adjacent cells
-        var adjacencies = new[]
+        else if (neighbor != parent)
         {
-            ("A", "B"), ("B", "C"), ("A", "D"), ("B", "E"), ("C", "F"),
-            ("D", "E"), ("E", "F"), ("D", "G"), ("E", "H"), ("F", "I"),
-            ("G", "H"), ("H", "I")
-        };
-
-        foreach (var (fromCell, toCell) in adjacencies)
-        {
-            gridGraph.AddEdge(vertices[fromCell], vertices[toCell], 1);
+            return true; // Found cycle
         }
-
-        // Find path from A to I
-        var path = AStar.FindPath(gridGraph, "A", "I", positions);
-        Console.WriteLine($"A* path from A to I: {(path != null ? string.Join(" -> ", path) : "No path")}");
     }
+
+    return false;
 }
 ```
+
+---
 
 ## Common Interview Problems
 

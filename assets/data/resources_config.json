@@ -3,6 +3,8 @@
     "plan-task-skill.md",
     "refine-prose-skill.md",
     "big-o-complexity-quick-reference.md",
+    "data-structure-selection-guide.md",
+    "dsa-diagrams.md",
     "adr-template.md",
     "project-charter-template.md",
     "aaa-gate-readiness.md",
@@ -41,6 +43,8 @@
     "machine-learning-diagrams.md",
     "llm-systems-diagrams.md",
     "database-selection-matrix.md",
-    "database-diagrams.md"
+    "database-diagrams.md",
+    "git-quick-reference.md",
+    "github-quick-reference.md"
   ]
 }

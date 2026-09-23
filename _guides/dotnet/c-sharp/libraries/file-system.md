@@ -3,331 +3,275 @@ title: "C# File System Operations"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "File and directory operations with System.IO including reading, writing, paths, async file handling, and binary read/write with BinaryWriter and BinaryReader."
-tags: [c-sharp, dotnet, file-io, streams, async, practical]
+description: "System.IO in practice: whole-file and streaming reads and writes, encodings, paths and the Path.Combine traversal trap, FileStream modes and sharing, crash-safe writes, directory enumeration, FileSystemWatcher's limits, the I/O exception hierarchy, and custom binary formats with BinaryWriter and BinaryReader."
+tags: [file-io, filestream, path, filesystemwatcher, binarywriter, streams, practical]
 ---
 
-## File Operations Overview
+## Whole-File Operations
 
-System.IO provides classes for file system operations. Most operations have both synchronous and async variants.
+The static `File` methods open a file, do one thing, and close it. For files that comfortably fit in memory, they're all you need:
 
 ```csharp
-using System.IO;
-
-// Check existence
-bool exists = File.Exists("data.txt");
-bool dirExists = Directory.Exists("logs");
-
-// Simple read/write
-string content = File.ReadAllText("config.json");
+string text = File.ReadAllText("config.json");
 File.WriteAllText("output.txt", "Hello, World!");
 
-// Read/write lines
 string[] lines = File.ReadAllLines("data.csv");
 File.WriteAllLines("output.csv", lines);
 
-// Read/write bytes
 byte[] bytes = File.ReadAllBytes("image.png");
 File.WriteAllBytes("copy.png", bytes);
+
+File.AppendAllText("log.txt", "New entry" + Environment.NewLine);
 ```
 
-## Path Operations
+Each has an `Async` counterpart (`ReadAllTextAsync`, `WriteAllLinesAsync`, and so on) taking a `CancellationToken`. Async file I/O is worth it where a thread must not block, like a UI thread or a server's request path. In a console tool or a batch job, the synchronous calls are simpler and give up nothing.
 
-<div class="callout callout--tip">
-<p class="callout__title">Always Use Path.Combine</p>
-<p>Never concatenate paths with string operations. <code>Path.Combine</code> handles cross-platform separators correctly.</p>
-</div>
+### Encodings
 
-Use `Path` class for cross-platform path manipulation.
+Reading detects a byte order mark and otherwise assumes UTF-8. Writing uses UTF-8 **without** a BOM. Passing `Encoding.UTF8` explicitly does the opposite of what most people expect: it writes the three BOM bytes `EF BB BF`, because that static instance is configured to emit one.
 
 ```csharp
-// Combine paths (handles separators correctly)
+File.WriteAllText("a.txt", "héllo");                 // 68 C3 A9 ...  no BOM
+File.WriteAllText("b.txt", "héllo", Encoding.UTF8);  // EF BB BF 68 ...  BOM
+File.WriteAllText("c.txt", "héllo", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));  // no BOM
+```
+
+Most tools on Linux, and many parsers, treat a BOM as content, so a file written with `Encoding.UTF8` can fail to parse as JSON or break a shell script's first line. Leave the encoding off, or pass a `UTF8Encoding` with the BOM disabled, unless the consumer requires one.
+
+## Streaming Large Files
+
+`ReadAllText` and `ReadAllLines` hold the whole file in memory. For a large file, read it a line or a chunk at a time:
+
+```csharp
+foreach (string line in File.ReadLines("large.log"))
+{
+    Process(line);
+}
+
+await foreach (string line in File.ReadLinesAsync("large.log", cancellationToken))   // .NET 7
+{
+    Process(line);
+}
+```
+
+`File.ReadLines` is lazy. It opens the file when enumeration starts and keeps it open until the enumeration finishes or is disposed, so a `foreach` that's still running, or an enumerator that's been abandoned undisposed, blocks other processes from deleting or replacing the file.
+
+For binary data, read into a reused buffer:
+
+```csharp
+await using FileStream stream = File.OpenRead("large.bin");
+byte[] buffer = new byte[81920];
+int read;
+while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+{
+    ProcessChunk(buffer.AsMemory(0, read));
+}
+```
+
+`ReadAsync` returns however many bytes are available, which can be fewer than the buffer holds before the end of the file. Always use the returned count, never `buffer.Length`. To copy one stream to another, `source.CopyToAsync(destination)` runs the same loop for you.
+
+`StreamReader` and `StreamWriter` sit over a stream and handle encoding, buffering, and line splitting:
+
+```csharp
+await using var writer = new StreamWriter("report.txt", append: false);
+await writer.WriteLineAsync("Header");
+
+using var reader = new StreamReader("report.txt");
+string? line;
+while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+{
+    Process(line);
+}
+```
+
+A `StreamWriter` buffers, and what's in the buffer reaches the file only on `Flush` or `Dispose`. A writer that's never disposed loses its last few kilobytes.
+
+## Paths
+
+The `Path` class manipulates path strings without touching the disk:
+
+```csharp
 string fullPath = Path.Combine("folder", "subfolder", "file.txt");
 
-// Get path components
-string dir = Path.GetDirectoryName(fullPath);      // folder/subfolder
-string file = Path.GetFileName(fullPath);           // file.txt
-string name = Path.GetFileNameWithoutExtension(fullPath);  // file
-string ext = Path.GetExtension(fullPath);           // .txt
-
-// Change extension
-string newPath = Path.ChangeExtension(fullPath, ".json");
-
-// Get absolute path
-string absolute = Path.GetFullPath("relative/path");
-
-// Special folders
-string temp = Path.GetTempPath();
-string tempFile = Path.GetTempFileName();  // Creates empty temp file
-
-// .NET 6+ - Path.Exists checks both files and directories
-bool exists = Path.Exists("something");
+Path.GetDirectoryName(fullPath);             // folder\subfolder on Windows, folder/subfolder elsewhere
+Path.GetFileName(fullPath);                  // file.txt
+Path.GetFileNameWithoutExtension(fullPath);  // file
+Path.GetExtension(fullPath);                 // .txt
+Path.ChangeExtension(fullPath, ".json");     // The same path ending in file.json
+Path.GetFullPath("relative/path");           // Resolved against the current directory
 ```
 
-## Reading Files
+Build paths with `Path.Combine` or `Path.Join` rather than string concatenation, so the separator is right on every platform.
 
-### Text Files
+### Combine Discards Everything Before an Absolute Segment
+
+`Path.Combine` treats a rooted argument as a fresh start and drops everything before it:
 
 ```csharp
-// Read all at once (small files)
-string content = File.ReadAllText("file.txt");
-string[] lines = File.ReadAllLines("file.txt");
-
-// Read line by line (memory efficient)
-foreach (string line in File.ReadLines("large.txt"))
-{
-    ProcessLine(line);
-}
-
-// Async reading
-string content = await File.ReadAllTextAsync("file.txt");
-string[] lines = await File.ReadAllLinesAsync("file.txt");
-
-// With specific encoding
-string content = File.ReadAllText("file.txt", Encoding.UTF8);
+Path.Combine("uploads", @"C:\Windows\win.ini");   // C:\Windows\win.ini
+Path.Combine("uploads", "/etc/passwd");            // /etc/passwd
+Path.Join("uploads", @"C:\Windows\win.ini");      // uploads\C:\Windows\win.ini
 ```
 
-### Binary Files
+When any segment comes from a user, such as an uploaded file's name, `Combine` turns it into a path traversal. `Path.Join` (.NET Core 3.0) concatenates with a separator and never discards, but neither method resolves `..`, so a name like `..\..\secret.txt` escapes the directory either way. Treat user input as a file *name*, and confirm the resolved path stays inside the intended directory:
 
 ```csharp
-byte[] data = File.ReadAllBytes("file.bin");
-byte[] data = await File.ReadAllBytesAsync("file.bin");
-
-// Using FileStream for large files
-await using var stream = File.OpenRead("large.bin");
-var buffer = new byte[4096];
-int bytesRead;
-while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
+string SafePathFor(string baseDirectory, string userFileName)
 {
-    ProcessChunk(buffer.AsSpan(0, bytesRead));
+    string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDirectory));
+    string candidate = Path.GetFullPath(Path.Join(root, Path.GetFileName(userFileName)));
+
+    if (!candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        throw new ArgumentException("Invalid file name.", nameof(userFileName));
+
+    return candidate;
 }
 ```
 
-### StreamReader
+`Path.GetFileName` strips any directory part the user supplied, `GetFullPath` resolves what remains, and the prefix check rejects anything that still lands outside `root`. Better still, store uploads under a name you generate and keep the user's name only as metadata.
 
-<div class="callout callout--note">
-<p class="callout__title">StreamReader vs ReadAllText</p>
-<p>Use <code>StreamReader</code> for line-by-line processing of large files (memory efficient). Use <code>File.ReadAllText</code> for small files where you need all content at once.</p>
-</div>
+### Temporary Files
+
+`Path.GetTempFileName()` creates an empty file with a predictable name pattern in the shared temp directory, and on Windows it fails once 65,535 of them accumulate. `Directory.CreateTempSubdirectory()` (.NET 7) creates a uniquely named directory for the process's scratch files, and `Path.GetRandomFileName()` returns a random name without creating anything.
+
+## FileStream: Modes, Access, and Sharing
+
+`File.OpenRead`, `File.Create`, and friends are shortcuts for a `FileStream` with particular settings. Three enums define what an open does:
+
+| Setting | Controls | Values that matter |
+|---|---|---|
+| `FileMode` | What happens if the file does or doesn't exist | `CreateNew` fails if it exists. `Create` truncates it. `Open` fails if it's missing. `OpenOrCreate` does neither and **doesn't truncate**. `Append` seeks to the end |
+| `FileAccess` | What this handle may do | `Read`, `Write`, `ReadWrite` |
+| `FileShare` | What **other** handles may do while this one is open | `None`, `Read`, `Write`, `ReadWrite`, `Delete` |
+
+`File.OpenWrite` uses `OpenOrCreate`, so writing `abc` over a file containing `0123456789` leaves `abc3456789`. Use `File.Create` or `FileMode.Create` to replace contents.
+
+Sharing is negotiated both ways. An open succeeds only if its requested access is allowed by every existing handle's `FileShare`, and its own `FileShare` allows every existing handle's access. `File.ReadAllText` opens with `FileShare.Read`, which refuses a file another handle has open for writing, so reading a log that another process is still writing throws `IOException`. Open it with `FileShare.ReadWrite` instead:
 
 ```csharp
-using var reader = new StreamReader("file.txt");
+using var stream = new FileStream("app.log", FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+using var reader = new StreamReader(stream);
+```
 
-// Read line by line
-string? line;
-while ((line = await reader.ReadLineAsync()) != null)
+`FileStreamOptions` (.NET 6) collects these settings with the buffer size, a preallocation size, and `FileOptions` such as `Asynchronous`:
+
+```csharp
+await using var stream = new FileStream("data.bin", new FileStreamOptions
 {
-    Console.WriteLine(line);
+    Mode = FileMode.Create,
+    Access = FileAccess.Write,
+    Share = FileShare.None,
+    Options = FileOptions.Asynchronous,
+    PreallocationSize = expectedLength
+});
+```
+
+## Writing Without Corrupting the File
+
+Overwriting a file in place is not safe against a crash. `File.WriteAllText` truncates the file first and then writes, so a crash or power loss in between leaves it empty or half-written. A reader opening it at the wrong moment sees the same partial contents.
+
+Write to a temporary file in the same directory, force it to disk, and then rename it over the original:
+
+```csharp
+public static async Task WriteAtomicallyAsync(string path, string content, CancellationToken ct = default)
+{
+    string tempPath = Path.Join(Path.GetDirectoryName(Path.GetFullPath(path)), Path.GetRandomFileName());
+
+    await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+        bufferSize: 4096, FileOptions.Asynchronous))
+    await using (var writer = new StreamWriter(stream))
+    {
+        await writer.WriteAsync(content.AsMemory(), ct);
+        await writer.FlushAsync(ct);
+        stream.Flush(flushToDisk: true);
+    }
+
+    File.Move(tempPath, path, overwrite: true);
 }
-
-// Read to end
-string all = await reader.ReadToEndAsync();
-
-// With encoding
-using var reader = new StreamReader("file.txt", Encoding.UTF8);
 ```
 
-## Writing Files
+The rename is what makes this work. Within one volume it replaces the directory entry rather than copying data, so readers see either the whole old file or the whole new one, and a crash before the rename leaves the original intact beside a stray temp file. The temp file must be in the same directory for that to hold. A rename across volumes becomes a copy and loses the guarantee. `Flush(flushToDisk: true)` matters because a rename can reach the disk before the data it points to, which after a power loss leaves a new name pointing at empty contents.
 
-### Text Files
+`File.Replace(source, destination, backup)` does the same swap and also keeps a backup of the old file. It throws `FileNotFoundException` if the destination doesn't exist yet, so first-time writes need `File.Move`.
 
-```csharp
-// Write all at once
-File.WriteAllText("file.txt", content);
-File.WriteAllLines("file.txt", lines);
-
-// Async writing
-await File.WriteAllTextAsync("file.txt", content);
-await File.WriteAllLinesAsync("file.txt", lines);
-
-// Append
-File.AppendAllText("log.txt", "New entry\n");
-await File.AppendAllTextAsync("log.txt", "New entry\n");
-File.AppendAllLines("log.txt", newLines);
-```
-
-### Binary Files
+## Directories
 
 ```csharp
-File.WriteAllBytes("file.bin", data);
-await File.WriteAllBytesAsync("file.bin", data);
+Directory.CreateDirectory("path/to/new/folder");   // Creates missing parents; no error if it exists
 
-// Using FileStream
-await using var stream = File.Create("file.bin");
-await stream.WriteAsync(data);
-```
-
-### StreamWriter
-
-```csharp
-// Create/overwrite
-await using var writer = new StreamWriter("file.txt");
-await writer.WriteLineAsync("First line");
-await writer.WriteAsync("More text");
-
-// Append
-await using var writer = new StreamWriter("file.txt", append: true);
-
-// With encoding and buffer
-await using var writer = new StreamWriter("file.txt", Encoding.UTF8,
-    new FileStreamOptions { BufferSize = 4096 });
-```
-
-## Directory Operations
-
-```csharp
-// Create directory (creates parent directories too)
-Directory.CreateDirectory("path/to/new/folder");
-
-// List contents
-string[] files = Directory.GetFiles("folder");
-string[] dirs = Directory.GetDirectories("folder");
-
-// Recursive search
-string[] allCsFiles = Directory.GetFiles("src", "*.cs", SearchOption.AllDirectories);
-
-// Enumerate (memory efficient for large directories)
-foreach (string file in Directory.EnumerateFiles("folder", "*.txt"))
+foreach (string file in Directory.EnumerateFiles("src", "*.cs", SearchOption.AllDirectories))
 {
     Console.WriteLine(file);
 }
 
-// Delete
-Directory.Delete("folder");                    // Must be empty
-Directory.Delete("folder", recursive: true);   // Delete all contents
-
-// Move/rename
+Directory.Delete("folder");                   // Throws IOException unless empty
+Directory.Delete("folder", recursive: true);  // Deletes the contents too
 Directory.Move("old/path", "new/path");
 ```
 
-## FileInfo and DirectoryInfo
+`EnumerateFiles` yields results as it walks the tree, while `GetFiles` builds the whole array before returning. Prefer the former for large trees, and whenever you might stop early.
 
-Object-oriented alternative with cached metadata.
+A recursive search with `SearchOption.AllDirectories` throws `UnauthorizedAccessException` at the first directory it can't read, which on a real disk usually aborts the whole walk. `EnumerationOptions` changes that, and its `IgnoreInaccessible` defaults to `true`:
 
 ```csharp
-// FileInfo
-var file = new FileInfo("document.pdf");
-if (file.Exists)
+var options = new EnumerationOptions
 {
-    Console.WriteLine($"Size: {file.Length} bytes");
-    Console.WriteLine($"Created: {file.CreationTime}");
-    Console.WriteLine($"Modified: {file.LastWriteTime}");
-
-    file.CopyTo("backup.pdf", overwrite: true);
-    file.MoveTo("new/location.pdf");
-    // file.Delete();
-}
-
-// DirectoryInfo
-var dir = new DirectoryInfo("logs");
-foreach (FileInfo f in dir.EnumerateFiles("*.log"))
-{
-    if (f.LastWriteTime < DateTime.Now.AddDays(-30))
-    {
-        f.Delete();
-    }
-}
-```
-
-## File Copy, Move, Delete
-
-```csharp
-// Copy
-File.Copy("source.txt", "dest.txt");
-File.Copy("source.txt", "dest.txt", overwrite: true);
-
-// Move (rename)
-File.Move("old.txt", "new.txt");
-File.Move("file.txt", "archive/file.txt", overwrite: true);  // .NET 5+
-
-// Delete
-File.Delete("file.txt");  // No error if doesn't exist
-
-// Replace (atomic on same volume)
-File.Replace("new.txt", "target.txt", "backup.txt");
-```
-
-## File Streams
-
-```csharp
-// FileMode: Create, CreateNew, Open, OpenOrCreate, Append, Truncate
-// FileAccess: Read, Write, ReadWrite
-// FileShare: None, Read, Write, ReadWrite
-
-await using var stream = new FileStream(
-    "file.bin",
-    FileMode.OpenOrCreate,
-    FileAccess.ReadWrite,
-    FileShare.Read,
-    bufferSize: 4096,
-    useAsync: true);
-
-// Or simpler
-await using var read = File.OpenRead("file.bin");
-await using var write = File.OpenWrite("file.bin");
-await using var create = File.Create("new.bin");
-```
-
-### Copy Stream to Stream
-
-```csharp
-await using var source = File.OpenRead("source.bin");
-await using var dest = File.Create("dest.bin");
-await source.CopyToAsync(dest);
-```
-
-## Common Patterns
-
-### Safe File Writing
-
-```csharp
-public async Task WriteFileSafelyAsync(string path, string content)
-{
-    var tempPath = path + ".tmp";
-    var backupPath = path + ".bak";
-
-    await File.WriteAllTextAsync(tempPath, content);
-
-    if (File.Exists(path))
-    {
-        File.Replace(tempPath, path, backupPath);
-    }
-    else
-    {
-        File.Move(tempPath, path);
-    }
-}
-```
-
-### Watch for Changes
-
-```csharp
-using var watcher = new FileSystemWatcher("folder")
-{
-    Filter = "*.txt",
-    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
-    EnableRaisingEvents = true
+    RecurseSubdirectories = true,
+    IgnoreInaccessible = true,
+    MatchCasing = MatchCasing.CaseInsensitive    // Default follows the platform: insensitive on Windows, sensitive on Linux
 };
 
-watcher.Changed += (s, e) => Console.WriteLine($"Changed: {e.FullPath}");
-watcher.Created += (s, e) => Console.WriteLine($"Created: {e.FullPath}");
-watcher.Deleted += (s, e) => Console.WriteLine($"Deleted: {e.FullPath}");
-watcher.Renamed += (s, e) => Console.WriteLine($"Renamed: {e.OldFullPath} -> {e.FullPath}");
+foreach (string file in Directory.EnumerateFiles("/data", "*.csv", options))
+    Console.WriteLine(file);
 ```
 
-### Read Lines with Index
+The casing default is a portability trap. `*.CSV` finds `report.csv` on Windows and nothing on Linux unless `MatchCasing` is set.
+
+### FileInfo and DirectoryInfo
+
+The `FileInfo` and `DirectoryInfo` classes wrap one path and expose its metadata as properties. They read that metadata once and cache it. A `FileInfo` created before the file exists keeps reporting `Exists == false` after the file is created, until you call `Refresh()`:
 
 ```csharp
-var numberedLines = File.ReadLines("file.txt")
-    .Select((line, index) => (Number: index + 1, Text: line));
+DateTimeOffset cutoff = timeProvider.GetUtcNow().AddDays(-30);
 
-foreach (var (number, text) in numberedLines)
+foreach (FileInfo f in new DirectoryInfo("logs").EnumerateFiles("*.log"))
 {
-    Console.WriteLine($"{number}: {text}");
+    if (f.LastWriteTimeUtc < cutoff.UtcDateTime)
+        f.Delete();
 }
 ```
 
-## Error Handling
+Compare with the `Utc` variants of the time properties. `LastWriteTime` is local time and shifts by an hour across a daylight-saving change.
+
+## Copy, Move, Delete
+
+```csharp
+File.Copy("source.txt", "dest.txt");                    // Throws IOException if dest exists
+File.Copy("source.txt", "dest.txt", overwrite: true);
+
+File.Move("old.txt", "new.txt");                        // Throws IOException if new.txt exists
+File.Move("file.txt", "archive/file.txt", overwrite: true);   // .NET Core 3.0
+
+File.Delete("file.txt");   // No error if the file is missing; DirectoryNotFoundException if the directory is
+```
+
+## Check-Then-Act Is a Race
+
+`File.Exists` followed by an open, or `Directory.Exists` followed by a delete, is a race with every other process on the machine. The file can appear, vanish, or be locked between the check and the call, so the call must handle failure anyway. Attempt the operation and handle the exception, and use the check only where the answer changes what you'd do, not as a guard. `FileMode.CreateNew` is the race-free "create only if it doesn't exist": it fails with `IOException` if another process got there first.
+
+`Path.Exists` (.NET 7) answers whether a path exists as either a file or a directory.
+
+## Exceptions
+
+| Exception | Derives from | Typical cause |
+|---|---|---|
+| `FileNotFoundException` | `IOException` | The file doesn't exist |
+| `DirectoryNotFoundException` | `IOException` | A directory in the path doesn't exist |
+| `PathTooLongException` | `IOException` | The path exceeds a platform limit |
+| `IOException` | `SystemException` | Sharing violation, file exists, directory not empty, disk full |
+| `UnauthorizedAccessException` | `SystemException`, **not** `IOException` | Permissions, a read-only file, or a path that's actually a directory |
+
+Because `UnauthorizedAccessException` isn't an `IOException`, `catch (IOException)` alone lets permission failures escape. Catch the specific types you can act on, and order them from most to least derived:
 
 ```csharp
 try
@@ -336,64 +280,61 @@ try
 }
 catch (FileNotFoundException)
 {
-    // File doesn't exist
+    // Use defaults
 }
-catch (DirectoryNotFoundException)
+catch (UnauthorizedAccessException ex)
 {
-    // Directory doesn't exist
-}
-catch (UnauthorizedAccessException)
-{
-    // Permission denied
+    logger.LogError(ex, "No permission to read {Path}", path);
+    throw;
 }
 catch (IOException ex)
 {
-    // Other I/O error (file in use, disk full, etc.)
+    // Often transient: locked by another process. A short retry can succeed
+    logger.LogWarning(ex, "Could not read {Path}", path);
 }
 ```
 
-## Binary Serialization
+## FileSystemWatcher
 
-### BinaryWriter and BinaryReader
-
-For custom binary formats and protocol implementations.
+`FileSystemWatcher` raises events when files in a directory change:
 
 ```csharp
-// Write binary data
-using var ms = new MemoryStream();
-using var writer = new BinaryWriter(ms);
+using var watcher = new FileSystemWatcher("inbox")
+{
+    Filter = "*.csv",
+    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
+    InternalBufferSize = 64 * 1024
+};
 
-writer.Write(42);              // Int32 (4 bytes)
-writer.Write("hello");         // Length-prefixed string
-writer.Write(3.14159);         // Double (8 bytes)
-writer.Write(true);            // Boolean (1 byte)
-writer.Write((byte)255);       // Byte
-writer.Write(new byte[] { 1, 2, 3 });  // Raw bytes
+watcher.Created += (_, e) => queue.Writer.TryWrite(e.FullPath);
+watcher.Changed += (_, e) => queue.Writer.TryWrite(e.FullPath);
+watcher.Renamed += (_, e) => queue.Writer.TryWrite(e.FullPath);
+watcher.Error += (_, e) => logger.LogError(e.GetException(), "Watcher failed; rescanning");
 
-// Read binary data
-ms.Position = 0;
-using var reader = new BinaryReader(ms);
-
-int num = reader.ReadInt32();
-string str = reader.ReadString();
-double d = reader.ReadDouble();
-bool b = reader.ReadBoolean();
-byte by = reader.ReadByte();
-byte[] bytes = reader.ReadBytes(3);
+watcher.EnableRaisingEvents = true;
 ```
 
-### Custom Binary Serialization
+It's a notification that something probably changed, not a reliable change log:
+
+- **One save raises several events.** Editors write, truncate, rename, and set attributes, so a single save commonly produces multiple `Changed` events. Debounce per path before acting.
+- **A `Created` event can arrive before the writer has finished.** Opening the file at once may fail with a sharing violation or read partial content. Retry the open, or have writers use the temp-and-rename pattern so the file appears complete.
+- **Events can be lost.** Changes are queued in a buffer (8 KB by default, 64 KB maximum on Windows), and a burst that overflows it raises `Error` with an `InternalBufferOverflowException` and drops the events. Handle `Error` by rescanning the directory.
+- **Handlers run on thread-pool threads**, possibly concurrently. Hand the path to a queue or channel rather than doing slow work in the handler.
+
+A system that must not miss a file should rescan the directory on startup and periodically, and use the watcher only to react sooner.
+
+## Custom Binary Formats
+
+`BinaryWriter` and `BinaryReader` write and read primitive values as raw bytes. They suit compact formats you control, such as a cache file, a save file, or a simple wire protocol:
 
 ```csharp
-public class Player
+public sealed record Player(int Id, string Name, float Health, Vector3 Position)
 {
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-    public float Health { get; set; }
-    public Vector3 Position { get; set; }
+    private const int FormatVersion = 1;
 
     public void WriteTo(BinaryWriter writer)
     {
+        writer.Write(FormatVersion);
         writer.Write(Id);
         writer.Write(Name);
         writer.Write(Health);
@@ -404,85 +345,56 @@ public class Player
 
     public static Player ReadFrom(BinaryReader reader)
     {
-        return new Player
-        {
-            Id = reader.ReadInt32(),
-            Name = reader.ReadString(),
-            Health = reader.ReadSingle(),
-            Position = new Vector3(
-                reader.ReadSingle(),
-                reader.ReadSingle(),
-                reader.ReadSingle())
-        };
+        int version = reader.ReadInt32();
+        if (version != FormatVersion)
+            throw new InvalidDataException($"Unsupported player format version {version}");
+
+        return new Player(
+            reader.ReadInt32(),
+            reader.ReadString(),
+            reader.ReadSingle(),
+            new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
     }
 }
 
-// Usage
-using var stream = File.Create("player.dat");
-using var writer = new BinaryWriter(stream);
-player.WriteTo(writer);
+await using (FileStream output = File.Create("player.dat"))
+using (var writer = new BinaryWriter(output))
+    player.WriteTo(writer);
 
-using var readStream = File.OpenRead("player.dat");
-using var reader = new BinaryReader(readStream);
-var loaded = Player.ReadFrom(reader);
+using FileStream input = File.OpenRead("player.dat");
+using var reader = new BinaryReader(input);
+Player loaded = Player.ReadFrom(reader);
 ```
 
-### Binary vs JSON
+The format is exactly the sequence of calls. Nothing in the file names a field or its type, so the reader must call the matching `Read` methods in the same order. Reading past the end throws `EndOfStreamException`. A few details decide whether the bytes are what another program expects:
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Binary Serialization</h4>
-<ul>
-<li><strong>Size:</strong> Compact</li>
-<li><strong>Speed:</strong> Faster</li>
-<li><strong>Readability:</strong> Not human-readable</li>
-<li><strong>Debugging:</strong> Difficult</li>
-<li><strong>Use case:</strong> Performance-critical, network protocols</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>JSON Serialization</h4>
-<ul>
-<li><strong>Size:</strong> Larger (text-based)</li>
-<li><strong>Speed:</strong> Slower</li>
-<li><strong>Readability:</strong> Human-readable</li>
-<li><strong>Debugging:</strong> Easy</li>
-<li><strong>Use case:</strong> APIs, config files, data exchange</li>
-</ul>
-</div>
-</div>
+- **Integers and floats are always little-endian**, on every platform. For a protocol that specifies big-endian, use `BinaryPrimitives.WriteInt32BigEndian` and its siblings on a span instead.
+- **Strings are length-prefixed.** `Write(string)` writes the UTF-8 byte count as a 7-bit-encoded integer, then the bytes. Only another `BinaryReader` understands that prefix.
+- **A version number comes first.** Without one, adding a field makes every existing file unreadable, with no way to tell old files from corrupt ones.
 
-<div class="callout callout--tip">
-<p class="callout__title">When to Use Binary</p>
-<p>Use binary serialization only when size/speed justify the debugging difficulty. For most cases, prefer JSON for interoperability and maintainability.</p>
-</div>
+`BinaryFormatter`, which serialized whole object graphs by type name, is removed. Its methods throw `PlatformNotSupportedException` on current .NET, and it was never safe for untrusted data, since the payload chose which types to instantiate.
 
-| Aspect | Binary | JSON |
-|--------|--------|------|
-| Size | Compact | Larger (text) |
-| Speed | Faster | Slower |
-| Readability | Not human-readable | Human-readable |
-| Debugging | Difficult | Easy |
-| Schema evolution | Manual versioning | Flexible |
-| Use case | Performance-critical, protocols | APIs, config, data exchange |
+| | `BinaryWriter` format | JSON |
+|---|---|---|
+| Size | Compact, no field names | Larger, text with field names |
+| Readable by people and other tools | No | Yes |
+| Adding or reordering fields | Needs explicit versioning | Unknown fields are ignored and missing ones default |
+| Suits | Formats you own end to end, where size or parsing cost matters | Configuration, data exchange, anything another system reads |
 
-```csharp
-// JSON alternative for most cases
-byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-var data = JsonSerializer.Deserialize<MyData>(jsonBytes);
-```
-
+Prefer JSON unless size or parsing cost has been measured to matter, or the format is dictated by something else.
 
 ## Key Takeaways
 
-**Use Path.Combine**: Never concatenate paths with string operations. Path.Combine handles cross-platform separators.
+**Never pass user input to `Path.Combine`.** A rooted segment discards the base directory. Take the file name only and check the resolved path stays inside the base.
 
-**Prefer async for I/O**: Use `ReadAllTextAsync`, `WriteAllTextAsync`, etc. for better scalability.
+**Replace files by writing a temp file in the same directory and renaming it,** so a crash never leaves a half-written file.
 
-**Use ReadLines for large files**: It enumerates lazily instead of loading the entire file into memory.
+**Mind the defaults.** `File.OpenWrite` doesn't truncate, `Encoding.UTF8` writes a BOM, and `FileShare.Read` refuses files another process is writing.
 
-**Handle I/O exceptions**: File operations can fail for many reasons. Always handle IOException and related exceptions.
+**Attempt and handle, don't check then act.** Existence checks race with other processes.
 
-**Dispose streams**: Always use `using` or `await using` with streams to ensure proper cleanup.
+**Catch `UnauthorizedAccessException` separately.** It isn't an `IOException`.
 
-**Consider file locking**: Be aware of FileShare options when multiple processes might access the same file.
+**Treat `FileSystemWatcher` as a hint.** Debounce its events, handle `Error`, and rescan.
+
+**Version binary formats from the first byte,** and remember `BinaryWriter` is little-endian with its own string prefix.

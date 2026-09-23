@@ -1,0 +1,86 @@
+---
+title: "Append Cost in a Doubling Dynamic Array"
+kind: chart
+system: dsa
+summary: "Cost of each of 33 appends, with copies at each doubling."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 390" role="img" aria-labelledby="am-title am-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="am-title">Cost of each append to a dynamic array that doubles from capacity 4</title>
+<desc id="am-desc">A bar chart of 33 appends to a dynamic array that starts at capacity 4 and doubles when full. Most appends cost one element write. Appends 5, 9, 17, and 33 find the array full and also copy 4, 8, 16, and 32 elements into a new array twice the size. A line showing the average cost per append so far stays below 3 and ends at about 2.8.</desc>
+<style>
+.am-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.am-grid { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.am-write { fill: var(--color-primary, #1A5F8A); }
+.am-copy { fill: var(--color-accent, #A5486E); opacity: 0.85; }
+.am-avg { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.am-tick { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.am-el { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.am-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.am-avgl { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="am-grid" d="M 70,252.2 H 820"/>
+<text class="am-tick" x="62" y="256.2" text-anchor="end">10</text>
+<path class="am-grid" d="M 70,174.4 H 820"/>
+<text class="am-tick" x="62" y="178.4" text-anchor="end">20</text>
+<path class="am-grid" d="M 70,96.7 H 820"/>
+<text class="am-tick" x="62" y="100.7" text-anchor="end">30</text>
+<rect class="am-write" x="72.0" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="81.4" y="346" text-anchor="middle">1</text>
+<rect class="am-write" x="94.7" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="117.5" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="140.2" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-copy" x="162.9" y="291.1" width="18.7" height="31.1"/>
+<text class="am-lab" x="172.3" y="285.1" text-anchor="middle">copy 4</text>
+<rect class="am-write" x="162.9" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="172.3" y="346" text-anchor="middle">5</text>
+<rect class="am-write" x="185.6" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="208.4" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="231.1" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="240.5" y="346" text-anchor="middle">8</text>
+<rect class="am-copy" x="253.8" y="260.0" width="18.7" height="62.2"/>
+<text class="am-lab" x="263.2" y="254.0" text-anchor="middle">copy 8</text>
+<rect class="am-write" x="253.8" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="263.2" y="346" text-anchor="middle">9</text>
+<rect class="am-write" x="276.5" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="299.3" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="322.0" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="344.7" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="367.5" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="390.2" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="412.9" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="422.3" y="346" text-anchor="middle">16</text>
+<rect class="am-copy" x="435.6" y="197.8" width="18.7" height="124.4"/>
+<text class="am-lab" x="445.0" y="191.8" text-anchor="middle">copy 16</text>
+<rect class="am-write" x="435.6" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="445.0" y="346" text-anchor="middle">17</text>
+<rect class="am-write" x="458.4" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="481.1" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="503.8" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="526.5" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="549.3" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="572.0" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="594.7" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="604.1" y="346" text-anchor="middle">24</text>
+<rect class="am-write" x="617.5" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="640.2" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="662.9" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="685.6" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="708.4" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="731.1" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="753.8" y="322.2" width="18.7" height="7.8"/>
+<rect class="am-write" x="776.5" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="785.9" y="346" text-anchor="middle">32</text>
+<rect class="am-copy" x="799.3" y="73.3" width="18.7" height="248.9"/>
+<text class="am-lab" x="808.6" y="67.3" text-anchor="middle">copy 32</text>
+<rect class="am-write" x="799.3" y="322.2" width="18.7" height="7.8"/>
+<text class="am-tick" x="808.6" y="346" text-anchor="middle">33</text>
+<path class="am-avg" d="M 81.4,322.2 L 104.1,322.2 L 126.8,322.2 L 149.5,322.2 L 172.3,316.0 L 195.0,317.0 L 217.7,317.8 L 240.5,318.3 L 263.2,311.9 L 285.9,312.9 L 308.6,313.7 L 331.4,314.4 L 354.1,315.0 L 376.8,315.6 L 399.5,316.0 L 422.3,316.4 L 445.0,309.4 L 467.7,310.1 L 490.5,310.8 L 513.2,311.3 L 535.9,311.9 L 558.6,312.3 L 581.4,312.8 L 604.1,313.1 L 626.8,313.5 L 649.5,313.8 L 672.3,314.2 L 695.0,314.4 L 717.7,314.7 L 740.5,315.0 L 763.2,315.2 L 785.9,315.4 L 808.6,308.1"/>
+<text class="am-avgl" x="788" y="298.1" text-anchor="end">average cost per append so far: 2.8</text>
+<path class="am-axis" d="M 70,50 V 330 H 820"/>
+<text class="am-el" x="445.0" y="370" text-anchor="middle">append number</text>
+<text class="am-el" x="70" y="34" text-anchor="middle">cost (element writes)</text>
+<rect class="am-write" x="240" y="24" width="14" height="12"/><text class="am-el" x="260" y="34">write the new element</text>
+<rect class="am-copy" x="420" y="24" width="14" height="12"/><text class="am-el" x="440" y="34">copy into a doubled array</text>
+</g>
+</svg>

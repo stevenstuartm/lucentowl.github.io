@@ -3,93 +3,85 @@ title: "C# Native Interop (P/Invoke and COM)"
 layout: guide
 category: ".NET & C#"
 subcategory: "Advanced Topics"
-description: "Understanding why managed code needs to talk to native code, how P/Invoke and COM bridging works, and when you'll encounter it in modern development like WinUI and IoT."
-tags: [c-sharp, dotnet, interop, pinvoke, com, native-code, advanced]
+description: "How managed code calls native libraries and COM components: LibraryImport versus DllImport, marshalling and blittable types, matching native types including C long, strings and bool, pinning and callbacks, SafeHandle, error codes, COM lifetime and RCWs, and cross-platform library loading."
+tags: [pinvoke, libraryimport, marshalling, com, safehandle, interop, advanced]
 ---
 
-## The Two Worlds Your Code Lives In
+## The Boundary Between Managed and Native Code
 
-When you write C#, the runtime manages memory, handles garbage collection, and provides type safety. This is the "managed" world. But your application runs on an operating system written in C and C++, and it interacts with hardware through drivers that speak a completely different language. The "unmanaged" or "native" world is everything outside the .NET runtime's control.
+C# code runs under the .NET runtime, which manages memory, moves objects during garbage collection, and checks types. That's the **managed** world. The operating system, device SDKs, and most system libraries are written in C or C++ and know nothing about any of it. That's the **native** world.
 
-Most of the time you never think about this boundary because the .NET Base Class Library wraps native calls for you. When you open a file with `File.Open()`, the BCL is calling the Windows `CreateFile` API (or the Linux equivalent) on your behalf. When you create a `Socket`, native system calls handle the actual network operations. The abstraction is so thorough that many developers work for years without realizing there's a native layer underneath.
+Most of the time the base class library crosses the boundary for you. `File.Open` calls `CreateFileW` on Windows and `open` on Linux, and `Socket` wraps the OS networking calls. You cross it yourself when:
 
-That abstraction breaks down in a few specific situations, and when it does, you need to understand what's happening at the boundary between these two worlds.
+- **An OS API has no managed wrapper.** Windows exposes thousands of functions the BCL never wraps, and Linux has system calls and libraries in the same position.
+- **A vendor ships only a C SDK.** Hardware, sensors, cameras, and industrial devices commonly come with a C library and a header file.
+- **A native library already does the job well.** A mature compression, imaging, or numerical library can be cheaper to call than to rewrite.
+- **A framework is built on COM.** WinUI, the Windows Shell, DirectX, and Office are COM-based. A WinUI desktop app that opens a file picker has to hand the picker its window handle through a COM interface, which is the first interop many developers write without meaning to.
 
-## When the Abstraction Falls Away
-
-### System APIs Without Managed Wrappers
-
-The .NET BCL covers the most common operating system capabilities, but Windows alone exposes thousands of APIs that have no managed equivalent. If you need to query specific hardware information, manipulate windows at the OS level, or access newer platform features before the .NET team wraps them, you're calling native APIs directly.
-
-### Hardware and IoT
-
-Working with embedded devices, sensors, or specialized hardware almost always involves native interop. Device manufacturers provide C/C++ SDKs, and your C# code needs to call into those libraries. IoT scenarios on platforms like Raspberry Pi frequently require calling into native GPIO libraries or device-specific drivers that only expose C interfaces.
-
-### WinUI and Modern Windows Development
-
-This is where most .NET developers first encounter native interop without expecting it. WinUI 3 is built on top of WinRT, which is itself built on COM. When you build a WinUI desktop application, you're constantly crossing the managed-to-native boundary without realizing it because the tooling hides it well.
-
-Consider what happens when you need to open a file picker in a WinUI desktop app. Unlike UWP (where the app model handled window ownership automatically), desktop apps must explicitly tell the system dialog which window owns it. That means getting the native window handle (an `HWND`) from your managed `Window` object and passing it to the picker before it can display:
-
-```csharp
-// Get the native window handle from the managed WinUI Window
-IntPtr hwnd = WindowNative.GetWindowHandle(window);
-
-// Tell the file picker which window it belongs to
-var picker = new FileOpenPicker();
-InitializeWithWindow.Initialize(picker, hwnd);
-```
-
-That `WindowNative.GetWindowHandle` call is reaching through the WinRT/COM layer to get a native pointer. The `InitializeWithWindow.Initialize` call passes that pointer to a COM interface (`IInitializeWithWindow`) that the picker implements. This same pattern appears whenever a WinUI desktop app interacts with system dialogs, camera capture, or any UI component that needs window ownership.
-
-The `WinRT.Interop` namespace exists specifically to bridge these gaps. Every time you see code importing from that namespace, native interop is happening.
-
-### Performance-Critical Code
-
-Sometimes managed overhead matters. If you have an optimized C++ math library, a native image processing pipeline, or a compression algorithm tuned for specific hardware, calling into that native code directly avoids the cost of reimplementing it in C# and potentially losing performance characteristics.
+Every crossing costs something, and every mistake at it is unforgiving. A wrong declaration doesn't produce an exception with a helpful message. It produces corrupted memory, a crash in native code, or values that are silently wrong.
 
 ## P/Invoke: Calling Native Functions
 
-Platform Invocation Services (P/Invoke) is the mechanism for calling functions that live in native DLLs. The concept is straightforward: you declare a C# method signature that matches a function exported by a native library, and the runtime handles the rest.
+**P/Invoke** (platform invoke) calls a function exported from a native library. You declare a C# method whose signature matches the native function, and the runtime loads the library, finds the export, converts the arguments, and makes the call.
 
-### How It Works
+### LibraryImport and DllImport
 
-When you call a P/Invoke method, the runtime performs several steps. It locates and loads the native DLL, finds the function by name (or by an explicit entry point you specify), converts your managed parameters into their native equivalents (a process called marshaling), switches from the managed execution context to native execution, runs the function, converts return values back to managed types, and returns control to your code.
-
-The declaration looks like this:
+There are two ways to declare one:
 
 ```csharp
-[DllImport("user32.dll", SetLastError = true)]
-public static extern bool MessageBox(IntPtr hWnd, string text, string caption, uint type);
+// Source-generated (.NET 7). Preferred
+[LibraryImport("kernel32.dll", SetLastError = true)]
+[return: MarshalAs(UnmanagedType.Bool)]
+internal static partial bool CloseHandle(IntPtr handle);
+
+// Runtime-generated. The original mechanism
+[DllImport("kernel32.dll", SetLastError = true)]
+internal static extern bool CloseHandle(IntPtr handle);
 ```
 
-The `DllImport` attribute tells the runtime which DLL contains the function. `SetLastError = true` tells the runtime to capture the native error code before returning (important because other managed operations could overwrite it). The parameter types need to match what the native function expects, or the marshaling will produce incorrect results or crashes.
+With `DllImport`, the runtime generates an **IL stub** the first time the method is called, a small piece of code that converts arguments, and JIT-compiles it. That stub is generated at run time, so trimmed and Native AOT applications can't depend on it. `LibraryImport` has a source generator write the same conversion code at build time, as ordinary C# you can read and step through. The declaration is `static partial` rather than `extern`, and the project needs `AllowUnsafeBlocks` (error SYSLIB1062 otherwise).
 
-### LibraryImport: The Modern Approach
+`LibraryImport` also refuses to guess. A `bool` or `string` parameter without explicit marshalling information is error SYSLIB1051, because the defaults `DllImport` applied to them caused a long history of bugs. Microsoft's guidance is to use `LibraryImport` on .NET 7 and later wherever possible. Analyzer SYSLIB1054 identifies `DllImport` declarations that can be converted. A few `DllImport` settings have different spellings: `CharSet` becomes `StringMarshalling` (with UTF-8 available directly and ANSI removed), and `CallingConvention` becomes the `[UnmanagedCallConv]` attribute.
 
-.NET 7 introduced `LibraryImport` as the successor to `DllImport`. The difference matters for practical reasons. `DllImport` generates marshaling code at runtime using reflection, which means it's incompatible with Ahead-of-Time (AOT) compilation and harder for the compiler to optimize. `LibraryImport` uses source generators to create the marshaling code at compile time, so you can inspect what it produces, it works with AOT, and it performs better.
+### Finding the Library
+
+The library name is resolved at the first call, and a failure throws `DllNotFoundException` then, not at startup. The runtime tries platform variations of the name, so `[LibraryImport("sensor_sdk")]` finds `sensor_sdk.dll` on Windows, `libsensor_sdk.so` on Linux, and `libsensor_sdk.dylib` on macOS. That lets one declaration serve every platform when the native library follows the naming convention.
+
+When it doesn't, or the library lives somewhere unusual, `NativeLibrary.SetDllImportResolver` lets you choose the path per platform, and `NativeLibrary.TryLoad` checks whether a library can be loaded before relying on it. A missing export throws `EntryPointNotFoundException`. For a C++ library, the usual cause is a function declared without `extern "C"`, so its exported name is mangled.
+
+## Marshalling: Matching Native Types
+
+**Marshalling** converts arguments between managed and native representations. Its cost and its correctness both depend on whether a type needs converting at all.
+
+**Blittable** types have the same bit layout on both sides and pass through unchanged: `byte`, `short`, `int`, `long`, their unsigned forms, `float`, `double`, `nint`, `nuint`, pointers, and structs made only of those. A one-dimensional array of them, like `int[]`, is passed by pinning it and handing native code a pointer to the elements, with no copy. `bool` is never blittable, `char` only sometimes, and `string` is copied unless it's passed as UTF-16.
+
+### Types That Don't Mean What They Say
+
+Most interop bugs come from a C type whose size differs from the C# type with the same name:
+
+| Native type | C# type | Trap |
+|---|---|---|
+| `int`, `int32_t` | `int` | None; 32-bit everywhere |
+| `long long`, `int64_t` | `long` | None; 64-bit everywhere |
+| C `long`, `unsigned long` | `CLong`, `CULong` (.NET 6) | C `long` is **32-bit on Windows and 64-bit on 64-bit Linux and macOS**. C# `long` is always 64-bit |
+| Windows `LONG`, `DWORD`, `ULONG` | `int`, `uint` | 32-bit on 64-bit Windows despite the names |
+| Pointers, handles, `size_t`, `HWND` | `nint`/`IntPtr`, `nuint`, or a `SafeHandle` | Change size between 32-bit and 64-bit processes |
+| Windows `BOOL` | `int`, or `bool` with `MarshalAs(UnmanagedType.Bool)` | 4 bytes |
+| C `bool`, `_Bool` | `bool` with `MarshalAs(UnmanagedType.U1)` | 1 byte. Marshalled as a 4-byte `BOOL`, three bytes of whatever follows are read too |
+| `wchar_t*` on Windows, `char16_t*` | `string` with `StringMarshalling.Utf16` | Passed without copying |
+| `char*` holding UTF-8 | `string` with `StringMarshalling.Utf8` | Copied to a temporary native buffer |
+
+C `long` is the one that survives testing. A declaration using C# `long` works on Linux and reads the wrong bits on Windows, or the reverse if it uses `int`. `CLong` has the right size on each platform. When C# and native types don't match in size, what goes wrong depends on the calling convention: arguments can arrive with garbage in their upper bytes, or later arguments can be read from the wrong place. Either way, nothing checks it.
+
+### Structs
+
+A struct passed to native code must have the native struct's fields in the same order, with the same sizes and alignment:
 
 ```csharp
-[LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-public static partial int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
-```
+// C header:
+// typedef struct { int32_t sensor_id; float temperature; int64_t timestamp; } SensorReading;
 
-The trade-off is that `LibraryImport` requires explicit marshaling annotations. With `DllImport`, the runtime made implicit decisions about how to convert types like `bool` (which has different sizes in different native conventions). With `LibraryImport`, you must be explicit, which eliminates an entire category of subtle bugs. For any new interop code, prefer `LibraryImport`.
-
-## Marshaling: Translating Between Worlds
-
-Marshaling is the process of converting data between managed and native representations. Some types are "blittable," meaning their managed and native memory layouts are identical. Types like `int`, `float`, `double`, and `IntPtr` can be passed directly without any conversion because they have the same byte representation on both sides.
-
-Non-blittable types require actual translation. Strings are the most common example. A C# `string` is a managed object on the garbage-collected heap, stored as UTF-16. A native function might expect a null-terminated ANSI string, a UTF-8 string, or a wide (UTF-16) string. The marshaler copies the string data into a native-compatible format, passes a pointer to the native function, and cleans up afterward.
-
-Structures need matching memory layouts. If your C# struct has fields in a different order than the native struct, or if the compiler inserts padding differently, the native function reads garbage data. The `StructLayout` attribute with `LayoutKind.Sequential` tells the C# compiler to lay out fields in declaration order without rearranging them, matching C struct conventions:
-
-```csharp
-// This C struct from a device SDK:
-// struct SensorReading { int sensor_id; float temperature; long timestamp; };
-
-// Must be matched exactly in C#, field by field, in the same order
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential)]   // The default for structs; stated here for readers
 public struct SensorReading
 {
     public int SensorId;
@@ -97,208 +89,178 @@ public struct SensorReading
     public long Timestamp;
 }
 
-// Now you can pass it directly to the native function
 [LibraryImport("sensor_sdk")]
-public static partial int ReadSensor(int deviceId, out SensorReading reading);
-```
+internal static partial int ReadSensor(int deviceId, out SensorReading reading);
 
-If you swapped `Temperature` and `SensorId` in the C# struct, the native function would write the sensor ID into the temperature field and vice versa. The code would compile and run without errors, but the values would be wrong. This is the kind of bug that can survive testing if you don't know to look for it.
-
-Arrays require the native side to know the length (since native code has no built-in array length tracking), so you'll almost always pass the array alongside its length as a separate parameter:
-
-```csharp
-// Native function: int process_readings(SensorReading* data, int count);
 [LibraryImport("sensor_sdk")]
-public static partial int ProcessReadings(
-    [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)]
-    SensorReading[] data,
-    int count);
-
-// The SizeParamIndex = 1 tells the marshaler that parameter at index 1 (count)
-// specifies how many array elements to marshal
+internal static partial int ProcessReadings([In] SensorReading[] data, int count);
 ```
 
-### Why Marshaling Bugs Are Dangerous
+C# structs are laid out sequentially by default, and the runtime inserts the same alignment padding a C compiler would. So the struct above is 16 bytes on both sides, and moving `Timestamp` to the front would add padding on both sides alike. Swap two fields, or use a type of a different size, and native code reads the wrong bytes with no error. Native code also has no array length, so an array always travels with a separate count.
 
-Marshaling errors don't throw friendly exceptions. They produce memory corruption, access violations, or subtly wrong behavior. If you declare a parameter as `int` but the native function expects a `long`, you've shifted every subsequent parameter by 4 bytes. The function reads the wrong memory for every argument after that point. The result could be a crash, corrupted data, or a security vulnerability.
+Check the layout rather than trusting it. Compare `Marshal.SizeOf<SensorReading>()` against the native `sizeof`, since a size mismatch is the quickest sign of a wrong field. And keep structs blittable, which in practice means avoiding `bool` and `char` fields. A blittable struct is passed directly, while a non-blittable one is copied field by field on every call.
 
-This is why `LibraryImport`'s explicit marshaling is valuable. Making the conversion rules visible in the source code means code reviews can catch mismatches before they become runtime mysteries.
+### Buffers From Native Code
 
-## COM: The Component Object Model
-
-COM is often treated as an arcane legacy technology, but it's the foundation of a surprising amount of modern Windows development. Understanding what COM actually is and why it exists makes the "magic" in frameworks like WinUI and Office automation much less mysterious.
-
-### The Problem COM Solves
-
-In the early 1990s, Microsoft faced a fundamental problem: how do you let software components written in different languages, compiled by different compilers, and potentially running in different processes communicate with each other? C++ classes can't be shared across compiler boundaries because different compilers use different memory layouts, name mangling, and calling conventions. DLL functions work but only support simple function calls without the richness of object-oriented interfaces.
-
-COM's answer was to define a binary standard for component interaction. Instead of sharing source code or class definitions, COM components expose functionality through interface pointers with a fixed memory layout (a virtual function table, or "vtable"). Any language that can work with pointers and follow the vtable convention can consume COM components. This is why you can use COM objects from C#, C++, Python, VBScript, and dozens of other languages.
-
-### The Three Pillars of COM
-
-**Interfaces, not classes.** COM components are accessed exclusively through interfaces. You never directly instantiate a COM class; you ask the COM runtime to create an instance and give you an interface pointer. This is why COM code always involves GUIDs (globally unique identifiers) that identify specific interfaces and classes. The most fundamental interface is `IUnknown`, which every COM object must implement. It provides three methods: `QueryInterface` (to ask for other interfaces the object supports), `AddRef` (to increment the reference count), and `Release` (to decrement it).
-
-**Reference counting for lifetime management.** Unlike .NET's garbage collector, COM objects track their own lifetime through reference counting. Every time code obtains a reference to a COM object, it calls `AddRef`. When it's done, it calls `Release`. When the count reaches zero, the object destroys itself. This is deterministic (the object is freed immediately when the last reference is released), but it puts the burden on the caller to balance every `AddRef` with a `Release`. Forgetting to release creates memory leaks; releasing too early creates dangling pointers.
-
-**Location transparency.** A COM object can live in your process, in another process on the same machine, or on a remote machine entirely. The client code doesn't change because COM's proxy/stub mechanism handles the communication. When you automate Excel from C#, Excel runs as a separate process, and COM marshals your method calls across the process boundary transparently.
-
-### Where You Encounter COM Today
-
-**WinUI and WinRT.** Windows Runtime (WinRT) is a modernized version of COM. It uses the same binary interface convention (vtables and `IUnknown`) but adds metadata, modern type support, and a cleaner activation model. When you write a WinUI application, the XAML framework, input handling, composition engine, and window management are all WinRT (COM) components. The C#/WinRT tooling generates projection code that makes these COM components look like regular .NET classes, but underneath, every property access and method call crosses the COM boundary.
-
-**Office automation.** Controlling Word, Excel, Outlook, or any Office application from C# means working through COM interfaces. The Office applications expose their object models as COM type libraries, and your C# code communicates through Runtime Callable Wrappers (RCWs) that the .NET runtime generates to bridge the managed/COM boundary.
-
-**Windows Shell and system components.** File dialogs, taskbar integration, notification icons, and many other Windows Shell features are COM-based. The file picker example from the WinUI section is a COM component implementing `IFileOpenDialog` behind the scenes.
-
-**DirectX and media.** Graphics, audio, and video APIs on Windows are COM-based. Direct3D, DirectSound, Media Foundation, and related APIs all use COM interfaces.
-
-### COM in .NET: The Runtime Callable Wrapper
-
-When you use a COM object from C#, the .NET runtime creates a Runtime Callable Wrapper (RCW) around it. The RCW is a managed object that holds a reference to the underlying COM object and forwards your method calls across the boundary. It handles the marshaling, calling convention differences, and error translation (converting COM `HRESULT` error codes to .NET exceptions).
-
-The RCW also participates in the .NET garbage collector, but here's where things get tricky: the GC is non-deterministic. It might not collect the RCW (and therefore release the COM object) for a long time. If the COM object holds expensive resources like file handles, database connections, or an entire Excel process, waiting for the GC is wasteful or even harmful.
-
-This is why COM interop code often calls `Marshal.ReleaseComObject` explicitly. It tells the RCW to release its COM reference immediately rather than waiting for garbage collection. Forgetting this call is one of the most common COM interop bugs, and it's why Office automation code sometimes leaves phantom Excel processes running in the background.
-
-Here's what proper COM cleanup looks like in practice with Excel automation:
+Many C functions fill a caller-supplied buffer. With `LibraryImport`, a `Span<T>` is the natural type, and a stack buffer avoids allocating:
 
 ```csharp
-Excel.Application? app = null;
-Excel.Workbook? workbook = null;
-Excel.Worksheet? sheet = null;
+[LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+internal static partial uint GetSystemDirectoryW(Span<char> buffer, uint size);
 
-try
-{
-    app = new Excel.Application();
-    workbook = app.Workbooks.Add();
-    sheet = (Excel.Worksheet)workbook.Sheets[1];
-    sheet.Cells[1, 1] = "Hello from C#";
-    workbook.SaveAs("report.xlsx");
-}
-finally
-{
-    // Release in reverse order of acquisition.
-    // Each ReleaseComObject call decrements the COM reference count,
-    // allowing Excel to shut down cleanly.
-    if (sheet != null) Marshal.ReleaseComObject(sheet);
-    if (workbook != null) Marshal.ReleaseComObject(workbook);
-    if (app != null)
-    {
-        app.Quit();
-        Marshal.ReleaseComObject(app);
-    }
-}
+Span<char> buffer = stackalloc char[260];
+uint length = GetSystemDirectoryW(buffer, (uint)buffer.Length);
+string systemDirectory = buffer[..(int)length].ToString();   // C:\WINDOWS\system32
 ```
 
-Without the explicit `ReleaseComObject` calls, the RCWs keep COM references alive until the garbage collector runs. Excel can't shut down because something still holds references to its objects. Open Task Manager after running automation code without cleanup and you'll likely see `EXCEL.EXE` still running with no visible window.
+Avoid `StringBuilder` parameters, a common pattern in older code. Marshalling one allocates and copies several times per call.
 
-### ComWrappers: The Modern COM Approach
+## Pinning and Lifetime
 
-.NET 5 introduced the `ComWrappers` API as a replacement for the built-in COM interop infrastructure. The older approach relied heavily on runtime code generation, which doesn't work with AOT compilation and is difficult to optimize. `ComWrappers` gives you explicit control over how COM objects are wrapped and unwrapped, making it compatible with AOT and source generators.
+The garbage collector moves objects when it compacts the heap. Native code holding a pointer into a managed object would then read or write memory that now belongs to something else.
 
-WinRT projections (the code that makes WinRT/COM objects look like .NET classes in WinUI) use `ComWrappers` internally. When you see the `CsWinRT` source generator producing code in your WinUI project's `obj` folder, it's generating `ComWrappers`-based interop code.
+**For the duration of a call, the marshaller handles it.** An `int[]`, a UTF-16 `string`, or a `ref` to a blittable struct is pinned while the native function runs and unpinned when it returns. You don't need `fixed` for an ordinary synchronous call.
 
-## Resource Management Across the Boundary
+**Beyond the call, you're responsible.** If native code keeps the pointer, for example to fill a buffer asynchronously or to call back later, the object must stay put until native code is finished with it:
 
-Native resources like file handles, socket handles, device contexts, and COM object references exist outside the garbage collector's awareness. If a managed object holding a native handle gets collected without releasing that handle, the resource leaks. The .NET `SafeHandle` class solves this by tying native handle cleanup to the finalizer, ensuring the handle is released even if your code forgets or an exception interrupts normal cleanup.
+- Allocate the buffer with `GC.AllocateArray<byte>(size, pinned: true)`, which places it on the Pinned Object Heap, where it never moves.
+- Or pin an existing object with `GCHandle.Alloc(obj, GCHandleType.Pinned)`, and call `Free` when native code is done. A handle that's never freed pins the object forever.
+- Or allocate the buffer natively with `NativeMemory.Alloc`, which the GC never touches.
 
-The practical rule is straightforward: any time you obtain a native handle or COM reference, wrap it in either a `SafeHandle` subclass or a `using` pattern that guarantees cleanup. The `SafeHandle` approach is preferred because it's resilient to thread aborts and other edge cases that `try/finally` blocks can miss.
+**Callbacks need their delegate kept alive.** `Marshal.GetFunctionPointerForDelegate` returns a pointer that doesn't keep the delegate reachable. If native code stores the pointer and the delegate is collected, the next callback jumps into freed memory. Keep the delegate in a field for as long as native code might call it. The better option for new code is a static method marked `[UnmanagedCallersOnly]`, passed as a function pointer, which has no delegate to lose.
+
+## SafeHandle: Native Resources Without Leaks
+
+A native handle, like a file, device connection, or library context, is just a number to the runtime. If the object holding it is garbage-collected without closing it, the handle leaks. `SafeHandle` ties the handle's release to disposal, and to a finalizer as a backstop:
 
 ```csharp
-// A SafeHandle subclass for a hypothetical device connection
-public class SafeDeviceHandle : SafeHandleZeroOrMinusOneIsInvalid
+internal sealed class SafeDeviceHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
     public SafeDeviceHandle() : base(ownsHandle: true) { }
 
-    // This runs when the handle needs cleanup, even if your code
-    // threw an exception or forgot to call Dispose
-    protected override bool ReleaseHandle()
-    {
-        return NativeMethods.CloseDevice(handle);
-    }
+    protected override bool ReleaseHandle() => NativeMethods.CloseDevice(handle);
 }
 
-// The P/Invoke declaration returns SafeDeviceHandle instead of raw IntPtr
-[LibraryImport("device_sdk", SetLastError = true)]
-public static partial SafeDeviceHandle OpenDevice(int deviceId);
+internal static partial class NativeMethods
+{
+    [LibraryImport("device_sdk", SetLastError = true)]
+    internal static partial SafeDeviceHandle OpenDevice(int deviceId);
 
-// Usage: the using statement guarantees ReleaseHandle runs
+    [LibraryImport("device_sdk")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool CloseDevice(IntPtr handle);
+}
+
 using SafeDeviceHandle device = NativeMethods.OpenDevice(42);
 if (device.IsInvalid)
-{
-    int error = Marshal.GetLastWin32Error();
-    throw new Win32Exception(error);
-}
-// Use the device... handle is released automatically when scope ends
+    throw new Win32Exception(Marshal.GetLastPInvokeError());
 ```
 
-Compare this to using raw `IntPtr`, where an exception between opening and closing the handle leaks the native resource permanently. `SafeHandle` eliminates that entire class of bugs.
+A declaration can return and accept the `SafeHandle` subclass directly, and the marshaller wraps the raw value on the way out. `SafeHandle` also prevents a subtler bug. The runtime keeps it alive and un-released for the duration of any call it's passed to, so a handle can't be closed by a finalizer on another thread while native code is still using it. A raw `IntPtr` offers no such guarantee. The BCL provides `SafeFileHandle` and several others. Write a subclass only for handles that none of them fit.
 
-## Error Handling Across the Boundary
+## Errors Across the Boundary
 
-Managed and native code use different error reporting mechanisms. .NET uses exceptions. Windows APIs typically use boolean return values with a thread-local error code (`GetLastError`). COM uses `HRESULT` return codes where negative values indicate failure.
+Native APIs report failure in several ways, and none of them is an exception:
 
-The danger is that the error information is ephemeral. Between a failed native call and your code checking the error, the runtime might make other native calls internally (for garbage collection, thread management, or other housekeeping). Those internal calls can overwrite the error code. The `SetLastError = true` attribute on P/Invoke declarations tells the runtime to capture the error code immediately after the native call returns, before anything else can overwrite it.
+| Convention | Used by | How to read it |
+|---|---|---|
+| Return value plus thread-local error code | Win32 (`GetLastError`), POSIX (`errno`) | `SetLastError = true` on the declaration, then `Marshal.GetLastPInvokeError()` |
+| `HRESULT` return value | COM | Negative means failure. `Marshal.ThrowExceptionForHR(hr)` converts it |
+| Status code return value | Most C SDKs | Check it against the SDK's documented values |
+
+The thread-local error code is fragile. The runtime makes native calls of its own between yours, and any of them can overwrite it. `SetLastError = true` tells the generated code to capture the value the moment the native function returns. Read it immediately after the call and before anything else, and only when the return value says the call failed, since a successful call may leave a stale code behind:
 
 ```csharp
-[LibraryImport("kernel32.dll", SetLastError = true)]
-[return: MarshalAs(UnmanagedType.Bool)]
-public static partial bool CloseHandle(IntPtr handle);
-
-// After a P/Invoke call, check the return value FIRST,
-// then retrieve the error code IMMEDIATELY
-bool success = NativeMethods.CloseHandle(handle);
-if (!success)
-{
-    // GetLastWin32Error returns the value captured by SetLastError = true.
-    // Without that attribute, this could return a stale error from an
-    // unrelated internal call.
-    int errorCode = Marshal.GetLastWin32Error();
-    throw new Win32Exception(errorCode);
-}
+if (!NativeMethods.CloseHandle(handle))
+    throw new Win32Exception(Marshal.GetLastPInvokeError());   // 6: "The handle is invalid."
 ```
 
-For COM, the .NET runtime translates `HRESULT` failures into managed exceptions automatically when using RCWs. A failed COM call throws a `COMException` with the `HRESULT` value, which you can inspect to determine the specific failure. Common values like `E_OUTOFMEMORY`, `E_INVALIDARG`, and `E_FAIL` map to recognizable exception types.
+`Marshal.GetLastPInvokeError` (.NET 6) is the current name for `GetLastWin32Error`, which returns the same value and despite its name also carries `errno` on Unix.
 
-## Memory Pinning: Keeping Things in Place
+## COM
 
-The .NET garbage collector periodically moves objects in memory to compact the heap and improve allocation performance. This is normally invisible to managed code because the runtime updates all references automatically. But native code doesn't know about the GC. If you pass a pointer to a managed array into a native function and the GC moves that array while the native function is still using it, the native code reads or writes to memory that no longer belongs to that array.
+COM (Component Object Model) is Windows' binary standard for objects shared across languages, compilers, and processes. It predates .NET and sits under much of modern Windows.
 
-Pinning tells the GC not to move a specific object for the duration of the native call. The `fixed` statement in C# pins an object for the scope of its block. For longer-lived scenarios, `GCHandle.Alloc` with `GCHandleType.Pinned` pins an object until you explicitly free the handle.
+### How COM Works
+
+**Everything is an interface.** A COM object is reached only through interface pointers. Each interface has a GUID, and its methods are called through a fixed table of function pointers (a vtable), which any language that can call through a pointer can use. Every COM object implements `IUnknown`, whose `QueryInterface` asks for another interface the object supports.
+
+**Lifetime is reference-counted.** Each holder of an interface pointer calls `AddRef` when it takes a reference and `Release` when it's done, and the object destroys itself when the count reaches zero. That's deterministic, unlike garbage collection, and fragile: one missing `Release` keeps the object alive forever.
+
+**The object can live anywhere.** A COM server can run in your process, in another process, or on another machine, and proxies make the call look the same. Office automation works this way. Excel runs as its own process, and every call crosses into it.
+
+**WinRT is COM with metadata.** The Windows Runtime used by WinUI keeps COM's vtables and `IUnknown` and adds type metadata. C#/WinRT generates projections that make WinRT types look like .NET classes, so a WinUI app crosses the COM boundary on nearly every property access without showing it.
+
+### Runtime Callable Wrappers
+
+When C# code uses a COM object, the runtime wraps it in a **Runtime Callable Wrapper** (RCW): a managed object that holds one COM reference and forwards calls, converting failed `HRESULT`s into exceptions. `E_INVALIDARG` becomes `ArgumentException`, `E_OUTOFMEMORY` becomes `OutOfMemoryException`, and unrecognized codes become `COMException`, whose `HResult` holds the value.
+
+The RCW releases its COM reference only when the garbage collector finalizes it. For objects that hold something expensive, that delay shows up. Office automation is the classic case: `EXCEL.EXE` keeps running after the program finishes with it, because RCWs that haven't been collected still hold references.
+
+Two things cause it. One is intermediate objects that the code never names:
 
 ```csharp
-byte[] sensorBuffer = new byte[4096];
-
-// fixed pins the array in memory for the duration of the block.
-// The GC will not move sensorBuffer while this scope is active,
-// so the native function's pointer remains valid.
-unsafe
-{
-    fixed (byte* ptr = sensorBuffer)
-    {
-        int bytesRead = NativeMethods.ReadSensorData(ptr, sensorBuffer.Length);
-        // Process the data...
-    }
-}
-// After the fixed block ends, the GC is free to move the array again
+Excel.Workbook workbook = app.Workbooks.Add();   // app.Workbooks created an RCW that nothing releases
 ```
 
-Pinning has a performance cost because it creates holes in the managed heap that the GC must work around. For short-duration native calls, the cost is negligible. For long-lived pinned buffers, consider allocating from the Pinned Object Heap (POH) introduced in .NET 5, which is designed for objects that need to stay in place.
+The other is waiting on the garbage collector. The fixes are to name every COM object you touch, and to release them when you're done:
 
-## Cross-Platform Considerations
+```csharp
+Excel.Application app = new Excel.Application();
+Excel.Workbooks workbooks = app.Workbooks;
+Excel.Workbook workbook = workbooks.Add();
+try
+{
+    // ... work with the workbook ...
+    workbook.SaveAs(path);
+}
+finally
+{
+    workbook.Close(SaveChanges: false);
+    app.Quit();
+    Marshal.ReleaseComObject(workbook);
+    Marshal.ReleaseComObject(workbooks);
+    Marshal.ReleaseComObject(app);
+}
+```
 
-P/Invoke isn't Windows-specific. .NET on Linux and macOS can call into `.so` and `.dylib` native libraries using the same `DllImport` or `LibraryImport` attributes with different library names. The `NativeLibrary` class provides runtime resolution when you need to load platform-specific libraries dynamically.
+`Marshal.ReleaseComObject` releases the RCW's reference immediately. Use it with care. Any other variable still pointing at the same RCW becomes unusable, and calling through it throws `InvalidComObjectException`. The alternative, when the COM work is contained in one method, is to let every RCW go out of scope and then call `GC.Collect()` followed by `GC.WaitForPendingFinalizers()`, so the finalizers release everything at once.
 
-COM, however, is a Windows technology. While there are limited COM-like mechanisms on other platforms (and Mono had some COM support), COM interop in the way described here is a Windows concern. Cross-platform applications that need component interop typically use approaches like gRPC, shared libraries with C-style exports, or platform-specific abstraction layers.
+### Modern COM Interop
 
-## Common Pitfalls
+The built-in COM support generates its wrappers at run time and only works on Windows, so it has the same problem under Native AOT as `DllImport`. `ComWrappers` (.NET 5) lets a library control how COM objects are wrapped, and C#/WinRT is built on it. For your own COM interfaces, `[GeneratedComInterface]` and `[GeneratedComClass]` (.NET 8) generate the interop code at build time, the COM counterpart to `LibraryImport`.
 
-**Forgetting to release COM objects.** The garbage collector will eventually clean up RCWs, but "eventually" might mean phantom Office processes, locked files, or exhausted system resources. Release COM objects explicitly when you're done with them.
+## Cross-Platform Interop
 
-**Mismatched calling conventions.** Windows APIs use `StdCall` (callee cleans the stack), C libraries use `Cdecl` (caller cleans the stack). Using the wrong convention corrupts the stack, which might not crash immediately but will produce bizarre behavior later.
+P/Invoke works on every platform .NET runs on. The differences are in the details:
 
-**String encoding mismatches.** Passing a UTF-16 string to a function expecting ANSI (or vice versa) produces garbled text or buffer overruns. Always verify what encoding the native function expects and annotate accordingly.
+- **Library names and loading** vary by platform, as described above.
+- **C `long` and `wchar_t` change size.** `wchar_t` is 2 bytes on Windows and 4 bytes on Linux and macOS, so a `wchar_t*` API can't take a UTF-16 `string` on Unix.
+- **Calling conventions** matter only for 32-bit x86, where Windows APIs use `stdcall` and C libraries `cdecl`. On x64 and Arm64 each platform has a single convention, and the runtime picks it.
+- **COM is Windows-only.** A cross-platform component boundary uses a C API with plain exported functions, or a process boundary such as gRPC.
 
-**32-bit vs 64-bit pointer sizes.** `IntPtr` changes size between 32-bit and 64-bit processes. If you use `int` where a pointer-sized value is expected, your code works on 32-bit but fails on 64-bit. Always use `IntPtr` or `nint` for handles and pointers.
+## Common Mistakes
 
-**Ignoring return values.** Many native functions communicate errors through return values. Ignoring them means your code continues with invalid handles or corrupted state, turning a recoverable error into a crash or data corruption.
+**Mismatched type sizes.** C `long` declared as C# `long`, C `bool` marshalled as a 4-byte `BOOL`, or `int` used for a pointer-sized handle. Check each parameter against the header, not the documentation, when they disagree.
+
+**Reading the error code late or unconditionally.** Capture it with `SetLastError = true`, read it immediately, and only after a failure.
+
+**Letting native code keep a pointer to a movable object,** or a function pointer to a collectable delegate.
+
+**Freeing memory with the wrong allocator.** Memory allocated by a native library must be freed by that library's own function, not by `Marshal.FreeHGlobal` or `NativeMemory.Free`, since each allocator manages its own heap.
+
+**Leaking handles and COM references.** Wrap handles in `SafeHandle`, and name and release every COM object.
+
+## Key Takeaways
+
+**Use `LibraryImport` for new P/Invoke declarations.** It generates the marshalling code at build time, works under Native AOT, and makes you state how `bool` and strings cross.
+
+**Match native types by size, not by name.** Use `CLong` for C `long`, a 1-byte `bool` for C `bool`, and `nint` or a `SafeHandle` for pointers and handles.
+
+**Keep structs blittable** and check their size against the native `sizeof`.
+
+**Pinning during a call is automatic.** Anything native code keeps after the call returns needs a pinned, native, or rooted object.
+
+**Wrap handles in `SafeHandle`** and read error codes immediately after a failed call.
+
+**Name every COM object and release it deliberately,** and prefer the source-generated COM interop for new interfaces.

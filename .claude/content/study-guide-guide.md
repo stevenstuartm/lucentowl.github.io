@@ -336,7 +336,7 @@ When writing about software architecture, use correct terminology:
 | Category | Subcategories |
 | --- | --- |
 | Architecture | Foundations, Styles, Patterns, Design, Modeling, Quality & Risk, Governance, Business & Economics |
-| Data Structures & Algorithms | Fundamentals, Linear Data Structures, Trees & Heaps, Graphs, Hash Tables & Algorithms |
+| Data Structures & Algorithms | Fundamentals, Core Data Structures, Trees & Heaps, Graphs, Algorithms |
 | Object-Oriented Programming | OOP Foundations, Design Patterns |
 | Security | Security Fundamentals, Application Security, Security Operations, Governance & Risk |
 | Software Development Lifecycle | SDLC Fundamentals, AAA Cycle, SDLC Frameworks, DevOps & Delivery |
@@ -346,6 +346,7 @@ When writing about software architecture, use correct terminology:
 | Observability | Monitoring & Observability |
 | Networking | Network Fundamentals |
 | Web Development | SEO & Web |
+| Developer Tools | Git Fundamentals, GitHub |
 | IoT | Foundations, Architecture & Data, Security & Firmware, Fleet Operations, Industrial IoT |
 | Leadership & Team Management | Engineering Leadership |
 | .NET & C# | Platform & Runtime, Language Fundamentals, Object-Oriented Programming, Async & Concurrency, Collections & Data, Core Libraries, Advanced Topics, IoT & Embedded, Tooling & Quality |
@@ -362,6 +363,7 @@ When writing about software architecture, use correct terminology:
 - Leadership guides: `_guides/leadership/` (including architecture decision-making, which is a leadership topic rather than an architecture one)
 - .NET & C# guides: `_guides/dotnet/c-sharp/` (by subcategory: `foundations/`, `fundamentals/`, `oop/`, `async/`, `collections/`, `libraries/`, `advanced/`, `tooling/`) plus `_guides/dotnet/iot/` for the IoT & Embedded subcategory. `_guides/dotnet/asp/`, `_guides/dotnet/aspire/`, and `_guides/dotnet/winui/` belong to the separate ASP.NET Core and WinUI 3 categories
 - Networking guides: `_guides/networking/`
+- Developer Tools guides: `_guides/developer-tools/` (Git and GitHub; the Azure-specific GitHub Actions guide lives under `_guides/infrastructure/azure/`)
 - Top-level guides (observability, etc.): `_guides/`
 
 **When to create new subcategories**:
