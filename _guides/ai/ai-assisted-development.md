@@ -70,7 +70,7 @@ An assistant can rewrite a lot of files quickly, and "undo" stops being a meanin
 
 ### Be Explicit About Constraints
 
-The model sees what you put in front of it. Conventions your team settled three years ago, the caching library already in the container, the error-handling pattern used everywhere else: none of it is visible unless something in the context shows it.
+The model sees what you put in front of it. Conventions your team settled three years ago, the caching library already in the container, the error-handling pattern used everywhere else. None of it is visible unless something in the context shows it.
 
 ```
 ❌ "Add a caching layer"

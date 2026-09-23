@@ -3,8 +3,8 @@ title: "C# Interfaces and Inheritance"
 layout: guide
 category: ".NET & C#"
 subcategory: "Object-Oriented Programming"
-description: "Interfaces, inheritance, polymorphism, and practical guidance on when to use inheritance vs composition, aggregation, and delegation in modern C#."
-tags: [c-sharp, dotnet, oop, interfaces, inheritance, polymorphism, design-patterns, practical]
+description: "Interfaces as contracts, explicit and default interface members, class inheritance with virtual, override, and new, constructors and virtual calls across a hierarchy, polymorphism, choosing between interfaces and abstract classes, and when to reach for composition, aggregation, or delegation instead of inheritance."
+tags: [interfaces, inheritance, polymorphism, default-interface-methods, composition-over-inheritance, oop, practical]
 ---
 
 ## Interfaces
@@ -90,23 +90,10 @@ public class CustomerRepository : IRepository<Customer>
 
 ### Multiple Interface Implementation
 
+A class has one base class but can implement any number of interfaces. Implementing the BCL's own contracts lets the type plug into everything built on them: `IComparable<T>` makes it sortable, and `IEquatable<T>` gives collections a strongly typed equality check.
+
 ```csharp
-public interface IComparable<T>
-{
-    int CompareTo(T other);
-}
-
-public interface IEquatable<T>
-{
-    bool Equals(T other);
-}
-
-public interface IFormattable
-{
-    string ToString(string format, IFormatProvider formatProvider);
-}
-
-public class Money : IComparable<Money>, IEquatable<Money>, IFormattable
+public sealed class Money : IComparable<Money>, IEquatable<Money>
 {
     public decimal Amount { get; }
     public string Currency { get; }
@@ -130,17 +117,13 @@ public class Money : IComparable<Money>, IEquatable<Money>, IFormattable
         Amount == other.Amount &&
         Currency == other.Currency;
 
-    public string ToString(string? format, IFormatProvider? formatProvider)
-    {
-        return format switch
-        {
-            "C" => $"{Currency} {Amount:N2}",
-            "S" => $"{Amount:N2}",
-            _ => $"{Amount} {Currency}"
-        };
-    }
+    // IEquatable<T> alone isn't enough: keep object equality and hashing consistent
+    public override bool Equals(object? obj) => Equals(obj as Money);
+    public override int GetHashCode() => HashCode.Combine(Amount, Currency);
 }
 ```
+
+Implementing `IEquatable<T>` without overriding `Equals(object)` and `GetHashCode` leaves the type with two definitions of equality. `List<T>.Contains` would use the new one while a `HashSet<T>` put equal values in different buckets, so the three always change together.
 
 ### Explicit Interface Implementation
 
@@ -191,30 +174,25 @@ printable.Draw();        // "Drawing to printer"
 
 ### Default Interface Methods (C# 8.0)
 
-Default interface methods allow you to add method bodies directly to an interface. Existing implementers continue to compile without changes, and the default logic runs unless an implementer explicitly overrides it.
+A default interface method gives an interface member a body. Implementers that don't provide their own implementation get the default, and implementers that do replace it. The feature needs runtime support, so it works on .NET Core 3.0 and later but not on .NET Framework.
 
 ```csharp
-public interface ILogger
+public interface ILog
 {
     void Log(string message);
 
-    // Default implementations - implementers don't need to provide these
-    void LogWarning(string message) =>
-        Log($"WARNING: {message}");
-
-    void LogError(string message) =>
-        Log($"ERROR: {message}");
-
-    void LogError(Exception ex) =>
-        LogError($"{ex.GetType().Name}: {ex.Message}");
+    // Default implementations: implementers don't have to provide these
+    void LogWarning(string message) => Log($"WARNING: {message}");
+    void LogError(string message) => Log($"ERROR: {message}");
+    void LogError(Exception ex) => LogError($"{ex.GetType().Name}: {ex.Message}");
 }
 
-public class ConsoleLogger : ILogger
+public class ConsoleLog : ILog
 {
     public void Log(string message) =>
         Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
 
-    // Can override default implementations when the default isn't sufficient
+    // Replaces the default; the interface dispatches to this version
     public void LogError(string message)
     {
         Console.ForegroundColor = ConsoleColor.Red;
@@ -224,93 +202,27 @@ public class ConsoleLogger : ILogger
 }
 ```
 
-Default methods are only accessible through the interface reference, not through the concrete type. The implementing class never declared these methods as part of its own API, so they don't appear on the class.
+A default member is reachable only through the interface, not through the concrete type, because the class never declared it:
 
 ```csharp
-var logger = new ConsoleLogger();
-// logger.LogWarning("Careful"); // Compile error - not on ConsoleLogger
+var log = new ConsoleLog();
+// log.LogWarning("Careful");   // compile error: not a member of ConsoleLog
 
-ILogger iLogger = logger;
-iLogger.LogWarning("Careful");   // Works - accessed through interface
-iLogger.LogError("Oops");        // Works - uses ConsoleLogger's override
+ILog ilog = log;
+ilog.LogWarning("Careful");      // the interface's default
+ilog.LogError("Oops");           // ConsoleLog's version
+ilog.LogError(new Exception());  // the default, which calls ConsoleLog's LogError(string)
 ```
 
-**Be skeptical of this feature.** The stated justification is interface evolution: a library author can add `LogWarning` to `ILogger` without breaking every consumer's build. But that compile error is arguably the better outcome. It forces the implementer to acknowledge the new method and make a conscious decision about how to handle it. A silent default means the new capability exists but nobody opted into it intentionally. Developers don't read release notes thoroughly (or at all), so the default behavior just runs without anyone realizing it's there.
+Interfaces gained more than method bodies in C# 8. They can declare static fields and methods, and non-public members. They still can't hold instance state: no instance fields, and a property declared in an interface is abstract rather than auto-implemented.
 
-C# already has `[Obsolete]` for deprecation and versioned interfaces for evolution. A compile error on upgrade is a feature, not a problem; it surfaces the change at the exact moment the developer needs to see it. Default interface methods trade that visibility for silent compatibility, which is a questionable tradeoff for most codebases.
+**Be skeptical of this feature in application code.** The stated justification is interface evolution. Adding a member to a published interface breaks every implementer's build, and an implementing assembly compiled against the old version and never rebuilt fails at run time, with a `TypeLoadException` when its type loads. A default body avoids both. For a library with many unknown implementers, avoiding that break justifies the feature, and the same construct also lets C# interoperate with Java and Swift APIs that use it.
 
-The feature exists primarily because the .NET runtime team needed it. When Microsoft adds a method to an interface like `IAsyncDisposable` that millions of classes across the ecosystem implement, a compile break at that scale is genuinely disruptive. That's a real problem, but it's a framework-author problem. For application code, adding a method to an interface and updating the five classes that implement it is straightforward, transparent, and leaves no hidden behavior.
+In application code, where the team owns every implementer, the compile error is arguably the better outcome. It forces each implementer to acknowledge the new member and decide how to handle it. A silent default means the new behavior runs in every implementation without anyone having chosen it. Adding a member to an interface and updating the five classes that implement it is straightforward, visible in review, and leaves no hidden behavior.
 
 ### Static Abstract Members (C# 11)
 
-Regular interface members define what an instance of a type can do: call `repository.GetById(5)` on any `IRepository<T>`. Static abstract members solve a different problem: they define what a type itself must provide, independent of any instance.
-
-The motivating case is generic math. Before C# 11, there was no way to write a generic `Sum<T>` method because there was no way to express "T must have a `+` operator and a zero value" as a constraint. You couldn't call `T.Zero` or use `left + right` inside a generic method because operators and static members aren't part of any interface contract. The only option was to pass in the operations as delegates or helper objects, which made the API awkward.
-
-Static abstract members close this gap by letting an interface require that implementing types provide specific static members, including operators, factory methods, and static properties. The constraint `where T : IAddable<T>` then guarantees that `T.Zero` and `T + T` are available at compile time.
-
-```csharp
-public interface IAddable<T> where T : IAddable<T>
-{
-    static abstract T operator +(T left, T right);
-    static abstract T Zero { get; }
-}
-
-public readonly struct Fraction : IAddable<Fraction>
-{
-    public int Numerator { get; }
-    public int Denominator { get; }
-
-    public Fraction(int numerator, int denominator)
-    {
-        Numerator = numerator;
-        Denominator = denominator;
-    }
-
-    public static Fraction Zero => new(0, 1);
-
-    public static Fraction operator +(Fraction left, Fraction right) =>
-        new(
-            left.Numerator * right.Denominator + right.Numerator * left.Denominator,
-            left.Denominator * right.Denominator);
-}
-
-// Now possible: a generic Sum that works with any type that defines + and Zero
-public static T Sum<T>(IEnumerable<T> values) where T : IAddable<T>
-{
-    T result = T.Zero;
-    foreach (var value in values)
-    {
-        result = result + value;
-    }
-    return result;
-}
-
-// Works with Fraction, int, double, or any custom type that implements IAddable<T>
-var fractions = new[] { new Fraction(1, 2), new Fraction(1, 3) };
-Fraction total = Sum(fractions);
-```
-
-The .NET 7+ `System.Numerics` namespace uses this pattern extensively. Interfaces like `INumber<T>`, `IAdditionOperators<TSelf, TOther, TResult>`, and `IParsable<T>` let you write generic algorithms that work across `int`, `double`, `decimal`, and custom numeric types without boxing or runtime type checks.
-
-Beyond math, the same pattern works for factory methods and parsing. An `IParsable<T>` interface with `static abstract T Parse(string s)` lets a generic method create instances of `T` from strings without reflection or activator hacks. The constraint tells the compiler that `T` knows how to construct itself.
-
-```csharp
-public interface IFactory<T> where T : IFactory<T>
-{
-    static abstract T Create();
-    static abstract T CreateFrom(string input);
-}
-
-// Generic method that creates instances without reflection
-public static T BuildAndValidate<T>(string input) where T : IFactory<T>
-{
-    T instance = T.CreateFrom(input);
-    return instance;
-}
-```
-
-The self-referencing constraint `where T : IInterface<T>` is called the curiously recurring template pattern. It looks unusual, but it's what makes the whole mechanism work: it lets the interface refer to the implementing type in its own member signatures, so `operator +` can return `T` rather than some base type.
+An interface can also declare `static abstract` and `static virtual` members, which an implementing type satisfies with its own static members, including operators. They are only usable through a generic type parameter constrained to the interface, since a static member has no instance to dispatch on. The BCL's generic math interfaces, such as `INumber<T>`, are built on them, which is what lets one generic method work across `int`, `double`, and `decimal`.
 
 ## Inheritance
 
@@ -397,54 +309,64 @@ d.VirtualMethod();    // "Derived override"
 d.NonVirtualMethod(); // "Derived new"
 ```
 
-### Abstract Classes and Methods
+### Constructors in a Hierarchy
+
+Constructors aren't inherited. Every constructor of a derived class calls a base constructor first, either one named with `: base(...)` or, when none is named, the base's parameterless constructor. If the base has no parameterless constructor, the derived class must name one.
 
 ```csharp
-public abstract class Shape
+public class Animal
 {
-    public string Color { get; set; }
-
-    // Abstract - must be implemented by derived class
-    public abstract double Area { get; }
-    public abstract double Perimeter { get; }
-
-    // Virtual - can be overridden
-    public virtual void Draw()
-    {
-        Console.WriteLine($"Drawing {Color} shape");
-    }
-
-    // Regular - inherited as-is
-    public void Describe()
-    {
-        Console.WriteLine($"{Color} shape: Area={Area:F2}, Perimeter={Perimeter:F2}");
-    }
+    public string Name { get; }
+    protected Animal(string name) => Name = name;
 }
 
-public class Rectangle : Shape
+public class Dog : Animal
 {
-    public double Width { get; set; }
-    public double Height { get; set; }
+    public string Breed { get; }
+    public Dog(string name, string breed) : base(name) => Breed = breed;
+}
+```
 
-    public override double Area => Width * Height;
-    public override double Perimeter => 2 * (Width + Height);
+The order has a trap. Derived field initializers run first, then the base constructor, then the derived constructor body. A virtual method called from the base constructor therefore dispatches to the derived override **before the derived constructor has run**:
+
+```csharp
+public class Base
+{
+    public Base() => Describe();
+    public virtual void Describe() => Console.WriteLine("base");
+}
+
+public class Derived : Base
+{
+    private readonly string fromInitializer = "set";
+    private readonly string fromConstructor;
+
+    public Derived(string value) => fromConstructor = value;
+
+    public override void Describe() =>
+        Console.WriteLine($"{fromInitializer}, {fromConstructor ?? "null"}");
+}
+
+new Derived("x");   // prints "set, null"
+```
+
+The override sees a half-built object, in which a non-nullable field that the constructor would have set is still null. Don't call virtual members from a constructor.
+
+### Covariant Return Types (C# 9)
+
+An override can narrow its return type to a more derived one, so a `Clone()` on a derived class can return the derived type rather than the base:
+
+```csharp
+public class Shape
+{
+    public virtual Shape Clone() => new Shape();
 }
 
 public class Circle : Shape
 {
-    public double Radius { get; set; }
-
-    public override double Area => Math.PI * Radius * Radius;
-    public override double Perimeter => 2 * Math.PI * Radius;
-
-    public override void Draw()
-    {
-        base.Draw(); // Call base implementation
-        Console.WriteLine($"Circle with radius {Radius}");
-    }
+    public override Circle Clone() => new Circle();   // callers holding a Circle get a Circle
 }
 ```
-
 
 ## Polymorphism
 
@@ -568,7 +490,7 @@ Both define contracts, but they serve different purposes.
 - You want to provide a partial implementation as a starting point
 - The relationship is truly "is-a" (a Dog IS an Animal)
 
-**Why this matters**: Inheritance creates tight coupling. When you inherit from a class, you take on its implementation details and any changes to the base class can break derived classes. Interfaces are pure contracts; implementing `IComparable` doesn't tie you to any specific implementation.
+**Why this matters**: Inheritance creates tight coupling. When you inherit from a class, you take on its implementation details, and changes to the base class can break derived classes. An interface is a contract with at most default members, and implementing `IComparable<T>` doesn't tie you to any particular implementation.
 
 **Common pattern**: Use an interface for the public contract and an abstract class for shared implementation among related types.
 
@@ -812,26 +734,23 @@ Delegation costs more code than inheritance because you manually forward each me
 
 ## Extending Types Without Creating Dependencies
 
-Sometimes the question isn't whether to inherit or compose, but how to add capability to an existing type without creating a dependency between types that don't need to know about each other.
+Sometimes the choice is not between inheriting and composing at all. The need is to add capability to an existing type without creating a dependency between types that don't need to know about each other.
 
 ### Extension Methods
 
-Extension methods add behavior without modifying the type. When an operation logically applies to a type but doesn't need access to private state, an extension method keeps the type clean while making the operation discoverable.
+Extension methods add behavior to a type without modifying it or deriving from it. When an operation logically applies to a type but doesn't need its private state, an extension method keeps the type small while making the operation discoverable.
 
 ```csharp
-public static class EnumerableExtensions
+public static class OrderExtensions
 {
-    public static IEnumerable<T> WhereNotNull<T>(this IEnumerable<T?> source) where T : class =>
-        source.Where(item => item is not null)!;
-
-    public static IEnumerable<IEnumerable<T>> Batch<T>(this IEnumerable<T> source, int size) =>
-        source.Select((item, index) => new { item, index })
-              .GroupBy(x => x.index / size)
-              .Select(g => g.Select(x => x.item));
+    public static bool IsOverdue(this Order order, DateTimeOffset now) =>
+        order.DueDate < now && order.Status != OrderStatus.Shipped;
 }
+
+if (order.IsOverdue(timeProvider.GetUtcNow())) { /* ... */ }
 ```
 
-Extension methods can't access private members, can't be overridden polymorphically, and can create confusion about where behavior lives when overused. They work best for utility operations that genuinely extend a type's surface area without changing its identity.
+An extension method can't access private members and can't be overridden, since the call is bound at compile time to the static method. It works best for operations that extend a type's surface without changing what the type is.
 
 ### Interface Composition
 
@@ -859,7 +778,7 @@ public class Order : IAuditable, ISoftDeletable
 
     // IAuditable
     public DateTime CreatedAt { get; set; }
-    public string CreatedBy { get; set; }
+    public string CreatedBy { get; set; } = "";
     public DateTime? ModifiedAt { get; set; }
     public string? ModifiedBy { get; set; }
 
@@ -871,7 +790,7 @@ public class Order : IAuditable, ISoftDeletable
 
 The alternative inheritance approach would require `Order` to extend `AuditableEntity` and somehow also include soft-delete behavior, likely through a chain like `AuditableEntity -> SoftDeletableEntity -> Order`. That hierarchy forces every auditable entity to also be soft-deletable (or vice versa), and it locks the order into a specific inheritance chain that can't accommodate future cross-cutting concerns.
 
-With interfaces, each type opts into exactly the capabilities it needs. Generic infrastructure code like an EF Core `SaveChangesInterceptor` can operate on any `IAuditable` entity regardless of its concrete type or inheritance chain. The tradeoff is boilerplate: each implementing class declares the interface properties rather than inheriting them from a base. But the flexibility gain is significant because a type can implement any combination of interfaces without being locked into a specific hierarchy.
+With interfaces, each type opts into exactly the capabilities it needs. Generic infrastructure code like an EF Core `SaveChangesInterceptor` can operate on any `IAuditable` entity regardless of its concrete type or inheritance chain. The tradeoff is boilerplate, since each implementing class declares the interface properties rather than inheriting them from a base. In exchange, a type can implement any combination of interfaces without being locked into a specific hierarchy.
 
 ## Key Takeaways
 
@@ -882,6 +801,8 @@ With interfaces, each type opts into exactly the capabilities it needs. Generic 
 **Apply the Liskov Substitution test**: Before creating an inheritance relationship, verify that the derived type can replace the base type in every context without violating expectations. If substitution breaks behavior, the hierarchy is wrong.
 
 **Choose the right form of composition**: Use composition (owned dependencies) for implementation details, aggregation (injected dependencies) for configurable collaborators, and delegation for adding behavior to existing contracts without inheritance.
+
+**Don't call virtual members from a constructor**: The derived override runs before the derived constructor body, against a half-built object.
 
 **Keep hierarchies shallow**: Deep inheritance chains create fragile coupling to base class internals. Two or three levels of meaningful specialization beats long chains of incremental additions.
 

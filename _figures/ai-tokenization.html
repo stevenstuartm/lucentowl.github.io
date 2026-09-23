@@ -1,0 +1,86 @@
+---
+title: "Text to Tokens"
+kind: structure
+system: ai-core
+summary: "Common words as single tokens, rare names and code split finer."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="aitk-title aitk-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aitk-title">How text splits into tokens</title>
+<desc id="aitk-desc">Three strings split into tokens, shown as alternating colored chips. The weather is nice today becomes five tokens, one per common word, about five characters each. Deploy to Kubernetes becomes five tokens because the rare name Kubernetes splits into Kub, ern, and etes. The JSON fragment with a retry field of 3 becomes five tokens from twelve characters, because punctuation and quotes take tokens of their own. The splits are illustrative and vary by tokenizer. Each piece maps to an integer ID in the vocabulary.</desc>
+<style>
+.tk-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.tk-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.tk-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.tk-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.tk-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.tk-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.tk-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.tk-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.tk-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.tk-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.tk-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.tk-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.tk-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.tk-dot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+
+.tk-code { font-family: 'Consolas', 'Menlo', 'Courier New', monospace; font-size: 13px; fill: var(--color-text, #2C3E50); }
+.tk-c0 { fill: #E3EEF6; stroke: var(--color-primary, #1A5F8A); stroke-width: 1; }
+.tk-c1 { fill: #EFE8F7; stroke: var(--color-purple, #6B3FA0); stroke-width: 1; }
+.tk-big { font-size: 18px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+</style>
+<defs>
+
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="tk-hd" x="30" y="30">TEXT</text>
+<text class="tk-hd" x="330" y="30">TOKENS (ILLUSTRATIVE SPLIT)</text>
+<text class="tk-hd" x="870" y="30" text-anchor="end">TOKENS</text>
+<rect class="tk-band" x="20" y="50" width="860" height="84" rx="8"/>
+<text class="tk-n" x="34" y="80">Common words</text>
+<text class="tk-code" x="34" y="106">The weather is nice today</text>
+<rect class="tk-c0" x="330" y="74" width="40" height="34" rx="4"/>
+<text class="tk-code" x="350" y="96" text-anchor="middle">The</text>
+<rect class="tk-c1" x="386" y="74" width="72" height="34" rx="4"/>
+<text class="tk-code" x="422" y="96" text-anchor="middle">weather</text>
+<rect class="tk-c0" x="474" y="74" width="32" height="34" rx="4"/>
+<text class="tk-code" x="490" y="96" text-anchor="middle">is</text>
+<rect class="tk-c1" x="522" y="74" width="48" height="34" rx="4"/>
+<text class="tk-code" x="546" y="96" text-anchor="middle">nice</text>
+<rect class="tk-c0" x="586" y="74" width="56" height="34" rx="4"/>
+<text class="tk-code" x="614" y="96" text-anchor="middle">today</text>
+<text class="tk-big" x="866" y="90" text-anchor="end">5</text>
+<text class="tk-s" x="866" y="110" text-anchor="end">5.0 chars each</text>
+<rect class="tk-band" x="20" y="150" width="860" height="84" rx="8"/>
+<text class="tk-n" x="34" y="180">A rare name</text>
+<text class="tk-code" x="34" y="206">Deploy to Kubernetes</text>
+<rect class="tk-c0" x="330" y="174" width="64" height="34" rx="4"/>
+<text class="tk-code" x="362" y="196" text-anchor="middle">Deploy</text>
+<rect class="tk-c1" x="410" y="174" width="32" height="34" rx="4"/>
+<text class="tk-code" x="426" y="196" text-anchor="middle">to</text>
+<rect class="tk-c0" x="458" y="174" width="40" height="34" rx="4"/>
+<text class="tk-code" x="478" y="196" text-anchor="middle">Kub</text>
+<rect class="tk-c1" x="502" y="174" width="40" height="34" rx="4"/>
+<text class="tk-code" x="522" y="196" text-anchor="middle">ern</text>
+<rect class="tk-c0" x="546" y="174" width="48" height="34" rx="4"/>
+<text class="tk-code" x="570" y="196" text-anchor="middle">etes</text>
+<text class="tk-big" x="866" y="190" text-anchor="end">5</text>
+<text class="tk-s" x="866" y="210" text-anchor="end">4.0 chars each</text>
+<rect class="tk-band" x="20" y="250" width="860" height="84" rx="8"/>
+<text class="tk-n" x="34" y="280">Code and JSON</text>
+<text class="tk-code" x="34" y="306">{&quot;retry&quot;: 3}</text>
+<rect class="tk-c0" x="330" y="274" width="32" height="34" rx="4"/>
+<text class="tk-code" x="346" y="296" text-anchor="middle">{&quot;</text>
+<rect class="tk-c1" x="366" y="274" width="56" height="34" rx="4"/>
+<text class="tk-code" x="394" y="296" text-anchor="middle">retry</text>
+<rect class="tk-c0" x="426" y="274" width="32" height="34" rx="4"/>
+<text class="tk-code" x="442" y="296" text-anchor="middle">&quot;:</text>
+<rect class="tk-c1" x="462" y="274" width="24" height="34" rx="4"/>
+<text class="tk-code" x="474" y="296" text-anchor="middle">3</text>
+<rect class="tk-c0" x="490" y="274" width="24" height="34" rx="4"/>
+<text class="tk-code" x="502" y="296" text-anchor="middle">}</text>
+<text class="tk-big" x="866" y="290" text-anchor="end">5</text>
+<text class="tk-s" x="866" y="310" text-anchor="end">2.4 chars each</text>
+<text class="tk-el" x="30" y="360">Each piece maps to an integer ID in the model's vocabulary, which is all the model reads.</text>
+<text class="tk-el" x="30" y="378">Splits vary by tokenizer. Non-English text usually breaks into more pieces than English.</text>
+</g>
+</svg>

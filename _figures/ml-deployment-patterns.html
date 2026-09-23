@@ -1,0 +1,129 @@
+---
+title: "Model Deployment Patterns"
+kind: flow
+system: mlops
+summary: "How five deployment patterns split live traffic between two models."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="mldp-title mldp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mldp-title">How shadow, canary, blue-green, A/B, and bandit deployments route traffic</title>
+<desc id="mldp-desc">Five rows, each routing live traffic to a current model and a new model. Shadow: all users are served by the current model while the new model receives a copy of the traffic and its predictions are logged, not used. Canary: most traffic goes to the current model and a small share goes to the new one, rising as metrics hold. Blue-green: traffic switches from the current environment to the new one at once, and rollback is instant. A/B test: traffic splits between the two models long enough to compare outcomes. Multi-armed bandit: traffic shifts toward whichever model performs better while the test runs.</desc>
+<style>
+.mldp-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mldp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mldp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mldp-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mldp-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mldp-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mldp-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mldp-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mldp-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mldp-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mldp-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mldp-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mldp-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mldp-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mldp-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.mldp-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mldp-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mldp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mldp-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mldp-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mldp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mldp-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mldp-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mldp-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.mldp-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+.mldp-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mldp-c1 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mldp-c2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.mldp-c3 { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mldp-c4 { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2; stroke-dasharray: 3 3; }
+.mldp-area1 { fill: var(--color-primary, #1A5F8A); opacity: 0.14; }
+.mldp-area2 { fill: var(--color-accent, #A5486E); opacity: 0.14; }
+.mldp-g { font-size: 11px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mldp-dot { fill: var(--color-primary, #1A5F8A); }
+.mldp-dotx { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.mldp-prev { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 2; }
+.mldp-copy { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="mldp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mldp-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="mldp-hd" x="24" y="28">PATTERN</text>
+<text class="mldp-hd" x="330" y="28">WHERE LIVE TRAFFIC GOES</text>
+<text class="mldp-hd" x="640" y="28">WHAT USERS SEE</text>
+<rect class="mldp-band" x="12" y="38" width="876" height="94" rx="8"/>
+<text class="mldp-t" x="24" y="74">Shadow</text>
+<text class="mldp-s" x="24" y="94">copy of live traffic</text>
+<rect class="mldp-sys" x="206" y="66" width="100" height="36" rx="6"/>
+<text class="mldp-n-inv" x="218" y="89">Live traffic</text>
+<rect class="mldp-box" x="430" y="46" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="68">Current model</text>
+<rect class="mldp-box" x="430" y="90" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="112">New model</text>
+<path class="mldp-flow" style="stroke-width:9" d="M 306,84 C 364,84 364,62 424,62"/>
+<path class="mldp-copy" style="stroke-width:3" d="M 306,84 C 364,84 364,106 424,106"/>
+<text class="mldp-s" x="640" y="68">current model's predictions</text>
+<text class="mldp-s" x="640" y="112">new: logged, not used</text>
+<rect class="mldp-band" x="12" y="140" width="876" height="94" rx="8"/>
+<text class="mldp-t" x="24" y="176">Canary</text>
+<text class="mldp-s" x="24" y="196">small share, then more</text>
+<rect class="mldp-sys" x="206" y="168" width="100" height="36" rx="6"/>
+<text class="mldp-n-inv" x="218" y="191">Live traffic</text>
+<rect class="mldp-box" x="430" y="148" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="170">Current model</text>
+<rect class="mldp-box" x="430" y="192" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="214">New model</text>
+<path class="mldp-flow" style="stroke-width:9" d="M 306,186 C 364,186 364,164 424,164"/>
+<path class="mldp-flow" style="stroke-width:2" d="M 306,186 C 364,186 364,208 424,208"/>
+<text class="mldp-s" x="640" y="170">most users</text>
+<text class="mldp-s" x="640" y="214">a small share, rising as</text>
+<text class="mldp-s" x="640" y="230">metrics hold</text>
+<rect class="mldp-band" x="12" y="242" width="876" height="94" rx="8"/>
+<text class="mldp-t" x="24" y="278">Blue-green</text>
+<text class="mldp-s" x="24" y="298">switch over at once</text>
+<rect class="mldp-sys" x="206" y="270" width="100" height="36" rx="6"/>
+<text class="mldp-n-inv" x="218" y="293">Live traffic</text>
+<rect class="mldp-box" x="430" y="250" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="272">Current model</text>
+<rect class="mldp-box" x="430" y="294" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="316">New model</text>
+<path class="mldp-prev" style="stroke-width:3" d="M 306,288 C 364,288 364,266 424,266"/>
+<path class="mldp-flow" style="stroke-width:9" d="M 306,288 C 364,288 364,310 424,310"/>
+<text class="mldp-s" x="640" y="272">before the switch</text>
+<text class="mldp-s" x="640" y="316">everyone, after one cutover,</text>
+<text class="mldp-s" x="640" y="332">with instant rollback</text>
+<rect class="mldp-band" x="12" y="344" width="876" height="94" rx="8"/>
+<text class="mldp-t" x="24" y="380">A/B test</text>
+<text class="mldp-s" x="24" y="400">split to compare outcomes</text>
+<rect class="mldp-sys" x="206" y="372" width="100" height="36" rx="6"/>
+<text class="mldp-n-inv" x="218" y="395">Live traffic</text>
+<rect class="mldp-box" x="430" y="352" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="374">Current model</text>
+<rect class="mldp-box" x="430" y="396" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="418">New model</text>
+<path class="mldp-flow" style="stroke-width:6" d="M 306,390 C 364,390 364,368 424,368"/>
+<path class="mldp-flow" style="stroke-width:6" d="M 306,390 C 364,390 364,412 424,412"/>
+<text class="mldp-s" x="640" y="374">one group</text>
+<text class="mldp-s" x="640" y="418">another group, long enough</text>
+<text class="mldp-s" x="640" y="434">to compare outcomes</text>
+<rect class="mldp-band" x="12" y="446" width="876" height="94" rx="8"/>
+<text class="mldp-t" x="24" y="482">Multi-armed bandit</text>
+<text class="mldp-s" x="24" y="502">shift toward the better one</text>
+<rect class="mldp-sys" x="206" y="474" width="100" height="36" rx="6"/>
+<text class="mldp-n-inv" x="218" y="497">Live traffic</text>
+<rect class="mldp-box" x="430" y="454" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="476">Current model</text>
+<rect class="mldp-box" x="430" y="498" width="160" height="34" rx="6"/>
+<text class="mldp-t" x="442" y="520">New model</text>
+<path class="mldp-flow" style="stroke-width:3" d="M 306,492 C 364,492 364,470 424,470"/>
+<path class="mldp-flow" style="stroke-width:8" d="M 306,492 C 364,492 364,514 424,514"/>
+<text class="mldp-s" x="640" y="476">less, if it performs worse</text>
+<text class="mldp-s" x="640" y="520">more, while it performs</text>
+<text class="mldp-s" x="640" y="536">better</text>
+<text class="mldp-el" x="24" y="552">Line width shows the share of live traffic. Dashed: a copy that reaches a model but not users. Pale: traffic before the switch.</text>
+</g>
+</svg>

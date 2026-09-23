@@ -1,0 +1,76 @@
+---
+title: "The Reinforcement Learning Loop"
+kind: flow
+system: machine-learning
+summary: "An agent acts, and the environment returns a state and reward."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 262" role="img" aria-labelledby="mlq-title mlq-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mlq-title">The reinforcement learning loop</title>
+<desc id="mlq-desc">An agent, here a game-playing program, chooses an action according to its policy and sends it to the environment, the game itself. The environment responds with a new state, the board after the move, and a reward, the points won or lost, which is often zero. The agent chooses its next action from the new state, and the loop repeats.</desc>
+<style>
+.mlq-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mlq-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlq-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mlq-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlq-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mlq-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mlq-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mlq-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mlq-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlq-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mlq-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlq-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mlq-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mlq-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mlq-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mlq-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mlq-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlq-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mlq-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mlq-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mlq-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mlq-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mlq-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mlq-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mlq-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mlq-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mlq-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlq-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlq-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mlq-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mlq-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlq-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mlq-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mlq-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mlq-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlq-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mlq-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mlq-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mlq-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlq-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlq-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlq-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mlq-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mlq-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mlq-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mlq-sys" x="120" y="80" width="240" height="90" rx="6"/>
+<text class="mlq-t-inv" x="134" y="106">Agent</text>
+<text class="mlq-s-inv" x="134" y="128">the game-playing program</text>
+<text class="mlq-s-inv" x="134" y="146">chooses moves by its policy</text>
+<rect class="mlq-box" x="540" y="80" width="240" height="90" rx="6"/>
+<text class="mlq-n" x="552" y="104">Environment</text>
+<text class="mlq-s" x="552" y="124">the game itself</text>
+<text class="mlq-s" x="552" y="142">responds to every move</text>
+<path class="mlq-flow" d="M 240,80 V 50 H 660 V 74" marker-end="url(#mlq-a)"/>
+<text class="mlq-lab" x="372" y="42">action: a move</text>
+<path class="mlq-flow" d="M 660,170 V 206 H 240 V 176" marker-end="url(#mlq-a)"/>
+<text class="mlq-lab" x="280" y="226">new state: the board after the move</text>
+<text class="mlq-lab" x="280" y="244">reward: points won or lost, often zero</text>
+</g>
+</svg>

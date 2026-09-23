@@ -1,0 +1,86 @@
+---
+title: "MCP Hosts, Clients, and Servers"
+kind: container
+system: llm-systems
+summary: "One client per server inside the host; only the host talks to the model."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" role="img" aria-labelledby="mcpa-title mcpa-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mcpa-title">MCP host, client, and server architecture</title>
+<desc id="mcpa-desc">A host application such as a chat app, IDE, or agent runtime owns the conversation with the model API and sends it the conversation, including tool results. Inside the host, one client connects to each server: client A to a local filesystem server over stdio, clients B and C to remote ticketing and internal API servers over Streamable HTTP. Each server reaches its own backend: local files, a ticketing API, or internal services. The model never talks to the servers directly.</desc>
+<style>
+.mcpa-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mcpa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mcpa-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mcpa-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mcpa-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mcpa-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mcpa-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mcpa-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mcpa-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mcpa-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mcpa-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mcpa-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mcpa-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mcpa-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mcpa-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.mcpa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mcpa-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mcpa-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mcpa-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mcpa-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mcpa-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mcpa-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mcpa-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mcpa-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.mcpa-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="mcpa-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mcpa-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mcpa-ext" x="330" y="16" width="240" height="62" rx="6"/>
+<text class="mcpa-t-ext" x="342" y="38">Model API</text>
+<text class="mcpa-k" x="342" y="55">[Model provider]</text>
+<text class="mcpa-s" x="342" y="73">never talks to servers</text>
+<rect class="mcpa-band" x="24" y="110" width="852" height="150" rx="8"/>
+<text class="mcpa-t" x="40" y="134">Host application</text>
+<text class="mcpa-k" x="40" y="151">[Chat app, IDE, or agent runtime]</text>
+<text class="mcpa-s" x="40" y="169">owns the conversation, can gate and log every call</text>
+<path class="mcpa-flow" d="M 450,110 V 84" marker-end="url(#mcpa-a)"/>
+<text class="mcpa-el" x="462" y="100">conversation, including tool results</text>
+<rect class="mcpa-box" x="76" y="192" width="200" height="48" rx="6"/>
+<text class="mcpa-t" x="88" y="214">Client A</text>
+<text class="mcpa-k" x="88" y="231">[one per server]</text>
+<rect class="mcpa-box" x="350" y="192" width="200" height="48" rx="6"/>
+<text class="mcpa-t" x="362" y="214">Client B</text>
+<text class="mcpa-k" x="362" y="231">[one per server]</text>
+<rect class="mcpa-box" x="624" y="192" width="200" height="48" rx="6"/>
+<text class="mcpa-t" x="636" y="214">Client C</text>
+<text class="mcpa-k" x="636" y="231">[one per server]</text>
+<path class="mcpa-flow" d="M 176,240 V 302" marker-end="url(#mcpa-a)"/>
+<text class="mcpa-el" x="186" y="276">stdio</text>
+<rect class="mcpa-sys" x="76" y="308" width="200" height="64" rx="6"/>
+<text class="mcpa-t-inv" x="88" y="330">Filesystem server</text>
+<text class="mcpa-k-inv" x="88" y="347">[Local child process]</text>
+<path class="mcpa-flow" d="M 176,372 V 418" marker-end="url(#mcpa-a)"/>
+<rect class="mcpa-ext" x="76" y="424" width="200" height="40" rx="6"/>
+<text class="mcpa-t-ext" x="88" y="446">Local files</text>
+<path class="mcpa-flow" d="M 450,240 V 302" marker-end="url(#mcpa-a)"/>
+<text class="mcpa-el" x="460" y="276">Streamable HTTP</text>
+<rect class="mcpa-sys" x="350" y="308" width="200" height="64" rx="6"/>
+<text class="mcpa-t-inv" x="362" y="330">Ticketing server</text>
+<text class="mcpa-k-inv" x="362" y="347">[Remote service]</text>
+<path class="mcpa-flow" d="M 450,372 V 418" marker-end="url(#mcpa-a)"/>
+<rect class="mcpa-ext" x="350" y="424" width="200" height="40" rx="6"/>
+<text class="mcpa-t-ext" x="362" y="446">Ticketing API</text>
+<path class="mcpa-flow" d="M 724,240 V 302" marker-end="url(#mcpa-a)"/>
+<text class="mcpa-el" x="734" y="276">Streamable HTTP</text>
+<rect class="mcpa-sys" x="624" y="308" width="200" height="64" rx="6"/>
+<text class="mcpa-t-inv" x="636" y="330">Internal API server</text>
+<text class="mcpa-k-inv" x="636" y="347">[Remote service]</text>
+<path class="mcpa-flow" d="M 724,372 V 418" marker-end="url(#mcpa-a)"/>
+<rect class="mcpa-ext" x="624" y="424" width="200" height="40" rx="6"/>
+<text class="mcpa-t-ext" x="636" y="446">Internal services</text>
+</g>
+</svg>

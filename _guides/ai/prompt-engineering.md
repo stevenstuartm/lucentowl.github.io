@@ -128,6 +128,8 @@ A single reasoning chain can go wrong at one step and carry the error to the end
 
 **Tree of Thoughts** ([Yao et al., 2023](https://arxiv.org/abs/2305.10601){:target="_blank" rel="noopener noreferrer"}) treats problem solving as search. The model proposes several candidate next steps, evaluates how promising each is, explores the best ones further, and backtracks from dead ends. It's a program that orchestrates many model calls, not a single prompt. On the Game of 24 puzzle, the authors report GPT-4 with chain-of-thought prompting solved 4% of tasks while their Tree of Thoughts method solved 74%.
 
+{% include figure.html id="llm-reasoning-structures" %}
+
 | Aspect | Chain-of-thought | Self-consistency | Tree of Thoughts |
 |---|---|---|---|
 | **Structure** | One linear reasoning path | Several independent paths, then a vote | A search tree of partial solutions, with evaluation at each step |

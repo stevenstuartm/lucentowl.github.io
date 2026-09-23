@@ -3,658 +3,335 @@ title: "C# Control Flow"
 layout: guide
 category: ".NET & C#"
 subcategory: "Language Fundamentals"
-description: "Conditionals, loops, and branching in C# including modern switch expressions and pattern-based control flow."
-tags: [c-sharp, dotnet, fundamentals, control-flow, pattern-matching, practical]
+description: "How C# statements direct execution: if and guard clauses, the switch statement's no-fall-through rules, choosing between for, foreach, while, and do, what foreach compiles to, loop-variable capture, and how break, continue, return, and goto interact with finally."
+tags: [control-flow, switch-statement, loops, foreach, closures, fundamentals]
 ---
 
-## Conditional Statements
+## Statements Direct Execution
 
-### if, else if, else
+Control flow is the set of **statements** that decide which code runs next. Branches choose a path, loops repeat one, and jump statements leave a block early. None of them produce a value. When the goal of a branch is to compute a value, expression forms like the conditional operator `?:` and the switch expression usually fit better, because the result can be assigned once and the compiler can check that every case is handled. This guide covers the statement forms, which remain the right tool when each path *does* something rather than *produces* something.
 
-The fundamental branching construct.
+## Branching with if
 
 ```csharp
-int score = 85;
-
 if (score >= 90)
 {
-    Console.WriteLine("A");
+    grade = "A";
 }
 else if (score >= 80)
 {
-    Console.WriteLine("B");
-}
-else if (score >= 70)
-{
-    Console.WriteLine("C");
+    grade = "B";
 }
 else
 {
-    Console.WriteLine("F");
+    grade = "C";
 }
+```
 
-// Single statements don't require braces, but using them is safer
-if (isValid)
-    ProcessItem(); // Works but easy to introduce bugs when adding lines
+The braces are optional around a single statement, and leaving them out is how a second line added later ends up running unconditionally. Most teams enforce braces through an EditorConfig rule rather than code review.
 
-// Nested conditions - consider refactoring if deeply nested
-if (user != null)
+The condition can be any `bool` expression, including a pattern test that binds a variable for use inside the branch:
+
+```csharp
+if (value is string text)
 {
-    if (user.IsActive)
+    Console.WriteLine(text.Length);  // text is in scope and non-null here
+}
+```
+
+### Guard Clauses Flatten Nesting
+
+Each nested `if` adds a level of indentation and a condition the reader has to hold in mind until its closing brace. A method that checks three preconditions before doing its work reads as a pyramid:
+
+```csharp
+if (order != null)
+{
+    if (order.Items.Count > 0)
     {
-        if (user.HasPermission("admin"))
+        if (order.Status == OrderStatus.Pending)
         {
-            // Deep nesting is a code smell
+            Process(order);
         }
     }
 }
-
-// Better: guard clauses
-if (user == null) return;
-if (!user.IsActive) return;
-if (!user.HasPermission("admin")) return;
-// Main logic here, not nested
 ```
 
-### Conditional with Pattern Matching
-
-Combine `if` with pattern matching for type-safe branching.
+Inverting each condition and leaving early puts the preconditions at the top, one per line, and leaves the main logic unindented:
 
 ```csharp
-object value = GetValue();
+ArgumentNullException.ThrowIfNull(order);
+if (order.Items.Count == 0) return;
+if (order.Status != OrderStatus.Pending)
+    throw new InvalidOperationException("Order already processed");
 
-// Type pattern with variable
-if (value is string text)
-{
-    Console.WriteLine($"String of length {text.Length}");
-}
-else if (value is int number)
-{
-    Console.WriteLine($"Number: {number}");
-}
-else if (value is null)
-{
-    Console.WriteLine("Null value");
-}
-
-// Property pattern
-if (customer is { IsPremium: true, Balance: > 1000 })
-{
-    ApplyDiscount(customer);
-}
-
-// Negated pattern
-if (input is not null and not "")
-{
-    Process(input);
-}
-
-// Relational patterns
-if (age is >= 18 and < 65)
-{
-    Console.WriteLine("Working age");
-}
+Process(order);
 ```
 
-## Switch Statement
+The two versions behave the same. The difference is that in the second, a reader who reaches `Process(order)` knows every condition that led there without scanning back through the braces.
 
-Multi-way branching based on a value.
+## The switch Statement
 
-### Classic Switch
+A `switch` statement compares one value against a list of `case` labels and runs the statements in the first section that matches.
 
 ```csharp
-DayOfWeek day = DateTime.Now.DayOfWeek;
-
 switch (day)
 {
-    case DayOfWeek.Monday:
-    case DayOfWeek.Tuesday:
-    case DayOfWeek.Wednesday:
-    case DayOfWeek.Thursday:
-    case DayOfWeek.Friday:
-        Console.WriteLine("Weekday");
-        break;
     case DayOfWeek.Saturday:
     case DayOfWeek.Sunday:
-        Console.WriteLine("Weekend");
+        ScheduleMaintenance();
         break;
+    case DayOfWeek.Monday:
+        SendWeeklyReport();
+        goto default;          // run the default section as well
     default:
-        Console.WriteLine("Unknown");
+        ProcessQueue();
         break;
 }
 ```
 
-### Pattern-Based Switch Statement (C# 7.0)
+### No Fall-Through Between Sections
+
+In C and Java, a `case` without a `break` falls through into the next one. C# makes that a compile error. Every section must end with a statement that leaves it: `break`, `return`, `throw`, `continue` inside a loop, or `goto`. Stacking several labels on one section, as `Saturday` and `Sunday` do above, is allowed because the first label has no statements of its own. When one section genuinely should continue into another, `goto case X` or `goto default` says so explicitly, and the reader can't mistake it for a forgotten `break`.
+
+### Pattern Cases and Their Order
+
+Since C# 7, a `case` label can be any pattern, optionally followed by a `when` guard for conditions a pattern can't express. Cases are then checked **top to bottom**, so a specific case must come before a general one that would also match. The compiler rejects a case that an earlier one already covers, since it could never run.
 
 ```csharp
-object shape = GetShape();
-
 switch (shape)
 {
-    case Circle c when c.Radius > 10:
-        Console.WriteLine($"Large circle with radius {c.Radius}");
+    case Circle { Radius: > 10 } c:
+        Console.WriteLine($"Large circle, radius {c.Radius}");
         break;
     case Circle c:
-        Console.WriteLine($"Circle with radius {c.Radius}");
+        Console.WriteLine($"Circle, radius {c.Radius}");
         break;
-    case Rectangle { Width: var w, Height: var h } when w == h:
-        Console.WriteLine($"Square with side {w}");
-        break;
-    case Rectangle r:
-        Console.WriteLine($"Rectangle {r.Width}x{r.Height}");
+    case Rectangle r when r.Width == r.Height:
+        Console.WriteLine($"Square, side {r.Width}");
         break;
     case null:
         Console.WriteLine("No shape");
         break;
     default:
-        Console.WriteLine("Unknown shape");
+        Console.WriteLine("Other shape");
         break;
 }
 ```
 
-### Switch Expression (C# 8.0)
+`default` can appear anywhere in the list and still runs only when no other case matches. If nothing matches and there is no `default`, the statement does nothing and execution continues after it. That silence is the main practical difference from a switch expression, which warns at compile time about unhandled inputs and throws at run time if one arrives.
 
-When you need to return a value based on patterns, switch expressions are more concise.
+Use the statement when each case performs actions, needs several statements, or has nothing to return. When every case produces a value for the same variable, the switch expression is shorter and the compiler checks it more thoroughly.
 
-```csharp
-// Basic switch expression
-string dayType = day switch
-{
-    DayOfWeek.Saturday or DayOfWeek.Sunday => "Weekend",
-    _ => "Weekday"
-};
+## Choosing a Loop
 
-// With relational patterns
-string grade = score switch
-{
-    >= 90 => "A",
-    >= 80 => "B",
-    >= 70 => "C",
-    >= 60 => "D",
-    _ => "F"
-};
-
-// Property patterns
-decimal discount = customer switch
-{
-    { IsPremium: true, YearsActive: > 5 } => 0.25m,
-    { IsPremium: true } => 0.15m,
-    { YearsActive: > 10 } => 0.10m,
-    _ => 0m
-};
-
-// Tuple patterns
-string direction = (x, y) switch
-{
-    (0, 0) => "Origin",
-    (> 0, 0) => "Right",
-    (< 0, 0) => "Left",
-    (0, > 0) => "Up",
-    (0, < 0) => "Down",
-    (> 0, > 0) => "Upper-right",
-    (< 0, > 0) => "Upper-left",
-    (< 0, < 0) => "Lower-left",
-    (> 0, < 0) => "Lower-right",
-    _ => throw new InvalidOperationException()
-};
-
-// Type patterns
-double area = shape switch
-{
-    Circle c => Math.PI * c.Radius * c.Radius,
-    Rectangle r => r.Width * r.Height,
-    Triangle t => 0.5 * t.Base * t.Height,
-    null => 0,
-    _ => throw new ArgumentException($"Unknown shape: {shape.GetType()}")
-};
-```
-
-<div class="callout callout--tip">
-<p class="callout__title">When to Use Statement vs Expression</p>
-<p>Use <strong>switch expressions</strong> when you need to return or assign a value based on patterns. They're concise and readable for mapping scenarios.</p>
-<p>Use <strong>switch statements</strong> when each case needs multiple statements, side effects, or complex logic that doesn't fit neatly into a single expression.</p>
-</div>
-
-## Loops
-
-### for Loop
-
-Use when you need a counter or known iteration count.
+| Loop | Tests its condition | Use when |
+|------|---------------------|----------|
+| `foreach` | Before each element | Visiting every element of a collection, which is most loops |
+| `for` | Before each iteration | The index itself matters: stepping by more than one, iterating backwards, or reading neighbouring elements |
+| `while` | Before each iteration, so the body may run zero times | The end depends on something other than a count, like input or a queue draining |
+| `do`/`while` | After each iteration, so the body runs at least once | The first pass produces the value the condition tests, as with prompting until the input is valid |
 
 ```csharp
-// Standard for loop
-for (int i = 0; i < 10; i++)
-{
-    Console.WriteLine(i);
-}
-
-// Reverse iteration
-for (int i = array.Length - 1; i >= 0; i--)
+for (int i = array.Length - 1; i >= 0; i--)     // backwards by index
 {
     Console.WriteLine(array[i]);
 }
 
-// Step by 2
-for (int i = 0; i < 100; i += 2)
-{
-    Console.WriteLine(i); // Even numbers
-}
-
-// Multiple variables
-for (int i = 0, j = 10; i < j; i++, j--)
-{
-    Console.WriteLine($"i={i}, j={j}");
-}
-
-// Infinite loop (use break to exit)
-for (;;)
-{
-    if (ShouldStop()) break;
-    DoWork();
-}
-```
-
-### foreach Loop
-
-Iterate over any `IEnumerable<T>` or `IEnumerable`.
-
-```csharp
-var names = new List<string> { "Alice", "Bob", "Charlie" };
-
-foreach (var name in names)
+foreach (var name in names)                      // every element
 {
     Console.WriteLine(name);
 }
 
-// With index using LINQ
-foreach (var (name, index) in names.Select((n, i) => (n, i)))
+string? line;
+while ((line = reader.ReadLine()) is not null)   // until the input ends
+{
+    Process(line);
+}
+
+int choice;
+do                                               // at least once
+{
+    Console.Write("Enter 1-10: ");
+}
+while (!int.TryParse(Console.ReadLine(), out choice) || choice is < 1 or > 10);
+```
+
+The `while` loop tests for `null`, not only for a sentinel string. `ReadLine` returns `null` at the end of input, and a loop written as `while ((line = Console.ReadLine()) != "quit")` never ends when input is redirected from a file that lacks the sentinel.
+
+Every section of a `for` header is optional, so `for (;;)` is an infinite loop, as is `while (true)`. Both need a `break` or `return` inside to stop.
+
+## How foreach Works
+
+`foreach` does not require `IEnumerable<T>`. It works on any type with a public `GetEnumerator()` method (an extension method counts) that returns something with a `bool MoveNext()` method and a `Current` property. The compiler rewrites the loop into roughly this:
+
+```csharp
+var e = collection.GetEnumerator();
+try
+{
+    while (e.MoveNext())
+    {
+        var item = e.Current;
+        // loop body
+    }
+}
+finally
+{
+    (e as IDisposable)?.Dispose();
+}
+```
+
+That shape explains several behaviours. The enumerator is disposed even when the body throws or `break`s, which is what lets an iterator method's `finally` blocks and `using` statements run. Applying `foreach` to `null` throws `NullReferenceException` at the `GetEnumerator()` call. For arrays and `Span<T>`, the compiler skips the enumerator and emits an indexed loop, so `foreach` over an array costs no more than `for`.
+
+### Modifying the Collection Ends the Loop
+
+The standard collections track a version number that every `Add`, `Remove`, or `Clear` increments. The enumerator checks it on each `MoveNext`, so changing the collection mid-loop throws `InvalidOperationException` on the next iteration:
+
+```csharp
+foreach (var item in list)
+{
+    if (item.IsExpired)
+        list.Remove(item);   // InvalidOperationException on the next MoveNext
+}
+
+// Removing in place: iterate backwards by index so removals don't shift unvisited items
+for (int i = list.Count - 1; i >= 0; i--)
+{
+    if (list[i].IsExpired)
+        list.RemoveAt(i);
+}
+
+// Or let the collection do it
+list.RemoveAll(item => item.IsExpired);
+```
+
+### Getting the Index and Writing Elements
+
+`foreach` gives the element, not its position. When the position is also needed, `Index()` (.NET 9) pairs each element with its index, and on earlier versions `Select((item, i) => (i, item))` does the same:
+
+```csharp
+foreach (var (index, name) in names.Index())
 {
     Console.WriteLine($"{index}: {name}");
 }
+```
 
-// Dictionary iteration
-var scores = new Dictionary<string, int>
-{
-    ["Alice"] = 95,
-    ["Bob"] = 87
-};
+The iteration variable is a read-only copy of the element, so assigning to it doesn't compile. When the enumerator's `Current` returns by reference, as `Span<T>`'s does, declaring the variable `ref` makes it an alias for the element itself, and writes go straight into the underlying memory:
 
-foreach (var kvp in scores)
-{
-    Console.WriteLine($"{kvp.Key}: {kvp.Value}");
-}
-
-// Deconstruct KeyValuePair
-foreach (var (name, score) in scores)
-{
-    Console.WriteLine($"{name}: {score}");
-}
-
-// Ref foreach for modifying structs in place (C# 7.3)
-Span<int> numbers = stackalloc int[] { 1, 2, 3, 4, 5 };
+```csharp
+Span<int> numbers = stackalloc int[] { 1, 2, 3 };
 foreach (ref int n in numbers)
 {
-    n *= 2; // Modifies in place
+    n *= 2;   // numbers is now { 2, 4, 6 }
 }
 ```
 
-### while and do-while
+For an `IAsyncEnumerable<T>`, `await foreach` follows the same pattern with `GetAsyncEnumerator` and an awaited `MoveNextAsync`.
+
+## Loop Variables and Closures
+
+A lambda created inside a loop **captures the variable, not its current value**. Whether that is a bug depends on which loop declared the variable.
 
 ```csharp
-// while - check condition first
-int count = 0;
-while (count < 10)
-{
-    Console.WriteLine(count);
-    count++;
-}
+var actions = new List<Func<int>>();
 
-// Reading until condition met
-string input;
-while ((input = Console.ReadLine()) != "quit")
-{
-    ProcessInput(input);
-}
+for (int i = 0; i < 3; i++)
+    actions.Add(() => i);
+// Every lambda returns 3
 
-// do-while - execute at least once
-do
-{
-    Console.Write("Enter a number (1-10): ");
-    input = Console.ReadLine();
-} while (!int.TryParse(input, out int n) || n < 1 || n > 10);
+foreach (var x in new[] { 0, 1, 2 })
+    actions.Add(() => x);
+// These return 0, 1, 2
 ```
 
-## Loop Control
-
-### break
-
-Exit the innermost loop immediately.
+A `for` loop declares **one** `i` for the whole loop, and every lambda shares it. By the time they run, the loop has finished and `i` is 3. `foreach` declares a **fresh** variable for each iteration (a change made in C# 5), so each lambda has its own. The fix for `for` is to copy the value into a variable declared inside the body:
 
 ```csharp
-foreach (var item in items)
+for (int i = 0; i < 3; i++)
 {
-    if (item.IsTarget)
-    {
-        foundItem = item;
-        break; // Exit loop
-    }
-}
-
-// Breaking from nested loops requires a flag or goto
-bool found = false;
-for (int i = 0; i < rows && !found; i++)
-{
-    for (int j = 0; j < cols; j++)
-    {
-        if (matrix[i, j] == target)
-        {
-            found = true;
-            break; // Only exits inner loop
-        }
-    }
+    int copy = i;
+    actions.Add(() => copy);  // 0, 1, 2
 }
 ```
 
-### continue
+The same trap applies to any delayed use of a loop variable, including tasks started in the loop and event handlers subscribed in it.
 
-Skip to the next iteration.
+## Jump Statements
+
+Four statements move execution somewhere other than the next line. `break` leaves the innermost loop or `switch`. `continue` skips to the next iteration of the innermost loop. `return` leaves the method. `goto` jumps to a label in the same method, or to another `case` within a `switch`.
 
 ```csharp
 foreach (var file in files)
 {
     if (file.IsHidden)
-        continue; // Skip hidden files
+        continue;        // next file
 
-    ProcessFile(file);
-}
-
-// Filtering in loops
-for (int i = 0; i < 100; i++)
-{
-    if (i % 2 != 0)
-        continue; // Skip odd numbers
-
-    ProcessEvenNumber(i);
-}
-```
-
-<div class="callout callout--warning">
-<p class="callout__title">goto (Use Sparingly)</p>
-<p>Jump to a labeled statement. Rarely appropriate, but valid for breaking nested loops. In most cases, extracting to a method with an early return is clearer.</p>
-</div>
-
-### goto (Use Sparingly)
-
-Jump to a labeled statement. Rarely appropriate, but valid for breaking nested loops.
-
-```csharp
-for (int i = 0; i < rows; i++)
-{
-    for (int j = 0; j < cols; j++)
+    if (file.Name == target)
     {
-        if (matrix[i, j] == target)
-        {
-            goto Found;
-        }
-    }
-}
-Console.WriteLine("Not found");
-goto End;
-
-Found:
-Console.WriteLine("Found!");
-
-End:
-// Continue with rest of code
-```
-
-Better alternative: extract to a method.
-
-```csharp
-var (row, col) = FindInMatrix(matrix, target);
-if (row >= 0)
-{
-    Console.WriteLine($"Found at ({row}, {col})");
-}
-
-(int Row, int Col) FindInMatrix(int[,] matrix, int target)
-{
-    for (int i = 0; i < matrix.GetLength(0); i++)
-    {
-        for (int j = 0; j < matrix.GetLength(1); j++)
-        {
-            if (matrix[i, j] == target)
-                return (i, j);
-        }
-    }
-    return (-1, -1);
-}
-```
-
-## Exception Handling
-
-### try-catch-finally
-
-```csharp
-try
-{
-    var content = File.ReadAllText(path);
-    ProcessContent(content);
-}
-catch (FileNotFoundException ex)
-{
-    Console.WriteLine($"File not found: {ex.FileName}");
-}
-catch (IOException ex)
-{
-    Console.WriteLine($"IO error: {ex.Message}");
-}
-catch (Exception ex)
-{
-    // Catch-all should be last
-    Console.WriteLine($"Unexpected error: {ex.Message}");
-    throw; // Re-throw to preserve stack trace
-}
-finally
-{
-    // Always executes, even if exception thrown
-    CleanupResources();
-}
-```
-
-### Exception Filters (C# 6.0)
-
-Filter which exceptions to catch based on conditions.
-
-```csharp
-try
-{
-    await httpClient.GetAsync(url);
-}
-catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-{
-    return null; // Handle 404 specifically
-}
-catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
-{
-    throw new AuthenticationException("Invalid credentials", ex);
-}
-catch (HttpRequestException ex)
-{
-    throw new ServiceException($"HTTP error: {ex.StatusCode}", ex);
-}
-
-// Logging without catching
-catch (Exception ex) when (LogException(ex))
-{
-    // Never executes if LogException returns false
-}
-
-bool LogException(Exception ex)
-{
-    logger.LogError(ex, "Error occurred");
-    return false; // Don't catch, just log
-}
-```
-
-### throw and throw Expressions
-
-```csharp
-// Throwing exceptions
-throw new ArgumentNullException(nameof(customer));
-throw new InvalidOperationException("Cannot process in current state");
-
-// throw expressions (C# 7.0)
-string name = input ?? throw new ArgumentNullException(nameof(input));
-
-var customer = GetCustomer(id) ?? throw new KeyNotFoundException($"Customer {id} not found");
-
-// In expression-bodied members
-public string Name
-{
-    get => name ?? throw new InvalidOperationException("Name not set");
-    set => name = value ?? throw new ArgumentNullException(nameof(value));
-}
-
-// In conditional expressions
-int result = isValid
-    ? ProcessValue(value)
-    : throw new InvalidOperationException("Invalid state");
-```
-
-### using Statement
-
-Ensures `IDisposable` resources are properly cleaned up.
-
-```csharp
-// Classic using statement
-using (var reader = new StreamReader(path))
-{
-    string content = reader.ReadToEnd();
-    return content;
-}
-// reader.Dispose() called automatically
-
-// Using declaration (C# 8.0) - disposes at end of scope
-using var connection = new SqlConnection(connectionString);
-connection.Open();
-// Use connection...
-// Disposed when method exits
-
-// Multiple using declarations
-using var reader = new StreamReader(inputPath);
-using var writer = new StreamWriter(outputPath);
-string line;
-while ((line = reader.ReadLine()) != null)
-{
-    writer.WriteLine(line.ToUpper());
-}
-// Both disposed at end of method
-
-// Pattern-based using (C# 8.0)
-// Works with any type that has a public Dispose method
-ref struct ResourceWrapper
-{
-    public void Dispose() { /* cleanup */ }
-}
-
-using var wrapper = new ResourceWrapper();
-```
-
-### await using for Async Dispose (C# 8.0)
-
-```csharp
-await using var connection = new SqlConnection(connectionString);
-await connection.OpenAsync();
-
-await using var command = connection.CreateCommand();
-command.CommandText = "SELECT * FROM Users";
-
-await using var reader = await command.ExecuteReaderAsync();
-while (await reader.ReadAsync())
-{
-    // Process rows
-}
-// All resources disposed asynchronously
-```
-
-## Iteration Patterns
-
-### Early Exit with Guard Clauses
-
-```csharp
-public void ProcessOrder(Order order)
-{
-    // Guard clauses reduce nesting
-    if (order == null)
-        throw new ArgumentNullException(nameof(order));
-
-    if (order.Items.Count == 0)
-        return; // Nothing to process
-
-    if (order.Status != OrderStatus.Pending)
-        throw new InvalidOperationException("Order already processed");
-
-    // Main logic, not nested
-    foreach (var item in order.Items)
-    {
-        ProcessItem(item);
+        found = file;
+        break;           // stop searching
     }
 }
 ```
 
-### Collection Filtering in Loops vs LINQ
+### Leaving Nested Loops
+
+`break` only leaves the innermost loop, so finding a value in a grid needs something more. A `goto` to a label after the outer loop works and is one of the few uses of `goto` that reads clearly. Extracting the search into a method and using `return` usually reads better still, because the method's name documents what the loops are for:
 
 ```csharp
-// Loop with filtering
-var results = new List<string>();
-foreach (var item in items)
+static (int Row, int Col)? Find(int[,] grid, int target)
 {
-    if (item.IsActive && item.Value > 10)
+    for (int r = 0; r < grid.GetLength(0); r++)
+        for (int c = 0; c < grid.GetLength(1); c++)
+            if (grid[r, c] == target)
+                return (r, c);
+
+    return null;
+}
+```
+
+A flag variable checked in the outer loop's condition also works, at the cost of an extra variable whose only job is to carry the result out.
+
+### Jumps Still Run finally
+
+A `return`, `break`, `continue`, or `goto` that leaves a `try` block runs the `finally` block on the way out. The jump is not skipped, it is delayed:
+
+```csharp
+static int Read()
+{
+    try
     {
-        results.Add(item.Name);
+        return 1;
+    }
+    finally
+    {
+        Console.WriteLine("cleanup");  // prints before the caller receives 1
     }
 }
+```
 
-// LINQ equivalent (often clearer for simple transformations)
-var results = items
+The same guarantee covers `using` statements, which compile to `try`/`finally`, and the `foreach` enumerator disposal shown above. It's why an early `return` from inside a `using` block, or a `break` out of a `foreach` over a file-reading iterator, still releases the resource. A `finally` block itself cannot contain a `return`, and a jump out of `finally` is a compile error.
+
+## Loops Versus LINQ
+
+Much of what a loop does (filtering, projecting, summing, finding the first match) LINQ expresses as a single query:
+
+```csharp
+var names = items
     .Where(i => i.IsActive && i.Value > 10)
     .Select(i => i.Name)
     .ToList();
-
-// Use loops when:
-// - You need to break early
-// - You have complex side effects
-// - Performance is critical (avoid allocations)
 ```
 
-### Parallel Iteration
-
-```csharp
-// Parallel.ForEach for CPU-bound work
-Parallel.ForEach(items, item =>
-{
-    ProcessItem(item); // Runs on multiple threads
-});
-
-// With degree of parallelism
-Parallel.ForEach(items,
-    new ParallelOptions { MaxDegreeOfParallelism = 4 },
-    item => ProcessItem(item));
-
-// For async I/O-bound work, use Task.WhenAll
-var tasks = items.Select(item => ProcessItemAsync(item));
-await Task.WhenAll(tasks);
-```
+The query states *what* is computed. The loop states *how*, which is what makes the loop the better choice when the body has side effects beyond building a result, when one pass needs to update several results at once, or when it has to stop early on a condition that isn't simply "found the first match". In hot paths, a loop also avoids the delegate calls and enumerator allocations a LINQ chain can introduce, though that is a reason to measure, not a default.
 
 ## Key Takeaways
 
-**Prefer switch expressions for mapping**: When transforming a value based on patterns, switch expressions are clearer than if-else chains.
+**Leave early instead of nesting.** Guard clauses put the preconditions at the top and keep the main logic unindented.
 
-**Use guard clauses to reduce nesting**: Return early for invalid cases instead of deeply nesting the happy path.
+**A switch section can't fall through.** Stack labels to share a section and use `goto case` when one section should continue into another. Pattern cases are checked in order, and a `switch` statement with no match silently does nothing.
 
-**Use using declarations**: The C# 8.0 `using var` syntax reduces nesting while maintaining deterministic disposal.
+**`foreach` is a pattern, not an interface.** It disposes its enumerator on every exit and throws if the collection changes underneath it.
 
-**Pattern matching makes intent clear**: Combining `is` patterns and switch expressions often produces more readable code than traditional type checks and casts.
+**`for` shares its loop variable, `foreach` doesn't.** A lambda created in a `for` loop sees the variable's final value unless the body copies it first.
 
-**Choose the right loop**: Use `for` when you need an index, `foreach` for general iteration, and `while` when the termination condition isn't iteration-based.
+**Every jump out of a `try` runs `finally`.** That includes `return`, `break`, and `continue`, which is why `using` and `foreach` still clean up on an early exit.

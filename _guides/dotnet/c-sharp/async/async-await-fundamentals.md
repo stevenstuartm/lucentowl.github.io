@@ -3,598 +3,451 @@ title: "C# Async/Await Fundamentals"
 layout: guide
 category: ".NET & C#"
 subcategory: "Async & Concurrency"
-description: "Asynchronous programming with async/await, Task-based patterns, cancellation, and best practices for I/O-bound operations."
-tags: [c-sharp, dotnet, async, concurrency, task, performance, practical]
+description: "What await does to a method, where continuations run and why ConfigureAwait exists, why blocking on async code deadlocks or starves the thread pool, Task and ValueTask, exceptions and cancellation in async code, running operations concurrently, and the fire-and-forget and async void traps."
+tags: [async, task, cancellation-tokens, configureawait, synchronization-context, valuetask, practical]
 ---
 
 ## Why Async
 
-Asynchronous programming enables non-blocking I/O operations. While waiting for a database query, HTTP request, or file read, the thread can do other work instead of sitting idle.
+An I/O operation, such as a database query, an HTTP call, or a file read, spends almost all of its time waiting on something outside the process. A synchronous call holds a thread for that whole wait. An asynchronous call releases the thread and picks the work back up when the result arrives.
 
 ```csharp
-// Synchronous - blocks thread while waiting
-public string GetData()
-{
-    var response = httpClient.GetString("https://api.example.com"); // Thread blocked
-    return response;
-}
+// Synchronous: the calling thread is blocked until the file is read
+public string LoadSettings() => File.ReadAllText("settings.json");
 
-// Asynchronous - thread freed while waiting
-public async Task<string> GetDataAsync()
-{
-    var response = await httpClient.GetStringAsync("https://api.example.com"); // Thread freed
-    return response;
-}
+// Asynchronous: the thread is released while the read is in flight
+public async Task<string> LoadSettingsAsync() =>
+    await File.ReadAllTextAsync("settings.json");
 ```
 
-**Key insight**: Async isn't about parallelism or making things faster. It's about freeing threads to handle other requests while waiting for I/O. A web server using async can handle thousands of concurrent requests with a small thread pool.
+Async doesn't make a single operation faster, and it isn't parallelism. It makes waiting cheap. A web server whose request handlers await their I/O can serve thousands of concurrent requests from a small thread pool, because a request that is waiting holds no thread at all. CPU-bound work gains nothing from `async`, since there is no wait to release a thread during.
 
-## Task and Task<T>
+## What await Does
 
-`Task` represents an asynchronous operation. `Task<T>` represents an operation that returns a value.
-
-```csharp
-// Task - no return value
-public Task SaveDataAsync(string data)
-{
-    return File.WriteAllTextAsync("data.txt", data);
-}
-
-// Task<T> - returns a value
-public Task<string> LoadDataAsync()
-{
-    return File.ReadAllTextAsync("data.txt");
-}
-
-// Creating completed tasks
-Task completedTask = Task.CompletedTask;
-Task<int> resultTask = Task.FromResult(42);
-Task<string> failedTask = Task.FromException<string>(new Exception("Failed"));
-
-// Creating a task from a canceled token
-Task canceledTask = Task.FromCanceled(canceledToken);
-```
-
-## async and await
-
-The `async` modifier enables `await` in a method. `await` pauses execution until the awaited task completes, without blocking the thread.
+The compiler rewrites an `async` method into a state machine. Every `await` is a point where the method may pause, and the code after it becomes a **continuation** that runs when the awaited operation completes.
 
 ```csharp
 public async Task<Customer> GetCustomerAsync(int id)
 {
-    // Execution pauses here, thread returns to pool
+    Log("starting");                                          // runs on the caller's thread
     var json = await httpClient.GetStringAsync($"/customers/{id}");
-
-    // Execution resumes when HTTP call completes
-    return JsonSerializer.Deserialize<Customer>(json);
-}
-
-// Multiple sequential awaits
-public async Task ProcessOrderAsync(Order order)
-{
-    var customer = await GetCustomerAsync(order.CustomerId);
-    var inventory = await CheckInventoryAsync(order.Items);
-    var result = await SubmitOrderAsync(order, customer, inventory);
-    await SendConfirmationAsync(result);
+    return JsonSerializer.Deserialize<Customer>(json)!;       // runs later, as the continuation
 }
 ```
+
+Calling the method runs it **synchronously, on the caller's thread, up to the first `await` whose operation isn't already complete.** At that point the method registers its continuation and returns an incomplete `Task<Customer>` to the caller. The thread is then free. When the HTTP call finishes, the continuation runs, the method finishes, and the task completes with the result.
+
+```
+caller thread     GetCustomerAsync()
+  │── call ──────▶ Log("starting")
+  │               await GetStringAsync ── not complete: register continuation
+  │◀── Task ───── return an incomplete Task
+  │   (thread free for other work)
+  │
+  │               ... the HTTP response arrives ...
+  │
+continuation      Deserialize → return → Task completes → anyone awaiting it resumes
+```
+
+Two consequences follow. If the awaited task is already complete, as with a cache hit, `await` doesn't pause at all and the method carries on synchronously. And the "pause" never blocks anything: there is no thread sitting in the method while it waits.
+
+A chain of awaits is the same thing repeated. Each `await` in `ProcessOrderAsync` below releases the thread until that step completes:
+
+```csharp
+public async Task ProcessOrderAsync(Order order, CancellationToken ct)
+{
+    var customer = await GetCustomerAsync(order.CustomerId, ct);
+    var inventory = await CheckInventoryAsync(order.Items, ct);
+    var result = await SubmitOrderAsync(order, customer, inventory, ct);
+    await SendConfirmationAsync(result, ct);
+}
+```
+
+## Where the Continuation Runs
+
+When an `await` pauses, it captures the current `SynchronizationContext`, if there is one, and schedules the continuation back onto it. Without one, the continuation runs on a thread-pool thread.
+
+| Environment | Captured context | Where code after `await` runs |
+| --- | --- | --- |
+| WPF, WinForms, WinUI, .NET MAUI | The UI thread's context | Back on the UI thread, so it can touch controls |
+| ASP.NET Core | None | Any thread-pool thread |
+| Console apps, worker services | None | Any thread-pool thread |
+| Classic ASP.NET (.NET Framework) | The request context | One request-bound thread at a time |
+
+`ConfigureAwait(false)` tells an `await` not to capture the context, so the continuation can run on any thread-pool thread:
+
+```csharp
+public async Task<Report> BuildReportAsync(CancellationToken ct)
+{
+    var data = await FetchDataAsync(ct).ConfigureAwait(false);
+    return Summarize(data);   // may run on a thread-pool thread, not the caller's context
+}
+```
+
+**Use it in general-purpose library code.** A library doesn't know whether its caller has a UI context, and its continuations never need that context. Skipping the capture avoids a needless hop back to the UI thread, and it removes the library's part in the deadlock described next. **Don't use it in UI code that touches controls after the await**, since that code has to be back on the UI thread. In ASP.NET Core application code it makes no difference, because there is no context to capture.
+
+.NET 8 added an overload that takes `ConfigureAwaitOptions` flags. `SuppressThrowing` awaits completion without rethrowing a failure, and it is valid only on a non-generic `Task`, since a `Task<T>` would have no result to return. `ForceYielding` always schedules the continuation asynchronously even when the task has already completed.
+
+## Blocking on Async Code
+
+Calling `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` on an incomplete task blocks the current thread until the task finishes. That is called sync-over-async, and it fails in one of two ways.
+
+**Deadlock under a single-threaded context.** On a UI thread, the blocking call holds the only thread that the context will run continuations on. The awaited operation completes and posts its continuation to that context, which can't run it because the thread is blocked waiting for that very continuation. Neither side can proceed.
+
+```csharp
+// On a UI thread: deadlocks
+private void Button_Click(object sender, EventArgs e)
+{
+    var data = LoadAsync().Result;   // blocks the UI thread
+}
+
+private async Task<string> LoadAsync()
+{
+    await Task.Delay(100);           // continuation wants the UI thread
+    return "done";
+}
+```
+
+`ConfigureAwait(false)` inside `LoadAsync` would stop this particular deadlock, which is why libraries use it. It doesn't make blocking a good idea.
+
+**Thread-pool starvation where there's no context.** ASP.NET Core can't deadlock this way, but each blocked request holds a thread-pool thread for the whole wait. Under load, the pool runs out of threads faster than it adds new ones, and requests queue behind blocked threads. Throughput collapses while CPU sits idle.
+
+The fix for both is to await all the way up the call chain. When blocking is truly unavoidable, such as in a `Main` from before async `Main` existed, prefer `.GetAwaiter().GetResult()` over `.Result`: it rethrows the original exception, while `.Result` and `.Wait()` wrap it in an `AggregateException`.
+
+## Task and Task&lt;T&gt;
+
+`Task` represents an operation that will complete, and `Task<T>` one that will complete with a value. A task ends in one of three states: `RanToCompletion`, `Faulted` (it holds the exception), or `Canceled`.
+
+```csharp
+// Ready-made tasks, for methods that sometimes have the answer immediately
+Task done = Task.CompletedTask;
+Task<int> answer = Task.FromResult(42);
+Task<string> failed = Task.FromException<string>(new InvalidOperationException());
+Task cancelled = Task.FromCanceled(alreadyCancelledToken);   // the token must be cancelled
+```
+
+To expose a callback- or event-based API as a task, use `TaskCompletionSource<T>`. You hand out its `Task` and complete it when the callback fires:
+
+```csharp
+public static Task<Reading> NextReadingAsync(Sensor sensor)
+{
+    var tcs = new TaskCompletionSource<Reading>(TaskCreationOptions.RunContinuationsAsynchronously);
+    sensor.ReadingAvailable += (_, reading) => tcs.TrySetResult(reading);
+    return tcs.Task;
+}
+```
+
+`RunContinuationsAsynchronously` stops awaiters' continuations from running inline inside the event handler that completed the task, which could otherwise run unrelated code on the sensor's thread.
 
 ## Return Types
 
-### Task and Task<T>
+### Task and Task&lt;T&gt;
 
-Standard return types for async methods.
+The default. Return `Task` from an async method with no result and `Task<T>` from one with a result.
 
-```csharp
-// Return Task when no value returned
-public async Task SaveAsync()
-{
-    await repository.SaveChangesAsync();
-}
+### ValueTask and ValueTask&lt;T&gt;
 
-// Return Task<T> when returning a value
-public async Task<int> CountAsync()
-{
-    return await repository.CountAsync();
-}
-```
-
-### ValueTask and ValueTask<T>
-
-Optimization for methods that often complete synchronously.
+`ValueTask<T>` is a struct that holds either a result or a task. A method that usually completes synchronously, such as one that often hits a cache, can return its result with no `Task` allocation at all:
 
 ```csharp
 public async ValueTask<int> GetCachedValueAsync(string key)
 {
-    // Synchronous path - no allocation
     if (cache.TryGetValue(key, out int value))
-        return value;
+        return value;                        // synchronous path: no allocation
 
-    // Async path - allocates Task
-    value = await LoadFromDatabaseAsync(key);
+    value = await LoadFromDatabaseAsync(key);  // asynchronous path allocates as usual
     cache[key] = value;
     return value;
 }
 ```
 
-**Use ValueTask when**:
-- The operation often completes synchronously (cache hits)
-- Called in high-throughput scenarios
-- The allocation overhead of Task matters
+That saving comes with rules, because a `ValueTask` may be backed by a pooled object that gets reused once consumed:
 
-**Constraints**:
-- Can only be awaited once
-- Cannot use `.Result` or `.Wait()`
-- Cannot store and await later
+- Await it **once**. Don't await the same `ValueTask` twice, or from two places concurrently.
+- Don't read `.Result` or call `.GetAwaiter().GetResult()` unless `IsCompletedSuccessfully` is already true.
+- If you need to store it, await it more than once, or combine it with `Task.WhenAll`, call `.AsTask()` first.
 
-### async void (Avoid)
+Return `ValueTask` when the synchronous path is common and the method is hot enough for the allocation to show up in a profile. Otherwise return `Task`, which has none of these restrictions.
 
-Only for event handlers. Cannot be awaited, exceptions can crash the process.
+### async void
+
+An `async void` method can't be awaited, so the caller can't know when it finishes or observe its exceptions. An exception that escapes an `async void` method is rethrown on the captured `SynchronizationContext`, or on the thread pool when there is none, and **an unhandled exception on the thread pool terminates the process**.
+
+It exists for event handlers, whose delegate signature requires `void`. Keep the handler thin and catch everything inside it:
 
 ```csharp
-// BAD - exceptions crash the process
-private async void Button_Click(object sender, EventArgs e)
-{
-    await ProcessAsync(); // If this throws, app crashes
-}
-
-// BETTER - wrap in try-catch
-private async void Button_Click(object sender, EventArgs e)
+private async void SaveButton_Click(object sender, EventArgs e)
 {
     try
     {
-        await ProcessAsync();
+        await SaveAsync();
     }
     catch (Exception ex)
     {
-        HandleError(ex);
+        ShowError(ex);
     }
 }
 ```
 
-## Concurrent Execution
+Anywhere else, return `Task`. A lambda passed where an `Action` is expected is also `async void`, so `list.ForEach(async x => await SaveAsync(x))` compiles, starts every save without awaiting any of them, and lets their exceptions crash the process.
+
+## Exceptions in Async Methods
+
+An exception thrown inside an `async` method, **even before its first `await`**, doesn't propagate out of the call. The compiler catches it and stores it in the returned task, which becomes `Faulted`, and the exception is rethrown where the task is awaited:
+
+```csharp
+public async Task SaveAsync(Order order)
+{
+    ArgumentNullException.ThrowIfNull(order);   // stored in the task, not thrown here
+    await repository.SaveAsync(order);
+}
+
+Task pending = SaveAsync(null!);   // no exception yet
+await pending;                     // ArgumentNullException thrown here
+```
+
+That delay is harmless when the caller awaits immediately, which is usually the case. When argument errors should surface at the call site even if the task is stored and awaited later, split the method into a non-async wrapper that validates and an async core that does the work:
+
+```csharp
+public Task SaveAsync(Order order)
+{
+    ArgumentNullException.ThrowIfNull(order);   // thrown at the call
+    return SaveCoreAsync(order);
+
+    async Task SaveCoreAsync(Order o) => await repository.SaveAsync(o);
+}
+```
+
+`await` rethrows a faulted task's exception directly, not wrapped, so `catch` blocks name specific types as they would for synchronous code. For a task that failed more than once, such as one from `Task.WhenAll`, `await` rethrows only the first failure. The rest are available only through the task's `Exception` property.
+
+## Returning a Task Without Awaiting It
+
+A method whose last step is awaiting another task can return that task directly instead of being `async`. That skips building a state machine:
+
+```csharp
+public Task<string> ReadConfigAsync(string path) => File.ReadAllTextAsync(path);
+```
+
+It is safe only when nothing in the method needs to happen after the inner task completes. Two common cases break it:
+
+```csharp
+// Broken: the reader is disposed as soon as the method returns,
+// before ReadToEndAsync has finished using it
+public Task<string> ReadAllAsync(string path)
+{
+    using var reader = new StreamReader(path);
+    return reader.ReadToEndAsync();
+}
+
+// Broken: the try only covers starting the operation, not its failure
+public Task SaveSafelyAsync(Order order)
+{
+    try { return repository.SaveAsync(order); }
+    catch (DbException) { return Task.CompletedTask; }   // misses exceptions stored in the task
+}
+```
+
+Both need `async` and `await`, so that the `using` and the `try` span the whole operation. When in doubt, keep `async`. The saving from eliding it is small.
+
+## Running Operations Concurrently
 
 ### Task.WhenAll
 
-Run multiple tasks concurrently and wait for all to complete.
+Awaiting operations one after another makes their latencies add up. Starting them all first and then awaiting them together makes the total roughly the latency of the slowest:
 
 ```csharp
-public async Task<OrderSummary> GetOrderSummaryAsync(int orderId)
+public async Task<OrderSummary> GetOrderSummaryAsync(int orderId, CancellationToken ct)
 {
-    // Start all tasks
-    var orderTask = GetOrderAsync(orderId);
-    var customerTask = GetCustomerAsync(orderId);
-    var itemsTask = GetOrderItemsAsync(orderId);
+    // Start all three; none is awaited yet
+    Task<Order> orderTask = GetOrderAsync(orderId, ct);
+    Task<Customer> customerTask = GetCustomerForOrderAsync(orderId, ct);
+    Task<List<Item>> itemsTask = GetOrderItemsAsync(orderId, ct);
 
-    // Wait for all to complete
     await Task.WhenAll(orderTask, customerTask, itemsTask);
 
-    return new OrderSummary
-    {
-        Order = orderTask.Result,
-        Customer = customerTask.Result,
-        Items = itemsTask.Result
-    };
-}
-
-// Or with tuple deconstruction
-public async Task<(Order, Customer)> GetOrderWithCustomerAsync(int id)
-{
-    var orderTask = GetOrderAsync(id);
-    var customerTask = GetCustomerAsync(id);
-
-    await Task.WhenAll(orderTask, customerTask);
-
-    return (await orderTask, await customerTask);
-}
-
-// Processing a collection concurrently
-public async Task ProcessAllAsync(IEnumerable<Order> orders)
-{
-    var tasks = orders.Select(o => ProcessOrderAsync(o));
-    await Task.WhenAll(tasks);
+    // All complete: awaiting again returns immediately
+    return new OrderSummary(await orderTask, await customerTask, await itemsTask);
 }
 ```
 
-### Task.WhenAny
+Only start operations concurrently when they are independent and the resource behind them can take the load. Two queries on the same Entity Framework `DbContext` at once throw, because a `DbContext` doesn't support concurrent operations.
 
-Wait for the first task to complete.
+When the tasks come from a LINQ query, materialize them before awaiting. `Select` is lazy, and enumerating it a second time, for example in a `catch` block that inspects the failures, calls the method again and starts every operation over:
 
 ```csharp
-public async Task<string> GetFastestResponseAsync()
-{
-    var task1 = httpClient.GetStringAsync("https://server1.com/data");
-    var task2 = httpClient.GetStringAsync("https://server2.com/data");
+Task<string>[] downloads = urls.Select(url => httpClient.GetStringAsync(url, ct)).ToArray();
+Task<string[]> all = Task.WhenAll(downloads);
 
-    var firstCompleted = await Task.WhenAny(task1, task2);
-    return await firstCompleted;
+try
+{
+    string[] pages = await all;
 }
-
-// Timeout pattern
-public async Task<string?> GetWithTimeoutAsync(string url, TimeSpan timeout)
+catch
 {
-    var dataTask = httpClient.GetStringAsync(url);
-    var timeoutTask = Task.Delay(timeout);
-
-    var completed = await Task.WhenAny(dataTask, timeoutTask);
-
-    if (completed == timeoutTask)
-        return null; // Timed out
-
-    return await dataTask;
+    foreach (var ex in all.Exception!.InnerExceptions)   // every failure, not just the first
+        logger.LogError(ex, "Download failed");
+    throw;
 }
 ```
+
+### Limiting Concurrency
+
+`Task.WhenAll` over ten thousand items starts ten thousand operations at once, which can exhaust connections or trip a remote service's rate limit. `Parallel.ForEachAsync` (.NET 6) runs an async body over a collection with a cap on how many run at the same time:
+
+```csharp
+await Parallel.ForEachAsync(orders,
+    new ParallelOptions { MaxDegreeOfParallelism = 8, CancellationToken = ct },
+    async (order, token) => await ProcessOrderAsync(order, token));
+```
+
+A `SemaphoreSlim` shared across callers is the alternative when the limit has to span unrelated code paths.
+
+### Task.WhenAny and Timeouts
+
+`Task.WhenAny` completes when the first of its tasks does, and returns that task:
+
+```csharp
+Task<string> primary = httpClient.GetStringAsync(primaryUrl, ct);
+Task<string> mirror = httpClient.GetStringAsync(mirrorUrl, ct);
+
+Task<string> first = await Task.WhenAny(primary, mirror);
+string data = await first;   // rethrows if the first to finish failed
+```
+
+The losing task keeps running. Nothing cancels it, and if it later fails nobody observes the exception. The same flaw sinks the old timeout idiom of racing an operation against `Task.Delay`. Prefer one of two approaches:
+
+```csharp
+// Stop waiting after a timeout (.NET 6): throws TimeoutException, operation keeps running
+string result = await LoadAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+// Actually stop the operation: give it a token that cancels itself
+using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+cts.CancelAfter(TimeSpan.FromSeconds(5));
+string result2 = await httpClient.GetStringAsync(url, cts.Token);
+```
+
+`WaitAsync` only stops the waiting. Cancellation stops the work, provided the operation honors the token, which is the better outcome whenever the API accepts one.
 
 ## Cancellation
 
-### CancellationToken
+Cancellation in .NET is cooperative. A `CancellationTokenSource` issues a `CancellationToken`, code that can stop checks the token or passes it on, and cancelling the source signals every holder of the token. Nothing is ever forcibly aborted.
 
-Pass cancellation tokens to async methods to enable cancellation.
+### Accepting and Passing a Token
+
+Accept a `CancellationToken` as the last parameter of any async method that does I/O or long work, and pass it to everything you call:
 
 ```csharp
-public async Task<string> FetchDataAsync(string url, CancellationToken cancellationToken)
+public async Task<string> FetchAsync(string url, CancellationToken ct = default)
 {
-    // Pass token to underlying operations
-    var response = await httpClient.GetAsync(url, cancellationToken);
-    var content = await response.Content.ReadAsStringAsync(cancellationToken);
-    return content;
+    using var response = await httpClient.GetAsync(url, ct);
+    return await response.Content.ReadAsStringAsync(ct);
 }
 
-// Check for cancellation in loops
-public async Task ProcessBatchAsync(IEnumerable<Item> items, CancellationToken cancellationToken)
+public async Task ProcessBatchAsync(IEnumerable<Item> items, CancellationToken ct)
 {
     foreach (var item in items)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        await ProcessItemAsync(item, cancellationToken);
+        ct.ThrowIfCancellationRequested();   // check between units of work
+        await ProcessItemAsync(item, ct);
     }
 }
 ```
 
-### CancellationTokenSource
+A method that stops early because of the token throws `OperationCanceledException`, often its subclass `TaskCanceledException`. A task that ends that way is in the `Canceled` state rather than `Faulted`.
 
-Create and control cancellation tokens.
+### Creating Tokens
 
 ```csharp
-// Basic usage
 using var cts = new CancellationTokenSource();
+cts.Cancel();                                      // cancel now
 
-// Cancel manually
-cts.Cancel();
+using var timed = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+timed.CancelAfter(TimeSpan.FromMinutes(5));        // reset the deadline
 
-// Cancel after timeout
-using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-
-// Or
-cts.CancelAfter(TimeSpan.FromMinutes(5));
-
-// Link multiple tokens
-using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-    requestToken,
-    applicationToken);
+// Cancelled when either input is: the request aborts, or the app shuts down
+using var linked = CancellationTokenSource.CreateLinkedTokenSource(requestToken, shutdownToken);
 ```
+
+Dispose a `CancellationTokenSource` you create. A timed or linked source registers a timer or callbacks that otherwise live on.
 
 ### Handling Cancellation
 
-```csharp
-public async Task ProcessAsync(CancellationToken cancellationToken)
-{
-    try
-    {
-        await LongRunningOperationAsync(cancellationToken);
-    }
-    catch (OperationCanceledException)
-    {
-        // Clean up if needed
-        logger.LogInformation("Operation was cancelled");
-    }
-}
+Catching `OperationCanceledException` and returning normally changes the meaning of the result. The task completes as `RanToCompletion`, so the caller sees success for work that never happened. Catch it only at the level that asked for the cancellation, and only when the token it cares about was the one cancelled:
 
-// Pattern for graceful shutdown
-public class Worker : BackgroundService
+```csharp
+try
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await ProcessWorkAsync(stoppingToken);
-                await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                // Normal shutdown, not an error
-                break;
-            }
-        }
-    }
+    await ProcessBatchAsync(items, stoppingToken);
+}
+catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+{
+    // shutdown was requested: stop quietly
 }
 ```
 
-## Error Handling
+Anywhere below that level, let the exception propagate.
 
-### try-catch with await
+## Fire and Forget
+
+Calling an async method without awaiting it starts the operation and throws away the only handle on its outcome:
 
 ```csharp
-public async Task<Result> ProcessAsync()
+public async Task OnOrderPlacedAsync(Order order)
 {
-    try
-    {
-        var data = await FetchDataAsync();
-        return await ProcessDataAsync(data);
-    }
-    catch (HttpRequestException ex)
-    {
-        logger.LogError(ex, "HTTP request failed");
-        return Result.Failure("Network error");
-    }
-    catch (JsonException ex)
-    {
-        logger.LogError(ex, "Invalid response format");
-        return Result.Failure("Invalid data");
-    }
+    SendConfirmationAsync(order);        // CS4014 warning: the call is not awaited
+    _ = SendConfirmationAsync(order);    // discard: no warning, same behavior
+    await AuditAsync(order);
 }
 ```
 
-### Multiple Task Exceptions
+The compiler raises CS4014 only inside an `async` method. The same call from a synchronous method compiles silently. If the task fails, nothing sees the exception. When the faulted task is eventually garbage collected, the runtime raises `TaskScheduler.UnobservedTaskException` and otherwise ignores it, so the process keeps running and the failure is simply lost. The discard `_ =` silences the compiler warning without changing any of that.
 
-When using `Task.WhenAll`, all exceptions are captured.
+There are further hazards in a server. The request can finish while the forgotten task is still running, so anything scoped to the request, such as a `DbContext` from dependency injection, may be disposed underneath it. And a process shutting down doesn't wait for tasks it doesn't know about.
+
+When work genuinely should outlive the caller, give it an owner: write it to a queue that a hosted background service drains, which gives the work a lifetime, a scope, error handling, and graceful shutdown. For a small in-process case, at least route the task through a method that observes its failure:
 
 ```csharp
-public async Task ProcessAllAsync(IEnumerable<string> urls)
+public static async void Forget(this Task task, ILogger logger)
 {
-    var tasks = urls.Select(url => httpClient.GetStringAsync(url));
+    try { await task; }
+    catch (Exception ex) { logger.LogError(ex, "Background task failed"); }
+}
 
-    try
-    {
-        await Task.WhenAll(tasks);
-    }
-    catch
-    {
-        // Single catch, but examine all failures
-        foreach (var task in tasks.Where(t => t.IsFaulted))
-        {
-            logger.LogError(task.Exception, "Request failed");
-        }
-    }
+SendConfirmationAsync(order).Forget(logger);
+```
+
+This is the rare deliberate `async void`: the method catches everything, so nothing escapes to crash the process, and every failure is logged instead of lost.
+
+## Async Lazy Initialization
+
+`Lazy<Task<T>>` starts an expensive async initialization on first use and shares the resulting task with every caller:
+
+```csharp
+public class ReferenceData
+{
+    private readonly Lazy<Task<Catalog>> catalog;
+
+    public ReferenceData(ICatalogClient client) =>
+        catalog = new Lazy<Task<Catalog>>(() => client.LoadCatalogAsync());
+
+    public Task<Catalog> GetCatalogAsync() => catalog.Value;
 }
 ```
 
-## Common Patterns
-
-### Async Lazy Initialization
-
-```csharp
-public class DataService
-{
-    private readonly AsyncLazy<ExpensiveData> data;
-
-    public DataService()
-    {
-        data = new AsyncLazy<ExpensiveData>(() => LoadDataAsync());
-    }
-
-    public async Task<ExpensiveData> GetDataAsync()
-    {
-        return await data.Value;
-    }
-}
-
-// Simple AsyncLazy implementation
-public class AsyncLazy<T>
-{
-    private readonly Lazy<Task<T>> lazy;
-
-    public AsyncLazy(Func<Task<T>> factory)
-    {
-        lazy = new Lazy<Task<T>>(factory);
-    }
-
-    public Task<T> Value => lazy.Value;
-}
-```
-
-### Retry Pattern
-
-```csharp
-public async Task<T> RetryAsync<T>(
-    Func<Task<T>> operation,
-    int maxRetries = 3,
-    TimeSpan? delay = null)
-{
-    var attempts = 0;
-    while (true)
-    {
-        try
-        {
-            return await operation();
-        }
-        catch (Exception ex) when (attempts < maxRetries)
-        {
-            attempts++;
-            logger.LogWarning(ex, "Attempt {Attempt} failed, retrying...", attempts);
-
-            if (delay.HasValue)
-                await Task.Delay(delay.Value);
-        }
-    }
-}
-
-// Usage
-var result = await RetryAsync(
-    () => httpClient.GetStringAsync(url),
-    maxRetries: 3,
-    delay: TimeSpan.FromSeconds(1));
-```
-
-### Semaphore for Throttling
-
-```csharp
-public class ThrottledProcessor
-{
-    private readonly SemaphoreSlim semaphore;
-
-    public ThrottledProcessor(int maxConcurrency)
-    {
-        semaphore = new SemaphoreSlim(maxConcurrency);
-    }
-
-    public async Task ProcessAllAsync(IEnumerable<Item> items)
-    {
-        var tasks = items.Select(item => ProcessWithThrottleAsync(item));
-        await Task.WhenAll(tasks);
-    }
-
-    private async Task ProcessWithThrottleAsync(Item item)
-    {
-        await semaphore.WaitAsync();
-        try
-        {
-            await ProcessItemAsync(item);
-        }
-        finally
-        {
-            semaphore.Release();
-        }
-    }
-}
-```
-
-### Channel for Producer-Consumer
-
-```csharp
-using System.Threading.Channels;
-
-public class MessageProcessor
-{
-    private readonly Channel<Message> channel;
-
-    public MessageProcessor()
-    {
-        channel = Channel.CreateBounded<Message>(new BoundedChannelOptions(100)
-        {
-            FullMode = BoundedChannelFullMode.Wait
-        });
-    }
-
-    public async Task ProduceAsync(Message message, CancellationToken ct)
-    {
-        await channel.Writer.WriteAsync(message, ct);
-    }
-
-    public async Task ConsumeAsync(CancellationToken ct)
-    {
-        await foreach (var message in channel.Reader.ReadAllAsync(ct))
-        {
-            await ProcessMessageAsync(message);
-        }
-    }
-}
-```
-
-## Best Practices
-
-### Do's
-
-```csharp
-// DO use async all the way
-public async Task<Order> GetOrderAsync(int id)
-{
-    var data = await repository.GetAsync(id);
-    return await TransformAsync(data);
-}
-
-// DO use ConfigureAwait(false) in library code
-public async Task<string> LibraryMethodAsync()
-{
-    var data = await FetchDataAsync().ConfigureAwait(false);
-    return await ProcessAsync(data).ConfigureAwait(false);
-}
-
-// DO pass CancellationToken
-public async Task ProcessAsync(CancellationToken cancellationToken = default)
-{
-    await DoWorkAsync(cancellationToken);
-}
-
-// DO use ValueTask for hot paths that often complete sync
-public ValueTask<int> GetCachedAsync(string key)
-{
-    if (cache.TryGetValue(key, out var value))
-        return new ValueTask<int>(value);
-    return new ValueTask<int>(LoadAsync(key));
-}
-```
-
-### Don'ts
-
-```csharp
-// DON'T block on async code (causes deadlocks)
-var result = GetDataAsync().Result;  // BAD
-var result = GetDataAsync().GetAwaiter().GetResult();  // Still bad
-
-// DON'T use async void except for event handlers
-public async void BadMethod() { }  // BAD
-
-// DON'T mix blocking and async unnecessarily
-public async Task BadMixAsync()
-{
-    Thread.Sleep(1000);  // BAD - use await Task.Delay
-    var data = httpClient.GetString(url);  // BAD - use GetStringAsync
-}
-
-// DON'T ignore tasks
-public void FireAndForget()
-{
-    DoWorkAsync();  // BAD - task ignored, exceptions lost
-}
-
-// Instead
-_ = DoWorkAsync().ContinueWith(t =>
-    logger.LogError(t.Exception, "Background task failed"),
-    TaskContinuationOptions.OnlyOnFaulted);
-```
-
-## Async Streams (C# 8.0)
-
-For asynchronously producing sequences of values.
-
-```csharp
-public async IAsyncEnumerable<int> GenerateSequenceAsync(
-    [EnumeratorCancellation] CancellationToken cancellationToken = default)
-{
-    for (int i = 0; i < 100; i++)
-    {
-        await Task.Delay(100, cancellationToken);
-        yield return i;
-    }
-}
-
-// Consuming
-await foreach (var item in GenerateSequenceAsync())
-{
-    Console.WriteLine(item);
-}
-
-// With cancellation
-var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-await foreach (var item in GenerateSequenceAsync(cts.Token))
-{
-    Process(item);
-}
-```
+The cached task is cached permanently, including when it fails. One transient error during the first load makes every later caller get the same exception. If the load can fail transiently, replace the `Lazy` on failure or use a caching layer with retry.
 
 ## Key Takeaways
 
-**Async is about I/O, not parallelism**: Use async for I/O-bound operations (network, disk). Use parallel processing for CPU-bound work.
+**`await` releases the thread, it doesn't block it.** The method runs synchronously to its first incomplete `await`, returns a task, and resumes later as a continuation.
 
-**Async all the way**: Once you go async, stay async. Don't mix `.Result` or `.Wait()` with async code.
+**Continuations return to the captured context.** Use `ConfigureAwait(false)` in library code. UI code that touches controls after an `await` needs the context.
 
-**Always pass CancellationToken**: Enable callers to cancel long-running operations.
+**Don't block on async code.** `.Result` and `.Wait()` deadlock under a UI context and starve the thread pool on a server. Await all the way up.
 
-**Use Task.WhenAll for concurrent I/O**: Running multiple I/O operations concurrently improves throughput.
+**Exceptions live in the task.** Even argument validation before the first `await` throws only when the task is awaited, and `await` surfaces only the first of several failures.
 
-**Avoid async void**: Only use for event handlers. Prefer returning Task.
+**Start independent operations together.** `Task.WhenAll` turns summed latencies into the slowest one, and `Parallel.ForEachAsync` caps how many run at once.
 
-**Configure await in libraries**: Use `ConfigureAwait(false)` in library code to avoid capturing synchronization context.
+**Cancellation is cooperative.** Accept a token, pass it on, and don't swallow `OperationCanceledException` below the level that requested it.
+
+**Every task needs an owner.** An `async void` method or an unawaited task loses its exceptions or crashes the process. Give background work a queue and a hosted service.

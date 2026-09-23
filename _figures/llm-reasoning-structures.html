@@ -1,0 +1,150 @@
+---
+title: "Chain-of-Thought, Self-Consistency, Tree of Thoughts"
+kind: structure
+system: llm-systems
+summary: "One path, several paths with a vote, and a search tree."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" role="img" aria-labelledby="rsn-title rsn-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rsn-title">The shapes of three reasoning techniques</title>
+<desc id="rsn-desc">Chain-of-thought: one linear path from the question through several steps to an answer, so an early mistake carries through. Self-consistency: several independent reasoning paths from the same question, each reaching an answer, followed by a vote on the answer most paths agree on, so a wrong path is outvoted if most avoid it. Tree of Thoughts: from the problem, several candidate next steps are proposed and evaluated; a weak branch is abandoned, a dead end is backtracked from, and the promising branch is explored further to a solution. Answers shown are illustrative.</desc>
+<style>
+.rsn-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.rsn-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rsn-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.rsn-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.rsn-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.rsn-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rsn-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.rsn-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rsn-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rsn-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rsn-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.rsn-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rsn-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rsn-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rsn-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.rsn-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rsn-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.rsn-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rsn-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rsn-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.rsn-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rsn-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rsn-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.rsn-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rsn-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+.rsn-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.rsn-c1 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.rsn-c2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.rsn-c3 { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.rsn-c4 { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2; stroke-dasharray: 3 3; }
+.rsn-area1 { fill: var(--color-primary, #1A5F8A); opacity: 0.14; }
+.rsn-area2 { fill: var(--color-accent, #A5486E); opacity: 0.14; }
+.rsn-g { font-size: 11px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.rsn-dot { fill: var(--color-primary, #1A5F8A); }
+.rsn-dotx { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.rsn-prev { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 2; }
+.rsn-copy { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="rsn-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rsn-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="rsn-band" x="12" y="12" width="292" height="406" rx="8"/>
+<text class="rsn-t" x="28" y="38">Chain-of-thought</text>
+<text class="rsn-s" x="28" y="56">one linear path</text>
+<rect class="rsn-band" x="304" y="12" width="292" height="406" rx="8"/>
+<text class="rsn-t" x="320" y="38">Self-consistency</text>
+<text class="rsn-s" x="320" y="56">several paths, then a vote</text>
+<rect class="rsn-band" x="596" y="12" width="292" height="406" rx="8"/>
+<text class="rsn-t" x="612" y="38">Tree of Thoughts</text>
+<text class="rsn-s" x="612" y="56">search with evaluation</text>
+<rect class="rsn-sys" x="115.0" y="81" width="86" height="30" rx="15"/>
+<text class="rsn-n-inv" x="158" y="100" text-anchor="middle">Question</text>
+<rect class="rsn-box" x="115.0" y="141" width="86" height="30" rx="15"/>
+<text class="rsn-n" x="158" y="160" text-anchor="middle">Step 1</text>
+<path class="rsn-thin" d="M 158,111 L 158,135" marker-end="url(#rsn-a)"/>
+<rect class="rsn-box" x="115.0" y="201" width="86" height="30" rx="15"/>
+<text class="rsn-n" x="158" y="220" text-anchor="middle">Step 2</text>
+<path class="rsn-thin" d="M 158,171 L 158,195" marker-end="url(#rsn-a)"/>
+<rect class="rsn-box" x="115.0" y="261" width="86" height="30" rx="15"/>
+<text class="rsn-n" x="158" y="280" text-anchor="middle">Step 3</text>
+<path class="rsn-thin" d="M 158,231 L 158,255" marker-end="url(#rsn-a)"/>
+<rect class="rsn-sys" x="115.0" y="331" width="86" height="30" rx="15"/>
+<text class="rsn-n-inv" x="158" y="350" text-anchor="middle">Answer</text>
+<path class="rsn-thin" d="M 158,291 L 158,325" marker-end="url(#rsn-a)"/>
+<text class="rsn-s" x="28" y="398">An early mistake carries through.</text>
+<rect class="rsn-sys" x="407.0" y="81" width="86" height="30" rx="15"/>
+<text class="rsn-n-inv" x="450" y="100" text-anchor="middle">Question</text>
+<path class="rsn-thin" d="M 450,111 L 330,140" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 330,146 V 236"/>
+<circle class="rsn-dot" cx="330" cy="166" r="4"/>
+<circle class="rsn-dot" cx="330" cy="196" r="4"/>
+<circle class="rsn-dot" cx="330" cy="226" r="4"/>
+<rect class="rsn-box" x="308.0" y="247" width="44" height="30" rx="15"/>
+<text class="rsn-n" x="330" y="266" text-anchor="middle">42</text>
+<path class="rsn-thin" d="M 330,277 L 450,316" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 450,111 L 390,140" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 390,146 V 236"/>
+<circle class="rsn-dot" cx="390" cy="166" r="4"/>
+<circle class="rsn-dot" cx="390" cy="196" r="4"/>
+<circle class="rsn-dot" cx="390" cy="226" r="4"/>
+<rect class="rsn-box" x="368.0" y="247" width="44" height="30" rx="15"/>
+<text class="rsn-n" x="390" y="266" text-anchor="middle">42</text>
+<path class="rsn-thin" d="M 390,277 L 450,316" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 450,111 L 450,140" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 450,146 V 236"/>
+<circle class="rsn-dot" cx="450" cy="166" r="4"/>
+<circle class="rsn-dot" cx="450" cy="196" r="4"/>
+<circle class="rsn-dot" cx="450" cy="226" r="4"/>
+<rect class="rsn-box" x="428.0" y="247" width="44" height="30" rx="15"/>
+<text class="rsn-n" x="450" y="266" text-anchor="middle">38</text>
+<path class="rsn-thin" d="M 450,277 L 450,316" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 450,111 L 510,140" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 510,146 V 236"/>
+<circle class="rsn-dot" cx="510" cy="166" r="4"/>
+<circle class="rsn-dot" cx="510" cy="196" r="4"/>
+<circle class="rsn-dot" cx="510" cy="226" r="4"/>
+<rect class="rsn-box" x="488.0" y="247" width="44" height="30" rx="15"/>
+<text class="rsn-n" x="510" y="266" text-anchor="middle">42</text>
+<path class="rsn-thin" d="M 510,277 L 450,316" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 450,111 L 570,140" marker-end="url(#rsn-a)"/>
+<path class="rsn-thin" d="M 570,146 V 236"/>
+<circle class="rsn-dot" cx="570" cy="166" r="4"/>
+<circle class="rsn-dot" cx="570" cy="196" r="4"/>
+<circle class="rsn-dot" cx="570" cy="226" r="4"/>
+<rect class="rsn-box" x="548.0" y="247" width="44" height="30" rx="15"/>
+<text class="rsn-n" x="570" y="266" text-anchor="middle">40</text>
+<path class="rsn-thin" d="M 570,277 L 450,316" marker-end="url(#rsn-a)"/>
+<rect class="rsn-sys" x="380" y="322" width="140" height="34" rx="6"/>
+<text class="rsn-n-inv" x="450" y="344" text-anchor="middle">Vote: 42</text>
+<text class="rsn-s" x="320" y="398">A wrong path is outvoted if most avoid it.</text>
+<rect class="rsn-sys" x="699.0" y="81" width="86" height="30" rx="15"/>
+<text class="rsn-n-inv" x="742" y="100" text-anchor="middle">Problem</text>
+<path class="rsn-thin" d="M 742,111 L 652,160" marker-end="url(#rsn-a)"/>
+<rect class="rsn-box" x="624.0" y="160" width="56" height="30" rx="15"/>
+<text class="rsn-n" x="652" y="179" text-anchor="middle">A</text>
+<path class="rsn-thin" d="M 742,111 L 742,160" marker-end="url(#rsn-a)"/>
+<rect class="rsn-box" x="714.0" y="160" width="56" height="30" rx="15"/>
+<text class="rsn-n" x="742" y="179" text-anchor="middle">B</text>
+<path class="rsn-thin" d="M 742,111 L 832,160" marker-end="url(#rsn-a)"/>
+<rect class="rsn-badbox" x="804.0" y="160" width="56" height="30" rx="15"/>
+<text class="rsn-n-bad" x="832" y="179" text-anchor="middle">C</text>
+<text class="rsn-bad" x="832" y="206" text-anchor="middle">abandoned</text>
+<rect class="rsn-badbox" x="624.0" y="235" width="56" height="30" rx="15"/>
+<text class="rsn-n-bad" x="652" y="254" text-anchor="middle">A1</text>
+<path class="rsn-thin" d="M 652,190 L 652,229" marker-end="url(#rsn-a)"/>
+<text class="rsn-bad" x="652" y="281" text-anchor="middle">dead end:</text>
+<text class="rsn-bad" x="652" y="296" text-anchor="middle">backtrack</text>
+<rect class="rsn-box" x="714.0" y="235" width="56" height="30" rx="15"/>
+<text class="rsn-n" x="742" y="254" text-anchor="middle">B1</text>
+<path class="rsn-thin" d="M 742,190 L 742,229" marker-end="url(#rsn-a)"/>
+<rect class="rsn-sys" x="694.0" y="315" width="96" height="30" rx="15"/>
+<text class="rsn-n-inv" x="742" y="334" text-anchor="middle">Solution</text>
+<path class="rsn-thin" d="M 742,265 L 742,309" marker-end="url(#rsn-a)"/>
+<text class="rsn-s" x="612" y="380">Each candidate step is evaluated.</text>
+<text class="rsn-s" x="612" y="398">Weak branches are abandoned.</text>
+</g>
+</svg>

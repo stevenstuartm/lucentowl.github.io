@@ -1,0 +1,129 @@
+---
+title: "Loss on a Line Through House Prices"
+kind: chart
+system: machine-learning
+summary: "Two candidate lines through the same eight houses, scored by loss."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 425" role="img" aria-labelledby="mll-title mll-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mll-title">Two lines fitted to house prices and the loss of each</title>
+<desc id="mll-desc">Eight houses are plotted by floor area and sale price. On the left, a poor guess, price = 0.5 times area plus 170, leaves long vertical gaps between each house and the line, and its average squared error is 1,676. On the right, the line after training, price = 1.5 times area plus 56, runs through the middle of the points with short gaps, and its average squared error is 97.</desc>
+<style>
+.mll-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mll-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mll-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mll-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mll-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mll-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mll-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mll-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mll-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mll-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mll-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mll-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mll-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mll-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mll-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mll-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mll-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mll-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mll-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mll-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mll-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mll-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mll-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mll-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mll-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mll-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mll-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mll-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mll-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mll-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mll-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mll-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mll-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mll-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mll-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mll-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mll-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mll-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mll-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mll-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mll-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mll-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mll-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mll-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mll-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mll-band" x="20" y="20" width="420" height="370" rx="8"/>
+<text class="mll-n" x="34" y="44">A poor guess</text>
+<text class="mll-s" x="34" y="62">price = 0.5 × area + 170</text>
+<path class="mll-axis" d="M 80,76 V 316 H 420"/>
+<text class="mll-s" x="80" y="334" text-anchor="middle">50</text>
+<text class="mll-s" x="193.333" y="334" text-anchor="middle">100</text>
+<text class="mll-s" x="306.667" y="334" text-anchor="middle">150</text>
+<text class="mll-s" x="420" y="334" text-anchor="middle">200</text>
+<text class="mll-s" x="72" y="320" text-anchor="end">100</text>
+<text class="mll-s" x="72" y="224" text-anchor="end">200</text>
+<text class="mll-s" x="72" y="128" text-anchor="end">300</text>
+<text class="mll-k" x="88" y="86">price ($k)</text>
+<text class="mll-k" x="250" y="352" text-anchor="middle">floor area (m²)</text>
+<path class="mll-err" d="M 102.7,268.0 V 220.0"/>
+<path class="mll-err" d="M 148.0,258.4 V 210.4"/>
+<path class="mll-err" d="M 182.0,220.0 V 203.2"/>
+<path class="mll-err" d="M 216.0,210.4 V 196.0"/>
+<path class="mll-err" d="M 261.3,172.0 V 186.4"/>
+<path class="mll-err" d="M 306.7,157.6 V 176.8"/>
+<path class="mll-err" d="M 352.0,114.4 V 167.2"/>
+<path class="mll-err" d="M 397.3,95.2 V 157.6"/>
+<path class="mll-fit" d="M 80.0,224.8 L 420.0,152.8"/>
+<circle class="mll-pt" cx="102.7" cy="268.0" r="4.5"/>
+<circle class="mll-pt" cx="148.0" cy="258.4" r="4.5"/>
+<circle class="mll-pt" cx="182.0" cy="220.0" r="4.5"/>
+<circle class="mll-pt" cx="216.0" cy="210.4" r="4.5"/>
+<circle class="mll-pt" cx="261.3" cy="172.0" r="4.5"/>
+<circle class="mll-pt" cx="306.7" cy="157.6" r="4.5"/>
+<circle class="mll-pt" cx="352.0" cy="114.4" r="4.5"/>
+<circle class="mll-pt" cx="397.3" cy="95.2" r="4.5"/>
+<text class="mll-bad" x="34" y="378">average squared error: 1,676</text>
+<rect class="mll-band" x="460" y="20" width="420" height="370" rx="8"/>
+<text class="mll-n" x="474" y="44">After training</text>
+<text class="mll-s" x="474" y="62">price = 1.5 × area + 56</text>
+<path class="mll-axis" d="M 520,76 V 316 H 860"/>
+<text class="mll-s" x="520" y="334" text-anchor="middle">50</text>
+<text class="mll-s" x="633.333" y="334" text-anchor="middle">100</text>
+<text class="mll-s" x="746.667" y="334" text-anchor="middle">150</text>
+<text class="mll-s" x="860" y="334" text-anchor="middle">200</text>
+<text class="mll-s" x="512" y="320" text-anchor="end">100</text>
+<text class="mll-s" x="512" y="224" text-anchor="end">200</text>
+<text class="mll-s" x="512" y="128" text-anchor="end">300</text>
+<text class="mll-k" x="528" y="86">price ($k)</text>
+<text class="mll-k" x="690" y="352" text-anchor="middle">floor area (m²)</text>
+<path class="mll-err" d="M 542.7,268.0 V 271.8"/>
+<path class="mll-err" d="M 588.0,258.4 V 243.0"/>
+<path class="mll-err" d="M 622.0,220.0 V 221.4"/>
+<path class="mll-err" d="M 656.0,210.4 V 199.8"/>
+<path class="mll-err" d="M 701.3,172.0 V 171.0"/>
+<path class="mll-err" d="M 746.7,157.6 V 142.2"/>
+<path class="mll-err" d="M 792.0,114.4 V 113.4"/>
+<path class="mll-err" d="M 837.3,95.2 V 84.6"/>
+<path class="mll-fit" d="M 520.0,286.2 L 860.0,70.2"/>
+<circle class="mll-pt" cx="542.7" cy="268.0" r="4.5"/>
+<circle class="mll-pt" cx="588.0" cy="258.4" r="4.5"/>
+<circle class="mll-pt" cx="622.0" cy="220.0" r="4.5"/>
+<circle class="mll-pt" cx="656.0" cy="210.4" r="4.5"/>
+<circle class="mll-pt" cx="701.3" cy="172.0" r="4.5"/>
+<circle class="mll-pt" cx="746.7" cy="157.6" r="4.5"/>
+<circle class="mll-pt" cx="792.0" cy="114.4" r="4.5"/>
+<circle class="mll-pt" cx="837.3" cy="95.2" r="4.5"/>
+<text class="mll-ok" x="474" y="378">average squared error: 97</text>
+<path class="mll-err" d="M 470,410 H 500"/>
+<text class="mll-el" x="508" y="414">one house's error</text>
+<path class="mll-fit" d="M 640,410 H 670"/>
+<text class="mll-el" x="678" y="414">the model's line</text>
+</g>
+</svg>

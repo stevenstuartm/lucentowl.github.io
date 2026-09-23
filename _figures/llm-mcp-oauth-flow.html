@@ -1,0 +1,82 @@
+---
+title: "MCP Authorization Flow"
+kind: dynamic
+system: llm-systems
+summary: "From an unauthenticated request to an audience-bound bearer token."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-labelledby="mcpo-title mcpo-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mcpo-title">The MCP OAuth authorization sequence</title>
+<desc id="mcpo-desc">1: the MCP client sends a request with no token. 2: the MCP server answers 401 with a WWW-Authenticate header naming its resource metadata URL and required scope. 3: the client fetches the protected resource metadata, which names the authorization server to use. 4: the client fetches the authorization server's metadata. 5: the client identifies itself with a client ID metadata document URL, a pre-registered ID, or dynamic client registration. 6: the client sends an authorization request with a PKCE challenge and the MCP server's URI as the resource, and the user signs in and consents in a browser. 7: the authorization server returns an authorization code with its issuer, which the client checks. 8: the client requests a token with the code, PKCE verifier, and resource. 9: the authorization server issues an access token whose audience is this MCP server. 10: the client sends requests to the MCP server with that bearer token.</desc>
+<style>
+.mcpo-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mcpo-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mcpo-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mcpo-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mcpo-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mcpo-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mcpo-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mcpo-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mcpo-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mcpo-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mcpo-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mcpo-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mcpo-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mcpo-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mcpo-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.mcpo-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mcpo-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mcpo-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mcpo-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mcpo-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mcpo-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mcpo-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mcpo-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mcpo-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.mcpo-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="mcpo-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mcpo-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mcpo-sys" x="20" y="16" width="180" height="40" rx="6"/>
+<text class="mcpo-t-inv" x="32" y="38">MCP client</text>
+<rect class="mcpo-sys" x="350" y="16" width="180" height="40" rx="6"/>
+<text class="mcpo-t-inv" x="362" y="38">MCP server</text>
+<rect class="mcpo-sys" x="700" y="16" width="180" height="40" rx="6"/>
+<text class="mcpo-t-inv" x="712" y="38">Authorization server</text>
+<path class="mcpo-life" d="M 110,56 V 628"/>
+<path class="mcpo-life" d="M 440,56 V 628"/>
+<path class="mcpo-life" d="M 790,56 V 628"/>
+<path class="mcpo-flow" d="M 110,96 H 434" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="89">1 · Request, no token</text>
+<path class="mcpo-flow" d="M 440,150 H 116" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="128">2 · 401 + WWW-Authenticate</text>
+<text class="mcpo-s" x="124" y="143">resource_metadata URL, required scope</text>
+<path class="mcpo-flow" d="M 110,190 H 434" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="183">3 · Fetch protected resource metadata</text>
+<path class="mcpo-flow" d="M 440,230 H 116" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="223">which authorization server to use</text>
+<path class="mcpo-flow" d="M 110,272 H 784" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="265">4 · Fetch authorization server metadata</text>
+<rect class="mcpo-box" x="124" y="288" width="290" height="60" rx="6"/>
+<text class="mcpo-n" x="136" y="306">5 · Identify the client</text>
+<text class="mcpo-s" x="136" y="323">metadata document URL, pre-registered ID,</text>
+<text class="mcpo-s" x="136" y="339">or dynamic registration</text>
+<path class="mcpo-flow" d="M 110,392 H 784" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="370">6 · Authorization request</text>
+<text class="mcpo-s" x="124" y="385">PKCE challenge + resource = the MCP server's URI</text>
+<rect class="mcpo-ext" x="620" y="404" width="256" height="34" rx="6"/>
+<text class="mcpo-s" x="632" y="426">user signs in and consents in a browser</text>
+<path class="mcpo-flow" d="M 790,472 H 116" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="450">7 · Authorization code</text>
+<text class="mcpo-s" x="124" y="465">+ issuer, checked by the client</text>
+<path class="mcpo-flow" d="M 110,522 H 784" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="500">8 · Token request</text>
+<text class="mcpo-s" x="124" y="515">code + PKCE verifier + resource</text>
+<path class="mcpo-flow" d="M 790,564 H 116" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="557">9 · Access token, audience = this MCP server</text>
+<path class="mcpo-flow" d="M 110,612 H 434" marker-end="url(#mcpo-a)"/>
+<text class="mcpo-n" x="124" y="605">10 · Requests with Authorization: Bearer token</text>
+</g>
+</svg>

@@ -17,6 +17,8 @@ The obvious approach is to work through the batch in a single session, one item 
 
 **Prompt caching softens this but does not remove it.** In a sequential session the accumulated history is a stable prefix, so a provider's prefix cache can serve most of it at around a tenth of the normal input rate. That turns a punishing quadratic term into a smaller one. It is still quadratic, it depends on each request landing within the cache's lifetime, and it does nothing for the other two problems.
 
+{% include figure.html id="llm-batch-cost" %}
+
 **Quality degrades and the window fills.** Nine completed outputs the model will never reference again compete for its attention with the task in front of it, and long batches exhaust the context window before they finish. Neither is a pricing problem, so no pricing mechanism fixes them.
 
 ---

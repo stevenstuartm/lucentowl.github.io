@@ -3,903 +3,357 @@ title: "C# Exceptions and Error Handling"
 layout: guide
 category: ".NET & C#"
 subcategory: "Language Fundamentals"
-description: "Exception handling, custom exceptions, error patterns, and best practices for robust error management."
-tags: [c-sharp, dotnet, fundamentals, exceptions, error-handling, reliability, practical]
+description: "How .NET exceptions propagate and what they cost, which exception to throw and the throw helpers, catching only what you can handle, exception filters and why they run before unwinding, rethrowing without losing the stack trace, AggregateException, custom exceptions, and when a Try method or result type beats throwing."
+tags: [exceptions, error-handling, exception-filters, aggregateexception, result-pattern, reliability, practical]
 ---
 
-## Exception Basics
+## How Exceptions Propagate
 
-Exceptions represent errors or unexpected conditions that disrupt normal program flow. They propagate up the call stack until caught or they terminate the application.
+When code throws, the runtime stops executing the current method and searches up the call stack for a `catch` block that accepts the exception's type. Every method between the throw and that `catch` is abandoned, and each `finally` block along the way runs as its method is exited. If no `catch` is found, the exception is **unhandled**, and the process terminates.
 
 ```csharp
 try
 {
-    int result = 10 / divisor;
-    ProcessResult(result);
+    int result = Divide(10, divisor);
+    Save(result);
 }
 catch (DivideByZeroException ex)
 {
     Console.WriteLine($"Cannot divide by zero: {ex.Message}");
 }
-catch (Exception ex)
-{
-    Console.WriteLine($"Unexpected error: {ex.Message}");
-    throw;  // Re-throw preserving stack trace
-}
 finally
 {
-    // Always runs - cleanup code
-    CloseResources();
+    CloseResources();   // runs whether or not anything threw
 }
 ```
 
-### Exception Hierarchy
+That model makes exceptions a good fit for failures the immediate caller can't do anything about. A method deep in a call chain reports the problem once, and it travels to whatever level knows how to respond, such as a request handler that returns an error page, without every method in between checking a return code.
+
+It also makes them expensive. Throwing captures a stack trace and walks the stack, which costs far more than returning a value. .NET 9 replaced the runtime's exception handling implementation and Microsoft measured it at two to four times faster on micro-benchmarks, but it is still the slow path. An exception thrown once per failed request is fine. One thrown per item while parsing a million lines is not, and those cases call for the `Try` methods and result types covered at the end of this guide.
+
+## Choosing What to Throw
+
+Throw the most specific existing exception type that describes the problem. Callers catch by type, so a precise type lets them handle one failure without accidentally catching another.
+
+| Situation | Throw |
+|-----------|-------|
+| An argument is `null` where that isn't allowed | `ArgumentNullException` |
+| An argument is outside its valid range | `ArgumentOutOfRangeException` |
+| An argument is invalid in some other way | `ArgumentException` |
+| The object's current state doesn't allow this call | `InvalidOperationException` |
+| The call is made on an object that has been disposed | `ObjectDisposedException` |
+| The operation isn't supported by this implementation at all | `NotSupportedException` |
+| A string isn't in the expected format | `FormatException` |
+| A key or item that must exist doesn't | `KeyNotFoundException` |
+| An operation ran out of time | `TimeoutException` |
+| An operation was cancelled through a `CancellationToken` | `OperationCanceledException` |
+
+`NotImplementedException` means "this code isn't written yet" and should never ship. Never throw `Exception`, `SystemException`, `NullReferenceException`, or `IndexOutOfRangeException` yourself. The first two are too general to catch selectively, and the last two signal bugs detected by the runtime. `ApplicationException` was once recommended as the base for application exceptions and no longer is.
+
+The relevant part of the hierarchy is shallow, and some of its nesting matters when catching:
 
 ```
 System.Exception
-├── System.SystemException (runtime exceptions)
+├── SystemException
 │   ├── ArgumentException
 │   │   ├── ArgumentNullException
 │   │   └── ArgumentOutOfRangeException
 │   ├── InvalidOperationException
-│   ├── NullReferenceException
-│   ├── IndexOutOfRangeException
-│   ├── InvalidCastException
-│   ├── NotSupportedException
-│   ├── NotImplementedException
-│   ├── ObjectDisposedException
-│   ├── FormatException
-│   └── IO.IOException
-│       ├── FileNotFoundException
-│       └── DirectoryNotFoundException
-└── System.ApplicationException (legacy, avoid)
+│   │   └── ObjectDisposedException
+│   ├── OperationCanceledException
+│   │   └── TaskCanceledException
+│   ├── IOException
+│   │   ├── FileNotFoundException
+│   │   └── DirectoryNotFoundException
+│   ├── FormatException, KeyNotFoundException, NotSupportedException, TimeoutException, ...
+└── HttpRequestException, and most exceptions defined by libraries
 ```
 
-## Throwing Exceptions
+`catch (InvalidOperationException)` also catches every `ObjectDisposedException`, and `catch (OperationCanceledException)` also catches `TaskCanceledException`.
 
-### Basic Throwing
+### Throw Helpers
+
+The argument exceptions have static helpers that check and throw in one call, and fill in the parameter name automatically from the argument expression:
 
 ```csharp
-public void SetAge(int age)
+public void Register(string name, int age, Stream output)
 {
-    if (age < 0)
-        throw new ArgumentOutOfRangeException(nameof(age), age, "Age cannot be negative");
-
-    if (age > 150)
-        throw new ArgumentOutOfRangeException(nameof(age), age, "Age seems unrealistic");
-
-    _age = age;
-}
-
-public void ProcessOrder(Order? order)
-{
-    // ArgumentNullException with nameof for refactoring safety
-    ArgumentNullException.ThrowIfNull(order);
-
-    // Continue processing...
+    ArgumentNullException.ThrowIfNull(output);             // .NET 6
+    ArgumentException.ThrowIfNullOrWhiteSpace(name);        // .NET 8
+    ArgumentOutOfRangeException.ThrowIfNegative(age);       // .NET 8
+    ArgumentOutOfRangeException.ThrowIfGreaterThan(age, 150);
+    ObjectDisposedException.ThrowIf(_disposed, this);       // .NET 7
+    // ...
 }
 ```
 
-### Throw Expressions (C# 7.0)
+They exist for two reasons beyond brevity. The name comes from the caller's expression via `[CallerArgumentExpression]`, so it can't drift from the parameter during a rename. And keeping the `throw` inside a separate helper keeps the calling method smaller, which helps the JIT inline it. Note that `ThrowIfNullOrWhiteSpace` throws `ArgumentNullException` for `null` and `ArgumentException` for empty or blank strings.
+
+Because `throw` is an expression, it also works inside `??` and `?:`:
 
 ```csharp
-// In null-coalescing
-string name = input ?? throw new ArgumentNullException(nameof(input));
-
-// In conditional expressions
-int value = isValid ? ComputeValue() : throw new InvalidOperationException("Invalid state");
-
-// In expression-bodied members
-public string Name => _name ?? throw new InvalidOperationException("Name not set");
+_name = name ?? throw new ArgumentNullException(nameof(name));
 ```
 
-<div class="callout callout--warning">
-<p class="callout__title">Re-throwing: Use throw, not throw ex</p>
-<p>When re-throwing an exception, use <code>throw;</code> without the exception variable. Using <code>throw ex;</code> loses the original stack trace, making debugging harder.</p>
-</div>
+## Catching
 
-### Re-throwing
+### Catch What You Can Handle
+
+A `catch` block should exist because that code can do something about the failure, such as retrying, falling back, translating it into a response, or adding context and rethrowing. Catching an exception only to log it and carry on hides the failure from everything above. Catching it and returning `null` or a default loses the reason entirely.
 
 ```csharp
-try
-{
-    DoWork();
-}
-catch (Exception ex)
-{
-    // GOOD: Re-throw preserving original stack trace
-    throw;
-}
+catch (Exception) { }                     // swallows every failure, including bugs
 
-try
-{
-    DoWork();
-}
 catch (Exception ex)
 {
-    // BAD: Loses original stack trace
-    throw ex;  // Don't do this!
-}
-
-try
-{
-    DoWork();
-}
-catch (Exception ex)
-{
-    // Wrap with additional context
-    throw new ServiceException("Failed to process request", ex);
+    return null;                          // the caller learns something failed, but never what
 }
 ```
 
-## Catching Exceptions
+A broad `catch (Exception)` belongs at a **boundary**, the top of a request, a message handler, a background loop, or `Main`, where the job is to log, report, and keep the rest of the process healthy.
 
-### Catch Ordering
+### Order Matters
 
-Catch blocks are evaluated in order. More specific exceptions must come before general ones.
+`catch` blocks are tried top to bottom, and the first compatible one wins. A block for a base type placed above one for a derived type would make the derived block unreachable, so the compiler rejects that order:
 
 ```csharp
 try
 {
     ProcessFile(path);
 }
-catch (FileNotFoundException ex)
+catch (FileNotFoundException ex)        // most specific first
 {
-    // Most specific first
-    Console.WriteLine($"File not found: {ex.FileName}");
+    Console.WriteLine($"Missing: {ex.FileName}");
 }
-catch (IOException ex)
+catch (IOException ex)                  // then its base type
 {
-    // More general I/O error
     Console.WriteLine($"I/O error: {ex.Message}");
-}
-catch (Exception ex)
-{
-    // Catch-all last
-    Console.WriteLine($"Unexpected error: {ex.Message}");
-    throw;  // Re-throw unexpected errors
 }
 ```
 
-### Exception Filters (C# 6.0)
+### Exception Filters Run Before Unwinding
 
-Filter exceptions without catching and re-throwing.
+A `when` clause (C# 6) adds a condition to a `catch`. If the condition is false, the block is skipped as if it didn't exist and the search continues upward.
 
 ```csharp
 try
 {
-    await httpClient.GetAsync(url);
+    return await client.GetStringAsync(url);
 }
 catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
 {
-    return null;  // Handle 404 specifically
-}
-catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
-{
-    await Task.Delay(retryDelay);
-    throw;  // Re-throw for retry logic
-}
-catch (HttpRequestException ex) when (IsTransient(ex))
-{
-    // Handle transient errors
-    logger.LogWarning(ex, "Transient error, will retry");
-    throw;
-}
-
-// Filter can call methods
-private bool IsTransient(HttpRequestException ex)
-{
-    return ex.StatusCode is >= HttpStatusCode.InternalServerError
-           or HttpStatusCode.RequestTimeout;
-}
-
-// Logging without catching
-catch (Exception ex) when (LogException(ex))
-{
-    // Never executes - LogException returns false
-}
-
-private bool LogException(Exception ex)
-{
-    logger.LogError(ex, "Error occurred");
-    return false;  // Don't actually catch
-}
-```
-
-### Catching Multiple Exception Types
-
-```csharp
-// C# 6.0+ - filter with pattern
-try
-{
-    Process();
+    return null;                        // only 404 is handled here
 }
 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
 {
-    HandleFileError(ex);
+    HandleFileError(ex);                // several types, one handler
+}
+```
+
+Filters differ from catching and rethrowing in one important way. The runtime handles an exception in two passes. The first pass walks up the stack **evaluating filters** to find a handler, while every frame is still intact. Only then does the second pass unwind, running `finally` blocks on the way down to the chosen `catch`. So a filter runs before any inner `finally` block and while the stack still shows where the exception was thrown. A filter that returns `false` leaves the exception exactly as it was, which is why a debugger or crash dump taken later still shows the original throw site.
+
+That makes a filter the right place for logging that shouldn't handle anything:
+
+```csharp
+catch (Exception ex) when (LogAndContinueSearch(ex))
+{
+    // never reached
 }
 
-// Alternative: multiple catch blocks with same handling
-catch (IOException ex)
+static bool LogAndContinueSearch(Exception ex)
 {
-    HandleFileError(ex);
+    logger.LogError(ex, "Unhandled failure");
+    return false;
 }
-catch (UnauthorizedAccessException ex)
+```
+
+An exception thrown inside a filter is swallowed and treated as `false`, so filters should be simple.
+
+### Cancellation Is Not a Failure
+
+`OperationCanceledException` usually means something asked the operation to stop, not that it broke. Handling it separately, and only when the cancellation came from the token the code was given, avoids logging every cancelled request as an error:
+
+```csharp
+catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 {
-    HandleFileError(ex);
+    // the caller cancelled: stop quietly
+}
+```
+
+## Rethrowing and Wrapping
+
+Inside a `catch`, there are three ways to send an exception onward, and they differ in what the stack trace shows:
+
+```csharp
+catch (Exception ex)
+{
+    throw;              // rethrows the same exception, stack trace intact
+}
+
+catch (Exception ex)
+{
+    throw ex;           // rethrows the same object, but resets the stack trace to this line
+}
+
+catch (SqlException ex)
+{
+    throw new OrderStoreException($"Failed to save order {orderId}", ex);   // wraps it
+}
+```
+
+`throw ex;` is almost always a mistake, because the trace now starts at the `catch` and the line that actually failed is lost. Wrapping is the right move when crossing a layer boundary, where the caller should see a failure in its own terms ("the order couldn't be saved") rather than an implementation detail ("a SQL timeout"). Passing the original as the inner exception keeps the full cause available to logs and debuggers.
+
+To capture an exception now and rethrow it later, possibly on another thread, with its original trace, use `ExceptionDispatchInfo`. This is what `await` does internally when it rethrows a faulted task's exception:
+
+```csharp
+ExceptionDispatchInfo? captured = null;
+try { DoWork(); }
+catch (Exception ex) { captured = ExceptionDispatchInfo.Capture(ex); }
+
+captured?.Throw();   // rethrows with the original stack trace, plus this rethrow point
+```
+
+## finally and Cleanup
+
+A `finally` block runs when control leaves its `try` by any route, whether that is normal completion, `return`, `break`, or an exception. That's what makes it the place for cleanup. The exceptions are process-level failures that give the runtime no chance to run anything, such as `Environment.FailFast`, a stack overflow, or the process being killed.
+
+Throwing from a `finally` block while an exception is already propagating **replaces** the original exception, and the original is lost with no trace. Cleanup code that can fail should catch its own exceptions.
+
+Most cleanup is disposing a resource, and a `using` statement is the standard way to write it. It compiles to a `try`/`finally` that calls `Dispose`.
+
+## Reading an Exception
+
+```csharp
+catch (Exception ex)
+{
+    string message = ex.Message;              // human-readable description
+    string? trace = ex.StackTrace;            // where it was thrown, frame by frame
+    Exception? cause = ex.InnerException;     // the wrapped original, if any
+    ex.Data["OrderId"] = orderId;             // attach context before rethrowing
+    throw;
+}
+```
+
+`ex.ToString()` includes the type, message, stack trace, and every inner exception, which is why logging APIs take the exception object itself rather than its message. Passing only `ex.Message` to a log throws away the stack trace and the inner exceptions. When the root cause is several wrappers deep, `GetBaseException()` returns the innermost exception.
+
+## AggregateException
+
+Some operations can fail in several places at once, and `AggregateException` carries all of those failures in its `InnerExceptions` collection. `Parallel.ForEach` throws one when any iteration fails, and so do the blocking `Task.Wait()` and `Task.Result`.
+
+```csharp
+try
+{
+    Parallel.ForEach(items, ProcessItem);
+}
+catch (AggregateException ae)
+{
+    foreach (var ex in ae.Flatten().InnerExceptions)    // Flatten unwraps nested aggregates
+        logger.LogError(ex, "Item failed");
+}
+```
+
+`await` behaves differently. It unwraps the aggregate and throws **only the first** inner exception, so `catch` blocks can name specific types as they would for synchronous code. When awaiting `Task.WhenAll`, that means the other failures are silently dropped from the `catch`. Keep a reference to the combined task to see them all:
+
+```csharp
+Task all = Task.WhenAll(tasks);
+try
+{
+    await all;
+}
+catch (Exception first)
+{
+    foreach (var ex in all.Exception!.InnerExceptions)  // every failure, not just the first
+        logger.LogError(ex, "Task failed");
 }
 ```
 
 ## Custom Exceptions
 
-### Creating Custom Exceptions
+Define a new exception type only when a caller needs to catch that failure **separately** from the standard types, or needs data about it beyond a message. If no caller would write a `catch` for it, a standard exception with a clear message is better.
 
 ```csharp
-public class OrderProcessingException : Exception
+public class InsufficientStockException : Exception
 {
-    public string OrderId { get; }
-    public OrderErrorCode ErrorCode { get; }
+    public string ProductId { get; }
+    public int Requested { get; }
+    public int Available { get; }
 
-    public OrderProcessingException(string orderId, OrderErrorCode errorCode)
-        : base($"Failed to process order {orderId}: {errorCode}")
+    public InsufficientStockException(string productId, int requested, int available, Exception? inner = null)
+        : base($"Product {productId}: requested {requested}, only {available} available", inner)
     {
-        OrderId = orderId;
-        ErrorCode = errorCode;
-    }
-
-    public OrderProcessingException(string orderId, OrderErrorCode errorCode, Exception inner)
-        : base($"Failed to process order {orderId}: {errorCode}", inner)
-    {
-        OrderId = orderId;
-        ErrorCode = errorCode;
+        ProductId = productId;
+        Requested = requested;
+        Available = available;
     }
 }
-
-public enum OrderErrorCode
-{
-    InvalidProduct,
-    InsufficientStock,
-    PaymentFailed,
-    ShippingUnavailable
-}
-
-// Usage
-throw new OrderProcessingException(order.Id, OrderErrorCode.InsufficientStock);
 ```
 
-### Serializable Exceptions (Legacy/Remoting)
+Name it with the `Exception` suffix, derive from `Exception` (or from a more specific standard type the failure genuinely is a kind of), and accept an inner exception so callers can wrap. Older guidance also required a `[Serializable]` attribute and a protected `(SerializationInfo, StreamingContext)` constructor. That supported .NET Framework remoting and `BinaryFormatter`, both gone from modern .NET, and the base constructor it calls has been obsolete since .NET 8 (warning `SYSLIB0051`). New exception types shouldn't include it.
+
+## Exceptions Versus Returned Failures
+
+An exception is the right signal when the caller **didn't expect** the failure and probably can't handle it locally, such as a missing configuration file, a lost database connection, or a bug. When failure is an ordinary, expected outcome, like a user typing an invalid number, a lookup finding nothing, or a validation rule rejecting input, returning the failure is clearer and far cheaper. The caller sees it in the method's signature and has to deal with it.
+
+### The Try Pattern
+
+The BCL's convention for "this may not work, and that's normal" is a `Try` method that returns `bool` and hands back the result through an `out` parameter. `[NotNullWhen(true)]` tells the nullable analysis that the value is non-null whenever the method returns `true`:
 
 ```csharp
-[Serializable]
-public class BusinessException : Exception
+public bool TryGetUser(int id, [NotNullWhen(true)] out User? user)
 {
-    public BusinessException() { }
-    public BusinessException(string message) : base(message) { }
-    public BusinessException(string message, Exception inner) : base(message, inner) { }
-
-    // Required for serialization (legacy)
-    protected BusinessException(SerializationInfo info, StreamingContext context)
-        : base(info, context) { }
+    user = _repository.Find(id);
+    return user is not null;
 }
+
+if (TryGetUser(123, out var user))
+    Console.WriteLine(user.Name);   // no nullable warning
 ```
 
-## The finally Block
+### Result Types
 
-The `finally` block always executes, whether an exception occurs or not.
-
-```csharp
-FileStream? file = null;
-try
-{
-    file = File.OpenRead(path);
-    ProcessFile(file);
-}
-catch (IOException ex)
-{
-    logger.LogError(ex, "Failed to process file");
-    throw;
-}
-finally
-{
-    // Always runs - even if exception thrown
-    file?.Dispose();
-}
-```
-
-### Using Statements (Preferred)
-
-The `using` statement is syntactic sugar for try/finally with Dispose.
-
-```csharp
-// Using declaration (C# 8.0) - disposed at end of scope
-using var file = File.OpenRead(path);
-using var reader = new StreamReader(file);
-string content = reader.ReadToEnd();
-// Disposed here when scope ends
-
-// Using statement (traditional) - explicit scope
-using (var connection = new SqlConnection(connectionString))
-{
-    connection.Open();
-    // Use connection
-}  // Disposed here
-
-// Multiple resources
-using var file = File.OpenRead(path);
-using var reader = new StreamReader(file);
-// Both disposed at end of scope (in reverse order)
-
-// Async disposal (C# 8.0)
-await using var connection = new SqlConnection(connectionString);
-await connection.OpenAsync();
-```
-
-## Exception Properties
-
-```csharp
-try
-{
-    DoWork();
-}
-catch (Exception ex)
-{
-    // Core properties
-    string message = ex.Message;           // Error description
-    string? stackTrace = ex.StackTrace;    // Call stack
-    Exception? inner = ex.InnerException;  // Wrapped exception
-    string? source = ex.Source;            // Assembly/app name
-    MethodBase? target = ex.TargetSite;    // Method that threw
-
-    // Data dictionary for additional info
-    foreach (DictionaryEntry entry in ex.Data)
-    {
-        Console.WriteLine($"{entry.Key}: {entry.Value}");
-    }
-
-    // Add data before re-throwing
-    ex.Data["CorrelationId"] = correlationId;
-    throw;
-}
-```
-
-### Walking the Exception Chain
-
-```csharp
-public static IEnumerable<Exception> GetAllExceptions(Exception ex)
-{
-    var current = ex;
-    while (current != null)
-    {
-        yield return current;
-        current = current.InnerException;
-    }
-}
-
-// Usage
-foreach (var exception in GetAllExceptions(ex))
-{
-    logger.LogError(exception.Message);
-}
-
-// Get root cause
-Exception rootCause = ex;
-while (rootCause.InnerException != null)
-    rootCause = rootCause.InnerException;
-```
-
-## AggregateException
-
-Used with parallel operations and tasks to collect multiple exceptions.
-
-```csharp
-try
-{
-    Parallel.ForEach(items, item => ProcessItem(item));
-}
-catch (AggregateException ae)
-{
-    // Flatten nested AggregateExceptions
-    foreach (var ex in ae.Flatten().InnerExceptions)
-    {
-        Console.WriteLine($"Error: {ex.Message}");
-    }
-
-    // Handle specific types
-    ae.Handle(ex =>
-    {
-        if (ex is InvalidOperationException)
-        {
-            Console.WriteLine($"Invalid operation: {ex.Message}");
-            return true;  // Handled
-        }
-        return false;  // Not handled, will re-throw
-    });
-}
-
-// With tasks
-try
-{
-    await Task.WhenAll(tasks);
-}
-catch (Exception ex)
-{
-    // Only first exception thrown, but all are available
-    var allExceptions = Task.WhenAll(tasks).Exception?.InnerExceptions;
-}
-```
-
-## Error Handling Patterns
-
-### Result Pattern (Avoid Exceptions for Expected Cases)
-
-The Result pattern returns an object indicating success or failure instead of throwing exceptions for expected failures like validation errors, "not found" scenarios, or business rule violations. Exceptions remain appropriate for truly exceptional conditions.
-
-#### Minimal Implementation with Modern C#
-
-Using `readonly record struct` (C# 10+) provides value semantics, immutability, and structural equality with minimal boilerplate:
+A `Try` method can report that something failed but not why. A **result type** returns either a value or an error description, and the caller branches on which:
 
 ```csharp
 public readonly record struct Result<T>
 {
+    private readonly bool _succeeded;
     public T? Value { get; }
     public string? Error { get; }
-    public bool IsSuccess => Error is null;
-    public bool IsFailure => !IsSuccess;
 
-    private Result(T value) => Value = value;
-    private Result(string error) => Error = error;
+    private Result(T value) { _succeeded = true; Value = value; Error = null; }
+    private Result(string error) { _succeeded = false; Value = default; Error = error; }
+
+    public bool IsSuccess => _succeeded;
 
     public static Result<T> Success(T value) => new(value);
-    public static Result<T> Fail(string error) => new(error);
+    public static Result<T> Failure(string error) => new(error);
 
-    // Implicit conversions reduce ceremony
-    public static implicit operator Result<T>(T value) => Success(value);
-
-    public TResult Match<TResult>(Func<T, TResult> onSuccess, Func<string, TResult> onFailure)
-        => IsSuccess ? onSuccess(Value!) : onFailure(Error!);
+    public TOut Match<TOut>(Func<T, TOut> onSuccess, Func<string, TOut> onFailure) =>
+        _succeeded ? onSuccess(Value!) : onFailure(Error ?? "Uninitialized result");
 }
 
-// Usage with implicit conversion
-public Result<User> GetUser(int id)
-{
-    var user = _repository.Find(id);
-    return user is not null
-        ? user  // Implicit conversion to Result<User>
-        : Result<User>.Fail($"User {id} not found");
-}
-
-var result = GetUser(123);
-var message = result.Match(
-    user => $"Found: {user.Name}",
-    error => $"Error: {error}"
-);
+public Result<User> FindUser(int id) =>
+    _repository.Find(id) is { } user
+        ? Result<User>.Success(user)
+        : Result<User>.Failure($"User {id} not found");
 ```
 
-For operations that don't return a value, add a non-generic Result:
+The explicit `_succeeded` flag matters because this is a struct. `default(Result<T>)` exists whether or not anyone intended it, and a version that derived success from `Error is null` would report an uninitialized result as a success.
 
-```csharp
-public readonly record struct Result
-{
-    public string? Error { get; }
-    public bool IsSuccess => Error is null;
+Libraries such as [ErrorOr](https://github.com/amantinband/error-or){:target="_blank" rel="noopener noreferrer"}, [FluentResults](https://github.com/altmann/FluentResults){:target="_blank" rel="noopener noreferrer"}, and [OneOf](https://github.com/mcintyre321/OneOf){:target="_blank" rel="noopener noreferrer"} provide richer versions, with typed error categories, multiple accumulated errors, or one case per distinct outcome. C# itself has no built-in union or result type in C# 14. Union types appear in the C# 15 preview, and until a released version ships them, a result type is a library or hand-written struct.
 
-    private Result(string? error) => Error = error;
-
-    public static Result Success() => new(null);
-    public static Result Fail(string error) => new(error);
-}
-```
-
-#### Popular Libraries
-
-For production code, established libraries offer richer functionality, tested implementations, and ecosystem support.
-
-**[ErrorOr](https://github.com/amantinband/error-or){:target="_blank" rel="noopener noreferrer"}** provides a discriminated union with typed errors and fluent chaining. It's lightweight, struct-based, and popular in API development:
-
-```csharp
-// Define domain-specific errors
-public static class UserErrors
-{
-    public static Error NotFound(int id) => Error.NotFound("User.NotFound", $"User {id} not found");
-    public static Error InvalidEmail => Error.Validation("User.InvalidEmail", "Email format is invalid");
-}
-
-// Return ErrorOr<T> from methods
-public ErrorOr<User> GetUser(int id)
-{
-    var user = _repository.Find(id);
-    return user is not null ? user : UserErrors.NotFound(id);
-}
-
-// Chain operations fluently
-var result = await GetUser(id)
-    .Then(user => ValidateEmail(user.Email))
-    .ThenAsync(user => _repository.UpdateAsync(user));
-
-// Handle with Match or Switch
-return result.Match(
-    user => Ok(user),
-    errors => errors.First().Type switch
-    {
-        ErrorType.NotFound => NotFound(),
-        ErrorType.Validation => BadRequest(errors),
-        _ => Problem()
-    }
-);
-```
-
-**[FluentResults](https://github.com/altmann/FluentResults){:target="_blank" rel="noopener noreferrer"}** supports multiple errors, hierarchical error chains with root cause tracking, and custom error types:
-
-```csharp
-// Custom domain error
-public class InsufficientStockError : Error
-{
-    public string ProductId { get; }
-    public InsufficientStockError(string productId, int requested, int available)
-        : base($"Requested {requested} but only {available} available")
-    {
-        ProductId = productId;
-        Metadata.Add("Requested", requested);
-        Metadata.Add("Available", available);
-    }
-}
-
-// Accumulate multiple errors
-public Result<Order> ValidateOrder(Order order)
-{
-    var result = Result.Ok(order);
-
-    if (order.Items.Count == 0)
-        result = result.WithError("Order must have at least one item");
-
-    foreach (var item in order.Items)
-    {
-        var stock = _inventory.GetStock(item.ProductId);
-        if (stock < item.Quantity)
-            result = result.WithError(new InsufficientStockError(item.ProductId, item.Quantity, stock));
-    }
-
-    return result;
-}
-
-// Chain with root cause tracking
-public Result<Receipt> ProcessPayment(Order order)
-{
-    try
-    {
-        return _paymentGateway.Charge(order.Total);
-    }
-    catch (PaymentException ex)
-    {
-        return Result.Fail(new Error("Payment processing failed").CausedBy(ex));
-    }
-}
-```
-
-**[OneOf](https://github.com/mcintyre321/OneOf){:target="_blank" rel="noopener noreferrer"}** models outcomes as distinct types rather than success/failure, which works well when a method can return several different valid results:
-
-```csharp
-// Model distinct outcomes as types
-public OneOf<User, NotFound, Suspended> GetUser(int id)
-{
-    var user = _repository.Find(id);
-    if (user is null) return new NotFound();
-    if (user.IsSuspended) return new Suspended(user.SuspendedUntil);
-    return user;
-}
-
-// Exhaustive handling - compiler ensures all cases covered
-var response = GetUser(id).Match(
-    user => Ok(user),
-    notFound => NotFound(),
-    suspended => StatusCode(403, $"Account suspended until {suspended.Until}")
-);
-```
-
-#### Choosing an Approach
-
-| Approach | Best For |
-|----------|----------|
-| Minimal `record struct` | Simple projects, learning, or when you want no dependencies |
-| ErrorOr | API development with typed errors and fluent chaining |
-| FluentResults | Complex validation with multiple errors and root cause tracking |
-| OneOf | Methods with multiple distinct outcomes beyond success/failure |
-
-#### Native Discriminated Unions (Future)
-
-C# 14 is expected to introduce native discriminated unions, which will provide language-level support for this pattern with exhaustiveness checking. Until then, these libraries fill the gap effectively.
-
-### Try Pattern
-
-Return boolean indicating success, with out parameter for result.
-
-```csharp
-public bool TryGetUser(int id, out User? user)
-{
-    user = _repository.Find(id);
-    return user != null;
-}
-
-// Usage
-if (TryGetUser(123, out var user))
-{
-    Console.WriteLine(user.Name);
-}
-else
-{
-    Console.WriteLine("User not found");
-}
-```
-
-### Parse vs TryParse
-
-```csharp
-// Parse throws on failure - use when input should be valid
-int value = int.Parse(validInput);
-
-// TryParse returns bool - use for user input or uncertain data
-if (int.TryParse(userInput, out int result))
-{
-    UseValue(result);
-}
-else
-{
-    ShowValidationError("Please enter a valid number");
-}
-```
-
-### Guard Clauses
-
-Validate early, fail fast.
-
-```csharp
-public void ProcessOrder(Order order, Customer customer)
-{
-    // Validate inputs immediately
-    ArgumentNullException.ThrowIfNull(order);
-    ArgumentNullException.ThrowIfNull(customer);
-
-    if (order.Items.Count == 0)
-        throw new ArgumentException("Order must have at least one item", nameof(order));
-
-    if (!customer.IsActive)
-        throw new InvalidOperationException("Cannot process order for inactive customer");
-
-    // Main logic only runs if all guards pass
-    ProcessValidOrder(order, customer);
-}
-```
-
-### Validation with Aggregate Errors
-
-```csharp
-public class ValidationResult
-{
-    private readonly List<string> _errors = new();
-
-    public bool IsValid => _errors.Count == 0;
-    public IReadOnlyList<string> Errors => _errors;
-
-    public void AddError(string error) => _errors.Add(error);
-
-    public void ThrowIfInvalid()
-    {
-        if (!IsValid)
-            throw new ValidationException(string.Join("; ", _errors));
-    }
-}
-
-public ValidationResult Validate(Order order)
-{
-    var result = new ValidationResult();
-
-    if (string.IsNullOrWhiteSpace(order.CustomerId))
-        result.AddError("Customer ID is required");
-
-    if (order.Items.Count == 0)
-        result.AddError("Order must have at least one item");
-
-    foreach (var item in order.Items)
-    {
-        if (item.Quantity <= 0)
-            result.AddError($"Invalid quantity for item {item.ProductId}");
-    }
-
-    return result;
-}
-```
-
-## Async Exception Handling
-
-```csharp
-// Exceptions in async methods
-public async Task ProcessAsync()
-{
-    try
-    {
-        await DoWorkAsync();
-    }
-    catch (HttpRequestException ex)
-    {
-        // Exception is properly caught here
-        logger.LogError(ex, "HTTP request failed");
-        throw;
-    }
-}
-
-// Task.WhenAll - first exception thrown, all available
-try
-{
-    await Task.WhenAll(task1, task2, task3);
-}
-catch (Exception ex)
-{
-    // ex is the first exception
-    // Access all via the task
-}
-
-// Handle all exceptions from WhenAll
-var allTasks = Task.WhenAll(task1, task2, task3);
-try
-{
-    await allTasks;
-}
-catch
-{
-    // Aggregate contains all exceptions
-    AggregateException? aggregate = allTasks.Exception;
-    foreach (var ex in aggregate?.InnerExceptions ?? Enumerable.Empty<Exception>())
-    {
-        logger.LogError(ex, "Task failed");
-    }
-}
-
-// Fire and forget with exception handling
-public static async void SafeFireAndForget(
-    this Task task,
-    Action<Exception>? onException = null)
-{
-    try
-    {
-        await task;
-    }
-    catch (Exception ex)
-    {
-        onException?.Invoke(ex);
-    }
-}
-
-// Avoid: unobserved exceptions
-_ = DoWorkAsync();  // Exception may be lost!
-
-// Better: fire and forget safely
-DoWorkAsync().SafeFireAndForget(ex => logger.LogError(ex, "Background task failed"));
-```
-
-## Logging Exceptions
-
-```csharp
-// With ILogger (Microsoft.Extensions.Logging)
-catch (Exception ex)
-{
-    // Log with exception parameter - preserves stack trace
-    logger.LogError(ex, "Failed to process order {OrderId}", orderId);
-
-    // Don't do this - loses exception details
-    logger.LogError("Failed to process order: " + ex.Message);
-
-    throw;
-}
-
-// Structured logging
-catch (Exception ex)
-{
-    logger.LogError(ex,
-        "Order processing failed. OrderId={OrderId}, CustomerId={CustomerId}",
-        orderId,
-        customerId);
-    throw;
-}
-```
-
-## ExceptionDispatchInfo
-
-Preserve and re-throw exceptions with original stack trace.
-
-```csharp
-ExceptionDispatchInfo? capturedException = null;
-
-try
-{
-    DoWork();
-}
-catch (Exception ex)
-{
-    capturedException = ExceptionDispatchInfo.Capture(ex);
-}
-
-// Later, re-throw with original stack trace
-if (capturedException != null)
-{
-    capturedException.Throw();  // Original stack trace preserved
-}
-```
-
-## Best Practices
-
-### Do
-
-```csharp
-// Use specific exception types
-throw new ArgumentNullException(nameof(input));
-
-// Include context in messages
-throw new InvalidOperationException(
-    $"Cannot transition from {currentState} to {newState}");
-
-// Preserve stack trace when re-throwing
-catch (Exception ex)
-{
-    logger.LogError(ex, "Operation failed");
-    throw;  // Not throw ex;
-}
-
-// Use exception filters for logging
-catch (Exception ex) when (LogAndContinue(ex))
-{
-}
-
-// Clean up resources with using
-using var stream = File.OpenRead(path);
-
-// Validate arguments early
-ArgumentNullException.ThrowIfNull(order);
-```
-
-### Don't
-
-```csharp
-// Don't catch and swallow
-catch (Exception) { }  // BAD: Hides problems
-
-// Don't catch Exception without re-throwing or logging
-catch (Exception ex)
-{
-    return null;  // BAD: Lost information
-}
-
-// Don't use exceptions for flow control
-try
-{
-    var user = GetUser(id);
-}
-catch (UserNotFoundException)
-{
-    return CreateNewUser(id);  // BAD: Use TryGet pattern instead
-}
-
-// Don't throw Exception or ApplicationException
-throw new Exception("Something went wrong");  // Too generic
-
-// Don't throw in finally
-finally
-{
-    throw new Exception();  // BAD: Overwrites original exception
-}
-```
+The result approach has a cost of its own. Every caller must check it and pass failures along explicitly, which is the propagation work exceptions do automatically. Most codebases mix the two, using result types or `Try` methods for expected outcomes inside the domain and exceptions for everything unexpected.
 
 ## Key Takeaways
 
-**Use specific exceptions**: Throw and catch specific exception types rather than generic Exception.
+**Throw the most specific standard exception,** and use the throw helpers for argument checks. Define a custom type only when a caller needs to catch it separately.
 
-**Preserve stack traces**: Use `throw;` not `throw ex;` when re-throwing.
+**Catch only where you can act.** Broad `catch (Exception)` belongs at process and request boundaries, and a `catch` that swallows or returns `null` hides the failure.
 
-**Exception filters for conditions**: Use `when` clauses to filter without catching and re-throwing.
+**Filters run before the stack unwinds.** A `when` clause that returns `false` leaves the exception untouched, which makes filters ideal for logging and for selecting by status code or cancellation.
 
-**Using for cleanup**: Prefer `using` statements over try/finally for IDisposable resources.
+**Rethrow with `throw;`, never `throw ex;`,** and wrap with an inner exception when crossing a layer boundary.
 
-**Don't use exceptions for flow control**: Use TryParse patterns, null checks, or Result types for expected cases.
+**`await Task.WhenAll` surfaces only the first failure.** Keep the combined task to read all of them.
 
-**Validate early**: Use guard clauses at method entry to fail fast with clear messages.
-
-**Log then throw**: When catching to log, always re-throw or handle completely.
+**Exceptions are for the unexpected.** Expected failures are cheaper and clearer as `Try` methods or result types.

@@ -1,0 +1,92 @@
+---
+title: "The Training Loop"
+kind: flow
+system: machine-learning
+summary: "Predict, measure the loss, adjust the parameters, then repeat."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" role="img" aria-labelledby="mlt-title mlt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mlt-title">The training loop</title>
+<desc id="mlt-desc">A batch of training examples supplies features to the model, which uses its current parameters to predict a price for each house. The predictions and the batch's labels, the correct prices, both feed the loss, a single number measuring how far off the predictions are. The optimizer takes the loss, computes the gradient, and steps each parameter. The updated model then receives the next batch, and the loop repeats.</desc>
+<style>
+.mlt-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mlt-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlt-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mlt-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlt-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mlt-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mlt-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mlt-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mlt-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlt-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mlt-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlt-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mlt-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mlt-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mlt-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mlt-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mlt-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlt-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mlt-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mlt-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mlt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mlt-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mlt-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mlt-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mlt-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mlt-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mlt-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlt-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlt-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mlt-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mlt-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlt-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mlt-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mlt-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mlt-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlt-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mlt-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mlt-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mlt-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlt-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlt-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlt-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mlt-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mlt-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mlt-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mlt-box" x="40" y="60" width="220" height="70" rx="6"/>
+<text class="mlt-n" x="52" y="84">Batch of examples</text>
+<text class="mlt-s" x="52" y="104">features and labels</text>
+<text class="mlt-s" x="52" y="121">for, say, 32 houses</text>
+<rect class="mlt-sys" x="340" y="60" width="200" height="70" rx="6"/>
+<text class="mlt-t-inv" x="354" y="88">Model</text>
+<text class="mlt-s-inv" x="354" y="110">current parameters</text>
+<rect class="mlt-box" x="620" y="60" width="240" height="70" rx="6"/>
+<text class="mlt-n" x="632" y="84">Predictions</text>
+<text class="mlt-s" x="632" y="104">a price for each house</text>
+<rect class="mlt-box" x="620" y="240" width="240" height="80" rx="6"/>
+<text class="mlt-n" x="632" y="264">Loss</text>
+<text class="mlt-s" x="632" y="284">one number: how far the</text>
+<text class="mlt-s" x="632" y="301">predictions are from the labels</text>
+<rect class="mlt-box" x="340" y="240" width="200" height="80" rx="6"/>
+<text class="mlt-n" x="352" y="264">Optimizer</text>
+<text class="mlt-s" x="352" y="284">computes the gradient</text>
+<text class="mlt-s" x="352" y="301">and steps each parameter</text>
+<path class="mlt-flow" d="M 260,95 H 334" marker-end="url(#mlt-a)"/>
+<text class="mlt-lab" x="272" y="87">features</text>
+<path class="mlt-flow" d="M 540,95 H 614" marker-end="url(#mlt-a)"/>
+<path class="mlt-flow" d="M 740,130 V 234" marker-end="url(#mlt-a)"/>
+<path class="mlt-flow" d="M 620,280 H 546" marker-end="url(#mlt-a)"/>
+<text class="mlt-lab" x="556" y="272">loss</text>
+<path class="mlt-flow" d="M 440,240 V 136" marker-end="url(#mlt-a)"/>
+<text class="mlt-lab" x="452" y="180">updated parameters,</text>
+<text class="mlt-lab" x="452" y="197">then the next batch</text>
+<path class="mlt-flow" d="M 150,130 V 360 H 740 V 326" marker-end="url(#mlt-a)"/>
+<text class="mlt-lab" x="162" y="352">labels, the correct prices</text>
+</g>
+</svg>

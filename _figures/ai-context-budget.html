@@ -1,0 +1,76 @@
+---
+title: "One Context Window, Shared"
+kind: layering
+system: ai-core
+summary: "Prompt, history, documents, and output all drawn from one token budget."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="aicb-title aicb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aicb-title">Everything in a request shares one context window</title>
+<desc id="aicb-desc">Two horizontal bars, each measured against a dashed context window limit. The first request holds a small system prompt, the conversation history, documents and tool results, a short new message, and room for the generated output and reasoning, with a little space to spare. In the second request the history and documents are larger and the input reaches the limit on its own, so the output segment sits outside the window with no room, and the request fails or the output is cut short.</desc>
+<style>
+.cb-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.cb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.cb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.cb-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.cb-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.cb-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.cb-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.cb-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.cb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.cb-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.cb-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.cb-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.cb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.cb-dot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+
+.cb-sys { fill: var(--color-secondary, #2D5A85); }
+.cb-hist { fill: var(--color-primary, #1A5F8A); }
+.cb-docs { fill: var(--color-purple, #6B3FA0); }
+.cb-new { fill: var(--color-gold, #C9A227); }
+.cb-out { fill: var(--color-green, #3C8D53); }
+.cb-free { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.cb-over { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.cb-lim { stroke: var(--color-text, #2C3E50); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.cb-in { font-size: 11.5px; font-weight: 600; fill: #FFFFFF; }
+.cb-acc { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.cb-row { font-size: 12.5px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<line class="cb-lim" x1="780" y1="46" x2="780" y2="300"/>
+<text class="cb-num" x="780" y="38" text-anchor="middle">context window limit</text>
+<text class="cb-row" x="30" y="82">A request with room to answer</text>
+<rect class="cb-sys" x="30" y="92" width="58" height="44" rx="0"/>
+<rect class="cb-hist" x="90" y="92" width="218" height="44" rx="0"/>
+<text class="cb-in" x="100" y="119">conversation history</text>
+<rect class="cb-docs" x="310" y="92" width="198" height="44" rx="0"/>
+<text class="cb-in" x="320" y="119">documents, tool results</text>
+<rect class="cb-new" x="510" y="92" width="48" height="44" rx="0"/>
+<rect class="cb-out" x="560" y="92" width="158" height="44" rx="0"/>
+<text class="cb-in" x="570" y="119">output and reasoning</text>
+<rect class="cb-free" x="720" y="92" width="60" height="44" rx="0"/>
+<text class="cb-s" x="30" y="158">Input and output are counted against the same limit.</text>
+<text class="cb-row" x="30" y="212">Input that fills the window</text>
+<rect class="cb-sys" x="30" y="222" width="58" height="44" rx="0"/>
+<rect class="cb-hist" x="90" y="222" width="328" height="44" rx="0"/>
+<text class="cb-in" x="100" y="249">conversation history</text>
+<rect class="cb-docs" x="420" y="222" width="308" height="44" rx="0"/>
+<text class="cb-in" x="430" y="249">documents, tool results</text>
+<rect class="cb-new" x="730" y="222" width="48" height="44" rx="0"/>
+<rect class="cb-over" x="784" y="222" width="86" height="44" rx="0"/>
+<text class="cb-acc" x="827" y="249" text-anchor="middle">output</text>
+<text class="cb-acc" x="30" y="290">No room is left for the answer, so the request fails or the output is cut short.</text>
+<rect class="cb-sys" x="30" y="328" width="14" height="14" rx="2"/>
+<text class="cb-el" x="50" y="339">system prompt</text>
+<rect class="cb-hist" x="143.3" y="328" width="14" height="14" rx="2"/>
+<text class="cb-el" x="163.3" y="339">conversation history</text>
+<rect class="cb-docs" x="299.3" y="328" width="14" height="14" rx="2"/>
+<text class="cb-el" x="319.3" y="339">documents and tool results</text>
+<rect class="cb-new" x="491.9" y="328" width="14" height="14" rx="2"/>
+<text class="cb-el" x="511.9" y="339">new message</text>
+<rect class="cb-out" x="593" y="328" width="14" height="14" rx="2"/>
+<text class="cb-el" x="613" y="339">generated output</text>
+</g>
+</svg>

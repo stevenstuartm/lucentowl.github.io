@@ -1,0 +1,87 @@
+---
+title: "Top-p Sampling"
+kind: rules
+system: ai-core
+summary: "The smallest set of likely tokens reaching p, with the tail cut off."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="ainp-title ainp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ainp-title">Top-p nucleus sampling cutting off unlikely tokens</title>
+<desc id="ainp-desc">Ten candidate tokens sorted by probability, with a running sum under each: mat 41 percent, floor 22, couch 14, bed 9, roof 5, then rug, chair, table, moon, and sky at 3 percent or less. With top-p set to 0.9 a dashed line falls after roof, where the running sum reaches 91 percent. The five tokens left of the line are sampled from, rescaled to sum to 100 percent, and the five to the right are never sampled. Probabilities are illustrative.</desc>
+<style>
+.np-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.np-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.np-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.np-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.np-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.np-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.np-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.np-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.np-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.np-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.np-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.np-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.np-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.np-dot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+
+.np-bar { fill: var(--color-primary, #1A5F8A); }
+.np-cut { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.np-line { stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.np-in-lab { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.np-out-lab { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.np-acc { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+<defs>
+
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="np-bar" x="140" y="96" width="48" height="164" rx="2"/>
+<text class="np-num" x="164" y="90" text-anchor="middle">41%</text>
+<text class="np-el" x="164" y="280" text-anchor="middle">mat</text>
+<text class="np-num" x="164" y="302" text-anchor="middle">41%</text>
+<rect class="np-bar" x="210" y="172" width="48" height="88" rx="2"/>
+<text class="np-num" x="234" y="166" text-anchor="middle">22%</text>
+<text class="np-el" x="234" y="280" text-anchor="middle">floor</text>
+<text class="np-num" x="234" y="302" text-anchor="middle">63%</text>
+<rect class="np-bar" x="280" y="204" width="48" height="56" rx="2"/>
+<text class="np-num" x="304" y="198" text-anchor="middle">14%</text>
+<text class="np-el" x="304" y="280" text-anchor="middle">couch</text>
+<text class="np-num" x="304" y="302" text-anchor="middle">77%</text>
+<rect class="np-bar" x="350" y="224" width="48" height="36" rx="2"/>
+<text class="np-num" x="374" y="218" text-anchor="middle">9%</text>
+<text class="np-el" x="374" y="280" text-anchor="middle">bed</text>
+<text class="np-num" x="374" y="302" text-anchor="middle">86%</text>
+<rect class="np-bar" x="420" y="240" width="48" height="20" rx="2"/>
+<text class="np-num" x="444" y="234" text-anchor="middle">5%</text>
+<text class="np-el" x="444" y="280" text-anchor="middle">roof</text>
+<text class="np-num" x="444" y="302" text-anchor="middle">91%</text>
+<rect class="np-cut" x="490" y="248" width="48" height="12" rx="2"/>
+<text class="np-num" x="514" y="242" text-anchor="middle">3%</text>
+<text class="np-el" x="514" y="280" text-anchor="middle">rug</text>
+<text class="np-num" x="514" y="302" text-anchor="middle">94%</text>
+<rect class="np-cut" x="560" y="252" width="48" height="8" rx="2"/>
+<text class="np-num" x="584" y="246" text-anchor="middle">2%</text>
+<text class="np-el" x="584" y="280" text-anchor="middle">chair</text>
+<text class="np-num" x="584" y="302" text-anchor="middle">96%</text>
+<rect class="np-cut" x="630" y="252" width="48" height="8" rx="2"/>
+<text class="np-num" x="654" y="246" text-anchor="middle">2%</text>
+<text class="np-el" x="654" y="280" text-anchor="middle">table</text>
+<text class="np-num" x="654" y="302" text-anchor="middle">98%</text>
+<rect class="np-cut" x="700" y="256" width="48" height="4" rx="2"/>
+<text class="np-num" x="724" y="250" text-anchor="middle">1%</text>
+<text class="np-el" x="724" y="280" text-anchor="middle">moon</text>
+<text class="np-num" x="724" y="302" text-anchor="middle">99%</text>
+<rect class="np-cut" x="770" y="256" width="48" height="4" rx="2"/>
+<text class="np-num" x="794" y="250" text-anchor="middle">1%</text>
+<text class="np-el" x="794" y="280" text-anchor="middle">sky</text>
+<text class="np-num" x="794" y="302" text-anchor="middle">100%</text>
+<line x1="134" y1="260" x2="824" y2="260" stroke="var(--color-border, #DDE3EB)" stroke-width="1"/>
+<line class="np-line" x1="479" y1="40" x2="479" y2="310"/>
+<text class="np-acc" x="479" y="32" text-anchor="middle">top-p = 0.9</text>
+<text class="np-in-lab" x="467" y="70" text-anchor="end">sampled from these 5,</text>
+<text class="np-s" x="467" y="88" text-anchor="end">rescaled to sum to 100%</text>
+<text class="np-out-lab" x="491" y="190">never sampled</text>
+<text class="np-hd" x="30" y="280">TOKEN</text>
+<text class="np-hd" x="30" y="302">RUNNING SUM</text>
+<text class="np-el" x="30" y="346">Top-p keeps the smallest set of most likely tokens whose probabilities reach p, here 91% after five tokens. Probabilities are illustrative.</text>
+</g>
+</svg>

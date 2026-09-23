@@ -1,0 +1,87 @@
+---
+title: "Mixture-of-Experts Routing"
+kind: flow
+system: ai-core
+summary: "A router sending each token to 2 of 8 experts, all held in memory."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 416" role="img" aria-labelledby="aimo-title aimo-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aimo-title">Mixture-of-experts routing inside one layer</title>
+<desc id="aimo-desc">A mixture-of-experts layer. One token's representation goes to a router, which picks the top 2 of 8 experts. Experts 2 and 6 run, with weights 0.7 and 0.3, and the other six stay idle for this token. The two outputs are combined in a weighted sum and passed to the next layer. All eight experts sit in GPU memory. Compute follows the active parameters, 37 billion per token for DeepSeek-V3, while memory follows the total, all 671 billion.</desc>
+<style>
+.mo-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mo-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mo-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mo-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.mo-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mo-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mo-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mo-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mo-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mo-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mo-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mo-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mo-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mo-dot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+
+.mo-idle-l { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+.mo-n-off { font-size: 12px; font-weight: 600; fill: var(--color-text-light, #4A5568); }
+.mo-note { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+</style>
+<defs>
+<marker id="aimo-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mo-box" x="350" y="20" width="200" height="48" rx="6"/>
+<text class="mo-n" x="450" y="40" text-anchor="middle">One token</text>
+<text class="mo-s" x="450" y="58" text-anchor="middle">its representation at this layer</text>
+<path class="mo-flow" d="M 450,68 V 90" marker-end="url(#aimo-a)"/>
+<rect class="mo-sys" x="350" y="96" width="200" height="54" rx="6"/>
+<text class="mo-t-inv" x="450" y="118" text-anchor="middle">Router</text>
+<text class="mo-s-inv" x="450" y="138" text-anchor="middle">picks the top 2 of 8 experts</text>
+<rect class="mo-band" x="30" y="170" width="840" height="136" rx="8"/>
+<text class="mo-hd" x="44" y="298">ALL EXPERTS IN GPU MEMORY</text>
+<line class="mo-idle-l" x1="450" y1="150" x2="93" y2="210"/>
+<path class="mo-flow" d="M 450,150 L 195,204" marker-end="url(#aimo-a)"/>
+<line class="mo-idle-l" x1="450" y1="150" x2="297" y2="210"/>
+<line class="mo-idle-l" x1="450" y1="150" x2="399" y2="210"/>
+<line class="mo-idle-l" x1="450" y1="150" x2="501" y2="210"/>
+<path class="mo-flow" d="M 450,150 L 603,204" marker-end="url(#aimo-a)"/>
+<line class="mo-idle-l" x1="450" y1="150" x2="705" y2="210"/>
+<line class="mo-idle-l" x1="450" y1="150" x2="807" y2="210"/>
+<rect class="mo-idle" x="48" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n-off" x="93" y="238" text-anchor="middle">Expert 1</text>
+<text class="mo-s" x="93" y="258" text-anchor="middle">idle</text>
+<rect class="mo-box" x="150" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n" x="195" y="238" text-anchor="middle">Expert 2</text>
+<text class="mo-s" x="195" y="258" text-anchor="middle">weight 0.7</text>
+<rect class="mo-idle" x="252" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n-off" x="297" y="238" text-anchor="middle">Expert 3</text>
+<text class="mo-s" x="297" y="258" text-anchor="middle">idle</text>
+<rect class="mo-idle" x="354" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n-off" x="399" y="238" text-anchor="middle">Expert 4</text>
+<text class="mo-s" x="399" y="258" text-anchor="middle">idle</text>
+<rect class="mo-idle" x="456" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n-off" x="501" y="238" text-anchor="middle">Expert 5</text>
+<text class="mo-s" x="501" y="258" text-anchor="middle">idle</text>
+<rect class="mo-box" x="558" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n" x="603" y="238" text-anchor="middle">Expert 6</text>
+<text class="mo-s" x="603" y="258" text-anchor="middle">weight 0.3</text>
+<rect class="mo-idle" x="660" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n-off" x="705" y="238" text-anchor="middle">Expert 7</text>
+<text class="mo-s" x="705" y="258" text-anchor="middle">idle</text>
+<rect class="mo-idle" x="762" y="210" width="90" height="70" rx="6"/>
+<text class="mo-n-off" x="807" y="238" text-anchor="middle">Expert 8</text>
+<text class="mo-s" x="807" y="258" text-anchor="middle">idle</text>
+<path class="mo-flow" d="M 195,280 L 410,336" marker-end="url(#aimo-a)"/>
+<path class="mo-flow" d="M 603,280 L 490,336" marker-end="url(#aimo-a)"/>
+<rect class="mo-sys" x="350" y="342" width="200" height="54" rx="6"/>
+<text class="mo-t-inv" x="450" y="364" text-anchor="middle">Weighted sum</text>
+<text class="mo-s-inv" x="450" y="384" text-anchor="middle">passed to the next layer</text>
+<rect class="mo-note" x="30" y="336" width="290" height="64" rx="6"/>
+<text class="mo-n" x="44" y="360">Compute follows active parameters</text>
+<text class="mo-s" x="44" y="380">DeepSeek-V3 runs 37B per token</text>
+<rect class="mo-note" x="580" y="336" width="290" height="64" rx="6"/>
+<text class="mo-n" x="594" y="360">Memory follows total parameters</text>
+<text class="mo-s" x="594" y="380">DeepSeek-V3 loads all 671B</text>
+</g>
+</svg>

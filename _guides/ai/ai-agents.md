@@ -90,50 +90,17 @@ Developer-facing agents run tools on the user's machine while inference runs on 
 
 ### What Crosses the Boundary on Every Turn
 
-Each iteration of the loop crosses the network. One complete cycle, with the boundary marked:
+Each iteration of the loop crosses the network.
 
-```
-  LOCAL EXECUTION                           REMOTE INFERENCE
-  ───────────────                           ────────────────
+{% include figure.html id="llm-agent-boundary" %}
 
-  1. User provides goal
-        │
-        ▼
-  2. Assemble initial context
-     (system prompt + user goal)
-        │
-        ├──────── HTTPS ──────────────► 3. Model reasons about goal
-        │                                     │
-        │                                     ▼
-        │                               4. Model returns a tool call
-        │◄─────── HTTPS ───────────────    ("read file X")
-        │
-        ▼
-  5. Execute tool locally
-     (read file X from disk)
-        │
-        ▼
-  6. Append tool result to context
-        │
-        ├──────── HTTPS ──────────────► 7. Model sees file contents,
-        │                                  reasons about next step
-        │                                     │
-        │                                     ▼
-        │                               8. Returns next tool call
-        │◄─────── HTTPS ───────────────    or a final response
-        │
-        ▼
-  9. Execute next tool locally
-     ...cycle repeats...
-```
-
-Every rightward arrow is data leaving the machine, and each request carries the entire conversation so far rather than just the newest turn. A file read at step 5 is in the request at step 6, and in every request after it. By step 20 a single request may carry the contents of dozens of files, command outputs, and search results.
+Every red arrow is data leaving the machine, and each request carries the entire conversation so far rather than just the newest turn. A file read at step 5 is in the request at step 6, and in every request after it. By step 20 a single request may carry the contents of dozens of files, command outputs, and search results.
 
 ### What the Provider Receives
 
 The split means source code, configuration, and command output reach the provider's infrastructure as a condition of getting help with them. An agent cannot reason about data it has not been sent, so there is no way to get model assistance on a file without that file crossing the network.
 
-The exposure this creates is incidental rather than malicious. A developer asking an agent to fix an authentication bug may send it reading configuration files, environment dumps, and logs holding connection strings, API keys, or tokens. None of those reads are wrong. They are the agent doing the job it was given. But those values now sit in the inference context, governed by whatever retention and access terms apply to the account. Retention periods, training-data exclusions, and enterprise carve-outs vary by provider and by plan, and they change often enough that the terms page is the only reliable source.
+The exposure this creates is incidental rather than malicious. A developer asking an agent to fix an authentication bug may find it reading configuration files, environment dumps, and logs holding connection strings, API keys, or tokens. None of those reads are wrong. They are the agent doing the job it was given. But those values now sit in the inference context, governed by whatever retention and access terms apply to the account. Retention periods, training-data exclusions, and enterprise carve-outs vary by provider and by plan, and they change often enough that the terms page is the only reliable source.
 
 Two controls limit the blast radius without giving up the tool. Keep secrets out of the paths the agent can read, using scoped credentials and secret scanning rather than trusting the model to avoid them. Then treat a long session as an accumulating liability and start a fresh one when the task changes, since context pruning and session limits cap how much is in flight at once.
 

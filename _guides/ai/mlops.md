@@ -35,7 +35,7 @@ Reproducing a model means being able to recover everything that produced it. Ver
 | **Evaluation results** | The evidence a model was fit to promote |
 | **Environment** | Library versions affect both training results and numeric behavior at serving time |
 
-The record linking these together (which data, code, and configuration produced which model, evaluated how, deployed where) is called **lineage**, and it's what lets a team answer "why did the model do that?" months later.
+The record of which data, code, and configuration produced which model, how it was evaluated, and where it was deployed is called **lineage**. It's what lets a team answer "why did the model do that?" months later.
 
 ---
 
@@ -59,7 +59,7 @@ Google Cloud's [MLOps architecture guide](https://docs.cloud.google.com/architec
 
 ### Level 0: Manual Process
 
-Every step is manual and usually happens in notebooks. A data scientist trains a model and hands the artifact to engineers, who deploy it as a prediction service. Releases are rare, there's no CI or CD, and nobody actively monitors model performance, so degradation goes unnoticed until someone complains. This level is acceptable for a first model or a model that genuinely rarely needs to change, and it's where most teams start.
+Every step is manual and usually happens in notebooks. A data scientist trains a model and hands the artifact to engineers, who deploy it as a prediction service. Releases are rare, there's no CI or CD, and nobody actively monitors model performance, so degradation goes unnoticed until someone complains. This level is acceptable for a first model or a model that rarely needs to change, and it's where most teams start.
 
 ### Level 1: Automated Training Pipeline
 
@@ -125,7 +125,7 @@ Every pipeline run records its inputs, parameters, code and data versions, execu
 
 ### Offline Validation Before Online Validation
 
-A new model first has to beat the current one on held-out data, and it should also match it on important slices of that data (a new model can improve overall accuracy while getting much worse for one region or customer segment). Offline evaluation can't capture everything, though. Real traffic differs from historical data, and some effects, like whether users click a recommendation, only show up live. The deployment patterns below provide that online validation with limited risk.
+A new model first has to beat the current one on held-out data, and it should also match it on important slices of that data, because a new model can improve overall accuracy while getting much worse for one region or customer segment. Offline evaluation can't capture everything, though. Real traffic differs from historical data, and some effects, like whether users click a recommendation, only show up live. The deployment patterns below provide that online validation with limited risk.
 
 ### Deployment Patterns
 
@@ -136,6 +136,8 @@ A new model first has to beat the current one on held-out data, and it should al
 | **Blue-green** | A full parallel environment runs the new model and traffic switches over at once | Clean cutover and instant rollback | Changes to the serving infrastructure as well as the model |
 | **A/B test** | Traffic splits between models for long enough to compare business outcomes statistically | Whether the new model actually improves the outcome | The offline metric is only a proxy for what matters |
 | **Multi-armed bandit** | Traffic shifts toward whichever model is performing better while the test runs | Outcome, while limiting exposure to the worse model | Many variants, or when a losing variant is costly to keep serving |
+
+{% include figure.html id="ml-deployment-patterns" %}
 
 Shadow deployment can't measure outcomes that depend on the prediction being acted on, since users never see the shadow model's output. Anything that needs user response takes a canary or an A/B test.
 
@@ -149,6 +151,8 @@ A model can return well-formed predictions at normal latency while being wrong, 
 
 - **Data drift** (also called covariate shift) is a change in the distribution of the inputs. A loan model trained mostly on applicants aged 30-50 starts seeing many applicants in their early twenties. The relationship it learned might still hold, but it's now predicting in a region it saw little of.
 - **Concept drift** is a change in the relationship between inputs and the correct answer. The same transaction pattern that used to be legitimate is now a common fraud technique. The inputs look familiar and the model is wrong anyway.
+
+{% include figure.html id="ml-data-vs-concept-drift" %}
 
 Data drift is detectable without labels, by comparing live feature distributions with the training distributions using a statistical distance or test. Concept drift generally isn't, because detecting it requires knowing the correct answers.
 

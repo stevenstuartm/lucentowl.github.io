@@ -1,0 +1,150 @@
+---
+title: "Classification, Regression, and Clustering"
+kind: chart
+system: machine-learning
+summary: "What each task learns, drawn on the same kind of scatter plot."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 365" role="img" aria-labelledby="mlk-title mlk-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mlk-title">What classification, regression, and clustering each learn</title>
+<desc id="mlk-desc">Three scatter plots. In classification, emails are plotted by number of links and by words like free, colored as spam or not spam, and the model learns a dashed boundary between the two colors. In regression, sold houses are plotted by floor area and price, and the model learns a line through them. In clustering, customers are plotted by orders per month and average order value with no labels at all, and the algorithm finds three groups on its own, circled A, B, and C.</desc>
+<style>
+.mlk-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mlk-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlk-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mlk-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlk-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mlk-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mlk-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mlk-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mlk-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlk-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mlk-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlk-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mlk-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mlk-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mlk-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mlk-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mlk-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlk-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mlk-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mlk-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mlk-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mlk-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mlk-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mlk-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mlk-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mlk-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mlk-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlk-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlk-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mlk-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mlk-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlk-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mlk-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mlk-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mlk-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlk-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mlk-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mlk-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mlk-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlk-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlk-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlk-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mlk-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mlk-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mlk-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mlk-band" x="20" y="20" width="280" height="330" rx="8"/>
+<text class="mlk-n" x="34" y="44">Classification</text>
+<path class="mlk-axis" d="M 44,60 V 240 H 276"/>
+<text class="mlk-k" x="276" y="256" text-anchor="end">links in the email</text>
+<text class="mlk-k" x="50" y="64">words like 'free'</text>
+<path class="mlk-bound" d="M 76.5,70.8 L 266.7,211.2"/>
+<circle class="mlk-pt" cx="71.8" cy="213.0" r="4.5"/>
+<circle class="mlk-pt" cx="90.4" cy="189.6" r="4.5"/>
+<circle class="mlk-pt" cx="78.8" cy="169.8" r="4.5"/>
+<circle class="mlk-pt" cx="109.0" cy="218.4" r="4.5"/>
+<circle class="mlk-pt" cx="120.6" cy="196.8" r="4.5"/>
+<circle class="mlk-pt" cx="99.7" cy="157.2" r="4.5"/>
+<circle class="mlk-pt" cx="136.8" cy="207.6" r="4.5"/>
+<circle class="mlk-pt" cx="67.2" cy="142.8" r="4.5"/>
+<circle class="mlk-pt" cx="127.5" cy="175.2" r="4.5"/>
+<circle class="mlk-pt" cx="150.7" cy="222.0" r="4.5"/>
+<circle class="mlk-pt2" cx="183.2" cy="110.4" r="4.5"/>
+<circle class="mlk-pt2" cx="211.0" cy="135.6" r="4.5"/>
+<circle class="mlk-pt2" cx="169.3" cy="88.8" r="4.5"/>
+<circle class="mlk-pt2" cx="238.9" cy="114.0" r="4.5"/>
+<circle class="mlk-pt2" cx="201.8" cy="79.8" r="4.5"/>
+<circle class="mlk-pt2" cx="229.6" cy="153.6" r="4.5"/>
+<circle class="mlk-pt2" cx="220.3" cy="94.2" r="4.5"/>
+<circle class="mlk-pt2" cx="178.6" cy="126.6" r="4.5"/>
+<circle class="mlk-pt2" cx="248.2" cy="132.0" r="4.5"/>
+<circle class="mlk-pt2" cx="192.5" cy="150.0" r="4.5"/>
+<circle class="mlk-pt2" cx="40.0" cy="322.0" r="4.5"/>
+<text class="mlk-el" x="50" y="326">spam</text>
+<circle class="mlk-pt" cx="110.0" cy="322.0" r="4.5"/>
+<text class="mlk-el" x="120" y="326">not spam</text>
+<path class="mlk-bound" d="M 190,322 H 216"/>
+<text class="mlk-el" x="222" y="326">boundary</text>
+<text class="mlk-note" x="34" y="276">labels are categories,</text>
+<text class="mlk-note" x="34" y="294">so it learns a boundary</text>
+<rect class="mlk-band" x="310" y="20" width="280" height="330" rx="8"/>
+<text class="mlk-n" x="324" y="44">Regression</text>
+<path class="mlk-axis" d="M 334,60 V 240 H 566"/>
+<text class="mlk-k" x="566" y="256" text-anchor="end">floor area</text>
+<text class="mlk-k" x="340" y="64">price</text>
+<path class="mlk-fit" d="M 341.0,214.7 L 559.0,87.1"/>
+<circle class="mlk-pt" cx="357.2" cy="200.4" r="4.5"/>
+<circle class="mlk-pt" cx="380.4" cy="195.0" r="4.5"/>
+<circle class="mlk-pt" cx="403.6" cy="171.6" r="4.5"/>
+<circle class="mlk-pt" cx="422.2" cy="175.2" r="4.5"/>
+<circle class="mlk-pt" cx="450.0" cy="150.0" r="4.5"/>
+<circle class="mlk-pt" cx="473.2" cy="144.6" r="4.5"/>
+<circle class="mlk-pt" cx="496.4" cy="117.6" r="4.5"/>
+<circle class="mlk-pt" cx="519.6" cy="115.8" r="4.5"/>
+<circle class="mlk-pt" cx="542.8" cy="90.6" r="4.5"/>
+<circle class="mlk-pt" cx="330.0" cy="322.0" r="4.5"/>
+<text class="mlk-el" x="340" y="326">sold house</text>
+<path class="mlk-fit" d="M 430,322 H 456"/>
+<text class="mlk-el" x="462" y="326">learned line</text>
+<text class="mlk-note" x="324" y="276">labels are numbers, so it</text>
+<text class="mlk-note" x="324" y="294">learns a line or curve</text>
+<rect class="mlk-band" x="600" y="20" width="280" height="330" rx="8"/>
+<text class="mlk-n" x="614" y="44">Clustering</text>
+<path class="mlk-axis" d="M 624,60 V 240 H 856"/>
+<text class="mlk-k" x="856" y="256" text-anchor="end">orders per month</text>
+<text class="mlk-k" x="630" y="64">average order value</text>
+<ellipse class="mlk-bound" cx="667.2" cy="205.1" rx="36" ry="28"/>
+<circle class="mlk-pt3" cx="658.8" cy="204.0" r="4.5"/>
+<circle class="mlk-pt3" cx="675.0" cy="214.8" r="4.5"/>
+<circle class="mlk-pt3" cx="651.8" cy="220.2" r="4.5"/>
+<circle class="mlk-pt3" cx="684.3" cy="196.8" r="4.5"/>
+<circle class="mlk-pt3" cx="665.8" cy="189.6" r="4.5"/>
+<text class="mlk-lab" x="707.152" y="187.08">A</text>
+<ellipse class="mlk-bound" cx="789.2" cy="203.3" rx="36" ry="28"/>
+<circle class="mlk-pt3" cx="772.5" cy="200.4" r="4.5"/>
+<circle class="mlk-pt3" cx="795.7" cy="211.2" r="4.5"/>
+<circle class="mlk-pt3" cx="786.4" cy="189.6" r="4.5"/>
+<circle class="mlk-pt3" cx="809.6" cy="196.8" r="4.5"/>
+<circle class="mlk-pt3" cx="781.8" cy="218.4" r="4.5"/>
+<text class="mlk-lab" x="829.184" y="185.28">B</text>
+<ellipse class="mlk-bound" cx="726.1" cy="102.5" rx="36" ry="28"/>
+<circle class="mlk-pt3" cx="716.8" cy="114.0" r="4.5"/>
+<circle class="mlk-pt3" cx="735.4" cy="99.6" r="4.5"/>
+<circle class="mlk-pt3" cx="707.5" cy="96.0" r="4.5"/>
+<circle class="mlk-pt3" cx="744.6" cy="117.6" r="4.5"/>
+<circle class="mlk-pt3" cx="726.1" cy="85.2" r="4.5"/>
+<text class="mlk-lab" x="766.08" y="84.48">C</text>
+<circle class="mlk-pt3" cx="620.0" cy="322.0" r="4.5"/>
+<text class="mlk-el" x="630" y="326">customer</text>
+<ellipse class="mlk-bound" cx="725" cy="322" rx="14" ry="8"/>
+<text class="mlk-el" x="746" y="326">group found</text>
+<text class="mlk-note" x="614" y="276">no labels at all, so it</text>
+<text class="mlk-note" x="614" y="294">finds the groups itself</text>
+</g>
+</svg>

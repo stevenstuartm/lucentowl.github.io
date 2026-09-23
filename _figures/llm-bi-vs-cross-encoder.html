@@ -1,0 +1,98 @@
+---
+title: "Bi-Encoder and Cross-Encoder"
+kind: structure
+system: llm-systems
+summary: "Encoding separately for search versus reading together to score."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="bxe-title bxe-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="bxe-title">Bi-encoder compared with cross-encoder</title>
+<desc id="bxe-desc">Left: a bi-encoder encodes the document and the query separately; document vectors are computed once, and query and document vectors are compared by similarity, which makes search across millions of chunks fast. Right: a cross-encoder reads the query and one document together and outputs a relevance score; it is more accurate but produces no reusable embedding and must run once per query-document pair, too slow for a whole collection.</desc>
+<style>
+.bxe-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.bxe-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bxe-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.bxe-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bxe-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.bxe-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bxe-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.bxe-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bxe-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.bxe-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bxe-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.bxe-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bxe-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.bxe-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.bxe-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.bxe-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.bxe-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.bxe-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bxe-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bxe-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.bxe-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.bxe-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bxe-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.bxe-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.bxe-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+.bxe-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.bxe-c1 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.bxe-c2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.bxe-c3 { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.bxe-c4 { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2; stroke-dasharray: 3 3; }
+.bxe-area1 { fill: var(--color-primary, #1A5F8A); opacity: 0.14; }
+.bxe-area2 { fill: var(--color-accent, #A5486E); opacity: 0.14; }
+.bxe-g { font-size: 11px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.bxe-dot { fill: var(--color-primary, #1A5F8A); }
+.bxe-dotx { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.bxe-prev { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 2; }
+.bxe-copy { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="bxe-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="bxe-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="bxe-band" x="12" y="12" width="564" height="336" rx="8"/>
+<rect class="bxe-band" x="592" y="12" width="296" height="336" rx="8"/>
+<text class="bxe-t" x="28" y="38">Bi-encoder</text>
+<text class="bxe-s" x="28" y="56">used for retrieval embeddings</text>
+<text class="bxe-t" x="608" y="38">Cross-encoder</text>
+<text class="bxe-s" x="608" y="56">used for reranking</text>
+<rect class="bxe-box" x="28" y="84" width="110" height="44" rx="6"/>
+<text class="bxe-t" x="40" y="106">Document</text>
+<rect class="bxe-sys" x="160" y="84" width="100" height="44" rx="6"/>
+<text class="bxe-t-inv" x="172" y="106">Encoder</text>
+<rect class="bxe-box" x="282" y="78" width="126" height="56" rx="6"/>
+<text class="bxe-t" x="294" y="100">Doc vector</text>
+<text class="bxe-s" x="294" y="118">computed once</text>
+<path class="bxe-flow" d="M 138,106 H 154" marker-end="url(#bxe-a)"/>
+<path class="bxe-flow" d="M 260,106 H 276" marker-end="url(#bxe-a)"/>
+<rect class="bxe-box" x="28" y="204" width="110" height="44" rx="6"/>
+<text class="bxe-t" x="40" y="226">Query</text>
+<rect class="bxe-sys" x="160" y="204" width="100" height="44" rx="6"/>
+<text class="bxe-t-inv" x="172" y="226">Encoder</text>
+<rect class="bxe-box" x="282" y="204" width="126" height="44" rx="6"/>
+<text class="bxe-t" x="294" y="226">Query vector</text>
+<path class="bxe-flow" d="M 138,226 H 154" marker-end="url(#bxe-a)"/>
+<path class="bxe-flow" d="M 260,226 H 276" marker-end="url(#bxe-a)"/>
+<rect class="bxe-box" x="438" y="144" width="124" height="44" rx="6"/>
+<text class="bxe-t" x="450" y="166">Similarity</text>
+<path class="bxe-flow" d="M 408,106 C 424,106 420,160 432,160" marker-end="url(#bxe-a)"/>
+<path class="bxe-flow" d="M 408,226 C 424,226 420,176 432,176" marker-end="url(#bxe-a)"/>
+<text class="bxe-s" x="28" y="290">Query and documents are encoded separately,</text>
+<text class="bxe-s" x="28" y="308">so document vectors are reused and search</text>
+<text class="bxe-s" x="28" y="326">across millions of chunks is fast.</text>
+<rect class="bxe-box" x="608" y="84" width="264" height="58" rx="6"/>
+<text class="bxe-t" x="620" y="106">Query + one document</text>
+<text class="bxe-s" x="620" y="124">read together</text>
+<rect class="bxe-sys" x="608" y="170" width="264" height="40" rx="6"/>
+<text class="bxe-t-inv" x="620" y="192">Cross-encoder</text>
+<rect class="bxe-box" x="608" y="238" width="264" height="40" rx="6"/>
+<text class="bxe-t" x="620" y="260">Relevance score</text>
+<path class="bxe-flow" d="M 740,142 V 164" marker-end="url(#bxe-a)"/>
+<path class="bxe-flow" d="M 740,210 V 232" marker-end="url(#bxe-a)"/>
+<text class="bxe-s" x="608" y="300">More accurate, but no reusable embedding.</text>
+<text class="bxe-s" x="608" y="318">Runs once per query-document pair, too</text>
+<text class="bxe-s" x="608" y="336">slow for a whole collection.</text>
+</g>
+</svg>

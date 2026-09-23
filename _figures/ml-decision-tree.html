@@ -1,0 +1,97 @@
+---
+title: "A Small Decision Tree for House Prices"
+kind: structure
+system: machine-learning
+summary: "Three learned questions sorting houses into four price leaves."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 395" role="img" aria-labelledby="mld-title mld-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mld-title">A decision tree that predicts house prices</title>
+<desc id="mld-desc">The root asks whether floor area is under 120 square meters, splitting 200 training houses into 96 and 104. The smaller houses are split by whether they were built over 30 years ago, giving leaves that predict 165 thousand dollars for the older ones and 205 thousand for the newer ones. The larger houses are split by whether they have four or more bedrooms, giving leaves that predict 330 thousand and 265 thousand. Each leaf predicts the average price of the training houses that ended there, and a new house is sorted down the tree to the leaf it lands in.</desc>
+<style>
+.mld-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mld-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mld-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mld-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mld-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mld-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mld-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mld-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mld-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mld-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mld-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mld-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mld-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mld-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mld-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mld-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mld-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mld-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mld-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mld-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mld-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mld-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mld-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mld-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mld-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mld-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mld-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mld-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mld-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mld-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mld-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mld-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mld-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mld-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mld-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mld-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mld-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mld-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mld-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mld-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mld-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mld-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mld-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mld-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mld-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mld-box" x="330" y="30" width="240" height="56" rx="6"/>
+<text class="mld-n" x="342" y="54">Floor area under 120 m²?</text>
+<text class="mld-s" x="342" y="74">all 200 houses</text>
+<rect class="mld-box" x="100" y="150" width="240" height="56" rx="6"/>
+<text class="mld-n" x="112" y="174">Built over 30 years ago?</text>
+<text class="mld-s" x="112" y="194">96 houses</text>
+<rect class="mld-box" x="560" y="150" width="240" height="56" rx="6"/>
+<text class="mld-n" x="572" y="174">Four or more bedrooms?</text>
+<text class="mld-s" x="572" y="194">104 houses</text>
+<path class="mld-flow" d="M 450,86 V 118 H 220 V 144" marker-end="url(#mld-a)"/>
+<text class="mld-lab" x="300" y="110">yes</text>
+<path class="mld-flow" d="M 450,86 V 118 H 680 V 144" marker-end="url(#mld-a)"/>
+<text class="mld-lab" x="580" y="110">no</text>
+<rect class="mld-store" x="60" y="280" width="150" height="64" rx="6"/>
+<text class="mld-v" x="72" y="306">$165k</text>
+<text class="mld-s" x="72" y="328">average of 41 houses</text>
+<rect class="mld-store" x="230" y="280" width="150" height="64" rx="6"/>
+<text class="mld-v" x="242" y="306">$205k</text>
+<text class="mld-s" x="242" y="328">average of 55 houses</text>
+<rect class="mld-store" x="520" y="280" width="150" height="64" rx="6"/>
+<text class="mld-v" x="532" y="306">$330k</text>
+<text class="mld-s" x="532" y="328">average of 38 houses</text>
+<rect class="mld-store" x="690" y="280" width="150" height="64" rx="6"/>
+<text class="mld-v" x="702" y="306">$265k</text>
+<text class="mld-s" x="702" y="328">average of 66 houses</text>
+<path class="mld-flow" d="M 220,206 V 240 H 135 V 274" marker-end="url(#mld-a)"/>
+<text class="mld-lab" x="150" y="232">yes</text>
+<path class="mld-flow" d="M 220,206 V 240 H 305 V 274" marker-end="url(#mld-a)"/>
+<text class="mld-lab" x="272" y="232">no</text>
+<path class="mld-flow" d="M 680,206 V 240 H 595 V 274" marker-end="url(#mld-a)"/>
+<text class="mld-lab" x="610" y="232">yes</text>
+<path class="mld-flow" d="M 680,206 V 240 H 765 V 274" marker-end="url(#mld-a)"/>
+<text class="mld-lab" x="732" y="232">no</text>
+<text class="mld-note" x="40" y="380">A house that hasn't sold is sorted down the tree and gets the price of the leaf it lands in.</text>
+</g>
+</svg>

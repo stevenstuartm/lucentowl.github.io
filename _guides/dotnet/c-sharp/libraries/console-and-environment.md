@@ -3,7 +3,7 @@ title: "C# Console and Environment"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "Console input/output, formatting, colors, environment variables, and binary serialization."
+description: "Writing a console application that behaves correctly in a shell and a container: the standard streams, exit codes, arguments, environment variables, and process information."
 tags: [c-sharp, dotnet, console, environment, io, practical]
 ---
 
@@ -29,32 +29,6 @@ Console.Error.WriteLine("Error message");
 TextWriter stdout = Console.Out;
 TextWriter stderr = Console.Error;
 TextReader stdin = Console.In;
-```
-
-### Formatting Output
-
-```csharp
-// Numeric format strings
-Console.WriteLine("Currency: {0:C}", 1234.56);      // $1,234.56
-Console.WriteLine("Decimal: {0:D8}", 42);           // 00000042
-Console.WriteLine("Scientific: {0:E2}", 12345.67); // 1.23E+004
-Console.WriteLine("Fixed: {0:F2}", 3.14159);        // 3.14
-Console.WriteLine("Percent: {0:P1}", 0.1234);       // 12.3%
-Console.WriteLine("Hex: {0:X}", 255);               // FF
-Console.WriteLine("Number: {0:N0}", 1234567);       // 1,234,567
-
-// Alignment
-Console.WriteLine("{0,-10} {1,10}", "Left", "Right");
-Console.WriteLine("{0,10:C}", 42.5);  // Right-aligned currency
-
-// Date/time formatting
-Console.WriteLine("{0:D} at {1:HH:mm}", DateTime.Now, DateTime.Now);
-Console.WriteLine($"ISO: {DateTime.Now:yyyy-MM-ddTHH:mm:ss}");
-
-// String interpolation with format
-Console.WriteLine($"Price: {price:C2}");
-Console.WriteLine($"Date: {date:yyyy-MM-dd}");
-Console.WriteLine($"Aligned: {name,-20} {value,10:N2}");
 ```
 
 ### Console Colors
@@ -298,126 +272,6 @@ Console.WriteLine($"Threads: {current.Threads.Count}");
 Console.WriteLine($"Start Time: {current.StartTime}");
 ```
 
-## Binary Serialization
-
-### BinaryWriter and BinaryReader
-
-For custom binary formats and protocol implementations.
-
-```csharp
-// Write binary data
-using var ms = new MemoryStream();
-using var writer = new BinaryWriter(ms);
-
-writer.Write(42);              // Int32 (4 bytes)
-writer.Write("hello");         // Length-prefixed string
-writer.Write(3.14159);         // Double (8 bytes)
-writer.Write(true);            // Boolean (1 byte)
-writer.Write((byte)255);       // Byte
-writer.Write(new byte[] { 1, 2, 3 });  // Raw bytes
-
-// Read binary data
-ms.Position = 0;
-using var reader = new BinaryReader(ms);
-
-int num = reader.ReadInt32();
-string str = reader.ReadString();
-double d = reader.ReadDouble();
-bool b = reader.ReadBoolean();
-byte by = reader.ReadByte();
-byte[] bytes = reader.ReadBytes(3);
-```
-
-### Custom Binary Serialization
-
-```csharp
-public class Player
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-    public float Health { get; set; }
-    public Vector3 Position { get; set; }
-
-    public void WriteTo(BinaryWriter writer)
-    {
-        writer.Write(Id);
-        writer.Write(Name);
-        writer.Write(Health);
-        writer.Write(Position.X);
-        writer.Write(Position.Y);
-        writer.Write(Position.Z);
-    }
-
-    public static Player ReadFrom(BinaryReader reader)
-    {
-        return new Player
-        {
-            Id = reader.ReadInt32(),
-            Name = reader.ReadString(),
-            Health = reader.ReadSingle(),
-            Position = new Vector3(
-                reader.ReadSingle(),
-                reader.ReadSingle(),
-                reader.ReadSingle())
-        };
-    }
-}
-
-// Usage
-using var stream = File.Create("player.dat");
-using var writer = new BinaryWriter(stream);
-player.WriteTo(writer);
-
-using var readStream = File.OpenRead("player.dat");
-using var reader = new BinaryReader(readStream);
-var loaded = Player.ReadFrom(reader);
-```
-
-### Binary vs JSON
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Binary Serialization</h4>
-<ul>
-<li><strong>Size:</strong> Compact</li>
-<li><strong>Speed:</strong> Faster</li>
-<li><strong>Readability:</strong> Not human-readable</li>
-<li><strong>Debugging:</strong> Difficult</li>
-<li><strong>Use case:</strong> Performance-critical, network protocols</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>JSON Serialization</h4>
-<ul>
-<li><strong>Size:</strong> Larger (text-based)</li>
-<li><strong>Speed:</strong> Slower</li>
-<li><strong>Readability:</strong> Human-readable</li>
-<li><strong>Debugging:</strong> Easy</li>
-<li><strong>Use case:</strong> APIs, config files, data exchange</li>
-</ul>
-</div>
-</div>
-
-<div class="callout callout--tip">
-<p class="callout__title">When to Use Binary</p>
-<p>Use binary serialization only when size/speed justify the debugging difficulty. For most cases, prefer JSON for interoperability and maintainability.</p>
-</div>
-
-| Aspect | Binary | JSON |
-|--------|--------|------|
-| Size | Compact | Larger (text) |
-| Speed | Faster | Slower |
-| Readability | Not human-readable | Human-readable |
-| Debugging | Difficult | Easy |
-| Schema evolution | Manual versioning | Flexible |
-| Use case | Performance-critical, protocols | APIs, config, data exchange |
-
-```csharp
-// JSON alternative for most cases
-byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-var data = JsonSerializer.Deserialize<MyData>(jsonBytes);
-```
-
 ## Key Takeaways
 
 **Console.Error for diagnostics**: Separate error stream allows redirecting stdout while keeping errors visible.
@@ -428,6 +282,4 @@ var data = JsonSerializer.Deserialize<MyData>(jsonBytes);
 
 **Use GetFolderPath for portability**: Special folders resolve correctly across platforms.
 
-**Binary for performance**: Use BinaryWriter/Reader for compact, fast serialization when human readability isn't needed.
-
-**Prefer JSON for interoperability**: Use binary only when size/speed justify the debugging difficulty.
+**Exit codes are the shell's only signal**: Set `Environment.ExitCode` or return from `Main`; a process that fails silently with code 0 breaks every caller that checks.

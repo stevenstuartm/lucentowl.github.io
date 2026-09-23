@@ -3,20 +3,20 @@ title: "C# Classes and Structs"
 layout: guide
 category: ".NET & C#"
 subcategory: "Object-Oriented Programming"
-description: "Understanding classes, structs, and records in C# including when to use each, initialization patterns, and best practices."
-tags: [c-sharp, dotnet, oop, classes, structs, records, practical]
+description: "Declaring classes, structs, and records in C#: constructors and primary constructors, struct initialization and copy pitfalls, readonly and ref structs, choosing between a struct and a class, where records fit and where they add friction, and when sealed, abstract, partial, static, and nested types earn their place."
+tags: [classes, structs, records, primary-constructors, ref-struct, oop, practical]
 ---
 
 ## Classes
 
-Classes are reference types that encapsulate data and behavior. They support inheritance and can be allocated on the heap.
+A class is a reference type. Creating one allocates an object on the managed heap, and every variable of the class type holds a reference to that object, so assigning or passing it shares the same instance rather than copying it.
 
 ### Basic Class Structure
 
 ```csharp
 public class Customer
 {
-    // Fields (private by default)
+    // Fields (members are private by default)
     private readonly int id;
     private string name;
 
@@ -46,7 +46,7 @@ public class Customer
 
 ### Constructors and Overloading
 
-Constructors can be overloaded to support different ways of creating an instance. Use `: this()` to chain constructors and avoid duplicating initialization logic.
+Constructors can be overloaded to support different ways of creating an instance. Use `: this(...)` to chain one constructor to another and keep the initialization logic in one place.
 
 ```csharp
 public class Order
@@ -61,28 +61,29 @@ public class Order
     {
         CreatedAt = DateTime.UtcNow;
         Status = OrderStatus.Pending;
+        CustomerName = "Unknown";
     }
 
-    // Overload: accepts id and customer name, chains to parameterless
+    // Accepts id and customer name, chains to the parameterless constructor
     public Order(int id, string customerName) : this()
     {
         Id = id;
         CustomerName = customerName;
     }
 
-    // Overload: accepts only id, chains to the two-parameter overload
+    // Accepts only id, chains to the two-parameter constructor
     public Order(int id) : this(id, "Unknown")
     {
     }
 
-    // Static constructor - runs once per type, before any instance is created
+    // Static constructor - runs once per type, before the first instance
+    // is created or any static member is accessed
     static Order()
     {
         Console.WriteLine("Order type initialized");
     }
 }
 
-// Each overload gives callers flexibility
 var defaultOrder = new Order();
 var namedOrder = new Order(1, "Alice");
 var idOnlyOrder = new Order(2);
@@ -90,7 +91,7 @@ var idOnlyOrder = new Order(2);
 
 ### Primary Constructors (C# 12)
 
-Primary constructors capture parameters directly in the class declaration, reducing boilerplate. The parameters are available throughout the class body.
+A primary constructor declares its parameters on the type itself, and those parameters are in scope throughout the class body.
 
 ```csharp
 // Traditional approach with overloaded constructors
@@ -100,14 +101,8 @@ public class Product
     private readonly decimal price;
     private readonly string category;
 
-    public Product(string name, decimal price)
-    {
-        this.name = name;
-        this.price = price;
-        this.category = "General";
-    }
+    public Product(string name, decimal price) : this(name, price, "General") { }
 
-    // Overload that accepts a category
     public Product(string name, decimal price, string category)
     {
         this.name = name;
@@ -120,8 +115,7 @@ public class Product
     public string Category => category;
 }
 
-// Same type with a primary constructor (C# 12)
-// The primary constructor replaces the main parameter list
+// The same type with a primary constructor
 public class Product(string name, decimal price, string category = "General")
 {
     public string Name => name;
@@ -132,15 +126,15 @@ public class Product(string name, decimal price, string category = "General")
         price * (1 - percentage);
 }
 
-// Usage is identical for both approaches
+// Usage is identical for both
 var widget = new Product("Widget", 9.99m);
 var bolt = new Product("Bolt", 1.50m, "Hardware");
 ```
 
-Primary constructors are especially useful for dependency injection, where services typically accept dependencies through a single constructor.
+Primary constructors are especially common for dependency injection, where a service accepts its dependencies through a single constructor.
 
 ```csharp
-public class OrderProcessor(ILogger logger, IEmailService emailService)
+public class OrderProcessor(ILogger<OrderProcessor> logger, IEmailService emailService)
 {
     public async Task ProcessAsync(Order order)
     {
@@ -150,23 +144,25 @@ public class OrderProcessor(ILogger logger, IEmailService emailService)
 }
 ```
 
-**Watch out for mutability.** Primary constructor parameters are captured as hidden mutable fields. There is no way to mark them `readonly`, so any method in the class can silently reassign them. For service classes with injected dependencies, assign parameters to `private readonly` fields to preserve the immutability guarantee that traditional constructors provided.
+**Watch out for mutability.** A parameter used only to initialize a field or property is not stored. A parameter referenced from a method or property body is captured into a hidden field so it survives past construction, and that hidden field is mutable. There is no way to mark a primary constructor parameter `readonly`, so any member of the class can reassign it:
 
 ```csharp
-// Unsafe: logger can be reassigned anywhere in the class
-public class OrderProcessor(ILogger logger)
+public class OrderProcessor(ILogger<OrderProcessor> logger)
 {
-    public void DoWork()
+    public void DoWork(ILogger<OrderProcessor> other)
     {
         logger.LogInformation("Working...");
-        logger = null; // Compiles with no warning
+        logger = other;   // compiles with no warning
     }
 }
+```
 
-// Safer: assign to a readonly field to prevent reassignment
-public class OrderProcessor(ILogger logger, IEmailService emailService)
+For a service where the dependencies must not change, assign the parameters to `private readonly` fields:
+
+```csharp
+public class OrderProcessor(ILogger<OrderProcessor> logger, IEmailService emailService)
 {
-    private readonly ILogger _logger = logger;
+    private readonly ILogger<OrderProcessor> _logger = logger;
     private readonly IEmailService _emailService = emailService;
 
     public async Task ProcessAsync(Order order)
@@ -177,117 +173,35 @@ public class OrderProcessor(ILogger logger, IEmailService emailService)
 }
 ```
 
-Even with the readonly field approach, there is a risk that traditional constructors did not have. With a traditional constructor, the parameter `logger` was scoped to the constructor body and could not be referenced anywhere else. With a primary constructor, `logger` remains accessible throughout the entire class even after assigning it to `_logger`. Nothing prevents you from accidentally using the mutable `logger` instead of the readonly `_logger`, and the compiler will not warn you.
+The parameter stays in scope for the whole class even after you copy it, so a method can still reach for `logger` instead of `_logger`. The compiler catches that case: using a parameter in a member body when it also initializes a field produces warning CS9124, because the parameter is now captured twice. Promote CS9124 to an error and the readonly-field pattern is enforced.
 
-```csharp
-public class OrderProcessor(ILogger logger, IEmailService emailService)
-{
-    private readonly ILogger _logger = logger;
-    private readonly IEmailService _emailService = emailService;
-
-    public void DoWork()
-    {
-        _logger.LogInformation("Safe");
-        logger.LogInformation("Also compiles, but bypasses readonly");
-    }
-}
-```
-
-For these reasons, prefer traditional constructors for any class where immutability matters. A simple data-carrying class might seem safe today, but classes evolve. What starts as a thin wrapper with a few properties can gain methods, validation, and business logic over time. A primary constructor that felt harmless at creation becomes a mutability risk the moment the class grows, and nothing in the compiler will flag the transition. The brevity that primary constructors offer is not worth the safety that `readonly` fields guarantee.
-
-### Properties
-
-**Always use properties over public fields.** Changing a public field to a property is a binary-breaking change — any assembly compiled against the field must be recompiled. Properties provide a stable API contract from day one, allowing you to add validation or change notification later without breaking consumers. Auto-properties (`{ get; set; }`) since C# 3.0 eliminated the verbosity argument. The only acceptable public fields are `const` and `static readonly`.
-
-```csharp
-public class Product
-{
-    // Auto-implemented property
-    public string Name { get; set; }
-
-    // Read-only auto-property
-    public int Id { get; }
-
-    // Init-only setter (C# 9.0) - settable during initialization, readonly after
-    public string Sku { get; init; }
-
-    // Computed property
-    public decimal Price { get; set; }
-    public decimal Tax => Price * 0.08m;
-    public decimal TotalPrice => Price + Tax;
-
-    // Property with backing field
-    private string description;
-    public string Description
-    {
-        get => description ?? "";
-        set => description = value?.Trim();
-    }
-
-    // Property with validation
-    private int quantity;
-    public int Quantity
-    {
-        get => quantity;
-        set
-        {
-            if (value < 0)
-                throw new ArgumentOutOfRangeException(nameof(value));
-            quantity = value;
-        }
-    }
-
-    // Required property (C# 11)
-    public required string Category { get; set; }
-}
-
-// Using init-only and required
-var product = new Product
-{
-    Id = 1,           // Error: read-only
-    Sku = "ABC123",   // OK: init-only
-    Name = "Widget",
-    Category = "Hardware"  // Required: must be set
-};
-```
-
-**Understanding `init`.** An `init` setter does two things: it allows the property to be set during object creation (via a constructor or object initializer), and it makes the property readonly after that point. This matters most for structs, where `{ get; }` properties can only be set inside a constructor. Using `{ get; init; }` on a struct lets you use object initializer syntax while still preventing mutation after creation. On a `readonly struct`, `init` is redundant because all members are already immutable.
-
-```csharp
-public struct Point
-{
-    public double X { get; init; }
-    public double Y { get; init; }
-}
-
-var p = new Point { X = 3, Y = 4 }; // OK: init allows object initializer
-p.X = 99;                            // Error: readonly after creation
-```
+Even so, primary constructors trade the scoping of a traditional constructor for brevity. A traditional constructor's parameters vanish when the constructor returns, and its `readonly` fields can't be reassigned by anything. What starts as a thin wrapper can gain methods, validation, and business logic over time, and a captured parameter that was harmless at creation becomes reassignable state as the class grows. For classes where immutability matters, prefer a traditional constructor, or use a primary constructor only with the readonly-field pattern and CS9124 as an error.
 
 ### Object Initializers
+
+An object initializer sets accessible properties after the constructor runs. The examples below use properties rather than public fields throughout, since turning a public field into a property later is a binary-breaking change.
 
 ```csharp
 public class Address
 {
-    public string Street { get; set; }
-    public string City { get; set; }
-    public string PostalCode { get; set; }
+    public string? Street { get; set; }
+    public string? City { get; set; }
+    public string? PostalCode { get; set; }
     public string Country { get; set; } = "USA";
 }
 
-// Object initializer syntax
 var address = new Address
 {
     Street = "123 Main St",
     City = "Seattle",
     PostalCode = "98101"
-    // Country uses default
+    // Country keeps its default
 };
 
-// Nested object initializers
+// Nested initializer: sets properties on the existing Address instance
 public class Customer
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = "";
     public Address Address { get; set; } = new();
 }
 
@@ -301,7 +215,7 @@ var customer = new Customer
     }
 };
 
-// Collection initializers
+// Collection initializer on a get-only collection property
 public class OrderList
 {
     public List<string> Items { get; } = new();
@@ -313,16 +227,16 @@ var orderList = new OrderList
 };
 ```
 
-**Object initializers are practical, but use nullable types to keep the contract honest.** Serialization frameworks, ORMs, and test builders often require parameterless constructors, which means you cannot always protect instantiation through constructor parameters. That is fine — real-world code has many instantiation paths, and object initializers handle that flexibility well. The danger is not the initializer syntax itself but the failure to mark optional properties as nullable. If `Address` might not be set, declare it as `Address?` and address every compiler warning. This makes the absence visible at every call site rather than hiding it behind a silently empty default. Default `= new()` makes sense for collections, where an empty list genuinely means "zero items." For reference type properties, prefer nullable types so the compiler enforces what the constructor cannot.
+**Object initializers are practical, but use nullable types to keep the contract honest.** Serialization frameworks, ORMs, and test builders often require a parameterless constructor, so you can't always protect instantiation through constructor parameters. Object initializers handle those many instantiation paths well. The danger is failing to mark optional properties as nullable. If `Address` might not be set, declare it `Address?` and address every compiler warning, which makes the absence visible at each call site instead of hiding it behind an empty default. A default of `= new()` makes sense for collections, where an empty list means "zero items." For other reference-type properties, prefer a nullable type so the compiler enforces what the constructor can't. Marking a property `required` is the other option when every caller must set it.
 
 ## Structs
 
-Structs are value types allocated on the stack (when local) or inline (when in arrays or as fields). They're copied on assignment.
+A struct is a value type. A variable of a struct type holds the struct's data directly, and assignment or passing copies all of it. Where that data lives depends on where the variable lives: a local sits in the method's stack frame or a register, a struct field of a class sits inside that object on the heap, and a struct element of an array sits inline in the array.
 
 ### Basic Struct
 
 ```csharp
-public struct Point
+public readonly struct Point
 {
     public double X { get; }
     public double Y { get; }
@@ -333,22 +247,53 @@ public struct Point
         Y = y;
     }
 
-    public double DistanceFromOrigin() =>
-        Math.Sqrt(X * X + Y * Y);
+    public double DistanceFromOrigin() => Math.Sqrt(X * X + Y * Y);
 
-    public Point Translate(double dx, double dy) =>
-        new Point(X + dx, Y + dy);
+    public Point Translate(double dx, double dy) => new Point(X + dx, Y + dy);
 }
 
-// Value semantics
 var p1 = new Point(3, 4);
-var p2 = p1;  // Copy
-// Modifying p2 doesn't affect p1
+var p2 = p1;   // a full copy; p1 and p2 are independent
 ```
+
+### Constructors Don't Always Run
+
+Since C# 10 a struct can declare a parameterless constructor, and `new Point()` runs it. `default(Point)`, a freshly allocated array, and an uninitialized struct field do not. Each of those produces the zeroed value, with every field at its default, and no constructor is involved:
+
+```csharp
+public struct Counter
+{
+    public int Start;
+    public Counter() { Start = 42; }
+}
+
+var a = new Counter();            // Start == 42
+var b = default(Counter);         // Start == 0
+var c = new Counter[1];           // c[0].Start == 0
+```
+
+Design every struct so that its all-zero state is valid, because code will create it whether or not you declare a constructor.
+
+### Mutable Structs Copy Silently
+
+Because a struct is copied whenever it's read out of something, mutating a struct usually mutates a copy. The compiler rejects the obvious cases and misses the subtle ones:
+
+```csharp
+public struct MutablePoint { public int X; }
+
+var list = new List<MutablePoint> { new() };
+list[0].X = 5;              // CS1612: the indexer returns a copy
+
+var point = list[0];        // a copy
+point.X = 5;                // changes the copy, not the list element
+list[0] = point;            // the write-back you need
+```
+
+The same happens through a property that returns a struct and through a `readonly` field, where calling a mutating method silently operates on a copy. Making structs immutable removes this whole class of bug, which is why the guidance for structs is to make them `readonly` unless you have a specific reason not to.
 
 ### Readonly Structs (C# 7.2)
 
-Enforce immutability at compile time.
+`readonly struct` makes immutability a compile-time guarantee. Every instance field must be `readonly` and every property get-only or `init`, and every member is implicitly `readonly`, meaning it promises not to modify the struct.
 
 ```csharp
 public readonly struct Vector3
@@ -357,94 +302,87 @@ public readonly struct Vector3
     public double Y { get; }
     public double Z { get; }
 
-    public Vector3(double x, double y, double z)
-    {
-        X = x;
-        Y = y;
-        Z = z;
-    }
+    public Vector3(double x, double y, double z) => (X, Y, Z) = (x, y, z);
 
-    // All methods must be readonly (implicit in readonly struct)
-    public double Magnitude() =>
-        Math.Sqrt(X * X + Y * Y + Z * Z);
+    public double Magnitude() => Math.Sqrt(X * X + Y * Y + Z * Z);
 
-    public Vector3 Normalize()
-    {
-        var mag = Magnitude();
-        return new Vector3(X / mag, Y / mag, Z / mag);
-    }
-
-    // Operator overloading
     public static Vector3 operator +(Vector3 a, Vector3 b) =>
         new Vector3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
 }
 ```
 
-### Record Structs (C# 10)
+A struct that has to stay mutable can still mark individual members `readonly` (C# 8). The promise matters when the struct is accessed through a `readonly` field or an `in` parameter: the compiler can call a `readonly` member directly, but for any other member it first makes a defensive copy.
 
-Value types with record semantics.
+### Ref Structs
+
+A `ref struct` is a struct the compiler confines so that it can never end up on the heap. `Span<T>` is the best-known one. The confinement is a set of declaration rules:
+
+| A `ref struct` can't | Because |
+| --- | --- |
+| Be a field of a class or of a non-ref struct | The containing object could live on the heap |
+| Be boxed, or converted to an interface it implements | Boxing copies it to the heap |
+| Be captured by a lambda or local function | Captures are stored in a heap object |
+| Be alive across an `await` or `yield return` | The state machine that spans them may be on the heap |
+| Be an array element | Arrays are heap objects |
+
+Later versions loosened what a `ref struct` can take part in without relaxing those rules. C# 11 lets a `ref struct` declare `ref` fields. C# 13 lets it implement interfaces, although it still can't be converted to one. C# 13 also lets it be a generic type argument when the type parameter declares `allows ref struct`, and it lets a `ref struct` local appear in an async method or iterator as long as its use doesn't span an `await` or `yield return`.
 
 ```csharp
-// Record struct - value type with value equality
-public readonly record struct Coordinate(double Latitude, double Longitude);
+public ref struct Tokenizer(ReadOnlySpan<char> text)
+{
+    private ReadOnlySpan<char> remaining = text;   // a span field is allowed here
 
-var coord1 = new Coordinate(47.6062, -122.3321);
-var coord2 = new Coordinate(47.6062, -122.3321);
-Console.WriteLine(coord1 == coord2);  // true - value equality
+    public bool TryNext(out ReadOnlySpan<char> token)
+    {
+        remaining = remaining.TrimStart(' ');
+        if (remaining.IsEmpty) { token = default; return false; }
 
-// With expressions for non-destructive mutation
-var coord3 = coord1 with { Longitude = -122.5 };
+        int end = remaining.IndexOf(' ');
+        if (end < 0) end = remaining.Length;
+        token = remaining[..end];
+        remaining = remaining[end..];
+        return true;
+    }
+}
 ```
+
+Declare a `ref struct` when the type has to hold a `Span<T>` or a `ref` field. Anything else is better as an ordinary struct, which can go everywhere a `ref struct` can't.
 
 ### Choosing Between Structs and Classes
 
-**Use a struct when**:
-- The type represents a single value (like a number or coordinate)
-- Instances are small (16 bytes or less)
-- The type is immutable (or should be)
-- You're creating many short-lived instances in performance-critical code
-- Identity doesn't matter—two instances with the same values should be considered equal
-
-**Use a class when**:
-- Identity matters—two objects with the same data are still distinct entities
-- The type manages resources or has complex lifecycle
-- Inheritance is needed
-- The type has many fields or contains reference type fields
-- Instances will be passed around extensively (avoiding copy overhead)
-
-**Why 16 bytes matters**: Value types are copied on assignment and when passed to methods. A struct larger than 16 bytes often performs worse than a class because the copying overhead exceeds heap allocation cost. The runtime can also pass small structs in registers.
-
-**Why identity matters**: A `Customer` with ID 42 is a specific entity. Even if you create another object with the same data, they represent different things conceptually. A `Point(3, 4)` is just a value, and any `Point(3, 4)` is interchangeable with any other.
+Classes are the default. A struct pays off when the type is a small, immutable, single value with no identity, and many instances are created, so avoiding a heap allocation per instance adds up.
 
 | Factor | Struct | Class |
-|--------|--------|-------|
-| Size | Small (≤16 bytes ideal) | Any size |
-| Semantics | Value (copy on assign) | Reference (share) |
-| Mutability | Prefer immutable | Either |
-| Inheritance | Cannot inherit | Can inherit |
-| Allocation | Stack/inline | Heap |
-| Nullability | Not null by default | Can be null |
-| Use case | Coordinates, colors, small data | Entities, services, complex objects |
+| --- | --- | --- |
+| Semantics | Value (copied on assign and pass) | Reference (shared) |
+| Size | Small; Microsoft's design guidelines suggest under 16 bytes | Any |
+| Mutability | Should be immutable | Either |
+| Inheritance | None (can implement interfaces) | Single inheritance |
+| Storage | Inline in its variable, field, or array | A separate heap object |
+| Null | Only as `Nullable<T>` | Any reference can be null |
+| Typical use | Coordinates, colors, measurements, small keys | Entities, services, anything with identity |
+
+The size guideline is about copying. Every assignment and every by-value argument copies the whole struct, so the cost grows with its size, while a class reference stays one pointer wide. Past a few dozen bytes, a struct that is passed around a lot can easily cost more than the allocation it saved. Converting a struct to an interface or to `object` boxes it onto the heap, which erases the saving entirely.
+
+**Identity decides the rest.** A `Customer` with ID 42 is a specific entity, and another object with the same data is still a different thing. A `Point(3, 4)` is just a value, and any `Point(3, 4)` is interchangeable with any other.
 
 ```csharp
-// Good struct candidates
-public readonly struct Color(byte R, byte G, byte B);
-public readonly struct DateRange(DateTime Start, DateTime End);
-public readonly struct Money(decimal Amount, string Currency);
+// Good struct candidates: small, immutable values with value equality
+public readonly record struct Rgb(byte R, byte G, byte B);
+public readonly record struct DateRange(DateOnly Start, DateOnly End);
 
 // Should be classes
-public class Customer { }     // Identity matters
-public class OrderService { } // Has behavior/dependencies
-public class FileStream { }   // Manages resources
+public class Customer { }       // identity matters
+public class OrderService { }   // behavior and dependencies
 ```
 
 ## Records (C# 9.0+)
 
 ### The Problem Records Solve
 
-Before C# 9, getting value-based equality on a class required overriding `Equals`, `GetHashCode`, and the `==`/`!=` operators by hand. This was tedious and fragile. Adding a new property meant updating every equality method, and forgetting to do so introduced subtle bugs where two objects that looked identical compared as unequal (or worse, two different objects compared as equal because the new property wasn't checked).
+Before C# 9, getting value-based equality on a class meant overriding `Equals`, `GetHashCode`, and the `==` and `!=` operators by hand. This was tedious and fragile. Adding a new property meant updating every equality method, and forgetting one produced subtle bugs where two objects that looked identical compared as unequal, or two different objects compared as equal because the new property wasn't checked.
 
-Records eliminate that entire class of bugs. The compiler generates correct equality members for every declared property, updates them automatically when properties change, and provides `with` expressions for creating modified copies. You get immutability by default, structural equality, built-in deconstruction, and a useful `ToString()` override, all from a single line of code.
+Records remove that class of bug. The compiler generates equality members over every instance field, including the backing fields of auto-properties, regenerates them when fields change, and provides `with` expressions for creating modified copies. A positional record also gets `init`-only properties, deconstruction, and a readable `ToString()` from a single line.
 
 ```csharp
 // Without records: tedious, error-prone, and easy to break when adding properties
@@ -474,15 +412,13 @@ public class PersonClass
         !Equals(left, right);
 }
 
-// With records: one line, correct equality, immutable by default
+// With records: one line, equality that can't fall out of sync
 public record Person(string FirstName, string LastName);
 ```
 
-Both types above behave the same way under `==`, but the record version cannot fall out of sync with its own properties.
-
 ### Record Classes
 
-A `record` (or `record class`) is a reference type. It lives on the heap and is passed by reference, just like a class. The difference is that equality compares property values instead of object references.
+A `record` (or `record class`) is a reference type, allocated and passed like any class. The difference is that equality compares field values instead of references.
 
 ```csharp
 public record Person(string FirstName, string LastName);
@@ -490,38 +426,34 @@ public record Person(string FirstName, string LastName);
 var person1 = new Person("John", "Doe");
 var person2 = new Person("John", "Doe");
 
-// Value equality: same data means equal
-Console.WriteLine(person1 == person2);       // true
-Console.WriteLine(ReferenceEquals(person1, person2)); // false - still different objects
+Console.WriteLine(person1 == person2);                 // true: same data
+Console.WriteLine(ReferenceEquals(person1, person2));  // false: different objects
 
-// Deconstruction works with positional records
-var (first, last) = person1;
+var (first, last) = person1;                           // positional records deconstruct
 
-// ToString() is auto-generated and useful for logging
-Console.WriteLine(person1); // Person { FirstName = John, LastName = Doe }
+Console.WriteLine(person1);   // Person { FirstName = John, LastName = Doe }
 ```
 
-**Non-destructive mutation with `with` expressions.** Records are immutable by default, so you cannot change their properties after creation. Instead, `with` creates a new instance that copies every property from the original and overrides only the ones you specify.
+**Non-destructive mutation with `with` expressions.** A positional record's properties are `init`-only, so they can't change after creation. `with` creates a new instance that copies every field from the original and overrides only the ones you name.
 
 ```csharp
 var person3 = person1 with { LastName = "Smith" };
-// person1 is still "John Doe" - unchanged
-// person3 is "John Smith" - a new object
+// person1 is still "John Doe"; person3 is a new "John Smith"
 ```
 
-**Adding members beyond positional parameters.** Records can have additional properties, methods, and computed values. The positional parameters generate `init`-only properties and a deconstructor, but you can extend the type as needed.
+**Adding members beyond positional parameters.** Records can have extra properties, methods, and computed values alongside the positional ones.
 
 ```csharp
 public record Employee(string Name, string Department)
 {
-    public DateTime HireDate { get; init; }
+    public DateOnly HireDate { get; init; }
 
-    public int YearsEmployed =>
-        (DateTime.Now - HireDate).Days / 365;
+    public int YearsEmployed(DateOnly today) =>
+        today.Year - HireDate.Year - (today.DayOfYear < HireDate.DayOfYear ? 1 : 0);
 }
 ```
 
-**Inheritance.** Record classes support inheritance, but equality is type-aware. A `Manager` record is never equal to an `Employee` record even if all shared properties match, because the runtime type is part of the equality check.
+**Inheritance.** Record classes support inheritance, and equality is type-aware. A `Manager` record is never equal to an `Employee` record even when every shared property matches, because the runtime type is part of the comparison.
 
 ```csharp
 public record Employee(string Name, string Department);
@@ -531,20 +463,20 @@ public record Manager(string Name, string Department, int TeamSize)
 var emp = new Employee("Alice", "Engineering");
 var mgr = new Manager("Alice", "Engineering", 5);
 
-Console.WriteLine(emp == mgr); // false - different types
+Console.WriteLine(emp == mgr); // false: different types
 ```
 
-This is deliberate. Records represent data, and data from two different shapes is not the same data. If you need polymorphic equality that ignores type, records are the wrong tool.
+This is deliberate. Records represent data, and data of two different shapes is not the same data. If you need polymorphic equality that ignores the type, records are the wrong tool.
 
 ### Record Structs (C# 10)
 
-A `record struct` is a value type with record semantics. It copies on assignment (like any struct) and compares by value (like any record).
+A `record struct` is a value type with record semantics. It copies on assignment like any struct and compares by value like any record.
 
 ```csharp
-// Mutable by default - unlike record classes
+// Mutable by default, unlike record classes
 public record struct Point(double X, double Y);
 
-// Readonly record struct enforces immutability
+// readonly record struct makes the positional properties init-only
 public readonly record struct Coordinate(double Latitude, double Longitude);
 
 var coord1 = new Coordinate(47.6062, -122.3321);
@@ -554,23 +486,23 @@ Console.WriteLine(coord1 == coord2); // true
 var coord3 = coord1 with { Longitude = -122.5 };
 ```
 
-There is an important asymmetry here: `record class` generates `init` setters (immutable by default), but `record struct` generates regular `set` setters (mutable by default). If you want an immutable value type, you need `readonly record struct` explicitly.
+There is an asymmetry here. A positional `record class` generates `init` properties, so it's immutable by default. A positional `record struct` generates ordinary `set` properties, so it's mutable by default. For an immutable value type, write `readonly record struct` explicitly.
 
 | Feature | Record Class | Record Struct |
-|---------|--------------|---------------|
+| --- | --- | --- |
 | Type | Reference | Value |
 | Inheritance | Yes | No |
-| Null | Can be null | Not null |
-| Allocation | Heap | Stack/inline |
-| Default mutability | Immutable (init) | Mutable |
-| With expressions | Yes | Yes |
+| Null | Can be null | Only as `Nullable<T>` |
+| Storage | A separate heap object | Inline in its variable, field, or array |
+| Positional properties | `init` (immutable) | `set` (mutable) unless `readonly` |
+| `with` expressions | Yes | Yes |
 
 ### When to Use Records
 
-The textbook answer is "use records for data types where identity doesn't matter," but that advice is too broad. A `Person` with `FirstName`, `LastName`, and `Email` is pure data with no behavior, which sounds like a record candidate. But in a real workflow, you validate the first name, then the last name, then the email, updating the object as you go. With a mutable class, each validation step sets the property directly. With a record, you either chain `with` expressions that create and immediately discard intermediate copies, or you accumulate the validated values separately and construct the record at the end. Both approaches are more awkward and more bug-prone than just setting properties on a class.
+The textbook answer is "use records for data types where identity doesn't matter," but that advice is too broad. A `Person` with `FirstName`, `LastName`, and `Email` is pure data with no behavior, which sounds like a record candidate. In practice, though, you validate the first name, then the last name, then the email, updating the object as you go. With a mutable class, each validation step sets a property. With a record, you either chain `with` expressions that create and discard intermediate copies, or you accumulate the validated values separately and construct the record at the end. Both are more awkward than setting properties on a class.
 
 ```csharp
-// With a mutable class: straightforward, validate and set as you go
+// With a mutable class: validate and set as you go
 var person = new Person();
 person.FirstName = ValidateFirstName(input.FirstName);
 person.LastName = ValidateLastName(input.LastName);
@@ -582,7 +514,7 @@ person = person with { FirstName = ValidateFirstName(input.FirstName) };
 person = person with { LastName = ValidateLastName(input.LastName) };
 person = person with { Email = ValidateEmail(input.Email) };
 
-// Or you accumulate validated values and construct once at the end,
+// Or accumulate validated values and construct once at the end,
 // which means holding validated state outside the object
 var firstName = ValidateFirstName(input.FirstName);
 var lastName = ValidateLastName(input.LastName);
@@ -590,28 +522,28 @@ var email = ValidateEmail(input.Email);
 var person = new Person(firstName, lastName, email);
 ```
 
-None of the record approaches are terrible, but none are better than the class version either. The immutability that records enforce is not helping here; it is creating friction in a workflow that naturally involves incremental mutation.
+None of the record approaches are terrible, but none are better than the class version either. The immutability records enforce isn't helping here. It creates friction in a workflow that naturally involves incremental mutation.
 
-There is a counterargument worth addressing. If you adopt a functional style where methods never mutate their inputs and instead return new instances, `with` expressions become genuinely convenient. A pipeline that transforms a record through several stages, each returning a modified copy, reads cleanly and avoids shared mutable state. But this argument works backwards as a justification for defaulting to records. Most C# codebases are not functional-first. Services mutate objects by reference, controllers bind mutable models, and Entity Framework tracks changes on mutable entities. Adopting records everywhere to enable a functional style that the rest of the codebase does not follow creates inconsistency without delivering the safety benefits that a truly functional architecture would provide. Use records when the data is naturally immutable, not to impose a programming paradigm that the surrounding code does not support.
+There is a counterargument. In a functional style, where methods never mutate their inputs and instead return new instances, `with` expressions are convenient. A pipeline that transforms a record through several stages, each returning a modified copy, reads cleanly and avoids shared mutable state. But that works backwards as a justification for defaulting to records. Most C# codebases are not functional-first. Services mutate objects by reference, controllers bind mutable models, and Entity Framework tracks changes on mutable entities. Adopting records everywhere to enable a style the rest of the codebase doesn't follow creates inconsistency without the safety a functional architecture would provide. Use records when the data is naturally immutable, not to impose a paradigm the surrounding code doesn't support.
 
-Records earn their keep when the data genuinely should not change after creation. In practice, that means **computed results and decision outputs**: the return value of a calculation, the outcome of a business rule, or a snapshot of state at a specific moment. These are values that are produced once and then consumed, never edited.
+Records earn their keep when the data should not change after creation. In practice, that means **computed results and decision outputs**: the return value of a calculation, the outcome of a business rule, or a snapshot of state at a specific moment. These are produced once and then consumed, never edited.
 
 **Where records fit naturally**:
-- **Computed results**: `PricingResult`, `TaxCalculation`, `RouteDecision`. These represent the output of a process. Once computed, there is no reason to modify them.
-- **Event payloads**: `OrderPlaced`, `PaymentProcessed`, `UserRegistered`. Events describe something that already happened, which by definition cannot change.
-- **Query results and projections**: Data returned from a database query or API call that you read and pass along but never edit.
-- **Snapshots**: `AuditEntry`, `ConfigurationSnapshot`, `BalanceAtDate`. These capture state at a point in time for later reference.
-- **Dictionary and lookup keys**: Value equality makes records safe as keys without writing custom comparers or overriding `GetHashCode` by hand.
+- **Computed results**: `PricingResult`, `TaxCalculation`, `RouteDecision`. These represent the output of a process, with no reason to modify them once computed.
+- **Event payloads**: `OrderPlaced`, `PaymentProcessed`, `UserRegistered`. Events describe something that already happened, which by definition can't change.
+- **Query results and projections**: data returned from a database query or API call that you read and pass along but never edit.
+- **Snapshots**: `AuditEntry`, `ConfigurationSnapshot`, `BalanceAtDate`. These capture state at a point in time.
+- **Dictionary and lookup keys**: value equality makes records usable as keys without custom comparers or a hand-written `GetHashCode`.
 
 **Where records create unnecessary friction**:
-- **Objects that are built up incrementally.** If you validate, enrich, or transform the data through multiple steps during a workflow, mutable properties on a class are simpler and less error-prone.
-- **Entities with identity.** A `Customer` with ID 42 is a specific entity. Creating another object with the same data does not make it the same customer. Classes with reference equality or explicit ID-based equality are more appropriate.
+- **Objects that are built up incrementally.** If you validate, enrich, or transform the data through multiple steps, mutable properties on a class are simpler.
+- **Entities with identity.** A `Customer` with ID 42 is a specific entity. Another object with the same data isn't the same customer, so reference equality or explicit ID-based equality fits better.
 - **Service classes.** `OrderProcessor` or `EmailService` types have dependencies, side effects, and no meaningful concept of equality.
-- **Types where you need selective equality.** Records compare every property. If you need to exclude a timestamp or cache field from equality, you have to override the equality members yourself, which defeats the purpose.
+- **Types that need selective equality.** Records compare every field. Excluding a timestamp or cache field means overriding the equality members yourself, which defeats the purpose.
 
-### Pitfalls and Best Practices
+### Pitfalls
 
-**`with` creates shallow copies.** When a record property is a reference type like a `List<T>` or another class, the `with` expression copies the reference rather than cloning the object. Both the original and the copy point to the same list, so mutating it through one reference affects both.
+**`with` creates shallow copies.** When a record property is a reference type such as a `List<T>`, the `with` expression copies the reference, not the list. The original and the copy share it, so mutating it through one affects both.
 
 ```csharp
 public record Order(int Id, List<string> Items);
@@ -620,52 +552,49 @@ var order1 = new Order(1, new List<string> { "Widget" });
 var order2 = order1 with { Id = 2 };
 
 order2.Items.Add("Gadget");
-Console.WriteLine(order1.Items.Count); // 2 - the original was affected
+Console.WriteLine(order1.Items.Count); // 2: the original was affected
 ```
 
-If your record contains mutable reference types, treat the copy as sharing state rather than owning independent data. For truly independent copies, you need to clone the inner collections yourself.
+If a record contains mutable reference types, treat a copy as sharing state. For independent copies, clone the inner collections yourself, or use immutable collections so there's nothing to share.
 
-**Positional parameters generate `init` properties, not fields.** This means the properties are publicly visible and settable during object initialization. If you need a property to be private or need to control access more tightly, use a standard property declaration inside the record body.
+**Positional parameters generate public properties.** Every positional parameter becomes a public `init` property. To keep one less visible, declare it as an ordinary property in the record body.
 
 ```csharp
-// The parameter 'ssn' becomes a public init-only property
-public record Person(string Name, string Ssn); // Ssn is publicly readable
+public record Person(string Name, string Ssn);   // Ssn is publicly readable
 
-// If you need to hide it, declare it explicitly
 public record Person(string Name)
 {
-    internal string Ssn { get; init; }
+    internal string Ssn { get; init; } = "";
 }
 ```
 
-**Keep records focused on data.** Records can have methods, but loading them with business logic blurs the line between data types and service types. A record with a `CalculateTax()` method is still a record, but a record with `SendEmail()` or `SaveToDatabase()` has crossed into behavior that belongs in a service class.
+**Keep records focused on data.** Records can have methods, but loading them with business logic blurs the line between data types and service types. A record with a `CalculateTax()` method is still a record. One with `SendEmail()` or `SaveToDatabase()` has crossed into behavior that belongs in a service class.
 
-**Prefer `readonly record struct` over `record struct`.** The mutable default for record structs is a common source of confusion. If you are using a record struct because you want a small, stack-allocated value type with equality semantics, you almost certainly also want immutability. Make `readonly` the default choice and drop it only when you have a specific reason to allow mutation.
+**Prefer `readonly record struct` over `record struct`.** The mutable default for record structs is a common source of confusion. If you chose a record struct to get a small value type with equality, you almost certainly want immutability too, along with the protection from copy bugs that comes with it.
 
 ## Sealed Classes
 
-The `sealed` keyword prevents a class from being inherited. The .NET runtime team seals aggressively, and some style guides recommend sealing everything by default. The practical value depends on whether you are writing library code or application code.
+`sealed` prevents a class from being inherited. Some style guides recommend sealing everything by default. The practical value depends on whether you're writing library code or application code.
 
 ```csharp
 public sealed class Configuration
 {
-    public string ConnectionString { get; init; }
+    public string ConnectionString { get; init; } = "";
     public int Timeout { get; init; }
 }
 
-// Cannot inherit from Configuration
-// public class ExtendedConfig : Configuration { } // Compiler error
+// public class ExtendedConfig : Configuration { }   // compile error
 ```
 
-**The case for sealing: library and framework code.** When you publish a library, you cannot control what consumers do with your types. If someone inherits from your class and overrides a method in a way you did not anticipate, the derived class can violate invariants that your code depends on. Sealing protects against this by closing the type to extension. The .NET runtime seals `String`, `HttpClient`, and hundreds of other types for exactly this reason. Framework authors cannot predict every subclass, so sealing is a defensive necessity.
+**The case for sealing: library and framework code.** When you publish a library, you can't control what consumers do with your types. A derived class that overrides a method in a way you didn't anticipate can violate invariants your code depends on. Sealing closes the type to extension. It is also a one-way door in the other direction: unsealing later is compatible, but sealing a type that has shipped unsealed breaks every consumer that derived from it, so the decision is best made at the first release. In the BCL, `String` is sealed while `HttpClient` is not, because `HttpClient` was designed for extension.
 
-There is also a real performance benefit. The JIT compiler can devirtualize method calls on sealed types, turning virtual dispatch into direct calls and enabling inlining. On hot paths in high-throughput code, this can matter. The .NET team has measurable benchmarks showing the impact across the runtime.
+Sealing also helps performance. The JIT can devirtualize calls on a sealed type, turning virtual dispatch into direct calls that can be inlined, and type checks and casts against a sealed type are cheaper. On hot paths in high-throughput code, this can matter. The CA1852 analyzer flags internal types that nothing in the assembly derives from, since those can be sealed with no compatibility cost.
 
-**The case against sealing: application code.** In a typical application codebase, the team controls all the code. Nobody is going to accidentally inherit from your `OrderService` and break its invariants; a code review would catch that immediately. Sealing every class by default adds noise to the codebase without preventing a problem that realistically does not occur.
+**The case against sealing: application code.** In a typical application, the team controls all the code. Nobody is going to inherit from `OrderService` by accident and break its invariants, and a code review would catch it if they did. Sealing every class by default adds noise without preventing a problem that realistically occurs.
 
-Sealing can also create friction with testing. Some mocking frameworks create test doubles by generating subclasses at runtime. Sealing a class means those frameworks cannot mock it directly, forcing you to either extract an interface (adding a file that exists only for testability) or use a framework that supports sealing like source-generated mocks. Neither is a major obstacle, but both are friction that exists because of a keyword that is not solving a real problem in application code.
+Sealing also affects testing. Mocking frameworks built on runtime proxies, such as Moq and NSubstitute, create test doubles by generating subclasses, so they can't mock a sealed class. They can't intercept a non-virtual member of an unsealed class either, so in practice these frameworks mock through interfaces regardless, and sealing mostly matters for code that mocks concrete classes with virtual members.
 
-**When sealing does make sense in application code.** Some classes genuinely should not be inherited because their correctness depends on controlling all behavior. A class that manages a resource like a database connection pool or a thread-safe cache may rely on specific method execution order or internal state transitions that a subclass could disrupt. Sealing these types is a genuine safety measure, not just a style preference.
+**When sealing does make sense in application code.** Some classes should not be inherited because their correctness depends on controlling all behavior. A class that manages a resource like a connection pool or a thread-safe cache may rely on a specific method execution order or internal state transitions that a subclass could disrupt.
 
 ```csharp
 // Sealing makes sense here: the pool manages internal state
@@ -678,78 +607,52 @@ public sealed class ConnectionPool
     public void Release(DbConnection connection) { /* ... */ }
 }
 
-// Sealing adds nothing here: it's a plain data class
-// that nobody would have a reason to inherit from anyway
-public sealed class CustomerDto  // the 'sealed' is not wrong, just pointless
+// Sealing adds little here: a plain data class
+// that nobody has a reason to inherit from
+public sealed class CustomerDto
 {
     public int Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = "";
 }
 ```
 
-The honest answer is that `sealed` is rarely necessary in application code. Reserve it for types where inheritance would genuinely break correctness rather than applying it as a blanket policy.
+In application code, `sealed` is rarely necessary for correctness. Reserve it for types where inheritance would break correctness, or apply it where CA1852 shows it costs nothing, rather than as a blanket policy.
 
 ## Abstract Classes
 
-Cannot be instantiated; provide base for derived classes.
+An abstract class can't be instantiated. It exists to be derived from, and it can mix members every derived class must implement (`abstract`), members they may override (`virtual`), and members they inherit unchanged.
 
 ```csharp
 public abstract class Shape
 {
-    public string Color { get; set; }
+    public string Color { get; set; } = "black";
 
-    // Abstract method - must be implemented
-    public abstract double CalculateArea();
+    public abstract double CalculateArea();          // must be implemented
 
-    // Virtual method - can be overridden
-    public virtual void Draw()
-    {
+    public virtual void Draw() =>                     // may be overridden
         Console.WriteLine($"Drawing {Color} shape");
-    }
 
-    // Regular method - inherited as-is
-    public void Describe()
-    {
+    public void Describe() =>                         // inherited as-is
         Console.WriteLine($"A {Color} shape with area {CalculateArea()}");
-    }
 }
 
 public class Circle : Shape
 {
     public double Radius { get; set; }
 
-    public override double CalculateArea() =>
-        Math.PI * Radius * Radius;
+    public override double CalculateArea() => Math.PI * Radius * Radius;
 
     public override void Draw()
     {
-        base.Draw();  // Call base implementation
+        base.Draw();
         Console.WriteLine($"Circle with radius {Radius}");
     }
 }
 ```
 
-## Partial Classes
+## Partial Types
 
-The `partial` keyword lets you split a single class definition across multiple files. The compiler merges them into one type at build time, so the runtime sees no difference between a partial class and a regular one.
-
-```csharp
-// Customer.cs
-public partial class Customer
-{
-    public int Id { get; set; }
-    public string Name { get; set; }
-}
-
-// Customer.Generated.cs (tool-generated code)
-public partial class Customer
-{
-    public bool IsValid() =>
-        Id > 0 && !string.IsNullOrEmpty(Name);
-}
-```
-
-**The legitimate use case: separating hand-written code from generated code.** Partial classes exist primarily to solve the code generation problem. Tools like Entity Framework, WinForms designers, source generators, and gRPC produce code that belongs to a class you also need to extend with your own logic. Without partial classes, you would have to either edit the generated file (which gets overwritten on the next generation) or resort to inheritance just to add members. Partial classes let the tool own one file and the developer own another, both contributing to the same type without conflict.
+The `partial` keyword splits one type's declaration across several files. The compiler merges them into a single type, so at run time a partial class is indistinguishable from one written in a single file.
 
 ```csharp
 // Customer.cs - your code, never touched by the generator
@@ -759,25 +662,27 @@ public partial class Customer
     public bool IsPreferred => TotalOrders > 100;
 }
 
-// Customer.Generated.cs - produced by EF scaffold, source generator, etc.
+// Customer.Generated.cs - produced by EF scaffolding, a source generator, etc.
 // Regenerated freely without overwriting your code
 public partial class Customer
 {
     public int Id { get; set; }
-    public string FirstName { get; set; }
-    public string LastName { get; set; }
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
     public int TotalOrders { get; set; }
 }
 ```
 
-This is the scenario partial classes were designed for, and it works well.
+**The legitimate use: separating hand-written code from generated code.** Tools like Entity Framework scaffolding, WinForms designers, source generators, and gRPC produce code for a class you also need to extend. Without partial types you would have to edit the generated file, which the next generation overwrites, or resort to inheritance just to add members. Partial types let the tool own one file and the developer own another.
 
-**The problem: using partial classes to manage complexity.** When a class grows large enough that developers feel the need to split it across files for readability, the real issue is not file length. It is that the class has too many responsibilities. Splitting `Customer` into `Customer.cs`, `Customer.Validation.cs`, `Customer.Persistence.cs`, and `Customer.Formatting.cs` does not reduce complexity. It distributes it across files while keeping all the coupling intact. Every partial file still shares the same private fields, the same state, and the same implicit dependencies. The class is just as hard to reason about, but now you also have to check multiple files to understand it.
+Individual members can be partial too, which is how a generator and a developer split a single member. One part declares it and the other implements it. Partial methods have been around longest. A `void` partial method with no access modifier may be left unimplemented, in which case the compiler removes the calls to it. Any other partial method must be implemented. C# 13 added partial properties and indexers, and C# 14 added partial constructors and events, which lets a source generator supply the implementation of a member you declare.
+
+**The problem: using partial classes to manage complexity.** When a class grows large enough that developers split it across files for readability, the issue isn't file length. It's that the class has too many responsibilities. Splitting `Customer` into `Customer.cs`, `Customer.Validation.cs`, `Customer.Persistence.cs`, and `Customer.Formatting.cs` doesn't reduce complexity. It spreads it across files while keeping all the coupling, since every part shares the same private fields and state. The class is just as hard to reason about, and now you have to open four files to do it.
 
 ```csharp
 // This looks organized, but it's a single class with four responsibilities
-// Customer.cs           - properties and constructors
-// Customer.Validation.cs - validation methods
+// Customer.cs             - properties and constructors
+// Customer.Validation.cs  - validation methods
 // Customer.Persistence.cs - Save(), Load(), Delete()
 // Customer.Formatting.cs  - ToString(), ToJson(), ToCsv()
 
@@ -785,54 +690,44 @@ This is the scenario partial classes were designed for, and it works well.
 // The "separation" is cosmetic. The coupling is identical to one big file.
 ```
 
-If a class needs validation, persistence, and formatting, those are three separate concerns that should be three separate types. A `CustomerValidator`, a `CustomerRepository`, and a `CustomerFormatter` each have a single responsibility, can be tested independently, and make their dependencies explicit through their constructors. Partial classes hide the fact that the original `Customer` class was doing too much by making the file size feel manageable while leaving the design problem untouched.
+If a class needs validation, persistence, and formatting, those are three concerns that should be three types. A `CustomerValidator`, a `CustomerRepository`, and a `CustomerFormatter` each have one responsibility, can be tested independently, and make their dependencies explicit through their constructors.
 
-**When partial classes are appropriate**:
+**When partial types are appropriate**:
 - Separating hand-written code from tool-generated code (EF models, source generators, WinForms designers, gRPC stubs)
-- Partial methods, where a generated file declares a method signature and the developer optionally provides the implementation
+- Partial members, where one part declares a member and a generator or the developer implements it
 
-**When partial classes are masking a design problem**:
-- Splitting a class across files because it is "too long." The length is a symptom; the multiple responsibilities are the disease.
-- Organizing a class by concern (validation in one file, persistence in another). If you can name distinct concerns, they should be distinct types.
-- Making a class feel smaller without actually reducing its coupling or complexity
+**When partial types are masking a design problem**:
+- Splitting a class across files because it is "too long." The length is a symptom, and the multiple responsibilities are the cause.
+- Organizing a class by concern, with validation in one file and persistence in another. If you can name distinct concerns, they should be distinct types.
 
 ## Static Classes
 
-A static class cannot be instantiated, cannot be inherited, and can only contain static members. The compiler enforces all three constraints, making this a deliberate design choice rather than a convention.
+A static class can't be instantiated, can't be inherited, and can contain only static members. The compiler enforces all three, which makes it a deliberate design choice rather than a convention.
 
 ```csharp
-public static class MathHelper
+public static class Geometry
 {
-    public const double Pi = 3.14159265358979;
-
     public static double Square(double x) => x * x;
 
-    public static double Cube(double x) => x * x * x;
-
-    public static bool IsEven(int n) => n % 2 == 0;
+    public static double CircleArea(double radius) => Math.PI * Square(radius);
 }
-
-double area = MathHelper.Pi * MathHelper.Square(radius);
 ```
 
-The intended purpose is to group pure functions and constants that have no meaningful instance state. `Math.Max`, `Path.Combine`, and `Convert.ToInt32` all take input, produce output, and depend on no object's state. There is no reason to create an instance of `Math` because none of its methods would benefit from one.
+The intended purpose is to group functions and constants that have no meaningful instance state. `Math.Max`, `Path.Combine`, and `Convert.ToInt32` take input, produce output, and depend on no object's state, so there's nothing an instance would add.
 
 ### When Static Classes Are Appropriate
 
-**Pure utility functions.** Methods with no side effects where the same inputs always produce the same output. String formatting, math operations, validation predicates, and type conversions all qualify.
+**Pure utility functions.** Methods with no side effects, where the same inputs always produce the same output: string formatting, math, validation predicates, and type conversions.
 
 **Constants.** A static class can serve as a named container for related constants, replacing scattered magic numbers with readable names.
 
-**Extension methods.** The compiler requires extension methods to live in a non-nested, non-generic static class, so there is no alternative. This is the most common use of static classes in application code.
+**Extension methods.** The compiler requires extension methods, and C# 14's `extension` blocks, to live in a non-nested, non-generic static class. This is the most common use of static classes in application code.
 
 ```csharp
 public static class StringExtensions
 {
-    public static string Truncate(this string value, int maxLength)
-    {
-        if (string.IsNullOrEmpty(value)) return value;
-        return value.Length <= maxLength ? value : value[..maxLength] + "...";
-    }
+    public static string Truncate(this string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength] + "...";
 }
 
 var preview = longDescription.Truncate(100);
@@ -840,7 +735,7 @@ var preview = longDescription.Truncate(100);
 
 ### When Static Classes Become a Problem
 
-**Hiding dependencies.** The most damaging misuse is using static classes to provide services that should be injected. When a class calls `DatabaseHelper.GetConnection()` directly, that dependency is invisible in the constructor, invisible in the type signature, and unreplaceable in tests.
+**Hiding dependencies.** The most damaging misuse is a static class that provides a service that should be injected. When a class calls `DatabaseHelper.GetConnection()` directly, the dependency is invisible in the constructor and the type signature, and it can't be replaced in tests.
 
 ```csharp
 // Hidden dependency: where does the connection come from?
@@ -848,8 +743,8 @@ public class OrderService
 {
     public Order GetOrder(int id)
     {
-        var conn = DatabaseHelper.GetConnection();
-        return conn.Query<Order>("SELECT * FROM Orders WHERE Id = @Id", new { Id = id });
+        using var conn = DatabaseHelper.GetConnection();
+        return conn.QuerySingle<Order>("SELECT * FROM Orders WHERE Id = @Id", new { Id = id });
     }
 }
 
@@ -857,64 +752,56 @@ public class OrderService
 public class OrderService(IDbConnection connection)
 {
     public Order GetOrder(int id) =>
-        connection.Query<Order>("SELECT * FROM Orders WHERE Id = @Id", new { Id = id });
+        connection.QuerySingle<Order>("SELECT * FROM Orders WHERE Id = @Id", new { Id = id });
 }
 ```
 
-**Accumulating global state.** Static fields live for the lifetime of the application domain. A static class that starts with helper methods can gradually acquire static fields for caching or configuration, creating global mutable state that every caller shares. This introduces concurrency bugs and order-of-operation dependencies that are difficult to diagnose. If a method needs cached data, the cache should be an injected dependency with explicit lifetime management.
+**Accumulating global state.** A static field lives as long as the process, or until its `AssemblyLoadContext` unloads. A static class that starts with helper methods can gradually acquire static fields for caching or configuration, which is global mutable state every caller shares. That brings concurrency bugs and order-of-initialization dependencies that are hard to diagnose. If a method needs cached data, make the cache an injected dependency with an explicit lifetime.
 
-**Growing into a dumping ground.** Utility classes attract unrelated methods over time. `StringHelper` starts with `Truncate` and `ToTitleCase`, then acquires `FormatCurrency`, `ParseCsvLine`, and eventually thirty methods spanning unrelated concerns. When this happens, split into focused classes like `CsvParser` and `CurrencyFormatter`.
+**Growing into a dumping ground.** Utility classes attract unrelated methods. `StringHelper` starts with `Truncate` and `ToTitleCase`, then gains `FormatCurrency`, `ParseCsvLine`, and eventually thirty methods spanning unrelated concerns. When that happens, split it into focused classes like `CsvParser` and `CurrencyFormatter`.
 
-### Static Classes vs. Singleton vs. Dependency Injection
+### Static Class, Singleton, or Injected Dependency
 
-When developers reach for a static class to hold service-like behavior, they are trying to solve "I need one of these, accessible everywhere." A static class makes the dependency invisible and untestable. A singleton makes it visible through `Instance` but hard-couples to the concrete type. Dependency injection makes it visible, replaceable, and testable.
+Reaching for a static class to hold service-like behavior is an attempt to solve "I need one of these, accessible everywhere." The three common answers differ in what they expose:
 
 ```csharp
-Logger.Log("Order processed");           // Static: invisible, untestable
-Logger.Instance.Log("Order processed");  // Singleton: visible, hard-coupled
+Logger.Log("Order processed");            // static: invisible, can't be replaced
+Logger.Instance.Log("Order processed");   // singleton: visible, but tied to one concrete type
 
-public class OrderProcessor(ILogger logger)  // DI: visible, replaceable
+public class OrderProcessor(ILogger<OrderProcessor> logger)   // injected: visible and replaceable
 {
-    public void Process(Order order) =>
-        logger.LogInformation("Order processed");
+    public void Process(Order order) => logger.LogInformation("Order processed");
 }
 ```
 
-For services with side effects like logging, email, or database access, dependency injection is the right answer. Static classes should be reserved for stateless operations that have no reason to vary between environments or tests.
+For services with side effects, like logging, email, or database access, inject them. Keep static classes for stateless operations that have no reason to vary between environments or tests.
 
-## Nested Classes
+## Nested Types
 
-A nested class is a class defined inside another class. The outer class acts as a namespace, and a `private` nested class is invisible to everything outside.
+A nested type is declared inside another type. It has one capability a top-level type lacks: it can access the enclosing type's `private` members. Its own accessibility can also be `private`, which hides it from everything outside the enclosing type.
 
 ```csharp
 public class LinkedList<T>
 {
     private Node? head;
 
-    public void Add(T value)
-    {
-        var newNode = new Node(value);
-        newNode.Next = head;
-        head = newNode;
-    }
+    public void Add(T value) => head = new Node(value) { Next = head };
 
-    private class Node
+    private class Node(T value)
     {
-        public T Value { get; }
+        public T Value { get; } = value;
         public Node? Next { get; set; }
-
-        public Node(T value) => Value = value;
     }
 }
 ```
 
-The textbook justification is encapsulation: `Node` is an implementation detail of `LinkedList<T>`, so hiding it prevents external code from depending on it. This sounds reasonable in isolation, but it is worth questioning whether hiding a type actually serves the same purpose as hiding a function.
+The textbook justification is encapsulation: `Node` is an implementation detail of `LinkedList<T>`, so hiding it prevents outside code from depending on it. That sounds reasonable in isolation, but hiding a type doesn't serve the same purpose as hiding a function.
 
-A local function inside a method is genuinely private to that method's execution. It cannot be tested independently, but it also does not need to be because it is a few lines of logic inlined into a single call site. A nested class is different. It is a full type with its own fields, properties, and methods. It can grow, accumulate behavior, and develop bugs. The moment you want to unit test `Node` independently, or reuse it in a second data structure, or reference it from a configuration or serialization context, the nesting becomes an obstacle you have to undo.
+A local function inside a method is private to that method's execution. It can't be tested independently, and it rarely needs to be, because it's a few lines of logic serving one call site. A nested class is a full type with its own fields, properties, and methods. It can grow, accumulate behavior, and develop bugs. The moment you want to unit test `Node` on its own, reuse it in a second data structure, or reference it from a serialization context, the nesting becomes an obstacle to undo.
 
-In practice, types that start as "pure implementation details" rarely stay that way. A `Node` might need to be exposed for custom iterators. An `Order.LineItem` that seemed tightly coupled to `Order` gets referenced by invoicing, reporting, and shipping code. A private `Builder` nested inside a complex object eventually needs to be shared with a test fixture. Each time this happens, you either make the nested class public (which raises the question of why it is nested at all) or extract it to its own file (a refactoring that touches every call site).
+Types that start as "pure implementation details" rarely stay that way. A `Node` might need to be exposed for custom iterators. An `Order.LineItem` that seemed tightly coupled to `Order` gets referenced by invoicing, reporting, and shipping code. A private `Builder` nested inside a complex object eventually needs to be shared with a test fixture. Each time, you either make the nested class public, which raises the question of why it's nested at all, or extract it to its own file, a refactoring that touches every reference.
 
-**Public nested classes have a weaker justification.** `Order.LineItem` reads nicely, but the namespacing benefit is cosmetic. A top-level `OrderLineItem` class conveys the same relationship without forcing consumers to navigate through `Order` to reach it. The nesting also means that `LineItem` cannot be used in a `using` import or referenced without qualification, which adds friction as usage spreads.
+**Public nested classes have a weaker justification.** `Order.LineItem` reads nicely, but the namespacing benefit is cosmetic. A top-level `OrderLineItem` conveys the same relationship without making every consumer qualify the name through `Order`, or add `using static Order;` to bring its nested types into scope.
 
 ```csharp
 // Nested: reads well initially, creates friction as usage grows
@@ -924,17 +811,22 @@ var item = new Order.LineItem { ProductName = "Widget" };
 var item = new OrderLineItem { ProductName = "Widget" };
 ```
 
-**Where nesting survives scrutiny.** The .NET base class library uses nested types in a few specific patterns. `List<T>.Enumerator` is a `readonly struct` nested inside `List<T>` because it is a performance-critical implementation detail that consumers should never instantiate directly; they interact with it through `IEnumerator<T>`. Source generators and compiler-generated code use nested types because the generated code must coexist with user code without name collisions. These are infrastructure-level concerns, not typical application patterns.
+**Where nesting survives scrutiny.** The BCL uses nested types in a few specific patterns. `List<T>.Enumerator` is a public struct nested in `List<T>`. `List<T>.GetEnumerator()` returns that struct directly, so a `foreach` over a `List<T>` uses it without boxing or allocating. It is also bound to the list's internal state, reading the list's version counter to detect modification during enumeration, and the nesting says so. Compiler-generated code, such as the state machines behind `async` methods and iterators, is emitted as nested types so it can call the enclosing type's private members. These are infrastructure concerns rather than typical application patterns.
 
-For application code, default to top-level types. If you find yourself nesting a class, ask whether it will genuinely remain private to the outer type for the life of the codebase. If there is any chance it will be tested, shared, or referenced independently, save yourself the future refactoring and put it in its own file from the start.
+For application code, default to top-level types. Nest a type when it needs the enclosing type's private members, or when it will genuinely stay private to that type for the life of the codebase. If it is likely to be tested, shared, or referenced independently, put it in its own file from the start.
+
 ## Key Takeaways
 
-**Default to classes**: Use classes for most types. Use structs only for small, immutable value objects.
+**Default to classes.** Use a struct only for a small, immutable value with no identity.
 
-**Prefer immutability**: Use `init` setters, readonly structs, and records to create types that can't be accidentally modified.
+**A struct lives wherever its container lives.** It is copied on every assignment and by-value argument, and `default` and arrays create it without running a constructor.
 
-**Use records for immutable outputs, not mutable data**: Records shine for computed results, event payloads, and snapshots that are produced once and never edited. For data that gets built up or modified during a workflow, a mutable class is simpler.
+**Make structs readonly.** Mutable structs are mutated through copies, silently.
 
-**Seal classes when inheritance would break correctness**: In library code, seal aggressively to protect invariants from unknown consumers. In application code, seal only types where subclassing would genuinely corrupt internal state, not as a blanket policy.
+**Use `ref struct` only to hold a span or a ref field.** Its restrictions exist to keep it off the heap, and they apply everywhere it goes.
 
-**Keep structs small**: The copy-on-assignment semantics of structs make large structs expensive to pass around.
+**Primary constructor parameters are mutable captured state.** Copy them to `readonly` fields and treat CS9124 as an error when immutability matters.
+
+**Use records for immutable outputs, not mutable data.** Records shine for computed results, event payloads, and snapshots that are produced once and never edited. For data built up or modified during a workflow, a mutable class is simpler.
+
+**Seal classes when inheritance would break correctness.** In library code, sealing protects invariants from unknown consumers and is hard to add later. In application code, seal where subclassing would corrupt internal state or where CA1852 shows it's free.

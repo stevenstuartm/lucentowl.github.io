@@ -15,7 +15,7 @@ Four properties of the API explain most production surprises, and each one has a
 
 **Output tokens dominate latency; input tokens dominate cost.** Input is processed in parallel, while output is generated sequentially, so a request with a long prompt and a short answer returns quickly. A short prompt asking for a long answer does not. Cost runs the other way for most applications, because a conversation resends its whole history on every turn while producing a few hundred output tokens each time.
 
-**Every request carries the entire conversation.** The API is stateless, so a long session grows quadratically in billed input: turn twenty pays for turns one through nineteen again. Server-side conversation state does not change this, since the accumulated history is still billed as input on each call.
+**Every request carries the entire conversation.** The API is stateless, so a long session grows quadratically in billed input. Turn twenty pays for turns one through nineteen again. Server-side conversation state does not change this, since the accumulated history is still billed as input on each call.
 
 **Everything in the context is billed, including the parts you forget about.** Tool definitions, system prompts, retrieved chunks, and extended reasoning all consume the budget. Reasoning tokens in particular are billed as output and count toward the output limit, so a model configured to think hard is paying output rates for text the user never sees.
 

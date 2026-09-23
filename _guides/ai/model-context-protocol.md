@@ -31,26 +31,7 @@ Anthropic introduced MCP in 2024 and donated it to the Linux Foundation's Agenti
 - A **client** is the component inside the host that connects to one MCP server. A host connected to three servers runs three client connections.
 - A **server** exposes capabilities, like tools, resources, and prompts, for one integration.
 
-```
- ┌────────────────────────────────────────────────────────────┐
- │  Host application (chat app, IDE, agent runtime)            │
- │                                                              │
- │   Model API ◄──── conversation, including tool results       │
- │                                                              │
- │   ┌──────────┐      ┌──────────┐       ┌──────────┐         │
- │   │ Client A │      │ Client B │       │ Client C │         │
- │   └────┬─────┘      └────┬─────┘       └────┬─────┘         │
- └────────┼─────────────────┼──────────────────┼───────────────┘
-          │ stdio           │ Streamable HTTP  │ Streamable HTTP
-          ▼                 ▼                  ▼
-   ┌─────────────┐   ┌─────────────┐    ┌─────────────┐
-   │ Filesystem  │   │ Ticketing   │    │ Internal    │
-   │ server      │   │ server      │    │ API server  │
-   │ (local)     │   │ (remote)    │    │ (remote)    │
-   └──────┬──────┘   └──────┬──────┘    └──────┬──────┘
-          ▼                 ▼                  ▼
-     Local files      Ticketing API       Internal services
-```
+{% include figure.html id="llm-mcp-architecture" %}
 
 The model isn't a participant in the protocol. Servers don't talk to the model, and the model never talks to servers directly. The host lists a server's tools, passes them to the model as tool definitions, receives the model's tool call, sends it to the right server through that server's client, and puts the result back into the conversation. That's what gives the host the chance to require user approval, filter what reaches the model, and log every call.
 
@@ -190,38 +171,7 @@ Authorization is optional in MCP, and the [authorization specification](https://
 
 ### The Flow
 
-```
- MCP client                MCP server             Authorization server
-     │                          │                          │
-     │ 1. Request, no token     │                          │
-     │─────────────────────────►│                          │
-     │ 2. 401 + WWW-Authenticate│                          │
-     │    (resource_metadata    │                          │
-     │     URL, required scope) │                          │
-     │◄─────────────────────────│                          │
-     │ 3. Fetch protected       │                          │
-     │    resource metadata     │                          │
-     │─────────────────────────►│                          │
-     │    → which authorization │                          │
-     │      server to use       │                          │
-     │◄─────────────────────────│                          │
-     │ 4. Fetch authorization server metadata              │
-     │────────────────────────────────────────────────────►│
-     │ 5. Identify the client (metadata document URL,      │
-     │    pre-registered ID, or dynamic registration)      │
-     │ 6. Authorization request: PKCE challenge +          │
-     │    resource = the MCP server's URI                  │
-     │────────────────────────────────────────────────────►│
-     │            [user signs in and consents in a browser]│
-     │ 7. Authorization code (+ issuer, checked by client) │
-     │◄────────────────────────────────────────────────────│
-     │ 8. Token request: code + PKCE verifier + resource   │
-     │────────────────────────────────────────────────────►│
-     │ 9. Access token, audience = this MCP server         │
-     │◄────────────────────────────────────────────────────│
-     │ 10. Requests with Authorization: Bearer <token>     │
-     │─────────────────────────►│                          │
-```
+{% include figure.html id="llm-mcp-oauth-flow" %}
 
 Several standards do the work:
 

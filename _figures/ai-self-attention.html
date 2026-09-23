@@ -1,0 +1,87 @@
+---
+title: "Self-Attention"
+kind: structure
+system: ai-core
+summary: "One token weighing every earlier token, heaviest on the noun it refers to."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="aisa-title aisa-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aisa-title">Self-attention from one token to the tokens before it</title>
+<desc id="aisa-desc">The sentence The animal didn't cross the street because it was tired, split into tokens. Curved lines run from the token it back to every earlier token, and a bar under each earlier token shows its attention weight. The heaviest line and tallest bar, 52 percent, go to animal, the noun it refers to. Street gets 18 percent, because 15 percent, and the rest a few percent each. The tokens after it, was and tired, are dashed out because a decoder-only model cannot see later tokens. The weights are illustrative, and a real model runs many attention heads.</desc>
+<style>
+.sa-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.sa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.sa-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.sa-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.sa-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.sa-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.sa-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.sa-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.sa-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.sa-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.sa-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.sa-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.sa-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.sa-dot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+
+.sa-tok { font-size: 13px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.sa-tok-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.sa-tok-off { font-size: 13px; fill: var(--color-text-light, #4A5568); }
+.sa-hot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-purple, #6B3FA0); stroke-width: 2.5; }
+.sa-arc { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-linecap: round; }
+.sa-bar { fill: var(--color-purple, #6B3FA0); }
+.sa-bar-lo { fill: var(--color-purple, #6B3FA0); opacity: 0.45; }
+</style>
+<defs>
+
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="sa-hd" x="34" y="24">ATTENTION FROM “IT” TO EVERY EARLIER TOKEN</text>
+<path class="sa-arc" d="M 660,200 Q 366,-76.36 72,200" stroke-width="1.42" opacity="0.39"/>
+<path class="sa-arc" d="M 660,200 Q 408,-36.88 156,200" stroke-width="8.28" opacity="1.00"/>
+<path class="sa-arc" d="M 660,200 Q 450,2.6 240,200" stroke-width="1.56" opacity="0.40"/>
+<path class="sa-arc" d="M 660,200 Q 492,42.08 324,200" stroke-width="1.84" opacity="0.42"/>
+<path class="sa-arc" d="M 660,200 Q 534,81.56 408,200" stroke-width="1.28" opacity="0.38"/>
+<path class="sa-arc" d="M 660,200 Q 576,121.04 492,200" stroke-width="3.52" opacity="0.57"/>
+<path class="sa-arc" d="M 660,200 Q 618,160.52 576,200" stroke-width="3.10" opacity="0.54"/>
+<rect class="sa-box" x="34" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="72" y="225" text-anchor="middle">The</text>
+<rect class="sa-hot" x="118" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="156" y="225" text-anchor="middle">animal</text>
+<rect class="sa-box" x="202" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="240" y="225" text-anchor="middle">didn't</text>
+<rect class="sa-box" x="286" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="324" y="225" text-anchor="middle">cross</text>
+<rect class="sa-box" x="370" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="408" y="225" text-anchor="middle">the</text>
+<rect class="sa-box" x="454" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="492" y="225" text-anchor="middle">street</text>
+<rect class="sa-box" x="538" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok" x="576" y="225" text-anchor="middle">because</text>
+<rect class="sa-sys" x="622" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok-inv" x="660" y="225" text-anchor="middle">it</text>
+<rect class="sa-idle" x="706" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok-off" x="744" y="225" text-anchor="middle">was</text>
+<rect class="sa-idle" x="790" y="200" width="76" height="40" rx="6"/>
+<text class="sa-tok-off" x="828" y="225" text-anchor="middle">tired</text>
+<rect class="sa-bar-lo" x="54" y="345.5" width="36" height="4.5" rx="2"/>
+<text class="sa-num" x="72" y="368" text-anchor="middle">3%</text>
+<rect class="sa-bar" x="138" y="272" width="36" height="78" rx="2"/>
+<text class="sa-num" x="156" y="368" text-anchor="middle">52%</text>
+<rect class="sa-bar-lo" x="222" y="344" width="36" height="6" rx="2"/>
+<text class="sa-num" x="240" y="368" text-anchor="middle">4%</text>
+<rect class="sa-bar-lo" x="306" y="341" width="36" height="9" rx="2"/>
+<text class="sa-num" x="324" y="368" text-anchor="middle">6%</text>
+<rect class="sa-bar-lo" x="390" y="347" width="36" height="3" rx="2"/>
+<text class="sa-num" x="408" y="368" text-anchor="middle">2%</text>
+<rect class="sa-bar" x="474" y="323" width="36" height="27" rx="2"/>
+<text class="sa-num" x="492" y="368" text-anchor="middle">18%</text>
+<rect class="sa-bar" x="558" y="327.5" width="36" height="22.5" rx="2"/>
+<text class="sa-num" x="576" y="368" text-anchor="middle">15%</text>
+<line x1="34" y1="350" x2="614" y2="350" stroke="var(--color-border, #DDE3EB)" stroke-width="1"/>
+<text class="sa-s" x="660" y="264" text-anchor="middle">the token being</text>
+<text class="sa-s" x="660" y="280" text-anchor="middle">processed</text>
+<text class="sa-s" x="786" y="264" text-anchor="middle">later tokens are</text>
+<text class="sa-s" x="786" y="280" text-anchor="middle">masked in a decoder</text>
+<text class="sa-el" x="34" y="400">Thicker line, higher weight. Weights are illustrative, and a real model runs many attention heads, each weighting differently.</text>
+</g>
+</svg>

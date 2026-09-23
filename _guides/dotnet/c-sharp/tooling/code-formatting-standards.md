@@ -2,7 +2,7 @@
 title: "Code Formatting and Style Enforcement"
 layout: guide
 category: ".NET & C#"
-subcategory: "Tooling"
+subcategory: "Tooling & Quality"
 description: "Enforcing consistent code style with .editorconfig, Roslyn analyzers, and dotnet format."
 tags: [c-sharp, dotnet, tooling, code-quality, maintainability, practical]
 ---

@@ -25,6 +25,7 @@
 {%- when "layering" -%}{%- assign fig_kind = "Layering" -%}
 {%- when "boundary" -%}{%- assign fig_kind = "Trust boundary" -%}
 {%- when "rules" -%}{%- assign fig_kind = "Rules" -%}
+{%- when "chart" -%}{%- assign fig_kind = "Chart" -%}
 {%- else -%}{%- assign fig_kind = "Diagram" -%}
 {%- endcase -%}
 {%- if include.mode == "section" -%}

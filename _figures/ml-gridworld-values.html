@@ -1,0 +1,117 @@
+---
+title: "State Values in a Small Grid"
+kind: chart
+system: machine-learning
+summary: "Each cell's value when reward is discounted by 0.9 per step."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="mlw-title mlw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mlw-title">Discounted state values in a grid with a wall</title>
+<desc id="mlw-desc">A grid of five columns and three rows has the goal in the top-right corner, worth plus ten, and a wall filling the top two cells of the middle column. Each other cell shows its value with a discount of 0.9 per step. Cells next to the goal are worth 10.0, cells two steps away 9.0, then 8.1, 7.3, 6.6, 5.9, 5.3, and 4.8 for the top-left corner. The cell just left of the wall is worth only 5.3 although it is close to the goal in a straight line, because the path around the wall is seven steps long. An arrow in each cell points toward the neighbor with the highest value.</desc>
+<style>
+.mlw-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mlw-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlw-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mlw-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlw-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mlw-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mlw-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mlw-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mlw-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlw-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mlw-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlw-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mlw-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mlw-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mlw-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mlw-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mlw-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlw-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mlw-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mlw-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mlw-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mlw-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mlw-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mlw-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mlw-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mlw-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mlw-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlw-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlw-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mlw-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mlw-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlw-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mlw-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mlw-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mlw-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlw-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mlw-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mlw-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mlw-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlw-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlw-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlw-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mlw-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mlw-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mlw-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="mlw-box" x="150" y="30" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="200" y="74" text-anchor="middle">4.8</text>
+<path class="mlw-stepl" d="M 186.0,104.0 L 214.0,104.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="150" y="130" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="200" y="174" text-anchor="middle">5.3</text>
+<path class="mlw-stepl" d="M 186.0,204.0 L 214.0,204.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="150" y="230" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="200" y="274" text-anchor="middle">5.9</text>
+<path class="mlw-stepl" d="M 186.0,304.0 L 214.0,304.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="250" y="30" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="300" y="74" text-anchor="middle">5.3</text>
+<path class="mlw-stepl" d="M 300.0,92.0 L 300.0,116.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="250" y="130" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="300" y="174" text-anchor="middle">5.9</text>
+<path class="mlw-stepl" d="M 300.0,192.0 L 300.0,216.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="250" y="230" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="300" y="274" text-anchor="middle">6.6</text>
+<path class="mlw-stepl" d="M 286.0,304.0 L 314.0,304.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-wall" x="350" y="30" width="100" height="100" rx="0"/>
+<text class="mlw-n-mute" x="400" y="84" text-anchor="middle">wall</text>
+<rect class="mlw-wall" x="350" y="130" width="100" height="100" rx="0"/>
+<text class="mlw-n-mute" x="400" y="184" text-anchor="middle">wall</text>
+<rect class="mlw-box" x="350" y="230" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="400" y="274" text-anchor="middle">7.3</text>
+<path class="mlw-stepl" d="M 386.0,304.0 L 414.0,304.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="450" y="30" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="500" y="74" text-anchor="middle">10.0</text>
+<path class="mlw-stepl" d="M 486.0,104.0 L 514.0,104.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="450" y="130" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="500" y="174" text-anchor="middle">9.0</text>
+<path class="mlw-stepl" d="M 500.0,216.0 L 500.0,192.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="450" y="230" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="500" y="274" text-anchor="middle">8.1</text>
+<path class="mlw-stepl" d="M 500.0,316.0 L 500.0,292.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-okbox" x="553" y="33" width="94" height="94" rx="4"/>
+<text class="mlw-n-ok" x="600" y="76" text-anchor="middle">GOAL</text>
+<text class="mlw-ok" x="600" y="96" text-anchor="middle">+10</text>
+<rect class="mlw-box" x="550" y="130" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="600" y="174" text-anchor="middle">10.0</text>
+<path class="mlw-stepl" d="M 600.0,216.0 L 600.0,192.0" marker-end="url(#mlw-p)"/>
+<rect class="mlw-box" x="550" y="230" width="100" height="100" rx="0"/>
+<text class="mlw-v" x="600" y="274" text-anchor="middle">9.0</text>
+<path class="mlw-stepl" d="M 600.0,316.0 L 600.0,292.0" marker-end="url(#mlw-p)"/>
+<text class="mlw-n" x="690" y="50">Setup</text>
+<text class="mlw-s" x="690" y="72">move one cell per step</text>
+<text class="mlw-s" x="690" y="90">+10 for reaching the goal</text>
+<text class="mlw-s" x="690" y="108">0 for every other move</text>
+<text class="mlw-s" x="690" y="126">discount γ = 0.9</text>
+<text class="mlw-n" x="690" y="170">Reading a cell</text>
+<text class="mlw-s" x="690" y="192">value = reward for the move</text>
+<text class="mlw-s" x="690" y="210">+ 0.9 × value of the cell</text>
+<text class="mlw-s" x="690" y="228">it leads to</text>
+<path class="mlw-stepl" d="M 690,262 H 716" marker-end="url(#mlw-p)"/>
+<text class="mlw-s" x="726" y="266">best move from here</text>
+</g>
+</svg>

@@ -9,7 +9,7 @@ tags: [rag, hybrid-search, chunking, reranking, embeddings, retrieval-evaluation
 
 **Retrieval-augmented generation (RAG)** answers a question by first searching a collection of documents for relevant passages, then giving those passages to a language model along with the question. The model's knowledge stays frozen at its training cutoff and never included your private data, but the retrieved passages can be current, proprietary, and cited.
 
-The term comes from [Lewis et al. (2020)](https://arxiv.org/abs/2005.11401){:target="_blank" rel="noopener noreferrer"}, which combined a model's parametric memory (what's stored in its weights) with a non-parametric memory (a searchable document index), and pointed to two advantages that still motivate RAG: answers can show their provenance, and knowledge can be updated by changing the index instead of retraining the model.
+The term comes from [Lewis et al. (2020)](https://arxiv.org/abs/2005.11401){:target="_blank" rel="noopener noreferrer"}, which combined a model's parametric memory, the knowledge stored in its weights, with a non-parametric memory in the form of a searchable document index. It pointed to two advantages that still motivate RAG: answers can show their provenance, and knowledge can be updated by changing the index instead of retraining the model.
 
 ## When RAG Is the Right Tool
 
@@ -31,29 +31,7 @@ Retrieval also isn't the tool for changing how a model behaves. RAG changes what
 
 A RAG system is two pipelines that share an index.
 
-```
-  INDEXING (offline, whenever content changes)
-
-  Source documents ──► Parse and clean ──► Chunk ──► Embed ──► Index
-                                                               (vectors, text,
-                                                                metadata, access
-                                                                rules)
-                                                                   │
-  QUERY (online, per request)                                      │
-                                                                   ▼
-  User question ──► Rewrite and embed ──► Retrieve candidates: vector search
-                    the query              + keyword search, filtered by
-                                           metadata and user permissions
-                                                   │
-                                                   ▼
-                                           Rerank ──► Top passages
-                                                          │
-                                                          ▼
-               Model ◄── Prompt: instructions + passages + question
-                 │
-                 ▼
-         Answer with citations
-```
+{% include figure.html id="llm-rag-pipelines" %}
 
 Each stage can lose the answer. Poor parsing drops a table, a chunk boundary splits a fact from its subject, the query uses different words from the document, or the right passage ranks just below the cutoff. Debugging a RAG system means working out which stage failed, which is covered at the end of this guide.
 
@@ -139,6 +117,8 @@ Retrieving too few chunks misses answers that rank just below the cutoff, while 
 ## Reranking
 
 Retrieval models are built for speed across millions of chunks. The [Sentence Transformers documentation](https://sbert.net/examples/cross_encoder/applications/README.html){:target="_blank" rel="noopener noreferrer"} explains the underlying trade-off. A **bi-encoder**, the kind of model used for embeddings, encodes the query and each document separately, so document vectors can be computed once and searched quickly. A **cross-encoder** reads the query and a document together and outputs a relevance score. That's more accurate, but it produces no reusable embedding and has to run once per query-document pair, which is far too slow to apply to a whole collection.
+
+{% include figure.html id="llm-bi-vs-cross-encoder" %}
 
 So the two are combined. Retrieve a broad candidate set cheaply (say, the top 100), rerank those candidates with a cross-encoder, and pass the best few to the model. A general-purpose LLM can also act as the reranker, which is flexible but slower and more expensive. Reranking adds latency to every query, so apply it where precision matters more than response time.
 

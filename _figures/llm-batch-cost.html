@@ -1,0 +1,77 @@
+---
+title: "Batch Cost: One Session Versus Isolated Tasks"
+kind: chart
+system: llm-systems
+summary: "Cumulative input cost across a 30-item batch, three ways."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="bcs-title bcs-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="bcs-title">Cumulative input cost of a batch run three ways</title>
+<desc id="bcs-desc">Cumulative input tokens billed across a 30-item batch. One long session grows quadratically, because each request resends every earlier output. The same session with prompt caching still grows quadratically, but the reused history is billed at a tenth of the rate, so the curve is lower. Isolating each task repeats the shared setup per task and does not grow with position. Illustrative sizes: a 5,000-token shared setup and 6,000-token outputs.</desc>
+<style>
+.bcs-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.bcs-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bcs-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.bcs-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bcs-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.bcs-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bcs-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.bcs-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bcs-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.bcs-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.bcs-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.bcs-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.bcs-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.bcs-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.bcs-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.bcs-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.bcs-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.bcs-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.bcs-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.bcs-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.bcs-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.bcs-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.bcs-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.bcs-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.bcs-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+
+.bcs-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.bcs-c1 { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.bcs-c2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.bcs-c3 { fill: none; stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.bcs-c4 { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2; stroke-dasharray: 3 3; }
+.bcs-area1 { fill: var(--color-primary, #1A5F8A); opacity: 0.14; }
+.bcs-area2 { fill: var(--color-accent, #A5486E); opacity: 0.14; }
+.bcs-g { font-size: 11px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.bcs-dot { fill: var(--color-primary, #1A5F8A); }
+.bcs-dotx { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.bcs-prev { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 2; }
+.bcs-copy { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="bcs-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="bcs-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<path class="bcs-axis" d="M 110,40 V 340 H 710"/>
+<text class="bcs-el" x="710" y="374" text-anchor="end">items completed in the batch</text>
+<text class="bcs-el" x="102" y="40" text-anchor="end"></text>
+<text class="bcs-el" x="102" y="24">input billed (tokens)</text>
+<text class="bcs-el" x="102" y="344.0" text-anchor="end">0</text>
+<text class="bcs-el" x="102" y="236.85714285714286" text-anchor="end">1M</text>
+<text class="bcs-el" x="102" y="129.71428571428572" text-anchor="end">2M</text>
+<text class="bcs-el" x="110.0" y="356" text-anchor="middle">1</text>
+<text class="bcs-el" x="296.2068965517242" y="356" text-anchor="middle">10</text>
+<text class="bcs-el" x="503.10344827586204" y="356" text-anchor="middle">20</text>
+<text class="bcs-el" x="710.0" y="356" text-anchor="middle">30</text>
+<path class="bcs-c2" d="M 110.0,339.5 L 130.7,338.3 L 151.4,336.5 L 172.1,334.0 L 192.8,330.9 L 213.4,327.1 L 234.1,322.8 L 254.8,317.7 L 275.5,312.0 L 296.2,305.7 L 316.9,298.8 L 337.6,291.1 L 358.3,282.9 L 379.0,274.0 L 399.7,264.5 L 420.3,254.3 L 441.0,243.5 L 461.7,232.0 L 482.4,219.9 L 503.1,207.1 L 523.8,193.8 L 544.5,179.7 L 565.2,165.0 L 585.9,149.7 L 606.6,133.8 L 627.2,117.1 L 647.9,99.9 L 668.6,82.0 L 689.3,63.5 L 710.0,44.3"/>
+<path class="bcs-c1" d="M 110.0,339.5 L 130.7,338.8 L 151.4,338.0 L 172.1,337.2 L 192.8,336.3 L 213.4,335.3 L 234.1,334.3 L 254.8,333.2 L 275.5,332.1 L 296.2,330.9 L 316.9,329.6 L 337.6,328.3 L 358.3,326.9 L 379.0,325.4 L 399.7,323.9 L 420.3,322.3 L 441.0,320.6 L 461.7,318.9 L 482.4,317.1 L 503.1,315.2 L 523.8,313.3 L 544.5,311.3 L 565.2,309.3 L 585.9,307.2 L 606.6,305.0 L 627.2,302.8 L 647.9,300.5 L 668.6,298.1 L 689.3,295.7 L 710.0,293.2"/>
+<path class="bcs-c3" d="M 110.0,339.5 L 130.7,338.9 L 151.4,338.4 L 172.1,337.9 L 192.8,337.3 L 213.4,336.8 L 234.1,336.2 L 254.8,335.7 L 275.5,335.2 L 296.2,334.6 L 316.9,334.1 L 337.6,333.6 L 358.3,333.0 L 379.0,332.5 L 399.7,332.0 L 420.3,331.4 L 441.0,330.9 L 461.7,330.4 L 482.4,329.8 L 503.1,329.3 L 523.8,328.8 L 544.5,328.2 L 565.2,327.7 L 585.9,327.1 L 606.6,326.6 L 627.2,326.1 L 647.9,325.5 L 668.6,325.0 L 689.3,324.5 L 710.0,323.9"/>
+<text class="bcs-n-bad" x="722" y="42.28571428571428">One long session</text>
+<text class="bcs-s" x="722" y="58.28571428571428">quadratic</text>
+<text class="bcs-n" x="722" y="275.16785714285714">Same, with caching</text>
+<text class="bcs-s" x="722" y="291.16785714285714">still quadratic, smaller</text>
+<text class="bcs-g" x="722" y="335.92857142857144">Isolated per task</text>
+<text class="bcs-s" x="722" y="351.92857142857144">setup repeats, no growth</text>
+<text class="bcs-el" x="110" y="400">Illustrative: a 5,000-token shared setup and 6,000-token outputs, cache reads at a tenth of the input rate.</text>
+</g>
+</svg>

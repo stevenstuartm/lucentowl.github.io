@@ -2,7 +2,7 @@
 
 This guide covers format requirements, tagging, organization, and quality standards for study guides, plus the workflow for writing a new one and the quality checklist every guide must pass. Always also read [writing-standards.md](../skills/refine-prose/writing-standards.md) — the universal rules apply to all guide content.
 
-The [Quality Checklist](#quality-checklist) and [Standing Gotchas](#standing-gotchas) below are shared with [`guide-refinement-standard.md`](guide-refinement-standard.md). A new guide passes them before it is handed over, so it never needs a first refinement round; the refinement standard exists for re-checking existing guides as sources drift.
+The [Quality Checklist](#quality-checklist) and [Standing Gotchas](#standing-gotchas) below are shared with the two refinement standards: [`guide-refinement-standard.md`](guide-refinement-standard.md) (depth) and [`guide-presentation-standard.md`](guide-presentation-standard.md) (presentation). A new guide passes them before it is handed over, so it never needs a first refinement round. The depth standard exists for re-checking existing guides as sources drift, and the presentation standard for bringing them up to date as the writing and figure standards change.
 
 ---
 
@@ -112,6 +112,35 @@ Readers should learn things they didn't know and understand what they can do wit
 - Readers need to understand the subject matter before they can make informed decisions about applying it
 - When documenting a framework, explain its structure, components, and how it works BEFORE listing use cases
 
+### Build the Foundation Before the Jump
+
+Every concept a section uses must already be on the page, or be something the guide's reader can be assumed to bring. The author can't see this gap easily, because someone who knows the subject fills in the missing step without noticing. Find it by reading as the reader:
+
+- **List what each paragraph depends on.** Any term or idea that is introduced later, or never, is a jump. Machine Learning originally explained weights, hidden layers, and non-linear functions in its opening section, before it had said what a parameter or a loss was.
+- **A definition is not a foundation.** "The gradient of the loss says which direction each parameter should move" defines a term and still leaves the reader with nothing to hold onto. The foundation is the thing the definition is about: a loss the reader has seen computed, on a curve that has a slope.
+- **Order sections by dependency**, not by the subject's conventional taxonomy or its history. The conventional opener for machine learning (AI, then ML, then deep learning) puts the hardest idea first.
+- **Carry one worked example** through a fundamentals guide when its concepts are abstract and build on each other. Machine Learning's house-price table gives features, parameters, loss, trees, and networks one concrete thing to attach to, and later sections refer back to it instead of re-explaining. Don't force one onto a guide whose sections stand independently.
+- **The skill-level tag sets what counts as foundation.** A `fundamentals` guide assumes a working developer who is new to the domain. A `practical` or `advanced` guide may assume the domain's fundamentals, and it still has to build whatever is new at its own depth.
+
+### Show What the Reader Has to Picture
+
+Some concepts only land once the reader forms a mental picture: a line fitted through points, a curve with a lowest point, a boundary between two classes, a loop between two systems, a request crossing three trust zones. When the prose asks the reader to build that picture unaided, most readers won't, and the guide reads as abstract even when every sentence is correct. Draw the picture for them.
+
+A figure *can* be drawn for almost anything, so the decision is about whether it is prudent. Make that decision per topic, not per guide, and let three things drive it:
+
+- **The subject.** Some domains are made of shapes: geometry (fits, boundaries, distributions, curves), topology (networks, trust boundaries, containment), and motion (flows, loops, sequences between parts). Others are made of judgment, policy, and trade-offs, like leadership, governance, and most process guides. The first kind tends to need several figures. The second may need none, and a figure forced onto it is decoration.
+- **The depth.** A fundamentals guide is teaching the picture itself, so it has to show it. An advanced guide's reader already holds the basic picture, so draw only what is new at that depth. The same loss curve earns a figure in one guide and a sentence in another.
+- **The individual topic.** Test each section on its own. In Machine Learning, the loss, gradient descent, overfitting, and confusion-matrix sections needed pictures. The explainability and "when not to use it" sections did not, and they got none.
+
+**The test:** after reading only the prose, could a reader new to this topic sketch what the section describes? If the section describes a shape, a spatial relationship, or movement between parts, and the honest answer is no, the section needs a figure. If the section is a list, a set of steps, a comparison of attributes, or an argument, the answer is usually yes. Prose, a table, or a decision tree will then serve better than a figure.
+
+**Charts count.** A plotted chart (a fitted line, a loss curve, a decision boundary, clusters on a scatter plot) is a figure like any systems diagram, with `kind: chart`. Abstract, quantitative subjects need charts far more often than boxes and arrows, and they are the figures a reviewer is most likely to miss.
+
+**What a figure is never:**
+- A quota. There is no expected number per guide, and one guide's figure count is not a target for its siblings. Machine Learning needed twelve. A leadership guide may correctly have none.
+- A table or list restated with boxes, or prose labels joined by arrows.
+- A picture of a scope ladder or a nesting that one sentence states ("deep learning is a subset of machine learning, which is a subset of AI").
+
 **Link inline, not in separate sections**:
 - If you reference a specific tool, framework, organization, website, or resource in the content, provide an inline link where it's mentioned
 - Use descriptive link text so readers know what they're clicking on
@@ -165,13 +194,15 @@ Read .claude/content/study-guide-guide.md (the Quality Checklist and Standing Go
 
 1. Item 1 first. List every falsifiable claim, hard number, absolute, code sample, and "X vs Y" table in the guide. Verify each against a primary source with web research. For every named feature, confirm the source actually mentions it; absence is a finding.
 2. Run items 2-9 against the guide as written.
-3. Do not edit the file.
+3. Read it once more as a reader new to the domain at the guide's skill level. List every term or idea used before the guide introduces it, and every section that describes a shape, spatial relationship, or movement between parts with no figure. Also list every figure that only restates a table or a sentence.
+4. Do not edit the file.
 
 Report, most severe first:
 - Factual errors: quote, what the source says, source URL.
 - Unverifiable claims: quote, and what could be verified instead.
 - Missing material a practitioner would expect given the reader question.
 - Findings for items 2-9, each with the section it applies to.
+- Foundation jumps and missing or decorative figures from step 3, each with the section it applies to.
 - A verdict: "ready" only if there are no factual errors and no missing material.
 ```
 
@@ -189,7 +220,7 @@ Apply the findings, re-checking any that look wrong against the source rather th
 
 ### Done
 
-The guide is done when the last review returned "ready" and the mechanical checks pass. This is the same bar as `Complete` in the refinement standard. When handing it over, report any claims that were softened because they could not be verified; there is no plan document to record them in.
+The guide is done when the last review returned "ready" and the mechanical checks pass. This is the same bar as `Complete` in the depth refinement standard. When handing it over, report any claims that were softened because they could not be verified; there is no plan document to record them in.
 
 ---
 
@@ -212,11 +243,13 @@ Every guide passes this checklist, whether newly written or under refinement.
 
 **Order of operations:** run item 1 (correctness and completeness) **first** — it is the only pass that adds or rewrites content, and every later check has to operate on the corrected text, not the original. Items 2-7 then refine that content. The two front-matter items (8 and 9) run last so they confirm tags and description against the final content.
 
+**Content vs presentation.** Items 1, 3, and 7 are content items: they verify, add, or rewrite what a guide claims. Items 4, 5, 6, 8, and 9 are presentation items, as is item 2 within a single file. Item 2 checked against a topic ownership map is a content item. New guides run all nine. Refinement splits them: the [presentation pass](guide-presentation-standard.md) runs only the presentation items, and the [depth pass](guide-refinement-standard.md) runs the content items and then the presentation pass.
+
 1. **Factual correctness and completeness (verify against authoritative sources) — do this first.** Distinct from item 3's *pedagogical* gaps: this checks whether the guide's technical claims are actually true and current, and whether a materially important part of the topic is missing — not treating the prose as given. Web-research the guide's falsifiable claims against its authoritative sources (named in the plan document during a refinement pass): service limits, naming and character constraints, defaults, support matrices, feature availability and release/preview status, tier and pricing boundaries, and any hard number or absolute ("max 24 characters", "not supported", "always inherits", "only in the same region"). Prioritize claims that are (a) falsifiable, (b) consequential if a reader acts on them, or (c) prone to drift as the product evolves — don't spend the pass rubber-stamping prose that merely reads plausibly, and don't try to re-verify inherently stable conceptual framing. Correct stale or wrong content in place. Where a claim can't be confirmed against a source, soften it to what's verifiable rather than leaving an unverified absolute in place. **Completeness is judged at study-guide altitude, not doc-completeness** — flag only a missing piece a practitioner would reasonably expect given the guide's stated scope and description, not every edge case. Because this pass can add or modify content, run the remaining checks over whatever it produces.
 2. **Redundancy** — same fact, table, or explanation repeated across sections; consolidate or cross-reference within the same file. Where an ownership map exists, a guide that doesn't own a concept doesn't re-teach it.
-3. **Gaps** — missing explanation of a concept before it's prescribed; missing trade-offs; missing "why would I not use this." (Pedagogical completeness — whether concepts are introduced in a learnable order — as opposed to item 1's factual completeness.)
+3. **Gaps** — a concept used before it's introduced, or a section that jumps further than the page has prepared the reader for (apply [Build the Foundation Before the Jump](#build-the-foundation-before-the-jump) paragraph by paragraph); missing explanation of a concept before it's prescribed; missing trade-offs; missing "why would I not use this." (Pedagogical completeness — whether concepts are introduced in a learnable order — as opposed to item 1's factual completeness.)
 4. **Clarity** — dense prose that a comparison table or list would serve better; inconsistent structure vs. the guide's own sections.
-5. **Diagrams** — reserve for genuinely technical relationships and flows: network topology, request or traffic flow, data flow between components, reconciliation loops, hub-and-spoke topologies, auth and token exchange sequences. The bar is whether it depicts actual structure (branching, parallel components, directional flow between distinct systems) that prose or a table can't already convey cleanly. Do **not** use a diagram to dress up a linear conceptual hierarchy, a scope or abstraction ladder, or anything that's really just a sequential list with arrows between prose labels — that's not practical output, it's decoration. If a sentence already says it clearly, don't diagram it. Skip where a table already conveys the comparison clearly. A diagram that clears this bar is drawn as a figure in `_figures/` and embedded with `{% include figure.html %}`, so other guides and a composite resource can reuse it (see [figure-guide.md](figure-guide.md)). ASCII is still acceptable for a small diagram tied to one paragraph that no other page would reuse.
+5. **Diagrams** — apply [Show What the Reader Has to Picture](#show-what-the-reader-has-to-picture) section by section, weighing the subject, the guide's depth, and each topic on its own. Two kinds qualify. Systems diagrams show structure and flow: network topology, request or traffic flow, data flow between components, reconciliation loops, hub-and-spoke topologies, auth and token exchange sequences. Charts show a shape: a fitted line, a loss curve, a decision boundary, a distribution. The bar is whether it depicts something the reader has to picture (branching, parallel components, directional flow between distinct systems, or a geometric relationship) that prose or a table can't already convey cleanly. Do **not** use a diagram to dress up a linear conceptual hierarchy, a scope or abstraction ladder, or anything that's really just a sequential list with arrows between prose labels — that's not practical output, it's decoration. If a sentence already says it clearly, don't diagram it. Skip where a table already conveys the comparison clearly. A diagram that clears this bar is drawn as a figure in `_figures/` and embedded with `{% include figure.html %}`, so other guides and a composite resource can reuse it (see [figure-guide.md](figure-guide.md)). ASCII is still acceptable for a small diagram tied to one paragraph that no other page would reuse.
 6. **Decision trees** — where a guide has 2+ comparison tables that all feed into "which option do I pick," consider consolidating into one ASCII decision tree.
 7. **Hierarchy and scope clarity.** When a guide introduces a resource or concept whose behavior or constraints depend on where it sits in the domain's containment hierarchy, state that scope explicitly and early rather than leaving the reader to infer it from a buried constraint bullet. The tell is a constraint bullet that only makes sense if you already know the scope — a line like "all members must be in the same VNet" tells a reader who already knows the answer, and tells nobody else. Apply this only where scope is genuinely ambiguous or consequential for how the reader would design or deploy something, not as boilerplate on every resource mentioned.
 8. Confirm front matter (tags, description) still matches content after edits.
@@ -252,6 +285,8 @@ Learned from completed passes. These hold regardless of domain, and they apply a
 ### On the refinement items
 
 - **Item 5 is a two-way check, not a filter.** The easy reading is to judge the diagrams already present, drop the decorative ones, and add nothing. That is half the check, and it lets a guide pass while every relationship it teaches stays in prose-and-table form. Ask both questions on every guide: does each existing diagram clear the bar, **and** does the guide explain a structure with no diagram? The second finds more than the first. Structures that qualify and are easy to miss: a control that enforces at two levels, two options whose traffic paths differ in shape rather than in attributes, and a topology whose behavior comes from routing rather than from the links drawn.
+- **A guide can be correct and still unlearnable.** Machine Learning had accurate claims, clean prose, and two ASCII diagrams, and it still read as abstract. The pictures it lacked were charts (a line through points, a loss curve, three fits of rising flexibility), which a check that looks only for systems diagrams passes over. Its sections also leaned on terms defined later. Neither problem is visible to someone who already knows the subject, which is why step 3 of the reviewer brief reads the guide as a newcomer would.
+- **Don't let one guide's figures set the bar for its siblings.** After a guide gains figures, the rest of its category can look bare next to it. Judge each sibling on its own subject, depth, and topics. Adding figures to match is the decoration this standard exists to prevent.
 - **Sibling links hide in two forms.** Grepping `](/study-guides/` finds only markdown links; links inside HTML callout blocks use `<a href="/study-guides/...">` and will be missed. Check both. Some cross-references are also unlinked prose ("covered in the X guide") — those are "where this fits" framing and go too.
 - **Some linter hits are ordinary technical phrases.** "In real time" trips the "real" pattern, and "failure mode" trips the AI-tell list even in a reliability guide, including in section titles like "Common Failure Modes". Rephrase ("continuously", "as it happens", "Where X Breaks", "each way an asset fails") rather than arguing with the linter.
 - **Run the linter even when the edit felt clean.** Heavy prose additions reliably introduce em-dashes and mis-ordered sections that are invisible while writing.
@@ -312,6 +347,7 @@ When writing about software architecture, use correct terminology:
 | Web Development | SEO & Web |
 | IoT | Foundations, Architecture & Data, Security & Firmware, Fleet Operations, Industrial IoT |
 | Leadership & Team Management | Engineering Leadership |
+| .NET & C# | Platform & Runtime, Language Fundamentals, Object-Oriented Programming, Async & Concurrency, Collections & Data, Core Libraries, Advanced Topics, IoT & Embedded, Tooling & Quality |
 
 **File organization conventions**:
 - Architecture guides: `_guides/architecture/`
@@ -322,6 +358,7 @@ When writing about software architecture, use correct terminology:
 - AI & ML guides: `_guides/ai/`
 - IoT guides: `_guides/iot/` (vendor-neutral; Azure IoT product guides live under `_guides/infrastructure/azure/`)
 - Leadership guides: `_guides/leadership/` (including architecture decision-making, which is a leadership topic rather than an architecture one)
+- .NET & C# guides: `_guides/dotnet/c-sharp/` (by subcategory: `foundations/`, `fundamentals/`, `oop/`, `async/`, `collections/`, `libraries/`, `advanced/`, `tooling/`) plus `_guides/dotnet/iot/` for the IoT & Embedded subcategory. `_guides/dotnet/asp/`, `_guides/dotnet/aspire/`, and `_guides/dotnet/winui/` belong to the separate ASP.NET Core and WinUI 3 categories
 - Top-level guides (observability, networking, etc.): `_guides/`
 
 **When to create new subcategories**:

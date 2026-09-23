@@ -1,0 +1,90 @@
+---
+title: "The Confusion Matrix for a Fraud Model"
+kind: structure
+system: machine-learning
+summary: "A thousand transactions sorted by prediction and truth."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="mlc-title mlc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mlc-title">A confusion matrix for a fraud model with precision and recall</title>
+<desc id="mlc-desc">Of 1,000 transactions, 10 are fraud. The matrix sorts them by what the model predicted and what was true. It caught 8 fraudulent transactions, missed 2, raised 4 false alarms on legitimate ones, and correctly left 986 legitimate ones alone. Precision reads down the predicted-fraud column: 8 of the 12 flagged were fraud, 67 percent. Recall reads across the actually-fraud row: 8 of the 10 frauds were caught, 80 percent. Accuracy is 99.4 percent, but a model that flags nothing scores 99.0 percent accuracy with 0 percent recall.</desc>
+<style>
+.mlc-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mlc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlc-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mlc-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mlc-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mlc-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mlc-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mlc-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mlc-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlc-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mlc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlc-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mlc-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mlc-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mlc-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mlc-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mlc-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mlc-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mlc-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mlc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mlc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mlc-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mlc-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mlc-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mlc-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mlc-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mlc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlc-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlc-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mlc-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mlc-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlc-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mlc-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mlc-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mlc-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mlc-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mlc-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mlc-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mlc-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mlc-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mlc-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mlc-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mlc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mlc-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mlc-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="mlc-hd" x="40" y="40">1,000 TRANSACTIONS, 10 OF THEM FRAUD</text>
+<text class="mlc-lab" x="350" y="96" text-anchor="middle">predicted fraud</text>
+<text class="mlc-lab" x="550" y="96" text-anchor="middle">predicted legitimate</text>
+<text class="mlc-lab" x="240" y="160" text-anchor="end">actually fraud</text>
+<text class="mlc-lab" x="240" y="250" text-anchor="end">actually legitimate</text>
+<rect class="mlc-okbox" x="252" y="112" width="196" height="86" rx="4"/>
+<text class="mlc-big" x="266" y="150">8</text>
+<text class="mlc-n-ok" x="266" y="176">fraud caught</text>
+<rect class="mlc-badbox" x="452" y="112" width="196" height="86" rx="4"/>
+<text class="mlc-big" x="466" y="150">2</text>
+<text class="mlc-n-bad" x="466" y="176">fraud missed</text>
+<rect class="mlc-badbox" x="252" y="202" width="196" height="86" rx="4"/>
+<text class="mlc-big" x="266" y="240">4</text>
+<text class="mlc-n-bad" x="266" y="266">false alarms</text>
+<rect class="mlc-box" x="452" y="202" width="196" height="86" rx="4"/>
+<text class="mlc-big" x="466" y="240">986</text>
+<text class="mlc-n" x="466" y="266">legitimate, left alone</text>
+<path class="mlc-stepl" d="M 252,300 V 310 H 448 V 300"/>
+<text class="mlc-lab" x="350" y="330" text-anchor="middle">precision = 8 / (8 + 4) = 67%</text>
+<text class="mlc-s" x="350" y="348" text-anchor="middle">of everything flagged, how much was fraud</text>
+<path class="mlc-stepl" d="M 660,112 H 670 V 198 H 660"/>
+<text class="mlc-lab" x="682" y="150">recall = 8 / (8 + 2)</text>
+<text class="mlc-lab" x="682" y="168">= 80%</text>
+<text class="mlc-s" x="682" y="186">of all fraud, how much</text>
+<text class="mlc-s" x="682" y="203">was caught</text>
+<text class="mlc-note" x="40" y="386">accuracy = (8 + 986) / 1,000 = 99.4%</text>
+<text class="mlc-bad" x="400" y="386">a model that flags nothing: 99.0% accuracy, 0% recall</text>
+</g>
+</svg>

@@ -3,27 +3,54 @@ title: "Machine Learning"
 layout: guide
 category: AI & Machine Learning
 subcategory: Machine Learning
-description: "Machine learning fundamentals: how models learn from examples, the three kinds of learning, evaluating a model without fooling yourself, explainability, and when machine learning is the wrong tool."
-tags: [supervised-learning, unsupervised-learning, reinforcement-learning, neural-networks, model-evaluation, fundamentals]
+description: "Machine learning fundamentals built up from one worked example: how a model learns from labeled data through loss and gradient descent, how neural networks extend the same idea, the three kinds of learning, evaluating a model without fooling yourself, explainability, and when machine learning is the wrong tool."
+tags: [supervised-learning, unsupervised-learning, reinforcement-learning, neural-networks, gradient-descent, model-evaluation, fundamentals]
 ---
 
-## How AI, Machine Learning, and Deep Learning Relate
+## What Machine Learning Is
 
-The three terms nest inside each other. **Artificial intelligence** is the broadest: any computer system performing tasks that normally take human intelligence, such as perception, language, and decision-making, whether it gets there through hand-written rules or learned behavior. **Machine learning** is the subset of AI where the system learns its behavior from data instead of following instructions a programmer wrote. **Deep learning** is the subset of machine learning that uses neural networks with many layers.
+### Rules Written by Hand Versus Rules Learned From Examples
 
-### Machine Learning Replaces Rules With Examples
+A traditional program encodes its rules directly. A spam filter written that way checks for known phrases, suspicious senders, and too many links, and every new spam tactic needs a new rule from a programmer. A machine learning spam filter is instead shown thousands of emails that people have already marked as spam or not spam, and a training algorithm works out for itself which patterns separate the two. The programmer's job shifts from writing the rules to choosing the examples, the learning method, and the way success is measured.
 
-A traditional program encodes the rules directly. A spam filter written that way checks for known phrases, suspicious senders, and too many links, and every new spam tactic needs a new rule. A machine learning spam filter is instead shown thousands of emails already marked spam or not spam, and it works out for itself which patterns separate the two. The programmer's job shifts from writing the rules to choosing the data, the learning method, and the way success is measured.
+{% include figure.html id="ml-rules-vs-examples" %}
 
-The output of that learning process is a **model**: a function with learned internal values that maps new inputs to predictions. The **algorithm** is the procedure that produces the model from data. A decision tree algorithm, run on two different datasets, produces two different models.
+The output of training is a **model**, and it takes the place the hand-written program used to hold. A new email goes in and an answer comes out, but the logic producing the answer was learned rather than typed.
 
-### Deep Learning Is Machine Learning With Many-Layered Neural Networks
+### A Worked Example: Predicting House Prices
 
-A neural network is a set of connected units arranged in layers. Each unit multiplies its inputs by weights, sums them, and passes the result through a non-linear function to the next layer. The design was loosely inspired by biological neurons, but the resemblance ends at the metaphor. A network with more than one hidden layer between input and output is called deep, and modern networks range from a handful of layers to hundreds.
+Most of this guide builds on one small problem. Suppose a dataset records houses that have already sold:
 
-Depth matters because each layer can build on the representations the previous one learned. In an image model, early layers tend to respond to edges, middle layers to textures and shapes, and later layers to whole objects. Nobody programs those intermediate features. They emerge from training, which is why deep learning dominates tasks like vision, speech, and language where hand-designing features is impractical.
+| Floor area (m²) | Bedrooms | Age (years) | Sale price |
+|---|---|---|---|
+| 60 | 1 | 45 | $150k |
+| 95 | 2 | 30 | $200k |
+| 130 | 3 | 12 | $250k |
+| 170 | 4 | 8 | $310k |
 
-### Narrow AI and Artificial General Intelligence
+Each row is one **example**. The columns describing the house are its **features**, the measurable inputs the model gets to see. The column the model has to predict is the **label**, the correct answer for that example. Once trained, the model receives the features of a house that hasn't sold and predicts its price.
+
+Choosing informative features has a large effect on what a model can learn. Floor area says a lot about price, while the color of the front door probably says little. Deriving useful features from raw data, such as turning a street address into a distance from the city center, is called feature engineering.
+
+Labels come from wherever ground truth exists. Here they come from historical sales records. Elsewhere they come from human annotators, or from later outcomes such as whether a customer actually churned. Obtaining labels is often the most expensive part of a project.
+
+### A Model Is a Function With Learned Parameters
+
+The simplest useful model for this data is a straight line relating floor area to price:
+
+```
+predicted price = w × floor area + b
+```
+
+`w` is how many thousand dollars each extra square meter adds, and `b` is a baseline price. These two numbers are the model's **parameters**, the values learned during training. Before training they're arbitrary and the line is a poor guess. Training adjusts them until the line runs close to the known sales. A model that uses more features gets one weight per feature (`w₁ × area + w₂ × bedrooms + w₃ × age + b`), and a large neural network has millions or billions of parameters, but each one is a learned number of the same kind.
+
+The **algorithm** is the procedure that produces the model from data. Fitting a line is one algorithm, and growing a decision tree is another. Run the same algorithm on two different datasets and it produces two different models.
+
+**Hyperparameters** are settings chosen before training that control how learning happens, such as how far training moves the parameters on each adjustment, or how many levels a decision tree may grow. Training finds the parameters. The practitioner picks the hyperparameters, usually by running experiments and comparing the results.
+
+### Machine Learning Within AI
+
+Three terms that are often used interchangeably nest inside each other. **Artificial intelligence** is the broadest: any computer system performing tasks that normally take human intelligence, such as perception, language, and decision-making, whether it gets there through hand-written rules or learned behavior. **Machine learning** is the subset of AI where the behavior is learned from data, as in the examples above. **Deep learning** is the subset of machine learning that uses neural networks with many layers, which this guide builds up to after covering how a simpler model learns.
 
 Every AI system in production today is **narrow** (sometimes called weak or applied) AI. It performs well within the tasks it was built or trained for and has no competence outside them. **Artificial general intelligence (AGI)** describes a system with general-purpose ability comparable to a human's across domains. There's no agreed definition or test for it, so claims that a system has reached it are contested.
 
@@ -31,69 +58,102 @@ Every AI system in production today is **narrow** (sometimes called weak or appl
 
 ## How a Model Learns
 
-### Features, Labels, and Parameters
+### Loss Measures How Wrong the Model Is
 
-**Features** are the measurable inputs describing each example. For predicting house prices, features might include floor area, number of bedrooms, location, and the age of the house. Choosing informative features has a large effect on what a model can learn, and the work of deriving them from raw data is called feature engineering.
+Training needs a way to score a guess. A **loss function** turns the model's errors across a set of examples into a single number, where lower is better. For house prices, a common choice is the average of the squared differences between predicted and actual prices. Squaring makes every error positive, and it makes one large miss count for far more than several small ones.
 
-**Labels** are the correct answers the model learns to predict, like the actual sale price of each house or the species name for each bird photo. Labels come from wherever ground truth exists: human annotators, historical records, or later outcomes such as whether a customer actually churned. Obtaining labels is often the most expensive part of a project.
+{% include figure.html id="ml-loss-line-fit" %}
 
-**Parameters** are the values the model learns during training, such as the weights in a neural network or the split points in a decision tree. **Hyperparameters** are settings chosen before training that control how learning happens, such as the learning rate, the maximum depth of a tree, or the number of clusters. Training finds the parameters. The practitioner, usually through experiments, picks the hyperparameters.
+Each dashed segment is one house's error, the gap between its actual price and the price the line predicts. The poor guess leaves long gaps and scores a large loss. The trained line runs through the middle of the points, and its loss is a small fraction of the first. Training is the search for the parameters that make this number as small as possible.
+
+### Gradient Descent Walks the Loss Downhill
+
+For a fixed dataset, every choice of `w` produces a loss. Plotting loss against `w` gives a curve with a lowest point, and that point is the best line. Training doesn't try every possible value. It starts somewhere, measures the slope of the curve where it stands, and takes a step downhill. That slope is the **gradient**, and repeating the measure-and-step is called **gradient descent**. A model with many parameters has a loss surface in many dimensions instead of a curve, but the gradient still says which direction lowers the loss fastest, and each step moves every parameter a little that way.
+
+The size of each step is set by the **learning rate**, the hyperparameter that controls how far each adjustment moves the parameters.
+
+{% include figure.html id="ml-gradient-descent" %}
+
+A learning rate that's too small makes training crawl, and it can stall before it gets near the bottom. One that's too large overshoots the lowest point on every step, so the loss bounces around or climbs until training diverges.
 
 ### The Training Loop
 
-Most models learn by repeatedly measuring how wrong they are and adjusting to be less wrong.
+Real datasets are too large to compute the loss over every example before every step, so training works through the data in small **batches**. Each pass of the loop predicts, measures, and adjusts:
 
-```
- ┌──────────────┐     ┌──────────────┐     ┌───────────────┐
- │  Batch of    │────►│    Model     │────►│  Predictions  │
- │  training    │     │ (parameters) │     └───────┬───────┘
- │  examples    │     └──────▲───────┘             │
- └──────────────┘            │                     ▼
-                      ┌──────┴───────┐     ┌───────────────┐
-                      │  Optimizer   │◄────│  Loss: how    │
-                      │  adjusts the │     │  far off the  │
-                      │  parameters  │     │  predictions  │
-                      └──────────────┘     │  are from the │
-                          gradient         │  labels       │
-                                           └───────────────┘
-```
+{% include figure.html id="ml-training-loop" %}
 
-A **loss function** turns prediction error into a single number, such as the average squared difference between predicted and actual prices. The **gradient** of the loss says which direction each parameter should move to reduce it. **Gradient descent** moves every parameter a small step in that direction, with the step size set by the learning rate, and then the loop repeats on the next batch. A learning rate that's too high makes the loss jump around or diverge. One that's too low makes training slow and can stall it.
+The model predicts prices for a batch of houses. The loss compares those predictions against the batch's labels. The **optimizer**, the component that carries out gradient descent, computes the gradient and updates each parameter, and the loop repeats with the next batch. One full pass over the training data is called an **epoch**, and training often runs for several.
 
-Not every algorithm uses gradient descent. Decision trees, for example, grow by greedily choosing the split that best separates the labels at each node. The pattern of fitting to data and measuring error against labels still holds.
+### Not Every Algorithm Uses Gradient Descent
 
-### Neural Networks and Backpropagation
+A **decision tree** learns a hierarchy of yes-or-no questions about the features. At each step the algorithm tries candidate splits, such as "floor area under 120 m²?", and keeps the one that best separates the labels, meaning the houses on each side of the split have prices as similar as possible. It then repeats the search inside each branch. A leaf predicts the average price of the training houses that ended up there.
 
-In a network with many layers, computing the gradient for every weight is the hard part. **Backpropagation** solves it by applying the chain rule backwards from the loss, layer by layer, so one backward pass yields every gradient.
+{% include figure.html id="ml-decision-tree" %}
 
-The ideas took decades to come together. The McCulloch-Pitts neuron model dates to 1943 and Frank Rosenblatt's perceptron to 1958. In 1969, Minsky and Papert's *Perceptrons* showed that a single-layer perceptron can only learn linearly separable functions (it can't learn XOR), which contributed to a collapse in neural network funding and interest. The reverse-mode differentiation behind backpropagation appeared in Seppo Linnainmaa's 1970 thesis, and Paul Werbos proposed applying it to neural networks in 1974. It was [Rumelhart, Hinton, and Williams' 1986 paper in Nature](https://www.nature.com/articles/323533a0){:target="_blank" rel="noopener noreferrer"} that demonstrated backpropagation training multi-layer networks and revived the field. The modern deep learning era took off after 2012, when a GPU-trained convolutional network (AlexNet) won the ImageNet image-recognition competition by a wide margin.
+Here the learned parameters are the questions, thresholds, and leaf values rather than weights. The pattern of fitting to training data and measuring error against labels still holds.
 
 ### Training and Inference
 
-**Training** is the loop above, run until the model stops improving on data it hasn't trained on. It's the computationally expensive phase. **Inference** is using the finished model to make predictions on new inputs, with the parameters frozen. Inference is usually far cheaper per prediction, but it runs continuously in production, so for widely used models its total cost can exceed training's. Where inference runs (a cloud service, a server, a phone) depends on the model's size and the latency the application needs.
+**Training** is the loop above, run until the model stops improving on data it hasn't trained on. It's the computationally expensive phase. **Inference** is using the finished model to make predictions on new inputs, with the parameters frozen. Inference is usually far cheaper per prediction, but it runs continuously in production, so for widely used models its total cost can exceed training's. Whether inference runs in a cloud service, on a server, or on a phone depends on the model's size and the latency the application needs.
+
+---
+
+## Neural Networks and Deep Learning
+
+### One Unit Is a Weighted Sum With a Bend
+
+A neural network is built from simple units, and each unit does what the house-price line does. It multiplies each input by a weight and adds the results together with a bias, which plays the role of `b`. It then passes the total through an **activation function**, a fixed non-linear bend. A common choice called ReLU passes positive totals through unchanged and turns negative totals into zero.
+
+Units are arranged in **layers**. The input layer holds the features, the output layer produces the prediction, and the layers in between are called **hidden layers** because nothing outside the network sees their values directly. In the common fully connected arrangement, every unit feeds every unit in the next layer, and every one of those connections has its own weight.
+
+{% include figure.html id="ml-neural-network" %}
+
+The design was loosely inspired by biological neurons, but the resemblance ends at the metaphor.
+
+### Why the Bend Matters
+
+Without the activation function, stacking layers would gain nothing. A weighted sum of weighted sums is still one weighted sum, so a hundred layers without bends can only draw the same straight line as one. The bend lets each layer reshape the output of the previous one, and with enough units a network can approximate curved relationships, such as a price that rises steeply with floor area up to a point and then levels off.
+
+This limit shaped the field's history. A single layer of units can only separate classes with a straight boundary, so it can't learn XOR, the function that's true when exactly one of its two inputs is true. Minsky and Papert's 1969 book *Perceptrons* showed this for the single-layer perceptron, which contributed to a collapse in neural network funding and interest. A network with one hidden layer and a non-linear activation can learn XOR.
+
+### Backpropagation Assigns Each Weight Its Share of the Error
+
+Gradient descent needs the gradient for every weight, and in a network with many layers that's the hard part. A weight in the first hidden layer affects the loss only through every layer after it. **Backpropagation** works backwards from the loss one layer at a time. It first computes how much each weight in the output layer contributed to the error, then reuses those results to compute the contributions of the layer before, and so on down to the input. Mathematically it's the chain rule from calculus applied layer by layer, and one backward pass yields the gradient for every weight.
+
+The pieces took decades to come together. The McCulloch-Pitts neuron model dates to 1943 and Frank Rosenblatt's perceptron to 1958. The reverse-mode differentiation behind backpropagation appeared in Seppo Linnainmaa's 1970 thesis, and Paul Werbos proposed applying it to neural networks in 1974. It was [Rumelhart, Hinton, and Williams' 1986 paper in Nature](https://www.nature.com/articles/323533a0){:target="_blank" rel="noopener noreferrer"} that demonstrated backpropagation training multi-layer networks and revived the field.
+
+### Deep Networks Learn Their Own Features
+
+A network with more than one hidden layer is called deep, and modern networks range from a handful of layers to hundreds. Depth matters because each layer can build on the representations the previous one learned. In an image model, early layers tend to respond to edges, middle layers to textures and shapes, and later layers to whole objects. Nobody programs those intermediate features. They emerge from training.
+
+That's the practical difference from the house-price example. A person can choose floor area and bedrooms as features, but nobody can hand-write useful features for raw pixels, audio, or text, which is why deep learning dominates vision, speech, and language. The modern deep learning era took off after 2012, when a GPU-trained convolutional network (AlexNet) won the ImageNet image-recognition competition by a wide margin.
 
 ---
 
 ## The Three Kinds of Learning
 
+The three kinds differ in what the training data tells the model. Supervised learning gets the correct answers, unsupervised learning gets no answers, and reinforcement learning gets a score for its own actions.
+
+{% include figure.html id="ml-learning-tasks" %}
+
 ### Supervised Learning
 
-The model learns from examples paired with correct answers, then predicts answers for new examples. Two task types cover most uses:
+The house-price model is supervised. It learns from examples paired with correct answers, then predicts answers for new examples. Two task types cover most uses:
 
 - **Classification** predicts a category. Binary classification picks between two (spam or not spam, fraud or legitimate), and multiclass classification picks among several (which of ten handwritten digits, which product category).
-- **Regression** predicts a continuous number, like a price, a temperature, or delivery time.
+- **Regression** predicts a continuous number, like a price, a temperature, or a delivery time.
 
 Common algorithms trade interpretability, accuracy, and data requirements against each other:
 
 | Algorithm | How it works | Strengths | Watch out for |
 |---|---|---|---|
-| **Linear regression** | Fits a weighted sum of features to a numeric target | Fast, interpretable, a strong baseline | Can't capture non-linear relationships without engineered features |
-| **Logistic regression** | Fits a weighted sum and squashes it into a probability for classification | Interpretable, calibrated probabilities | Same linearity limit as linear regression |
-| **Decision tree** | Learns a hierarchy of if/then splits on features | Easy to visualize and explain | A single deep tree overfits readily |
+| **Linear regression** | Fits a weighted sum of features to a numeric target, like the house-price line | Fast, interpretable, a strong baseline | Only fits straight-line relationships unless the features are transformed first |
+| **Logistic regression** | Fits a weighted sum and converts it into a probability between 0 and 1 for classification | Interpretable, and outputs a probability rather than only a label | Same straight-line limit as linear regression |
+| **Decision tree** | Learns a hierarchy of yes-or-no splits on features | Easy to visualize and explain | A single deep tree overfits readily |
 | **Random forest** | Averages many trees, each trained on random subsets of rows and features (Breiman, 2001) | Robust, little tuning needed | Harder to explain than one tree |
 | **Gradient-boosted trees** | Adds trees one at a time, each correcting the errors of those before | Frequently the most accurate choice on tabular data | More hyperparameters to tune, easier to overfit than a forest |
-| **Support vector machine** | Finds the boundary with the widest margin between classes, using the kernel trick for non-linear boundaries (Boser, Guyon, and Vapnik, 1992) and a soft margin for overlapping classes (Cortes and Vapnik, 1995) | Effective in high-dimensional spaces with modest data | Scales poorly to very large datasets |
-| **Neural network** | Layers of weighted units trained by backpropagation | Learns its own features from raw images, audio, and text | Needs a lot of data and compute; hard to interpret |
+| **Support vector machine** | Finds the boundary that leaves the widest gap between classes. The kernel trick lets it draw curved boundaries (Boser, Guyon, and Vapnik, 1992), and a soft margin tolerates overlapping classes (Cortes and Vapnik, 1995) | Effective with many features and modest data | Scales poorly to very large datasets |
+| **Neural network** | Layers of weighted units trained by backpropagation | Learns its own features from raw images, audio, and text | Needs a lot of data and compute, and is hard to interpret |
 
 Decision trees trace to the CART (Breiman et al., 1984) and ID3 (Quinlan, 1986) algorithms.
 
@@ -102,39 +162,39 @@ Decision trees trace to the CART (Breiman et al., 1984) and ID3 (Quinlan, 1986) 
 The model gets data with no labels and finds structure in it. Evaluating the result is harder than in supervised learning because there's no correct answer to compare against. A clustering is only as good as the decisions it supports, such as whether the customer segments it finds respond differently to marketing.
 
 - **Clustering** groups similar items together, such as segmenting customers by purchasing behavior. There's no single best clustering criterion, and different algorithms (k-means, density-based methods, hierarchical clustering) can produce very different groupings of the same data.
-- **Dimensionality reduction** compresses many features into fewer while keeping as much of the variation as possible. It's used to visualize high-dimensional data, speed up other algorithms, and remove noise. Principal component analysis (PCA) is the classic method.
+- **Dimensionality reduction** compresses many features into fewer while keeping as much of the variation between examples as possible. A dataset with fifty measurements per customer can be reduced to two combined measurements and plotted, and the plot can reveal groups that were invisible in the raw columns. It's also used to speed up other algorithms and remove noise. Principal component analysis (PCA) is the classic method.
 - **Anomaly detection** flags points that don't fit the patterns in the rest of the data, such as unusual transactions or sensor readings.
 
 **Self-supervised learning** sits between supervised and unsupervised. It creates labels from the data itself, for example by hiding a word in a sentence and training the model to predict it. It needs no human labeling, which makes training on enormous unlabeled datasets possible, and it's how large language models are pretrained.
 
 ### Reinforcement Learning
 
-An **agent** takes actions in an **environment**, observes the resulting **state**, and receives a **reward** signal. Nobody tells it the correct action. It learns a **policy** (a strategy for choosing actions) that maximizes the total reward it collects over time.
+An **agent** takes actions in an **environment**, observes the resulting **state**, and receives a **reward** signal. For a program learning to play a game, the agent is the player, the environment is the game, the state is the board, an action is a move, and the reward is points won or lost. Nobody tells the agent the correct move. It learns a **policy**, a strategy for choosing actions, that maximizes the total reward it collects over time.
 
-```
-                     action
-        ┌──────────────────────────────┐
-        │                              ▼
-  ┌─────┴─────┐                 ┌─────────────┐
-  │   Agent   │                 │ Environment │
-  │ (policy)  │                 │             │
-  └─────▲─────┘                 └──────┬──────┘
-        │      new state + reward      │
-        └──────────────────────────────┘
-```
+{% include figure.html id="ml-rl-loop" %}
 
-Two things make reinforcement learning harder than supervised learning. Rewards can arrive long after the actions that earned them, so the agent has to work out which earlier actions deserve credit. And the agent has to balance exploiting actions it knows pay off against exploring actions that might pay off more.
+Two things make reinforcement learning harder than supervised learning. Rewards can arrive long after the actions that earned them, as when a game is won or lost only at the end, so the agent has to work out which earlier moves deserve credit. And the agent has to balance exploiting moves it knows pay off against exploring moves that might pay off more.
 
-Much of reinforcement learning rests on the **Bellman equation**, from Richard Bellman's work on dynamic programming in the 1950s. It defines the value of a state recursively: the best achievable value is the immediate reward plus the discounted value of wherever the best action leads. The optimality form, as written in [Sutton and Barto's *Reinforcement Learning*](http://incompleteideas.net/book/the-book-2nd.html){:target="_blank" rel="noopener noreferrer"}, is:
+### State Values and the Bellman Equation
+
+To choose well, an agent needs to know how good each state is. A state's **value** is the total reward the agent can expect from that state onward if it acts well from there. A **discount factor**, written `γ` (gamma) and set between 0 and 1, makes a reward that arrives one step later worth less than the same reward now.
+
+Consider a small grid where the agent moves one cell per step and receives +10 for reaching the goal and nothing for any other move. With `γ = 0.9`, a cell next to the goal is worth 10, a cell two steps away is worth 0.9 × 10 = 9, three steps away 0.9 × 9 = 8.1, and so on.
+
+{% include figure.html id="ml-gridworld-values" %}
+
+Every cell's value is the reward for its best move plus the discounted value of the cell that move leads to. The wall makes the top-left cells worth little even though they're close to the goal in a straight line, because the way around the wall is long. Once the values are known, the policy follows directly. The agent moves toward the neighbor with the highest value.
+
+That recursive definition is the **Bellman equation**, from Richard Bellman's work on dynamic programming in the 1950s. The grid is deterministic, so each move has one outcome. Most environments are random, so the general form weighs every possible outcome of an action by its probability. The optimality form, as written in [Sutton and Barto's *Reinforcement Learning*](http://incompleteideas.net/book/the-book-2nd.html){:target="_blank" rel="noopener noreferrer"}, is:
 
 ```
 V*(s) = max over actions a of  Σ  p(s', r | s, a) × [ r + γ · V*(s') ]
                               s',r
 ```
 
-Here `p(s', r | s, a)` is the probability of reaching state `s'` with reward `r` after taking action `a` in state `s`, and the discount factor `γ` (between 0 and 1) sets how much future rewards count relative to immediate ones. The sum matters: environments are often random, so the equation weighs every possible outcome by its probability rather than assuming one. A related form defines Q-values, the value of taking a specific action in a state, which algorithms like Q-learning estimate directly.
+Here `V*(s)` is the best achievable value of state `s`, and `p(s', r | s, a)` is the probability of reaching state `s'` with reward `r` after taking action `a` in state `s`. The bracket is the grid calculation, reward plus discounted next value, and the sum averages it over every outcome the action could have. A related form defines Q-values, the value of taking a specific action in a state, which algorithms like Q-learning estimate directly.
 
-**Deep reinforcement learning** uses neural networks to approximate these value functions or the policy itself. DeepMind's AlphaGo combined networks trained partly through self-play reinforcement learning with tree search to beat top human Go players. Beyond games, reinforcement learning is applied to robotics control, resource allocation, and recommendation, and a variant that learns from human preference judgments is used to fine-tune large language models.
+**Deep reinforcement learning** uses neural networks to approximate these value functions or the policy itself, which matters when there are far too many states to list in a grid. DeepMind's AlphaGo combined networks trained partly through self-play reinforcement learning with tree search to beat top human Go players. Beyond games, reinforcement learning is applied to robotics control, resource allocation, and recommendation, and a variant that learns from human preference judgments is used to fine-tune large language models.
 
 ### Choosing a Learning Type
 
@@ -175,7 +235,9 @@ The validation set exists because tuning against the test set leaks information.
 
 ### Cross-Validation
 
-Holding out a separate validation set wastes data when data is scarce. **K-fold cross-validation** splits the training data into k parts, trains k times using k−1 parts, and validates on the remaining part each time. The reported score is the average across folds, which is also more stable than a single validation split. The test set still stays held out for the final check.
+Holding out a separate validation set wastes data when data is scarce. **K-fold cross-validation** splits the non-test data into k parts, trains k times on k−1 of the parts, and validates on the remaining part each time, so every example is used for validation exactly once. The reported score is the average across folds, which is also more stable than a single validation split. The test set still stays held out for the final check.
+
+{% include figure.html id="ml-data-splits" %}
 
 Random splitting assumes examples are independent. For time series, validation data has to come after the training data in time, or the model gets to learn from the future.
 
@@ -188,6 +250,10 @@ Random splitting assumes examples are independent. For time series, validation d
 - **Duplicates across splits.** Near-identical records in both training and test sets let the model score well by recognition rather than generalization.
 
 ### Underfitting and Overfitting
+
+A model can miss in two opposite directions, and the validation set is what tells them apart. The figure fits three models of increasing flexibility to the same training points, with held-out validation points drawn hollow.
+
+{% include figure.html id="ml-fit-spectrum" %}
 
 <div class="comparison">
 <div class="content-card content-card--accent">
@@ -208,11 +274,17 @@ Random splitting assumes examples are independent. For time series, validation d
 </div>
 </div>
 
-The two pull against each other, which is often described as the bias-variance trade-off. A simple model makes consistent but systematically wrong predictions (high bias). A very flexible model fits each training set closely but changes a lot between training sets (high variance). **Regularization** adds a penalty for complexity to the loss. L2 regularization (ridge) shrinks all weights toward zero, L1 (lasso) can drive some weights exactly to zero and so drops features, and elastic net combines the two. **Early stopping** ends training when the validation loss starts rising even as training loss keeps falling.
+The two pull against each other, which is often described as the bias-variance trade-off. A simple model makes consistent but systematically wrong predictions (high bias), like the straight line that can never follow the curve. A very flexible model fits each training set closely but would change a lot if trained on a different sample (high variance), like the curve that bends to hit every point.
+
+**Regularization** adds a penalty for complexity to the loss, so the model only grows large weights when they reduce the error enough to pay for themselves. L2 regularization (ridge) shrinks all weights toward zero, L1 (lasso) can drive some weights exactly to zero and so drops features, and elastic net combines the two. **Early stopping** ends training when the validation loss starts rising even as training loss keeps falling, which is the point where the model has started fitting noise in the training set.
 
 ### Choosing a Metric
 
-The metric decides what "good" means, and the default one is often the wrong one.
+The metric decides what "good" means, and the default one is often the wrong one. Classification metrics are easiest to see in a **confusion matrix**, which sorts every prediction by what the model said and what was actually true. Consider a fraud model scored on 1,000 transactions, 10 of which are fraudulent:
+
+{% include figure.html id="ml-confusion-matrix" %}
+
+Accuracy counts the whole diagonal as correct and looks excellent at 99.4%, but it hides the part that matters. A model that labels every transaction legitimate is 99% accurate and catches no fraud at all. Precision and recall each look at one edge of the matrix, and they trade against each other through the decision threshold. Lowering the score at which the model says "fraud" moves transactions out of the missed-fraud cell (higher recall) and into the false-alarm cell (lower precision), so picking the threshold is a business decision about which error costs more.
 
 | Metric | Measures | Use when |
 |---|---|---|
@@ -225,7 +297,7 @@ The metric decides what "good" means, and the default one is often the wrong one
 | **RMSE** | Square root of the average squared error | Large errors are disproportionately bad |
 | **R²** | Share of the target's variance the model explains | Comparing regression models on the same target |
 
-Accuracy misleads badly on imbalanced data. If 1% of transactions are fraudulent, a model that labels everything legitimate is 99% accurate and catches no fraud at all. Precision and recall also trade against each other through the decision threshold. Lowering the score at which a model says "fraud" finds more fraud (higher recall) and flags more legitimate transactions (lower precision), so picking the threshold is a business decision about which error costs more.
+The last three are for regression. RMSE is the square root of the loss the house-price line was trained on, which puts it back in the units of the prediction, thousands of dollars rather than squared thousands.
 
 ---
 
@@ -233,7 +305,7 @@ Accuracy misleads badly on imbalanced data. If 1% of transactions are fraudulent
 
 ### Black Boxes and Interpretable Models
 
-Some models explain themselves. A linear model's weights say how much each feature pushes the prediction, and a shallow decision tree can be read as a flowchart. Others, like large ensembles and deep neural networks, are **black boxes** that produce predictions without a readable account of why. The more expressive models tend to be the less interpretable ones, so a regulated decision such as a loan approval can favor a slightly less accurate model whose reasoning can be shown to an auditor or the person affected.
+Some models explain themselves. The house-price line's `w` says exactly how much each square meter adds, and a shallow decision tree like the one earlier can be read as a flowchart. Others, like large ensembles and deep neural networks, are **black boxes** that produce predictions without a readable account of why. The more expressive models tend to be the less interpretable ones, so a regulated decision such as a loan approval can favor a slightly less accurate model whose reasoning can be shown to an auditor or the person affected.
 
 ### Explanation Methods
 

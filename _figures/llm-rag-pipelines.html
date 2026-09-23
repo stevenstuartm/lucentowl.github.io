@@ -1,0 +1,97 @@
+---
+title: "Two RAG Pipelines Sharing One Index"
+kind: flow
+system: llm-systems
+summary: "Offline indexing and per-request querying, meeting at one index."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="rag-title rag-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="rag-title">The indexing and query pipelines of a RAG system</title>
+<desc id="rag-desc">Indexing runs offline whenever content changes: source documents are parsed and cleaned, chunked, embedded, and written to an index holding vectors, text, metadata, and access rules. The query pipeline runs per request: the user question is rewritten and embedded, candidates are retrieved from the index with vector and keyword search filtered by metadata and user permissions, reranked to the top passages, assembled into a prompt with instructions and the question, and sent to the model, which answers with citations.</desc>
+<style>
+.rag-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.rag-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rag-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.rag-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.rag-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.rag-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rag-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.rag-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rag-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rag-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.rag-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.rag-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.rag-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.rag-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.rag-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.rag-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.rag-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.rag-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.rag-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.rag-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.rag-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.rag-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.rag-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.rag-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.rag-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="rag-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="rag-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="rag-band" x="12" y="12" width="876" height="160" rx="8"/>
+<text class="rag-hd" x="28" y="34">INDEXING · OFFLINE, WHENEVER CONTENT CHANGES</text>
+<rect class="rag-band" x="12" y="190" width="876" height="268" rx="8"/>
+<text class="rag-hd" x="28" y="212">QUERY · ONLINE, PER REQUEST</text>
+<rect class="rag-ext" x="28" y="56" width="148" height="64" rx="6"/>
+<text class="rag-t-ext" x="40" y="78">Source documents</text>
+<rect class="rag-box" x="202" y="56" width="148" height="64" rx="6"/>
+<text class="rag-t" x="214" y="78">Parse and clean</text>
+<text class="rag-s" x="214" y="96">keep structure</text>
+<rect class="rag-box" x="376" y="56" width="148" height="64" rx="6"/>
+<text class="rag-t" x="388" y="78">Chunk</text>
+<rect class="rag-box" x="550" y="56" width="148" height="64" rx="6"/>
+<text class="rag-t" x="562" y="78">Embed</text>
+<rect class="rag-sys" x="724" y="48" width="148" height="110" rx="6"/>
+<text class="rag-t-inv" x="736" y="70">Index</text>
+<text class="rag-k-inv" x="736" y="87">[Shared store]</text>
+<text class="rag-s-inv" x="736" y="105">vectors, text,</text>
+<text class="rag-s-inv" x="736" y="123">metadata, access</text>
+<text class="rag-s-inv" x="736" y="141">rules</text>
+<path class="rag-flow" d="M 176,88 H 196" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 350,88 H 370" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 524,88 H 544" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 698,88 H 718" marker-end="url(#rag-a)"/>
+<rect class="rag-box" x="28" y="236" width="148" height="64" rx="6"/>
+<text class="rag-t" x="40" y="258">User question</text>
+<rect class="rag-box" x="202" y="236" width="148" height="64" rx="6"/>
+<text class="rag-t" x="214" y="258">Rewrite and</text>
+<text class="rag-s" x="214" y="276">embed the query</text>
+<rect class="rag-box" x="376" y="230" width="496" height="76" rx="6"/>
+<text class="rag-t" x="388" y="252">Retrieve candidates</text>
+<text class="rag-s" x="388" y="270">vector search + keyword search, filtered by</text>
+<text class="rag-s" x="388" y="288">metadata and user permissions</text>
+<path class="rag-flow" d="M 176,268 H 196" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 350,268 H 370" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 798,158 V 224" marker-end="url(#rag-a)"/>
+<text class="rag-el" x="808" y="184">searched</text>
+<rect class="rag-box" x="724" y="356" width="148" height="64" rx="6"/>
+<text class="rag-t" x="736" y="378">Rerank</text>
+<rect class="rag-box" x="550" y="356" width="148" height="64" rx="6"/>
+<text class="rag-t" x="562" y="378">Top passages</text>
+<rect class="rag-box" x="376" y="356" width="148" height="76" rx="6"/>
+<text class="rag-t" x="388" y="378">Prompt</text>
+<text class="rag-s" x="388" y="396">instructions +</text>
+<text class="rag-s" x="388" y="414">passages + question</text>
+<rect class="rag-sys" x="202" y="356" width="148" height="64" rx="6"/>
+<text class="rag-t-inv" x="214" y="378">Model</text>
+<rect class="rag-box" x="28" y="356" width="148" height="64" rx="6"/>
+<text class="rag-t" x="40" y="378">Answer</text>
+<text class="rag-s" x="40" y="396">with citations</text>
+<path class="rag-flow" d="M 798,306 V 350" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 724,388 H 704" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 550,388 H 530" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 376,388 H 356" marker-end="url(#rag-a)"/>
+<path class="rag-flow" d="M 202,388 H 182" marker-end="url(#rag-a)"/>
+</g>
+</svg>

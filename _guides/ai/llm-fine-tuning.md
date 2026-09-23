@@ -81,7 +81,7 @@ It tends not to pay off when requirements change often, the task needs current o
 
 ### Full Fine-Tuning
 
-Full fine-tuning updates every weight in the model. It can make the largest changes, and it has the highest cost. Training needs memory not just for the weights but for their gradients and the optimizer's state. With the common mixed-precision Adam setup, that comes to about 16 bytes per parameter (the accounting used in Microsoft's [ZeRO paper](https://arxiv.org/abs/1910.02054){:target="_blank" rel="noopener noreferrer"}): 16-bit weights and gradients plus 32-bit master weights and two optimizer moments. A 7-billion-parameter model therefore needs around 112 GB for model state alone, before activations, which means multiple data-center GPUs. Full fine-tuning also produces a complete copy of the model for every variant you train, and it risks **catastrophic forgetting**, where performance on tasks outside the training data degrades.
+Full fine-tuning updates every weight in the model. It can make the largest changes, and it has the highest cost. Training needs memory not just for the weights but for their gradients and the optimizer's state. With the common mixed-precision Adam setup, Microsoft's [ZeRO paper](https://arxiv.org/abs/1910.02054){:target="_blank" rel="noopener noreferrer"} counts about 16 bytes per parameter: 16-bit weights and gradients plus 32-bit master weights and two optimizer moments. A 7-billion-parameter model therefore needs around 112 GB for model state alone, before activations, which means multiple data-center GPUs. Full fine-tuning also produces a complete copy of the model for every variant you train, and it risks **catastrophic forgetting**, where performance on tasks outside the training data degrades.
 
 ### LoRA
 
@@ -171,6 +171,8 @@ There's no universal number. Narrow formatting tasks can improve with a modest s
 | **Maximum sequence length** | Longest example processed | Examples beyond it are truncated, which can cut off the response being learned |
 
 ### Reading the Loss Curves
+
+{% include figure.html id="llm-loss-curves" %}
 
 | Pattern | Likely cause | Response |
 |---|---|---|

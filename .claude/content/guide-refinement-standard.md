@@ -1,6 +1,8 @@
-# Guide Refinement Standard
+# Guide Refinement Standard (Depth Pass)
 
-The reusable half of every study-guide refinement pass: what gets checked, in what order, and how to work through a batch. Domain specifics live in the plan document that accompanies each pass — see **The plan document** at the bottom for what belongs there instead of here.
+The reusable half of every study-guide depth pass: what gets checked, in what order, and how to work through a batch. A depth pass verifies facts, fills gaps, and restructures a block of guides. Domain specifics live in the plan document that accompanies each pass — see **The plan document** at the bottom for what belongs there instead of here.
+
+When the facts are not in question and a guide only needs to meet current form, tone, prose, and diagram standards, run the cheaper [presentation pass](guide-presentation-standard.md) instead. This standard runs that pass as the last step on every guide, so it never repeats the presentation checks itself.
 
 Standards in force for every edit made under this document: [`.claude/skills/refine-prose/writing-standards.md`](../skills/refine-prose/writing-standards.md) (always) and [`.claude/content/study-guide-guide.md`](study-guide-guide.md) (format, tagging, content philosophy, and the shared Quality Checklist and Standing Gotchas).
 
@@ -74,7 +76,14 @@ The map stays in the plan for the life of the pass, and Phase 1 checklist item 2
 
 ## Review checklist (apply to every guide)
 
-The checklist is the [Quality Checklist](study-guide-guide.md#quality-checklist) in `study-guide-guide.md`, shared with new-guide authoring so both hold guides to the same bar. Item numbers there are the ones plans and pre-flags refer to. Two refinement-specific additions:
+The checklist is the [Quality Checklist](study-guide-guide.md#quality-checklist) in `study-guide-guide.md`, shared with new-guide authoring so both hold guides to the same bar. Item numbers there are the ones plans and pre-flags refer to.
+
+A depth pass runs it in two parts per guide:
+
+1. **Content items:** 1 (factual correctness), 3 (gaps), 7 (hierarchy and scope), and 2 against the topic ownership map when one exists.
+2. **The [presentation pass](guide-presentation-standard.md)** over the result: items 2 (within the file), 4, 5, 6, 8, 9, out-of-scope links, and `/refine-prose`. Its "meaning does not change" rule applies only to that step. The content items before it are where meaning is allowed to change.
+
+Two refinement-specific additions:
 
 - **Item 1 records what it can't verify.** A claim softened because no source confirms it goes under **Unverified, left standing** in the plan. The corrections themselves are in the diff, so don't write them down anywhere (see Process below).
 - **Out-of-scope sibling links are judged against the pass's scope**, not just the subcategory: remove inline links to any guide the pass covers.
@@ -84,7 +93,7 @@ The checklist is the [Quality Checklist](study-guide-guide.md#quality-checklist)
 ## Process
 
 - **One guide at a time**, no parallel dispatch. The status column in the progress table is the single source of truth for where the pass is.
-- **Per guide:** run the checklist, apply the fixes, run `/refine-prose`, set status to Complete, move to the next row. Don't stop for approval between rows. No Jekyll build — content-only edits don't break the build.
+- **Per guide:** run the content items, apply the fixes, run the presentation pass, set status to Complete, move to the next row. Don't stop for approval between rows. No Jekyll build — content-only edits don't break the build.
 - **Never record what changed.** The progress table tracks status and nothing else, because the corrections are already in the diff and a per-guide changelog is dead weight. The only things that get written down are forward-looking:
   - a finding a *later, not-yet-done* row has to act on goes in **Open pre-flags**;
   - a fact that constrains every remaining guide goes in **Cross-guide facts in force**;
@@ -115,7 +124,7 @@ These are not stylistic preferences. Each one exists because something else in t
 - **Every heading below is present from the start, even when its section is empty.** A pass that never creates an **Unverified, left standing** heading will quietly leave unverified absolutes in the guides instead of softening them, because item 1's fallback has nowhere to write. Same for pre-flags. Create the headings when the plan is created, not when the first entry appears.
 - **Row numbers are assigned once and never reused or renumbered.** Pre-flags, cross-guide facts, and the unverified list all address rows by number, and those references outlive the rows they were written from. If a guide is added mid-pass, give it the next free number at the bottom of the table and note where it belongs in reading order — do not renumber to keep the table in config order.
 - **Status is exactly `Not started`, `In progress`, or `Complete`.** "Status is the single source of truth" only holds if the vocabulary is closed. No `Partial`, no `Done (tags only)` — a guide that had some items run and not others is `In progress`.
-- **`Complete` means all nine checklist items ran and `/refine-prose` came back clean.** Not "the diff looks substantial." Item 1 leaves no trace in a diff, so this status is the only record that it happened; setting it early destroys the information permanently.
+- **`Complete` means the content items ran and the presentation pass finished with `/refine-prose` clean.** Not "the diff looks substantial." Item 1 leaves no trace in a diff, so this status is the only record that it happened; setting it early destroys the information permanently.
 - **A pre-flag names a row number, not just a guide.** Guide names get remembered wrong and don't sort. `| 44 data-architecture |` is the form — number first, name as the human hint.
 - **Cross-guide facts lead with a bolded subject.** The section is read by scanning for a subject, not by reading top to bottom, and it grows past a screenful early in any real pass.
 
@@ -124,7 +133,7 @@ These are not stylistic preferences. Each one exists because something else in t
 1. Create `_drafts/<scope>-refinement-plan.md` from the skeleton below.
 2. Decide whether the pass needs **Phase 0** (see above). If it does, run Phase 0 through its gate before building the progress table, keep the **Topic ownership map** section in the plan, and build the table from the post-consolidation config. If it doesn't, delete that section from the skeleton.
 3. Build the progress table from `assets/data/study_guides_config.json`, in config order, one row per guide. That order is the consumption order.
-4. Write the scope sentence and name the sources. Leave the three tracking sections empty under their headings.
+4. Write the scope sentence and name the sources. Leave the three tracking sections empty under their headings, except for one import: if an earlier presentation pass over this scope left a `_drafts/<scope>-presentation-plan.md`, copy its **Suspect claims** rows into **Open pre-flags** by row number, then delete that file.
 5. Run the tag-frequency measurement for the category and record it under **Domain notes** — item 9 needs to know which tags are filler *here*, and that is a per-category fact.
 6. Start at row 1.
 

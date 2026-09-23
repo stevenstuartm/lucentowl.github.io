@@ -15,27 +15,7 @@ The [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/){:ta
 
 A context window has no privilege levels. The system prompt, the user's message, a retrieved document, a tool result, and the contents of a web page the agent just fetched all arrive as text in one sequence, and the model decides what to act on by reading it. Nothing in the architecture marks one region as trusted and another as data.
 
-```
-        UNTRUSTED SOURCES                        DOWNSTREAM SINKS
-        ─────────────────                        ────────────────
-
-  user message ──────┐                   ┌────► rendered in a browser
-  retrieved chunks ──┤                   │      (XSS)
-  tool results ──────┼──► ┌──────────┐ ──┼────► passed to a shell or
-  fetched web page ──┤    │ Context  │   │      eval (RCE)
-  file contents ─────┤    │ window   │   ├────► interpolated into SQL
-  another agent ─────┘    │          │   │      (injection)
-                          │ no       │   ├────► a tool call with
-  system prompt ────────► │ privilege│   │      real-world effect
-  (trusted, but not       │ levels   │   └────► a URL the client fetches
-   privileged by the      └──────────┘          (exfiltration)
-   architecture)               │
-                               ▼
-                        model output
-                     (untrusted; it was
-                      derived from all
-                      of the above)
-```
+{% include figure.html id="llm-injection-surface" %}
 
 Two consequences follow, and they organize the rest of this guide. Anything that reaches the context window can attempt to steer the model, so every input source is an attack surface. And anything the model produces was derived from those inputs, so model output is untrusted data wherever it is used.
 

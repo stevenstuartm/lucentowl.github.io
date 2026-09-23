@@ -1,0 +1,84 @@
+---
+title: "One Agent Cycle Across the Network"
+kind: dynamic
+system: llm-systems
+summary: "Tools run locally, inference runs remotely, and context crosses on every turn."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 616" role="img" aria-labelledby="agb-title agb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="agb-title">One agent loop cycle split across local execution and remote inference</title>
+<desc id="agb-desc">Steps 1, 2, 5, 6, and 9 run on the user's machine: the user provides a goal, the runtime assembles the initial context from the system prompt and goal, executes a tool locally such as reading file X from disk, appends the tool result to the context, and executes the next tool. Steps 3, 4, 7, and 8 run on the provider's servers: the model reasons about the goal, returns a tool call, sees the file contents and reasons about the next step, and returns the next tool call or a final response. Each crossing is an HTTPS request; the red rightward crossings are data leaving the machine, carrying the whole conversation so far.</desc>
+<style>
+.agb-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.agb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.agb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.agb-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.agb-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.agb-t { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.agb-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.agb-t-ext { font-size: 14px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.agb-t-bad { font-size: 14px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.agb-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.agb-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.agb-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.agb-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.agb-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.agb-k-inv { font-size: 10.5px; font-style: italic; fill: #E8F1F8; }
+.agb-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.agb-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.agb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.agb-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.agb-bad { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.agb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.agb-thin { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.agb-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.agb-bound { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 7 5; }
+.agb-life { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="agb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="agb-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="agb-band" x="12" y="12" width="420" height="566" rx="8"/>
+<rect class="agb-band" x="488" y="12" width="400" height="566" rx="8"/>
+<text class="agb-hd" x="28" y="36">LOCAL EXECUTION · USER'S MACHINE</text>
+<text class="agb-hd" x="504" y="36">REMOTE INFERENCE · PROVIDER</text>
+<path class="agb-bound" d="M 460,46 V 570"/>
+<text class="agb-n-mute" x="460" y="36" text-anchor="middle">HTTPS</text>
+<rect class="agb-box" x="60" y="56" width="300" height="44" rx="6"/>
+<text class="agb-t" x="72" y="78">1 · User provides goal</text>
+<rect class="agb-box" x="60" y="124" width="300" height="62" rx="6"/>
+<text class="agb-t" x="72" y="146">2 · Assemble initial context</text>
+<text class="agb-s" x="72" y="164">system prompt + user goal</text>
+<rect class="agb-sys" x="540" y="162" width="300" height="44" rx="6"/>
+<text class="agb-t-inv" x="552" y="184">3 · Model reasons about goal</text>
+<rect class="agb-sys" x="540" y="230" width="300" height="62" rx="6"/>
+<text class="agb-t-inv" x="552" y="252">4 · Model returns a tool call</text>
+<text class="agb-s-inv" x="552" y="270">“read file X”</text>
+<rect class="agb-box" x="60" y="268" width="300" height="62" rx="6"/>
+<text class="agb-t" x="72" y="290">5 · Execute tool locally</text>
+<text class="agb-s" x="72" y="308">read file X from disk</text>
+<rect class="agb-box" x="60" y="354" width="300" height="62" rx="6"/>
+<text class="agb-t" x="72" y="376">6 · Append tool result</text>
+<text class="agb-s" x="72" y="394">to the context</text>
+<rect class="agb-sys" x="540" y="392" width="300" height="62" rx="6"/>
+<text class="agb-t-inv" x="552" y="414">7 · Model sees file contents,</text>
+<text class="agb-s-inv" x="552" y="432">reasons about next step</text>
+<rect class="agb-sys" x="540" y="478" width="300" height="62" rx="6"/>
+<text class="agb-t-inv" x="552" y="500">8 · Returns next tool call</text>
+<text class="agb-s-inv" x="552" y="518">or a final response</text>
+<rect class="agb-box" x="60" y="496" width="300" height="62" rx="6"/>
+<text class="agb-t" x="72" y="518">9 · Execute next tool locally</text>
+<text class="agb-s" x="72" y="536">the cycle repeats</text>
+<path class="agb-flow" d="M 210,100 V 118" marker-end="url(#agb-a)"/>
+<path class="agb-badl" d="M 360,155 H 420 V 184 H 534" marker-end="url(#agb-x)"/>
+<path class="agb-flow" d="M 690,206 V 224" marker-end="url(#agb-a)"/>
+<path class="agb-flow" d="M 540,261 H 420 V 299 H 366" marker-end="url(#agb-a)"/>
+<path class="agb-flow" d="M 210,330 V 348" marker-end="url(#agb-a)"/>
+<path class="agb-badl" d="M 360,385 H 420 V 423 H 534" marker-end="url(#agb-x)"/>
+<path class="agb-flow" d="M 690,454 V 472" marker-end="url(#agb-a)"/>
+<path class="agb-flow" d="M 540,509 H 420 V 527 H 366" marker-end="url(#agb-a)"/>
+<text class="agb-bad" x="24" y="602">Red: a request leaving the machine, carrying the whole conversation so far.</text>
+<text class="agb-el" x="560" y="602">Blue: a response coming back.</text>
+</g>
+</svg>

@@ -757,11 +757,11 @@
     ".NET & C#": {
       "subcategories": [
         {
-          "name": "Foundations",
-          "description": "Essential programming concepts and terminology that underpin C# and modern software development",
+          "name": "Platform & Runtime",
+          "description": "How .NET turns source into a running process, and how that output is packaged, versioned, and resolved",
           "guides": [
-            "dotnet/c-sharp/foundations/programming-terminology.md",
-            "dotnet/c-sharp/foundations/compilation-and-runtime.md"
+            "dotnet/c-sharp/foundations/compilation-and-runtime.md",
+            "dotnet/c-sharp/foundations/assemblies-packages-and-targeting.md"
           ]
         },
         {
@@ -774,6 +774,7 @@
             "dotnet/c-sharp/fundamentals/methods-and-parameters.md",
             "dotnet/c-sharp/fundamentals/delegates-and-events.md",
             "dotnet/c-sharp/fundamentals/strings-and-text.md",
+            "dotnet/c-sharp/fundamentals/dates-times-and-numbers.md",
             "dotnet/c-sharp/fundamentals/exceptions-and-errors.md",
             "dotnet/c-sharp/fundamentals/attributes-and-reflection.md",
             "dotnet/c-sharp/fundamentals/memory-management.md",
@@ -847,9 +848,11 @@
           ]
         },
         {
-          "name": "Tooling",
-          "description": "Developer tooling for code quality, formatting, and project configuration",
+          "name": "Tooling & Quality",
+          "description": "Verifying, measuring, and enforcing quality in a .NET codebase",
           "guides": [
+            "dotnet/c-sharp/tooling/unit-testing-in-dotnet.md",
+            "dotnet/c-sharp/tooling/benchmarking-and-diagnostics.md",
             "dotnet/c-sharp/tooling/code-formatting-standards.md"
           ]
         }

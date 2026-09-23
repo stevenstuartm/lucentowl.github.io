@@ -3,7 +3,7 @@ title: "C# File System Operations"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "File and directory operations with System.IO including reading, writing, paths, and async file handling."
+description: "File and directory operations with System.IO including reading, writing, paths, async file handling, and binary read/write with BinaryWriter and BinaryReader."
 tags: [c-sharp, dotnet, file-io, streams, async, practical]
 ---
 
@@ -351,6 +351,127 @@ catch (IOException ex)
     // Other I/O error (file in use, disk full, etc.)
 }
 ```
+
+## Binary Serialization
+
+### BinaryWriter and BinaryReader
+
+For custom binary formats and protocol implementations.
+
+```csharp
+// Write binary data
+using var ms = new MemoryStream();
+using var writer = new BinaryWriter(ms);
+
+writer.Write(42);              // Int32 (4 bytes)
+writer.Write("hello");         // Length-prefixed string
+writer.Write(3.14159);         // Double (8 bytes)
+writer.Write(true);            // Boolean (1 byte)
+writer.Write((byte)255);       // Byte
+writer.Write(new byte[] { 1, 2, 3 });  // Raw bytes
+
+// Read binary data
+ms.Position = 0;
+using var reader = new BinaryReader(ms);
+
+int num = reader.ReadInt32();
+string str = reader.ReadString();
+double d = reader.ReadDouble();
+bool b = reader.ReadBoolean();
+byte by = reader.ReadByte();
+byte[] bytes = reader.ReadBytes(3);
+```
+
+### Custom Binary Serialization
+
+```csharp
+public class Player
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public float Health { get; set; }
+    public Vector3 Position { get; set; }
+
+    public void WriteTo(BinaryWriter writer)
+    {
+        writer.Write(Id);
+        writer.Write(Name);
+        writer.Write(Health);
+        writer.Write(Position.X);
+        writer.Write(Position.Y);
+        writer.Write(Position.Z);
+    }
+
+    public static Player ReadFrom(BinaryReader reader)
+    {
+        return new Player
+        {
+            Id = reader.ReadInt32(),
+            Name = reader.ReadString(),
+            Health = reader.ReadSingle(),
+            Position = new Vector3(
+                reader.ReadSingle(),
+                reader.ReadSingle(),
+                reader.ReadSingle())
+        };
+    }
+}
+
+// Usage
+using var stream = File.Create("player.dat");
+using var writer = new BinaryWriter(stream);
+player.WriteTo(writer);
+
+using var readStream = File.OpenRead("player.dat");
+using var reader = new BinaryReader(readStream);
+var loaded = Player.ReadFrom(reader);
+```
+
+### Binary vs JSON
+
+<div class="comparison">
+<div class="content-card content-card--accent">
+<h4>Binary Serialization</h4>
+<ul>
+<li><strong>Size:</strong> Compact</li>
+<li><strong>Speed:</strong> Faster</li>
+<li><strong>Readability:</strong> Not human-readable</li>
+<li><strong>Debugging:</strong> Difficult</li>
+<li><strong>Use case:</strong> Performance-critical, network protocols</li>
+</ul>
+</div>
+<div class="content-card content-card--accent-secondary">
+<h4>JSON Serialization</h4>
+<ul>
+<li><strong>Size:</strong> Larger (text-based)</li>
+<li><strong>Speed:</strong> Slower</li>
+<li><strong>Readability:</strong> Human-readable</li>
+<li><strong>Debugging:</strong> Easy</li>
+<li><strong>Use case:</strong> APIs, config files, data exchange</li>
+</ul>
+</div>
+</div>
+
+<div class="callout callout--tip">
+<p class="callout__title">When to Use Binary</p>
+<p>Use binary serialization only when size/speed justify the debugging difficulty. For most cases, prefer JSON for interoperability and maintainability.</p>
+</div>
+
+| Aspect | Binary | JSON |
+|--------|--------|------|
+| Size | Compact | Larger (text) |
+| Speed | Faster | Slower |
+| Readability | Not human-readable | Human-readable |
+| Debugging | Difficult | Easy |
+| Schema evolution | Manual versioning | Flexible |
+| Use case | Performance-critical, protocols | APIs, config, data exchange |
+
+```csharp
+// JSON alternative for most cases
+byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
+var data = JsonSerializer.Deserialize<MyData>(jsonBytes);
+```
+
 
 ## Key Takeaways
 

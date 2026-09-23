@@ -14,7 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
 | [`figure-guide.md`](.claude/content/figure-guide.md) | Drawing a diagram as a figure, composing figures into a composite resource, or embedding one in a guide |
-| [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Running a review-and-refine pass over an existing block of study guides — consolidation (Phase 0), batch process, and the structure of the accompanying plan doc in `_drafts/` |
+| [`guide-presentation-standard.md`](.claude/content/guide-presentation-standard.md) | Cheap refinement of existing guides — form, tone, prose, tables, diagrams, tags — without re-verifying facts. Use when a standard changed or a guide reads badly |
+| [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Depth refinement of a block of study guides — factual verification, gaps, consolidation (Phase 0), the plan doc in `_drafts/`. Runs the presentation standard as its last step. Use when facts may be stale or the guide set is rough |
 
 ### Content pipeline
 

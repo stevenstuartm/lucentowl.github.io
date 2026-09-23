@@ -28,7 +28,7 @@ The failure it exists to prevent: polishing prose on an argument that is about t
 | Asks "is this argument complete?" | Asks "is this argument well-said?" |
 | Presents options, author decides | Applies fixes directly |
 
-Scope is blog post drafts. Study guides have their own pass in [`guide-refinement-standard.md`](../content/guide-refinement-standard.md).
+Scope is blog post drafts. Study guides have their own passes in [`guide-presentation-standard.md`](../content/guide-presentation-standard.md) and [`guide-refinement-standard.md`](../content/guide-refinement-standard.md).
 
 ---
 

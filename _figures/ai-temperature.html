@@ -1,0 +1,102 @@
+---
+title: "Temperature"
+kind: structure
+system: ai-core
+summary: "One next-token distribution sharpened at low temperature, flattened at high."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 390" role="img" aria-labelledby="aitp-title aitp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aitp-title">Temperature rescaling a next-token distribution</title>
+<desc id="aitp-desc">Three bar charts of the same six candidate tokens, mat, floor, couch, bed, roof, and moon, at three temperatures. At low temperature, 0.2, mat takes almost all the probability. At temperature 1.0 the model's own distribution is used, with mat at 45 percent and the others trailing. At high temperature, 1.8, the bars flatten and unlikely tokens such as roof and moon gain probability. Probabilities are illustrative.</desc>
+<style>
+.tp-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.tp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.tp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.tp-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.tp-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.tp-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.tp-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.tp-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.tp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.tp-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.tp-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.tp-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.tp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.tp-dot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 2 4; }
+
+.tp-bar { fill: var(--color-primary, #1A5F8A); }
+.tp-bar-lo { fill: var(--color-primary, #1A5F8A); opacity: 0.4; }
+.tp-row { font-size: 13px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="tp-band" x="20" y="20" width="280" height="330" rx="8"/>
+<text class="tp-row" x="36" y="46">Low temperature (0.2)</text>
+<text class="tp-s" x="36" y="64">nearly always picks “mat”</text>
+<rect class="tp-bar" x="44" y="99.4624" width="30" height="190.538" rx="2"/>
+<text class="tp-num" x="59" y="93.4624" text-anchor="middle">95%</text>
+<text class="tp-el" x="59" y="308" text-anchor="middle">mat</text>
+<rect class="tp-bar-lo" x="86" y="281.524" width="30" height="8.47568" rx="2"/>
+<text class="tp-num" x="101" y="275.524" text-anchor="middle">4%</text>
+<text class="tp-el" x="101" y="308" text-anchor="middle">floor</text>
+<rect class="tp-bar-lo" x="128" y="289.115" width="30" height="0.884507" rx="2"/>
+<text class="tp-num" x="143" y="283.115" text-anchor="middle">&lt;1%</text>
+<text class="tp-el" x="143" y="308" text-anchor="middle">couch</text>
+<rect class="tp-bar-lo" x="170" y="289.903" width="30" height="0.0971122" rx="2"/>
+<text class="tp-num" x="185" y="283.903" text-anchor="middle">&lt;1%</text>
+<text class="tp-el" x="185" y="308" text-anchor="middle">bed</text>
+<rect class="tp-bar-lo" x="212" y="289.995" width="30" height="0.00513939" rx="2"/>
+<text class="tp-num" x="227" y="283.995" text-anchor="middle">&lt;1%</text>
+<text class="tp-el" x="227" y="308" text-anchor="middle">roof</text>
+<rect class="tp-bar-lo" x="254" y="290" width="30" height="1.6446e-06" rx="2"/>
+<text class="tp-num" x="269" y="284" text-anchor="middle">&lt;1%</text>
+<text class="tp-el" x="269" y="308" text-anchor="middle">moon</text>
+<line x1="38" y1="290" x2="282" y2="290" stroke="var(--color-border, #DDE3EB)" stroke-width="1"/>
+<rect class="tp-band" x="310" y="20" width="280" height="330" rx="8"/>
+<text class="tp-row" x="326" y="46">Temperature 1.0</text>
+<text class="tp-s" x="326" y="64">the model's own distribution</text>
+<rect class="tp-bar" x="334" y="200.87" width="30" height="89.1304" rx="2"/>
+<text class="tp-num" x="349" y="194.87" text-anchor="middle">45%</text>
+<text class="tp-el" x="349" y="308" text-anchor="middle">mat</text>
+<rect class="tp-bar-lo" x="376" y="242.174" width="30" height="47.8261" rx="2"/>
+<text class="tp-num" x="391" y="236.174" text-anchor="middle">24%</text>
+<text class="tp-el" x="391" y="308" text-anchor="middle">floor</text>
+<rect class="tp-bar-lo" x="418" y="259.565" width="30" height="30.4348" rx="2"/>
+<text class="tp-num" x="433" y="253.565" text-anchor="middle">15%</text>
+<text class="tp-el" x="433" y="308" text-anchor="middle">couch</text>
+<rect class="tp-bar-lo" x="460" y="270.435" width="30" height="19.5652" rx="2"/>
+<text class="tp-num" x="475" y="264.435" text-anchor="middle">10%</text>
+<text class="tp-el" x="475" y="308" text-anchor="middle">bed</text>
+<rect class="tp-bar-lo" x="502" y="279.13" width="30" height="10.8696" rx="2"/>
+<text class="tp-num" x="517" y="273.13" text-anchor="middle">5%</text>
+<text class="tp-el" x="517" y="308" text-anchor="middle">roof</text>
+<rect class="tp-bar-lo" x="544" y="287.826" width="30" height="2.17391" rx="2"/>
+<text class="tp-num" x="559" y="281.826" text-anchor="middle">1%</text>
+<text class="tp-el" x="559" y="308" text-anchor="middle">moon</text>
+<line x1="328" y1="290" x2="572" y2="290" stroke="var(--color-border, #DDE3EB)" stroke-width="1"/>
+<rect class="tp-band" x="600" y="20" width="280" height="330" rx="8"/>
+<text class="tp-row" x="616" y="46">High temperature (1.8)</text>
+<text class="tp-s" x="616" y="64">unlikely tokens gain ground</text>
+<rect class="tp-bar" x="624" y="226.031" width="30" height="63.9688" rx="2"/>
+<text class="tp-num" x="639" y="220.031" text-anchor="middle">32%</text>
+<text class="tp-el" x="639" y="308" text-anchor="middle">mat</text>
+<rect class="tp-bar-lo" x="666" y="244.734" width="30" height="45.2655" rx="2"/>
+<text class="tp-num" x="681" y="238.734" text-anchor="middle">23%</text>
+<text class="tp-el" x="681" y="308" text-anchor="middle">floor</text>
+<rect class="tp-bar-lo" x="708" y="254.786" width="30" height="35.214" rx="2"/>
+<text class="tp-num" x="723" y="248.786" text-anchor="middle">18%</text>
+<text class="tp-el" x="723" y="308" text-anchor="middle">couch</text>
+<rect class="tp-bar-lo" x="750" y="262.451" width="30" height="27.5494" rx="2"/>
+<text class="tp-num" x="765" y="256.451" text-anchor="middle">14%</text>
+<text class="tp-el" x="765" y="308" text-anchor="middle">bed</text>
+<rect class="tp-bar-lo" x="792" y="270.126" width="30" height="19.8744" rx="2"/>
+<text class="tp-num" x="807" y="264.126" text-anchor="middle">10%</text>
+<text class="tp-el" x="807" y="308" text-anchor="middle">roof</text>
+<rect class="tp-bar-lo" x="834" y="281.872" width="30" height="8.12788" rx="2"/>
+<text class="tp-num" x="849" y="275.872" text-anchor="middle">4%</text>
+<text class="tp-el" x="849" y="308" text-anchor="middle">moon</text>
+<line x1="618" y1="290" x2="862" y2="290" stroke="var(--color-border, #DDE3EB)" stroke-width="1"/>
+<text class="tp-el" x="20" y="376">The same six candidates for the next token after “The cat sat on the”, rescaled at three temperatures. Probabilities are illustrative.</text>
+</g>
+</svg>

@@ -121,7 +121,7 @@ For niche requirements (proprietary internal systems, specialized queuing, compl
 
 ## Configuration: Config-Driven vs. Code-Driven
 
-In mature systems, logging configuration is almost entirely config-driven. The CI/CD pipeline controls which providers are active, what log levels apply, and where logs go, not the application code. This is the same principle covered in the [Configuration and Options guide](/study-guides/dotnet/c-sharp/libraries/configuration-and-options.html): local files define structural defaults, and environment-specific overrides come from the deployment pipeline.
+In mature systems, logging configuration is almost entirely config-driven. The CI/CD pipeline controls which providers are active, what log levels apply, and where logs go, not the application code. The same principle governs configuration generally: local files define structural defaults, and environment-specific overrides come from the deployment pipeline.
 
 ### Why Config-Driven Matters
 

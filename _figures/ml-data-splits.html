@@ -1,0 +1,141 @@
+---
+title: "Holding Data Out for Evaluation"
+kind: structure
+system: machine-learning
+summary: "A train, validation, and test split, and five-fold cross-validation."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 390" role="img" aria-labelledby="mls-title mls-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="mls-title">A holdout split and five-fold cross-validation</title>
+<desc id="mls-desc">At the top, one dataset is divided into a training set of 70 percent that fits the parameters, a validation set of 15 percent that tunes and compares models, and a test set of 15 percent used for one final check. Below, five-fold cross-validation divides the non-test data into five parts. In each of five rounds a different part is used for validation and the other four for training, producing scores of 0.81, 0.84, 0.79, 0.83, and 0.83, which average to 0.82. The test set stays untouched until the very end.</desc>
+<style>
+.mls-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mls-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mls-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.mls-store { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.mls-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mls-wall { fill: var(--color-border, #DDE3EB); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.mls-okbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-green, #3C8D53); stroke-width: 2.5; }
+.mls-badbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.mls-val { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mls-t-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.mls-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mls-n-mute { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.mls-n-ok { font-size: 12px; font-weight: 700; fill: var(--color-green, #3C8D53); }
+.mls-n-bad { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.mls-n-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mls-big { font-size: 22px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mls-v { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.mls-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.mls-s-inv { font-size: 11.5px; fill: #FFFFFF; }
+.mls-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mls-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mls-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.mls-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.mls-ok { font-size: 11.5px; font-weight: 600; fill: var(--color-green, #3C8D53); }
+.mls-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mls-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.mls-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mls-badl { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mls-err { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mls-bound { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 7 5; }
+.mls-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mls-curve { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; }
+.mls-fit { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.mls-edge { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1.25; }
+.mls-edge-dk { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mls-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.mls-pt2 { fill: var(--color-accent, #A5486E); stroke: none; }
+.mls-pt3 { fill: var(--color-text-light, #4A5568); stroke: none; }
+.mls-hollow { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.mls-unit { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.mls-step { fill: var(--color-purple, #6B3FA0); stroke: none; }
+.mls-stepl { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; }
+</style>
+
+<defs>
+<marker id="mls-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="mls-p" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="mls-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="mls-hd" x="40" y="40">ONE HOLDOUT SPLIT</text>
+<rect class="mls-sys" x="40" y="54" width="560" height="44" rx="4"/>
+<text class="mls-n-inv" x="52" y="81">Training set 70%</text>
+<rect class="mls-val" x="600" y="54" width="120" height="44" rx="4"/>
+<text class="mls-n-inv" x="610" y="81">Validation 15%</text>
+<rect class="mls-okbox" x="722" y="55" width="118" height="42" rx="4"/>
+<text class="mls-n-ok" x="734" y="81">Test 15%</text>
+<text class="mls-s" x="40" y="118">fits the parameters</text>
+<text class="mls-s" x="600" y="118">tunes and compares</text>
+<text class="mls-s" x="722" y="118">one final check</text>
+<text class="mls-hd" x="40" y="170">FIVE-FOLD CROSS-VALIDATION ON THE NON-TEST DATA</text>
+<text class="mls-s" x="40" y="204">round 1</text>
+<rect class="mls-val" x="110" y="186" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="120" y="204">validate</text>
+<rect class="mls-sys" x="218" y="186" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="228" y="204">train</text>
+<rect class="mls-sys" x="326" y="186" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="336" y="204">train</text>
+<rect class="mls-sys" x="434" y="186" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="444" y="204">train</text>
+<rect class="mls-sys" x="542" y="186" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="552" y="204">train</text>
+<text class="mls-lab" x="662" y="204">0.81</text>
+<text class="mls-s" x="40" y="238">round 2</text>
+<rect class="mls-sys" x="110" y="220" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="120" y="238">train</text>
+<rect class="mls-val" x="218" y="220" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="228" y="238">validate</text>
+<rect class="mls-sys" x="326" y="220" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="336" y="238">train</text>
+<rect class="mls-sys" x="434" y="220" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="444" y="238">train</text>
+<rect class="mls-sys" x="542" y="220" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="552" y="238">train</text>
+<text class="mls-lab" x="662" y="238">0.84</text>
+<text class="mls-s" x="40" y="272">round 3</text>
+<rect class="mls-sys" x="110" y="254" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="120" y="272">train</text>
+<rect class="mls-sys" x="218" y="254" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="228" y="272">train</text>
+<rect class="mls-val" x="326" y="254" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="336" y="272">validate</text>
+<rect class="mls-sys" x="434" y="254" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="444" y="272">train</text>
+<rect class="mls-sys" x="542" y="254" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="552" y="272">train</text>
+<text class="mls-lab" x="662" y="272">0.79</text>
+<text class="mls-s" x="40" y="306">round 4</text>
+<rect class="mls-sys" x="110" y="288" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="120" y="306">train</text>
+<rect class="mls-sys" x="218" y="288" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="228" y="306">train</text>
+<rect class="mls-sys" x="326" y="288" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="336" y="306">train</text>
+<rect class="mls-val" x="434" y="288" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="444" y="306">validate</text>
+<rect class="mls-sys" x="542" y="288" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="552" y="306">train</text>
+<text class="mls-lab" x="662" y="306">0.83</text>
+<text class="mls-s" x="40" y="340">round 5</text>
+<rect class="mls-sys" x="110" y="322" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="120" y="340">train</text>
+<rect class="mls-sys" x="218" y="322" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="228" y="340">train</text>
+<rect class="mls-sys" x="326" y="322" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="336" y="340">train</text>
+<rect class="mls-sys" x="434" y="322" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="444" y="340">train</text>
+<rect class="mls-val" x="542" y="322" width="106" height="26" rx="3"/>
+<text class="mls-s-inv" x="552" y="340">validate</text>
+<text class="mls-lab" x="662" y="340">0.83</text>
+<path class="mls-axis" d="M 656,356 H 700"/>
+<text class="mls-lab" x="662" y="374">0.82</text>
+<text class="mls-s" x="560" y="374">average score</text>
+<rect class="mls-okbox" x="730" y="187" width="110" height="158" rx="4"/>
+<text class="mls-n-ok" x="742" y="250">Test set</text>
+<text class="mls-s" x="742" y="270">untouched until</text>
+<text class="mls-s" x="742" y="288">the very end</text>
+</g>
+</svg>

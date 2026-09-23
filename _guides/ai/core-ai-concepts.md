@@ -15,6 +15,8 @@ tags: [transformers, tokenization, context-window, sampling, embeddings, quantiz
 
 Modern LLMs are built on the transformer, introduced in the 2017 paper ["Attention Is All You Need"](https://arxiv.org/abs/1706.03762){:target="_blank" rel="noopener noreferrer"} (Vaswani et al.). Earlier language models, based on recurrent neural networks, read text one word at a time and struggled to carry information across long passages. The transformer's **self-attention** mechanism lets every position in a sequence draw directly on every other position, so a pronoun can attend to the noun it refers to fifty words back. Because attention is computed across the whole sequence at once rather than step by step, training parallelizes well on GPUs, which is what made training on internet-scale text practical.
 
+{% include figure.html id="ai-self-attention" %}
+
 | Component | Role |
 |---|---|
 | **Self-attention** | Lets each token weigh the relevance of every other token in the context |
@@ -28,28 +30,7 @@ A model stacks many of these layers. Most current LLMs use a decoder-only varian
 
 An LLM doesn't compose a whole answer and then output it. It predicts a probability for every possible next token, picks one, appends it to the input, and repeats.
 
-```
- ┌─────────────────────────┐
- │  Tokens so far          │◄──────────────────────────────┐
- │  (prompt + output)      │                               │
- └────────────┬────────────┘                               │
-              ▼                                            │
- ┌─────────────────────────┐                               │
- │  Transformer scores     │                               │
- │  every token in the     │                               │
- │  vocabulary             │                               │
- └────────────┬────────────┘                               │
-              ▼                                            │ append
- ┌─────────────────────────┐    ┌──────────────────────┐   │
- │  Scores become a        │───►│  Sample one token    │───┘
- │  probability            │    │  (temperature and    │
- │  distribution           │    │  top-p shape this)   │
- └─────────────────────────┘    └──────────┬───────────┘
-                                           │ stop token or
-                                           │ output limit reached
-                                           ▼
-                                        Response
-```
+{% include figure.html id="ai-generation-loop" %}
 
 Three consequences follow directly. Output streams token by token, which is why responses appear progressively. Generating is slower and more expensive per token than reading input, since each output token takes its own pass through the model. And the model has no separate step where it checks facts before committing to them. It produces the continuation that its training makes likely, which is usually right and occasionally fluent nonsense.
 
@@ -70,6 +51,8 @@ The later stages shape behavior far more than they add knowledge. What a model k
 ### What a Token Is
 
 Models don't read characters or words. They read **tokens**, which are chunks of text from a fixed vocabulary that usually holds tens of thousands to a few hundred thousand entries. Most tokenizers use subword schemes such as byte-pair encoding, so common words are often a single token, while rare words, names, and unusual strings split into several pieces. The same text tokenizes differently under different models.
+
+{% include figure.html id="ai-tokenization" %}
 
 ### Token Counts Depend on the Tokenizer
 
@@ -94,17 +77,15 @@ The gap between languages is larger still. [Petrov et al. (NeurIPS 2023)](https:
 
 The **context window** is the maximum number of tokens a model can work with in a single request. It isn't only the prompt. The system prompt, the conversation so far, any documents or tool results included, the new message, and the tokens the model generates in response (including any reasoning tokens) all have to fit. A request that fills the window with input leaves no room for the answer.
 
+{% include figure.html id="ai-context-budget" %}
+
 Current frontier models offer context windows from roughly 200,000 tokens to around a million, and smaller or older models often much less. These figures change with every model generation, so check the provider's current model documentation rather than relying on a remembered number.
 
 ### Every Request Resends the Conversation
 
-A model has no memory between requests. Chat feels continuous because the application sends the entire conversation again with each new message:
+A model has no memory between requests. Chat feels continuous because the application sends the entire conversation again with each new message.
 
-```
-Request 1:  [system] [user 1]                                          → reply 1
-Request 2:  [system] [user 1] [reply 1] [user 2]                       → reply 2
-Request 3:  [system] [user 1] [reply 1] [user 2] [reply 2] [user 3]    → reply 3
-```
+{% include figure.html id="ai-conversation-resend" %}
 
 Each request is larger than the last, so a long conversation costs more per message as it goes, and eventually it hits the context limit. Some APIs offer to hold conversation state on the server, but that changes who stores the history, not whether the model processes it. OpenAI's [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state){:target="_blank" rel="noopener noreferrer"}, for instance, states that when chaining responses by ID, all previous input tokens in the chain are still billed. Prompt caching can make the repeated portion cheaper and faster, but the tokens still count against the window.
 
@@ -133,6 +114,8 @@ The model produces a probability distribution over the next token. Sampling para
 
 Temperature rescales the distribution before sampling. Low temperature sharpens it toward the most likely tokens, so output becomes more focused and repeatable. High temperature flattens it, so less likely tokens get picked more often and output becomes more varied, then eventually incoherent.
 
+{% include figure.html id="ai-temperature" %}
+
 | Setting | Behavior | Typical use |
 |---|---|---|
 | **Low (near 0)** | Strongly favors the most likely tokens | Extraction, classification, code, factual answers |
@@ -147,6 +130,8 @@ Low temperature also doesn't prevent hallucination. It makes the model more cons
 
 Top-p (nucleus sampling) limits sampling to the smallest set of tokens whose probabilities add up to p. At 0.9, the model samples only from the tokens covering the top 90% of probability mass, cutting off the long tail of unlikely choices. Temperature and top-p both control randomness, and providers generally recommend adjusting one and leaving the other at its default. Some reasoning-capable models restrict or ignore these parameters, so check what a specific model accepts.
 
+{% include figure.html id="ai-top-p" %}
+
 ### Output Limits and Stop Sequences
 
 **Max output tokens** caps the length of a response. A response cut off at the limit ends mid-sentence, and APIs report that the limit was the reason it stopped, so check the stop reason instead of assuming the output is complete. **Stop sequences** end generation when the model produces a specified string, which is useful for structured formats. Some APIs also offer **frequency** and **presence penalties**, which discourage repeating tokens that have already appeared.
@@ -160,6 +145,8 @@ Top-p (nucleus sampling) limits sampling to the smallest set of tokens whose pro
 An **embedding model** converts text into a fixed-length list of numbers, a vector, positioned so that texts with similar meanings land near each other. "How do I reset my password?" and "I forgot my login credentials" share almost no words, but their embeddings are close, while "The weather is nice today" lands far away. Embedding models are separate from the models that generate text, and they output vectors, not words.
 
 This is what makes search by meaning possible. Embed a collection of documents once, embed each incoming query the same way, and the nearest document vectors are the most semantically related documents.
+
+{% include figure.html id="ai-embedding-space" %}
 
 ### Measuring Similarity
 
@@ -228,6 +215,8 @@ A **base model** is the output of pretraining alone and continues text rather th
 A model's **parameter count** is the number of learned weights. Within a model family, larger models are generally more capable and more expensive and slower to run. Closed-model providers usually don't publish parameter counts, so size comparisons are mostly possible among open-weight models, which commonly range from about one billion to hundreds of billions of parameters.
 
 **Mixture-of-experts (MoE)** models complicate the comparison. Instead of running every parameter for every token, a router activates a few specialized sub-networks per token. [DeepSeek-V3](https://arxiv.org/abs/2412.19437){:target="_blank" rel="noopener noreferrer"}, for example, has 671 billion total parameters but activates 37 billion per token. An MoE model runs with roughly the compute of its active parameters, but all of its parameters still have to be loaded into memory.
+
+{% include figure.html id="ai-mixture-of-experts" %}
 
 ### Multimodal Models
 

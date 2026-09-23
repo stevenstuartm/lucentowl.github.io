@@ -34,7 +34,7 @@ summary: "The five steps of one tick, in order."
 
 - **Filename is the id.** `<system prefix>-<topic>`, such as `gc-controller-tick` or `bd-ready-frontier`. Guides and composites reference it, so treat it as permanent, like any content filename.
 - **`title`**: the name shown above the embedded figure and as the composite's heading.
-- **`kind`**: drives the badge. One of `context`, `container`, `component`, `dynamic`, `deployment` (the C4 levels and supplementary views), or `state`, `graph`, `flow`, `structure`, `layering`, `boundary`, `rules`. Add a kind in both `_includes/figure.html` and `.figcheck.py` before using it.
+- **`kind`**: drives the badge. One of `context`, `container`, `component`, `dynamic`, `deployment` (the C4 levels and supplementary views), or `state`, `graph`, `flow`, `structure`, `layering`, `boundary`, `rules`, `chart` (a plotted chart such as a loss curve or scatter plot). Add a kind in both `_includes/figure.html` and `.figcheck.py` before using it.
 - **`system`**: the system the figure belongs to. Used for grouping, not rendering.
 - **`summary`**: a short phrase naming what the diagram shows, about **6 to 12 words**. The guide's prose carries the explanation, so the summary is a label beside the picture, not a substitute for the paragraph. Say the subject and the one thing that distinguishes it ("The five steps of one tick, in order.", "An order API's trust boundaries, with a threat on each crossing."). **Never open with "Why"**, never phrase it as the reason something is true, and don't stack clauses: a summary long enough to need the guide's context to parse leaves the reader worse off than a plain label. `title` is the plain name of the thing, not a clever phrase.
 - **Body**: exactly one `<svg>`, with no wrapper `<div>`. The include supplies the container and the horizontal scrolling.
@@ -50,6 +50,8 @@ The form rules in [domain-map-guide.md](domain-map-guide.md) apply: inline SVG, 
 - **Validate and look.** Run `python .svgcheck.py _figures/<id>.html` for geometry, then render it and look at it. The checker catches overflow and collisions but not a line that crosses a label.
 
 ### Granularity
+
+Whether a guide section earns a figure at all is decided by [Show What the Reader Has to Picture](study-guide-guide.md#show-what-the-reader-has-to-picture), which weighs the subject, the guide's depth, and the individual topic. This section covers how to split a figure once it has earned its place.
 
 One structural question per figure. A diagram that answers two questions is two figures: the routed-work sequence and the claim-tier rules started as one diagram and were split, so each can sit beside the paragraph it illustrates. A figure that only restates a table is a table, and belongs in the guide as one.
 

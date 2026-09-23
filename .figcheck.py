@@ -11,7 +11,7 @@ Pair it with `python .svgcheck.py _figures/*.html` for the geometry of each figu
 import glob, os, re, sys
 
 KINDS = {"context", "container", "component", "dynamic", "deployment", "state",
-         "graph", "flow", "structure", "layering", "boundary", "rules"}
+         "graph", "flow", "structure", "layering", "boundary", "rules", "chart"}
 REQUIRED = ("title", "kind", "system", "summary")
 
 def front_matter(path):

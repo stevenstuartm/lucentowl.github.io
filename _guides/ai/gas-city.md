@@ -8,9 +8,6 @@ tags: [gas-city, gas-town, multi-agent, orchestration, health-patrol, advanced]
 ---
 
 [Gas City](https://github.com/gastownhall/gascity){:target="_blank" rel="noopener noreferrer"} is an open-source toolkit for building systems that run many coding agents at once on long-lived engineering work. It does not supply a fixed team of agents. It supplies the machinery underneath one: durable work tracking, a supervisor that keeps agents running, a way to express multi-step methods that fan out across agents, and a configuration format for describing the team. Its [documentation](https://docs.gascity.com/){:target="_blank" rel="noopener noreferrer"} is the primary reference for everything below, and its [architecture notes](https://github.com/gastownhall/gascity/tree/main/engdocs/architecture){:target="_blank" rel="noopener noreferrer"} describe how each subsystem works in the code. By default, Gas City stores its work in [Beads](https://github.com/gastownhall/beads){:target="_blank" rel="noopener noreferrer"}, a dependency-aware issue tracker for agents.
-
-The general trade-offs of multi-agent systems, what parallel agents buy and what they cost, are covered in [AI Agents](/study-guides/ai/ai-agents.html).
-
 ---
 
 ## What Breaks When One Agent Becomes Twenty
@@ -106,9 +103,18 @@ Sessions are disposable by design. An agent with on-demand sessions spins them u
 
 ### Health Patrol Supervises Like Erlang
 
-Health patrol is the orchestrator's supervision logic, modeled on the Erlang/OTP supervisor. On every tick it looks for conditions including these. A session whose process is gone has crashed, and health patrol captures its terminal output for diagnosis before restarting it. A session with no activity past its idle timeout, which each agent opts into, is stalled. A session whose command or environment no longer matches configuration has drifted, which health patrol detects by comparing a hash of the session's command and environment with the current configuration. An agent that has exhausted its context can also ask to be restarted. Each one is corrected by restarting or replacing the session. Sessions that no longer belong to the configuration are drained gracefully when they are surplus pool members and stopped outright when they are true orphans.
+Health patrol is the orchestrator's supervision logic, modeled on the Erlang/OTP supervisor. On every tick it looks for conditions including these:
 
-The model is "let it crash." Agents are not expected to recover themselves. They die and are replaced. Restarts are one-for-one, in OTP terms: only the failed session restarts, with no cascade to agents that work alongside it. To stop a broken agent from restarting forever, health patrol counts restarts in a sliding window and quarantines an agent that reaches the limit (five restarts within an hour, by default) until the window passes. The crash counts, idle timers, and in-flight order state are all held in memory, following OTP's rule that a restarted supervisor starts its children's counts from zero, so quarantine resets if the orchestrator itself restarts.
+| Condition | How health patrol recognizes it |
+| --- | --- |
+| Crashed | The session's process is gone. Health patrol captures its terminal output for diagnosis before restarting it |
+| Stalled | No activity past the session's idle timeout, which each agent opts into |
+| Drifted | A hash of the session's command and environment no longer matches the current configuration |
+| Context exhausted | The agent asks to be restarted |
+
+Each one is corrected by restarting or replacing the session. Sessions that no longer belong to the configuration are drained gracefully when they are surplus pool members and stopped outright when they are true orphans.
+
+The model is "let it crash." Agents are not expected to recover themselves. They die and are replaced. Restarts are one-for-one in OTP terms, meaning only the failed session restarts, with no cascade to agents that work alongside it. To stop a broken agent from restarting forever, health patrol counts restarts in a sliding window and quarantines an agent that reaches the limit (five restarts within an hour, by default) until the window passes. The crash counts, idle timers, and in-flight order state are all held in memory, following OTP's rule that a restarted supervisor starts its children's counts from zero, so quarantine resets if the orchestrator itself restarts.
 
 {% include figure.html id="gc-health-patrol" %}
 
