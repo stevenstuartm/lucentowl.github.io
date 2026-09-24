@@ -1,0 +1,67 @@
+---
+title: "A Comparison Sort as a Decision Tree"
+kind: structure
+system: dsa
+summary: "The comparisons a sort makes on three elements, drawn as a tree with one leaf per possible order."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 442" role="img" aria-labelledby="dtr-title dtr-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="dtr-title">Decision tree of an insertion-style sort on three elements</title>
+<desc id="dtr-desc">A binary tree of comparisons for sorting a, b, and c. The root asks whether a is at most b. If yes, the next question is whether b is at most c: yes ends at the order a, b, c; no asks whether a is at most c, ending at a, c, b for yes and c, a, b for no. If a is more than b, the next question is whether a is at most c: yes ends at b, a, c; no asks whether b is at most c, ending at b, c, a for yes and c, b, a for no. The six leaves are the six possible orders of three elements. A binary tree of height 2 has at most 4 leaves, so at least one input needs 3 comparisons; two inputs finish after 2 and four take 3.</desc>
+<style>
+.dtr-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.dtr-leaf { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.dtr-qt { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.dtr-lt { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.dtr-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.dtr-el { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.dtr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.dtr-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="dtr-hd" x="40" y="30">ANY COMPARISON SORT ON a, b, c CAN BE DRAWN AS A TREE LIKE THIS</text>
+<path class="dtr-e" d="M 400,87.0 L 220,143.0"/>
+<text class="dtr-el" x="300.0" y="115.0" text-anchor="end">yes</text>
+<path class="dtr-e" d="M 400,87.0 L 580,143.0"/>
+<text class="dtr-el" x="500.0" y="115.0" text-anchor="start">no</text>
+<path class="dtr-e" d="M 220,177.0 L 120,233.0"/>
+<text class="dtr-el" x="160.0" y="205.0" text-anchor="end">yes</text>
+<path class="dtr-e" d="M 220,177.0 L 320,233.0"/>
+<text class="dtr-el" x="280.0" y="205.0" text-anchor="start">no</text>
+<path class="dtr-e" d="M 580,177.0 L 480,233.0"/>
+<text class="dtr-el" x="520.0" y="205.0" text-anchor="end">yes</text>
+<path class="dtr-e" d="M 580,177.0 L 680,233.0"/>
+<text class="dtr-el" x="640.0" y="205.0" text-anchor="start">no</text>
+<path class="dtr-e" d="M 320,267.0 L 250,323.0"/>
+<text class="dtr-el" x="275.0" y="295.0" text-anchor="end">yes</text>
+<path class="dtr-e" d="M 320,267.0 L 390,323.0"/>
+<text class="dtr-el" x="365.0" y="295.0" text-anchor="start">no</text>
+<path class="dtr-e" d="M 680,267.0 L 610,323.0"/>
+<text class="dtr-el" x="635.0" y="295.0" text-anchor="end">yes</text>
+<path class="dtr-e" d="M 680,267.0 L 750,323.0"/>
+<text class="dtr-el" x="725.0" y="295.0" text-anchor="start">no</text>
+<rect class="dtr-q" x="352.0" y="53.0" width="96" height="34" rx="6"/>
+<text class="dtr-qt" x="400" y="75" text-anchor="middle">a ≤ b ?</text>
+<rect class="dtr-q" x="172.0" y="143.0" width="96" height="34" rx="6"/>
+<text class="dtr-qt" x="220" y="165" text-anchor="middle">b ≤ c ?</text>
+<rect class="dtr-q" x="532.0" y="143.0" width="96" height="34" rx="6"/>
+<text class="dtr-qt" x="580" y="165" text-anchor="middle">a ≤ c ?</text>
+<rect class="dtr-leaf" x="72.0" y="233.0" width="96" height="34" rx="3"/>
+<text class="dtr-lt" x="120" y="255" text-anchor="middle">a, b, c</text>
+<rect class="dtr-q" x="272.0" y="233.0" width="96" height="34" rx="6"/>
+<text class="dtr-qt" x="320" y="255" text-anchor="middle">a ≤ c ?</text>
+<rect class="dtr-leaf" x="432.0" y="233.0" width="96" height="34" rx="3"/>
+<text class="dtr-lt" x="480" y="255" text-anchor="middle">b, a, c</text>
+<rect class="dtr-q" x="632.0" y="233.0" width="96" height="34" rx="6"/>
+<text class="dtr-qt" x="680" y="255" text-anchor="middle">b ≤ c ?</text>
+<rect class="dtr-leaf" x="202.0" y="323.0" width="96" height="34" rx="3"/>
+<text class="dtr-lt" x="250" y="345" text-anchor="middle">a, c, b</text>
+<rect class="dtr-leaf" x="342.0" y="323.0" width="96" height="34" rx="3"/>
+<text class="dtr-lt" x="390" y="345" text-anchor="middle">c, a, b</text>
+<rect class="dtr-leaf" x="562.0" y="323.0" width="96" height="34" rx="3"/>
+<text class="dtr-lt" x="610" y="345" text-anchor="middle">b, c, a</text>
+<rect class="dtr-leaf" x="702.0" y="323.0" width="96" height="34" rx="3"/>
+<text class="dtr-lt" x="750" y="345" text-anchor="middle">c, b, a</text>
+<text class="dtr-s" x="40" y="404">Each box asks one comparison, and each shaded leaf is the sorted order it concludes. The 3! = 6 possible input orders need 6 leaves.</text>
+<text class="dtr-s" x="40" y="422">A tree of height 2 holds at most 4 leaves, so some input must take 3 comparisons. Here, two orders finish after 2 and four take 3.</text>
+</g>
+</svg>

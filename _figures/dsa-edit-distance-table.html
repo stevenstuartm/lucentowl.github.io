@@ -1,0 +1,97 @@
+---
+title: "The Edit Distance Table"
+kind: structure
+system: dsa
+summary: "The dynamic programming table for turning horse into ros, with the path of edits traced back from the answer."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 392" role="img" aria-labelledby="edt-title edt-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="edt-title">Edit distance table for horse and ros</title>
+<desc id="edt-desc">A grid with the prefixes of horse down the side (empty, h, o, r, s, e) and the prefixes of ros across the top (empty, r, o, s). Row by row, the values are 0 1 2 3; 1 1 2 3; 2 2 1 2; 3 2 2 2; 4 3 3 2; 5 4 4 3. The bottom-right cell, 3, is the edit distance. A shaded path runs back from it to the top-left corner through the cells 3, 2, 2, 1, 1, 0, which spell out the edits: substitute h with r, keep o, delete r, keep s, delete e. A side panel shows that each cell is computed from its diagonal neighbor (a match or a substitution), the cell above (a deletion), or the cell to the left (an insertion). The first row and column are base cases, one edit per character.</desc>
+<style>
+.edt-cell { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #CBD5E0); stroke-width: 1.25; }
+.edt-base { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #CBD5E0); stroke-width: 1.25; }
+.edt-path { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.25; }
+.edt-cur { fill: var(--color-primary, #1A5F8A); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.25; }
+.edt-v { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.edt-v-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.edt-lab { font-size: 12px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.edt-ax { font-size: 14px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.edt-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.edt-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="edt-hd" x="40" y="30">EDIT DISTANCE FROM "horse" TO "ros"</text>
+<text class="edt-ax" x="181.0" y="68" text-anchor="middle">""</text>
+<text class="edt-ax" x="243.0" y="68" text-anchor="middle">r</text>
+<text class="edt-ax" x="305.0" y="68" text-anchor="middle">o</text>
+<text class="edt-ax" x="367.0" y="68" text-anchor="middle">s</text>
+<text class="edt-ax" x="136" y="105.0" text-anchor="end">""</text>
+<text class="edt-ax" x="136" y="145.0" text-anchor="end">h</text>
+<text class="edt-ax" x="136" y="185.0" text-anchor="end">o</text>
+<text class="edt-ax" x="136" y="225.0" text-anchor="end">r</text>
+<text class="edt-ax" x="136" y="265.0" text-anchor="end">s</text>
+<text class="edt-ax" x="136" y="305.0" text-anchor="end">e</text>
+<rect class="edt-path" x="150" y="80" width="62" height="40"/>
+<text class="edt-v-inv" x="181.0" y="105.0" text-anchor="middle">0</text>
+<rect class="edt-base" x="212" y="80" width="62" height="40"/>
+<text class="edt-v" x="243.0" y="105.0" text-anchor="middle">1</text>
+<rect class="edt-base" x="274" y="80" width="62" height="40"/>
+<text class="edt-v" x="305.0" y="105.0" text-anchor="middle">2</text>
+<rect class="edt-base" x="336" y="80" width="62" height="40"/>
+<text class="edt-v" x="367.0" y="105.0" text-anchor="middle">3</text>
+<rect class="edt-base" x="150" y="120" width="62" height="40"/>
+<text class="edt-v" x="181.0" y="145.0" text-anchor="middle">1</text>
+<rect class="edt-path" x="212" y="120" width="62" height="40"/>
+<text class="edt-v-inv" x="243.0" y="145.0" text-anchor="middle">1</text>
+<rect class="edt-cell" x="274" y="120" width="62" height="40"/>
+<text class="edt-v" x="305.0" y="145.0" text-anchor="middle">2</text>
+<rect class="edt-cell" x="336" y="120" width="62" height="40"/>
+<text class="edt-v" x="367.0" y="145.0" text-anchor="middle">3</text>
+<rect class="edt-base" x="150" y="160" width="62" height="40"/>
+<text class="edt-v" x="181.0" y="185.0" text-anchor="middle">2</text>
+<rect class="edt-cell" x="212" y="160" width="62" height="40"/>
+<text class="edt-v" x="243.0" y="185.0" text-anchor="middle">2</text>
+<rect class="edt-path" x="274" y="160" width="62" height="40"/>
+<text class="edt-v-inv" x="305.0" y="185.0" text-anchor="middle">1</text>
+<rect class="edt-cell" x="336" y="160" width="62" height="40"/>
+<text class="edt-v" x="367.0" y="185.0" text-anchor="middle">2</text>
+<rect class="edt-base" x="150" y="200" width="62" height="40"/>
+<text class="edt-v" x="181.0" y="225.0" text-anchor="middle">3</text>
+<rect class="edt-cell" x="212" y="200" width="62" height="40"/>
+<text class="edt-v" x="243.0" y="225.0" text-anchor="middle">2</text>
+<rect class="edt-path" x="274" y="200" width="62" height="40"/>
+<text class="edt-v-inv" x="305.0" y="225.0" text-anchor="middle">2</text>
+<rect class="edt-cell" x="336" y="200" width="62" height="40"/>
+<text class="edt-v" x="367.0" y="225.0" text-anchor="middle">2</text>
+<rect class="edt-base" x="150" y="240" width="62" height="40"/>
+<text class="edt-v" x="181.0" y="265.0" text-anchor="middle">4</text>
+<rect class="edt-cell" x="212" y="240" width="62" height="40"/>
+<text class="edt-v" x="243.0" y="265.0" text-anchor="middle">3</text>
+<rect class="edt-cell" x="274" y="240" width="62" height="40"/>
+<text class="edt-v" x="305.0" y="265.0" text-anchor="middle">3</text>
+<rect class="edt-path" x="336" y="240" width="62" height="40"/>
+<text class="edt-v-inv" x="367.0" y="265.0" text-anchor="middle">2</text>
+<rect class="edt-base" x="150" y="280" width="62" height="40"/>
+<text class="edt-v" x="181.0" y="305.0" text-anchor="middle">5</text>
+<rect class="edt-cell" x="212" y="280" width="62" height="40"/>
+<text class="edt-v" x="243.0" y="305.0" text-anchor="middle">4</text>
+<rect class="edt-cell" x="274" y="280" width="62" height="40"/>
+<text class="edt-v" x="305.0" y="305.0" text-anchor="middle">4</text>
+<rect class="edt-path" x="336" y="280" width="62" height="40"/>
+<text class="edt-v-inv" x="367.0" y="305.0" text-anchor="middle">3</text>
+<text class="edt-hd" x="470" y="90">EACH CELL COMES FROM ONE OF THREE</text>
+<rect class="edt-cell" x="500" y="120" width="80" height="44"/>
+<text class="edt-lab" x="540" y="147" text-anchor="middle">diagonal</text>
+<rect class="edt-cell" x="590" y="120" width="80" height="44"/>
+<text class="edt-lab" x="630" y="147" text-anchor="middle">above</text>
+<rect class="edt-cell" x="500" y="176" width="80" height="44"/>
+<text class="edt-lab" x="540" y="203" text-anchor="middle">left</text>
+<rect class="edt-cur" x="590" y="176" width="80" height="44"/>
+<text class="edt-v-inv" x="630" y="203" text-anchor="middle">d[i, j]</text>
+<text class="edt-s" x="470" y="256">From the diagonal: match (free) or substitute.</text>
+<text class="edt-s" x="470" y="274">From above: delete a character of "horse".</text>
+<text class="edt-s" x="470" y="292">From the left: insert a character of "ros".</text>
+<text class="edt-s" x="40" y="354">The shaded path walks back from the answer, 3, to the empty-string corner: substitute h with r, keep o, delete r, keep s, delete e.</text>
+<text class="edt-s" x="40" y="372">The first row and column are the base cases: turning a prefix into an empty string, or back, costs one edit per character.</text>
+</g>
+</svg>

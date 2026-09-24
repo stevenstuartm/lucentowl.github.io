@@ -1,0 +1,72 @@
+---
+title: "Backtracking Through Four Queens"
+kind: structure
+system: dsa
+summary: "The partial boards a backtracking search visits for four queens, with dead ends pruned and both solutions found."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 486" role="img" aria-labelledby="nqs-title nqs-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="nqs-title">The pruned search tree for the four-queens problem</title>
+<desc id="nqs-desc">A tree of partial placements for four queens on a 4 by 4 board, one queen per row. From the start, row 0 can take a queen in any of columns 0 to 3. Column 0 leads to row 1 columns 2 and 3. The row 1 queen in column 2 is a dead end with no safe square in row 2, and the one in column 3 leads to row 2 column 1, a dead end in row 3. Column 1 in row 0 leads to 3, then 0, then 2, a solution. Column 2 in row 0 leads to 0, then 3, then 1, the second solution. Column 3 mirrors column 0 and dead-ends. The search visits 16 partial boards, compared with 256 ways to place one queen in each row, and finds two solutions.</desc>
+<style>
+.nqs-n { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.nqs-root { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.nqs-dead { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.nqs-sol { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.nqs-v { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.nqs-v-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.nqs-t { font-size: 10px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.nqs-x { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.nqs-row { font-size: 11px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.nqs-e { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.nqs-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.nqs-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="nqs-hd" x="40" y="26">PLACING FOUR QUEENS, ONE ROW AT A TIME</text>
+<path class="nqs-e" d="M 450.0,77.0 L 186.0,121.0"/>
+<path class="nqs-e" d="M 186.0,155.0 L 120.0,199.0"/>
+<path class="nqs-e" d="M 186.0,155.0 L 252.0,199.0"/>
+<path class="nqs-e" d="M 252.0,233.0 L 252.0,277.0"/>
+<path class="nqs-e" d="M 450.0,77.0 L 384.0,121.0"/>
+<path class="nqs-e" d="M 384.0,155.0 L 384.0,199.0"/>
+<path class="nqs-e" d="M 384.0,233.0 L 384.0,277.0"/>
+<path class="nqs-e" d="M 384.0,311.0 L 384.0,355.0"/>
+<path class="nqs-e" d="M 450.0,77.0 L 516.0,121.0"/>
+<path class="nqs-e" d="M 516.0,155.0 L 516.0,199.0"/>
+<path class="nqs-e" d="M 516.0,233.0 L 516.0,277.0"/>
+<path class="nqs-e" d="M 516.0,311.0 L 516.0,355.0"/>
+<path class="nqs-e" d="M 450.0,77.0 L 714.0,121.0"/>
+<path class="nqs-e" d="M 714.0,155.0 L 648.0,199.0"/>
+<path class="nqs-e" d="M 648.0,233.0 L 648.0,277.0"/>
+<path class="nqs-e" d="M 714.0,155.0 L 780.0,199.0"/>
+<circle class="nqs-root" cx="450.0" cy="60" r="17"/><text class="nqs-t" x="450.0" y="64" text-anchor="middle">start</text>
+<circle class="nqs-n" cx="186.0" cy="138" r="17"/><text class="nqs-v" x="186.0" y="143" text-anchor="middle">0</text>
+<circle class="nqs-dead" cx="120.0" cy="216" r="17"/><text class="nqs-v" x="120.0" y="221" text-anchor="middle">2</text>
+<text class="nqs-x" x="120.0" y="249" text-anchor="middle">dead end</text>
+<circle class="nqs-n" cx="252.0" cy="216" r="17"/><text class="nqs-v" x="252.0" y="221" text-anchor="middle">3</text>
+<circle class="nqs-dead" cx="252.0" cy="294" r="17"/><text class="nqs-v" x="252.0" y="299" text-anchor="middle">1</text>
+<text class="nqs-x" x="252.0" y="327" text-anchor="middle">dead end</text>
+<circle class="nqs-n" cx="384.0" cy="138" r="17"/><text class="nqs-v" x="384.0" y="143" text-anchor="middle">1</text>
+<circle class="nqs-n" cx="384.0" cy="216" r="17"/><text class="nqs-v" x="384.0" y="221" text-anchor="middle">3</text>
+<circle class="nqs-n" cx="384.0" cy="294" r="17"/><text class="nqs-v" x="384.0" y="299" text-anchor="middle">0</text>
+<circle class="nqs-sol" cx="384.0" cy="372" r="17"/><text class="nqs-v-inv" x="384.0" y="377" text-anchor="middle">2</text>
+<circle class="nqs-n" cx="516.0" cy="138" r="17"/><text class="nqs-v" x="516.0" y="143" text-anchor="middle">2</text>
+<circle class="nqs-n" cx="516.0" cy="216" r="17"/><text class="nqs-v" x="516.0" y="221" text-anchor="middle">0</text>
+<circle class="nqs-n" cx="516.0" cy="294" r="17"/><text class="nqs-v" x="516.0" y="299" text-anchor="middle">3</text>
+<circle class="nqs-sol" cx="516.0" cy="372" r="17"/><text class="nqs-v-inv" x="516.0" y="377" text-anchor="middle">1</text>
+<circle class="nqs-n" cx="714.0" cy="138" r="17"/><text class="nqs-v" x="714.0" y="143" text-anchor="middle">3</text>
+<circle class="nqs-n" cx="648.0" cy="216" r="17"/><text class="nqs-v" x="648.0" y="221" text-anchor="middle">0</text>
+<circle class="nqs-dead" cx="648.0" cy="294" r="17"/><text class="nqs-v" x="648.0" y="299" text-anchor="middle">2</text>
+<text class="nqs-x" x="648.0" y="327" text-anchor="middle">dead end</text>
+<circle class="nqs-dead" cx="780.0" cy="216" r="17"/><text class="nqs-v" x="780.0" y="221" text-anchor="middle">1</text>
+<text class="nqs-x" x="780.0" y="249" text-anchor="middle">dead end</text>
+<text class="nqs-row" x="30" y="142">row 0</text>
+<text class="nqs-row" x="30" y="220">row 1</text>
+<text class="nqs-row" x="30" y="298">row 2</text>
+<text class="nqs-row" x="30" y="376">row 3</text>
+<text class="nqs-s" x="40" y="422">Each circle is a queen placed in that row, labeled with its column. A branch stops as soon as no column in the next row is safe.</text>
+<text class="nqs-s" x="40" y="440">The search visits 16 partial boards instead of the 256 complete ones, and finds the two solutions: columns 1, 3, 0, 2 and 2, 0, 3, 1.</text>
+<circle class="nqs-dead" cx="48" cy="464" r="8"/><text class="nqs-s" x="62" y="468">No safe square in the next row</text>
+<circle class="nqs-sol" cx="290" cy="464" r="8"/><text class="nqs-s" x="304" y="468">All four queens placed</text>
+</g>
+</svg>

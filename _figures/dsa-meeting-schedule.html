@@ -1,0 +1,73 @@
+---
+title: "Scheduling Meetings by Earliest Finish"
+kind: chart
+system: dsa
+summary: "Six meeting requests on a timeline, with the three that earliest-finish-first selects."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" role="img" aria-labelledby="mts-title mts-desc" style="width:100%; min-width:640px; height:auto; display:block;">
+<title id="mts-title">Six meetings on a timeline from 0 to 11, with A, D, and F selected</title>
+<desc id="mts-desc">Six meeting requests drawn as bars on a timeline from 0 to 11, in order of end time: A from 1 to 4, B from 3 to 5, C from 0 to 6, D from 5 to 7, E from 3 to 9, and F from 8 to 11. The greedy rule takes the meeting that ends earliest, A, which frees the room at 4. B, C, and E overlap a taken meeting and are skipped. D starts at 5, after 4, so it is taken, freeing the room at 7. F starts at 8 and is taken. The result is A, D, and F.</desc>
+<style>
+.mts-grid { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.mts-free { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.mts-pick { fill: var(--color-accent, #A5486E); stroke: var(--color-accent, #A5486E); stroke-width: 1.25; }
+.mts-skip { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.mts-lab { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.mts-lab-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.mts-note { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.mts-fl { font-size: 11px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.mts-t { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.mts-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.mts-s { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="mts-hd" x="40" y="30">SIX MEETING REQUESTS, SORTED BY END TIME</text>
+<path class="mts-grid" d="M 110,60 V 310"/>
+<text class="mts-t" x="110" y="328" text-anchor="middle">0</text>
+<path class="mts-grid" d="M 162,60 V 310"/>
+<text class="mts-t" x="162" y="328" text-anchor="middle">1</text>
+<path class="mts-grid" d="M 214,60 V 310"/>
+<text class="mts-t" x="214" y="328" text-anchor="middle">2</text>
+<path class="mts-grid" d="M 266,60 V 310"/>
+<text class="mts-t" x="266" y="328" text-anchor="middle">3</text>
+<path class="mts-grid" d="M 318,60 V 310"/>
+<text class="mts-t" x="318" y="328" text-anchor="middle">4</text>
+<path class="mts-grid" d="M 370,60 V 310"/>
+<text class="mts-t" x="370" y="328" text-anchor="middle">5</text>
+<path class="mts-grid" d="M 422,60 V 310"/>
+<text class="mts-t" x="422" y="328" text-anchor="middle">6</text>
+<path class="mts-grid" d="M 474,60 V 310"/>
+<text class="mts-t" x="474" y="328" text-anchor="middle">7</text>
+<path class="mts-grid" d="M 526,60 V 310"/>
+<text class="mts-t" x="526" y="328" text-anchor="middle">8</text>
+<path class="mts-grid" d="M 578,60 V 310"/>
+<text class="mts-t" x="578" y="328" text-anchor="middle">9</text>
+<path class="mts-grid" d="M 630,60 V 310"/>
+<text class="mts-t" x="630" y="328" text-anchor="middle">10</text>
+<path class="mts-grid" d="M 682,60 V 310"/>
+<text class="mts-t" x="682" y="328" text-anchor="middle">11</text>
+<path class="mts-free" d="M 318,54 V 310"/>
+<path class="mts-free" d="M 474,54 V 310"/>
+<rect class="mts-pick" x="162" y="70" width="156" height="26" rx="4"/>
+<text class="mts-lab-inv" x="172" y="88">A  1–4</text>
+<text class="mts-note" x="328" y="88">taken</text>
+<rect class="mts-skip" x="266" y="110" width="104" height="26" rx="4"/>
+<text class="mts-lab" x="276" y="128">B  3–5</text>
+<text class="mts-note" x="380" y="128">skipped: overlaps</text>
+<rect class="mts-skip" x="110" y="150" width="312" height="26" rx="4"/>
+<text class="mts-lab" x="120" y="168">C  0–6</text>
+<text class="mts-note" x="432" y="168">skipped: overlaps</text>
+<rect class="mts-pick" x="370" y="190" width="104" height="26" rx="4"/>
+<text class="mts-lab-inv" x="380" y="208">D  5–7</text>
+<text class="mts-note" x="484" y="208">taken</text>
+<rect class="mts-skip" x="266" y="230" width="312" height="26" rx="4"/>
+<text class="mts-lab" x="276" y="248">E  3–9</text>
+<text class="mts-note" x="588" y="248">skipped: overlaps</text>
+<rect class="mts-pick" x="526" y="270" width="156" height="26" rx="4"/>
+<text class="mts-lab-inv" x="536" y="288">F  8–11</text>
+<text class="mts-note" x="692" y="288">taken</text>
+<text class="mts-fl" x="318" y="50" text-anchor="middle">room free at 4</text>
+<text class="mts-fl" x="474" y="50" text-anchor="middle">free at 7</text>
+<text class="mts-s" x="40" y="360">Earliest finish first takes A, D, and F. Each meeting it skips overlaps one already taken.</text>
+</g>
+</svg>
