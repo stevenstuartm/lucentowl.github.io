@@ -2,7 +2,7 @@
 title: "AWS CDK for System Architects"
 layout: guide
 category: AWS
-subcategory: Developer Tools & CI/CD
+subcategory: Infrastructure as Code
 description: "Comprehensive guide to AWS Cloud Development Kit (CDK) covering infrastructure as code with programming languages, constructs, stacks, comparison with CloudFormation, integration patterns, and best practices for TypeScript, Python, and other supported languages"
 tags: [aws, cdk, infrastructure-as-code, cloudformation, typescript, python, iac, automation, fundamentals]
 ---

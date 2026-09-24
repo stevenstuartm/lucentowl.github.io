@@ -12,9 +12,15 @@ figures:
   - asp-endpoint-selection
   - asp-exception-reexecute
   - asp-route-selection
+  - asp-endpoint-filter-order
+  - asp-mvc-filter-pipeline
+  - asp-upload-paths
 tags: [diagrams, request-pipeline, hosting]
 related_guides:
   - /study-guides/dotnet/asp/aspnet-core-fundamentals.html
   - /study-guides/dotnet/asp/aspnet-middleware.html
   - /study-guides/dotnet/asp/aspnet-routing.html
+  - /study-guides/dotnet/asp/aspnet-minimal-apis.html
+  - /study-guides/dotnet/asp/aspnet-controller-apis.html
+  - /study-guides/dotnet/asp/aspnet-large-payloads.html
 ---

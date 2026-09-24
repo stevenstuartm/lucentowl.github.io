@@ -1,0 +1,67 @@
+---
+title: "A Frame's Back and Forward Stacks"
+kind: dynamic
+system: winui
+summary: "How Navigate and GoBack move pages between a frame's two stacks."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" role="img" aria-labelledby="wfs-title wfs-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wfs-title">How Navigate and GoBack move pages between a Frame's back stack and forward stack</title>
+<desc id="wfs-desc">Three rows show a Frame's state at three moments, with columns for the back stack, the current page, and the forward stack. In the first row, the back stack holds HomePage, the current page is OrdersPage, and the forward stack is empty. Calling Navigate to DetailPage moves OrdersPage onto the back stack, so the second row shows HomePage and OrdersPage in the back stack, DetailPage as the current page, and an empty forward stack. Calling GoBack then moves DetailPage onto the forward stack and takes OrdersPage off the back stack to become the current page, so the third row shows HomePage in the back stack, OrdersPage current, and DetailPage in the forward stack.</desc>
+<defs>
+<marker id="wfs-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.wfs-stack { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wfs-cur { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wfs-empty { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 4; }
+.wfs-col { fill: none; stroke: var(--color-border, #CBD5E0); stroke-width: 1; }
+.wfs-move { fill: none; stroke: var(--color-accent, #C0392B); stroke-width: 2; }
+.wfs-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wfs-t { font-size: 12px; fill: var(--color-text, #1A202C); }
+.wfs-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wfs-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wfs-op { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wfs-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wfs-hd" x="310" y="40" text-anchor="middle">BACKSTACK</text>
+<text class="wfs-hd" x="540" y="40" text-anchor="middle">CURRENT PAGE</text>
+<text class="wfs-hd" x="760" y="40" text-anchor="middle">FORWARDSTACK</text>
+
+<rect class="wfs-col" x="195" y="60" width="230" height="370" rx="6"/>
+<rect class="wfs-col" x="455" y="60" width="170" height="370" rx="6"/>
+<rect class="wfs-col" x="655" y="60" width="210" height="370" rx="6"/>
+
+<text class="wfs-k" x="30" y="129">start</text>
+<rect class="wfs-stack" x="205" y="105" width="100" height="36" rx="3"/><text class="wfs-t" x="255" y="128" text-anchor="middle">HomePage</text>
+<rect class="wfs-cur" x="470" y="105" width="140" height="36" rx="3"/><text class="wfs-n" x="540" y="128" text-anchor="middle">OrdersPage</text>
+<rect class="wfs-empty" x="670" y="105" width="180" height="36" rx="3"/><text class="wfs-k" x="760" y="128" text-anchor="middle">empty</text>
+
+<text class="wfs-op" x="30" y="194">Navigate(</text>
+<text class="wfs-op" x="30" y="210">DetailPage)</text>
+
+<rect class="wfs-stack" x="205" y="235" width="100" height="36" rx="3"/><text class="wfs-t" x="255" y="258" text-anchor="middle">HomePage</text>
+<rect class="wfs-stack" x="315" y="235" width="100" height="36" rx="3"/><text class="wfs-t" x="365" y="258" text-anchor="middle">OrdersPage</text>
+<rect class="wfs-cur" x="470" y="235" width="140" height="36" rx="3"/><text class="wfs-n" x="540" y="258" text-anchor="middle">DetailPage</text>
+<rect class="wfs-empty" x="670" y="235" width="180" height="36" rx="3"/><text class="wfs-k" x="760" y="258" text-anchor="middle">empty</text>
+
+<text class="wfs-op" x="30" y="332">GoBack()</text>
+
+<rect class="wfs-stack" x="205" y="365" width="100" height="36" rx="3"/><text class="wfs-t" x="255" y="388" text-anchor="middle">HomePage</text>
+<rect class="wfs-cur" x="470" y="365" width="140" height="36" rx="3"/><text class="wfs-n" x="540" y="388" text-anchor="middle">OrdersPage</text>
+<rect class="wfs-stack" x="670" y="365" width="100" height="36" rx="3"/><text class="wfs-t" x="720" y="388" text-anchor="middle">DetailPage</text>
+
+<path class="wfs-move" d="M520,141 C520,190 365,185 365,231" marker-end="url(#wfs-arrow)"/>
+<path class="wfs-move" d="M580,271 C580,320 720,315 720,361" marker-end="url(#wfs-arrow)"/>
+<path class="wfs-move" d="M365,271 C365,320 510,315 510,361" marker-end="url(#wfs-arrow)"/>
+
+<line class="wfs-move" x1="60" y1="468" x2="100" y2="468" marker-end="url(#wfs-arrow)"/>
+<text class="wfs-lg" x="112" y="472">a page entry moves</text>
+<rect class="wfs-cur" x="290" y="460" width="28" height="16" rx="3"/>
+<text class="wfs-lg" x="326" y="472">page shown in the frame</text>
+<rect class="wfs-stack" x="520" y="460" width="28" height="16" rx="3"/>
+<text class="wfs-lg" x="556" y="472">history entry (PageStackEntry)</text>
+</g>
+</svg>

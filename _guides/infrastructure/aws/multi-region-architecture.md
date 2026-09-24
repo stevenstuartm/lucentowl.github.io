@@ -2,7 +2,7 @@
 title: "Multi-Region Architecture on AWS for System Architects"
 layout: guide
 category: AWS
-subcategory: Architecture Patterns (Advanced)
+subcategory: Resilience
 description: "Comprehensive guide to multi-region AWS architectures covering active-active, active-passive, data replication, Route 53 routing, and cost optimization"
 tags: [aws, architecture, distributed-systems, scalability, reliability, multi-region, resilience, practical]
 ---

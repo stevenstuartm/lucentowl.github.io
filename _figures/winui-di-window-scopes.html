@@ -1,0 +1,60 @@
+---
+title: "One Service Scope per Window"
+kind: structure
+system: winui
+summary: "Shared singletons in the root, and each window's services in its own scope."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" role="img" aria-labelledby="wds-title wds-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wds-title">A root service provider shared by two windows, each with its own service scope</title>
+<desc id="wds-desc">At the top, the root provider, App.Current.Services, holds singletons such as IProductService, shared by every window. Below it are two document windows. Each window holds its own scope, created when the window opens, containing its NavigationService, DocumentSession, and view models. Each scope's services receive the shared singletons from the root. In each window, a page shown in the window's ContentFrame finds its window's scope by calling WindowScopes.For with its Frame. Closing a window disposes its scope and everything the scope created, while the root and its singletons remain.</desc>
+<style>
+.wds-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wds-root { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wds-win { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.wds-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wds-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wds-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wds-lb { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.wds-ln { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="wds-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="wds-root" x="300" y="30" width="360" height="72" rx="6"/>
+<text class="wds-n" x="316" y="56">Root provider</text>
+<text class="wds-k" x="316" y="74">[App.Current.Services]</text>
+<text class="wds-k" x="316" y="90">Singletons such as IProductService</text>
+
+<rect class="wds-win" x="30" y="150" width="410" height="250" rx="8"/>
+<text class="wds-hd" x="46" y="174">DOCUMENTWINDOW A</text>
+<rect class="wds-box" x="56" y="190" width="358" height="82" rx="6"/>
+<text class="wds-n" x="72" y="214">Window scope</text>
+<text class="wds-k" x="72" y="232">[IServiceScope, created when the window opens]</text>
+<text class="wds-k" x="72" y="250">NavigationService, DocumentSession, view models</text>
+<rect class="wds-box" x="56" y="316" width="358" height="60" rx="6"/>
+<text class="wds-n" x="72" y="340">ContentFrame &gt; ProductsPage</text>
+<text class="wds-k" x="72" y="358">[resolves its view model in OnNavigatedTo]</text>
+
+<rect class="wds-win" x="520" y="150" width="410" height="250" rx="8"/>
+<text class="wds-hd" x="536" y="174">DOCUMENTWINDOW B</text>
+<rect class="wds-box" x="546" y="190" width="358" height="82" rx="6"/>
+<text class="wds-n" x="562" y="214">Window scope</text>
+<text class="wds-k" x="562" y="232">[IServiceScope, created when the window opens]</text>
+<text class="wds-k" x="562" y="250">NavigationService, DocumentSession, view models</text>
+<rect class="wds-box" x="546" y="316" width="358" height="60" rx="6"/>
+<text class="wds-n" x="562" y="340">ContentFrame &gt; ProductsPage</text>
+<text class="wds-k" x="562" y="358">[resolves its view model in OnNavigatedTo]</text>
+
+<path class="wds-ln" d="M235,190 L235,126 L380,126 L380,104" marker-end="url(#wds-a)"/>
+<path class="wds-ln" d="M725,190 L725,126 L580,126 L580,104" marker-end="url(#wds-a)"/>
+<text class="wds-lb" x="480" y="140" text-anchor="middle">scoped services receive shared singletons</text>
+
+<path class="wds-ln" d="M235,316 L235,274" marker-end="url(#wds-a)"/>
+<text class="wds-lb" x="245" y="299">WindowScopes.For(Frame)</text>
+<path class="wds-ln" d="M725,316 L725,274" marker-end="url(#wds-a)"/>
+<text class="wds-lb" x="735" y="299">WindowScopes.For(Frame)</text>
+
+<text class="wds-lb" x="30" y="440">Closing a window disposes its scope and everything the scope created. The root and its singletons stay alive.</text>
+</g>
+</svg>

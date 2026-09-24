@@ -1,0 +1,70 @@
+---
+title: "One Search Through View, View Model, and Model"
+kind: dynamic
+system: winui
+summary: "How typing, enabling, clicking, and results move between the three layers."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" role="img" aria-labelledby="wml-title wml-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wml-title">The property, CanExecute, and command loop between a WinUI view, its view model, and the model</title>
+<desc id="wml-desc">Three columns: the view with a TextBox, a Search Button, and a ListView; the view model with the SearchQuery property, SearchCommand with its CanSearch check, and the Results property; and the model with IProductService. Step 1: the TextBox's two-way binding writes the typed text to SearchQuery. Step 2: the generated SearchQuery setter calls NotifyCanExecuteChanged on SearchCommand. Step 3: SearchCommand raises CanExecuteChanged, and the Button calls CanExecute, which runs CanSearch, and enables or disables itself. Step 4: a click calls Execute on SearchCommand, which runs SearchAsync. Step 5: SearchAsync awaits IProductService. Step 6: it assigns the returned products to Results. Step 7: Results raises PropertyChanged and the ListView bound to it updates.</desc>
+<style>
+.wml-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wml-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wml-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wml-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wml-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+.wml-ln { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wml-dot { fill: var(--color-primary, #1A5F8A); }
+.wml-num { font-size: 10.5px; font-weight: 700; fill: #FFFFFF; }
+</style>
+<defs>
+<marker id="wml-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wml-hd" x="16" y="40">VIEW</text>
+<text class="wml-hd" x="376" y="40">VIEW MODEL</text>
+<text class="wml-hd" x="736" y="40">MODEL</text>
+<rect class="wml-box" x="16" y="60" width="220" height="56" rx="6"/>
+<text class="wml-n" x="32" y="84">TextBox</text>
+<text class="wml-k" x="32" y="102">[Text bound TwoWay]</text>
+<rect class="wml-box" x="16" y="184" width="220" height="56" rx="6"/>
+<text class="wml-n" x="32" y="208">Button "Search"</text>
+<text class="wml-k" x="32" y="226">[Command bound]</text>
+<rect class="wml-box" x="16" y="308" width="220" height="56" rx="6"/>
+<text class="wml-n" x="32" y="332">ListView</text>
+<text class="wml-k" x="32" y="350">[ItemsSource bound OneWay]</text>
+<rect class="wml-box" x="376" y="60" width="220" height="56" rx="6"/>
+<text class="wml-n" x="392" y="84">SearchQuery</text>
+<text class="wml-k" x="392" y="102">[Observable property]</text>
+<rect class="wml-box" x="376" y="184" width="220" height="56" rx="6"/>
+<text class="wml-n" x="392" y="208">SearchCommand</text>
+<text class="wml-k" x="392" y="226">[CanExecute = CanSearch]</text>
+<rect class="wml-box" x="376" y="308" width="220" height="56" rx="6"/>
+<text class="wml-n" x="392" y="332">Results</text>
+<text class="wml-k" x="392" y="350">[Observable property]</text>
+<rect class="wml-box" x="736" y="184" width="208" height="56" rx="6"/>
+<text class="wml-n" x="752" y="208">IProductService</text>
+<text class="wml-k" x="752" y="226">[SearchAsync]</text>
+<path class="wml-ln" d="M236,88 L374,88" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="305" cy="88" r="9"/><text class="wml-num" x="305" y="92" text-anchor="middle">1</text>
+<path class="wml-ln" d="M486,116 L486,182" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="486" cy="149" r="9"/><text class="wml-num" x="486" y="153" text-anchor="middle">2</text>
+<path class="wml-ln" d="M376,200 L238,200" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="305" cy="200" r="9"/><text class="wml-num" x="305" y="204" text-anchor="middle">3</text>
+<path class="wml-ln" d="M236,226 L374,226" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="305" cy="226" r="9"/><text class="wml-num" x="305" y="230" text-anchor="middle">4</text>
+<path class="wml-ln" d="M596,212 L734,212" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="665" cy="212" r="9"/><text class="wml-num" x="665" y="216" text-anchor="middle">5</text>
+<path class="wml-ln" d="M486,240 L486,306" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="486" cy="273" r="9"/><text class="wml-num" x="486" y="277" text-anchor="middle">6</text>
+<path class="wml-ln" d="M376,336 L238,336" marker-end="url(#wml-a)"/>
+<circle class="wml-dot" cx="305" cy="336" r="9"/><text class="wml-num" x="305" y="340" text-anchor="middle">7</text>
+<text class="wml-lg" x="16" y="410">1  The two-way binding writes the typed text to SearchQuery.</text>
+<text class="wml-lg" x="16" y="430">2  The generated setter calls NotifyCanExecuteChanged on SearchCommand.</text>
+<text class="wml-lg" x="16" y="450">3  CanExecuteChanged fires; the button calls CanExecute and enables or disables.</text>
+<text class="wml-lg" x="16" y="470">4  A click calls Execute, which runs SearchAsync.</text>
+<text class="wml-lg" x="520" y="410">5  SearchAsync awaits the service.</text>
+<text class="wml-lg" x="520" y="430">6  The returned products are assigned to Results.</text>
+<text class="wml-lg" x="520" y="450">7  Results raises PropertyChanged; the ListView updates.</text>
+</g>
+</svg>

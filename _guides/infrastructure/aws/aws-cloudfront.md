@@ -2,7 +2,7 @@
 title: "AWS CloudFront for System Architects"
 layout: guide
 category: AWS
-subcategory: Networking
+subcategory: Networking & Content Delivery
 description: "Comprehensive guide to AWS CloudFront covering CDN architecture, edge locations, caching strategies, Lambda@Edge vs CloudFront Functions, Origin Shield, security, cost optimization, and global content delivery"
 tags: [aws, cloudfront, cdn, edge-computing, caching, performance, cost-optimization, fundamentals]
 ---

@@ -3,67 +3,98 @@ title: "Data Binding in WinUI 3"
 layout: guide
 category: "WinUI 3"
 subcategory: "Data & MVVM"
-description: "Understanding data binding modes, change notification with INotifyPropertyChanged, value converters, data templates, and CollectionViewSource for presenting data in WinUI 3."
-tags: [winui, winui-3, xaml, data-binding, mvvm, collections, desktop, practical]
+description: "How WinUI 3 data binding connects controls to data: where {x:Bind} and {Binding} each find their source, binding modes and update timing, change notification with INotifyPropertyChanged and ObservableCollection, converting values with functions or converters, binding inside data templates, and tracking down bindings that fail silently."
+tags: [data-binding, x-bind, inotifypropertychanged, observablecollection, value-converters, compiled-bindings, practical]
 ---
 
-## Table of Contents
+## Two Binding Systems
 
-- [What Data Binding Is and Why It Matters](#what-data-binding-is-and-why-it-matters)
-- [Binding Modes](#binding-modes)
-- [INotifyPropertyChanged](#inotifypropertychanged)
-- [ObservableCollection](#observablecollection)
-- [Value Converters](#value-converters)
-- [Data Templates](#data-templates)
-- [DataTemplateSelector](#datatemplateselector)
-- [CollectionViewSource](#collectionviewsource)
-- [Binding Failures and Debugging](#binding-failures-and-debugging)
+A binding connects a property on a control, the **target**, to a property on some object, the **source**, so that the control shows the source's value without code copying it across. Instead of writing `titleText.Text = viewModel.Title` every time the title changes, the markup declares the connection and the binding keeps the two in step. View models stay free of any reference to controls, which is what lets them be tested without a UI.
 
----
+WinUI has two ways to declare a binding, and they differ in where they look for the source:
 
-## What Data Binding Is and Why It Matters
+| | `{x:Bind}` | `{Binding}` |
+| --- | --- | --- |
+| Path starts at | The page, user control, or window class itself | The element's `DataContext`, the data object it inherits from its parent, or an explicit `Source`, `ElementName`, or `RelativeSource` |
+| Resolved | At compile time, into generated code in the `obj` folder | At runtime, by looking up names on whatever object it finds |
+| Default mode | `OneTime` | `OneWay` |
+| Mistyped path | Build error | Nothing shown, plus a message in the debugger output |
+| Inside a `DataTemplate` | Needs `x:DataType` naming the item type | Works against whatever item it gets |
+| Extras | Functions in the path, event handlers, element names as fields | Bindings created in code, sources whose type is only known at runtime |
 
-Data binding is the mechanism that connects properties on your XAML controls to properties on your data objects, without requiring you to write imperative code that manually copies values back and forth. Instead of writing `myTextBlock.Text = viewModel.Title` every time the title changes, you declare the connection in XAML and let the binding system manage synchronization for you.
+`DataContext` is a property on every `FrameworkElement` whose value, when not set, is inherited from the parent. Setting it on a page once makes it the default source for every `{Binding}` below. `{x:Bind}` ignores it and resolves each path against the page's own class, so `{x:Bind ViewModel.Title}` needs a `ViewModel` property in the page's code-behind:
 
-This separation matters for several reasons. Your view models and models can be written and tested independently of any UI code, because they contain no references to controls or XAML. The XAML file becomes a declarative description of how data should be presented rather than a sequence of assignments. When the underlying data changes, the UI responds automatically through the binding infrastructure rather than through manually wired event handlers.
+```csharp
+public sealed partial class OrdersPage : Page
+{
+    // The root of every {x:Bind ViewModel...} path on this page.
+    public OrderViewModel ViewModel { get; } = new();
 
-WinUI 3 provides two binding systems that serve the same goal but work differently. The classic `{Binding}` markup extension has been part of the XAML ecosystem since WPF and resolves property paths at runtime using reflection. The newer `{x:Bind}` extension generates strongly-typed C# code at compile time, which gives it better performance and the ability to catch errors before the application ever runs. Both appear regularly in WinUI 3 code, and understanding the differences between them shapes how you structure binding declarations throughout the application.
-
----
-
-## Binding Modes
-
-Both binding systems support the same set of binding modes, though their defaults differ in a way that catches developers off guard.
-
-`OneTime` reads the source value once when the binding is first evaluated and sets the target property. After that initial read, the binding system ignores any changes to the source. This mode is appropriate for data that never changes during the lifetime of the control, such as labels populated from a configuration object or items in a static lookup list.
-
-`OneWay` establishes a live connection from source to target. When the source property changes, the binding system propagates the new value to the target control. Changes to the target control do not flow back to the source. This is the right choice for read-only display properties like a status label or a progress indicator.
-
-`TwoWay` synchronizes values in both directions. When the source changes, the target updates. When the user modifies the target, such as typing in a `TextBox`, the new value is written back to the source property. This mode is appropriate for any input control where the user's interaction is meant to update the data model.
-
-```xml
-<!-- x:Bind: OneTime is the default, so these two are equivalent -->
-<TextBlock Text="{x:Bind Title}" />
-<TextBlock Text="{x:Bind Title, Mode=OneTime}" />
-
-<!-- x:Bind: OneWay keeps the label in sync with changes -->
-<TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" />
-
-<!-- x:Bind: TwoWay writes user input back to the view model -->
-<TextBox Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+    public OrdersPage()
+    {
+        InitializeComponent();
+        DataContext = ViewModel;   // only needed by {Binding}
+    }
+}
 ```
 
-The default mode difference between the two systems is worth memorizing. `{x:Bind}` defaults to `OneTime`, which means a binding that appears to work during development might silently stop updating when the source changes, because you forgot to add `Mode=OneWay`. `{Binding}` defaults to `OneWay`, which is a more forgiving starting point. Neither default is wrong; they reflect different design priorities. `{x:Bind}` trades the safer default for better performance by only subscribing to change notifications when explicitly asked to.
+{% include figure.html id="winui-binding-source-roots" %}
 
-`UpdateSourceTrigger` controls when a `TwoWay` binding writes back to the source. The default for most properties is `LostFocus`, meaning the source updates when the user moves away from the control. Setting it to `PropertyChanged` causes the source to update on every keystroke, which is useful for search fields or live-preview scenarios.
+The property has to hold the view model before the bindings first read it, which the next section times. A `Window` can be an `{x:Bind}` root too. `Window` isn't a `FrameworkElement` and has no `DataContext`, so `{Binding}` in a window takes its source from a `DataContext` set on the window's root content element.
+
+Prefer `{x:Bind}`. A renamed property or a typo breaks the build instead of producing an empty control at runtime, and the generated code avoids runtime lookups. `{Binding}` remains the tool for three cases. The first is a source whose type isn't known at compile time, such as a dictionary parsed from JSON, or items of unrelated types that happen to share a property name. The second is a binding built in code. The third is markup in a resource dictionary without a code-behind class, where `{x:Bind}` can't generate code.
 
 ---
 
-## INotifyPropertyChanged
+## Binding Modes and Update Timing
 
-For `OneWay` or `TwoWay` bindings to respond to source changes, the source object must give the binding system a way to detect when a property value has changed. `INotifyPropertyChanged` is the interface that provides this capability. It defines a single event, `PropertyChanged`, which the binding system subscribes to when it establishes a live binding.
+A binding's **mode** says which way values flow and for how long:
 
-A minimal manual implementation of the interface looks like this:
+| Mode | Flow | Typical use |
+| --- | --- | --- |
+| `OneTime` | Source to target, once, when the binding initializes | Values that never change while the page is shown |
+| `OneWay` | Source to target, again on every change notification | Labels, status text, lists that update |
+| `TwoWay` | Both ways: source changes update the control, and user edits update the source | Input controls bound to view model properties |
+
+```xml
+<!-- x:Bind: OneTime unless told otherwise -->
+<TextBlock Text="{x:Bind ViewModel.CustomerName}" />
+
+<!-- OneWay: follows later changes -->
+<TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" />
+
+<!-- TwoWay: user input flows back to the view model -->
+<TextBox Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay}" />
+```
+
+The different defaults cause the most common `{x:Bind}` bug. A binding without `Mode=OneWay` shows the value the property held when the page loaded and ignores every later change. The binding looks correct during development, when the data is usually ready before the page loads, and goes stale in the real app. Microsoft chose `OneTime` as the default because change tracking costs generated code. `x:DefaultBindMode="OneWay"` on an element changes the default for every `{x:Bind}` inside it.
+
+### When a Two-Way Binding Writes Back
+
+`UpdateSourceTrigger` decides when a `TwoWay` binding copies the control's value into the source:
+
+| Value | Writes back | Supported by |
+| --- | --- | --- |
+| `Default` | `PropertyChanged` for most properties, `LostFocus` for `TextBox.Text` | Both |
+| `PropertyChanged` | On every change, such as each keystroke | Both |
+| `LostFocus` | When the control loses focus | Both |
+| `Explicit` | Only when code calls `UpdateSource` on the binding, obtained with `GetBindingExpression` | `{Binding}` only |
+
+The `TextBox.Text` default means a view model bound to a text box sees the text only when the user leaves the box, so a Save button that reads the view model while focus is still in the box can miss the last edit. Set `UpdateSourceTrigger=PropertyChanged` for search-as-you-type or a live preview. The setting only reaches a `TextBox` you bind directly. Binding `NumberBox.Text`, whose text box lives inside its template, with `PropertyChanged` has no effect.
+
+### When x:Bind First Reads Its Source
+
+The generated code initializes a page's or user control's `{x:Bind}` bindings during its `Loading` event, just before its first layout. A `ViewModel` property still `null` at that point gives every binding a `null` source. A `Window` has no `Loading` event, and its generated code starts the bindings when the window is first activated instead. Data that arrives later, typically from an `async` load started in the constructor or `OnNavigatedTo`, reaches `OneWay` bindings through change notification. `OneTime` bindings never see it unless code calls `this.Bindings.Update()` after the data arrives, which re-reads every binding on the page once. For data that is loaded once and then never changes, `OneTime` bindings plus a single `Bindings.Update()` cost less than making everything `OneWay`.
+
+---
+
+## Change Notification
+
+`OneWay` and `TwoWay` bindings react to changes only when the source announces them. A property that changes silently leaves the control showing the old value, and nothing reports an error.
+
+### INotifyPropertyChanged
+
+A source object announces property changes by implementing `INotifyPropertyChanged`, whose single event, `PropertyChanged`, carries the name of the property that changed. The binding subscribes to it and re-reads that property.
 
 ```csharp
 using System.ComponentModel;
@@ -87,236 +118,139 @@ public class ProductViewModel : INotifyPropertyChanged
         }
     }
 
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 }
 ```
 
-The `[CallerMemberName]` attribute on the `propertyName` parameter causes the compiler to fill in the calling property's name automatically, so `OnPropertyChanged()` inside the `Name` setter automatically raises `PropertyChanged` with `"Name"` as the argument. This avoids brittle string literals that can become stale when properties are renamed.
+`[CallerMemberName]` fills in `"Name"` from the setter that calls it, so a rename can't leave a stale string behind. The equality check skips the event when the value didn't change, which avoids redundant UI updates and stops a `TwoWay` binding from echoing a value back and forth. A property computed from others, such as `FullName` from `FirstName` and `LastName`, gets no notification of its own, so the setters it depends on raise `PropertyChanged` for it too.
 
-The equality check before assigning the new value is a small but important detail. Without it, setting a property to its current value still raises `PropertyChanged`, which can trigger unnecessary UI updates and, in `TwoWay` binding scenarios, create feedback loops.
+The CommunityToolkit.Mvvm source generators write this pattern for you from an annotated field, and most WinUI view models use them rather than hand-written setters.
 
-Writing this boilerplate for every property in every view model becomes tedious quickly. The [CommunityToolkit.Mvvm](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/){:target="_blank" rel="noopener noreferrer"} library provides an `ObservableObject` base class and source generators that reduce this to annotated fields, generating the full property implementation automatically at compile time.
+Raise `PropertyChanged`, and change an `ObservableCollection`, on the UI thread. The binding updates the control from whatever thread raised the event, and a WinUI control touched from another thread throws.
 
-```csharp
-using CommunityToolkit.Mvvm.ComponentModel;
+### ObservableCollection
 
-public partial class ProductViewModel : ObservableObject
-{
-    [ObservableProperty]
-    private string _name = string.Empty;
-}
-```
-
-The source generator produces a `Name` property with the full `INotifyPropertyChanged` implementation, including the equality check and the `OnPropertyChanged` call.
-
----
-
-## ObservableCollection
-
-`INotifyPropertyChanged` handles changes to individual properties on an object, but collection controls like `ListView` and `GridView` need to know when items are added to, removed from, or reordered within the collection itself. `ObservableCollection<T>` provides this through a separate interface, `INotifyCollectionChanged`, which fires `CollectionChanged` events whenever the collection's contents are modified.
-
-When you add an item to an `ObservableCollection<T>`, the collection raises a `CollectionChanged` event with an action of `Add` and a reference to the new item. The bound `ListView` receives this notification and inserts the corresponding visual item without redrawing the entire list. The same granular notifications fire for removals and moves, keeping the UI synchronized efficiently.
+A property notification covers replacing a whole value. A list needs to announce items added, removed, or moved within it, which is what `INotifyCollectionChanged` and its `CollectionChanged` event do. `ObservableCollection<T>` implements it, and a list control bound to one updates only the rows that changed. A `List<T>` raises nothing, so items added after the first display never appear.
 
 ```csharp
-public class OrderViewModel : ObservableObject
+public class OrderViewModel
 {
     public ObservableCollection<LineItem> LineItems { get; } = new();
 
-    public void AddItem(LineItem item)
-    {
-        LineItems.Add(item); // ListView updates automatically
-    }
-
-    public void RemoveItem(LineItem item)
-    {
-        LineItems.Remove(item); // ListView removes just this row
-    }
+    public void AddItem(LineItem item) => LineItems.Add(item);    // one row appears
+    public void RemoveItem(LineItem item) => LineItems.Remove(item); // one row goes
 }
 ```
 
-One behavior that surprises developers is that replacing the entire collection does not notify the UI. If you write `LineItems = new ObservableCollection<LineItem>(freshData)`, the `ListView` is still watching the original collection instance. The binding to `LineItems` itself would need to be live (`OneWay`) and the `LineItems` property would need to raise `PropertyChanged` for the control to pick up the new collection reference. Adding `[ObservableProperty]` or implementing the property with `OnPropertyChanged()` in the setter handles this case, but it causes the list control to repopulate from scratch rather than applying incremental updates.
+Replacing the collection is a different kind of change. After `LineItems = new ObservableCollection<LineItem>(fresh)`, the list is still bound to the old instance and shows the old items. The new instance reaches the control only if the property raises `PropertyChanged` and the binding is `OneWay`, and the control then rebuilds the whole list.
 
-For bulk updates where you want to replace all items without the cost of individual add/remove notifications, the `CommunityToolkit.Mvvm` library provides an `ObservableCollection<T>` extension method that batches changes. For the straightforward case, clearing and re-adding items works, though it also resets scroll position and selection state.
+`ObservableCollection<T>` has no `AddRange`, so loading 500 items with `Add` raises 500 notifications, each of which the list control processes. For a full reload, either build a new collection and assign it to a notifying property, which the list handles as one change, or call `Clear` and re-add, which drops the selection along with the old items.
 
 ---
 
-## Value Converters
+## Converting Values
 
-Binding connects a source property to a target property, but source and target are often different types or require different representations. A boolean `IsActive` property might need to display as `Visibility.Visible` or `Visibility.Collapsed`. A `DateTime` stored as UTC might need to display in the user's local time with a specific format. Value converters transform the value as it travels between source and target.
+A bound value often isn't the type or form the target property needs, such as a `DateTime` shown as text in the user's format or a status enum that picks a color. Three places can do the conversion.
 
-A value converter implements `IValueConverter`, which requires two methods. `Convert` transforms the source value into the form expected by the target property. `ConvertBack` performs the reverse transformation for `TwoWay` bindings; if the binding is `OneWay`, `ConvertBack` can throw `NotImplementedException`.
+**A property on the view model.** Exposing `DueDateText` alongside `DueDate` keeps the logic testable and needs no XAML machinery. It stops scaling when many properties need the same treatment.
+
+**A function in an `{x:Bind}` path.** The last step of an `x:Bind` path can be a method call, and its arguments are themselves binding paths:
+
+```xml
+<Page xmlns:local="using:MyApp">
+    <TextBlock Text="{x:Bind local:Formatters.ShortDate(ViewModel.DueDate), Mode=OneWay}" />
+</Page>
+```
 
 ```csharp
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Data;
-
-public class BoolToVisibilityConverter : IValueConverter
+public static class Formatters
 {
-    public object Convert(object value, Type targetType, object parameter, string language)
-    {
-        return value is bool b && b ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, string language)
-    {
-        return value is Visibility v && v == Visibility.Visible;
-    }
+    public static string ShortDate(DateTime value) => value.ToString("d");
+    public static string Price(decimal value) => value.ToString("C");
 }
 ```
 
-Converters are declared as resources so they can be referenced by key in binding expressions. The most common place to declare them is in `App.xaml` or in the page's `Resources` section.
+With `Mode=OneWay`, the binding re-runs the function whenever an argument's property raises `PropertyChanged`. A function can take several arguments, so it also covers what WPF did with `MultiBinding`, which WinUI doesn't have. The argument types must match the bound values, because the binding performs no narrowing conversions, and the return type must match the target property. A `TwoWay` function binding names a second function for the reverse direction with `BindBack`.
+
+**A value converter.** A class implementing `IValueConverter` works with both binding systems and is the only option for `{Binding}`:
+
+```csharp
+using Microsoft.UI.Xaml.Data;
+
+public class DurationToTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language) =>
+        value is TimeSpan t ? $"{(int)t.TotalHours}h {t.Minutes:00}m" : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language) =>
+        throw new NotSupportedException();
+}
+```
 
 ```xml
 <Page.Resources>
-    <local:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    <local:DurationToTextConverter x:Key="DurationToText" />
 </Page.Resources>
 
-<!-- Usage in a binding -->
-<Border Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay,
-        Converter={StaticResource BoolToVisibility}}" />
+<TextBlock Text="{Binding Elapsed, Converter={StaticResource DurationToText}}" />
 ```
 
-The `parameter` argument to `Convert` lets you pass a static value from the XAML declaration to influence conversion logic. A single `BoolToVisibilityConverter` could accept a parameter like `"Invert"` to reverse the logic, rather than requiring a separate `InvertedBoolToVisibilityConverter` class.
+`Convert` runs on the way to the target, and `ConvertBack` only for `TwoWay` bindings, so a one-way converter can throw there. The `language` argument carries the binding's `ConverterLanguage`, and `ConverterParameter` passes a fixed value from markup into both methods. The Community Toolkit's `CommunityToolkit.WinUI.Converters` package ships common converters ready-made. In `{x:Bind}` property bindings, a `bool` converts to `Visibility` without any converter, as the `{x:Bind}` reference documents. That conversion doesn't apply to function bindings or to `{Binding}`, where Microsoft points to the toolkit's `BoolToVisibilityConverter`.
 
-Common converters worth having in a project include converters for boolean-to-visibility, null-to-visibility, string formatting, enum-to-description, and numeric formatting. Rather than writing these from scratch, the [WinUI 3 Gallery](https://github.com/microsoft/WinUI-Gallery){:target="_blank" rel="noopener noreferrer"} and `CommunityToolkit.WinUI` provide ready-made implementations.
+Two binding properties handle missing values without a converter. `TargetNullValue` supplies what to show when the value at the end of the path is `null`. `FallbackValue` supplies what to show when the path can't be resolved at all, such as when an object partway along it is `null`.
 
 ---
 
-## Data Templates
+## Binding Inside Data Templates
 
-A `DataTemplate` defines the visual structure used to represent a data object in a collection control or a content presenter. Instead of telling a `ListView` to display a list of strings, you can give it a template that describes how each `Product` object should appear, combining an image, a name label, and a price, all bound to properties of the data object.
+A `DataTemplate` describes how to display one item, and a list control stamps it out for each item in its collection. Inside a template, the source changes. `{Binding}` resolves against the item, because the list sets each generated element's `DataContext` to the item it shows. `{x:Bind}` resolves against the item too, but it has to know the item's type at compile time, so the template declares it with `x:DataType`:
+
+```csharp
+public record Product(string Name, string Category, decimal Price);
+```
 
 ```xml
 <ListView ItemsSource="{x:Bind ViewModel.Products, Mode=OneWay}">
     <ListView.ItemTemplate>
         <DataTemplate x:DataType="local:Product">
-            <Grid ColumnDefinitions="Auto,*,Auto" Padding="8">
-                <Image Grid.Column="0" Source="{x:Bind ThumbnailUrl}"
-                       Width="48" Height="48" />
-                <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                    <TextBlock Text="{x:Bind Name}" Style="{ThemeResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind Category}" Style="{ThemeResource CaptionTextBlockStyle}" />
+            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="12" Padding="8">
+                <StackPanel>
+                    <TextBlock Text="{x:Bind Name}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind Category}" Style="{StaticResource CaptionTextBlockStyle}" />
                 </StackPanel>
-                <TextBlock Grid.Column="2" Text="{x:Bind Price}" />
+                <TextBlock Grid.Column="1" Text="{x:Bind local:Formatters.Price(Price)}" />
             </Grid>
         </DataTemplate>
     </ListView.ItemTemplate>
 </ListView>
 ```
 
-The `x:DataType` attribute on the `DataTemplate` tells the `x:Bind` compiler what type the data context within the template represents. Without it, `x:Bind` has no way to generate strongly-typed binding code, and you would need to fall back to `{Binding}` for properties inside the template. The type specified in `x:DataType` must match the actual runtime type of the items in the collection for bindings to resolve correctly.
+`Price` is a `decimal`, which is what `Formatters.Price` takes. Function arguments get no narrowing conversion, so the source property's type has to match the parameter's.
 
-When a `DataTemplate` is reused across multiple locations, it makes sense to define it as a resource in `App.xaml` or in a `ResourceDictionary` file, giving it an `x:Key`. Content controls like `ContentPresenter` and `ContentControl` have a `ContentTemplate` property that accepts a `DataTemplate`, which is how detail panels typically display a selected item.
+Without `x:DataType`, `{x:Bind}` in a template fails to compile. With it, every item the template receives has to be that type, or a type derived from it, because the generated code treats each item as that type. An interface or base class works as the declared type when the collection mixes related types.
 
----
+Because an `{x:Bind}` path inside a template starts at the item, the template can't reach the page's view model the way the page's own bindings do. A command that acts on an item, such as Delete, is usually easier to expose on the item itself, or to invoke from the page with the item passed as the parameter, than to reach back out of the template.
 
-## DataTemplateSelector
-
-A single `DataTemplate` describes a uniform visual representation for every item in a collection. When items in a collection have different types or different display requirements based on their state, a `DataTemplateSelector` allows the control to choose a template dynamically for each item.
-
-`DataTemplateSelector` is an abstract class with one method to override: `SelectTemplateCore`. You receive the data item as an argument and return the appropriate `DataTemplate`.
-
-```csharp
-public class MessageTemplateSelector : DataTemplateSelector
-{
-    public DataTemplate? SentTemplate { get; set; }
-    public DataTemplate? ReceivedTemplate { get; set; }
-
-    protected override DataTemplate? SelectTemplateCore(object item)
-    {
-        if (item is ChatMessage message)
-        {
-            return message.IsSent ? SentTemplate : ReceivedTemplate;
-        }
-        return base.SelectTemplateCore(item);
-    }
-}
-```
-
-The template selector is declared as a resource, with its template properties set to other resources.
-
-```xml
-<Page.Resources>
-    <DataTemplate x:Key="SentMessageTemplate" x:DataType="local:ChatMessage">
-        <Border Background="{ThemeResource AccentFillColorDefaultBrush}"
-                HorizontalAlignment="Right" CornerRadius="8" Padding="12,8">
-            <TextBlock Text="{x:Bind Body}" Foreground="White" />
-        </Border>
-    </DataTemplate>
-
-    <DataTemplate x:Key="ReceivedMessageTemplate" x:DataType="local:ChatMessage">
-        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                HorizontalAlignment="Left" CornerRadius="8" Padding="12,8">
-            <TextBlock Text="{x:Bind Body}" />
-        </Border>
-    </DataTemplate>
-
-    <local:MessageTemplateSelector x:Key="MessageSelector"
-        SentTemplate="{StaticResource SentMessageTemplate}"
-        ReceivedTemplate="{StaticResource ReceivedMessageTemplate}" />
-</Page.Resources>
-
-<ListView ItemsSource="{x:Bind ViewModel.Messages, Mode=OneWay}"
-          ItemTemplateSelector="{StaticResource MessageSelector}" />
-```
-
-Note that when using a `DataTemplateSelector`, you assign `ItemTemplateSelector` on the collection control rather than `ItemTemplate`. The two properties are mutually exclusive; setting `ItemTemplate` overrides the selector.
+Choosing between several templates per item, and grouping items under headers with `CollectionViewSource`, are list-control features built on top of this. `CollectionViewSource` in WinUI provides grouping and a shared current item, not sorting or filtering. Sort or filter the collection in the view model before binding it.
 
 ---
 
-## CollectionViewSource
+## Finding Bindings That Fail Silently
 
-Presenting raw collections works well for simple cases, but many scenarios require sorting, grouping, or filtering the data before displaying it. `CollectionViewSource` wraps an existing collection and exposes a view over it that applies these transformations without modifying the source collection itself.
+A failing binding usually shows an empty control rather than an error, so the two systems need different habits.
 
-Grouping is the most common use of `CollectionViewSource`. To group a flat list of contacts by their first initial, you configure a `CollectionViewSource` with `IsSourceGrouped="True"` and provide a collection already organized into groups. The `ListView` or `GridView` then renders group headers automatically when bound to the `CollectionViewSource.View` property.
+With `{x:Bind}`, most failures surface at build time. The generated code lives in files like `OrdersPage.g.cs` in the `obj` folder, and a breakpoint there shows exactly when a binding reads its source. Turning on **Break On Unhandled Exceptions** in Visual Studio stops the debugger inside that generated code when a binding throws.
 
-```xml
-<Page.Resources>
-    <CollectionViewSource x:Key="GroupedContacts"
-                          IsSourceGrouped="True"
-                          Source="{x:Bind ViewModel.ContactGroups, Mode=OneWay}" />
-</Page.Resources>
+With `{Binding}`, a wrong path produces nothing on screen. When the debugger is attached, Visual Studio lists each failure in the **Output** window and in the **XAML Binding Failures** window, with the path it couldn't resolve and the type it looked on.
 
-<ListView ItemsSource="{Binding Source={StaticResource GroupedContacts}}">
-    <ListView.GroupStyle>
-        <GroupStyle>
-            <GroupStyle.HeaderTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Key}"
-                               Style="{ThemeResource TitleTextBlockStyle}" />
-                </DataTemplate>
-            </GroupStyle.HeaderTemplate>
-        </GroupStyle>
-    </ListView.GroupStyle>
-    <ListView.ItemTemplate>
-        <DataTemplate x:DataType="local:Contact">
-            <TextBlock Text="{x:Bind FullName}" />
-        </DataTemplate>
-    </ListView.ItemTemplate>
-</ListView>
-```
+A binding that compiles, reports no failure, and still shows stale or empty data usually comes down to one of these:
 
-Notice the use of `{Binding Source={StaticResource GroupedContacts}}` on the `ItemsSource`. The `CollectionViewSource` is not the data directly; you bind to its `View` property, which `{Binding}` resolves automatically when you provide the `CollectionViewSource` as the source. Attempting to use `{x:Bind}` directly with a `CollectionViewSource` requires explicitly binding to the `.View` property because `x:Bind` does not apply this implicit resolution.
-
-The source data for grouped display typically needs to be pre-grouped on the view model side into a collection of objects, where each group object exposes a `Key` and implements `IEnumerable` over its items. LINQ's `GroupBy` combined with a `ToObservableCollection` helper is a common pattern for building these group structures from a flat source.
-
----
-
-## Binding Failures and Debugging
-
-When a binding silently shows nothing or displays incorrect data, finding the cause depends on which binding system you used.
-
-`{x:Bind}` failures often manifest as compile errors when the property path is wrong, because the generated code references actual C# properties. If the project builds but the value does not appear, common causes include the mode being `OneTime` when you intended `OneWay`, the source property not raising `PropertyChanged`, or an `x:DataType` mismatch in a `DataTemplate` causing the bindings inside the template to target the wrong type.
-
-`{Binding}` failures are quieter. The runtime resolves paths using reflection and swallows errors silently, showing nothing rather than crashing. The Visual Studio Output window is the first place to look; the binding system writes diagnostic messages there when it cannot resolve a path or encounters a type mismatch. A message like `Error: BindingExpression path error: 'ProductNme' property not found on 'ProductViewModel'` points directly to a misspelling.
-
-To enable more verbose binding diagnostics, you can attach a `PresentationTraceSources` listener in WPF, though WinUI 3 uses a somewhat different diagnostic surface through the Windows App SDK. The [XAML Hot Reload](https://learn.microsoft.com/en-us/visualstudio/xaml-tools/xaml-hot-reload){:target="_blank" rel="noopener noreferrer"} tooling in Visual Studio can help observe the live element tree and the values actually bound to properties.
-
-A practical debugging workflow starts by simplifying the binding. Replace a complex path like `{x:Bind ViewModel.Order.Customer.Name, Mode=OneWay}` with a direct property on the page to verify that the binding infrastructure is working, then restore the full path once the simpler case succeeds. For collection bindings, confirming that the source collection is not null and contains the expected items before the binding is evaluated eliminates a common source of empty list displays.
-
-When converters are involved, temporarily removing the converter from the binding expression and checking whether the raw value appears confirms whether the issue is in the binding path itself or in the conversion logic. A converter that throws an exception during `Convert` will cause the binding to fall back silently in some cases, so adding a breakpoint inside the converter is often faster than reading diagnostics.
-
-The compile-time guarantees of `{x:Bind}` make it significantly easier to maintain as a codebase grows, because property renames and type changes surface as build errors rather than invisible runtime failures. Preferring `{x:Bind}` and reserving `{Binding}` for cases where `{x:Bind}` cannot reach the data context, such as certain `CollectionViewSource` scenarios, keeps the binding surface as auditable as possible.
+- **The binding is `OneTime`.** An `{x:Bind}` without `Mode=OneWay` read the source once at initialization, possibly before an `async` load finished.
+- **`ViewModel` was assigned after initialization.** The page doesn't announce changes to its own properties, so even `OneWay` bindings keep reading `null`. Assign it earlier, or call `Bindings.Update()` afterward.
+- **The source never announces the change.** The property doesn't raise `PropertyChanged`, or the collection is a `List<T>`.
+- **There is no source.** A `{Binding}` whose `DataContext` was never set, or was set on a different element, resolves against `null`.
+- **The collection instance was replaced.** The control is still bound to the old one.
+- **The edit hasn't been written back yet.** A two-way `TextBox.Text` binding updates the source only when the box loses focus.
+- **The notification came from another thread.** The update threw instead of reaching the control.
+- **It works in Debug and goes empty in a Native AOT build.** `{Binding}` and `DisplayMemberPath` look properties up at runtime, which AOT compilation can't do by reflection. CsWinRT's guidance is to make each C# class used as their source `partial` and mark it `[WinRT.GeneratedBindableCustomProperty]`, so a source generator produces the lookup. `{x:Bind}` needs neither.

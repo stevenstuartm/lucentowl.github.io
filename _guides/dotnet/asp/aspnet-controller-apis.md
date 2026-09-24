@@ -3,889 +3,304 @@ title: "Controller-Based APIs"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Building APIs"
-description: "Comprehensive guide to building controller-based Web APIs in ASP.NET Core, covering routing, model binding, filters, return types, and content negotiation."
-tags: [asp-net-core, web-api, mvc, controllers, routing, model-binding, filters]
+description: "Building ASP.NET Core web APIs with controllers: what [ApiController] changes, attribute routing and route tokens, choosing action return types, MVC model binding and custom binders, the five-stage filter pipeline, and content negotiation with input and output formatters."
+tags: [practical, controllers, apicontroller, attribute-routing, model-binding, mvc-filters, content-negotiation]
 ---
-{% raw %}
 
-## Controller-Based APIs
+## Controllers and Actions
 
-The controller-based programming model in ASP.NET Core provides a rich framework for building Web APIs through classes that derive from `ControllerBase` or `Controller`. Controllers organize related HTTP endpoints into logical groups while providing access to request context, automatic model binding, validation, content negotiation, and a filter pipeline for cross-cutting concerns. This programming model offers more structure and convention than minimal APIs while supporting both attribute-based and conventional routing patterns.
-
-## ControllerBase vs Controller
-
-ASP.NET Core provides two base classes for implementing controllers, each designed for different scenarios.
-
-**ControllerBase** serves as the foundation for API controllers. It provides core functionality for handling HTTP requests and returning responses without including features specific to rendering HTML views. ControllerBase gives you access to the HTTP context, request and response objects, URL helpers, and methods for returning various action results. The class focuses exclusively on API scenarios where you're returning data in formats like JSON or XML rather than rendered HTML pages.
-
-**Controller** extends `ControllerBase` to add support for view rendering. It includes everything from `ControllerBase` plus additional features like the `View()` method for rendering Razor views, `PartialView()` for rendering partial views, and helpers for working with form submissions and redirects between pages. Controller is designed for traditional MVC applications that serve HTML pages alongside API endpoints.
-
-For pure API development, prefer `ControllerBase`. It provides exactly what you need without carrying the overhead of view-related infrastructure. Use `Controller` only when building applications that serve both HTML pages and API endpoints, such as traditional web applications with AJAX-driven features.
-
-## The ApiController Attribute
-
-The `[ApiController]` attribute indicates that a controller is designed specifically for serving HTTP API responses. Applying this attribute, either to individual controllers or at the assembly level, enables several behaviors that streamline API development.
-
-### Automatic Model Validation
-
-When a controller has the `[ApiController]` attribute, model validation errors automatically trigger an HTTP 400 Bad Request response. The framework examines the `ModelState` after model binding completes, and if validation fails, it short-circuits the action execution and returns a `ValidationProblemDetails` response describing the errors. This eliminates the need to manually check `ModelState.IsValid` at the beginning of every action.
-
-The automatic validation response follows the RFC 7807 problem details format, providing a standardized structure that clients can parse consistently. The response includes the validation errors organized by property name, making it straightforward for clients to display field-specific error messages.
-
-You can disable this behavior by setting `SuppressModelStateInvalidFilter` to true in the API behavior options if you need more control over validation error responses.
-
-### Binding Source Inference
-
-The `[ApiController]` attribute enables automatic inference of binding sources for action parameters. Without explicit binding attributes, the framework applies these rules:
-
-- Complex types bind from the request body (`[FromBody]`)
-- Route parameters bind from route values (`[FromRoute]`)
-- Simple types appearing in the route template bind from route values
-- Simple types not in the route template bind from the query string (`[FromQuery]`)
-- Parameters of type `IFormFile` and `IFormFileCollection` bind from form data (`[FromForm]`)
-- Parameters registered in the dependency injection container bind from services (`[FromServices]`)
-
-This inference reduces the need for explicit binding attributes in common scenarios while remaining overridable when you need specific binding behavior.
-
-### Attribute Routing Requirement
-
-Controllers decorated with `[ApiController]` must use attribute routing. Conventional routes defined through methods like `MapControllerRoute` cannot reach actions in API controllers. This requirement ensures that API routes are explicitly defined where they're used rather than relying on global route patterns that might not reflect RESTful URL structures.
-
-### Multipart/Form-Data Request Inference
-
-When an action parameter uses `[FromForm]` or is of type `IFormFile` or `IFormFileCollection`, the framework infers that the action expects multipart/form-data content. This automatically adds the appropriate content type to the API documentation and OpenAPI specifications generated for the endpoint.
-
-### Problem Details for Error Status Codes
-
-API controllers transform error status codes (400 and higher) into `ProblemDetails` responses that follow RFC 7807. This provides a consistent error response format across your API, replacing the default empty responses with structured information about what went wrong.
-
-## Routing Approaches
-
-ASP.NET Core supports two approaches for mapping URLs to controller actions: conventional routing and attribute routing. These approaches differ in where routes are defined and how much flexibility they provide.
-
-### Conventional Routing
-
-Conventional routing defines route patterns globally in the application startup code. Routes are registered through methods like `MapControllerRoute` and rely on conventions to match URL segments to controller and action names.
-
-```csharp
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
-```
-
-This pattern matches URLs where the first segment corresponds to a controller name, the second segment to an action name, and an optional third segment to an ID parameter. The pattern includes default values that apply when segments are omitted.
-
-Conventional routing works well for applications with consistent URL structures where most endpoints follow the same pattern. It's commonly used for applications serving HTML pages where URLs like `/Products/Details/5` map naturally to controller and action names.
-
-For APIs, conventional routing often falls short because RESTful URLs don't necessarily reflect controller and action names. An endpoint like `GET /api/products/5` doesn't clearly indicate whether it should route to a `Products` controller with a `Get` action or a `ProductsController` with a `Details` action.
-
-### Attribute Routing
-
-Attribute routing defines routes directly on controllers and actions using attributes. This approach provides explicit control over each endpoint's URL and is the preferred pattern for API development.
+A *controller* is a class whose public methods, called *actions*, handle requests. API controllers derive from `ControllerBase`, which supplies helpers such as `Ok`, `NotFound`, `CreatedAtAction`, and `ValidationProblem`, plus access to the request through properties like `HttpContext`, `Request`, and `User`. The `Controller` class adds view rendering on top and belongs to apps that serve HTML pages.
 
 ```csharp
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController : ControllerBase
+public class OrdersController(IOrderStore orders) : ControllerBase
 {
-    [HttpGet]
-    public IActionResult GetAll() { }
-
-    [HttpGet("{id}")]
-    public IActionResult GetById(int id) { }
-
-    [HttpPost]
-    public IActionResult Create([FromBody] Product product) { }
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<Order>> Get(int id) =>
+        await orders.FindAsync(id) is { } order ? order : NotFound();
 }
 ```
 
-The `[Route]` attribute at the controller level defines a base path for all actions in the controller. Action-level attributes like `[HttpGet]` combine with the controller route to form complete URL patterns. The `GetById` action above matches `GET /api/products/{id}` by combining the controller's base path with the action's `{id}` segment.
+Controllers are registered with `builder.Services.AddControllers()` and mapped with `app.MapControllers()`, which turns every attribute-routed action into an endpoint in the same route table minimal APIs use. The framework creates a new controller instance for every request, so a field set in one request is never seen by another, and constructor-injected scoped services such as a `DbContext` are safe to use because they belong to the request's scope.
 
-Attribute routing produces URLs that reflect resource structures rather than code organization. You can design RESTful endpoints that make sense to API consumers without being constrained by controller or action names.
+## What [ApiController] Changes
 
-### Route Templates
+`[ApiController]` switches on a set of behaviors meant for HTTP APIs. It can go on a controller, on a base class that API controllers share, or on the assembly (`[assembly: ApiController]`), in which case every controller gets it and none can opt out.
 
-Route templates define URL patterns using a combination of literal segments and parameters. Parameters are denoted with curly braces and can include constraints that restrict what values match.
+Two terms come first. *Model state* (`ModelState`) is the per-request record of binding and validation results. Each parameter or property that fails to bind or validate adds an error to it. A *conventional route* is one app-wide URL pattern, such as `{controller}/{action}/{id?}`, from which MVC derives every action's URL by controller and method name. Attribute routing, covered in the next section, is the alternative.
 
-The template `api/products/{id:int}` matches URLs like `/api/products/5` but not `/api/products/abc` because the `int` constraint requires the ID parameter to be an integer. Constraints help route requests to the appropriate action when multiple routes share similar patterns.
+| Behavior | What it does | Turned off by `ApiBehaviorOptions` property |
+| --- | --- | --- |
+| Attribute routing required | Actions are reachable only through route attributes, never through conventional routes. An action with no attribute route throws when the app first builds its endpoints, usually on the first request | Can't be turned off |
+| Automatic `400` responses | A request whose model state is invalid gets a `400` with a `ValidationProblemDetails` body before the action runs | `SuppressModelStateInvalidFilter` |
+| Binding source inference | Parameters get a source without `[From...]` attributes (rules below) | `SuppressInferBindingSourcesForParameters` |
+| Multipart/form-data inference | `IFormFile` parameters make the action accept `multipart/form-data` | `SuppressConsumesConstraintForFormFileParameters` |
+| Problem Details for errors | Error results with no body, such as `NotFound()`, get a Problem Details body, the standard JSON error format from RFC 9457 | `SuppressMapClientErrors` |
 
-**Common route constraints:**
+The automatic `400` removes the `if (!ModelState.IsValid)` check that every action used to start with. Model state becomes invalid both when a data annotation fails and when a value can't be bound at all, such as `"abc"` for an `int`, so the client gets one consistent error shape for both. Actions that do their own checks should return `ValidationProblem()` rather than `BadRequest()` to produce the same shape.
 
-| Constraint | Description | Example |
-|------------|-------------|---------|
-| `int` | Matches any integer | `{id:int}` |
-| `guid` | Matches a GUID | `{id:guid}` |
-| `bool` | Matches true or false | `{active:bool}` |
-| `datetime` | Matches a DateTime value | `{date:datetime}` |
-| `decimal` | Matches a decimal number | `{price:decimal}` |
-| `double` | Matches a double-precision number | `{value:double}` |
-| `long` | Matches a 64-bit integer | `{id:long}` |
-| `minlength(n)` | String with minimum length | `{name:minlength(3)}` |
-| `maxlength(n)` | String with maximum length | `{name:maxlength(50)}` |
-| `length(n)` | String with exact length | `{code:length(5)}` |
-| `min(n)` | Integer with minimum value | `{age:min(18)}` |
-| `max(n)` | Integer with maximum value | `{quantity:max(100)}` |
-| `range(min,max)` | Integer within range | `{month:range(1,12)}` |
-| `alpha` | Matches alphabetic characters | `{code:alpha}` |
-| `regex(pattern)` | Matches a regular expression | `{ssn:regex(^\\d{{3}}-\\d{{2}}-\\d{{4}}$)}` |
+The options are set with `ConfigureApiBehaviorOptions`, which also replaces the automatic `400` response itself through `InvalidModelStateResponseFactory`, for an API that must return a different error body:
 
-Constraints can be combined by separating them with colons. The template `{id:int:min(1)}` requires the ID to be an integer greater than or equal to 1.
+```csharp
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+        options.InvalidModelStateResponseFactory = context =>
+            new UnprocessableEntityObjectResult(new ValidationProblemDetails(context.ModelState)));
+```
+
+`ValidationProblem()` doesn't use the replacement. It still returns a `400` built by the default Problem Details factory, so after a change like this one, actions that check for themselves and the automatic check disagree on status. Such actions should instead inject `IOptions<ApiBehaviorOptions>` and return the configured factory's result for `ControllerContext`, or share a helper with it.
+
+## Attribute Routing
+
+MVC supports two ways of attaching routes to actions. Conventional routing, declared with `MapControllerRoute`, suits HTML apps whose URLs follow code structure. *Attribute routing* puts a template on each controller and action, which is what APIs need, since a resource URL like `GET /api/orders/42` shouldn't depend on what a method is called.
+
+A `[Route]` on the controller sets a prefix, and the HTTP method attributes on actions (`[HttpGet]`, `[HttpPost]`, and the rest) add to it:
+
+```csharp
+[ApiController]
+[Route("api/orders")]
+public class OrdersController : ControllerBase
+{
+    [HttpGet]                          // GET  api/orders
+    public Task<Order[]> List() { ... }
+
+    [HttpGet("{id:int}", Name = "GetOrder")]   // GET  api/orders/42
+    public Task<ActionResult<Order>> Get(int id) { ... }
+
+    [HttpPost]                         // POST api/orders
+    public Task<ActionResult<Order>> Create(CreateOrder request) { ... }
+
+    [HttpGet("/api/order-summaries")]  // GET  api/order-summaries, ignoring the prefix
+    public Task<OrderSummary[]> Summaries() { ... }
+}
+```
+
+Templates, constraints such as `{id:int}`, and precedence work the same way as for any other endpoint. A template on an action that begins with `/` or `~/` replaces the controller's prefix instead of adding to it.
 
 ### Route Tokens
 
-Route templates support tokens that are replaced with actual values during route resolution. Tokens reduce duplication and make route templates more maintainable when controller or action names change.
+Route templates can contain the tokens `[controller]`, `[action]`, and `[area]`, which are replaced with the controller name (minus the `Controller` suffix), the action method name, and the area name. An *area* is a named group of controllers, declared with `[Area("Admin")]`, that larger apps use to split one app into sections. `[Route("api/[controller]")]` on `OrdersController` becomes `api/Orders`. Tokens keep templates short, but they tie the public URL to class and method names, so renaming a method silently changes the API. Many teams avoid `[action]` for that reason.
 
-**Available tokens:**
-
-| Token | Replaced With | Example |
-|-------|---------------|---------|
-| `[controller]` | Controller name without "Controller" suffix | `ProductsController` → `products` |
-| `[action]` | Action method name | `GetById` → `getbyid` |
-| `[area]` | Area name | `Admin` → `admin` |
+Token replacement keeps the name's casing. Matching is case-insensitive, so `/api/orders` still reaches the controller, but generated links read `/api/Orders`. A *parameter transformer* rewrites tokens consistently, typically to lowercase with hyphens. It is registered as a *convention*, a class MVC runs once at startup over its model of every controller and action, able to change their routes, names, or filters. Conventions and most other MVC-wide settings live on `MvcOptions`, the `options` object that `AddControllers` passes to its callback:
 
 ```csharp
-[Route("api/[controller]")]
-public class ProductsController : ControllerBase
+builder.Services.AddControllers(options =>
+    options.Conventions.Add(new RouteTokenTransformerConvention(new SlugifyParameterTransformer())));
+
+// A transformer is a small class implementing IOutboundParameterTransformer
+public class SlugifyParameterTransformer : IOutboundParameterTransformer
 {
-    [HttpGet("[action]")]
-    public IActionResult Search() { }
+    public string? TransformOutbound(object? value) =>
+        value is null
+            ? null
+            : Regex.Replace(value.ToString()!, "([a-z])([A-Z])", "$1-$2",
+                RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)).ToLowerInvariant();
 }
 ```
 
-The `Search` action matches the URL `/api/products/search` because `[controller]` is replaced with "products" and `[action]` is replaced with "search." Tokens maintain synchronization between code and routes without requiring manual updates when names change.
+With it, `OrderSummariesController` answers at `api/order-summaries`.
 
-## Action Methods and Return Types
+## Action Return Types
 
-Action methods are public methods on controllers that handle HTTP requests. The method signature determines how parameters are bound and what response is returned.
+An action's return type decides both what it can return and what the *API description* can say about it. The API description is the metadata about each endpoint's parameters and responses that OpenAPI generation reads.
 
-### Synchronous vs Asynchronous Actions
+| Return type | Can return | Documents the success type |
+| --- | --- | --- |
+| A specific type, such as `Order` | Only that type, as `200`, or `204` when the value is `null` | Yes |
+| `IActionResult` | Any status and body, through `Ok()`, `NotFound()`, and the rest | No; needs `[ProducesResponseType]` |
+| `ActionResult<Order>` | Either an `Order` (as `200`) or any `IActionResult` | Yes |
+| `Results<Ok<Order>, NotFound>` (the `HttpResults` types shared with minimal APIs) | Only the listed results, checked by the compiler | Yes, every listed result's status and body type |
 
-Actions can be synchronous or asynchronous. Asynchronous actions return `Task` or `Task<T>` and allow the thread handling the request to be released while waiting for I/O operations to complete.
+`ActionResult<T>` is the usual choice. Implicit conversions let an action `return order;` on success and `return NotFound();` on failure from the same method, and the API description knows a successful response contains an `Order`. The error responses still need declaring with `[ProducesResponseType(StatusCodes.Status404NotFound)]` if the description should list them. One limitation catches people: C# allows no implicit conversion from an interface type, so an expression typed as an interface can't be returned directly. An action declared as `ActionResult<IEnumerable<Order>>` that returns `repository.GetOrders()`, itself typed `IEnumerable<Order>`, fails to compile. Materializing it with `.ToList()` or wrapping it in `Ok(...)` fixes it.
+
+The `HttpResults` types behave differently in a controller than the other return types. Every other return type hands its value to MVC's *output formatters*, the classes that turn an object into a response body in the format the client's `Accept` header asks for (covered at the end of this guide). `HttpResults` types write their own response instead, so `[Produces]`, the formatters, and the `Accept` header have no effect on them, and they serialize with the minimal API JSON settings, not the controller ones. Mixing them into a controller that relies on formatters or on `AddJsonOptions` changes the output silently.
+
+A creation action should return `201 Created` with a `Location` header pointing at the new resource. `CreatedAtAction` and `CreatedAtRoute` build that header through link generation, the first from an action name and the second from a route name such as the `Name = "GetOrder"` set in the earlier sample:
 
 ```csharp
-// Synchronous action
-[HttpGet("{id}")]
-public IActionResult GetProduct(int id)
+[HttpPost]
+public async Task<ActionResult<Order>> Create(CreateOrder request)
 {
-    var product = _repository.GetById(id);
-    return Ok(product);
-}
-
-// Asynchronous action
-[HttpGet("{id}")]
-public async Task<IActionResult> GetProduct(int id)
-{
-    var product = await _repository.GetByIdAsync(id);
-    return Ok(product);
+    var order = await orders.CreateAsync(request);
+    return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
 }
 ```
 
-Asynchronous actions improve scalability by allowing more requests to be processed concurrently. When an action awaits an asynchronous operation, the thread returns to the thread pool where it can serve other requests. Once the awaited operation completes, a thread picks up the action and continues execution.
+MVC trims an `Async` suffix from action names by default, so an action method named `GetAsync` has the action name `Get`. `CreatedAtAction(nameof(GetAsync), ...)` then names an action that doesn't exist, and link generation fails at runtime. Pass the trimmed name, or set `MvcOptions.SuppressAsyncSuffixInActionNames` to `false`.
 
-Use asynchronous actions whenever your code performs I/O operations like database queries, file access, or HTTP calls to other services. The performance benefits are significant under load because threads aren't blocked waiting for external operations to complete.
-
-### Return Type Patterns
-
-ASP.NET Core supports three return type patterns for actions, each with different tradeoffs between type safety, flexibility, and documentation.
-
-**Specific Types** return a concrete type directly from the action. The framework automatically wraps the returned object in a 200 OK response.
-
-```csharp
-[HttpGet]
-public List<Product> GetAll()
-{
-    return _repository.GetAll();
-}
-```
-
-This approach offers the strongest type safety and works well when the action always returns the same type with a 200 status code. However, it doesn't support returning different status codes or action results like `NotFound` or `BadRequest`.
-
-**IActionResult** allows actions to return different types of results, including status codes, redirects, and formatted responses. This interface provides maximum flexibility when multiple return types or status codes are possible.
-
-```csharp
-[HttpGet("{id}")]
-public IActionResult GetById(int id)
-{
-    var product = _repository.GetById(id);
-    if (product == null)
-        return NotFound();
-
-    return Ok(product);
-}
-```
-
-The `IActionResult` pattern supports all action result types through methods like `Ok()`, `NotFound()`, `BadRequest()`, and `StatusCode()`. The downside is that the return type doesn't indicate what success looks like, making the API harder to document and understand.
-
-**ActionResult\<T\>** combines the benefits of specific types and `IActionResult`. It allows returning either the concrete type `T` or any `IActionResult`, providing both type safety and flexibility.
-
-```csharp
-[HttpGet("{id}")]
-public ActionResult<Product> GetById(int id)
-{
-    var product = _repository.GetById(id);
-    if (product == null)
-        return NotFound();
-
-    return product;
-}
-```
-
-Implicit conversion operators allow you to return either a `Product` instance directly or an action result like `NotFound()`. The concrete type `T` appears in API documentation and OpenAPI specifications, making it clear what a successful response contains. `ActionResult<T>` is the recommended pattern for API actions because it provides type safety while supporting error responses.
-
-When using `[ProducesResponseType]` attributes to document possible responses, `ActionResult<T>` reduces the need to specify the success response type since it's inferred from `T`. You still need to document error responses with attributes like `[ProducesResponseType(StatusCodes.Status404NotFound)]`.
+Two defaults surprise people. An action whose declared type is a model object and that returns `null` produces `204 No Content`, not `200` with a `null` body or a `404`. And an action that returns a `string` produces `text/plain` when the client sends no `Accept` header, `*/*`, or `text/plain`. A client that asks for `application/json` gets a JSON string. Both come from built-in output formatters, covered below, and both go away if those formatters are removed.
 
 ## Model Binding
 
-Model binding converts HTTP request data into strongly-typed .NET objects that actions can work with directly. The binding system examines action parameters and attempts to populate them from various sources in the HTTP request.
+MVC *model binding* fills action parameters from the request. It reads values from *value providers* (route values, the query string, and form fields), reads the body through *input formatters*, and resolves services from the container. Each parameter's source comes from an attribute, or from inference under `[ApiController]`:
 
-### Binding Sources
+| Attribute | Source | Inferred under `[ApiController]` for |
+| --- | --- | --- |
+| `[FromRoute]` | Route values | Parameters named in the route template |
+| `[FromQuery]` | Query string | Any other simple-type parameter |
+| `[FromBody]` | The request body, through an input formatter | Complex types not registered in the container |
+| `[FromForm]` | Form fields and files | `IFormFile` and `IFormFileCollection` |
+| `[FromHeader]` | A request header | Never; always explicit |
+| `[FromServices]` | The DI container | Complex types that are registered in the container |
 
-By default, model binding searches multiple locations for parameter values in a specific order. You can override this behavior with binding source attributes that explicitly indicate where values should come from.
+Only one parameter can bind from the body. Simple types never bind from the body by inference, so an action that expects a bare JSON string needs `[FromBody] string value`. A complex type marked `[FromQuery]` binds each of its properties from a query value of the same name, which suits search and paging parameters. Setting `ApiBehaviorOptions.DisableImplicitFromServicesParameters` to `true` turns off the `[FromServices]` inference, for teams that want every injected parameter marked.
 
-**[FromQuery]** binds parameters from query string values. This is the default for simple types not appearing in the route template.
+Binding failures don't throw. A value that can't be converted, or a required value that's missing, adds an error to `ModelState`, and under `[ApiController]` the automatic `400` handles it. Without `[ApiController]`, the action runs with default values and has to check `ModelState.IsValid` itself.
 
-```csharp
-[HttpGet("search")]
-public IActionResult Search([FromQuery] string term, [FromQuery] int page = 1)
-{
-    // Matches: GET /api/products/search?term=laptop&page=2
-}
-```
+The JSON settings controllers use are configured with `builder.Services.AddControllers().AddJsonOptions(...)`. `ConfigureHttpJsonOptions`, which configures minimal APIs, has no effect on controllers, and the reverse holds too, so an app with both needs both. The `HttpResults` exception above is the one crossover.
 
-Query string parameters work well for optional filtering, sorting, and pagination parameters that don't represent the core resource being accessed.
+### Custom Binding
 
-**[FromRoute]** binds parameters from route values. This is the default for parameters whose names appear in the route template.
-
-```csharp
-[HttpGet("{id}")]
-public IActionResult GetById([FromRoute] int id)
-{
-    // Matches: GET /api/products/5
-}
-```
-
-Route parameters typically represent resource identifiers and are part of the URL structure rather than optional query data.
-
-**[FromBody]** binds complex parameters from the request body. This is the default for complex types when the `[ApiController]` attribute is present.
+Types that implement a static `TryParse` method, or `IParsable<T>`, bind from route and query values without any extra code. For anything else, a custom model binder implements `IModelBinder`:
 
 ```csharp
-[HttpPost]
-public IActionResult Create([FromBody] Product product)
+public class OrderReferenceBinder : IModelBinder
 {
-    // Expects JSON in request body:
-    // { "name": "Laptop", "price": 999.99 }
-}
-```
-
-Only one parameter per action can bind from the body. If you need to receive multiple complex objects, wrap them in a container type or use separate endpoints.
-
-**[FromForm]** binds parameters from posted form fields. This is appropriate for traditional form submissions or file uploads with accompanying form data.
-
-```csharp
-[HttpPost("upload")]
-public IActionResult Upload([FromForm] IFormFile file, [FromForm] string description)
-{
-    // Expects: Content-Type: multipart/form-data
-}
-```
-
-Form binding is common when building endpoints that accept file uploads or integrate with traditional HTML forms.
-
-**[FromHeader]** binds parameters from HTTP request headers.
-
-```csharp
-[HttpGet]
-public IActionResult GetAll([FromHeader(Name = "X-API-Version")] string apiVersion)
-{
-    // Binds from: X-API-Version header
-}
-```
-
-Header binding is useful for cross-cutting concerns like API versioning, correlation IDs, or authentication tokens that aren't part of the resource representation.
-
-**[FromServices]** binds parameters from the dependency injection container rather than from the HTTP request.
-
-```csharp
-[HttpGet]
-public IActionResult GetAll([FromServices] IProductRepository repository)
-{
-    return Ok(repository.GetAll());
-}
-```
-
-While constructor injection is generally preferred for dependencies, `[FromServices]` is useful for dependencies needed by only a single action or when you want to make action-level dependencies explicit in the method signature.
-
-### Custom Model Binders
-
-Custom model binders handle specialized binding scenarios that the default binders don't support. You might create a custom binder to decrypt encrypted parameters, look up entities by alternate keys, or parse custom formats.
-
-A custom model binder implements the `IModelBinder` interface, which defines a single asynchronous method:
-
-```csharp
-public class ProductIdBinder : IModelBinder
-{
-    public async Task BindModelAsync(ModelBindingContext bindingContext)
+    public Task BindModelAsync(ModelBindingContext bindingContext)
     {
-        var value = bindingContext.ValueProvider.GetValue(bindingContext.ModelName);
+        var value = bindingContext.ValueProvider.GetValue(bindingContext.ModelName).FirstValue;
 
-        if (value == ValueProviderResult.None)
+        if (value is not null && OrderReference.TryParseLegacy(value, out var reference))
         {
-            return;
+            bindingContext.Result = ModelBindingResult.Success(reference);
+        }
+        else if (value is not null)
+        {
+            bindingContext.ModelState.AddModelError(bindingContext.ModelName, "Not a valid order reference.");
         }
 
-        var stringValue = value.FirstValue;
-
-        // Custom logic to parse or look up the model
-        if (TryParseProductId(stringValue, out var productId))
-        {
-            bindingContext.Result = ModelBindingResult.Success(productId);
-        }
-        else
-        {
-            bindingContext.ModelState.AddModelError(
-                bindingContext.ModelName,
-                "Invalid product ID format");
-        }
-    }
-}
-```
-
-The binder accesses request values through the `ValueProvider` and sets the binding result through `bindingContext.Result`. Setting `ModelState` errors allows validation to catch binding failures.
-
-To apply a custom binder, use the `[ModelBinder]` attribute on the parameter or create a model binder provider that matches specific types:
-
-```csharp
-[HttpGet("{id}")]
-public IActionResult GetById([ModelBinder(typeof(ProductIdBinder))] ProductId id)
-{
-}
-```
-
-Model binder providers implement `IModelBinderProvider` and return a binder instance when appropriate for the target type. Providers are registered in the MVC options during application startup and are evaluated in order until one returns a binder.
-
-### Value Providers
-
-Value providers extract data from specific parts of the HTTP request and make it available to model binders. The default value providers handle query strings, route data, form data, and other standard sources.
-
-Custom value providers are needed when binding from non-standard sources like custom headers, cookies with specific formats, or encrypted request data. A value provider implements `IValueProvider` and returns values for specific keys:
-
-```csharp
-public class CustomHeaderValueProvider : IValueProvider
-{
-    private readonly IHeaderDictionary _headers;
-
-    public CustomHeaderValueProvider(IHeaderDictionary headers)
-    {
-        _headers = headers;
-    }
-
-    public bool ContainsPrefix(string prefix)
-    {
-        return _headers.Keys.Any(k => k.StartsWith(prefix));
-    }
-
-    public ValueProviderResult GetValue(string key)
-    {
-        if (_headers.TryGetValue(key, out var value))
-        {
-            return new ValueProviderResult(value);
-        }
-        return ValueProviderResult.None;
-    }
-}
-```
-
-Value provider factories create value provider instances for each request and are registered with the MVC options. The factory examines the request and returns a provider if applicable:
-
-```csharp
-public class CustomHeaderValueProviderFactory : IValueProviderFactory
-{
-    public Task CreateValueProviderAsync(ValueProviderFactoryContext context)
-    {
-        var headers = context.ActionContext.HttpContext.Request.Headers;
-        var valueProvider = new CustomHeaderValueProvider(headers);
-        context.ValueProviders.Add(valueProvider);
         return Task.CompletedTask;
     }
 }
+
+[HttpGet("by-reference/{reference}")]
+public Task<ActionResult<Order>> GetByReference(
+    [ModelBinder(typeof(OrderReferenceBinder))] OrderReference reference) { ... }
 ```
 
-Register the factory during startup by adding it to the value provider collection. Value providers run in the order they're registered, and model binders use the first provider that returns a value for a given key.
+Adding an error to `ModelState` rather than throwing keeps the failure inside the normal `400` response. To apply a binder to every parameter of a type without attributes, register an `IModelBinderProvider` in `MvcOptions.ModelBinderProviders`. Providers are asked in order until one returns a binder, and the built-in ones already claim most types, so a custom provider goes in with `Insert(0, ...)` rather than `Add`. A custom *value provider* (`IValueProviderFactory`) adds a new source of values, such as a cookie format, for all binders to read from.
 
-## Filters
+## The Filter Pipeline
 
-Filters provide a way to run code before or after specific stages in the request processing pipeline. They handle cross-cutting concerns like authorization, caching, error handling, and logging without cluttering action methods with repetitive code.
+MVC *filters* run code at defined stages around an action, after routing has selected it. They are the controller counterpart to minimal API endpoint filters, with more stages. The five filter types nest around one another:
 
-### Filter Types and Execution Order
+{% include figure.html id="asp-mvc-filter-pipeline" %}
 
-ASP.NET Core supports five filter types, each running at a different stage in the pipeline:
+| Filter type | Runs | Typical use |
+| --- | --- | --- |
+| Authorization (`IAuthorizationFilter`) | First, before anything else | Rejecting requests that aren't authorized. Policy-based authorization with `[Authorize]` usually does this through authorization middleware instead |
+| Resource (`IResourceFilter`) | Before model binding, and again after the result has executed | Short-circuiting before binding, such as serving a cached response |
+| Action (`IActionFilter`) | Immediately before and after the action method, with bound arguments available | Inspecting or changing arguments; replacing the result |
+| Exception (`IExceptionFilter`) | When controller creation, model binding, an action filter, or the action throws | Turning specific exceptions into responses for a subset of controllers |
+| Result (`IResultFilter`) | Before and after the result executes | Adding headers or changing how the result is written |
 
-**Authorization filters** run first and determine whether the current user is authorized to access the requested resource. Authorization filters can short-circuit the pipeline by returning an immediate response, preventing unnecessary processing when authorization fails.
+Authorization, resource, and action filters short-circuit by setting a result instead of calling the next stage. A result filter stops the result from executing by setting `Cancel` to `true`, or by not calling `next` in its async form. An exception filter doesn't short-circuit; it handles the exception by setting a result or marking it handled. Result filters don't run after authorization, resource, or exception filters short-circuit, only when an action or action filter produced the result. A filter that must run for every result implements `IAlwaysRunResultFilter`.
 
-**Resource filters** run after authorization but before model binding. They can execute code before and after the rest of the pipeline, making them useful for caching scenarios where you want to return cached responses without performing model binding or executing actions. Resource filters can also short-circuit the pipeline.
+Exception filters don't see exceptions thrown by resource filters, by result filters, or during result execution, such as a serialization failure, and they don't see anything outside MVC. Exception handling middleware sees all of those, which is why it is the default for centralized error handling. An exception filter suits the narrower case of one group of controllers that needs different handling.
 
-**Action filters** run immediately before and after action methods execute, but after model binding completes. They have access to the action arguments and can modify them before the action runs. Action filters also see the action result before it executes, allowing them to modify or replace the result.
+### Scope and Order
 
-**Exception filters** run only when an unhandled exception occurs during action execution or while executing earlier filters. They provide a centralized place to handle exceptions and convert them into appropriate HTTP responses.
-
-**Result filters** run before and after the execution of action results. They run only when the action executes successfully, not when earlier filters or actions short-circuit the pipeline. Result filters can modify how results are formatted or add headers to responses.
-
-The complete execution order wraps like nested calls. Authorization filters run first, then resource filters, then action filters, then the action itself, then action filters again, then result filters, then the result execution, then result filters again, then resource filters again. Exception filters intercept any unhandled exceptions that occur during this process.
-
-### Filter Scopes
-
-Filters can be applied at three scopes: global, controller, and action. The scope determines which requests the filter affects.
-
-**Global filters** apply to all controllers and actions in the application. They're registered during startup:
+A filter can be registered globally, on a controller, or on an action:
 
 ```csharp
-builder.Services.AddControllers(options =>
+builder.Services.AddControllers(options => options.Filters.Add<RequestTimingFilter>());   // global
+
+[ServiceFilter<AuditFilter>]          // controller
+public class OrdersController : ControllerBase
 {
-    options.Filters.Add<GlobalExceptionFilter>();
-});
-```
-
-Global filters handle application-wide concerns like security headers, request logging, or error handling that should apply consistently across all endpoints.
-
-**Controller filters** apply to all actions within a specific controller. Apply them with attributes on the controller class:
-
-```csharp
-[ServiceFilter(typeof(ProductCacheFilter))]
-public class ProductsController : ControllerBase
-{
+    [HttpPost]
+    [TypeFilter<IdempotencyFilter>]   // action
+    public Task<ActionResult<Order>> Create(CreateOrder request) { ... }
 }
 ```
 
-Controller-level filters handle concerns specific to a logical group of endpoints, such as caching for a particular resource type or validation that applies to all operations on a resource.
+Filters of the same type run global first, then controller, then action, and in reverse order on the way out. A filter that implements `IOrderedFilter` can override that with its `Order` value, lower first.
 
-**Action filters** apply to individual actions and provide the most granular control:
+### Filters with Dependencies
 
-```csharp
-[HttpPost]
-[ValidateProductFilter]
-public IActionResult Create(Product product)
-{
-}
-```
-
-Action-level filters handle concerns unique to specific operations, such as validation rules that only apply to create or update operations.
-
-When multiple filters of the same type are present, they execute in order from global to controller to action for before-phases and from action to controller to global for after-phases.
-
-### Implementing Custom Filters
-
-Custom filters implement one of several filter interfaces depending on what pipeline stage they need to affect. Action filters are the most commonly implemented.
-
-Synchronous action filters implement `IActionFilter`:
+A filter written as an attribute gets its constructor arguments from the attribute usage, so it can't receive injected services. Two built-in attributes bridge the gap. `[ServiceFilter<T>]` resolves the filter from the container, so `T` has to be registered, and its registration decides its lifetime. `[TypeFilter<T>]` creates the filter with constructor injection without requiring a registration. Filters added to `options.Filters` by type are created the same way as `TypeFilter`.
 
 ```csharp
-public class LoggingActionFilter : IActionFilter
+public class RequestTimingFilter(ILogger<RequestTimingFilter> logger) : IAsyncActionFilter
 {
-    private readonly ILogger<LoggingActionFilter> _logger;
-
-    public LoggingActionFilter(ILogger<LoggingActionFilter> logger)
-    {
-        _logger = logger;
-    }
-
-    public void OnActionExecuting(ActionExecutingContext context)
-    {
-        _logger.LogInformation("Executing action: {Action}",
-            context.ActionDescriptor.DisplayName);
-    }
-
-    public void OnActionExecuted(ActionExecutedContext context)
-    {
-        _logger.LogInformation("Executed action: {Action}",
-            context.ActionDescriptor.DisplayName);
-    }
-}
-```
-
-Asynchronous filters implement async interfaces like `IAsyncActionFilter`:
-
-```csharp
-public class TimingActionFilter : IAsyncActionFilter
-{
-    public async Task OnActionExecutionAsync(
-        ActionExecutingContext context,
-        ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var stopwatch = Stopwatch.StartNew();
+        var executed = await next();   // runs the action and any later action filters
 
-        var resultContext = await next();
-
-        stopwatch.Stop();
-
-        resultContext.HttpContext.Response.Headers.Add(
-            "X-Elapsed-Time",
-            stopwatch.ElapsedMilliseconds.ToString());
+        // The result hasn't executed yet, so headers can still be set
+        executed.HttpContext.Response.Headers["X-Action-Time-Ms"] = stopwatch.ElapsedMilliseconds.ToString();
+        logger.LogDebug("{Action} took {Elapsed} ms", context.ActionDescriptor.DisplayName, stopwatch.ElapsedMilliseconds);
     }
 }
 ```
 
-The `next` delegate represents the rest of the pipeline. Calling it executes the action and any subsequent filters. Code before `await next()` runs before the action, while code after runs after the action completes.
+Endpoint filters, the minimal API kind, also run for controller actions when attached with `app.MapControllers().AddEndpointFilter(...)`, which lets an app with both styles share one implementation. They wrap the action method itself, so they run inside the action filters, after binding, with the bound arguments.
 
-Exception filters implement `IExceptionFilter` or `IAsyncExceptionFilter`:
+## Content Negotiation and Formatters
 
-```csharp
-public class BusinessExceptionFilter : IExceptionFilter
-{
-    public void OnException(ExceptionContext context)
-    {
-        if (context.Exception is BusinessException businessEx)
-        {
-            context.Result = new ObjectResult(new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Business rule violation",
-                Detail = businessEx.Message
-            });
+Controllers can return the same data in several formats. *Content negotiation* picks one from the request's `Accept` header, and *formatters* do the conversion: output formatters write responses, and input formatters read request bodies.
 
-            context.ExceptionHandled = true;
-        }
-    }
-}
-```
+When an action returns an object, MVC looks through the registered output formatters:
 
-Setting `ExceptionHandled` to true prevents the exception from propagating further. If you don't set this property, the exception continues up the pipeline where it might be handled by middleware or result in an unhandled exception response.
+- **With an `Accept` header**, it uses the first formatter that can produce one of the requested media types, in the client's order of preference.
+- **When none can**, it falls back to the first formatter that can write the object, or returns `406 Not Acceptable` if `MvcOptions.ReturnHttpNotAcceptable` is `true`.
+- **With no `Accept` header, or one containing `*/*`**, it uses the first formatter that can write the object. Browsers send `*/*`, so they get the default format unless `RespectBrowserAcceptHeader` is set to `true`.
 
-Filters can receive dependencies through constructor injection when registered as service filters:
+The default formatters handle JSON (through `System.Text.Json`), plain text for `string` results, and the `204` for `null` results. XML is one call away with `AddXmlSerializerFormatters()` or `AddXmlDataContractSerializerFormatters()`, which register both an input and an output formatter:
 
 ```csharp
-[ServiceFilter(typeof(LoggingActionFilter))]
-public class ProductsController : ControllerBase
-{
-}
-```
-
-The `ServiceFilter` attribute resolves the filter from the dependency injection container, allowing it to receive injected dependencies. The filter type must be registered in the container during startup.
-
-## Content Negotiation
-
-Content negotiation allows clients to specify their preferred response format through the `Accept` header, and the server returns the response in that format when possible. This enables APIs to support multiple formats like JSON, XML, or custom types without duplicating action methods.
-
-### How Content Negotiation Works
-
-When an action returns an object, the framework examines the `Accept` header in the request to determine what format the client prefers. It then searches through registered output formatters to find one that can produce the requested format. If a matching formatter is found, the formatter serializes the response. If no formatter matches, the framework uses the first configured formatter by default.
-
-By default, ASP.NET Core includes a JSON formatter that serializes responses using `System.Text.Json`. The framework automatically serializes objects returned from actions into JSON without explicit configuration.
-
-### Adding XML Support
-
-To support XML responses in addition to JSON, add the XML formatters during service configuration:
-
-```csharp
-builder.Services.AddControllers()
+builder.Services.AddControllers(options => options.ReturnHttpNotAcceptable = true)
     .AddXmlSerializerFormatters();
 ```
 
-This registers formatters that can serialize responses using `XmlSerializer`. Clients can now request XML by sending an `Accept: application/xml` header. Without this header, the API continues returning JSON as the default format.
+Two attributes narrow negotiation per action or controller:
 
-Configure the `RespectBrowserAcceptHeader` option to ensure the framework honors the `Accept` header:
-
-```csharp
-builder.Services.AddControllers(options =>
-{
-    options.RespectBrowserAcceptHeader = true;
-});
-```
-
-By default, when no `Accept` header is present or no formatter matches, the framework uses the first registered formatter. You can change formatter order to control which format is used as the default.
+- `[Produces("application/json")]` limits the response formats and is also what OpenAPI generation reports. With a single type, a client whose `Accept` header doesn't match still gets that format, unless `ReturnHttpNotAcceptable` is `true`, in which case it gets `406`.
+- `[Consumes("application/json")]` limits the request body formats. A request with a different `Content-Type` gets `415 Unsupported Media Type` before the action runs.
 
 ### Custom Formatters
 
-Custom formatters handle specialized formats not supported by the built-in formatters. You might create a custom formatter to support CSV exports, custom binary protocols, or domain-specific formats.
-
-Output formatters derive from `TextOutputFormatter` for text-based formats or `OutputFormatter` for binary formats:
+A format the framework doesn't support, such as CSV, gets a formatter class. An output formatter derives from `TextOutputFormatter` (or `OutputFormatter` for binary formats), declares the media types and CLR types it handles, and writes the body:
 
 ```csharp
-public class CsvOutputFormatter : TextOutputFormatter
+public class OrderCsvOutputFormatter : TextOutputFormatter
 {
-    public CsvOutputFormatter()
+    public OrderCsvOutputFormatter()
     {
         SupportedMediaTypes.Add(MediaTypeHeaderValue.Parse("text/csv"));
         SupportedEncodings.Add(Encoding.UTF8);
     }
 
-    protected override bool CanWriteType(Type type)
+    protected override bool CanWriteType(Type? type) =>
+        typeof(IEnumerable<Order>).IsAssignableFrom(type);
+
+    public override async Task WriteResponseBodyAsync(OutputFormatterWriteContext context, Encoding encoding)
     {
-        return typeof(IEnumerable<Product>).IsAssignableFrom(type);
-    }
-
-    public override async Task WriteResponseBodyAsync(
-        OutputFormatterWriteContext context,
-        Encoding selectedEncoding)
-    {
-        var response = context.HttpContext.Response;
-        var products = (IEnumerable<Product>)context.Object;
-
-        await using var writer = new StreamWriter(response.Body, selectedEncoding);
-        await writer.WriteLineAsync("Id,Name,Price");
-
-        foreach (var product in products)
+        var builder = new StringBuilder("Id,Customer,Total\n");
+        foreach (var order in (IEnumerable<Order>)context.Object!)
         {
-            await writer.WriteLineAsync($"{product.Id},{product.Name},{product.Price}");
+            builder.Append($"{order.Id},{order.Customer},{order.Total}\n");
         }
+
+        await context.HttpContext.Response.WriteAsync(builder.ToString(), encoding);
     }
 }
+
+builder.Services.AddControllers(options => options.OutputFormatters.Add(new OrderCsvOutputFormatter()));
 ```
 
-The formatter declares which media types it supports and which .NET types it can serialize. The `WriteResponseBodyAsync` method performs the actual serialization, writing directly to the response stream.
-
-Register custom formatters during service configuration:
-
-```csharp
-builder.Services.AddControllers(options =>
-{
-    options.OutputFormatters.Insert(0, new CsvOutputFormatter());
-});
-```
-
-Inserting at index 0 makes the custom formatter the highest priority during content negotiation. If the client sends `Accept: text/csv`, your formatter handles the response. The position in the collection determines the default format when no specific format is requested.
-
-Input formatters work similarly but derive from `TextInputFormatter` or `InputFormatter` and implement `ReadRequestBodyAsync` to deserialize request bodies into .NET objects.
-
-## Content Negotiation
-
-Content negotiation allows clients to specify the desired response format using the `Accept` header and informs the server of request body formats using the `Content-Type` header. ASP.NET Core selects formatters based on these headers.
-
-### How Content Negotiation Works
-
-When a request includes an `Accept` header, ASP.NET Core enumerates the media types in preference order and attempts to find a formatter capable of producing one of those formats. If no formatter matches, the framework uses the default JSON formatter.
-
-By default, ASP.NET Core ignores the `Accept` header for browsers because browsers often send overly permissive accept headers like `*/*` or `text/html`, which don't reflect API client needs. To respect browser accept headers, set `RespectBrowserAcceptHeader` to true:
-
-```csharp
-builder.Services.AddControllers(options =>
-{
-    options.RespectBrowserAcceptHeader = true;
-});
-```
-
-### Returning Specific Formats
-
-Controllers can return specific formats using `Produces` attributes or by returning typed results that specify the content type.
-
-```csharp
-[HttpGet("{id}")]
-[Produces("application/json", "application/xml")]
-public IActionResult GetUser(int id)
-{
-    var user = _repository.GetUser(id);
-    return Ok(user);
-}
-```
-
-The `Produces` attribute informs OpenAPI documentation generators about supported response types and restricts the formatter selection to those types.
-
-In minimal APIs, specify content types using typed results:
-
-```csharp
-app.MapGet("/users/{id}", (int id) =>
-{
-    var user = repository.GetUser(id);
-    return Results.Json(user);
-});
-```
-
-The `Results.Json` method forces JSON serialization regardless of the `Accept` header.
-
-## Input and Output Formatters
-
-Formatters convert between raw HTTP request bodies and C# objects during input binding, and between C# objects and HTTP response bodies during output serialization. ASP.NET Core includes JSON and text formatters by default. Adding XML support or custom formats requires registering additional formatters.
-
-### Adding XML Formatter Support
-
-To support XML input and output, add the XML formatters package and register them:
-
-```csharp
-builder.Services.AddControllers()
-    .AddXmlSerializerFormatters();
-```
-
-With XML formatters registered, clients can send `Content-Type: application/xml` requests and receive `Accept: application/xml` responses.
-
-```csharp
-[HttpPost]
-[Consumes("application/json", "application/xml")]
-[Produces("application/json", "application/xml")]
-public IActionResult Create([FromBody] CreateUserRequest request)
-{
-    return Ok(request);
-}
-```
-
-The `Consumes` attribute restricts acceptable input formats. The `Produces` attribute restricts output formats. If a client sends a format not listed in `Consumes`, the framework returns 415 Unsupported Media Type.
-
-### Custom Input Formatters
-
-Custom input formatters handle non-standard content types. Extend `TextInputFormatter` for text-based formats or `InputFormatter` for binary formats.
-
-```csharp
-public class CsvInputFormatter : TextInputFormatter
-{
-    public CsvInputFormatter()
-    {
-        SupportedMediaTypes.Add(MediaTypeHeaderValue.Parse("text/csv"));
-        SupportedEncodings.Add(Encoding.UTF8);
-    }
-
-    protected override bool CanReadType(Type type)
-    {
-        return type == typeof(List<UserRecord>);
-    }
-
-    public override async Task<InputFormatterResult> ReadRequestBodyAsync(
-        InputFormatterContext context, Encoding encoding)
-    {
-        var httpContext = context.HttpContext;
-        using var reader = new StreamReader(httpContext.Request.Body, encoding);
-        var csv = await reader.ReadToEndAsync();
-
-        var records = ParseCsv(csv);
-        return await InputFormatterResult.SuccessAsync(records);
-    }
-
-    private List<UserRecord> ParseCsv(string csv)
-    {
-        // Parse CSV into list of records
-        return new List<UserRecord>();
-    }
-}
-```
-
-Register the custom formatter:
-
-```csharp
-builder.Services.AddControllers(options =>
-{
-    options.InputFormatters.Add(new CsvInputFormatter());
-});
-```
-
-Now clients can post CSV data with `Content-Type: text/csv`, and the formatter converts it to a strongly typed list.
-
-### Custom Output Formatters
-
-Custom output formatters convert C# objects to non-standard response formats. Extend `TextOutputFormatter` for text formats or `OutputFormatter` for binary formats.
-
-```csharp
-public class CsvOutputFormatter : TextOutputFormatter
-{
-    public CsvOutputFormatter()
-    {
-        SupportedMediaTypes.Add(MediaTypeHeaderValue.Parse("text/csv"));
-        SupportedEncodings.Add(Encoding.UTF8);
-    }
-
-    protected override bool CanWriteType(Type type)
-    {
-        return typeof(IEnumerable<UserRecord>).IsAssignableFrom(type);
-    }
-
-    public override async Task WriteResponseBodyAsync(
-        OutputFormatterWriteContext context, Encoding encoding)
-    {
-        var httpContext = context.HttpContext;
-        var records = context.Object as IEnumerable<UserRecord>;
-
-        var csv = GenerateCsv(records);
-        await httpContext.Response.WriteAsync(csv, encoding);
-    }
-
-    private string GenerateCsv(IEnumerable<UserRecord> records)
-    {
-        // Generate CSV from records
-        return string.Empty;
-    }
-}
-```
-
-Register the formatter:
-
-```csharp
-builder.Services.AddControllers(options =>
-{
-    options.OutputFormatters.Add(new CsvOutputFormatter());
-});
-```
-
-When a client sends `Accept: text/csv`, the custom formatter generates a CSV response instead of JSON.
-
-## Common Patterns and Best Practices
-
-### RESTful Endpoint Design
-
-Structure endpoints around resources rather than actions. Use HTTP verbs to indicate the operation and URL paths to identify the resource:
-
-- `GET /api/products` retrieves all products
-- `GET /api/products/5` retrieves a specific product
-- `POST /api/products` creates a new product
-- `PUT /api/products/5` updates an existing product
-- `DELETE /api/products/5` deletes a product
-
-Avoid encoding actions in URLs like `/api/products/get` or `/api/products/update/5`. The HTTP verb already indicates the action.
-
-### Async/Await Throughout
-
-Use asynchronous methods consistently across the entire request path. An async action that calls synchronous repository methods wastes the benefits of async by blocking a thread pool thread in the repository layer. Similarly, synchronous actions that call async methods with `.Result` or `.Wait()` can cause deadlocks and defeat the purpose of async code.
-
-### Validation in Multiple Layers
-
-Model validation through data annotations catches basic problems like required fields and format issues, but business rules often require deeper validation. Implement business rule validation in a service layer that runs after model binding but before the core business logic executes:
-
-```csharp
-[HttpPost]
-public async Task<ActionResult<Product>> Create(Product product)
-{
-    var validationResult = await _validator.ValidateAsync(product);
-    if (!validationResult.IsValid)
-        return BadRequest(validationResult.Errors);
-
-    var created = await _service.CreateAsync(product);
-    return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-}
-```
-
-This separates technical validation (correct format) from business validation (valid according to business rules) while keeping controllers focused on HTTP concerns.
-
-### Consistent Error Responses
-
-Return problem details for all error responses to provide a consistent structure that clients can parse reliably. The `[ApiController]` attribute enables this by default for validation errors, but you should apply the same pattern to business rule violations and unexpected errors through exception filters or explicit problem details responses.
-
-### Resource-Based Authorization
-
-Implement authorization at both the endpoint level through authorization filters and at the resource level within actions. Endpoint-level authorization ensures the user has general permission to access a type of resource, while resource-level authorization checks whether they can access a specific instance:
-
-```csharp
-[HttpGet("{id}")]
-[Authorize]
-public async Task<ActionResult<Product>> GetById(int id)
-{
-    var product = await _repository.GetByIdAsync(id);
-    if (product == null)
-        return NotFound();
-
-    if (!await _authService.CanAccessAsync(User, product))
-        return Forbid();
-
-    return product;
-}
-```
-
-This pattern prevents unauthorized users from discovering whether resources exist by distinguishing between "not found" and "forbidden" responses.
-
-## Sources
-
-- [Create web APIs with ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/web-api/?view=aspnetcore-9.0){:target="_blank" rel="noopener noreferrer"}
-- [ApiControllerAttribute Class](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.apicontrollerattribute?view=aspnetcore-9.0){:target="_blank" rel="noopener noreferrer"}
-- [Controller action return types in ASP.NET Core web API](https://learn.microsoft.com/en-us/aspnet/core/web-api/action-return-types?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-- [Routing in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/routing?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-- [Routing to controller actions in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/controllers/routing?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-- [Model Binding in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/model-binding?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-- [Custom Model Binding in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/advanced/custom-model-binding?view=aspnetcore-9.0){:target="_blank" rel="noopener noreferrer"}
-- [Filters in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/controllers/filters?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-- [Format response data in ASP.NET Core Web API](https://learn.microsoft.com/en-us/aspnet/core/web-api/advanced/formatting?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-- [Upload files in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads?view=aspnetcore-10.0){:target="_blank" rel="noopener noreferrer"}
-{% endraw %}
+A client that sends `Accept: text/csv` to an action returning orders now gets CSV, and every other client still gets JSON. Adding the formatter at the end of the list keeps JSON as the default, and inserting it at index 0 would make CSV the default for any client that doesn't ask. An input formatter mirrors this, deriving from `TextInputFormatter` and implementing `ReadRequestBodyAsync`, so the same controller can accept CSV request bodies.
+
+## Key Takeaways
+
+- API controllers derive from `ControllerBase`, get a new instance per request, and map to endpoints through `MapControllers`.
+- `[ApiController]` requires attribute routing, returns an automatic `400` for invalid model state, infers binding sources, and gives error results a Problem Details body. Each behavior except the routing requirement can be switched off in `ApiBehaviorOptions`.
+- Route tokens tie URLs to class and method names and keep their casing. A parameter transformer convention normalizes them.
+- `ActionResult<T>` is the usual return type. A `null` model result gives `204`, and a `string` result gives `text/plain` unless the client asks for a format another formatter produces. `HttpResults` types bypass formatters and negotiation entirely.
+- Binding failures land in `ModelState` instead of throwing. Only one parameter binds from the body, and `[FromServices]` is inferred for registered types.
+- Filters run in five nested stages: authorization, resource, action, exception, and result. Exception filters miss result execution and everything outside MVC, so middleware stays the default for error handling.
+- Filters that need services use `[ServiceFilter<T>]` or `[TypeFilter<T>]`.
+- Content negotiation follows the `Accept` header across the registered output formatters, ignores `*/*` from browsers by default, and returns `406` only when asked to. `[Consumes]` mismatches become `415`.
+- Controllers read JSON settings from `AddJsonOptions`, not `ConfigureHttpJsonOptions`, except for `HttpResults` types, which use the minimal API settings.

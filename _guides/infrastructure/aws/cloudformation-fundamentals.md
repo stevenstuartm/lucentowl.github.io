@@ -223,6 +223,44 @@ Resources:
 
 ---
 
+## Outputs
+
+**Outputs** export values that can be viewed or imported by other stacks.
+
+```yaml
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPCID
+
+  PublicSubnets:
+    Description: Public subnet IDs
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnets
+
+  WebServerURL:
+    Description: URL of web server
+    Value: !Sub http://${WebServer.PublicDnsName}
+
+  LoadBalancerDNS:
+    Description: Load balancer DNS name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+```
+
+**Using exported values in other stacks:**
+```yaml
+Resources:
+  WebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !ImportValue MyNetworkStack-PublicSubnet1
+```
+
+---
+
 ## Working with Stacks
 
 ### Creating Stacks

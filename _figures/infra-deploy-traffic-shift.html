@@ -1,0 +1,64 @@
+---
+title: "Traffic Shift by Strategy"
+kind: chart
+system: infrastructure
+summary: "Share of traffic on the new version over a release, for three strategies."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" role="img" aria-labelledby="idt-title idt-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="idt-title">Share of traffic on the new version over time for rolling, blue-green, and canary deployments</title>
+<desc id="idt-desc">Three small charts, each plotting the share of traffic on the new version from 0 to 100 percent over the course of one release. In a rolling deployment the share rises in even steps as each batch of instances is replaced. In a blue-green deployment the share stays at zero while the idle green environment is tested, then jumps to 100 percent at the switch. In a canary release the share rises in uneven steps of 5, 25, 50, and 100 percent, with a pause at each step while the new version is watched.</desc>
+<style>
+.idt-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.idt-grid { stroke: var(--color-border, #D5DDE5); stroke-width: 1; stroke-dasharray: 3 4; }
+.idt-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.idt-h { font-size: 14px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.idt-tick { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.idt-note { font-size: 11.5px; font-style: italic; fill: var(--color-accent, #A5486E); }
+.idt-cap { font-size: 12px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Panel 1: rolling -->
+<text class="idt-h" x="175" y="38" text-anchor="middle">Rolling</text>
+<line class="idt-grid" x1="70" y1="70" x2="280" y2="70"/>
+<line class="idt-grid" x1="70" y1="160" x2="280" y2="160"/>
+<line class="idt-axis" x1="70" y1="60" x2="70" y2="250"/>
+<line class="idt-axis" x1="70" y1="250" x2="280" y2="250"/>
+<text class="idt-tick" x="62" y="74" text-anchor="end">100%</text>
+<text class="idt-tick" x="62" y="164" text-anchor="end">50%</text>
+<text class="idt-tick" x="62" y="254" text-anchor="end">0%</text>
+<path class="idt-line" d="M 72,248 H 95 V 205 H 135 V 160 H 175 V 115 H 215 V 70 H 278"/>
+<text class="idt-note" x="178" y="226">one batch at a time</text>
+<text class="idt-tick" x="175" y="270" text-anchor="middle">time</text>
+
+<!-- Panel 2: blue-green -->
+<text class="idt-h" x="465" y="38" text-anchor="middle">Blue-green</text>
+<line class="idt-grid" x1="360" y1="70" x2="570" y2="70"/>
+<line class="idt-grid" x1="360" y1="160" x2="570" y2="160"/>
+<line class="idt-axis" x1="360" y1="60" x2="360" y2="250"/>
+<line class="idt-axis" x1="360" y1="250" x2="570" y2="250"/>
+<text class="idt-tick" x="352" y="74" text-anchor="end">100%</text>
+<text class="idt-tick" x="352" y="164" text-anchor="end">50%</text>
+<text class="idt-tick" x="352" y="254" text-anchor="end">0%</text>
+<path class="idt-line" d="M 362,248 H 480 V 70 H 568"/>
+<text class="idt-note" x="368" y="232">green tested, no users</text>
+<text class="idt-note" x="490" y="100">switch</text>
+<text class="idt-tick" x="465" y="270" text-anchor="middle">time</text>
+
+<!-- Panel 3: canary -->
+<text class="idt-h" x="755" y="38" text-anchor="middle">Canary</text>
+<line class="idt-grid" x1="650" y1="70" x2="860" y2="70"/>
+<line class="idt-grid" x1="650" y1="160" x2="860" y2="160"/>
+<line class="idt-axis" x1="650" y1="60" x2="650" y2="250"/>
+<line class="idt-axis" x1="650" y1="250" x2="860" y2="250"/>
+<text class="idt-tick" x="642" y="74" text-anchor="end">100%</text>
+<text class="idt-tick" x="642" y="164" text-anchor="end">50%</text>
+<text class="idt-tick" x="642" y="254" text-anchor="end">0%</text>
+<path class="idt-line" d="M 652,248 H 665 V 241 H 715 V 205 H 765 V 160 H 815 V 70 H 858"/>
+<text class="idt-note" x="678" y="232">5%</text>
+<text class="idt-note" x="770" y="196">25%, then 50%</text>
+<text class="idt-tick" x="755" y="270" text-anchor="middle">time</text>
+
+<text class="idt-cap" x="465" y="305" text-anchor="middle">Share of traffic on the new version during one release. Step sizes vary by tool.</text>
+</g>
+</svg>

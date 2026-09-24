@@ -3,337 +3,137 @@ layout: guide
 title: "Disaster Recovery Patterns"
 category: Infrastructure & Cloud
 subcategory: Cloud Operations
-description: "Business continuity strategies from backup-and-restore to multi-site hot-standby, comparing RTO/RPO requirements, costs, and implementation approaches for disaster recovery."
-tags: [infrastructure, disaster-recovery, reliability, aws, practical]
+description: "How to plan for losing a whole site or region, or the data itself: business impact analysis, RTO and RPO, the four standard strategies from backup and restore to multi-site active/active, why replication is not a backup, failing over and back, and testing that recovery works."
+tags: [practical, disaster-recovery, rto-rpo, backup, multi-region, business-continuity]
 ---
 
-## Overview
+## Disaster Recovery Is Not High Availability
 
-Disaster Recovery (DR) strategies define how organizations prepare for and respond to disruptive events that could affect business operations. These patterns provide different levels of protection, recovery speed, and cost considerations to match various business continuity requirements.
+**High availability** keeps a workload running through the failures it expects: an instance dying, a disk failing, one data center in a cloud region going dark. It works by running redundant copies across availability zones, the separate data centers within a region, so a failure removes capacity without stopping service.
 
-**Disaster Types:**
-- **Natural Disasters**: Earthquakes, floods, hurricanes, fires
-- **Technical Failures**: Hardware failures, software bugs, network outages
-- **Human Actions**: Accidental deletions, malicious attacks, operational errors
-- **Regional Outages**: Data center failures, power grid issues, ISP problems
+**Disaster recovery** (DR) is the plan for failures high availability can't absorb. The events it covers fall into two groups:
 
-## Key Concepts
+- **Losing a site.** A whole cloud region becomes unavailable, or a data center outage takes down a single-site deployment.
+- **Losing the data.** Someone deletes a table, a bug corrupts records, ransomware encrypts storage, or an attacker with stolen credentials destroys an account's resources.
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Recovery Point Objective (RPO)</h4>
-<p>RPO measures the maximum age of files that an organization must recover from backup storage for normal operations to resume after a disaster.</p>
-<ul>
-<li><strong>What it answers:</strong> How much data can we afford to lose?</li>
-<li><strong>Example:</strong> RPO of 1 hour = accepting up to 1 hour of data loss</li>
-<li><strong>Typical ranges:</strong> Minutes to hours for critical systems</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Recovery Time Objective (RTO)</h4>
-<p>RTO measures the targeted duration within which a business process must be restored after a disaster to avoid unacceptable consequences.</p>
-<ul>
-<li><strong>What it answers:</strong> How long can we afford to be down?</li>
-<li><strong>Example:</strong> RTO of 2 hours = systems must be restored within 2 hours</li>
-<li><strong>Typical ranges:</strong> Minutes for mission-critical systems</li>
-</ul>
-</div>
-</div>
+The second group is easy to underestimate, because it defeats high availability outright. A replica in another zone or region copies a deletion or a corruption as faithfully as it copies a valid write, usually within seconds. Replication protects against losing a site. Only point-in-time backups, kept where the same mistake or attacker cannot reach them, protect against losing the data.
 
-### Recovery Point Objective (RPO)
-RPO measures the maximum age of files that an organization must recover from backup storage for normal operations to resume after a disaster. In other words, it determines how much data an organization can afford to lose.
+For many workloads, AWS's disaster recovery guidance notes, a well-built multi-zone deployment in one region already covers most physical disasters, and backups cover the data. Recovery into a second region is for when the definition of a disaster includes losing a whole region, or when regulation requires it.
 
-- **Example**: RPO of 1 hour means accepting up to 1 hour of data loss
-- **Typical Ranges**: Minutes to hours for critical systems, hours to days for less critical systems
+---
 
-### Recovery Time Objective (RTO)
-RTO measures the targeted duration within which a business process must be restored after a disaster to avoid unacceptable consequences. It determines how long an organization can afford to be down.
-
-- **Example**: RTO of 2 hours means systems must be restored within 2 hours
-- **Typical Ranges**: Minutes for mission-critical systems, hours to days for others
+## Setting Recovery Objectives
 
 ### Business Impact Analysis
-A study determining how important a system is to day-to-day business operations, answering:
-- How much money would be lost from downtime?
-- Would company reputation suffer?  
-- How much capital should be invested in DR?
-- What are the regulatory compliance requirements?
 
-## Backup and Restore
+A **business impact analysis** works out what a disruption to each workload would cost: lost revenue, customers unable to act, contractual penalties, regulatory exposure, and damage to reputation. Impact can depend on timing. A payroll system that is down the day before payday costs far more than the same outage the day after.
 
-The most basic DR strategy involves creating backups of data and systems that can be restored when needed. This approach offers the highest RPO but lowest cost and complexity.
+The analysis sets how quickly each workload must come back and how much data it can lose. It is weighed against the probability of each kind of disaster and the cost of protecting against it. If a recovery strategy costs more than the loss it prevents, and no regulation requires it, the better decision may be to accept the risk. Some workloads rightly have no disaster recovery beyond backups. The DR plan also belongs inside the organization's wider business continuity plan, since recovering a system helps little if the business around it can't operate.
 
-### How It Works
-1. **Regular Backups**: Automated snapshots of data, configurations, and system images
-2. **Offsite Storage**: Backups stored in different geographic locations
-3. **Restore Process**: Provision new infrastructure and restore from backups during disaster
-4. **Testing**: Regular validation that backups can be successfully restored
+### RTO and RPO
 
-### Implementation Components
-- **Amazon Machine Images (AMIs)**: Pre-configured server snapshots
-- **Database Snapshots**: Point-in-time copies of database state
-- **Cloud Storage Sync**: Services like AWS Storage Gateway, S3 cross-region replication
-- **Infrastructure as Code**: CloudFormation, Terraform templates for environment recreation
+Two objectives come out of the analysis. AWS defines them this way:
 
-### Advantages
-- **Lowest Cost**: Minimal ongoing infrastructure investment
-- **Simple Implementation**: Well-understood backup and restore processes
-- **Wide Applicability**: Suitable for all types of data and applications
-- **Regulatory Compliance**: Meets basic data retention requirements
+- **Recovery time objective (RTO):** the maximum acceptable delay between the interruption of service and its restoration.
+- **Recovery point objective (RPO):** the maximum acceptable time since the last data recovery point, which sets how much recent data may be lost.
 
-### Disadvantages
-- **High RPO**: Potential for significant data loss (hours to days)
-- **High RTO**: Long recovery times due to infrastructure provisioning
-- **Manual Intensive**: Often requires significant manual intervention
-- **Testing Overhead**: Regular restore testing required but often neglected
+{% include figure.html id="infra-rto-rpo-timeline" %}
 
-### Typical Metrics
-- **RPO**: 8-24 hours
-- **RTO**: 4-24+ hours
-- **Cost**: Lowest operational expense
-
-### When to Use
-- Non-critical systems where extended downtime is acceptable
-- "Cold" or archived data that changes infrequently
-- Budget-constrained environments
-- Initial DR implementation as foundation for more advanced strategies
-
-## Pilot Light
-
-For critical core data and services. The backups are provisioned but not running until needed. Pilot light involves maintaining a minimal version of an application infrastructure in the cloud that can be rapidly scaled up in the event of a disaster.
-
-### How It Works
-1. **Core Infrastructure**: Essential components always running (databases, key services)
-2. **Dormant Resources**: Application servers and non-core components shut down
-3. **Data Replication**: Continuous or near-continuous data synchronization
-4. **Activation Process**: Scale up dormant resources when disaster strikes
-5. **Traffic Switching**: Route users to scaled-up environment
-
-### Key Characteristics
-- **Always-On Core**: Critical data stores remain active and synchronized
-- **Shut-Off Compute**: Application servers are not deployed (zero instances)
-- **Separate Region**: Located in different geographic region from primary
-- **Quick Scaling**: Use AMIs and Auto Scaling to rapidly provision resources
-
-### Infrastructure Components
-- **Data Layer**: Amazon RDS cross-region read replicas, DynamoDB Global Tables
-- **Storage**: S3 cross-region replication, EBS snapshots
-- **Network**: VPC, subnets, security groups pre-configured
-- **Load Balancing**: Application Load Balancers configured but not receiving traffic
-- **Auto Scaling**: Groups configured with zero instances
-
-### Advantages
-- **Cost Effective**: Only pay for minimal running infrastructure
-- **Faster than Backup/Restore**: Core systems already provisioned
-- **Data Protection**: Continuous replication protects against data loss
-- **Scalable**: Can quickly scale to match production capacity
-
-### Disadvantages
-- **Manual Activation**: Requires human intervention to scale up
-- **Testing Complexity**: Harder to test without full activation
-- **Database Failover**: May involve promoting read replicas (with downtime)
-- **Application Dependencies**: Must ensure all dependencies can be quickly provisioned
-
-### Typical Metrics
-- **RPO**: 15 minutes to 1 hour (based on replication frequency)
-- **RTO**: 30 minutes to 1 hour (infrastructure scaling time)
-- **Cost**: Low to medium ongoing expense
-
-### Scaling Process
-1. **Detection**: Automated or manual disaster detection
-2. **Database Promotion**: Convert read replicas to primary databases
-3. **Instance Deployment**: Launch EC2 instances from pre-configured AMIs
-4. **Auto Scaling**: Scale out application tiers to production capacity
-5. **Load Balancer Update**: Begin routing traffic to recovery region
-6. **DNS Update**: Point domain names to recovery environment
-
-### When to Use
-- Business-critical applications requiring faster recovery than backup/restore
-- Systems with acceptable brief downtime during scaling process
-- Organizations wanting balance between cost and recovery speed
-- Applications with clear separation between data and compute tiers
-
-## Warm Standby
-
-A scaled-down version of a fully functional environment. This smaller, but always-on, environment can be quickly scaled up to handle production loads during a disaster. Warm standby involves ensuring that there is a scaled down, but fully functional, copy of your production environment in another Region.
-
-### How It Works
-1. **Functional Stack**: Complete application stack running at reduced capacity
-2. **Live Traffic Handling**: Can immediately serve requests, though at limited scale
-3. **Continuous Replication**: Real-time data synchronization from production
-4. **Scaling Process**: Increase capacity rather than deploying new infrastructure
-5. **Failover**: Quick traffic switching with minimal downtime
-
-### Key Characteristics
-- **Always Functional**: Unlike pilot light, can handle traffic immediately
-- **Reduced Capacity**: Typically 20-50% of production capacity
-- **Fully Deployed**: All application components running
-- **Separate Region**: Geographic separation for true disaster protection
-
-### Infrastructure Components
-- **Compute**: EC2 instances running but at smaller scale (e.g., 1 per tier)
-- **Databases**: Synchronized read replicas or secondary databases
-- **Load Balancers**: Active and health-checking warm standby instances
-- **Auto Scaling**: Configured to rapidly scale up when needed
-- **Monitoring**: Full observability stack monitoring warm standby health
-
-### Advantages
-- **Immediate Availability**: Can handle traffic at reduced capacity immediately
-- **Lower RTO**: Faster recovery than pilot light (only scaling, no deployment)
-- **Easy Testing**: Can test with synthetic transactions before failover
-- **Partial Capacity**: Provides service continuity even before full scaling
-
-### Disadvantages
-- **Higher Cost**: Running infrastructure continuously increases expense
-- **Resource Management**: Must maintain and update two environments
-- **Scaling Required**: Still needs scaling process to handle full production load
-- **Database Synchronization**: Complex database failover procedures
-
-### Typical Metrics
-- **RPO**: 5-15 minutes (based on replication lag)
-- **RTO**: 5-30 minutes (scaling time only)
-- **Cost**: Medium ongoing operational expense
-
-<div class="callout callout--tip">
-<p class="callout__title">Pilot Light vs. Warm Standby</p>
-<p><strong>Pilot Light:</strong> Cannot handle production traffic without initial action (turning on servers)</p>
-<p><strong>Warm Standby:</strong> Can immediately handle traffic at reduced capacity</p>
-</div>
-
-### The key difference between warm standby and pilot light:
-- **Pilot Light**: Cannot handle production traffic without initial action (turning on servers)
-- **Warm Standby**: Can immediately handle traffic at reduced capacity
-
-### When to Use
-- Applications requiring minimal downtime and fast recovery
-- Systems where partial capacity is acceptable during recovery
-- Organizations with moderate DR budget
-- Applications with predictable scaling patterns
-
-## Multi-Site Hot-Site
-
-Multi-site active/active is the most robust and costly disaster recovery strategy. It involves creating parallel infrastructure and data stores that are continuously kept in sync with production and can take over immediately during a disaster.
-
-### How It Works
-1. **Parallel Production**: Full-scale production environment in multiple regions
-2. **Active/Active**: Both sites serve production traffic simultaneously
-3. **Real-Time Sync**: Continuous data replication between sites
-4. **Automatic Failover**: Instant traffic redistribution during outages
-5. **Load Distribution**: Normal operations use both sites for capacity
-
-### Key Characteristics
-- **Full Capacity**: Each site capable of handling complete production load
-- **Zero Downtime**: Immediate failover with no service interruption
-- **Global Distribution**: Sites in different geographic regions
-- **Automatic Recovery**: Minimal human intervention required
-
-### Infrastructure Components
-- **Compute**: Full production capacity in multiple regions
-- **Databases**: Multi-region databases with automatic failover
-- **Global Load Balancers**: Route 53, Global Accelerator for traffic distribution
-- **Data Replication**: Synchronous or near-synchronous replication
-- **Monitoring**: Global monitoring and alerting systems
-
-### Advantages
-- **Near-Zero RTO**: Almost instantaneous failover capabilities
-- **Near-Zero RPO**: Minimal data loss with synchronous replication
-- **Business Continuity**: Uninterrupted service during disasters
-- **Performance**: Global presence improves user experience
-
-### Disadvantages
-- **Highest Cost**: Double (or more) infrastructure investment
-- **Complexity**: Most complex to design, implement, and maintain
-- **Data Consistency**: Complex distributed database challenges
-- **Over-Engineering**: May be excessive for many business requirements
-
-### Typical Metrics
-- **RPO**: Near-zero to 5 minutes
-- **RTO**: Near-zero to 5 minutes  
-- **Cost**: Highest ongoing operational expense
-
-### Implementation Patterns
-- **Active/Active**: Traffic distributed across multiple sites
-- **Active/Passive**: One site primary, others ready for immediate takeover
-- **Regional Distribution**: Sites in different continents for global coverage
-
-### When to Use
-- Mission-critical systems where any downtime is unacceptable
-- Financial services, healthcare, emergency services
-- Applications with global user base requiring low latency
-- Organizations with substantial DR budgets and requirements
-
-## Comparison Matrix
-
-| Strategy | RPO | RTO | Cost | Complexity | Best For |
-|----------|-----|-----|------|------------|-----------|
-| **Backup & Restore** | 8-24 hours | 4-24+ hours | Lowest | Low | Non-critical systems, archival data |
-| **Pilot Light** | `15 min−1 hour` | `30 min−1 hour` | Low-Medium | Medium | Business-critical with cost constraints |
-| **Warm Standby** | 5-15 minutes | 5-30 minutes | Medium | Medium-High | Applications needing fast recovery |
-| **Multi-Site Hot** | `Near-zero−5 min` | `Near-zero−5 min` | Highest | High | Mission-critical, zero-downtime requirements |
-
-## Implementation Strategies
-
-### AWS-Specific Services
-- **AWS Elastic Disaster Recovery**: Managed pilot light solution
-- **Aurora Global Database**: Multi-region database with fast failover
-- **Route 53 Health Checks**: Automated DNS failover
-- **CloudFormation**: Infrastructure as code for consistent deployments
-- **AWS Backup**: Centralized backup across AWS services
-
-### Multi-Cloud Considerations
-- **Cloud Agnostic Tools**: Terraform, Kubernetes for portability
-- **Data Synchronization**: Cross-cloud replication strategies
-- **Network Connectivity**: VPN, direct connect between cloud providers
-- **Compliance**: Ensure regulatory requirements met across providers
-
-### Hybrid Approaches
-Many organizations implement multiple strategies:
-- **Critical Tier**: Hot-site or warm standby
-- **Important Tier**: Pilot light
-- **Standard Tier**: Backup and restore
-
-## Best Practices
-
-### Planning and Design
-1. **Business Impact Analysis**: Understand true cost of downtime for each system
-2. **RTO/RPO Requirements**: Set realistic targets based on business needs
-3. **Budget Allocation**: Balance cost with recovery requirements
-4. **Dependency Mapping**: Understand system interdependencies
-5. **Regulatory Compliance**: Meet industry-specific requirements
-
-### Implementation
-1. **Automation First**: Automate deployment, scaling, and failover processes
-2. **Infrastructure as Code**: Version control all infrastructure definitions
-3. **Security**: Maintain security posture across all DR environments
-4. **Data Encryption**: Encrypt data in transit and at rest
-5. **Access Control**: Implement proper IAM for DR environments
-
-### Testing and Validation
-1. **Regular DR Drills**: Test failover procedures quarterly or bi-annually
-2. **Game Days**: Simulate real disaster scenarios with full team participation
-3. **Runbook Validation**: Keep recovery procedures up-to-date and tested
-4. **Automated Testing**: Include DR testing in CI/CD pipelines where possible
-5. **Recovery Validation**: Verify data integrity and application functionality after recovery
-
-### Operations
-1. **Monitoring**: Implement comprehensive monitoring across all DR components
-2. **Alerting**: Set up proactive alerts for DR environment health
-3. **Documentation**: Maintain current runbooks and contact information
-4. **Training**: Ensure team members understand DR procedures
-5. **Communication**: Plan stakeholder communication during disasters
-
-### Cost Optimization
-1. **Resource Scheduling**: Scale down non-production DR resources during off-hours
-2. **Storage Lifecycle**: Use cheaper storage tiers for older backups
-3. **Reserved Instances**: Use long-term commitments for predictable DR infrastructure
-4. **Monitoring Costs**: Track DR expenses and optimize regularly
-5. **Regular Reviews**: Assess if DR strategy matches current business needs
-
-### Security Considerations
-1. **Network Isolation**: Secure network boundaries between regions
-2. **Identity Management**: Consistent access controls across environments
-3. **Data Privacy**: Comply with data residency and privacy regulations
-4. **Incident Response**: Include security considerations in DR procedures
-5. **Forensics**: Preserve logs and evidence during disaster recovery
+Both are maximums the business accepts, not measurements, and each strategy below is a way to meet them at a particular cost. Two things push the real numbers past the targets. A workload's recovery cannot finish before its dependencies recover, such as its identity provider, its DNS, or a shared database, so objectives have to be set with the dependency chain in view. And for a data disaster, the usable recovery point is the last one taken *before the corruption began*, which may be far older than the replication lag suggests if the corruption went unnoticed for days.
 
 ---
+
+## The Four Strategies
+
+AWS's disaster recovery whitepaper groups strategies into four, from cheapest and slowest to most expensive and fastest. The first three are *active/passive*: one region serves traffic and the recovery region waits. The fourth runs more than one region at once.
+
+| Strategy | Running in the recovery region | Work at failover | Recovery time and data loss, as AWS characterizes them | Ongoing cost |
+|---|---|---|---|---|
+| **Backup and restore** | Backups only | Deploy the infrastructure, restore the data, switch traffic | Hours | Lowest |
+| **Pilot light** | Live replicated data and core infrastructure. Application servers not running | Deploy or start the application servers, scale out, promote the replica database to accept writes, switch traffic | Tens of minutes | Low |
+| **Warm standby** | The whole stack, running at reduced capacity | Scale up, promote the database, switch traffic | Minutes | Medium |
+| **Multi-site active/active** | The whole stack at full capacity, serving users | Route traffic away from the failed region | Near zero for losing a region | Highest |
+
+### Backup and Restore
+
+Data is backed up on a schedule, or continuously where the service supports *point-in-time recovery*, restoring to any chosen moment within a retention window, and the backups are copied to the recovery region. At failover, the infrastructure is recreated there and the data restored. The infrastructure has to be defined as code for this to work within any sensible RTO, and the backup has to include everything the rebuild needs, such as machine images and configuration, not just the data.
+
+Restoring a backup is itself a *control plane* operation, the kind of management API call that is less available than the services' everyday *data plane*, the path that actually serves requests. AWS suggests restoring backups into the recovery region on a schedule. That leaves a recent, usable data store in place even if restore calls fail during a disaster, and it tests the backups at the same time.
+
+### Pilot Light
+
+The data is replicated continuously into live databases and storage in the recovery region, and the core infrastructure, such as networking, is provisioned. Application servers are defined but not running. AWS's recommended form of "switched off" is not deployed at all, with everything ready to deploy on failover. Recovery means deploying and scaling out the application tier, promoting the replica database to accept writes, and switching traffic.
+
+The cost is mostly the replicated data, but every release now has to reach both regions, or the recovery region falls behind the primary. How fast the database takes over matters too. Promoting an RDS read replica in another region takes several minutes or longer and includes a reboot. An Aurora global database replicates with lag typically measured in seconds or less, and a secondary cluster typically takes over as primary within a few minutes. AWS Elastic Disaster Recovery applies the pilot light pattern to servers, whether in AWS, on-premises, or in another cloud, replicating their disks continuously and launching full-size copies on failover.
+
+### Warm Standby
+
+A complete copy of the workload runs in the recovery region at reduced size, so it can serve traffic immediately, just not all of it. That is the difference from pilot light: pilot light cannot handle a request until something is started, while warm standby only has to scale up. Because the standby is live, it can also be tested continuously with synthetic requests.
+
+Scaling up is a control plane operation too, and it depends on the recovery region's service quotas being high enough for production capacity. A team that doesn't want to depend on scaling at the worst moment can run the standby at full capacity, which AWS calls *hot standby*. At that point, many teams choose to serve traffic from both regions instead, since the capacity is already paid for.
+
+### Multi-Site Active/Active
+
+Every region serves users all the time, each able to carry the full load. Losing a region means routing its users to the others, so there is no failover in the usual sense, and recovery from a regional outage can be close to immediate.
+
+The hard part is writes. AWS describes three designs:
+
+- **Write global.** All writes go to one region and reads are served locally. Losing the write region means promoting another, as an Aurora global database does.
+- **Write local.** Each region accepts writes, and the database reconciles conflicts. DynamoDB global tables do this by default with *last writer wins*, so one of two concurrent updates to the same item is silently discarded. Their newer strongly consistent mode instead replicates writes synchronously and rejects the conflicting one.
+- **Write partitioned.** Each user or record belongs to one region, chosen by a key such as user ID, so two regions never write the same data.
+
+Active/active is the most complex and expensive strategy, and like every other strategy it still needs the backups covered below.
+
+---
+
+## Failing Over and Back
+
+A failover can start automatically on health checks or be started by a person. AWS's guidance leans toward a person deciding and automation doing the work. Every failover costs some availability and some data, so failing over on a false alarm causes the loss it was meant to prevent, but once the decision is made, the steps should be one command, not a runbook to follow by hand at 3 a.m.
+
+The steps themselves should avoid control plane operations wherever possible, since AWS designs data planes for higher availability than control planes. Two more steps come before any traffic moves. Detection counts against the RTO, since the clock starts when service is interrupted, not when someone notices, so monitoring that catches a regional failure quickly is part of the recovery design. And writes have to stop reaching the old primary before the replica is promoted, which in a real outage usually means taking the application offline or pointing it at a writer endpoint that moves with the promotion. Otherwise both regions accept writes at once, a *split brain*, and the two diverging copies of the data have to be reconciled by hand.
+
+For moving traffic between regions, the reliable options run on the data plane:
+
+- **DNS failover on health checks**, such as Amazon Route 53's, runs on the data plane. Amazon Application Recovery Controller adds health checks that act as manual on/off switches, so a person can trigger the failover through the same highly available path.
+- **Anycast addresses**, static IP addresses announced from many locations at once, such as AWS Global Accelerator's, move traffic on health checks without waiting for DNS caches to expire.
+
+Changing routing weights by editing DNS records, or turning Global Accelerator's traffic dials by hand, are control plane operations, and less dependable during an event.
+
+Failing back is its own project and is often harder than failing over. The original region's data is now stale, so it has to be resynchronized from the recovery region before traffic returns, and the move back usually carries its own brief outage. It needs the same planning and testing as the failover.
+
+---
+
+## Keeping Backups Out of Reach
+
+A backup that the same mistake or attacker can delete is not a disaster recovery measure. The protections that matter:
+
+- **Versioning and point-in-time recovery**, so an overwritten or corrupted object can be rolled back to a moment before the damage. Amazon S3 replication, by default, does not replicate deletions from the source, which keeps the recovery region's copy intact when objects are deleted in the primary.
+- **A separate account**, so credentials stolen from the production account cannot reach the backups. AWS Backup can copy backups across accounts and regions.
+- **Immutability**, where even an administrator cannot delete a backup before its retention period ends. AWS Backup Vault Lock and S3 Object Lock provide this in *compliance mode*. Their governance mode can be lifted by anyone with the right permissions, so it guards against accidents but not against a compromised administrator.
+
+---
+
+## Testing Recovery
+
+A recovery plan that has never been exercised is a guess. Testing turns the RTO and RPO from targets into measured numbers, and it finds the steps that no longer work because the architecture moved on.
+
+- **Restore tests** prove backups can be restored and that the restored data is complete and usable. Scheduled automatic restores do this continuously.
+- **Failover drills** run the real procedure, first in a non-production environment and eventually in production during a planned window, and time each step against the RTO.
+- **Region evacuation tests** for active/active confirm that the remaining regions can carry the full load when one is drained.
+- **Failback** gets tested too, since a failover that can't be reversed leaves the workload in its recovery region indefinitely.
+
+Tests belong on a schedule and after any significant architecture change. Deliberately injecting failures into production systems goes further, into chaos engineering, and complements rather than replaces these drills. [AWS Resilience Hub](https://aws.amazon.com/resilience-hub/){:target="_blank" rel="noopener noreferrer"} can assess a workload against its RTO and RPO targets between tests.
+
+---
+
+## Choosing per Workload
+
+Most organizations don't pick one strategy. They tier their workloads by the business impact analysis and give each tier the cheapest strategy that meets its objectives:
+
+| Tier | Typical strategy |
+|---|---|
+| Revenue- or safety-critical, where minutes of downtime matter | Warm standby, or multi-site active/active |
+| Important, where an outage of under an hour is tolerable | Pilot light |
+| Everything else | Backup and restore |
+
+A workload's tier also constrains its dependencies. A critical service on warm standby that relies on a shared database on backup and restore will recover at the database's pace, so tiering has to follow the dependency chain, not just each service on its own.

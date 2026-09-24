@@ -3,62 +3,33 @@ title: "MVVM Pattern with CommunityToolkit.Mvvm"
 layout: guide
 category: "WinUI 3"
 subcategory: "Data & MVVM"
-description: "Implementing the Model-View-ViewModel pattern in WinUI 3 using the CommunityToolkit.Mvvm library with source generators for ObservableProperty, RelayCommand, and messaging."
-tags: [winui, winui-3, mvvm, data-binding, design-patterns, dotnet, practical]
+description: "Structuring WinUI 3 apps with Model-View-ViewModel using CommunityToolkit.Mvvm: observable partial properties and why WinUI needs them, generated relay and async commands with cancellation and concurrency control, messaging between view models, and XAML Behaviors for invoking commands from any event."
+tags: [mvvm, communitytoolkit-mvvm, source-generators, relaycommand, messenger, xaml-behaviors, practical]
 ---
 
-## Table of Contents
+## Where MVVM Puts Each Kind of Code
 
-- [Why MVVM Matters for WinUI 3](#why-mvvm-matters-for-winui-3)
-- [CommunityToolkit.Mvvm Overview](#communitytoolkitmvvm-overview)
-- [ObservableObject Base Class](#observableobject-base-class)
-- [ObservableProperty Attribute](#observableproperty-attribute)
-- [RelayCommand Attribute](#relaycommand-attribute)
-- [Messaging with IMessenger](#messaging-with-imessenger)
-- [Source Generators and AOT Compatibility](#source-generators-and-aot-compatibility)
-- [Practical ViewModel Structure](#practical-viewmodel-structure)
+A page whose code-behind loads data, formats it, tracks what is selected, and reacts to every click works at first and becomes hard to change and harder to test. Its logic reads `TextBox.Text` and sets `Button.IsEnabled` directly, so a test has to create the controls to exercise it.
 
----
+Model-View-ViewModel splits that code into three roles:
 
-## Why MVVM Matters for WinUI 3
+| Role | Holds | Knows about |
+| --- | --- | --- |
+| **Model** | Domain data and rules, plus the services that load and save it | Nothing about the UI |
+| **ViewModel** | The state a screen shows, as properties, and what the user can do, as commands | The model, but no controls |
+| **View** | The XAML page and its minimal code-behind | The view model, through bindings |
 
-WinUI 3 applications built without a clear separation between UI logic and application logic tend to accumulate complexity in their code-behind files. When event handlers in a `MainWindow.xaml.cs` grow to manage state, trigger network calls, format display values, and respond to user input all at once, testing any of that logic becomes difficult. You cannot easily write a unit test against code that directly references `TextBox.Text` or manipulates visual elements.
+The view model is an ordinary C# class. A test constructs it with fake services, sets properties, runs commands, and checks the resulting state without a window or a UI thread. The view connects to it through data binding. Properties raise `PropertyChanged` so bound controls update, and buttons bind to `ICommand` objects that run the view model's logic and enable or disable themselves.
 
-Model-View-ViewModel addresses this by establishing three layers with distinct responsibilities. The Model holds domain data and business rules without any knowledge of the UI. The View is purely declarative XAML that binds to properties and commands exposed by the ViewModel. The ViewModel contains the logic that connects the two, holding observable state and commands that the View reacts to through data binding.
-
-This structure makes WinUI 3 applications much more testable. A ViewModel is a plain C# class. You can construct it in a test, call methods, set properties, and assert on the resulting state without ever instantiating a window or touching the UI thread. Separation of concerns also means that designers can work on the XAML without touching logic files, and the same ViewModel can theoretically back multiple views.
-
-The binding infrastructure in WinUI 3, particularly compiled bindings using `x:Bind`, is built around `INotifyPropertyChanged` and `ICommand`. ViewModels that implement these interfaces correctly get UI updates for free. When a property changes, any bound control updates automatically; when a command's executability changes, bound buttons enable or disable without manual intervention.
+Writing those notifications and commands by hand is repetitive. The [MVVM Toolkit](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/){:target="_blank" rel="noopener noreferrer"} (`CommunityToolkit.Mvvm`), part of the .NET Community Toolkit and maintained and published by Microsoft, generates them. It targets .NET Standard and works with any UI framework, and it requires no particular app structure or DI container.
 
 ---
 
-## CommunityToolkit.Mvvm Overview
+## Observable Properties
 
-Before the [CommunityToolkit.Mvvm](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/){:target="_blank" rel="noopener noreferrer"} library existed, implementing MVVM by hand meant writing boilerplate `INotifyPropertyChanged` implementations repeatedly. Every observable property required a backing field, a getter that returned the field, a setter that compared the old and new values, raised `PropertyChanged` with the property name, and sometimes triggered side effects. Multiplied across dozens of properties in a real application, this became noise that obscured the actual logic.
+### ObservableObject
 
-CommunityToolkit.Mvvm is the officially recommended approach for MVVM in .NET applications including WinUI 3. It is maintained by Microsoft's .NET team and ships as a NuGet package. The library provides base classes and, more significantly, C# source generators that eliminate the boilerplate entirely at compile time.
-
-To add it to a WinUI 3 project, install the NuGet package:
-
-```xml
-<PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
-```
-
-Or via the Package Manager console:
-
-```
-dotnet add package CommunityToolkit.Mvvm
-```
-
-The library does not require any runtime service registration or dependency injection container, though it integrates cleanly with `Microsoft.Extensions.DependencyInjection` if you use one.
-
----
-
-## ObservableObject Base Class
-
-The foundation of the toolkit is the `ObservableObject` base class. Inheriting from it gives a class a complete `INotifyPropertyChanged` and `INotifyPropertyChanging` implementation along with several utility methods.
-
-The most useful of those methods is `SetProperty`. Without source generators, you would call it manually in property setters to handle the comparison and change notification in a single line:
+View models derive from `ObservableObject`, which implements `INotifyPropertyChanged` and `INotifyPropertyChanging`. Its `SetProperty` method does the whole setter in one call. It compares the old and new values, and when they differ it raises `PropertyChanging`, assigns the field, and raises `PropertyChanged`.
 
 ```csharp
 private string _username = string.Empty;
@@ -70,267 +41,267 @@ public string Username
 }
 ```
 
-`SetProperty` compares the current backing field value to the incoming value, skips the assignment and notification if they are equal, and raises both `PropertyChanging` before and `PropertyChanged` after the assignment if they differ. This is more reliable than writing the comparison by hand and less error-prone than forgetting to raise both events.
+Most properties never need even that much, because a source generator writes it.
 
-For ViewModels that need to perform async initialization, `ObservableObject` also exposes `SetPropertyAndNotifyOnCompletion` for wrapping `Task` results as observable properties, though source generators provide a cleaner path for most async patterns.
+### Generating Properties with [ObservableProperty]
 
----
-
-## ObservableProperty Attribute
-
-The `[ObservableProperty]` attribute is the highest-impact feature the toolkit provides through source generators. Instead of writing the full property pattern above, you declare a private field and annotate it:
+A source generator runs during the build and adds C# code to your project, which you can read under the project's **Dependencies > Analyzers** node in Visual Studio. Mark a `partial` property with `[ObservableProperty]`, and the toolkit's generator writes its implementation in the other half of a `partial` class:
 
 ```csharp
+using CommunityToolkit.Mvvm.ComponentModel;
+
 public partial class SearchViewModel : ObservableObject
 {
     [ObservableProperty]
-    private string _searchQuery = string.Empty;
+    public partial string SearchQuery { get; set; }
 
     [ObservableProperty]
-    private bool _isLoading;
+    public partial bool ShowArchived { get; set; }
+
+    public SearchViewModel()
+    {
+        SearchQuery = string.Empty;
+    }
 }
 ```
 
-The source generator sees these fields at compile time and generates the corresponding public properties, including `INotifyPropertyChanged` notifications, in a separate partial class file. The generated `SearchQuery` property (derived from the `_searchQuery` field by removing the leading underscore and capitalizing) behaves identically to the manually written version.
+The class has to be `partial` too, as does every class it's nested in, or the generator has nowhere to put its code and the build fails.
 
-The attribute also generates partial methods you can implement to hook into the change cycle. `OnSearchQueryChanging` is called before the assignment and `OnSearchQueryChanged` is called after. These are optional; if you do not implement them, the compiler discards the empty partial method signatures at no cost:
+Older code and most tutorials put the attribute on a private field, such as `[ObservableProperty] private string _searchQuery;`, and the generator creates a `SearchQuery` property from it. The toolkit still supports that form, but WinUI has a reason to avoid it. `{x:Bind}` compiles to C# that reads your properties directly, but `{Binding}` and `DisplayMemberPath` are resolved at runtime by WinUI's native XAML engine, which reads your view model's properties through WinRT, Windows' cross-language object model. CsWinRT generates the C# glue that makes that possible. When an app is compiled ahead of time with Native AOT, that glue has to be generated at build time, and CsWinRT's generator can see a declared partial property but not one that another generator creates from a field. Since version 8.4, the toolkit reports warning MVVMTK0045 for field-based properties in WinUI projects that use CsWinRT's AOT support. Partial properties needed `LangVersion` set to `preview` in 8.4.0. From 8.4.1 on, they need C# 14, which is the default for a project targeting .NET 10, as current WinUI templates do. A project on an older target framework needs the .NET 10 SDK and `<LangVersion>14</LangVersion>` in its project file.
+
+The samples here assign starting values in the constructor. That assignment goes through the generated setter, so it runs the change hooks described next, which a field-based property with an initialized field didn't do.
+
+### Running Code When a Property Changes
+
+The generated setter calls partial methods you can choose to implement. `OnSearchQueryChanging` runs before the new value is stored and `OnSearchQueryChanged` after, and each comes in two overloads, one taking the new value and one taking the old and new values:
 
 ```csharp
 partial void OnSearchQueryChanged(string value)
 {
-    // Runs every time SearchQuery changes
-    FilterResults(value);
+    // Runs after every change to SearchQuery
+    ApplyFilter(value);
+}
+
+partial void OnSelectedItemChanged(ItemViewModel? oldValue, ItemViewModel? newValue)
+{
+    if (oldValue is not null) oldValue.IsSelected = false;
+    if (newValue is not null) newValue.IsSelected = true;
 }
 ```
 
-Two additional attributes on the field declaration connect related properties. `[NotifyPropertyChangedFor(nameof(CanSearch))]` causes the generator to raise `PropertyChanged` for `CanSearch` whenever `_searchQuery` changes. This is how you keep computed properties synchronized without writing manual cross-notification logic:
+Methods you don't implement are removed by the compiler, so they cost nothing. The implementations are declared with plain `partial` and no access modifier, because C# doesn't allow one on these methods.
+
+### Keeping Dependent Properties and Commands in Step
+
+A computed property such as `HasQuery` has no setter, so nothing announces its changes. `[NotifyPropertyChangedFor]` makes the generated setter of the property it depends on raise `PropertyChanged` for it too:
 
 ```csharp
 [ObservableProperty]
-[NotifyPropertyChangedFor(nameof(CanSearch))]
-private string _searchQuery = string.Empty;
+[NotifyPropertyChangedFor(nameof(HasQuery))]
+public partial string SearchQuery { get; set; }
 
-public bool CanSearch => !string.IsNullOrWhiteSpace(SearchQuery);
+public bool HasQuery => !string.IsNullOrWhiteSpace(SearchQuery);
 ```
 
-`[NotifyCanExecuteChangedFor(nameof(SearchCommand))]` serves a similar purpose for commands: when the annotated field changes, the generator calls `SearchCommand.NotifyCanExecuteChanged()`, prompting the UI to re-evaluate whether the command is executable.
+The same pattern extends to commands with `[NotifyCanExecuteChangedFor]`, covered with commands below. The toolkit can also generate a validation call in the setter with `[NotifyDataErrorInfo]`, on a view model derived from `ObservableValidator`, and a change message with `[NotifyPropertyChangedRecipients]`, on a view model that uses messaging.
 
 ---
 
-## RelayCommand Attribute
+## Commands
 
-Commands in WinUI 3 are bound through `ICommand`, and the toolkit's `[RelayCommand]` attribute generates command properties from ordinary methods. You write the logic as a method, annotate it, and the source generator creates an `IRelayCommand` property with the conventional name derived from the method name:
+### Generating Commands with [RelayCommand]
+
+`[RelayCommand]` on a method generates a command property that runs it. The name is the method name with any `On` prefix and `Async` suffix removed, followed by `Command`:
 
 ```csharp
+using CommunityToolkit.Mvvm.Input;
+
 [RelayCommand]
-private void ClearSearch()
+private void ClearSearch()         // generates ClearSearchCommand (IRelayCommand)
 {
     SearchQuery = string.Empty;
 }
-```
 
-This generates a `ClearSearchCommand` property of type `RelayCommand`, ready to bind in XAML:
-
-```xml
-<Button Command="{x:Bind ViewModel.ClearSearchCommand}" Content="Clear" />
-```
-
-For async operations, the method signature determines the generated command type. A method returning `Task` generates an `AsyncRelayCommand`, which handles the async execution on a background thread and exposes an `IsRunning` property for tracking in-flight operations:
-
-```csharp
 [RelayCommand]
-private async Task SearchAsync(CancellationToken cancellationToken)
-{
-    IsLoading = true;
-    Results = await _searchService.SearchAsync(SearchQuery, cancellationToken);
-    IsLoading = false;
-}
-```
-
-`CanExecute` conditions connect through the `CanExecute` parameter on the attribute, which takes the name of a property or method that returns `bool`:
-
-```csharp
-[RelayCommand(CanExecute = nameof(CanSearch))]
-private async Task SearchAsync(CancellationToken cancellationToken)
+private void OpenItem(Item item)   // generates OpenItemCommand (IRelayCommand<Item>)
 {
     // ...
 }
-
-public bool CanSearch => !string.IsNullOrWhiteSpace(SearchQuery) && !IsLoading;
 ```
 
-When combined with `[NotifyCanExecuteChangedFor(nameof(SearchCommand))]` on the relevant fields, the command button in the UI automatically enables and disables as `SearchQuery` and `IsLoading` change, with no manual wiring required.
+```xml
+<Button Content="Clear" Command="{x:Bind ViewModel.ClearSearchCommand}" />
+```
+
+`ViewModel` in these bindings is a property on the page's code-behind that holds its view model, the root that `{x:Bind}` paths start from.
+
+A method with one parameter produces a generic command, and the button supplies the argument through `CommandParameter`.
+
+### Enabling and Disabling Commands
+
+`CanExecute` names a property or method that returns `bool`. A button bound to the command disables itself whenever that check returns `false`:
+
+```csharp
+[RelayCommand(CanExecute = nameof(HasQuery))]
+private async Task SearchAsync(CancellationToken token) { /* ... */ }
+```
+
+The command runs the check when the button first binds and again only when something calls `NotifyCanExecuteChanged` on it, which raises `CanExecuteChanged` and makes the button ask again. It doesn't watch the properties the check reads. Put `[NotifyCanExecuteChangedFor]` on each of those properties, and the generated setter makes the call:
+
+```csharp
+[ObservableProperty]
+[NotifyCanExecuteChangedFor(nameof(SearchCommand))]
+public partial string SearchQuery { get; set; }
+```
+
+Without it the button keeps whatever state it had first.
+
+### Async Commands
+
+A method returning `Task` generates an `IAsyncRelayCommand`. It does not move the work to a background thread. Clicking the button calls the method on the UI thread, which runs until its first `await` like any `async` method, so slow synchronous work before that point still freezes the window. What the command adds is tracking of the running task:
+
+| Member or option | What it does |
+| --- | --- |
+| `IsRunning` | `true` while an execution is in progress, and raises `PropertyChanged`, so a `ProgressRing` can bind to it directly |
+| `ExecutionTask` | The task of the current or last execution |
+| `AllowConcurrentExecutions` | `false` by default, which reports the command as disabled while it runs, so a second click can't start a second search |
+| A `CancellationToken` parameter | The command passes a token to the method, which makes `Cancel()` signal it and `CanBeCanceled` report `true` while it runs |
+| `IncludeCancelCommand = true` | Also generates a cancel command, `SearchCancelCommand` for `SearchAsync`, which is enabled only while the search runs |
+| `FlowExceptionsToTaskScheduler` | `false` by default, so an exception is rethrown on the UI thread and reaches `Application.UnhandledException`, like one from a synchronous command, and can terminate the app. When `true`, it is stored on `ExecutionTask` and raised to `TaskScheduler.UnobservedTaskException` instead |
+
+Because the default rethrows, an async command that can fail, which is nearly any command that calls a network or file service, catches its own exceptions and turns them into state the view can show.
 
 ---
 
-## Messaging with IMessenger
+## Messaging Between View Models
 
-ViewModels sometimes need to communicate without holding direct references to each other. A `SettingsViewModel` may need to notify a `ShellViewModel` that the theme changed, but creating a direct dependency between them introduces coupling that defeats the purpose of MVVM. The toolkit's `IMessenger` interface solves this through a pub/sub channel.
+Two view models that need to react to each other, such as a settings page changing the theme that a shell view model displays, could hold references to each other. That couples them, and it gets worse as more screens join in. `IMessenger` replaces the references with messages. A sender sends an object of some message type, and every recipient registered for that type receives it, without either side knowing about the other.
 
-The toolkit ships two implementations. `WeakReferenceMessenger` holds weak references to registered recipients, which means objects can be garbage collected even if they have not explicitly unregistered. This is the safer default for most cases because it avoids memory leaks when ViewModels are discarded. `StrongReferenceMessenger` holds strong references for scenarios where the recipient must stay alive as long as messages could arrive, such as a long-lived service.
+The toolkit ships two messengers with the same API:
 
-Both implementations follow the same API. A recipient registers for a message type by implementing `IRecipient<TMessage>` and calling `Register`:
+| | `WeakReferenceMessenger` | `StrongReferenceMessenger` |
+| --- | --- | --- |
+| Holds recipients by | Weak reference | Strong reference |
+| A recipient that is never unregistered | Can still be garbage collected | Stays in memory: a leak |
+| Performance and memory use | Slower | Better, with far less memory |
+| Used by default | Yes, by `ObservableRecipient` | Only when passed in explicitly |
+
+`WeakReferenceMessenger` is the forgiving choice. Unregistering is still good practice with it, for performance, and it is required with `StrongReferenceMessenger`.
+
+A view model that receives messages usually derives from `ObservableRecipient`, which adds a messenger to `ObservableObject`, and implements `IRecipient<TMessage>` for each message type:
 
 ```csharp
-public sealed class ShellViewModel : ObservableRecipient, IRecipient<ThemeChangedMessage>
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using Microsoft.UI.Xaml;
+
+public sealed class ThemeChangedMessage(ElementTheme theme)
+    : ValueChangedMessage<ElementTheme>(theme);
+
+public sealed partial class ShellViewModel : ObservableRecipient, IRecipient<ThemeChangedMessage>
 {
     public ShellViewModel(IMessenger messenger) : base(messenger)
     {
-        IsActive = true;
+        IsActive = true;   // registers every IRecipient<T> this class implements
     }
 
-    public void Receive(ThemeChangedMessage message)
-    {
-        CurrentTheme = message.Value;
-    }
+    [ObservableProperty]
+    public partial ElementTheme CurrentTheme { get; set; }
+
+    public void Receive(ThemeChangedMessage message) => CurrentTheme = message.Value;
 }
 ```
 
-`ObservableRecipient` is a subclass of `ObservableObject` that integrates with the messenger. Its constructor accepts an `IMessenger` parameter so you can inject the messenger through DI rather than relying on `WeakReferenceMessenger.Default`. Setting `IsActive = true` automatically registers the ViewModel for all message types it implements, and setting it to `false` unregisters it.
-
-Sending a message from any other ViewModel or service requires no knowledge of who is listening. Any class that holds an injected `IMessenger` reference can publish:
+`ValueChangedMessage<T>` is a base class for messages that carry one value, exposed as `Value`. Setting `IsActive` to `true` registers the view model for every message type it implements, and setting it to `false` unregisters all of them, which matters most with `StrongReferenceMessenger`. Taking `IMessenger` as a constructor parameter, rather than using `WeakReferenceMessenger.Default`, lets a test pass in its own messenger. The sender, here another `ObservableRecipient` using its `Messenger` property, needs no knowledge of recipients:
 
 ```csharp
-_messenger.Send(new ThemeChangedMessage(Theme.Dark));
+Messenger.Send(new ThemeChangedMessage(ElementTheme.Dark));
 ```
 
-The toolkit includes `ValueChangedMessage<T>` as a convenient generic message type for notifying about a single changed value. You can also define custom message classes for domain-specific notifications:
+`Send` calls each recipient's `Receive` before it returns, on the sender's thread. A message sent from background work therefore sets `CurrentTheme` off the UI thread, and the bound control throws, so send from the UI thread or dispatch back to it first.
 
-```csharp
-public sealed class UserLoggedInMessage : ValueChangedMessage<User>
-{
-    public UserLoggedInMessage(User user) : base(user) { }
-}
-```
+Messages can also ask for a value. A `RequestMessage<T>` is sent, a recipient calls `Reply` on it, and the sender reads the reply. `AsyncRequestMessage<T>` does the same with a `Task<T>`. `WeakReferenceMessenger.Default` is one messenger shared by the whole process. A channel token passed to `Register` and `Send` separates traffic on it, so two parts of an app, such as two windows, can use the same message type without hearing each other.
 
-Messaging is well-suited for navigation events, login state changes, and cross-cutting notifications like theme or locale changes. It is not intended as a general-purpose event bus for every interaction; tightly related ViewModels that have a clear parent/child relationship can still use direct property binding or callbacks without the overhead of a messaging channel.
+Reserve messaging for notifications that cross screens, like sign-in state, theme, or locale. A parent view model that owns its children can call them directly, and routing that through a messenger hides a dependency that plain code would make obvious.
 
 ---
 
-## XAML Behaviors
+## Invoking Commands from Any Event with XAML Behaviors
 
-XAML behaviors, provided through the [Microsoft.Xaml.Behaviors.WinUI.Managed](https://www.nuget.org/packages/Microsoft.Xaml.Behaviors.WinUI.Managed){:target="_blank" rel="noopener noreferrer"} package, allow you to attach interactive logic to XAML elements declaratively. Instead of wiring up event handlers in code-behind, you attach a behavior to a control in XAML and configure it there.
-
-After installing the package, you reference it with two namespaces in XAML:
+A `Button` has a `Command` property, but most events have nothing like it. A `ListView` double-tap, a `TextBox` losing focus, or a page finishing loading can only run a view model command through an event handler in code-behind. The [XAML Behaviors](https://github.com/microsoft/XamlBehaviors){:target="_blank" rel="noopener noreferrer"} package, `Microsoft.Xaml.Behaviors.WinUI.Managed`, closes that gap declaratively. Since version 3.0, all of its types live in one namespace, `Microsoft.Xaml.Interactivity`.
 
 ```xml
-xmlns:i="using:Microsoft.Xaml.Interactivity"
-xmlns:ia="using:Microsoft.Xaml.Interactions.Core"
+<Page xmlns:i="using:Microsoft.Xaml.Interactivity" ...>
+
+    <TextBox Text="{x:Bind ViewModel.Email, Mode=TwoWay}">
+        <i:Interaction.Behaviors>
+            <i:EventTriggerBehavior EventName="LostFocus">
+                <i:InvokeCommandAction Command="{x:Bind ViewModel.ValidateEmailCommand}" />
+            </i:EventTriggerBehavior>
+        </i:Interaction.Behaviors>
+    </TextBox>
 ```
 
-The most common pattern is `EventTriggerBehavior` combined with `InvokeCommandAction`. This fires a ViewModel command in response to any control event without code-behind:
+`EventTriggerBehavior` listens for the named event, and `InvokeCommandAction` runs the command when it fires. `DataTriggerBehavior` runs its actions when a bound value meets a condition, instead of on an event. A custom behavior derives from `Behavior<T>` and attaches its logic in `OnAttached` and removes it in `OnDetaching`, which packages view-only logic like scrolling a list to its newest item so no code-behind has to hold it. The Community Toolkit's `CommunityToolkit.WinUI.Behaviors` package adds more ready-made behaviors on top of this one.
 
-```xml
-<TextBox>
-    <i:Interaction.Behaviors>
-        <i:BehaviorCollection>
-            <ia:EventTriggerBehavior EventName="LostFocus">
-                <ia:InvokeCommandAction Command="{x:Bind ViewModel.ValidateInputCommand}" />
-            </ia:EventTriggerBehavior>
-        </i:BehaviorCollection>
-    </i:Interaction.Behaviors>
-</TextBox>
-```
-
-`DataTriggerBehavior` watches a binding value and fires actions when it matches a condition. You can use this to invoke a command or call a method when a ViewModel property reaches a specific state:
-
-```xml
-<i:Interaction.Behaviors>
-    <i:BehaviorCollection>
-        <ia:DataTriggerBehavior Binding="{x:Bind ViewModel.IsComplete, Mode=OneWay}" Value="True">
-            <ia:InvokeCommandAction Command="{x:Bind ViewModel.NavigateNextCommand}" />
-        </ia:DataTriggerBehavior>
-    </i:BehaviorCollection>
-</i:Interaction.Behaviors>
-```
-
-You can also write custom behaviors by creating a class that inherits from `Behavior<T>`. The `OnAttached` method runs when the behavior is connected to its associated control, and `OnDetaching` runs when it is removed. Custom behaviors are a clean mechanism for encapsulating reusable interaction logic, such as auto-scrolling a list when new items arrive or focusing a control when a popup opens.
-
-Behaviors work well with MVVM because they allow the View to respond to events and property changes without code-behind methods, keeping UI logic either in the ViewModel or in the behavior class itself where it is testable and reusable.
+Reach for a behavior when no command property exists. Where one does, bind it directly, since a behavior adds a package and a layer of markup for no gain.
 
 ---
 
-## Source Generators and AOT Compatibility
+## A Complete View Model
 
-The `[ObservableProperty]` and `[RelayCommand]` attributes work through C# source generators, which run as part of the build process and emit additional C# code before compilation. The generated code is ordinary C# that you can inspect in Visual Studio by expanding the "Analyzers" node in the project's dependencies. There is no runtime reflection involved.
-
-This matters for WinUI 3 applications targeting .NET Native or ahead-of-time compilation. Frameworks that rely on reflection to discover and invoke members at runtime face trimming and AOT compatibility challenges because the trimmer cannot always determine which methods will be called. Source generators sidestep this entirely because the generated code is statically linked at compile time. The trimmer can see every reference.
-
-The generated partial class pattern requires your ViewModel to be declared as `partial`:
+A product search screen brings the pieces together. The search command can't run on an empty query, reports its own progress, can be cancelled, and turns failures into a message:
 
 ```csharp
-public partial class SearchViewModel : ObservableObject
-{
-    // Fields with [ObservableProperty] and methods with [RelayCommand] here
-}
-```
-
-Without the `partial` modifier, the source generator has nowhere to write its half of the class, and you will get compile errors. This is the most common mistake when adopting the toolkit for the first time.
-
-Source generation also improves build feedback. Errors in attribute usage, such as using `[NotifyCanExecuteChangedFor]` with a name that does not correspond to a generated command, produce actionable compile-time errors rather than silent runtime failures or NullReferenceExceptions.
-
----
-
-## Practical ViewModel Structure
-
-A well-organized ViewModel brings all these pieces together in a way that is readable and easy to navigate. The following example shows a realistic ViewModel for a product search screen:
-
-```csharp
-public partial class ProductSearchViewModel : ObservableRecipient
+public partial class ProductSearchViewModel : ObservableObject
 {
     private readonly IProductService _productService;
 
     public ProductSearchViewModel(IProductService productService)
     {
         _productService = productService;
-        IsActive = true;
+        SearchQuery = string.Empty;
+        Results = [];
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSearch))]
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
-    private string _searchQuery = string.Empty;
+    public partial string SearchQuery { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSearch))]
-    [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
-    private bool _isLoading;
+    public partial IReadOnlyList<Product> Results { get; set; }
 
     [ObservableProperty]
-    private IReadOnlyList<Product> _results = [];
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    public partial string? ErrorMessage { get; set; }
 
-    [ObservableProperty]
-    private string? _errorMessage;
+    public bool HasError => ErrorMessage is not null;
 
-    public bool CanSearch => !string.IsNullOrWhiteSpace(SearchQuery) && !IsLoading;
+    private bool CanSearch() => !string.IsNullOrWhiteSpace(SearchQuery);
 
-    [RelayCommand(CanExecute = nameof(CanSearch))]
-    private async Task SearchAsync(CancellationToken cancellationToken)
+    [RelayCommand(CanExecute = nameof(CanSearch), IncludeCancelCommand = true)]
+    private async Task SearchAsync(CancellationToken token)
     {
         ErrorMessage = null;
-        IsLoading = true;
-
         try
         {
-            Results = await _productService.SearchAsync(SearchQuery, cancellationToken);
+            Results = await _productService.SearchAsync(SearchQuery, token);
         }
         catch (OperationCanceledException)
         {
-            // Cancelled by user, no error to show
+            // The user cancelled; keep the previous results.
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
-        }
-        finally
-        {
-            IsLoading = false;
         }
     }
 
     [RelayCommand]
     private void ClearSearch()
     {
+        SearchCommand.Cancel();
         SearchQuery = string.Empty;
         Results = [];
         ErrorMessage = null;
@@ -338,34 +309,19 @@ public partial class ProductSearchViewModel : ObservableRecipient
 }
 ```
 
-Connecting the ViewModel to its View involves injecting it through the page's constructor. Rather than resolving dependencies from a static service locator like `App.Services`, constructor injection keeps the page testable and makes its dependencies explicit:
-
-```csharp
-public sealed partial class ProductSearchPage : Page
-{
-    public ProductSearchViewModel ViewModel { get; }
-
-    public ProductSearchPage(ProductSearchViewModel viewModel)
-    {
-        InitializeComponent();
-        ViewModel = viewModel;
-    }
-}
-```
-
-This requires that both the page and the ViewModel are registered in the DI container. WinUI 3's `Frame.Navigate` creates pages by type using a parameterless constructor by default, so constructor injection requires a custom navigation service or a page resolver that uses the container to instantiate pages. Most production WinUI 3 apps adopt this pattern because it keeps pages and ViewModels consistently testable.
-
-With the ViewModel exposed as a typed property on the page, `x:Bind` can reference it directly without casting:
-
 ```xml
 <TextBox Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-<Button Command="{x:Bind ViewModel.SearchCommand}" Content="Search"
-        IsEnabled="{x:Bind ViewModel.CanSearch, Mode=OneWay}" />
-<ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" />
-<TextBlock Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
-           Visibility="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}" />
+<Button Content="Search" Command="{x:Bind ViewModel.SearchCommand}" />
+<Button Content="Cancel" Command="{x:Bind ViewModel.SearchCancelCommand}" />
+<ProgressRing IsActive="{x:Bind ViewModel.SearchCommand.IsRunning, Mode=OneWay}" />
+<ListView ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}" />
+<InfoBar Severity="Error" IsClosable="False"
+         IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+         Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
 ```
 
-The `Mode=TwoWay` on the `TextBox` pushes user input back to the ViewModel, `UpdateSourceTrigger=PropertyChanged` ensures updates happen on each keystroke rather than on focus loss, and the `ProgressRing` and error message react automatically to state changes in the ViewModel without any event handlers.
+{% include figure.html id="winui-mvvm-command-loop" %}
 
-Organizing ViewModel fields by their role, observable properties first, then computed properties, then commands, keeps the class scannable. Injecting all dependencies through constructors, from services in ViewModels to ViewModels in pages to messengers in recipients, keeps every layer testable and makes the dependency graph explicit. Together, these conventions produce ViewModels that are easy to read, straightforward to test, and simple to bind in XAML.
+No `IsLoading` property is needed, because the command's `IsRunning` already tracks the search. The `await` in `SearchAsync` resumes on the UI thread, so setting `Results` and `ErrorMessage` afterward is safe.
+
+A `Frame` creates pages through their parameterless constructor, so a view model that takes services is usually resolved from a DI container rather than passed into the page's constructor.

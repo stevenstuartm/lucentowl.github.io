@@ -1,0 +1,50 @@
+---
+title: "RTO and RPO on a Timeline"
+kind: chart
+system: infrastructure
+summary: "RPO reaches back from the disaster, RTO forward from it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 230" role="img" aria-labelledby="irr-title irr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="irr-title">The recovery point objective and recovery time objective on a timeline around a disaster</title>
+<desc id="irr-desc">A timeline with three marked moments: the last recovery point, the disaster, and service restored. The span from the last recovery point to the disaster is the data that is lost, which the recovery point objective limits. The span from the disaster to service restored is the time the service is unavailable, which the recovery time objective limits.</desc>
+<style>
+.irr-axis { stroke: var(--color-text, #2C3E50); stroke-width: 2; fill: none; }
+.irr-brk { stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; fill: none; }
+.irr-brk-acc { stroke: var(--color-accent, #A5486E); stroke-width: 1.75; fill: none; }
+.irr-dot { fill: var(--color-primary, #1A5F8A); }
+.irr-dis { fill: var(--color-accent, #A5486E); }
+.irr-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.irr-n-acc { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.irr-d { font-size: 11.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.irr-pt { font-size: 12px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="irr-a" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="var(--color-text, #2C3E50)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Brackets -->
+<path class="irr-brk" d="M 220,100 L 220,86 L 468,86 L 468,100"/>
+<text class="irr-n" x="344" y="50" text-anchor="middle">RPO limits this</text>
+<text class="irr-d" x="344" y="70" text-anchor="middle">data written since the last recovery point is lost</text>
+
+<path class="irr-brk-acc" d="M 472,100 L 472,86 L 730,86 L 730,100"/>
+<text class="irr-n-acc" x="601" y="50" text-anchor="middle">RTO limits this</text>
+<text class="irr-d" x="601" y="70" text-anchor="middle">the service is unavailable</text>
+
+<!-- Axis -->
+<path class="irr-axis" d="M 60,120 L 846,120" marker-end="url(#irr-a)"/>
+<text class="irr-d" x="846" y="145" text-anchor="end">time</text>
+
+<circle class="irr-dot" cx="220" cy="120" r="7"/>
+<circle class="irr-dis" cx="470" cy="120" r="8"/>
+<circle class="irr-dot" cx="730" cy="120" r="7"/>
+
+<text class="irr-pt" x="220" y="152" text-anchor="middle">Last recovery point</text>
+<text class="irr-d" x="220" y="170" text-anchor="middle">backup or replicated write</text>
+<text class="irr-pt" x="470" y="152" text-anchor="middle">Disaster</text>
+<text class="irr-d" x="470" y="170" text-anchor="middle">service interrupted</text>
+<text class="irr-pt" x="730" y="152" text-anchor="middle">Service restored</text>
+<text class="irr-d" x="730" y="170" text-anchor="middle">in the recovery site</text>
+</g>
+</svg>

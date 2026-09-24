@@ -1,0 +1,63 @@
+---
+title: "Where SCPs and RCPs Apply"
+kind: boundary
+system: aws
+summary: "SCPs check the caller's account; RCPs check the resource's account."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" role="img" aria-labelledby="awsr-title awsr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsr-title">Where service control policies and resource control policies apply</title>
+<desc id="awsr-desc">Two member accounts sit inside an organization. A role in account A calls an S3 bucket in account B. That request is checked twice: against the SCPs of account A, where the caller lives, and against the RCPs of account B, where the resource lives. A principal in an account outside the organization calls the same bucket. SCPs don't apply to it, because it isn't in the organization, so only the RCPs of account B can stop it.</desc>
+<style>
+.awsr-org { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsr-acct { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsr-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsr-org-t { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsr-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsr-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsr-chk { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsr-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsr-dot { fill: var(--color-accent, #A5486E); }
+.awsr-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsr-ext { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 2; stroke-dasharray: 5 3; }
+</style>
+<defs>
+<marker id="awsr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsr-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="awsr-org" x="20" y="20" width="640" height="210" rx="10"/>
+<text class="awsr-org-t" x="36" y="42">Your organization</text>
+
+<rect class="awsr-acct" x="40" y="56" width="210" height="150" rx="8"/>
+<text class="awsr-t" x="54" y="78">Member account A</text>
+<rect class="awsr-box" x="60" y="96" width="170" height="60" rx="6"/>
+<text class="awsr-n" x="145" y="122" text-anchor="middle">App role</text>
+<text class="awsr-k" x="145" y="140" text-anchor="middle">[caller]</text>
+
+<rect class="awsr-acct" x="430" y="56" width="210" height="150" rx="8"/>
+<text class="awsr-t" x="444" y="78">Member account B</text>
+<rect class="awsr-box" x="450" y="96" width="170" height="60" rx="6"/>
+<text class="awsr-n" x="535" y="122" text-anchor="middle">S3 bucket</text>
+<text class="awsr-k" x="535" y="140" text-anchor="middle">[resource]</text>
+
+<rect class="awsr-acct" x="700" y="200" width="200" height="110" rx="8"/>
+<text class="awsr-t" x="714" y="222">Account outside the org</text>
+<rect class="awsr-box" x="715" y="236" width="170" height="56" rx="6"/>
+<text class="awsr-n" x="800" y="260" text-anchor="middle">External principal</text>
+<text class="awsr-k" x="800" y="278" text-anchor="middle">[caller]</text>
+
+<path class="awsr-flow" d="M230,126 L448,126" marker-end="url(#awsr-a)"/>
+<circle class="awsr-dot" cx="290" cy="126" r="5"/>
+<text class="awsr-chk" x="290" y="112" text-anchor="middle">SCPs of A</text>
+<circle class="awsr-dot" cx="400" cy="126" r="5"/>
+<text class="awsr-chk" x="400" y="112" text-anchor="middle">RCPs of B</text>
+
+<path class="awsr-ext" d="M715,264 L560,264 L560,158" marker-end="url(#awsr-g)"/>
+<circle class="awsr-dot" cx="560" cy="186" r="5"/>
+<text class="awsr-chk" x="572" y="190">RCPs of B</text>
+<text class="awsr-lab" x="640" y="282" text-anchor="middle">no SCP applies</text>
+
+<text class="awsr-lab" x="20" y="316">Each dot is a check that must allow the request, on top of the IAM and bucket policies.</text>
+</g>
+</svg>

@@ -2,7 +2,7 @@
 title: "AWS Redshift for System Architects"
 layout: guide
 category: AWS
-subcategory: Database Services
+subcategory: Analytics & Data Processing
 description: "Comprehensive guide to AWS Redshift covering Serverless vs provisioned clusters, RA3 node types, distribution and sort keys, Redshift Spectrum, cost optimization, and data warehousing best practices"
 tags: [aws, redshift, data-warehousing, analytics, sql, cost-optimization, fundamentals]
 ---

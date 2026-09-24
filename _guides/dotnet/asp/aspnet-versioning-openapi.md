@@ -3,530 +3,266 @@ title: "API Versioning and OpenAPI"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Building APIs"
-description: "Comprehensive guide to API versioning strategies and OpenAPI document generation in ASP.NET Core, covering the Asp.Versioning package, OpenAPI 3.1 support, transformers, and client SDK generation."
-tags: [asp-net-core, api-design, versioning, openapi, documentation, code-generation]
+description: "Versioning ASP.NET Core APIs with Asp.Versioning for controllers and minimal APIs, deprecation and sunset policies, generating OpenAPI documents with Microsoft.AspNetCore.OpenApi, per-version and per-audience documents, transformers, build-time generation, documentation UIs, and client generation."
+tags: [practical, api-versioning, openapi, deprecation, openapi-transformers, client-generation]
 ---
 
-## API Evolution at Scale
+## Versioning an API
 
-APIs must evolve while maintaining compatibility with existing clients. Versioning provides a structured path for introducing breaking changes without forcing all consumers to update simultaneously. OpenAPI document generation turns your API code into machine-readable specifications that enable tooling, testing, and client generation. Together, these capabilities transform API development from manual coordination into automated workflows where contracts drive implementation.
+A version lets an API make a breaking change, such as removing a field, renaming one, or changing a type, while existing clients keep calling the old shape. Additive changes, such as a new optional field or a new endpoint, don't need one as long as clients ignore fields they don't recognize. Versioning costs something for every version kept alive, so an API versions when a change would break clients, not for every release.
 
-This guide covers API versioning strategies, the Asp.Versioning package for both controllers and minimal APIs, OpenAPI document generation with Microsoft.AspNetCore.OpenApi, schema customization through transformers, and generating client SDKs from OpenAPI specifications.
+The client has to say which version it wants, and there are four places to put it. Choosing between them is an API design decision more than an ASP.NET Core one, so this table records only what each looks like in the library covered below:
 
-## Understanding API Versioning
+| Version travels in | Example | Asp.Versioning reader | Consequence |
+| --- | --- | --- | --- |
+| URL path | `/api/v2/orders` | `UrlSegmentApiVersionReader` | Visible everywhere, and each version is a different URL |
+| Query string | `/api/orders?api-version=2.0` | `QueryStringApiVersionReader` | Same path for every version. Caches must key on the query string |
+| Header | `api-version: 2.0` | `HeaderApiVersionReader` | Clean URLs, invisible in links and browser address bars |
+| Media type | `Accept: application/json;v=2.0` | `MediaTypeApiVersionReader` | Versions a representation rather than a resource. Hardest for clients |
 
-API versioning allows multiple versions of the same API to coexist. When you introduce breaking changes like removing properties, changing response structures, or altering behavior, versioning lets existing clients continue using the old version while new clients adopt the new one. Without versioning, every breaking change forces all consumers to update simultaneously, which becomes impossible as your API scales beyond a handful of internal services.
+The library can read several at once, but every extra source is one more way a client can ask, and one more to test. Most APIs pick one.
 
-Versioning creates a contract between API and client. The client specifies which version it expects, and the server routes the request to the appropriate implementation. This decouples deployment cycles and allows gradual migration rather than coordinated big-bang updates across all consumers.
+### Setting Up Asp.Versioning
 
-### When to Version
+ASP.NET Core has no built-in versioning. The Asp.Versioning libraries, maintained under the .NET Foundation, are the standard choice, and their major version tracks .NET's (10.x for .NET 10).
 
-Not every API change requires a new version. Additive changes like new optional properties, new endpoints, or additional query parameters typically maintain backward compatibility. Clients that don't know about new features simply ignore them. Breaking changes require new versions. These include removing properties, renaming fields, changing data types, altering validation rules, or modifying error responses in ways that clients depend on.
-
-The threshold for what constitutes a breaking change depends on your API contract. If you document that response bodies may include additional fields clients should ignore, adding fields isn't breaking. If clients expect strict schema validation, it might be. The key is establishing clear compatibility rules upfront and applying them consistently.
-
-### Versioning Strategy Trade-offs
-
-ASP.NET Core supports four primary versioning strategies. Each trades off between visibility, simplicity, and RESTful purity.
-
-URL path versioning embeds the version in the route itself, such as `/api/v1/products` versus `/api/v2/products`. This approach makes the version explicit and visible in logs, browser history, and documentation. URLs change between versions, which violates REST principles that resources should have stable identifiers, but the pragmatic benefits often outweigh theoretical concerns. URL path versioning works well for public APIs where discoverability and clarity matter more than REST purity.
-
-Query string versioning appends the version as a parameter like `/api/products?api-version=1.0`. This keeps URLs stable while allowing version selection. Browsers and tools make it easy to test different versions by changing a query parameter. The downside is that caching layers might ignore query parameters, causing version confusion if cache keys don't account for the version parameter. Query string versioning suits scenarios where URL stability matters but you don't want versioning in the path.
-
-Header versioning sends the version in a custom HTTP header such as `api-version: 1.0`. This separates versioning from the URL entirely, keeping resources stable and RESTful. The cost is reduced visibility since headers don't appear in browser address bars or casual logs. Header versioning works best for service-to-service APIs where clients are sophisticated enough to manage custom headers and REST principles are valued.
-
-Media type versioning uses content negotiation to specify versions, like `Accept: application/vnd.myapi.v1+json`. This is the most RESTful approach because it treats different versions as different representations of the same resource. The complexity comes from managing custom media types and teaching clients to use them correctly. Media type versioning fits scenarios where you're deeply committed to REST principles and have control over client implementations.
-
-You can combine strategies, and the Asp.Versioning package supports reading versions from multiple sources simultaneously, falling back through query string, header, and media type until it finds a version. This flexibility helps during transitions but adds complexity.
-
-## Configuring the Asp.Versioning Package
-
-The Asp.Versioning package provides versioning infrastructure for ASP.NET Core. Two NuGet packages exist: `Asp.Versioning.Mvc` for controller-based APIs and `Asp.Versioning.Http` for minimal APIs. Both packages share core abstractions but differ in how they integrate with the hosting model.
-
-Adding API versioning starts with registering services and configuring options. The options control default behavior when clients don't specify a version, which versioning strategies to accept, and how to report available versions.
+| Package | Adds |
+| --- | --- |
+| `Asp.Versioning.Http` | Versioning for minimal APIs, and the core services |
+| `Asp.Versioning.Mvc` | Versioning for controllers, enabled with `.AddMvc()` |
+| `Asp.Versioning.Mvc.ApiExplorer` | Version-aware API descriptions, enabled with `.AddApiExplorer()` |
+| `Asp.Versioning.OpenApi` | One OpenAPI document per version with the built-in generator, enabled with `.AddOpenApi()` |
 
 ```csharp
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new ApiVersion(1, 0);
-    options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+})
+.AddMvc();   // controllers only
+```
 
-    options.ApiVersionReader = ApiVersionReader.Combine(
-        new UrlSegmentApiVersionReader(),
-        new QueryStringApiVersionReader("api-version"),
-        new HeaderApiVersionReader("api-version"),
-        new MediaTypeApiVersionReader("v")
-    );
+Without an `ApiVersionReader`, the library reads the `api-version` query string parameter and a URL segment. `ReportApiVersions` adds `api-supported-versions` and `api-deprecated-versions` headers to responses, so clients can discover what exists.
+
+`AssumeDefaultVersionWhenUnspecified = true` makes a request with no version go to `DefaultApiVersion` instead of failing. It helps when adding versioning to an API that already has clients. It also means a client that forgets the version silently gets version 1 forever, including after version 1 is retired, so it is best kept for that transition.
+
+### Versioned Controllers
+
+Controllers declare the versions they serve with `[ApiVersion]`, and actions pick among them with `[MapToApiVersion]`. With URL versioning, the route template carries the version through the `apiVersion` route constraint:
+
+```csharp
+[ApiController]
+[Route("api/v{version:apiVersion}/orders")]
+[ApiVersion(1.0)]
+[ApiVersion(2.0)]
+public class OrdersController(IOrderStore orders) : ControllerBase
+{
+    [HttpGet("{id:int}")]
+    [MapToApiVersion(1.0)]
+    public async Task<ActionResult<OrderV1>> GetV1(int id) => ...;
+
+    [HttpGet("{id:int}")]
+    [MapToApiVersion(2.0)]
+    public async Task<ActionResult<OrderV2>> GetV2(int id) => ...;
+}
+```
+
+`/api/v2/orders/42` and `/api/v2.0/orders/42` both reach `GetV2`. When versions diverge more than a little, one controller per version, each with a single `[ApiVersion]`, keeps each version's code together and makes retiring a version a matter of deleting a class.
+
+### Versioned Minimal APIs
+
+Minimal APIs group endpoints into a *versioned API*, then declare versions on route groups:
+
+```csharp
+var orders = app.NewVersionedApi("Orders");
+
+var v1 = orders.MapGroup("/api/v{version:apiVersion}/orders").HasApiVersion(1.0);
+var v2 = orders.MapGroup("/api/v{version:apiVersion}/orders").HasApiVersion(2.0);
+
+v1.MapGet("/{id:int}", (int id, IOrderStore store) => ...);
+v2.MapGet("/{id:int}", (int id, IOrderStore store) => ...);
+```
+
+Every endpoint in a group serves that group's version. An endpoint that needs to serve only some of a group's versions narrows them with `.MapToApiVersion(...)`.
+
+### Requests for Versions That Don't Exist
+
+A request for a version no endpoint serves gets a `400 Bad Request` with a Problem Details body naming the problem. When the version travels only in the URL, the request gets `404 Not Found` instead, because no route matches. A request with no version at all gets `400` too, unless `AssumeDefaultVersionWhenUnspecified` is on. `UnsupportedApiVersionStatusCode` changes the status for the unsupported case.
+
+### Deprecation and Sunset
+
+A deprecated version still works, but clients are told to move off it. Controllers mark it with `[ApiVersion(1.0, Deprecated = true)]`, and minimal API groups with `.HasDeprecatedApiVersion(1.0)`. With `ReportApiVersions` on, responses then list it in `api-deprecated-versions`.
+
+Policies add dates and links. A *sunset policy* says when a version stops working, and a *deprecation policy* says when it became deprecated. The library writes them into the standard `Sunset` (RFC 8594) and `Deprecation` (RFC 9745) response headers, with a `Link` header pointing at the human-readable notice:
+
+```csharp
+builder.Services.AddApiVersioning(options =>
+{
+    options.ReportApiVersions = true;
+    options.Policies.Sunset(1.0)
+        .Effective(new DateTimeOffset(2027, 6, 30, 0, 0, 0, TimeSpan.Zero))
+        .Link("https://example.com/api/v1-retirement")
+            .Title("Version 1 retirement")
+            .Type("text/html");
 });
 ```
 
-The `DefaultApiVersion` defines which version unversioned clients receive. Setting `AssumeDefaultVersionWhenUnspecified` to true means requests without version information default to the specified version rather than failing. This simplifies adoption for clients that haven't implemented versioning yet but can mask issues where clients should be specifying versions explicitly.
+A client can watch for these headers and schedule its migration long before the date. Removing the version afterward means deleting its endpoints, after which requests for it get the `400` or `404` above. Logging which versions each client calls shows who still depends on a deprecated version before that happens.
 
-Enabling `ReportApiVersions` adds response headers listing supported and deprecated versions. The `api-supported-versions` header shows currently active versions, while `api-deprecated-versions` lists versions marked for removal. These headers help clients discover available versions and plan migrations.
+## Generating OpenAPI Documents
 
-The `ApiVersionReader` determines how the framework extracts version information from requests. Using `ApiVersionReader.Combine` allows multiple strategies simultaneously, checking URL segments first, then query strings, headers, and finally media types. This flexibility supports gradual transitions between versioning strategies.
-
-## Versioning in Controller-Based APIs
-
-Controller-based APIs use attributes to declare which versions a controller or action supports. The `[ApiVersion]` attribute marks supported versions, while `[MapToApiVersion]` maps specific actions to versions.
-
-```csharp
-[ApiController]
-[Route("api/v{version:apiVersion}/[controller]")]
-[ApiVersion("1.0")]
-[ApiVersion("2.0")]
-public class ProductsController : ControllerBase
-{
-    [HttpGet]
-    public IActionResult GetV1()
-    {
-        return Ok(new { Version = "1.0", Data = "..." });
-    }
-
-    [HttpGet]
-    [MapToApiVersion("2.0")]
-    public IActionResult GetV2()
-    {
-        return Ok(new { Version = "2.0", Data = "...", NewField = "..." });
-    }
-}
-```
-
-The route template includes `{version:apiVersion}` as a placeholder that accepts version values and participates in routing. When a request arrives for `/api/v2.0/products`, the framework extracts `2.0` as the version and routes to actions marked with `[MapToApiVersion("2.0")]`. If no action maps explicitly to that version, any action supporting that version via `[ApiVersion]` becomes a candidate.
-
-Separate controllers per version offer an alternative to multiple actions within one controller. This approach isolates version-specific logic and simplifies understanding what each version does.
-
-```csharp
-[ApiController]
-[Route("api/v{version:apiVersion}/products")]
-[ApiVersion("1.0")]
-public class ProductsV1Controller : ControllerBase
-{
-    [HttpGet]
-    public IActionResult Get() => Ok(new { Version = "1.0" });
-}
-
-[ApiController]
-[Route("api/v{version:apiVersion}/products")]
-[ApiVersion("2.0")]
-public class ProductsV2Controller : ControllerBase
-{
-    [HttpGet]
-    public IActionResult Get() => Ok(new { Version = "2.0" });
-}
-```
-
-Separate controllers reduce conditional logic within actions but increase the number of classes. Which approach works better depends on how much code differs between versions. If versions share most logic, keeping them in one controller with shared private methods makes sense. If versions diverge significantly, separate controllers clarify boundaries.
-
-## Versioning in Minimal APIs
-
-Minimal APIs use a fluent API and version sets to define versioned endpoints. Version sets group related endpoints under a common versioning scheme.
-
-```csharp
-var versionSet = app.NewApiVersionSet()
-    .HasApiVersion(new ApiVersion(1, 0))
-    .HasApiVersion(new ApiVersion(2, 0))
-    .ReportApiVersions()
-    .Build();
-
-app.MapGet("/api/v{version:apiVersion}/products", () =>
-{
-    return Results.Ok(new { Version = "1.0", Data = "..." });
-})
-.WithApiVersionSet(versionSet)
-.MapToApiVersion(1, 0);
-
-app.MapGet("/api/v{version:apiVersion}/products", () =>
-{
-    return Results.Ok(new { Version = "2.0", Data = "...", NewField = "..." });
-})
-.WithApiVersionSet(versionSet)
-.MapToApiVersion(2, 0);
-```
-
-Defining version sets once and reusing them across multiple endpoints reduces duplication. Route groups simplify applying version sets to many endpoints simultaneously.
-
-```csharp
-var productsGroup = app.MapGroup("/api/v{version:apiVersion}/products")
-    .WithApiVersionSet(versionSet);
-
-productsGroup.MapGet("", () =>
-    Results.Ok(new { Version = "1.0" }))
-    .MapToApiVersion(1, 0);
-
-productsGroup.MapGet("", () =>
-    Results.Ok(new { Version = "2.0" }))
-    .MapToApiVersion(2, 0);
-```
-
-Route groups also enable applying common policies like authorization or rate limiting to all versioned endpoints in the group. This reduces boilerplate and ensures consistency across versions.
-
-## Deprecating API Versions
-
-Deprecation signals that a version will stop being supported in the future. Marking a version as deprecated doesn't remove it; it tells clients to plan migration while maintaining backward compatibility during a transition period.
-
-Controller-based APIs mark versions deprecated using the `Deprecated` property on the `[ApiVersion]` attribute.
-
-```csharp
-[ApiController]
-[Route("api/v{version:apiVersion}/[controller]")]
-[ApiVersion("1.0", Deprecated = true)]
-[ApiVersion("2.0")]
-public class ProductsController : ControllerBase
-{
-    // Implementation
-}
-```
-
-Minimal APIs use the `HasDeprecatedApiVersion` method when defining version sets.
-
-```csharp
-var versionSet = app.NewApiVersionSet()
-    .HasDeprecatedApiVersion(new ApiVersion(1, 0))
-    .HasApiVersion(new ApiVersion(2, 0))
-    .Build();
-```
-
-When `ReportApiVersions` is enabled, responses include an `api-deprecated-versions` header listing deprecated versions. Monitoring logs for usage of deprecated versions helps identify clients that need to migrate before you remove support.
-
-Deprecation works best with a clear timeline. Communicate when a version becomes deprecated and when it will be removed. A common pattern is to support deprecated versions for six months or through the next major release, giving clients time to test migrations without indefinite support burdens.
-
-Removing a version after deprecation means deleting the controller or endpoints supporting that version. Once removed, requests for that version return 400 Bad Request responses indicating the requested version doesn't exist.
-
-## OpenAPI Document Generation
-
-OpenAPI specifications describe REST APIs in a machine-readable format. They document endpoints, request parameters, response schemas, authentication requirements, and error codes. Tooling consumes OpenAPI documents to generate client SDKs, interactive documentation UIs, and automated tests.
-
-Starting with .NET 9, ASP.NET Core includes built-in OpenAPI support through the `Microsoft.AspNetCore.OpenApi` package. This replaces third-party tools like Swashbuckle for document generation. The built-in support works with both controller-based and minimal APIs, supports trimming and Native AOT, and integrates directly with the framework rather than relying on reflection-heavy external libraries.
-
-Enabling OpenAPI document generation involves calling `AddOpenApi` during service registration and `MapOpenApi` to expose the generated document at runtime.
+An *OpenAPI document* is a machine-readable description of an API's operations, parameters, request and response schemas, and security requirements. Documentation UIs, client generators, and contract tests all read it. Since .NET 9, ASP.NET Core generates one itself through the `Microsoft.AspNetCore.OpenApi` package, and the project templates no longer include Swashbuckle.
 
 ```csharp
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-app.MapOpenApi();
-```
-
-By default, this exposes the OpenAPI document at `/openapi/v1.json`. The endpoint returns a JSON document conforming to the OpenAPI 3.1 specification. You can configure the endpoint path and document name through options.
-
-### OpenAPI 3.1 Support
-
-.NET 10 defaults to OpenAPI 3.1, which aligns with the latest specification and supports JSON Schema draft 2020-12. OpenAPI 3.1 unifies schema definitions, improves schema reusability, and supports modern JSON Schema features like `oneOf`, `anyOf`, and `allOf` without limitations present in OpenAPI 3.0.
-
-If you need OpenAPI 3.0 for compatibility with older tooling, you can configure the version explicitly.
-
-```csharp
-builder.Services.AddOpenApi(options =>
+if (app.Environment.IsDevelopment())
 {
-    options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_0;
-});
+    app.MapOpenApi();   // serves /openapi/v1.json
+}
 ```
 
-The underlying OpenAPI.NET library updated to version 2.0 to support OpenAPI 3.1. This update includes breaking changes where `OpenApiAny` is replaced by `JsonNode` for schema examples and default values. If you have custom transformers using `OpenApiAny`, you'll need to update them to work with `JsonNode` instead.
+`MapOpenApi` serves every registered document at `/openapi/{documentName}.json`, and the default document is named `v1`. Passing `"/openapi/{documentName}.yaml"` serves YAML instead. The templates map it only in Development, since a public API usually publishes its document deliberately rather than exposing whatever the running build describes. The generator works with both controllers and minimal APIs, and supports trimming and Native AOT.
+
+.NET 10 produces OpenAPI 3.1 by default, the version aligned with JSON Schema 2020-12. Tools that only read 3.0 get it with `options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_0`.
+
+### What Goes into the Document
+
+The generator builds each operation from what the endpoint declares, so a richer document comes from richer declarations, not from editing the output.
+
+| Source | Contributes |
+| --- | --- |
+| Route template, parameters, and binding sources | Paths, path and query parameters, and request bodies |
+| `TypedResults` return types, such as `Results<Ok<Order>, NotFound>` | Every listed status code and body schema, with no extra code |
+| `[ProducesResponseType]` (controllers) or `.Produces<T>(status)` (minimal APIs) | Responses the return type can't express |
+| `.WithSummary`, `.WithDescription`, `.WithTags`, or the matching attributes | Operation summaries, descriptions, and grouping |
+| XML doc comments (.NET 10), with `<GenerateDocumentationFile>true</GenerateDocumentationFile>` in the project | Summaries and descriptions for operations, parameters, and schema properties, extracted at build time by a source generator |
+| Data annotations such as `[Required]`, `[Range]`, and `[StringLength]` | Schema constraints |
+
+`WithOpenApi`, which older samples use to edit an operation inline, is obsolete in .NET 10 (warning ASPDEPR002). Its uses move to the methods above or to an operation transformer.
 
 ### Multiple OpenAPI Documents
 
-Applications often expose multiple APIs or group endpoints logically, such as public versus internal APIs or different API versions. You can generate separate OpenAPI documents for each group.
+An API with separate audiences, such as public and internal endpoints, can generate a document for each. Each `AddOpenApi` call registers a named document, and an endpoint joins one with `WithGroupName`:
 
 ```csharp
 builder.Services.AddOpenApi("public");
 builder.Services.AddOpenApi("internal");
 
-app.MapOpenApi("/openapi/public/v1.json")
-    .WithName("public");
-app.MapOpenApi("/openapi/internal/v1.json")
-    .WithName("internal");
+app.MapGet("/orders/{id:int}", GetOrder).WithGroupName("public");
+app.MapPost("/admin/reindex", Reindex).WithGroupName("internal");
+
+app.MapOpenApi();   // /openapi/public.json and /openapi/internal.json
 ```
 
-Endpoints declare which OpenAPI document they belong to using metadata.
+An endpoint with no group name appears in every document, which is the easiest way to leak an internal endpoint into a public document. Each document's `ShouldInclude` option replaces the group-name rule with any predicate over the endpoint's description, such as its route prefix or an attribute.
+
+### One Document per API Version
+
+A versioned API usually wants one document per version, so each version's clients see only the operations and shapes they can call. `Asp.Versioning.OpenApi` builds that on top of the built-in generator:
 
 ```csharp
-app.MapGet("/api/products", () => Results.Ok())
-    .WithOpenApi()
-    .WithName("public");
+builder.Services.AddApiVersioning()
+    .AddApiExplorer()
+    .AddOpenApi();   // replaces separate builder.Services.AddOpenApi("v1"), ("v2") calls
 
-app.MapGet("/admin/settings", () => Results.Ok())
-    .WithOpenApi()
-    .WithName("internal");
+app.MapOpenApi().WithDocumentPerVersion();
 ```
 
-This capability supports scenarios where different audiences need different documentation or where you want to avoid exposing internal endpoints in public-facing OpenAPI documents.
+Each version's document includes only that version's endpoints, and the sunset and deprecation policies appear in the documents as well as in the response headers.
 
-## Including Metadata in OpenAPI Documents
+### Transformers
 
-OpenAPI documents derive basic information from route definitions and parameter types, but rich documentation requires additional metadata describing request parameters, response types, and endpoint summaries.
+A *transformer* edits the generated document in code, so a customization reapplies every time the document is regenerated. There are three kinds, each scoped to one level of the document.
 
-### XML Documentation Comments
+| Transformer | Runs | Typical use |
+| --- | --- | --- |
+| Document (`IOpenApiDocumentTransformer`) | Once per document | Title and contact details, servers, security schemes |
+| Operation (`IOpenApiOperationTransformer`) | Once per endpoint | Adjustments driven by endpoint metadata |
+| Schema (`IOpenApiSchemaTransformer`) | Once per schema | Examples, formats, and descriptions for a type |
 
-XML documentation comments provide descriptions that appear in the generated OpenAPI document. Enabling XML comment processing requires configuring the project to generate XML documentation files at build time.
-
-```xml
-<PropertyGroup>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-</PropertyGroup>
-```
-
-With XML generation enabled, comments written above controllers, actions, and parameters flow into the OpenAPI document automatically.
+Each can be a class registered with `AddDocumentTransformer<T>()` and its siblings, which receives constructor injection, or a lambda:
 
 ```csharp
-/// <summary>
-/// Retrieves all products from the catalog.
-/// </summary>
-/// <param name="category">Optional category filter.</param>
-/// <returns>List of products.</returns>
-[HttpGet]
-public IActionResult GetProducts(string? category)
-{
-    // Implementation
-}
-```
-
-The source generator extracts XML comments at compile time and injects metadata into the runtime without reflection. This approach works with Native AOT and trimming because all processing happens during compilation.
-
-XML comments support tags like `<summary>`, `<param>`, `<returns>`, `<remarks>`, and `<example>`. Tags referencing other types like `<see cref="OtherType"/>` are converted to plain text in the OpenAPI document since OpenAPI doesn't support cross-references in the same way.
-
-### Response Type Annotations
-
-The `[ProducesResponseType]` attribute describes the type and status code of responses. This information appears in the OpenAPI document as possible responses for an endpoint.
-
-```csharp
-[HttpGet("{id}")]
-[ProducesResponseType<Product>(StatusCodes.Status200OK)]
-[ProducesResponseType(StatusCodes.Status404NotFound)]
-public IActionResult GetProduct(int id)
-{
-    var product = FindProduct(id);
-    return product == null ? NotFound() : Ok(product);
-}
-```
-
-Minimal APIs use the `Produces` extension method to achieve the same effect.
-
-```csharp
-app.MapGet("/api/products/{id}", (int id) =>
-{
-    var product = FindProduct(id);
-    return product == null ? Results.NotFound() : Results.Ok(product);
-})
-.Produces<Product>(StatusCodes.Status200OK)
-.Produces(StatusCodes.Status404NotFound);
-```
-
-Documenting all possible responses helps clients handle success and error cases correctly. When multiple status codes return different schemas, specifying each one ensures the generated OpenAPI document includes all response types.
-
-## Customizing OpenAPI Documents with Transformers
-
-Transformers modify OpenAPI documents after initial generation. They enable adding descriptions, adjusting schemas, injecting security requirements, or restructuring the document based on conventions.
-
-Three transformer types exist, each operating at different scopes. Document transformers modify the entire document and have access to all operations and schemas. Operation transformers target individual endpoints and can adjust parameters, responses, or operation metadata. Schema transformers handle individual schema definitions, allowing type-level customizations like changing property names or adding validation constraints.
-
-### Document Transformers
-
-Document transformers implement `IOpenApiDocumentTransformer` and run after the framework generates the base document.
-
-```csharp
-public class AddSecurityTransformer : IOpenApiDocumentTransformer
-{
-    public Task TransformAsync(
-        OpenApiDocument document,
-        OpenApiDocumentTransformerContext context,
-        CancellationToken cancellationToken)
-    {
-        document.Info.Title = "My API";
-        document.Info.Version = "v1";
-        document.Info.Description = "Production API for...";
-
-        return Task.CompletedTask;
-    }
-}
-
 builder.Services.AddOpenApi(options =>
 {
-    options.AddDocumentTransformer<AddSecurityTransformer>();
+    options.AddDocumentTransformer((document, context, ct) =>
+    {
+        document.Info.Title = "Orders API";
+        document.Info.Contact = new OpenApiContact { Email = "api-team@example.com" };
+        return Task.CompletedTask;
+    });
+
+    // Mark endpoints carrying [Obsolete] as deprecated in the document
+    options.AddOperationTransformer((operation, context, ct) =>
+    {
+        if (context.Description.ActionDescriptor.EndpointMetadata.OfType<ObsoleteAttribute>().Any())
+        {
+            operation.Deprecated = true;
+        }
+        return Task.CompletedTask;
+    });
+
+    options.AddSchemaTransformer((schema, context, ct) =>
+    {
+        if (context.JsonTypeInfo.Type == typeof(Order))
+        {
+            schema.Example = JsonNode.Parse("""{ "id": 42, "customer": "Contoso", "total": 129.50 }""");
+        }
+        return Task.CompletedTask;
+    });
 });
 ```
 
-Document transformers access the full OpenAPI object model. You can iterate through paths, add global security schemes, inject servers, or apply conventions across all operations. Common uses include adding API keys to security definitions, setting contact information, or grouping operations by tags.
+.NET 10 moved to OpenAPI.NET 2.x, the library that models the document, and transformers written for .NET 9 need updating. Examples and default values are `JsonNode` rather than `OpenApiAny`, a schema's `Type` is the `JsonSchemaType` enum rather than a string, and most collections on the model can be `null` until something assigns them. A transformer that needs a schema for a type no endpoint uses can create one with `context.GetOrCreateSchemaAsync`, new in .NET 10.
 
-### Operation Transformers
+### Generating the Document at Build Time
 
-Operation transformers implement `IOpenApiOperationTransformer` and run for each endpoint individually.
+Serving the document from the running app suits development. Committing it, diffing it in CI to catch breaking changes, or feeding it to a client generator needs a file. Adding the `Microsoft.Extensions.ApiDescription.Server` package makes `dotnet build` write one.
+
+The build doesn't analyze the code statically. It starts the app's entry point against a mock server and asks the generator for the document, so every line of startup code runs, including code that connects to databases or reads secrets. Such code can be skipped by checking for the generator's entry assembly:
 
 ```csharp
-public class AddResponseHeadersTransformer : IOpenApiOperationTransformer
+if (Assembly.GetEntryAssembly()?.GetName().Name != "GetDocument.Insider")
 {
-    public Task TransformAsync(
-        OpenApiOperation operation,
-        OpenApiOperationTransformerContext context,
-        CancellationToken cancellationToken)
-    {
-        foreach (var response in operation.Responses.Values)
-        {
-            response.Headers ??= new Dictionary<string, OpenApiHeader>();
-            response.Headers["X-Request-Id"] = new OpenApiHeader
-            {
-                Description = "Unique request identifier",
-                Schema = new OpenApiSchema { Type = "string" }
-            };
-        }
-
-        return Task.CompletedTask;
-    }
+    builder.Services.AddDbContext<AppDbContext>(...);
 }
 ```
 
-Operation transformers are useful for endpoint-specific customizations based on metadata. For instance, you might read custom attributes from the endpoint and use them to set descriptions, adjust parameters, or add headers that the default generation didn't capture.
+The file lands in the project's `obj` folder by default, named after the project. `<OpenApiDocumentsDirectory>` in the project file moves it, and `<OpenApiGenerateDocumentsOptions>` takes `--file-name` and `--document-name` arguments to rename it or generate a single document. Other named documents get the document name appended, as `{ProjectName}_{DocumentName}.json`.
 
-### Schema Transformers
+## Documentation UIs
 
-Schema transformers implement `IOpenApiSchemaTransformer` and apply to schemas for request and response bodies.
+The built-in generator produces the document but no UI to browse it. Two common choices read the generated document directly.
 
-```csharp
-public class AddExampleTransformer : IOpenApiSchemaTransformer
-{
-    public Task TransformAsync(
-        OpenApiSchema schema,
-        OpenApiSchemaTransformerContext context,
-        CancellationToken cancellationToken)
-    {
-        if (context.JsonTypeInfo.Type == typeof(Product))
-        {
-            schema.Example = JsonNode.Parse(@"{
-                ""id"": 1,
-                ""name"": ""Example Product"",
-                ""price"": 29.99
-            }");
-        }
+- **Scalar**, from the `Scalar.AspNetCore` package, maps with `app.MapScalarApiReference()` and serves at `/scalar`.
+- **Swagger UI**, from the `Swashbuckle.AspNetCore.SwaggerUI` package, maps with `app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "v1"))`. Only the UI package is needed. The full `Swashbuckle.AspNetCore` package's `AddSwaggerGen` and `UseSwagger` generate a second, separate document.
 
-        return Task.CompletedTask;
-    }
-}
-```
+Like `MapOpenApi`, they usually belong behind the Development check. Their "try it out" consoles send real requests with whatever credentials the browser holds.
 
-Schema transformers enable type-level conventions such as adding examples, adjusting property formats, or renaming properties without changing your C# models. They run once per schema, not per endpoint, which improves performance when the same type appears in multiple operations.
+## Generating Clients
 
-The context passed to transformers includes a `GetOrCreateSchemaAsync` method in .NET 10. This allows generating schemas for additional types and adding them to the document dynamically, which is helpful for polymorphic scenarios or when you need to reference types not directly used in endpoint signatures.
+A client generator turns the document into typed C# for calling the API, so client code stops hand-writing URLs and models and breaks at compile time when the API changes. Generating from the build-time file keeps the client in step with the server.
 
-## Interactive API Documentation
-
-OpenAPI documents become valuable when visualized through interactive UIs that let developers explore and test endpoints. Starting with .NET 9, ASP.NET Core no longer includes Swagger UI by default, but you can integrate lightweight alternatives like Scalar or continue using Swagger UI through the Swashbuckle package.
-
-### Scalar Integration
-
-Scalar is an open-source interactive documentation UI built for OpenAPI. It provides a modern interface with built-in themes, syntax highlighting, example requests in multiple languages, and a test console for sending live requests.
-
-Integrating Scalar involves adding the `Scalar.AspNetCore` package and calling `MapScalarApiReference`.
-
-```csharp
-app.MapOpenApi();
-app.MapScalarApiReference();
-```
-
-By default, Scalar serves its UI at `/scalar/v1`, consuming the OpenAPI document from the `/openapi/v1.json` endpoint. Developers navigating to `/scalar/v1` see the full API documentation with expandable sections for each endpoint, editable request bodies, and response previews.
-
-Scalar supports customization through options, including themes, authentication presets, and display preferences. The UI adapts to screen sizes and works well on mobile devices, which helps when testing APIs remotely.
-
-### Swagger UI
-
-If you prefer Swagger UI, the Swashbuckle package still works with .NET 9 and later. After adding the `Swashbuckle.AspNetCore` package, configure it to consume the built-in OpenAPI document rather than generating its own.
-
-```csharp
-builder.Services.AddSwaggerGen();
-
-app.UseSwagger();
-app.UseSwaggerUI(options =>
-{
-    options.SwaggerEndpoint("/openapi/v1.json", "v1");
-});
-```
-
-Swagger UI remains widely recognized and familiar to many developers. The trade-off is additional dependencies and slightly heavier runtime overhead compared to Scalar's minimal footprint.
-
-## Generating Client SDKs from OpenAPI Specifications
-
-OpenAPI documents enable automated client generation, eliminating manual HTTP plumbing and ensuring clients stay synchronized with API changes. Two primary tools exist for generating .NET clients: NSwag and Kiota.
-
-### NSwag
-
-NSwag generates strongly-typed C# clients from OpenAPI specifications. It produces code that includes models, request builders, and HTTP client wrappers with full IntelliSense support.
-
-NSwag integrates with MSBuild, allowing client generation during compilation whenever the OpenAPI document changes. This ensures clients reflect the latest API shape without manual updates.
-
-```xml
-<ItemGroup>
-    <OpenApiReference Include="openapi.json"
-                      CodeGenerator="NSwagCSharp"
-                      Namespace="MyApi.Client" />
-</ItemGroup>
-```
-
-The generated client exposes methods matching API endpoints, handles serialization and deserialization, and propagates errors from HTTP responses into exceptions. NSwag supports customization through configuration files that control naming conventions, whether to use synchronous or asynchronous methods, and how to handle optional parameters.
-
-NSwag works well for internal APIs where you control both server and client and want tight integration with minimal manual code. The generated clients are comprehensive but can be verbose, especially for large APIs.
-
-### Kiota
-
-Kiota is Microsoft's newer client generator, designed for clarity and modern .NET patterns. It generates lighter-weight clients than NSwag by focusing on request builders and fluent APIs rather than generating full method signatures for every endpoint.
-
-Kiota operates through a command-line tool that searches for OpenAPI documents, downloads them, and generates clients.
+- **NSwag** generates one client class with a method per operation. It runs during the client project's build from an `<OpenApiReference Include="openapi.json" CodeGenerator="NSwagCSharp" />` item, which the `NSwag.ApiDescription.Client` package provides and `dotnet openapi add file` adds.
+- **Kiota**, Microsoft's generator and the one behind the Microsoft Graph SDKs, generates fluent request builders that mirror the URL path, such as `client.Orders[42].GetAsync()`. It runs as a CLI tool, and the generated code needs the `Microsoft.Kiota.Bundle` package:
 
 ```bash
-kiota search MyApi
-kiota download --url https://api.example.com/openapi/v1.json
-kiota generate --language CSharp --namespace MyApi.Client
+kiota generate -l CSharp -c OrdersClient -n Contoso.Orders.Client -d ./obj/Orders.Api.json -o ./Client
 ```
 
-The generated code uses request builders that allow constructing API calls fluently. This approach reduces generated code size and improves readability when working with complex query parameters or headers.
+NSwag's method-per-operation clients are quicker to adopt. Kiota's builders stay smaller for large APIs and generate the same shape across languages.
 
-Kiota produces clients compatible with Microsoft Graph SDK patterns, making it a natural choice if you're already using Graph or prefer fluent builder syntax over method-heavy clients. The trade-off is less familiarity compared to NSwag's traditional approach.
+## Key Takeaways
 
-### Choosing a Client Generator
-
-NSwag suits scenarios where you want comprehensive, method-based clients and tight integration with MSBuild. It works well for internal service-to-service communication and rapid prototyping where developer convenience outweighs client size.
-
-Kiota fits when you prioritize clean generated code, modern patterns, and compatibility with Microsoft's latest API client conventions. It excels for public APIs or libraries where the client code will be reviewed or extended by others.
-
-Both tools keep clients synchronized with OpenAPI specs. The key is establishing a workflow where OpenAPI documents update automatically as the API evolves, triggering client regeneration and surfacing breaking changes during development rather than at runtime.
-
-## OpenAPI in Native AOT Applications
-
-Native AOT compiles applications to native binaries without a runtime JIT compiler. This reduces startup time, memory usage, and deployment size but restricts runtime code generation and reflection.
-
-The built-in OpenAPI support in .NET 9 and later works with Native AOT because it uses source generators instead of reflection. Schemas and metadata are computed at compile time, avoiding the reflection-based inspection that breaks under AOT constraints.
-
-Enabling OpenAPI in Native AOT applications follows the same patterns as normal applications. The framework detects AOT compatibility and adjusts how it processes types.
-
-```csharp
-var builder = WebApplication.CreateSlimBuilder(args);
-builder.Services.AddOpenApi();
-
-var app = builder.Build();
-app.MapOpenApi();
-```
-
-Custom transformers remain compatible with AOT as long as they don't rely on runtime reflection. If a transformer uses `Type.GetProperties()` or similar reflection APIs, it will fail at runtime in an AOT-compiled application. Using the source-generated `JsonTypeInfo` provided by the transformer context instead of reflection maintains AOT compatibility.
-
-Trimming also affects OpenAPI generation. The trimmer removes unused code, which can eliminate types referenced indirectly through generic parameters or interface implementations. Annotating types with `[DynamicallyAccessedMembers]` or disabling trimming for specific assemblies prevents unintended removal of types needed for OpenAPI schema generation.
-
-## Red Flags and Common Pitfalls
-
-Versioning without deprecation policies creates confusion. Clients don't know whether old versions will remain supported indefinitely or disappear without warning. Establish and communicate timelines for deprecation and removal upfront.
-
-Failing to test all active versions ensures breaking changes slip into older versions unnoticed. Automated tests should cover all supported versions, not just the latest. Deprecating a version doesn't mean ignoring it; clients relying on deprecated versions expect stability until removal.
-
-Combining too many versioning strategies complicates debugging. Supporting URL path, query string, header, and media type versioning simultaneously means understanding which strategy a particular client uses when issues arise. Choose one primary strategy and add others only if specific clients require them.
-
-Overusing versioning fragments APIs unnecessarily. If changes are backward compatible, don't version. Introducing a new version for every minor change creates maintenance burdens and confuses clients about which version they should use. Version intentionally, not reflexively.
-
-Generating OpenAPI documents without response type annotations produces incomplete specs. Clients generated from these documents lack proper error handling because they don't know about 404, 400, or 500 responses. Annotating all possible responses creates accurate documentation and better client code.
-
-Modifying OpenAPI documents manually instead of using transformers creates drift. Manual edits disappear when the document regenerates, forcing repeated fixes. Transformers codify customizations and apply them consistently every time the document updates.
-
-Ignoring OpenAPI validation tools allows invalid documents to reach consumers. Validators catch schema issues, missing descriptions, and structural problems before clients attempt to generate code. Integrating validation into CI pipelines prevents bad documents from propagating.
-
-Using reflection in transformers breaks Native AOT compatibility. If your application targets AOT, ensure transformers use source-generated types and avoid reflection APIs. Testing AOT compatibility locally catches issues before deployment.
-
-Failing to version OpenAPI documents themselves confuses clients. If your API evolves and the OpenAPI document structure changes, clients consuming those documents need to know whether their tooling remains compatible. Versioning the OpenAPI endpoint path like `/openapi/v1.json` and `/openapi/v2.json` signals changes to consumers.
+- Version for breaking changes only, and pick one place for the version to travel. Asp.Versioning reads the query string and URL segment by default.
+- Controllers declare versions with `[ApiVersion]` and `[MapToApiVersion]`. Minimal APIs use `NewVersionedApi` and `HasApiVersion` on route groups.
+- Unsupported versions get `400`, or `404` when the version is only in the URL. `AssumeDefaultVersionWhenUnspecified` hides clients that never send a version.
+- Deprecation and sunset policies produce standard `Deprecation`, `Sunset`, and `Link` headers that clients can act on.
+- `AddOpenApi` and `MapOpenApi` generate OpenAPI 3.1 in .NET 10. Enrich the document through return types, attributes, XML comments, and transformers, not by editing it.
+- Endpoints join named documents with `WithGroupName`, and ungrouped endpoints appear in every document. `Asp.Versioning.OpenApi` generates one document per API version.
+- Transformers written for .NET 9 need updating for OpenAPI.NET 2.x.
+- `Microsoft.Extensions.ApiDescription.Server` writes the document at build time by running the app's startup code, to `obj` by default.

@@ -707,6 +707,188 @@ console.log(JSON.stringify({
 - Performance metrics: External API latency, batch sizes processed
 - Operational metrics: DLQ message count, retry attempts
 
+## Core Serverless Principles
+
+### 1. Single Responsibility Functions
+
+**Pattern**: Each Lambda function does one thing well.
+
+**Why it matters**:
+- Faster cold starts (smaller deployment packages)
+- Easier testing and debugging
+- Independent scaling per function
+- Reduced blast radius for failures
+
+**Example**:
+
+```python
+# ❌ BAD: Monolithic function (multiple responsibilities)
+def lambda_handler(event, context):
+    if event['action'] == 'create_user':
+        # User creation logic (200 lines)
+        validate_user(event['user'])
+        save_to_database(event['user'])
+        send_welcome_email(event['user'])
+        update_analytics(event['user'])
+
+    elif event['action'] == 'delete_user':
+        # User deletion logic (150 lines)
+        validate_deletion(event['user_id'])
+        delete_from_database(event['user_id'])
+        archive_user_data(event['user_id'])
+
+    elif event['action'] == 'update_user':
+        # User update logic (180 lines)
+        # ...
+
+# Result:
+# - Large deployment package (slow cold starts)
+# - All users pay latency cost even for simple operations
+# - Hard to test individual operations
+# - Changes to one operation risk breaking others
+
+# ✅ GOOD: Single-responsibility functions
+def create_user_handler(event, context):
+    """Handle user creation only"""
+    user = event['user']
+
+    # Validate
+    if not validate_user(user):
+        return {'statusCode': 400, 'body': 'Invalid user'}
+
+    # Save
+    save_to_database(user)
+
+    # Publish event for downstream processing
+    sns.publish(
+        TopicArn='arn:aws:sns:us-east-1:123456789012:user-created',
+        Message=json.dumps({'user_id': user['id'], 'email': user['email']})
+    )
+
+    return {'statusCode': 201, 'body': json.dumps({'user_id': user['id']})}
+
+def send_welcome_email_handler(event, context):
+    """Handle welcome email (triggered by SNS)"""
+    message = json.loads(event['Records'][0]['Sns']['Message'])
+    send_email(message['email'], template='welcome')
+
+def update_analytics_handler(event, context):
+    """Handle analytics update (triggered by SNS)"""
+    message = json.loads(event['Records'][0]['Sns']['Message'])
+    analytics_service.track_user_created(message['user_id'])
+
+# Result:
+# - create_user: 50KB package, 200ms cold start
+# - send_email: 30KB package, 150ms cold start
+# - update_analytics: 25KB package, 100ms cold start
+# - Each function scales independently
+# - Failures isolated (email failure doesn't affect user creation)
+```
+
+### 2. Asynchronous Event-Driven Processing
+
+**Pattern**: Use events for communication instead of direct invocation.
+
+**Why it matters**:
+- Decouples services (sender doesn't wait for receiver)
+- Built-in retry logic (SQS, EventBridge)
+- Easier to add new consumers without changing producers
+
+**Example**:
+
+```python
+# ❌ BAD: Synchronous chaining (tight coupling)
+def create_order_handler(event, context):
+    order = event['order']
+
+    # Save order (synchronous)
+    order_id = save_order(order)
+
+    # Invoke payment function (synchronous, tight coupling)
+    lambda_client = boto3.client('lambda')
+    payment_response = lambda_client.invoke(
+        FunctionName='process-payment',
+        InvocationType='RequestResponse',  # Synchronous
+        Payload=json.dumps({'order_id': order_id, 'amount': order['total']})
+    )
+
+    # If payment function fails or times out, entire request fails
+    # If payment takes 5 seconds, user waits 5 seconds
+
+    if payment_response['StatusCode'] != 200:
+        # Complex error handling needed
+        rollback_order(order_id)
+        return {'statusCode': 500}
+
+    # Invoke shipping function (another synchronous call)
+    shipping_response = lambda_client.invoke(
+        FunctionName='schedule-shipping',
+        InvocationType='RequestResponse',
+        Payload=json.dumps({'order_id': order_id})
+    )
+
+    return {'statusCode': 200, 'body': json.dumps({'order_id': order_id})}
+
+# Problems:
+# - User waits for payment + shipping (slow response)
+# - Payment failure causes order rollback (complex)
+# - Hard to add new post-order steps (modify create_order code)
+
+# ✅ GOOD: Asynchronous event-driven (loose coupling)
+def create_order_handler(event, context):
+    order = event['order']
+
+    # Save order
+    order_id = save_order(order)
+
+    # Publish event (asynchronous, fire-and-forget)
+    eventbridge = boto3.client('events')
+    eventbridge.put_events(
+        Entries=[{
+            'Source': 'order-service',
+            'DetailType': 'OrderCreated',
+            'Detail': json.dumps({
+                'order_id': order_id,
+                'customer_id': order['customer_id'],
+                'total': order['total'],
+                'items': order['items']
+            })
+        }]
+    )
+
+    # Return immediately (user doesn't wait)
+    return {'statusCode': 202, 'body': json.dumps({'order_id': order_id})}
+
+# Separate functions subscribe to OrderCreated event
+def process_payment_handler(event, context):
+    """Triggered by OrderCreated event"""
+    detail = event['detail']
+    process_payment(detail['order_id'], detail['total'])
+
+    # Publish PaymentProcessed event (for next steps)
+    eventbridge.put_events(
+        Entries=[{
+            'Source': 'payment-service',
+            'DetailType': 'PaymentProcessed',
+            'Detail': json.dumps({'order_id': detail['order_id']})
+        }]
+    )
+
+def schedule_shipping_handler(event, context):
+    """Triggered by PaymentProcessed event"""
+    detail = event['detail']
+    schedule_shipping(detail['order_id'])
+
+# Benefits:
+# - User gets instant response (order_id)
+# - Payment and shipping run asynchronously
+# - Easy to add new subscribers (e.g., send confirmation email)
+# - Each function can retry independently
+# - No complex rollback logic
+```
+
+---
+
 ## Development Best Practices
 
 ### Function Handler Design
@@ -901,6 +1083,200 @@ EventBridge Pipes (2022+) provides point-to-point integration between AWS servic
 - Additional latency (traffic routes through NAT Gateway → internet → S3)
 
 **Solution**: Create VPC Endpoints for S3, DynamoDB, Secrets Manager. Traffic stays within AWS network; no NAT Gateway costs. 100 GB/month S3 transfer: $36.50 via NAT Gateway vs $0 via VPC Endpoint.
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Long-Running Lambda Functions
+
+**Problem**: Lambda has 15-minute timeout. Long-running jobs waste money and hit limits.
+
+**Example**:
+```python
+# ❌ BAD: Process 10,000 images in single Lambda invocation
+def process_images_handler(event, context):
+    images = get_all_images()  # 10,000 images
+
+    for image in images:
+        process_image(image)  # 5 seconds each
+
+    # Total: 50,000 seconds = 13.9 hours
+    # Result: Lambda times out after 15 minutes
+    # Cost: 15 minutes × 1GB = $0.25 (wasted)
+
+# ✅ GOOD: Fan-out to parallel Lambda invocations
+def fan_out_handler(event, context):
+    images = get_all_images()  # 10,000 images
+
+    # Invoke one Lambda per image (parallel)
+    lambda_client = boto3.client('lambda')
+
+    for image in images:
+        lambda_client.invoke(
+            FunctionName='process-single-image',
+            InvocationType='Event',  # Asynchronous
+            Payload=json.dumps({'image_id': image['id']})
+        )
+
+    # Or use Step Functions for orchestration
+    sfn = boto3.client('stepfunctions')
+    sfn.start_execution(
+        stateMachineArn='arn:aws:states:us-east-1:123456789012:stateMachine:process-images',
+        input=json.dumps({'image_ids': [img['id'] for img in images]})
+    )
+
+# Result: 10,000 parallel Lambda invocations, each 5 seconds
+# Total wall time: 5 seconds (vs 13.9 hours)
+# Cost: 10,000 × 5 seconds × 1GB × $0.0000166667 = $0.83
+```
+
+### Anti-Pattern 2: Storing State in Lambda /tmp
+
+**Problem**: /tmp is ephemeral and limited to 10GB. Not shared across invocations.
+
+```python
+# ❌ BAD: Store session data in /tmp
+def login_handler(event, context):
+    user_id = authenticate(event['username'], event['password'])
+
+    # Store session in /tmp (WRONG!)
+    with open(f'/tmp/session_{user_id}.json', 'w') as f:
+        json.dump({'user_id': user_id, 'expires': time.time() + 3600}, f)
+
+    return {'statusCode': 200, 'body': 'Logged in'}
+
+def get_profile_handler(event, context):
+    user_id = event['user_id']
+
+    # Try to read session (FAILS - different Lambda instance!)
+    try:
+        with open(f'/tmp/session_{user_id}.json', 'r') as f:
+            session = json.load(f)
+    except FileNotFoundError:
+        return {'statusCode': 401, 'body': 'Unauthorized'}
+
+# ✅ GOOD: Store state in DynamoDB or ElastiCache
+def login_handler(event, context):
+    user_id = authenticate(event['username'], event['password'])
+
+    # Store session in DynamoDB
+    sessions_table = dynamodb.Table('Sessions')
+    sessions_table.put_item(
+        Item={
+            'user_id': user_id,
+            'expires_at': int(time.time()) + 3600,
+            'created_at': int(time.time())
+        },
+        ConditionExpression='attribute_not_exists(user_id)'
+    )
+
+    return {'statusCode': 200, 'body': json.dumps({'token': user_id})}
+
+def get_profile_handler(event, context):
+    user_id = event['user_id']
+
+    # Read session from DynamoDB (works across all Lambda instances)
+    response = sessions_table.get_item(Key={'user_id': user_id})
+
+    if 'Item' not in response or response['Item']['expires_at'] < time.time():
+        return {'statusCode': 401, 'body': 'Unauthorized'}
+
+    return {'statusCode': 200, 'body': json.dumps(get_user_profile(user_id))}
+```
+
+### Anti-Pattern 3: Synchronous Chaining
+
+**Problem**: Cascading failures and high latency.
+
+```python
+# ❌ BAD: Synchronous chain (A → B → C)
+def function_a(event, context):
+    result = process_a(event)
+
+    # Invoke B synchronously
+    response = lambda_client.invoke(
+        FunctionName='function-b',
+        InvocationType='RequestResponse',  # Synchronous
+        Payload=json.dumps(result)
+    )
+
+    # Wait for B to complete before returning
+    return json.loads(response['Payload'].read())
+
+def function_b(event, context):
+    result = process_b(event)
+
+    # Invoke C synchronously
+    response = lambda_client.invoke(
+        FunctionName='function-c',
+        InvocationType='RequestResponse',
+        Payload=json.dumps(result)
+    )
+
+    return json.loads(response['Payload'].read())
+
+# Problems:
+# - User waits for A + B + C (300ms + 500ms + 200ms = 1 second)
+# - If C fails, B fails, A fails (cascading failure)
+# - A must wait for C (tight coupling)
+
+# ✅ GOOD: Asynchronous with events
+def function_a(event, context):
+    result = process_a(event)
+
+    # Publish event (asynchronous)
+    eventbridge.put_events(
+        Entries=[{
+            'Source': 'service-a',
+            'DetailType': 'ProcessingComplete',
+            'Detail': json.dumps(result)
+        }]
+    )
+
+    # Return immediately
+    return {'statusCode': 202}
+
+def function_b(event, context):
+    """Triggered by ProcessingComplete event"""
+    result = process_b(event['detail'])
+
+    eventbridge.put_events(
+        Entries=[{
+            'Source': 'service-b',
+            'DetailType': 'ProcessingComplete',
+            'Detail': json.dumps(result)
+        }]
+    )
+
+# Result: User gets response in 300ms, B and C run asynchronously
+```
+
+### Anti-Pattern 4: Not Using VPC Endpoints
+
+**Problem**: NAT Gateway costs $0.045/hour + $0.045/GB data transfer ($43/month + data transfer).
+
+```python
+# ❌ BAD: Lambda in VPC without VPC endpoints
+# Lambda → NAT Gateway → Internet Gateway → S3
+# Cost: $43/month + $0.09/GB data transfer
+
+# ✅ GOOD: Lambda in VPC with VPC endpoints
+# Lambda → VPC Endpoint → S3 (private connection)
+# Cost: $7/month (VPC endpoint) + $0 data transfer
+
+# Create VPC endpoint for S3
+ec2 = boto3.client('ec2')
+
+ec2.create_vpc_endpoint(
+    VpcId='vpc-0123456789abcdef0',
+    ServiceName='com.amazonaws.us-east-1.s3',
+    RouteTableIds=['rtb-0123456789abcdef0'],
+    VpcEndpointType='Gateway'  # Free for S3 and DynamoDB
+)
+
+# Savings: $43 + data transfer costs eliminated
+```
+
+---
 
 ## Key Takeaways
 

@@ -2,7 +2,7 @@
 title: "AWS API Gateway for System Architects"
 layout: guide
 category: AWS
-subcategory: Networking
+subcategory: Networking & Content Delivery
 description: "Comprehensive guide to AWS API Gateway covering REST vs HTTP APIs, authorization mechanisms, throttling and rate limiting, caching strategies, cost optimization, and integration patterns"
 tags: [aws, api-gateway, rest-api, http-api, serverless, authentication, cost-optimization, fundamentals]
 ---

@@ -1,0 +1,62 @@
+---
+title: "The Parts of a CommandBar"
+kind: structure
+system: winui
+summary: "Content, primary commands, and the overflow menu of an open command bar."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" role="img" aria-labelledby="wcb-title wcb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wcb-title">The areas of an open WinUI CommandBar</title>
+<desc id="wcb-desc">A horizontal command bar shown open. On its left is the content area, holding a text title reading Orders. On its right are the primary commands, three buttons labeled New order, Refresh, and Filters with a separator before Filters, followed by the see more button drawn as an ellipsis. Above the right end of the bar, the overflow menu is open, listing the secondary commands Export and Print. A note says the overflow menu opens upward by default and downward when there isn't room above. A second note says that when the bar narrows, primary commands move into the overflow menu.</desc>
+<defs>
+<marker id="wcb-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-text-light, #4A5568)"/>
+</marker>
+</defs>
+<style>
+.wcb-bar { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wcb-zone { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wcb-btn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wcb-more { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 1.75; }
+.wcb-menu { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 1.5; }
+.wcb-sep { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wcb-lead { stroke: var(--color-text-light, #4A5568); stroke-width: 1; fill: none; }
+.wcb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wcb-t { font-size: 12px; fill: var(--color-text, #1A202C); }
+.wcb-title { font-size: 15px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wcb-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wcb-a { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wcb-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="wcb-menu" x="640" y="80" width="180" height="92" rx="4"/>
+<text class="wcb-t" x="660" y="112">Export</text>
+<text class="wcb-t" x="660" y="148">Print</text>
+<text class="wcb-hd" x="640" y="66">OVERFLOW MENU</text>
+<text class="wcb-k" x="640" y="190">SecondaryCommands</text>
+
+<rect class="wcb-bar" x="60" y="220" width="780" height="72" rx="4"/>
+
+<rect class="wcb-zone" x="72" y="230" width="200" height="52" rx="3"/>
+<text class="wcb-title" x="90" y="262">Orders</text>
+
+<rect class="wcb-zone" x="400" y="230" width="360" height="52" rx="3"/>
+<rect class="wcb-btn" x="410" y="238" width="104" height="36" rx="3"/><text class="wcb-n" x="462" y="261" text-anchor="middle">New order</text>
+<rect class="wcb-btn" x="522" y="238" width="96" height="36" rx="3"/><text class="wcb-n" x="570" y="261" text-anchor="middle">Refresh</text>
+<line class="wcb-sep" x1="630" y1="240" x2="630" y2="272"/>
+<rect class="wcb-btn" x="642" y="238" width="108" height="36" rx="3"/><text class="wcb-n" x="696" y="261" text-anchor="middle">Filters</text>
+
+<rect class="wcb-more" x="776" y="238" width="52" height="36" rx="3"/><text class="wcb-a" x="802" y="261" text-anchor="middle">...</text>
+<line class="wcb-lead" x1="802" y1="236" x2="802" y2="176" marker-end="url(#wcb-arrow)"/>
+
+<text class="wcb-hd" x="72" y="320">CONTENT</text>
+<text class="wcb-k" x="72" y="338">any element, left side</text>
+<text class="wcb-hd" x="400" y="320">PRIMARY COMMANDS</text>
+<text class="wcb-k" x="400" y="338">AppBarButton, AppBarToggleButton, AppBarSeparator</text>
+<text class="wcb-hd" x="776" y="320">SEE MORE</text>
+
+<text class="wcb-k" x="60" y="100">The overflow menu opens upward by default,</text>
+<text class="wcb-k" x="60" y="116">and downward when there isn't room above.</text>
+<text class="wcb-k" x="60" y="384">When the bar narrows, primary commands move into the overflow menu,</text>
+<text class="wcb-k" x="60" y="400">and back out when there's room again.</text>
+</g>
+</svg>

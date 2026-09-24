@@ -1,283 +1,409 @@
 ---
-title: "Basic Input Controls in WinUI 3"
+title: "Input Controls in WinUI 3"
 layout: guide
 category: "WinUI 3"
 subcategory: "Controls & UI"
-description: "A guide to the foundational input controls in WinUI 3 including buttons, toggles, sliders, text entry, and selection controls for building interactive interfaces."
-tags: [winui, winui-3, xaml, controls, ui-framework, desktop, practical]
+description: "Choosing and configuring WinUI 3's input controls: the button family, toggles and check boxes, RadioButtons, ComboBox, and SelectorBar for picking one option, Slider and NumberBox for numbers, TextBox and its three text events, PasswordBox, AutoSuggestBox, RichEditBox, the date and time pickers, ColorPicker, RatingControl, and the Community Toolkit's SettingsCard, SettingsExpander, and Segmented."
+tags: [buttons, text-input, numberbox, date-time-pickers, radiobuttons, community-toolkit, practical]
 ---
 
-WinUI 3 ships with a rich set of input controls that handle the most common interaction patterns in desktop applications. Understanding these controls, knowing when to reach for each one, and knowing how to configure them well saves considerable time compared to building custom interaction logic from scratch. This guide walks through the foundational input controls grouped by their purpose.
+## Buttons
 
-## Table of Contents
+### Button and Its Click
 
-- [The Button Family](#the-button-family)
-- [Toggle Controls](#toggle-controls)
-- [CheckBox](#checkbox)
-- [RadioButtons](#radiobuttons)
-- [Slider](#slider)
-- [ComboBox](#combobox)
-- [TextBox](#textbox)
-- [PasswordBox](#passwordbox)
-- [NumberBox](#numberbox)
-- [AutoSuggestBox](#autosuggestbox)
-- [RichEditBox](#richeditbox)
-
-## The Button Family
-
-Buttons are the most direct way for users to trigger an action. WinUI 3 provides several button types, each suited to a different context.
-
-`Button` is the baseline. It fires a `Click` event when pressed and supports the `Command` property for MVVM scenarios. Command binding is almost always preferable to code-behind event handlers because it keeps the view decoupled from logic and makes the enabled state automatic through `ICommand.CanExecute`.
+`Button` starts an immediate action, such as submitting a form. It raises `Click` when the user releases a mouse press over it, taps it, or presses Enter or Space while it has focus. It also has a `Command` property that takes an `ICommand`, which is the usual choice in MVVM code because the command's `CanExecute` result enables and disables the button without extra code.
 
 ```xml
 <Button Content="Save" Command="{x:Bind ViewModel.SaveCommand}" />
 ```
 
-`RepeatButton` fires `Click` continuously while held down, not just once. This is useful for controls like increment/decrement steppers or scroll actions where holding a button should keep advancing a value.
+A button's `Content` can be any object. Text is typical, but a `StackPanel` holding an icon and a label works too. Don't use a `Button` to move to another page. Microsoft's guidance reserves navigation for `HyperlinkButton`, which is styled as a link.
 
-`HyperlinkButton` renders as an inline text link and is the right choice when navigating to a URI or another page in the application. It accepts a `NavigateUri` for external links or a `Click` handler for in-app navigation.
+### Specialized Buttons
 
-`DropDownButton` combines a label with a chevron that opens a `Flyout`. It is useful when a primary label needs to reveal a small set of related choices rather than committing to a single action immediately.
+| Control | Behavior | Typical use |
+| --- | --- | --- |
+| `RepeatButton` | Raises `Click` repeatedly while held. `Delay` sets the wait before repeating starts and `Interval` the time between repeats, both in milliseconds | Increment and decrement steppers |
+| `HyperlinkButton` | Looks like a link. `NavigateUri` opens a URI, or handle `Click` for in-app navigation | Links and navigation |
+| `DropDownButton` | A button with a chevron that opens its `Flyout`. It still has `Click`, but you rarely handle it | A small set of related choices behind one label |
+| `SplitButton` | Two halves. The main half raises `Click`, the chevron half opens the `Flyout` | Repeat the last choice, or pick another |
+| `ToggleSplitButton` | Like `SplitButton`, but the main half toggles on and off. `IsChecked` is a plain `bool`, and it raises `IsCheckedChanged` rather than `Checked` and `Unchecked` | A feature with variants, such as list formatting with a choice of bullet style |
+| `ToggleButton` | A button that stays pressed while on | See On/Off Choices |
 
-`SplitButton` splits the control into two hit areas: a primary action on the left and a dropdown on the right. The left side fires `Click` for the default action while the right side opens a `Flyout` with alternatives. A formatting toolbar that applies the last-used format on the left while letting the user choose a different format from the dropdown on the right is a good example of when this works well.
+`SplitButton` and `ToggleSplitButton` behave differently under touch. A tap on either half opens the flyout, so the main half's `Click` never fires. The flyout's items must therefore apply the action themselves, not just record which option was picked. For `ToggleSplitButton`, the flyout also needs an item that turns the feature off.
 
 ```xml
-<SplitButton Content="Format" Click="OnFormatClick">
+<SplitButton Content="Highlight" Click="OnHighlightClick">
     <SplitButton.Flyout>
         <MenuFlyout>
-            <MenuFlyoutItem Text="Bold" />
-            <MenuFlyoutItem Text="Italic" />
+            <MenuFlyoutItem Text="Yellow" Click="OnHighlightColorClick" />
+            <MenuFlyoutItem Text="Green" Click="OnHighlightColorClick" />
         </MenuFlyout>
     </SplitButton.Flyout>
 </SplitButton>
 ```
 
-## Toggle Controls
+## On/Off Choices
 
-Two controls represent on/off state: `ToggleButton` and `ToggleSwitch`. They look different and belong in different contexts.
+### ToggleSwitch or CheckBox
 
-`ToggleButton` looks and behaves like a regular button but stays visually "pressed" when active. It is well suited to toolbars where multiple formatting or view options can be toggled independently, such as bold, italic, and underline in a text editor. The `IsChecked` property holds its state, and it can participate in `ToggleButton` groups when multiple related options need to work together.
+Both hold a binary value. They differ in when the value takes effect.
 
-`ToggleSwitch` renders as a horizontal switch with an on/off label and is the right control for settings pages. Its visual language communicates an immediate effect, so users understand that flipping it changes something right now rather than staging a change for later confirmation. Avoid using `ToggleSwitch` in toolbars; the switch metaphor implies persistent settings rather than mode toggles tied to a focused document or selection.
+`ToggleSwitch` acts immediately, like a light switch. Flipping it changes something now, so it suits a settings page where each change applies as it is made. Its state is `IsOn`, and it raises `Toggled`. The default On and Off labels are localized automatically, and `OnContent` and `OffContent` replace them.
+
+`CheckBox` records a choice that takes effect later. Use one on a form that the user must still submit, for optional items, or when the user can select several related options. With a toggle switch, "on" is unambiguous. A check box on a settings page leaves the user wondering whether checking it has already turned the feature on.
 
 ```xml
-<ToggleSwitch Header="Enable notifications" IsOn="{x:Bind ViewModel.NotificationsEnabled, Mode=TwoWay}" />
+<ToggleSwitch Header="Notifications" IsOn="{x:Bind ViewModel.NotificationsEnabled, Mode=TwoWay}" />
 ```
 
-## CheckBox
+`ToggleButton` is a third option. It's a button that stays pressed while on, as a bold or italic button in an editor's toolbar might. Inside a `CommandBar`, use `AppBarToggleButton` instead. Microsoft's guidance prefers a check box, radio button, or toggle switch unless the UI specifically benefits from a button.
 
-`CheckBox` represents a boolean choice that the user opts into or out of. In its default two-state form, it is checked or unchecked. The `IsChecked` property is a nullable bool, which opens the door to a third indeterminate state when `IsThreeState` is set to true.
+### CheckBox's Indeterminate State
 
-The three-state mode makes sense when the checkbox summarizes the state of a collection of child checkboxes. If some children are checked and others are not, the parent checkbox shows the indeterminate state to signal the mixed condition rather than implying all-or-nothing. A "Select All" checkbox above a list of items with independent checkboxes is the canonical example. Setting `IsChecked` to `null` puts the control in the indeterminate state programmatically.
+`CheckBox.IsChecked` is a `bool?`. With `IsThreeState="True"`, it can also be `null`, which displays as indeterminate. The indeterminate state means "some but not all of the sub-items are set," as in a "Select all" box above a list of options. It isn't a third value in its own right. For low, medium, and high, use three radio buttons.
+
+Your code sets the indeterminate state by assigning `null` when the children are mixed. The catch is that with `IsThreeState` on, the user's own clicks also cycle through indeterminate. Microsoft's sample handles the `Indeterminate` event and, when all children are already checked, sets the parent to `false` instead, so the user never lands on the mixed state directly.
+
+To react to changes in code, handle `Click`, which fires on every change, or handle both `Checked` and `Unchecked`, which fire independently. Handling only `Checked` misses the user clearing the box.
+
+Because `IsChecked` is nullable, binding it to a plain `bool` needs a cast in `x:Bind` (`{x:Bind (x:Boolean)Box.IsChecked, Mode=OneWay}`) or a value converter.
+
+## Picking One Option from a Set
+
+### Choosing the Control
+
+| Situation | Control |
+| --- | --- |
+| Two options that read as one yes/no choice | A single `CheckBox` or `ToggleSwitch`, not two radio buttons |
+| Up to about eight options the user should see side by side | `RadioButtons` |
+| A few views or data sets to switch between, one selected at a time | `SelectorBar` |
+| Two to five options shown as one connected bar of buttons, including multi-select | `Segmented` (Community Toolkit) |
+| More than eight options, or options of secondary importance | `ComboBox` |
+| Values from a continuous range | `Slider` |
+
+The thresholds come from Microsoft's design guidance. Radio buttons give way to a combo box above eight options, and a combo box with fewer than five options is often better as radio buttons.
+
+### RadioButtons
+
+WinUI has two ways to build a group of radio buttons. Individual `RadioButton` controls form a group when they share a parent panel or the same `GroupName`, and you lay them out yourself. The `RadioButtons` control, which Microsoft recommends, takes the options as items and handles layout, spacing, and keyboard navigation for you. It populates like an `ItemsControl`, either from items in XAML or from `ItemsSource`, and exposes the choice through `SelectedIndex`, `SelectedItem`, and `SelectionChanged`.
 
 ```xml
-<CheckBox Content="Select all" IsThreeState="True" IsChecked="{x:Bind ViewModel.SelectAllState, Mode=TwoWay}" />
-```
-
-For straightforward yes/no options where there is no parent/child relationship, stick to the default two-state behavior and leave `IsThreeState` at false.
-
-## RadioButtons
-
-WinUI 3 introduced the `RadioButtons` control as the recommended replacement for manually grouping legacy `RadioButton` elements. The difference matters in practice. The older approach required developers to assign the same `GroupName` to each `RadioButton` and handle layout manually. `RadioButtons` wraps a collection of items, manages mutual exclusivity automatically, and provides built-in keyboard navigation that meets accessibility standards without extra work.
-
-The control accepts items directly or through data binding via `ItemsSource`. It can display a header above the group and supports both `MaxColumns` for multi-column layouts and single-column vertical stacking.
-
-```xml
-<RadioButtons Header="Theme" SelectedIndex="0">
-    <RadioButton Content="Light" />
-    <RadioButton Content="Dark" />
-    <RadioButton Content="System default" />
+<RadioButtons Header="Theme" SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}">
+    <x:String>Light</x:String>
+    <x:String>Dark</x:String>
+    <x:String>Use system setting</x:String>
 </RadioButtons>
 ```
 
-Keyboard navigation within the group follows a roving tabindex pattern, meaning tab moves focus into and out of the group as a whole while arrow keys move between options inside it. This behavior is correct per ARIA guidelines and does not require manual implementation when using `RadioButtons`.
+The keyboard behavior is the main reason to prefer it. Tab moves focus into the group and lands on the selected item. If nothing is selected, focus lands on the first item without selecting it. Inside the group, the arrow keys move between items and selection follows focus. Ctrl plus an arrow key moves focus without selecting, and Space then selects. Focus does not wrap from the last item back to the first, so screen reader users can tell where the list begins and ends. Once the user selects an option, they can't clear the group back to no selection. Code can, by setting `SelectedIndex` to -1 or `SelectedItem` to `null`.
 
-## Slider
+`MaxColumns` spreads the items across columns, filling each column top to bottom before starting the next. Setting it to the item count puts them all in one row. If you place `RadioButton` elements inside `RadioButtons` (to set `AutomationProperties.Name` on each, for example), their `GroupName` is ignored. Handle selection on the individual buttons or on the group, not both, because both sets of events fire.
 
-`Slider` lets users choose a numeric value from a continuous or stepped range by dragging a thumb along a track. The basic configuration involves `Minimum`, `Maximum`, and `Value`. When the range should snap to specific increments, `StepFrequency` controls the step size and `SnapsTo` determines whether snapping applies to steps, tick marks, or not at all.
+### ComboBox
 
-Tick marks can be shown with `TickFrequency` and `TickPlacement`. Setting `TickPlacement` to `Outside`, `Inline`, or `Both` controls where marks appear relative to the track. Showing ticks communicates the discrete nature of the choices, which matters when users need to land on meaningful values like 25%, 50%, 75%.
-
-`Orientation` can be `Horizontal` or `Vertical`. Vertical sliders are less common but appropriate for controls like a volume fader in an audio interface.
+`ComboBox` shows the current selection and expands to a list when clicked. Items come from XAML or `ItemsSource`. For bound objects, `DisplayMemberPath` names the property shown as the label and `SelectedValuePath` names the property that `SelectedValue` returns.
 
 ```xml
-<Slider Minimum="0" Maximum="100" StepFrequency="5"
-        TickFrequency="10" TickPlacement="Outside"
-        Value="{x:Bind ViewModel.Volume, Mode=TwoWay}" />
-```
-
-## ComboBox
-
-`ComboBox` presents a collapsed list that expands when the user clicks it, allowing selection of one item from a set of options. It is the right choice when the list of options is long enough that showing them all inline would consume too much vertical space.
-
-Items can be declared inline in XAML or bound through `ItemsSource`. For data binding, `DisplayMemberPath` points to the property on each item object that should display as the label, and `SelectedValuePath` identifies the backing value property.
-
-```xml
-<ComboBox ItemsSource="{x:Bind ViewModel.Countries}"
+<ComboBox Header="Country"
+          ItemsSource="{x:Bind ViewModel.Countries}"
           DisplayMemberPath="Name"
           SelectedValuePath="Code"
           SelectedValue="{x:Bind ViewModel.SelectedCountryCode, Mode=TwoWay}" />
 ```
 
-Setting `IsEditable="True"` converts the ComboBox into an editable combo, where the user can type a value that is not in the list. This is appropriate when the list covers common choices but the user may have a custom value to enter. Be careful with editable combos in situations where only the listed values are valid; `AutoSuggestBox` is usually a better fit for open-ended text entry with suggestions.
+Setting `SelectedIndex` or `SelectedItem` from code before the items are loaded throws. When the items come from code, set the default selection in the `Loaded` handler. By default, `SelectionChanged` fires only when the user commits a choice, not while they arrow through the open list. Set `SelectionChangedTrigger="Always"` for a font picker that should preview each item as the user moves through it.
 
-## TextBox
+`IsEditable="True"` lets the user type a value that isn't in the list. The `TextSubmitted` event fires when the typed text matches no item and the user presses Enter or moves focus away. Validate it there. Setting `e.Handled = true` stops `SelectedItem` from updating and leaves the box in editing mode, but the invalid text stays in it. To put the previous value back, reset `Text` yourself, for example from `SelectedValue`. Use an editable combo box when the list covers the common values but others are allowed. For open-ended search with suggestions, `AutoSuggestBox` fits better.
 
-`TextBox` covers the majority of text input needs. For a single line of input, the default configuration works. Setting `AcceptsReturn="True"` enables multi-line entry. `TextWrapping="Wrap"` keeps long lines visible rather than scrolling horizontally.
+### SelectorBar and Segmented
 
-`PlaceholderText` sets the greyed-out hint text shown when the field is empty, which is useful for communicating expected input format without needing a separate label for obvious fields.
+Both switch between a few views, and they differ in origin and flexibility.
 
-Input validation can be approached through two events with different timing. `TextChanged` fires after each keystroke and delivers the committed value. `TextChanging` fires before the text is updated, giving the handler a chance to intercept and modify or cancel the change before it appears. `TextChanging` is more appropriate for real-time filtering, such as preventing non-numeric characters from being entered into a field that expects only digits.
-
-```xml
-<TextBox PlaceholderText="Search..." TextChanging="OnSearchTextChanging" />
-```
-
-For longer blocks of unformatted user text such as notes or comments, increase `MinHeight` and set `AcceptsReturn` and `TextWrapping` together. Avoid using `TextBox` as a display-only surface; read-only labels belong in `TextBlock` elements, which carry no interactive affordance and communicate clearly that the content is not editable.
-
-## PasswordBox
-
-`PasswordBox` provides a secure text entry field that masks characters as the user types. Unlike `TextBox`, it does not expose a `Text` property that can be data-bound in the usual way. The password value is retrieved through the `Password` property, which returns a plain string, so the application is still responsible for handling that value securely once it has been read.
-
-`PasswordRevealMode` controls whether the reveal button appears. The options are `Peek` (the default, showing the button), `Hidden` (no reveal button at all), and `Visible` (shows the password without any button, useful if a separate show/hide toggle is implemented externally).
+`SelectorBar` is built into WinUI. Each `SelectorBarItem` has `Text`, an `Icon`, or both, and at most one item is selected at a time. Handle `SelectionChanged` and read `SelectedItem` to navigate a `Frame` or swap the data a list shows. If nothing is selected when the bar gets focus, it selects the first item, and `SelectionChanged` fires for that too, as it does for selections made from code. It has no `ItemsSource` and no `SelectedIndex`, because it is meant for a short, fixed set declared in XAML. Microsoft suggests `RadioButtons` instead when nothing should be selected by default and the choice isn't about switching views.
 
 ```xml
-<PasswordBox PlaceholderText="Enter password" PasswordRevealMode="Peek" />
+<SelectorBar SelectionChanged="OnViewSelectionChanged">
+    <SelectorBarItem Text="Recent" Icon="Clock" IsSelected="True" />
+    <SelectorBarItem Text="Shared" Icon="Share" />
+    <SelectorBarItem Text="Favorites" Icon="Favorite" />
+</SelectorBar>
 ```
 
-## NumberBox
-
-`NumberBox` is the right control whenever numeric input is required with validation. Unlike a plain `TextBox` with manual parsing logic, `NumberBox` enforces numeric input natively, handles formatting, and optionally shows increment and decrement spin buttons.
-
-`SpinButtonPlacementMode` controls the spin button behavior. Setting it to `Compact` shows buttons only when the control has focus; `Inline` always shows them. Setting it to `Hidden` removes them, which is appropriate when the user will always type a value directly.
-
-`SmallChange` and `LargeChange` configure how much the value moves per spin button click and per Page Up/Page Down key press respectively. `NumberFormatter` accepts a formatter object from the Windows.Globalization.NumberFormatting namespace to control decimal precision, currency symbols, and other display options.
-
-`NumberBox` also accepts basic mathematical expressions when `AcceptsExpression="True"` is set. A user can type something like `10 + 5` and the control evaluates it to `15` on commit. This is a convenience for productivity applications where the user may want to compute a value rather than type the result directly.
+`Segmented`, from the Community Toolkit, renders its options as one connected bar of buttons, which suits a switch like grid, list, and details. It is best with two to five items and has no overflow, so it doesn't scale to longer lists. It supports single and multiple selection, and in single mode it selects the first item automatically unless `AutoSelection` is `false`. `SegmentedItem` takes `Content`, an `Icon`, or both. It ships in the `CommunityToolkit.WinUI.Controls.Segmented` package under the `CommunityToolkit.WinUI.Controls` namespace, with the prefix below declared as `xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"`.
 
 ```xml
-<NumberBox Header="Quantity" Value="{x:Bind ViewModel.Quantity, Mode=TwoWay}"
-           SpinButtonPlacementMode="Compact"
-           SmallChange="1" Minimum="0" Maximum="1000" />
+<toolkit:Segmented SelectedIndex="0">
+    <toolkit:SegmentedItem Content="Grid" />
+    <toolkit:SegmentedItem Content="List" />
+    <toolkit:SegmentedItem Content="Details" />
+</toolkit:Segmented>
 ```
 
-## AutoSuggestBox
+## Numbers and Ranges
 
-`AutoSuggestBox` combines a text field with a dropdown suggestion list that updates as the user types. It is the standard pattern for search fields and anywhere the application can offer useful completions based on partial input.
+### Slider
 
-The `TextChanged` event fires as the user types. The handler receives the current text and a reason code indicating whether the change came from user input or programmatic assignment. The handler is responsible for filtering or fetching candidates and then assigning them to `ItemsSource` to populate the dropdown.
+A slider fits values the user thinks of as a relative amount, like volume or brightness, and benefits from seeing each change as it happens. If the user needs an exact, known number, or will prefer the keyboard, use `NumberBox` instead.
 
-`QuerySubmitted` fires when the user presses Enter or selects a suggestion. The event arguments carry both the chosen suggestion object (if a suggestion was selected) and the query text (if the user submitted without selecting). This distinction matters because the application may need to handle search-by-text differently from navigating to a specific matched item.
+`Minimum`, `Maximum`, and `Value` define the range. `StepFrequency` sets the interval between allowed values, and `TickFrequency` sets the interval between tick marks. `SnapsTo` decides which of the two the thumb snaps to, and it defaults to `StepValues`. `TickPlacement` positions the marks:
 
-`SuggestionChosen` fires when the user highlights a suggestion through keyboard navigation before committing, which can be used to preview or pre-fill related fields.
+| `TickPlacement` | Where tick marks appear |
+| --- | --- |
+| `None` | No tick marks |
+| `TopLeft` | Above a horizontal track, left of a vertical one |
+| `BottomRight` | Below a horizontal track, right of a vertical one |
+| `Outside` | On both sides of the track |
+| `Inline` | On the track itself |
 
 ```xml
-<AutoSuggestBox PlaceholderText="Search contacts..."
-                TextChanged="OnSearchTextChanged"
-                QuerySubmitted="OnQuerySubmitted" />
+<Slider Header="Volume" Minimum="0" Maximum="100"
+        StepFrequency="5" TickFrequency="10" TickPlacement="Outside"
+        Value="{x:Bind ViewModel.Volume, Mode=TwoWay}" />
 ```
 
-Keep the suggestion list short and meaningful. Showing more than around eight items at a time creates a list that the user must scroll through, which defeats the purpose of type-ahead filtering.
+Show tick marks when the snap points aren't obvious. A 200-pixel slider with 200 steps doesn't need them, but one with 10 steps does. `Orientation="Vertical"` suits values the user already pictures vertically, such as temperature. Microsoft's guidance puts a vertical slider's maximum at the top.
 
-## RichEditBox
+### NumberBox
 
-`RichEditBox` is a full rich-text editor control that supports bold, italic, underline, font changes, paragraph alignment, and other formatting through its document model. Content is manipulated programmatically through the `Document` property, which exposes an `ITextDocument` interface with methods for getting and setting selection, applying formatting, and loading or saving RTF content.
+`NumberBox` is a text box for numbers. Its `Value` is a `double`, and its `Text` holds the same value as a string. When the user clears the box, `Value` becomes `double.NaN`, not zero, so bind it to a `double` property and treat `NaN` as empty.
 
-Use `RichEditBox` when the application genuinely needs to let users produce formatted text, such as a notes editor, an email composition field, or a simple word processor. For plain text input, even multi-line text, `TextBox` is simpler and faster to configure. It also avoids the complexity of the document model. `RichEditBox` does not support `PlaceholderText` or straightforward two-way data binding; getting and setting content requires interacting with the document API directly.
+```xml
+<NumberBox Header="Quantity"
+           Value="{x:Bind ViewModel.Quantity, Mode=TwoWay}"
+           Minimum="0" Maximum="1000"
+           SmallChange="1" LargeChange="10"
+           SpinButtonPlacementMode="Compact" />
+```
+
+The box accepts any typed text and validates it when the user presses Enter or moves focus away. With the default `ValidationMode` of `InvalidInputOverwritten`, text that isn't a number or a valid expression reverts to the last valid value. `Disabled` turns that off so you can validate yourself.
+
+- **Stepping.** `SmallChange` applies to the arrow keys, the mouse wheel, and the spin buttons. `LargeChange` applies to Page Up and Page Down.
+- **Spin buttons.** `SpinButtonPlacementMode` defaults to `Hidden`. `Inline` shows the buttons beside the box, and `Compact` shows them in a flyout while the box has focus. The buttons disable themselves when another step would pass `Minimum` or `Maximum`.
+- **Expressions.** With `AcceptsExpression="True"`, typing `10 + 5 * 2` evaluates to 20 on commit. The operators are `^`, `*`, `/`, `+`, and `-` in that order of precedence, with parentheses to override it.
+- **Formatting.** `NumberFormatter` takes a formatter from `Windows.Globalization.NumberFormatting`, such as `DecimalFormatter` or `CurrencyFormatter`, which also controls rounding.
+
+## Text Entry
+
+| Input | Control |
+| --- | --- |
+| Plain text, one line or many | `TextBox` |
+| A password or other secret | `PasswordBox` |
+| A search term, with suggestions as the user types | `AutoSuggestBox` |
+| One of a list of values, or a custom value | `ComboBox` with `IsEditable="True"` |
+| A number | `NumberBox` |
+| A formatted document | `RichEditBox` |
+
+### TextBox
+
+`TextBox` takes plain, unformatted text. Set `AcceptsReturn="True"` and `TextWrapping="Wrap"` together for multi-line input, and give a multi-line box a fixed `Height` or `MaxHeight` so it doesn't grow as the user types. `Header` labels the box above it and stays visible, while `PlaceholderText` disappears once the user types. All the text-entry controls here have both properties, as do `NumberBox`, `ComboBox`, and `CalendarDatePicker`. `ToggleSwitch`, `Slider`, `RadioButtons`, `DatePicker`, and `TimePicker` have only `Header`.
+
+A few behaviors catch people out:
+
+- **`MaxLength` doesn't limit pasted text.** Handle the `Paste` event if the limit matters.
+- **`InputScope` performs no validation.** `InputScope="Number"` shows the number layout on the touch keyboard, but a hardware keyboard can still type anything.
+- **Read-only should be a temporary state.** A read-only `TextBox` looks editable. For text that is never editable, use a `TextBlock`.
+- **The clear-all button appears only on editable, non-wrapping boxes.** It shows while the box has text and focus, and never when `IsReadOnly` or `AcceptsReturn` is true or `TextWrapping` is anything but `NoWrap`.
+- **Expect to build your own validation display.** The current `TextBox` API and those of the other input controls have no properties for showing validation errors, so apps typically place their own error text next to the field.
+
+### The Three Text-Change Events
+
+`TextBox` raises three events for each change, and they differ in timing and in what the handler may do.
+
+| Event | When it fires | What the handler can do |
+| --- | --- | --- |
+| `BeforeTextChanging` | Synchronously, before `Text` updates | Read the proposed text from `args.NewText` and reject it with `args.Cancel = true` |
+| `TextChanging` | Synchronously, after `Text` holds the new value but before it renders | Adjust `Text` and the selection without flicker. Do nothing else here, because the event can fire during layout, when changing the visual tree may crash the app |
+| `TextChanged` | Asynchronously, after the new text renders | Anything, including showing UI or starting a search |
+
+To keep a field digits-only, cancel in `BeforeTextChanging`, since only that event can reject the change before it lands:
 
 ```csharp
-// Reading content as plain text
-string plainText;
-RichEditor.Document.GetText(Windows.UI.Text.TextGetOptions.None, out plainText);
-
-// Applying bold to the current selection
-RichEditor.Document.Selection.CharacterFormat.Bold = Windows.UI.Text.FormatEffect.On;
+private void OnDigitsBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs args)
+{
+    args.Cancel = args.NewText.Any(c => !char.IsAsciiDigit(c));
+}
 ```
 
-The choice between `TextBox` and `RichEditBox` comes down to whether formatting is a feature the application needs to support. If users just need to enter and read text, use `TextBox`. If formatting is part of the value being captured, use `RichEditBox`.
+For a numeric field that needs more than digits, `NumberBox` is usually the better control.
 
-## CalendarDatePicker
+### PasswordBox
 
-`CalendarDatePicker` provides a compact date selection experience. It displays as a text field showing the selected date, and when activated it opens a flyout containing a full month calendar. This makes it a good choice when date selection is one of several inputs on a form and the calendar should not dominate the layout.
+`PasswordBox` masks what the user types. Its value is the `Password` property, a plain `string`. Unlike in WPF, `Password` is a dependency property, so it can be bound. The app still holds the password as an ordinary string once it reads it. `PasswordChanged` fires on each edit, and `PasswordChar` replaces the default bullet.
+
+`PasswordRevealMode` has three values:
+
+- **`Peek`** (the default) shows a reveal button that displays the password only while pressed. The button appears only after the box first gets focus and the user types, and only if the box is wider than a minimum width. If focus leaves and returns, it stays hidden until the box is cleared.
+- **`Hidden`** never reveals the password.
+- **`Visible`** shows the password in clear text with no button.
+
+A "Show password" check box that switches between `Hidden` and `Visible` gives the user a reveal that doesn't need to be held down. `PasswordBox` supports only the `Password` and `NumericPin` input scopes.
+
+### AutoSuggestBox
+
+`AutoSuggestBox` is a text box with a suggestion list, and it's the standard search box. Using it means handling three moments:
+
+- **`TextChanged`** fires whenever the text changes. Check `args.Reason`, and filter suggestions only when it is `AutoSuggestionBoxTextChangeReason.UserInput`. The other reasons come from your own code or from the user choosing a suggestion.
+- **`SuggestionChosen`** fires when the user arrows through the list or clicks an item. If `TextMemberPath` is set, the box updates its text to the highlighted item without extra code. Handle the event only when the text needs building from more than one property.
+- **`QuerySubmitted`** fires when the user commits. `args.QueryText` always holds the text. `args.ChosenSuggestion` holds the item if the user picked it from the list, and is `null` if they pressed Enter or the query icon in the text box.
 
 ```xml
-<CalendarDatePicker
-    PlaceholderText="Select a date"
-    DateChanged="CalendarDatePicker_DateChanged" />
+<AutoSuggestBox PlaceholderText="Search contacts" QueryIcon="Find"
+                DisplayMemberPath="Name" TextMemberPath="Name"
+                TextChanged="OnSearchTextChanged"
+                QuerySubmitted="OnSearchQuerySubmitted" />
 ```
 
-The selected date is available through the `Date` property, which is of type `DateTimeOffset?`. The null value indicates that no date has been chosen, which is useful for distinguishing an empty field from a chosen date. You can constrain the selectable range using `MinDate` and `MaxDate`.
+```csharp
+private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+{
+    if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+    {
+        sender.ItemsSource = _contacts
+            .Where(c => c.Name.Contains(sender.Text, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+}
 
-## CalendarView
-
-`CalendarView` displays the calendar directly in the page rather than in a flyout, making it appropriate when date selection is the primary activity on a screen or when you want users to see context around the date they are selecting. It supports single, multiple, and range selection modes through the `SelectionMode` property.
-
-```xml
-<CalendarView
-    SelectionMode="Single"
-    SelectedDatesChanged="CalendarView_SelectedDatesChanged" />
+private void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+{
+    if (args.ChosenSuggestion is Contact contact)
+        OpenContact(contact);
+    else
+        RunSearch(args.QueryText);
+}
 ```
 
-In `Multiple` mode, the user can tap individual dates to add or remove them from the selection, which suits scenarios like scheduling recurring events. In `Range` mode, the user selects a start and end date, useful for booking or date range filters.
+When a search finds nothing, show a single "No results" item so the user knows the search ran.
 
-`CalendarView` exposes density indicators through the `CalendarViewDayItemChanging` event, letting you mark specific dates with visual cues to communicate that something is scheduled or notable on those days.
+### RichEditBox
 
-## DatePicker and TimePicker
+`RichEditBox` edits formatted documents, with bold and italic text, fonts, paragraph alignment, lists, and images. Microsoft positions it for working with documents such as `.rtf` files, not for collecting input from a form. For plain text, even long multi-line text, `TextBox` is simpler.
 
-`DatePicker` and `TimePicker` use spinner-style selectors rather than a calendar flyout, presenting separate columns for each component of the date or time. `DatePicker` shows day, month, and year columns, while `TimePicker` shows hour, minute, and AM/PM columns.
+It has no bindable `Text` property. Content lives in `Document`, a `RichEditTextDocument` from the `Microsoft.UI.Text` namespace. Code written for UWP uses `Windows.UI.Text` for these types, and that doesn't carry over to WinUI 3. The document loads and saves through streams, reads its text, and exposes the current selection for formatting:
 
-```xml
-<DatePicker Header="Appointment date" />
-<TimePicker Header="Appointment time" />
+```csharp
+using Microsoft.UI.Text;
+
+// Read the document as plain text
+Editor.Document.GetText(TextGetOptions.None, out string plainText);
+
+// Toggle bold on the current selection
+ITextCharacterFormat format = Editor.Document.Selection.CharacterFormat;
+format.Bold = FormatEffect.Toggle;
+Editor.Document.Selection.CharacterFormat = format;
+
+// Save as RTF. SaveToStream takes a WinRT IRandomAccessStream,
+// such as one from StorageFile.OpenAsync(FileAccessMode.ReadWrite)
+Editor.Document.SaveToStream(TextGetOptions.FormatRtf, randomAccessStream);
 ```
 
-The spinner format is familiar on touch-first or compact displays, where a full calendar flyout might feel heavyweight. On desktop, user preference varies, so choosing between `CalendarDatePicker` and `DatePicker` often comes down to whether the calendar context adds value for the task. Selecting a birthdate, for example, benefits from `DatePicker` because users typically know the date and do not need to navigate a calendar. Selecting a meeting date benefits from `CalendarDatePicker` because users may want to see the surrounding week.
+The control has no formatting toolbar of its own, so the app supplies the bold, italic, and alignment buttons. It does support `Header` and `PlaceholderText` like the other text controls. It can also edit math equations typed in UnicodeMath, a plain-text notation where `1/2` becomes ½, and read or write them as MathML. Math mode is off until you call `Document.SetMathMode(RichEditMathMode.MathOnly)`.
 
-`DatePicker` and `TimePicker` are frequently used together. Placing them side by side under a shared header creates a coherent date-and-time entry experience without requiring a custom compound control.
+## Dates and Times
 
-## SettingsCard and SettingsExpander (Community Toolkit)
+WinUI has four date and time controls, and Microsoft's guidance picks among them by whether the calendar itself helps the user.
 
-The `SettingsCard` and `SettingsExpander` controls address one of the most common patterns in Windows desktop applications: a settings page where options are presented in labeled cards that follow the Fluent Design style used by Windows itself and apps like Windows Settings.
+| Control | Use it to pick | Example |
+| --- | --- | --- |
+| `CalendarDatePicker` | One date from a drop-down calendar, when the day of the week or the surrounding dates matter | An appointment or departure date |
+| `DatePicker` | One known date, when calendar context doesn't matter | A date of birth |
+| `CalendarView` | One or more dates from a calendar that stays visible | Scheduling across several days |
+| `TimePicker` | One time value | An arrival time |
 
-`SettingsCard` is a single-line item with a header, optional description, optional icon, and a content area on the right side for controls like toggles, dropdowns, or buttons:
+In C#, all of them use `DateTimeOffset` for dates. Date properties can't be set as XAML attribute strings, because the XAML parser has no string-to-date conversion, so set them in code or through a binding.
+
+### CalendarDatePicker
+
+The control shows placeholder text ("select a date" by default) until the user picks a date, then shows the date. Clicking it opens a calendar over the rest of the UI. Its `Date` property is a `DateTimeOffset?` and is `null` until a date is chosen, and clicking the selected date again clears it. `DateChanged` reports changes. `MinDate` and `MaxDate` limit the range, and a `Date` set in code outside that range is clamped to the nearest bound.
 
 ```xml
-<ctk:SettingsCard
-    Header="Dark Mode"
-    Description="Use dark theme across the application"
-    HeaderIcon="{ui:FontIcon Glyph=&#xE793;}">
-    <ToggleSwitch IsOn="{x:Bind ViewModel.IsDarkModeEnabled, Mode=TwoWay}" />
-</ctk:SettingsCard>
+<CalendarDatePicker Header="Departure" PlaceholderText="Choose a date"
+                    DateChanged="OnDepartureDateChanged" />
 ```
 
-`SettingsExpander` wraps a header card that can collapse and expand to reveal a list of nested `SettingsCard` items. This pattern works well for grouping related settings that share a parent concept without cluttering the page when users do not need them:
+The internal calendar allows only single selection. When the user needs to pick several dates, or the calendar should stay open, use `CalendarView`.
+
+### CalendarView
+
+`CalendarView` shows a calendar that the user navigates by month, year, or decade. `SelectionMode` is `Single` by default, `Multiple` for picking several dates, or `None` for display only. Microsoft's overview pages say the control can select "a range of dates," but that means `Multiple` mode. There is no mode that selects a contiguous range from a start and end date. The selected dates are in the `SelectedDates` collection, and `SelectedDatesChanged` reports changes.
+
+To customize individual days, handle `CalendarViewDayItemChanging`, whose `args.Item` is the day being rendered. Set `IsBlackout` to make a day unselectable, or call `SetDensityColors` to draw up to 10 colored bars that show how busy a day is. The event supports phased rendering. Each call checks `args.Phase`, does that phase's work, and calls `args.RegisterUpdateCallback` to be invoked again for the next phase. Days the user scrolls past before all phases finish skip the remaining work.
 
 ```xml
-<ctk:SettingsExpander
-    Header="Notifications"
-    Description="Configure how the application notifies you"
-    HeaderIcon="{ui:FontIcon Glyph=&#xEA8F;}">
-    <ctk:SettingsExpander.Items>
-        <ctk:SettingsCard Header="Show toast notifications">
-            <ToggleSwitch IsOn="{x:Bind ViewModel.ToastsEnabled, Mode=TwoWay}" />
-        </ctk:SettingsCard>
-        <ctk:SettingsCard Header="Play notification sounds">
+<CalendarView SelectionMode="Multiple"
+              SelectedDatesChanged="OnSelectedDatesChanged"
+              CalendarViewDayItemChanging="OnDayItemChanging" />
+```
+
+### DatePicker and TimePicker
+
+`DatePicker` and `TimePicker` display their value in a compact entry point. Clicking it opens a picker surface with one scrolling column per component. Dates have day, month, and year columns, formatted for the user's locale, and times on a 12-hour clock have hour, minute, and AM/PM. `DatePicker` can hide a column with `DayVisible`, `MonthVisible`, or `YearVisible`.
+
+Each control has two value properties. `DatePicker.SelectedDate` (a `DateTimeOffset?`) and `TimePicker.SelectedTime` (a `TimeSpan?`) are `null` until the user picks a value, and while they are `null` the picker shows its field names. Bind to these and handle `SelectedDateChanged` and `SelectedTimeChanged`. The older non-nullable `Date` and `Time` properties can't represent "unset," so they report 12/31/1600 and a zero `TimeSpan` instead, which code can mistake for a value the user chose.
+
+`MinYear` and `MaxYear` default to 100 years before and after today. If you set only one of them, check that it still forms a valid range with the other's default, or the picker has no selectable dates. Unlike the date properties, `SelectedTime` can be set as a XAML string such as `SelectedTime="14:15"`.
+
+```xml
+<DatePicker Header="Arrival date" SelectedDateChanged="OnArrivalDateChanged" />
+<TimePicker Header="Arrival time" MinuteIncrement="15"
+            SelectedTimeChanged="OnArrivalTimeChanged" />
+```
+
+`MinuteIncrement` limits the minute column to multiples of a step, and `ClockIdentifier` switches between `"12HourClock"` (the default) and `"24HourClock"`. The two controls are often placed together, with the handlers combining the date and time into one value.
+
+## Color and Rating
+
+### ColorPicker
+
+`ColorPicker` lets the user choose a color from a spectrum or type RGB, HSV, or hex values. Read the result from `Color` or handle `ColorChanged`. The control can be pared down to fit the task:
+
+- **Casual picking.** `ColorSpectrumShape="Ring"` with the text inputs hidden gives a simple wheel and slider, suited to picking a highlighter color.
+- **Precise picking.** The default square spectrum shows more of the gamut, and the text inputs let the user refine the value.
+- **Transparency.** `IsAlphaEnabled="True"` adds an opacity slider and text box.
+
+Binding `Color` directly applies each change as the user drags. In a flyout, Microsoft recommends committing only when the user confirms, either with OK and Cancel buttons or when the flyout closes.
+
+### RatingControl
+
+`RatingControl` shows and sets a star rating. `MaxRating` sets the number of stars. A common pattern sets `PlaceholderValue` to the average rating of all users, which displays until the user rates the item, with `Caption` carrying a label such as the number of ratings. `IsClearEnabled` controls whether the user can remove a rating once set.
+
+`Value` is a `double`, so an unrated control can't report `null`. The API declares its default as -1, so treat any value below zero as "not rated". For ratings the user can't change, such as those on reviews in a long list, set `IsReadOnly="True"`. Microsoft recommends read-only mode for large virtualized lists, partly for performance.
+
+```xml
+<RatingControl Caption="Your rating" ValueChanged="OnRatingChanged" />
+```
+
+## Settings Pages with SettingsCard and SettingsExpander
+
+The Windows Community Toolkit's settings controls reproduce the card layout of the Windows 11 Settings app, which is otherwise tedious to build from `Grid` and `Border`. They ship in the `CommunityToolkit.WinUI.Controls.SettingsControls` package under the `CommunityToolkit.WinUI.Controls` namespace, declared here as `xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"`.
+
+A `SettingsCard` is one row. It has a `Header`, an optional `Description`, an optional `HeaderIcon`, and its content, typically a toggle switch, combo box, or button, sits on the right. When the card gets narrow, the content wraps below the header.
+
+```xml
+<toolkit:SettingsCard Header="Dark mode"
+                      Description="Use the dark theme across the app">
+    <toolkit:SettingsCard.HeaderIcon>
+        <FontIcon Glyph="&#xE793;" />
+    </toolkit:SettingsCard.HeaderIcon>
+    <ToggleSwitch IsOn="{x:Bind ViewModel.IsDarkMode, Mode=TwoWay}" />
+</toolkit:SettingsCard>
+```
+
+`IsClickEnabled="True"` turns the whole card into a button that raises `Click` or runs `Command`, for a setting that opens a detail page or an external link. A clickable card shows an action icon, which `ActionIcon` replaces and `IsActionIconVisible="False"` hides.
+
+`SettingsExpander` groups related cards under one header that expands and collapses. It can have its own content on the right like a card, and its `Items` are `SettingsCard` elements, so a setting moves in or out of a group by moving its XAML. It is also an `ItemsControl`, so `ItemsSource` and an `ItemTemplate` can generate the cards from data.
+
+```xml
+<toolkit:SettingsExpander Header="Notifications"
+                          Description="Choose how the app notifies you">
+    <toolkit:SettingsExpander.Items>
+        <toolkit:SettingsCard Header="Show notifications">
+            <ToggleSwitch IsOn="{x:Bind ViewModel.NotificationsEnabled, Mode=TwoWay}" />
+        </toolkit:SettingsCard>
+        <toolkit:SettingsCard Header="Play a sound">
             <ToggleSwitch IsOn="{x:Bind ViewModel.SoundsEnabled, Mode=TwoWay}" />
-        </ctk:SettingsCard>
-    </ctk:SettingsExpander.Items>
-</ctk:SettingsExpander>
-```
-
-These controls save significant time over building equivalent layouts from `Grid` and `Border` by hand, and they stay visually consistent with Windows 11 system applications.
-
-## Segmented (Community Toolkit)
-
-`Segmented` provides a horizontal set of mutually exclusive options that behaves similarly to a `RadioButtons` group but renders as a connected pill-style button bar. It suits view mode switching, filter selection, and any scenario where the user picks one option from a small set and the current selection needs to be visually prominent:
-
-```xml
-<ctk:Segmented SelectedIndex="0">
-    <ctk:SegmentedItem Content="Grid" />
-    <ctk:SegmentedItem Content="List" />
-    <ctk:SegmentedItem Content="Details" />
-</ctk:Segmented>
+        </toolkit:SettingsCard>
+    </toolkit:SettingsExpander.Items>
+</toolkit:SettingsExpander>
 ```

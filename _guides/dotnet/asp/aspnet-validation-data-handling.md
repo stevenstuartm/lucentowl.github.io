@@ -3,139 +3,121 @@ title: "Validation"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Building APIs"
-description: "Comprehensive coverage of validation approaches, content negotiation, formatters, and file handling patterns in ASP.NET Core APIs."
-tags: [asp-net-core, validation, data-annotations, fluent-validation, content-negotiation, file-uploads, json-serialization, model-binding]
+description: "Validating API input in ASP.NET Core: the separate validation systems for controllers and .NET 10 minimal APIs, data annotations and custom attributes, IValidatableObject, FluentValidation without its no-longer-supported auto-validation, and why uniqueness checks belong to the database."
+tags: [practical, validation, data-annotations, ivalidatableobject, fluent-validation, source-generators]
 ---
 
-## Validation and Data Handling in ASP.NET Core APIs
+## Where Validation Runs
 
-APIs exist to accept input, process it, and return output. Validation ensures the input meets expectations before processing begins. Data handling encompasses how that input arrives, how it transforms into application types, and how responses serialize back to clients. ASP.NET Core provides built-in validation through data annotations, integrates with third-party libraries like FluentValidation, and offers flexible content negotiation and serialization options. Understanding these mechanisms helps you build APIs that reject bad data early, handle multiple content types gracefully, and process file uploads without overwhelming server resources.
+Validation checks that a request's input meets the API's rules before the handler acts on it. It always runs after *model binding*, the step that turns route values, query strings, headers, and the body into typed parameters. A body that fails to deserialize, such as `"abc"` sent for a number, is a binding failure, not a validation failure, and the rules on that body never run. Controllers report the binding error in the same `400` as any validation errors from other parameters. Minimal APIs reject the request with a plain `400` before validation starts, or show the exception page in Development. A route or query value that fails to parse behaves differently in minimal APIs. The request is marked `400`, but the validation filter still runs, against the parameter's default value, so `?page=abc` for a `[Range(1, 100)] int page` reports a range error rather than a parse error.
 
-This guide covers validation patterns across controller-based and minimal APIs, explores System.Text.Json configuration, explains content negotiation and formatters, and examines file upload strategies including streaming for large files.
+### Two Validation Systems
 
-## Data Annotation Validation
+ASP.NET Core has two validation systems, one for each way of building an API. Both read the same rules, the attributes from `System.ComponentModel.DataAnnotations` and the `IValidatableObject` interface, so a request model can be shared between them.
 
-Data annotations provide declarative validation rules using attributes from the `System.ComponentModel.DataAnnotations` namespace. These attributes decorate model properties and execute automatically during model binding.
+| | Controllers | Minimal APIs (.NET 10) |
+| --- | --- | --- |
+| System | MVC model validation | `Microsoft.Extensions.Validation` |
+| Turned on by | `AddControllers()` | `builder.Services.AddValidation()` |
+| Runs | After binding, before action filters | In an *endpoint filter*, code that wraps the handler, placed ahead of every other endpoint filter |
+| Results go to | `ModelState`, the per-request record of binding and validation errors | Straight to the error response |
+| Invalid request gets | An automatic `400` under `[ApiController]`, otherwise the action checks `ModelState.IsValid` | A `400` before the handler runs |
+| Non-nullable reference properties, with nullable reference types enabled | Implicitly required | Required only with `[Required]` |
 
-### Built-In Validation Attributes
+The systems don't mix. `AddValidation` has no effect on controllers, and controller validation doesn't apply to minimal API handlers.
 
-Common validation attributes include `[Required]`, `[StringLength]`, `[Range]`, `[EmailAddress]`, `[RegularExpression]`, and `[Compare]`. Each enforces specific constraints on the property value.
+### The Error Response
+
+Controllers return failures as a *validation problem details* body, the standard JSON error format defined by [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457){:target="_blank" rel="noopener noreferrer"}, with an `errors` object that maps each failing field to its messages:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "One or more validation errors occurred.",
+  "status": 400,
+  "errors": {
+    "Username": ["The field Username must be a string with a minimum length of 3 and a maximum length of 50."],
+    "Customer.ShippingAddress.Street": ["Street is required."]
+  },
+  "traceId": "00-6f1c...-01"
+}
+```
+
+Minimal APIs write the full body only when the app registers the problem details service, which `builder.Services.AddProblemDetails()` does. Without it, the response carries just `title` and `errors`. An API that has both kinds of endpoint needs `AddProblemDetails()` for their errors to match.
+
+The second key comes from an order model with a nested customer and address. Nested properties and collection items get paths such as `Customer.ShippingAddress.Street` and `OrderItems[0].Description`, so a client can place each error next to the right field.
+
+## Data Annotations
+
+Data annotations are attributes on the properties of a request model. The common built-in ones are `[Required]`, `[StringLength]`, `[Range]`, `[EmailAddress]`, `[RegularExpression]`, and `[Compare]`. Each has a default message, and `ErrorMessage` replaces it:
 
 ```csharp
 public class CreateUserRequest
 {
-    [Required(ErrorMessage = "Username is required")]
-    [StringLength(50, MinimumLength = 3)]
-    public string Username { get; set; }
+    [Required, StringLength(50, MinimumLength = 3)]
+    public string? Username { get; set; }
 
-    [Required]
-    [EmailAddress]
-    public string Email { get; set; }
+    [Required(ErrorMessage = "An email address is required."), EmailAddress]
+    public string? Email { get; set; }
 
     [Range(18, 120)]
     public int Age { get; set; }
 
     [RegularExpression(@"^\d{3}-\d{2}-\d{4}$")]
-    public string TaxId { get; set; }
+    public string? TaxId { get; set; }
 }
 ```
 
-Data annotations run during model binding, before the controller action or minimal API handler executes. If validation fails, the framework populates `ModelState` with error details.
+Two rules about what counts as missing catch people.
 
-### How ModelState Works
+- **`[Required]` can't fail on a non-nullable value type.** A JSON body with no `age` deserializes to `0`, which is a value, so `[Required] int Age` passes. Declare it `int?` with `[Required]`, or mark the property with the C# `required` keyword so that deserialization itself rejects a body without it.
+- **Controllers treat non-nullable reference types as required.** With nullable reference types enabled, MVC treats every non-nullable reference-type parameter and bound property as if it had `[Required(AllowEmptyStrings = true)]`. A `string Notes` property with no initializer, which the client considers optional, then fails with a `400` nobody wrote a rule for. Declaring it `string?` or giving it a non-null initializer avoids that, and setting `MvcOptions.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes` to `true` turns the behavior off. Minimal API validation has no such rule, so the same model can behave differently in the two systems.
 
-`ModelState` is a dictionary tracking both binding and validation errors. Each property name becomes a key, and validation errors for that property accumulate as values. Controllers and handlers can inspect `ModelState.IsValid` to determine whether validation succeeded.
+## Cross-Property Rules with IValidatableObject
 
-```csharp
-[HttpPost("users")]
-public IActionResult CreateUser([FromBody] CreateUserRequest request)
-{
-    if (!ModelState.IsValid)
-    {
-        return BadRequest(ModelState);
-    }
-
-    // Process valid request
-    return Ok();
-}
-```
-
-When you return `BadRequest(ModelState)`, ASP.NET Core serializes the errors into a structured response showing which properties failed and why.
-
-### ApiController Attribute and Automatic Validation
-
-Controllers decorated with `[ApiController]` benefit from automatic validation. When model state is invalid, the framework returns an HTTP 400 response with a `ProblemDetails` payload before your action executes. You don't need to check `ModelState.IsValid` manually.
-
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class UsersController : ControllerBase
-{
-    [HttpPost]
-    public IActionResult Create([FromBody] CreateUserRequest request)
-    {
-        // If we reach this point, validation passed
-        return Ok();
-    }
-}
-```
-
-This automatic behavior reduces boilerplate and ensures consistent error responses across your API. The `ProblemDetails` format includes a `type`, `title`, `status`, and `errors` dictionary mapping property names to validation messages.
-
-## Complex Validation with IValidatableObject
-
-Data annotations handle simple constraints well, but complex validation requiring multiple property comparisons or external dependencies needs a different approach. The `IValidatableObject` interface allows your model to contain custom validation logic.
+An attribute sees one property, so a rule that compares two, such as a check-out date after the check-in date, goes in the model. `IValidatableObject` adds a `Validate` method that returns every failure. Its `ValidationContext` parameter describes what is being validated and can resolve services, covered under custom attributes below.
 
 ```csharp
 public class CreateReservationRequest : IValidatableObject
 {
-    [Required]
-    public DateTime CheckInDate { get; set; }
-
-    [Required]
-    public DateTime CheckOutDate { get; set; }
+    public DateOnly CheckIn { get; set; }
+    public DateOnly CheckOut { get; set; }
 
     [Range(1, 10)]
     public int Guests { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (CheckOutDate <= CheckInDate)
+        if (CheckOut <= CheckIn)
         {
             yield return new ValidationResult(
-                "Check-out date must be after check-in date",
-                new[] { nameof(CheckOutDate) });
+                "Check-out must be after check-in.", [nameof(CheckOut)]);
         }
-
-        if ((CheckOutDate - CheckInDate).TotalDays > 30)
+        else if (CheckOut.DayNumber - CheckIn.DayNumber > 30)
         {
             yield return new ValidationResult(
-                "Reservations cannot exceed 30 days",
-                new[] { nameof(CheckInDate), nameof(CheckOutDate) });
+                "Reservations can't exceed 30 nights.", [nameof(CheckIn), nameof(CheckOut)]);
         }
     }
 }
 ```
 
-The `Validate` method executes after data annotation validation succeeds. If it yields any `ValidationResult` instances, those errors merge into `ModelState` and trigger the same 400 response behavior.
+The member names passed to `ValidationResult` decide which keys in `errors` the message appears under.
 
-`IValidatableObject` works best for validation logic that belongs conceptually to the model itself. For rules requiring external services, databases, or complex business logic, consider custom validation attributes or FluentValidation.
+Both systems validate every property's attributes first. They run the type's own rules, meaning `Validate` and any *type-level attribute* (a `ValidationAttribute` placed on the class, which sees the whole object), only when every property passed. A request with `Guests = 0` and reversed dates reports only the guest count, and the date error appears after the client fixes it. That is the cost of `IValidatableObject`: a client can't see all of its errors in one round trip. MVC can run the type's rules anyway when `MvcOptions.ValidateComplexTypesIfChildValidationFails` is `true`. The minimal API system has no equivalent.
 
 ## Custom Validation Attributes
 
-When validation logic applies across multiple models but exceeds what built-in attributes provide, custom validation attributes offer reusability without duplicating code.
+A rule that several models share, and that looks at one value, becomes an attribute. It derives from `ValidationAttribute` and overrides `IsValid`:
 
 ```csharp
 public class FutureDateAttribute : ValidationAttribute
 {
-    protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+    protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {
-        if (value is DateTime date)
+        if (value is DateOnly date && date <= DateOnly.FromDateTime(DateTime.UtcNow))
         {
-            if (date <= DateTime.UtcNow)
-            {
-                return new ValidationResult("Date must be in the future");
-            }
+            return new ValidationResult("The date must be in the future.", [validationContext.MemberName!]);
         }
 
         return ValidationResult.Success;
@@ -144,274 +126,117 @@ public class FutureDateAttribute : ValidationAttribute
 
 public class ScheduleEventRequest
 {
-    [Required]
-    [FutureDate]
-    public DateTime EventDate { get; set; }
+    [Required, FutureDate]
+    public DateOnly? EventDate { get; set; }
 }
 ```
 
-Custom attributes inherit from `ValidationAttribute` and override `IsValid`. The `ValidationContext` parameter provides access to the entire object being validated, the service provider for dependency injection, and other contextual information.
+Returning `Success` for a `null` value, as this attribute does, leaves the missing-value check to `[Required]`, and most built-in attributes behave the same way, so rules combine without reporting a missing value twice. The property is `DateOnly?` for the reason given under data annotations. A non-nullable `DateOnly` would bind a missing value as `0001-01-01`, and the client would be told the date must be in the future rather than that it's missing.
 
-### Validation Attributes with Dependencies
+An attribute can read services too, through `validationContext.GetService<T>()`, which makes configuration-driven rules possible. `IsValid` is synchronous in .NET 10, though, so a database or HTTP call inside it blocks a thread on every request. (.NET 11 adds asynchronous validation attributes to the minimal API system.)
 
-If your validation logic requires external services like a database or HTTP client, request those dependencies through the `ValidationContext.GetService` method. This approach allows unit testing by mocking services while keeping the attribute declarative.
+## Uniqueness Belongs to the Database
+
+A service-backed validator makes it tempting to check that an email address isn't already registered. The check is a race. Two requests can both see the address as free and both insert it, whichever library runs the check. The database's unique constraint is what guarantees uniqueness, so the handler attempts the insert and turns the constraint violation into a `409 Conflict`. The same holds for anything another request can change between the check and the write, such as stock levels or room availability. A validator can still check first to give a friendlier message, but it can't replace the constraint.
+
+## Minimal API Validation in .NET 10
+
+`builder.Services.AddValidation()` turns on validation for every minimal API endpoint. It validates every handler parameter that isn't a service, whether it comes from the route, the query string, a header, or the body. A class or record used as a parameter has its attributes and `IValidatableObject` rules applied, including those of nested objects and collection items:
 
 ```csharp
-public class UniqueEmailAttribute : ValidationAttribute
+builder.Services.AddProblemDetails();
+builder.Services.AddValidation();
+
+app.MapPost("/products", (Product product) => TypedResults.Created($"/products/{product.Name}", product));
+
+public record Product([Required] string Name, [Range(1, 1000)] int Quantity);
+```
+
+A parameter whose value is `null` is skipped in .NET 10, so `[Required]` on an omitted `int? page` query parameter never fires. Declaring the parameter non-nullable makes binding reject a missing value instead. A failing request gets a `400` before the handler runs. The body goes through `IProblemDetailsService`, the service `AddProblemDetails()` registers, so a custom implementation of it can reshape the response. `.DisableValidation()` on an endpoint turns validation off for it, and `[SkipValidation]` does the same for one property, parameter, or type.
+
+Validation depends on a source generator that, at build time, finds the types used in endpoint handler signatures and writes validation code for them. Three limits follow from that.
+
+- **It covers only the assembly that calls `AddValidation`.** Endpoints or models in a class library need their own `AddValidation` call from inside that library, typically wrapped in an extension method the host calls. A library built with the base `Microsoft.NET.Sdk` also needs a package reference to `Microsoft.Extensions.Validation`.
+- **A root type the generator can't discover from a handler signature needs `[ValidatableType]`.** Types reachable from a marked type are included automatically. In .NET 10, `[ValidatableType]` and `[SkipValidation]` are *experimental*, meaning their design may still change. Using them from such a plain class library, rather than a Web SDK project, raises warning ASP0029 until it is suppressed.
+- **Missing metadata fails silently.** A type the generator didn't cover isn't validated, and nothing is logged. Invalid input reaches the handler. The generator skips non-public types and properties, so an `internal record` used as a request body is never validated.
+
+## FluentValidation
+
+[FluentValidation](https://docs.fluentvalidation.net/){:target="_blank" rel="noopener noreferrer"} is a widely used library that moves rules out of attributes and into a validator class per model. Rules read as code, can be conditional, and can be asynchronous:
+
+```csharp
+public class CreateReservationValidator : AbstractValidator<CreateReservationRequest>
 {
-    protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+    public CreateReservationValidator(IRoomInventory inventory)
     {
-        if (value is string email)
+        RuleFor(x => x.CheckOut).GreaterThan(x => x.CheckIn);
+
+        RuleFor(x => x.Guests).InclusiveBetween(1, 10);
+
+        RuleFor(x => x.Guests)
+            .MustAsync((request, guests, token) =>
+                inventory.HasCapacityAsync(request.CheckIn, request.CheckOut, guests, token))
+            .WithMessage("No rooms are available for that many guests on those dates.")
+            .When(x => x.CheckOut > x.CheckIn);
+    }
+}
+
+builder.Services.AddValidatorsFromAssemblyContaining<CreateReservationValidator>();
+```
+
+`AddValidatorsFromAssemblyContaining`, from the `FluentValidation.DependencyInjectionExtensions` package, registers every validator as `IValidator<T>`. A validator's constructor can take services, which is what lets the capacity rule query inventory. That rule is a pre-check for a clearer message, since availability can change before the booking commits, and the booking itself still enforces capacity. Hanging the rule off `RuleFor(x => x.Guests)` files its error under `Guests`. A rule written as `RuleFor(x => x)` would land under an empty key that no form field matches.
+
+### Auto-Validation Is No Longer Recommended
+
+The older `FluentValidation.AspNetCore` package plugs validators into MVC model validation with `AddFluentValidationAutoValidation()`. FluentValidation's own documentation no longer recommends it for new projects, for three reasons. It works only with MVC, not minimal APIs. The MVC validation pipeline is synchronous, so a validator with a `MustAsync` rule, like the one above, can't run under it. And because so much happens behind the scenes, a validator that doesn't run is hard to debug.
+
+### Calling Validators Explicitly
+
+The recommended approach is to call the validator explicitly. In a minimal API, an endpoint filter does that once for every endpoint that needs it:
+
+```csharp
+public class ValidationFilter<T>(IValidator<T> validator) : IEndpointFilter
+{
+    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        if (context.Arguments.OfType<T>().FirstOrDefault() is { } argument)
         {
-            var userRepository = validationContext.GetService(typeof(IUserRepository)) as IUserRepository;
-            if (userRepository != null && userRepository.EmailExists(email))
+            var result = await validator.ValidateAsync(argument, context.HttpContext.RequestAborted);
+            if (!result.IsValid)
             {
-                return new ValidationResult("Email address already in use");
+                return TypedResults.ValidationProblem(result.ToDictionary());
             }
         }
 
-        return ValidationResult.Success;
+        return await next(context);
     }
 }
+
+app.MapPost("/reservations", (CreateReservationRequest request) => ...)
+    .AddEndpointFilter<ValidationFilter<CreateReservationRequest>>();
 ```
 
-This pattern works, but accessing the database during model validation has performance implications. Consider whether validation belongs in the model layer or should move to a service layer instead.
-
-## FluentValidation Integration
-
-FluentValidation provides a fluent interface for building validation rules in dedicated validator classes instead of decorating models with attributes. This separation keeps validation logic distinct from data transfer objects and enables more sophisticated rule composition.
-
-### Basic FluentValidation Setup
-
-Install the `FluentValidation.AspNetCore` package and register validators in the dependency injection container. Validators implement `AbstractValidator<T>` and define rules in their constructors.
-
-```csharp
-public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
-{
-    public CreateUserRequestValidator()
-    {
-        RuleFor(x => x.Username)
-            .NotEmpty().WithMessage("Username is required")
-            .Length(3, 50);
-
-        RuleFor(x => x.Email)
-            .NotEmpty()
-            .EmailAddress();
-
-        RuleFor(x => x.Age)
-            .InclusiveBetween(18, 120);
-    }
-}
-```
-
-Register FluentValidation in your service configuration:
-
-```csharp
-builder.Services.AddValidatorsFromAssemblyContaining<CreateUserRequestValidator>();
-builder.Services.AddFluentValidationAutoValidation();
-```
-
-The `AddFluentValidationAutoValidation` method integrates validators into the ASP.NET Core pipeline. When model binding completes, FluentValidation runs registered validators and populates `ModelState` with errors, triggering the same automatic 400 responses in controllers with `[ApiController]`.
-
-### Complex Rules and Conditional Validation
-
-FluentValidation excels at complex scenarios. You can compose rules conditionally, validate collections, implement custom validators, and perform asynchronous validation.
-
-```csharp
-public class CreateReservationRequestValidator : AbstractValidator<CreateReservationRequest>
-{
-    public CreateReservationRequestValidator()
-    {
-        RuleFor(x => x.CheckInDate)
-            .NotEmpty()
-            .GreaterThan(DateTime.UtcNow);
-
-        RuleFor(x => x.CheckOutDate)
-            .NotEmpty()
-            .GreaterThan(x => x.CheckInDate);
-
-        RuleFor(x => x)
-            .Must(x => (x.CheckOutDate - x.CheckInDate).TotalDays <= 30)
-            .WithMessage("Reservations cannot exceed 30 days")
-            .When(x => x.CheckInDate != default && x.CheckOutDate != default);
-
-        RuleFor(x => x.Guests)
-            .InclusiveBetween(1, 10);
-    }
-}
-```
-
-The `Must` method accepts a predicate for custom logic. The `When` method applies rules conditionally. You can chain multiple conditions and rules to express intricate validation requirements that would be cumbersome with data annotations.
-
-### Asynchronous Validation
-
-FluentValidation supports asynchronous validation when rules require I/O operations like database queries or HTTP calls.
-
-```csharp
-public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
-{
-    private readonly IUserRepository _repository;
-
-    public CreateUserRequestValidator(IUserRepository repository)
-    {
-        _repository = repository;
-
-        RuleFor(x => x.Email)
-            .NotEmpty()
-            .EmailAddress()
-            .MustAsync(BeUniqueEmail)
-            .WithMessage("Email address already in use");
-    }
-
-    private async Task<bool> BeUniqueEmail(string email, CancellationToken token)
-    {
-        return !await _repository.EmailExistsAsync(email, token);
-    }
-}
-```
-
-The `MustAsync` method accepts an async predicate. FluentValidation invokes it during validation and awaits the result. This pattern enables validation against external systems while keeping the validator testable through dependency injection.
-
-## Validation in Minimal APIs
-
-Before .NET 10, minimal APIs lacked built-in validation support. Developers manually invoked validators or used third-party libraries. .NET 10 introduced native validation for minimal APIs, aligning them with controller behavior.
-
-### Built-In Validation in .NET 10
-
-To enable validation in minimal APIs, call `AddValidation` when configuring services. This activates data annotation validation automatically.
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddValidation();
-
-var app = builder.Build();
-
-app.MapPost("/users", (CreateUserRequest request) =>
-{
-    // If we reach here, validation passed
-    return Results.Ok();
-});
-
-app.Run();
-```
-
-When validation fails, the framework returns a 400 Bad Request response with a `ProblemDetails` payload, matching controller behavior. You don't need to check validation state manually.
-
-### Using FluentValidation with Minimal APIs
-
-FluentValidation works with minimal APIs when registered through `AddValidatorsFromAssembly` and `AddFluentValidationAutoValidation`. The integration populates validation errors and triggers automatic 400 responses.
-
-```csharp
-builder.Services.AddValidatorsFromAssemblyContaining<Program>();
-builder.Services.AddFluentValidationAutoValidation();
-
-app.MapPost("/users", (CreateUserRequest request) =>
-{
-    return Results.Created($"/users/{request.Username}", request);
-});
-```
-
-If you prefer manual validation control, inject `IValidator<T>` into the handler and invoke validation explicitly.
-
-```csharp
-app.MapPost("/users", async (CreateUserRequest request, IValidator<CreateUserRequest> validator) =>
-{
-    var result = await validator.ValidateAsync(request);
-    if (!result.IsValid)
-    {
-        return Results.ValidationProblem(result.ToDictionary());
-    }
-
-    return Results.Created($"/users/{request.Username}", request);
-});
-```
-
-Manual validation provides flexibility when you need custom error responses or want validation to occur at specific points in the handler logic.
-
-## System.Text.Json Configuration
-
-ASP.NET Core uses `System.Text.Json` as the default JSON serializer for both request deserialization and response serialization. Configuring serialization behavior affects how property names map between JSON and C# objects, how enums serialize, and whether null values appear in responses.
-
-### Common Configuration Options
-
-Configure JSON options when adding controllers or minimal API services:
-
-```csharp
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
-```
-
-The `PropertyNamingPolicy` controls whether property names serialize as PascalCase, camelCase, or snake_case. The default is camelCase, matching JavaScript conventions. The `DefaultIgnoreCondition` determines whether properties with null values appear in serialized output. `WhenWritingNull` omits them, reducing payload size. The `JsonStringEnumConverter` serializes enums as strings instead of integers, improving readability.
-
-### Custom Converters
-
-When default serialization behavior doesn't meet your needs, custom converters provide fine-grained control. Implement `JsonConverter<T>` to define how a specific type serializes and deserializes.
-
-```csharp
-public class DateOnlyConverter : JsonConverter<DateOnly>
-{
-    public override DateOnly Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        return DateOnly.ParseExact(reader.GetString(), "yyyy-MM-dd");
-    }
-
-    public override void Write(Utf8JsonWriter writer, DateOnly value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(value.ToString("yyyy-MM-dd"));
-    }
-}
-```
-
-Register the converter when configuring JSON options:
-
-```csharp
-options.JsonSerializerOptions.Converters.Add(new DateOnlyConverter());
-```
-
-Custom converters handle scenarios like formatting dates in specific patterns, encrypting sensitive properties during serialization, or mapping between legacy JSON structures and modern C# types.
-
-## Common Pitfalls
-
-### Validation Runs After Model Binding
-
-Validation executes after model binding completes. If binding fails because the request body doesn't match the expected structure, validation never runs. This distinction matters when debugging why certain validation errors don't appear.
-
-### Custom Validators Accessing Services
-
-Custom validation attributes can access services through `ValidationContext.GetService`, but this couples validation to the dependency injection container. If a validator queries a database, consider whether that logic belongs in the model layer or should move to a service layer instead.
-
-### Content Negotiation and Default Behavior
-
-ASP.NET Core defaults to JSON and ignores browser `Accept` headers unless configured otherwise. If your API supports multiple formats, test with explicit `Accept` headers to ensure formatters activate correctly.
-
-### FluentValidation and Async Validators
-
-Asynchronous validators in FluentValidation require careful handling. If a validator depends on a database or HTTP client, ensure the dependency is registered in the service container and the validator constructor requests it. Manual validation in minimal APIs requires calling `ValidateAsync`, not `Validate`.
-
-## Decision Framework: Choosing Validation Approaches
-
-| Scenario | Approach | Why |
-|----------|----------|-----|
-| Simple property constraints | Data annotations | Built-in, declarative, minimal code |
-| Cross-property validation | IValidatableObject | Keeps validation logic in the model |
-| Reusable custom rules | Custom attributes | Shareable across models |
-| Complex rule composition | FluentValidation | Fluent syntax, testable, separated from DTOs |
-| Async validation with I/O | FluentValidation async | Supports database queries and HTTP calls |
-| Minimal APIs in .NET 10 | Built-in validation | Native support, consistent with controllers |
-
-Choose data annotations for straightforward constraints. Move to `IValidatableObject` for multi-property validation. Use custom attributes when the same rule applies across models. Adopt FluentValidation when validation logic grows complex or requires dependency injection. In minimal APIs, leverage built-in validation in .NET 10 or integrate FluentValidation for consistency with controller-based APIs.
+`ToDictionary()` produces the property-to-messages shape that validation problem details expects, so clients see the same error format as built-in validation produces. In a controller, inject `IValidator<T>`, copy each failure into `ModelState` with `ModelState.AddModelError(error.PropertyName, error.ErrorMessage)`, and return `ValidationProblem()`. That goes through `ProblemDetailsFactory`, the same code the automatic `400` uses, so the body gets the same `type` and `traceId`.
+
+Pick one system per model. With `AddValidation` on, built-in validation runs first and returns its own `400` before a FluentValidation filter is reached. The `CreateReservationRequest` above implements `IValidatableObject` and also has a validator, so it would be checked twice, with the first failure answered by built-in validation. Either keep the rules in one place or call `.DisableValidation()` on endpoints that FluentValidation covers.
+
+## Choosing an Approach
+
+| Rule | Approach | Why | Why not |
+| --- | --- | --- | --- |
+| One property's format or range | Data annotations | Declarative, run by both systems, and reflected in the generated OpenAPI schema | Can't compare properties or express conditions |
+| Several properties of one model | `IValidatableObject` | Keeps the rule with the data it checks | Runs only after every property passes, so clients see errors in rounds |
+| One value, reused across models | Custom `ValidationAttribute` | Written once, applied like a built-in attribute | Synchronous in .NET 10 |
+| Conditional rules, rules that need services or I/O | FluentValidation, called explicitly | Async support and constructor injection | Rules don't appear in the OpenAPI schema without an extra library, and the call has to be wired per endpoint |
+| Uniqueness, or anything another request can change | The handler, backed by a database constraint | A validator's answer can be stale by the time the write runs | No reason to skip it. A validator can add a friendlier message on top |
 
 ## Key Takeaways
 
-Validation in ASP.NET Core operates through data annotations, custom attributes, `IValidatableObject`, and FluentValidation. Controllers with `[ApiController]` return automatic 400 responses when validation fails. Minimal APIs in .NET 10 support built-in validation when configured. FluentValidation separates validation logic into dedicated classes and supports asynchronous rules.
-
-System.Text.Json serves as the default serializer with configurable naming policies, ignore conditions, and custom converters. Content negotiation uses `Accept` and `Content-Type` headers to select formatters. Custom input and output formatters handle non-standard content types like CSV.
-
-File uploads use `IFormFile` for buffered scenarios and `MultipartReader` for streaming large files. Configure request size limits at the server, framework, and action levels. Streaming reduces memory consumption but requires more complex code.
-
-Understanding these mechanisms ensures your API validates input correctly, handles multiple content types gracefully, and processes file uploads efficiently without overwhelming server resources.
+- Validation runs after model binding. A body that doesn't deserialize fails as a binding error, and its rules never run.
+- Controllers use MVC model validation and `ModelState`. Minimal APIs use `AddValidation` in .NET 10. Both read data annotations and `IValidatableObject`, and neither applies to the other.
+- Minimal APIs return the full problem details body only when `AddProblemDetails()` is registered.
+- `[Required]` on a non-nullable value type never fails. Controllers treat non-nullable reference types as required, and minimal APIs don't.
+- Property attributes run first. Type-level rules, including `IValidatableObject`, run only when every property passed.
+- Minimal API validation relies on a source generator. It covers only the calling assembly and skips undiscovered types without any warning.
+- FluentValidation's auto-validation package is MVC-only and can't run async rules. Call validators explicitly, and don't also run built-in validation on the same model.
+- Uniqueness is enforced by a database constraint, not a validator.

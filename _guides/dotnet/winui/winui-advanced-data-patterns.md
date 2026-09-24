@@ -3,385 +3,279 @@ title: "Advanced Data Patterns"
 layout: guide
 category: "WinUI 3"
 subcategory: "Data & MVVM"
-description: "Implementing advanced data patterns in WinUI 3 including incremental loading, input validation with INotifyDataErrorInfo, caching strategies, and offline-capable data architectures."
-tags: [winui, winui-3, data-binding, validation, caching, mvvm, desktop, advanced]
+description: "Data patterns for WinUI 3 apps that outgrow a simple bound list: loading items as the user scrolls with ISupportIncrementalLoading and the toolkit's IncrementalLoadingCollection, explicit paging, validating input with ObservableValidator when controls show no errors themselves, batching collection updates, and working offline with a local store, sync status, and connectivity detection."
+tags: [incremental-loading, observablevalidator, data-validation, paging, offline-first, observablecollection, advanced]
 ---
 
-## Table of Contents
+## Loading Items as the User Scrolls
 
-- [Incremental Loading with ISupportIncrementalLoading](#incremental-loading-with-isupportincrementalloading)
-- [Data Validation with INotifyDataErrorInfo and ObservableValidator](#data-validation-with-inotifydataerrorinfo-and-observablevalidator)
-- [Caching Strategies](#caching-strategies)
-- [Offline Data Patterns](#offline-data-patterns)
-- [Batch Operations on ObservableCollection](#batch-operations-on-observablecollection)
-- [Data Paging for Large Datasets](#data-paging-for-large-datasets)
+A list of ten thousand products doesn't need ten thousand products in memory when the user will look at fifty. `ListView` and `GridView` can ask for data on demand. When their `ItemsSource` implements `ISupportIncrementalLoading` (`Microsoft.UI.Xaml.Data`), the control reads its `HasMoreItems` property and calls `LoadMoreItemsAsync` whenever the user scrolls close enough to the end of what has loaded. `ItemsView` and `ItemsRepeater` don't do this, so an incrementally loading collection bound to either one just shows what it holds and never asks for more.
 
----
+Two properties on the list tune how early and how often it asks. Both measure distance in viewport-sized pages of the list, which is a different "page" from the batch of items a data source returns. `IncrementalLoadingThreshold` sets how close to the end the viewport has to come before the list asks for more. A larger value starts loading further ahead, which suits users who fling through the list, at the cost of loading items they may never see. `DataFetchSize` sets how much the list asks for at a time.
 
-## Incremental Loading with ISupportIncrementalLoading
+Incremental loading depends on the list knowing where its viewport ends. A `ListView` placed where it gets unlimited height, such as inside a vertical `StackPanel`, has no viewport edge to approach, so it can keep requesting pages until the source runs out.
 
-Most real-world datasets are too large to load all at once. Fetching ten thousand product records on startup is wasteful when the user may only scroll through fifty of them. WinUI 3 collection controls like `ListView` and `GridView` support demand-driven loading natively through the `ISupportIncrementalLoading` interface, which tells the control that more data is available and provides a mechanism to request it as the user scrolls toward the bottom.
+### The Toolkit's IncrementalLoadingCollection
 
-The interface requires two members: a `HasMoreItems` property that signals whether additional data exists, and a `LoadMoreItemsAsync` method that the control calls when it determines it needs more content. Rather than implementing the full interface from scratch, the most practical approach is to subclass `IncrementalLoadingBase` from the [CommunityToolkit.WinUI](https://learn.microsoft.com/en-us/windows/communitytoolkit/){:target="_blank" rel="noopener noreferrer"} library, which handles the `IObservableVector` plumbing and leaves only the loading logic to implement.
-
-A minimal implementation for a paginated product API looks like this:
+Implementing `ISupportIncrementalLoading` by hand means building a collection, tracking pages, guarding against overlapping loads, and reporting progress. The Windows Community Toolkit's [`IncrementalLoadingCollection<TSource, T>`](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/windows/collections/incrementalloadingcollection){:target="_blank" rel="noopener noreferrer"}, in the `CommunityToolkit.WinUI.Collections` package, does that work. The app supplies only the page fetch, as an `IIncrementalSource<T>`:
 
 ```csharp
-public class IncrementalProductCollection : IncrementalLoadingBase
-{
-    private readonly IProductService _productService;
-    private int _currentPage = 0;
-    private const int PageSize = 25;
+using CommunityToolkit.WinUI.Collections;
 
-    public IncrementalProductCollection(IProductService productService)
+public sealed class ProductSource(IProductService products) : IIncrementalSource<Product>
+{
+    public Task<IEnumerable<Product>> GetPagedItemsAsync(
+        int pageIndex, int pageSize, CancellationToken cancellationToken = default) =>
+        products.GetPageAsync(pageIndex, pageSize, cancellationToken);
+}
+```
+
+```csharp
+public partial class CatalogViewModel : ObservableObject
+{
+    public CatalogViewModel(IProductService products)
     {
-        _productService = productService;
+        Products = new IncrementalLoadingCollection<ProductSource, Product>(
+            new ProductSource(products),
+            itemsPerPage: 25,
+            onError: ex => LoadError = ex.GetBaseException().Message);
     }
 
-    protected override bool HasMoreItemsOverride() => _currentPage >= 0;
+    public IncrementalLoadingCollection<ProductSource, Product> Products { get; }
 
-    protected override async Task<IList<object>> LoadMoreItemsOverrideAsync(
-        CancellationToken cancellationToken, uint count)
+    [ObservableProperty]
+    public partial string? LoadError { get; set; }
+
+    [RelayCommand]
+    private Task RetryAsync()
     {
-        var page = await _productService.GetPageAsync(_currentPage, PageSize, cancellationToken);
-
-        if (page.Items.Count < PageSize)
-            _currentPage = -1; // Signal end of data
-        else
-            _currentPage++;
-
-        return page.Items.Cast<object>().ToList();
+        LoadError = null;
+        return Products.RefreshAsync();
     }
 }
 ```
 
-In the ViewModel, you expose this collection as a property and bind it to a `ListView`. The control handles calling `LoadMoreItemsAsync` automatically when the user scrolls near the end. If you need finer control over the trigger threshold, the `ListView` exposes an `IncrementalLoadingThreshold` property that specifies how many items before the end the load should begin.
+```xml
+<ListView ItemsSource="{x:Bind ViewModel.Products}" />
+<ProgressRing IsActive="{x:Bind ViewModel.Products.IsLoading, Mode=OneWay}" />
+```
 
-One subtle issue is error handling inside `LoadMoreItemsOverrideAsync`. If the method throws, the control may stop requesting more items entirely depending on the implementation. Wrapping the async body in a try/catch and returning an empty list on failure, while also setting a flag the ViewModel can observe, gives the UI an opportunity to show a retry option without the list silently stopping.
+The collection derives from `ObservableCollection<T>` and exposes `IsLoading` and `HasMoreItems` as bindable properties. `pageIndex` starts at zero, and every call asks for `itemsPerPage` items whatever count the list requested, so the list's settings change how many fetches happen rather than their size. The collection stops asking for more once a page comes back empty.
+
+Errors need a plan. When a page fetch throws, the collection calls the `onError` callback and sets `HasMoreItems` to `false`, so the list stops at whatever it has and won't try that page again by itself. The exception arrives wrapped in an `AggregateException`, which is why the sample reads `GetBaseException()`. Without a callback, the exception propagates into the list's own load request, where nothing is waiting to handle it, so always pass one. Surfacing the error, as `LoadError` does here, and offering a retry that calls `RefreshAsync`, which clears the collection and loads from the first page, keeps a network blip from ending the list for the rest of the session.
 
 ---
 
-## Data Validation with INotifyDataErrorInfo and ObservableValidator
+## Paging with Explicit Controls
 
-Forms in desktop applications need more than just data binding. When a user enters an invalid email address or leaves a required field blank, the UI should reflect that state immediately and clearly. WinUI 3 data binding supports `INotifyDataErrorInfo`, an interface that lets a ViewModel carry validation state alongside its property values so controls can react automatically.
-
-Implementing `INotifyDataErrorInfo` manually involves maintaining a dictionary of property names to error lists, raising `ErrorsChanged` events when validation state changes, and running validation logic on every property setter. The [CommunityToolkit.Mvvm](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/){:target="_blank" rel="noopener noreferrer"} library eliminates this through `ObservableValidator`, a base class that handles the infrastructure and exposes validation through data annotations and the `ValidateProperty` method.
-
-A registration form ViewModel using `ObservableValidator` demonstrates the pattern:
+Incremental loading suits a feed the user scrolls through. Some data reads better as discrete pages with **Previous** and **Next**, such as search results the user compares or records they jump between by number. The view model tracks the page, the total, and which way the user can move:
 
 ```csharp
+public partial class OrdersViewModel(IOrderService orders) : ObservableObject
+{
+    private const int PageSize = 50;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PageInfo))]
+    [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand), nameof(NextPageCommand))]
+    public partial int CurrentPage { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PageInfo))]
+    [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
+    public partial int TotalPages { get; set; }
+
+    [ObservableProperty]
+    public partial IReadOnlyList<Order>? Orders { get; set; }
+
+    public string PageInfo => $"Page {CurrentPage} of {TotalPages}";
+
+    private bool CanGoBack() => CurrentPage > 1;
+    private bool CanGoForward() => CurrentPage < TotalPages;
+
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
+    private Task PreviousPageAsync() => LoadPageAsync(CurrentPage - 1);
+
+    [RelayCommand(CanExecute = nameof(CanGoForward))]
+    private Task NextPageAsync() => LoadPageAsync(CurrentPage + 1);
+
+    public async Task LoadPageAsync(int page)
+    {
+        PagedResult<Order> result = await orders.GetPageAsync(page, PageSize);
+        Orders = result.Items;
+        TotalPages = (int)Math.Ceiling(result.TotalCount / (double)PageSize);
+        CurrentPage = page;
+    }
+}
+```
+
+The page calls `LoadPageAsync(1)` when it is first shown, and each command then moves from there. Each async command disables itself while it runs, so a double-click can't load the same page twice. The other direction's command stays enabled, and a click on it starts a second load that can finish first. A view model that needs strict ordering cancels the previous load when a new one starts.
+
+Two refinements make paging feel faster. Keeping recently viewed pages in an in-memory cache makes Previous instant, and fetching the next page in the background after each load does the same for Next, as long as that background fetch catches its own exceptions, since nothing awaits it. A page-number box or slider bound to `CurrentPage` should wait until the input pauses before loading, with a debounce, or every keystroke loads a page.
+
+---
+
+## Validating Input with ObservableValidator
+
+### Controls Don't Show Validation Errors
+
+WinUI's input controls have no built-in way to display validation errors. A `TextBox` bound to a view model that implements `INotifyDataErrorInfo` doesn't show a red border or an error message by itself. Validation in a WinUI app is therefore view model state like any other, and the view decides how to show it.
+
+The MVVM Toolkit's [`ObservableValidator`](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/observablevalidator){:target="_blank" rel="noopener noreferrer"} provides that state. It derives from `ObservableObject`, implements `INotifyDataErrorInfo`, and validates properties against the attributes in `System.ComponentModel.DataAnnotations`, such as `[Required]` and `[EmailAddress]`. Adding `[NotifyDataErrorInfo]` to a generated property makes its setter validate every new value.
+
+### A Form View Model
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+
 public partial class RegistrationViewModel : ObservableValidator
 {
+    public RegistrationViewModel()
+    {
+        ErrorsChanged += (_, e) => OnPropertyChanged(e.PropertyName + "Error");
+        Email = string.Empty;
+        Password = string.Empty;
+    }
+
     [ObservableProperty]
     [NotifyDataErrorInfo]
     [Required(ErrorMessage = "Email is required.")]
     [EmailAddress(ErrorMessage = "Enter a valid email address.")]
-    private string _email = string.Empty;
+    public partial string Email { get; set; }
 
     [ObservableProperty]
     [NotifyDataErrorInfo]
     [Required(ErrorMessage = "Password is required.")]
     [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
-    private string _password = string.Empty;
+    public partial string Password { get; set; }
+
+    public string? EmailError => FirstError(nameof(Email));
+    public string? PasswordError => FirstError(nameof(Password));
+
+    private string? FirstError(string property) =>
+        GetErrors(property).FirstOrDefault()?.ErrorMessage;
 
     [RelayCommand]
     private void Submit()
     {
         ValidateAllProperties();
+        if (HasErrors) return;
 
-        if (HasErrors)
-            return;
-
-        // Proceed with registration
+        // Register the account
     }
 }
 ```
 
-The `[NotifyDataErrorInfo]` attribute on each field tells the source generator to call `ValidateProperty` whenever the property changes. Data annotations like `[Required]` and `[EmailAddress]` provide the validation rules, but you can also write custom validators by subclassing `ValidationAttribute`:
-
-```csharp
-public class NoReservedWordsAttribute : ValidationAttribute
-{
-    private static readonly string[] Reserved = ["admin", "root", "system"];
-
-    protected override ValidationResult? IsValid(object? value, ValidationContext context)
-    {
-        if (value is string s && Reserved.Contains(s.ToLowerInvariant()))
-            return new ValidationResult("This username is reserved.");
-
-        return ValidationResult.Success;
-    }
-}
+```xml
+<TextBox Header="Email" Text="{x:Bind ViewModel.Email, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+<TextBlock Text="{x:Bind ViewModel.EmailError, Mode=OneWay}"
+           Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
 ```
 
-Displaying validation errors in XAML requires binding to the errors collection on the control. WinUI 3 controls that inherit from `Control` expose an `InputValidationCommand` mechanism, but the more common approach is using the `InfoBar` or a `TextBlock` bound to a formatted error message computed from `GetErrors`:
+`ErrorsChanged` fires whenever a property's errors change, and the handler turns it into a change notification for the matching `...Error` property, so the message appears and clears as the user types. `[NotifyPropertyChangedFor(nameof(EmailError))]` would cover changes made through the setter, but errors also change without the setter running, when `Submit` calls `ValidateAllProperties`, when errors are cleared, and when another property's rule re-validates this one. Handling `ErrorsChanged` catches all of them.
 
-```csharp
-public string EmailError =>
-    GetErrors(nameof(Email)).FirstOrDefault()?.ErrorMessage ?? string.Empty;
-```
+The constructor assigns `Email` and `Password`, which runs validation on the empty values and so reports "is required" before the user has typed. Forms that shouldn't show errors until the user interacts call `ClearErrors()` at the end of the constructor, which clears every property's errors, and `Submit` validates everything with `ValidateAllProperties` anyway.
 
-With `[NotifyPropertyChangedFor(nameof(EmailError))]` added to the `_email` field, the XAML-bound error text updates alongside the property. This keeps the error display declarative and free of code-behind event handlers.
+The attributes are read by reflection, and the toolkit marks its validation methods as requiring code the trimmer can't see. A release publish with trimming or Native AOT, which current WinUI templates enable, reports trimming warnings for them, and properties the trimmer removes metadata for can go unvalidated.
+
+### Rules the Attributes Don't Cover
+
+A rule that needs a service goes in a static method named by `[CustomValidation(typeof(RegistrationViewModel), nameof(ValidateUserName))]`. The method receives the value and a `ValidationContext` whose `ObjectInstance` is the view model, which gives it access to injected services. Validation is synchronous, though, so a rule that needs a network call, such as checking that a username isn't taken, runs as an async check on submit or after the input pauses and records its result in a field that the custom rule then reads. A reusable rule becomes a class derived from `ValidationAttribute`. A rule that compares two properties has to be re-run when either changes, so the generated `OnPasswordChanged` partial method of one property calls `ValidateProperty` for the other.
 
 ---
 
-## Caching Strategies
+## Updating Collections in Batches
 
-Network calls are expensive. Round-tripping to an API for data that changes infrequently wastes time on every navigation and makes the application feel sluggish on poor connections. WinUI 3 applications typically layer two kinds of caching: an in-memory cache for hot data within a session and a persistent cache for data that should survive restarts.
+`ObservableCollection<T>` raises `CollectionChanged` for every change, and a bound list processes each notification. Adding a thousand search results one at a time sends a thousand notifications, which can make the list stutter while it fills. `ObservableCollection<T>` has no `AddRange`, and the MVVM Toolkit doesn't add one.
 
-For in-memory caching, `Microsoft.Extensions.Caching.Memory` provides `IMemoryCache`, which is available through the standard .NET dependency injection container. Entries can carry absolute or sliding expiration policies and size limits to prevent unbounded growth:
+The simplest fix for a list that is refreshed wholesale is not to modify it at all. Bind to a property of type `IReadOnlyList<T>` and assign a new list, and the view gets one `PropertyChanged` for the whole result. The paging view model above does this with `Orders`.
+
+A collection that also receives individual edits can add a batch method that raises one `Reset` notification at the end:
 
 ```csharp
-public class CachedProductService : IProductService
+public class BatchObservableCollection<T> : ObservableCollection<T>
 {
-    private readonly IProductService _inner;
-    private readonly IMemoryCache _cache;
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
-
-    public CachedProductService(IProductService inner, IMemoryCache cache)
+    public void AddRange(IEnumerable<T> items)
     {
-        _inner = inner;
-        _cache = cache;
-    }
-
-    public async Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken)
-    {
-        return await _cache.GetOrCreateAsync($"product:{id}", async entry =>
+        CheckReentrancy();
+        foreach (T item in items)
         {
-            entry.AbsoluteExpirationRelativeToNow = Ttl;
-            return await _inner.GetByIdAsync(id, cancellationToken);
-        });
+            Items.Add(item);   // the inner list, which raises nothing
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
     }
 }
 ```
 
-This decorator pattern wraps an existing service without modifying it, which keeps the caching concern separate from the retrieval logic and makes the behavior easy to test in isolation.
-
-For persistent caching that survives application restarts, SQLite is a natural fit for desktop applications. The [SQLite-net](https://github.com/praeclarum/sqlite-net){:target="_blank" rel="noopener noreferrer"} library offers a lightweight ORM that maps C# classes to SQLite tables and works well in the local application data folder:
-
-```csharp
-public class SqliteCache<T> where T : ICacheEntry, new()
-{
-    private readonly SQLiteAsyncConnection _db;
-
-    public SqliteCache(string dbPath)
-    {
-        _db = new SQLiteAsyncConnection(dbPath);
-        _db.CreateTableAsync<T>().Wait();
-    }
-
-    public async Task SetAsync(string key, T value, TimeSpan ttl)
-    {
-        value.Key = key;
-        value.ExpiresAt = DateTime.UtcNow.Add(ttl);
-        await _db.InsertOrReplaceAsync(value);
-    }
-
-    public async Task<T?> GetAsync(string key)
-    {
-        var entry = await _db.FindAsync<T>(key);
-        if (entry is null || entry.ExpiresAt < DateTime.UtcNow)
-            return null;
-        return entry;
-    }
-}
-```
-
-HTTP response caching deserves its own mention. When using `HttpClient`, configuring a `DelegatingHandler` that caches responses for specific endpoints avoids both the network round trip and the deserialization cost. The `CacheControlHeaderValue` from the HTTP response can guide whether a response should be cached at all, respecting server-side cache directives.
-
-Cache invalidation is where most caching strategies become complicated. The simplest approach is time-to-live expiry: cached entries are considered fresh for a fixed window. For write operations such as updating a product, invalidate the specific cache key immediately after a successful write so the next read reflects the change. Avoid bulk invalidation ("clear everything") unless the domain genuinely requires it, since it defeats the purpose of caching and causes thundering-herd problems where many requests race to repopulate the cache simultaneously.
+`CheckReentrancy` throws if a `CollectionChanged` handler is trying to modify the collection in the middle of a notification, the same guard the built-in methods use. `Items` is the protected inner list, so adding to it bypasses the per-item events, and the method raises the `Count` and indexer notifications that `ObservableCollection<T>` would otherwise have sent. `Reset` tells the list that everything changed, so it rebuilds its view of the collection. That is cheaper than a thousand individual adds, but for a handful of items it does more work than the adds would, and it may cost the user their scroll position or selection. Keep batches for large additions. Like any collection a list is bound to, this one is changed only on the UI thread.
 
 ---
 
-## Offline Data Patterns
+## Working Offline
 
-Desktop applications have an advantage over web applications in that they can continue functioning without a network connection. A local-first architecture treats the local database as the source of truth and treats network synchronization as a background concern rather than a prerequisite for every operation.
+### The Local Store Is the Source of Truth
 
-The pattern works in three layers. The application reads from and writes to a local SQLite database unconditionally. A background sync service monitors connectivity and pushes pending writes to the server when a connection is available. Incoming changes from the server are merged into the local database and surfaced to the UI through `INotifyPropertyChanged` notifications.
+A desktop app on a laptop loses its network as a matter of course, when the user closes the lid, moves between rooms, or sits on a plane. A local-first design treats that as normal. It costs a local schema, a sync service, and conflict handling, so an app that is useless offline anyway, such as a live dashboard, is better served by an online design with a cache. The app reads from and writes to a local database unconditionally, so every screen works offline. A background sync service pushes local changes to the server when it can and merges the server's changes into the local store, and the view models see those changes when they next read.
 
-Detecting connectivity in WinUI 3 uses the `NetworkInformation` class from `Windows.Networking.Connectivity`:
+Caching sits on the same foundation. An in-memory cache makes repeated reads within a session instant, and data that should survive a restart belongs in the local database, not in a second, separate cache.
 
-```csharp
-public class ConnectivityMonitor
-{
-    public bool IsConnected =>
-        NetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel()
-            == NetworkConnectivityLevel.InternetAccess;
+### Tracking What Needs to Sync
 
-    public ConnectivityMonitor()
-    {
-        NetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
-    }
-
-    private void OnNetworkStatusChanged(object sender)
-    {
-        ConnectivityChanged?.Invoke(this, IsConnected);
-    }
-
-    public event EventHandler<bool>? ConnectivityChanged;
-}
-```
-
-Conflict resolution is where local-first architectures require the most thought. When the same record has been modified both locally and on the server since the last sync, a strategy is needed. Three common approaches are last-write-wins (the record with the later timestamp overwrites the other), server-wins (local changes are discarded when the server has a newer version), and merge (specific fields are combined, which requires field-level tracking). For most desktop applications, last-write-wins with a user-visible conflict notification is sufficient. Domain-specific merge logic is worth investing in only when the cost of data loss is high.
-
-Tracking pending writes requires augmenting local records with a sync status field. Values like `Synced`, `PendingCreate`, `PendingUpdate`, and `PendingDelete` allow the sync service to identify exactly which records need to be pushed without scanning the entire database:
+Each local record carries its sync state, so the sync service can find pending work without comparing everything:
 
 ```csharp
 public enum SyncStatus { Synced, PendingCreate, PendingUpdate, PendingDelete }
 
 public class LocalProduct
 {
-    [PrimaryKey, AutoIncrement]
     public int LocalId { get; set; }
-    public int? ServerId { get; set; }
+    public int? ServerId { get; set; }          // assigned by the server after the first sync
     public string Name { get; set; } = string.Empty;
     public SyncStatus SyncStatus { get; set; } = SyncStatus.PendingCreate;
     public DateTime UpdatedAt { get; set; }
 }
 ```
 
-The sync service queries for records where `SyncStatus != Synced`, applies them to the server API, and updates the local records to `Synced` on success. If the server returns a new `ServerId` for a newly created record, the local record is updated with that identifier so future updates can reference the correct server resource.
+The sync service queries for records whose status isn't `Synced`, sends each to the server, and on success stores the `ServerId` the server returns for a new record. It marks the record `Synced` only if `UpdatedAt` hasn't changed since it was sent, because the user may have edited it again while the upload was in flight. A deleted record stays in the local store as `PendingDelete` until the server confirms, so it isn't resurrected by the next download.
 
-### Connectivity Detection
+When the same record changed both locally and on the server since the last sync, the app needs a rule:
 
-A desktop application running on a laptop faces intermittent connectivity as a normal operating condition, not an edge case. Users disconnect from Wi-Fi, switch between networks, and resume from sleep with the application still running. Designing for this requires both detecting connectivity changes and choosing how the application behaves when the network is unavailable.
+| Strategy | What happens | Suits |
+| --- | --- | --- |
+| Last write wins | The version with the later timestamp replaces the other | Most single-user data, especially with a visible notice when a local change was overwritten |
+| Server wins | Local changes to a record the server has changed are discarded | Reference data the user rarely edits |
+| Field-level merge | Changed fields from both sides are combined | Records where losing either side's edit is costly, at the price of tracking changes per field |
+| Ask the user | Both versions are shown and the user picks or combines them | Documents and other records where only the user can judge which edit is right |
 
-[NetworkInformation](https://learn.microsoft.com/en-us/dotnet/api/windows.networking.connectivity.networkinformation){:target="_blank" rel="noopener noreferrer"} is a Windows Runtime API available to WinUI 3 applications that reports the current connectivity state and fires events when it changes.
+Detecting the conflict comes first. A version number that the server increments on every change does that. The client sends the version its edit was based on, and a mismatch means someone else changed the record in between. Timestamps are weaker, because clocks on different machines disagree, and a timestamp the server assigns records when an edit was uploaded rather than when it was made, which turns last-write-wins into last-upload-wins.
+
+### Detecting Connectivity
+
+`NetworkInformation` in `Windows.Networking.Connectivity` reports the current connection and raises `NetworkStatusChanged` when it changes. One service wraps it so view models can bind to connection state and tests can fake it:
 
 ```csharp
-public class ConnectivityService : IConnectivityService
-{
-    public bool IsConnected => GetIsConnected();
+using Windows.Networking.Connectivity;
 
+public sealed class ConnectivityService : IConnectivityService
+{
     public ConnectivityService()
     {
-        NetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
+        NetworkInformation.NetworkStatusChanged += _ => ConnectivityChanged?.Invoke(this, IsNetworkAvailable);
     }
 
-    private static bool GetIsConnected()
-    {
-        var profile = NetworkInformation.GetInternetConnectionProfile();
-        return profile?.GetNetworkConnectivityLevel() == NetworkConnectivityLevel.InternetAccess;
-    }
-
-    private void OnNetworkStatusChanged(object sender)
-    {
-        var connected = GetIsConnected();
-        ConnectivityChanged?.Invoke(this, connected);
-    }
+    public bool IsNetworkAvailable =>
+        (NetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel()
+            ?? NetworkConnectivityLevel.None) >= NetworkConnectivityLevel.LocalAccess;
 
     public event EventHandler<bool>? ConnectivityChanged;
 }
 ```
 
-Note that `NetworkStatusChanged` fires on an arbitrary thread, so handlers that update the UI must dispatch to the UI thread through `DispatcherQueue`.
+`NetworkStatusChanged` can arrive on a background thread, so a subscriber that updates bound state dispatches to the UI thread first.
 
-Beyond detection, the design question is what the application should do when connectivity is lost. For applications with local data, continuing to display cached content while showing a subtle offline indicator is preferable to blocking the UI entirely. Queue writes and sync operations for when connectivity is restored, rather than surfacing errors that the user cannot act on. If the application makes a network call during an offline period, catching `HttpRequestException` or `SocketException` and returning a cached or empty result allows the UI to remain functional.
+Microsoft describes the reported level as only a hint and advises apps to try their services whenever it is `LocalAccess` or better, which is why the service tests for that rather than for `InternetAccess`. A server on the company network is reachable with local access alone, and a public network behind a sign-in page can report `ConstrainedInternetAccess` or `LocalAccess` while the internet is still unreachable. Treat the signal as a cue for when to try syncing, and treat a failed request as the real answer. When a request fails for lack of a network, the view keeps showing local data with an offline indicator, and the change stays pending, rather than showing an error the user can't act on.
 
-Cancellation tokens connect the connectivity story to the request lifecycle. Passing a `CancellationToken` to every async network call and canceling that token when the application loses connectivity, or when the user navigates away, prevents background requests from continuing unnecessarily and avoids the complexity of racing callbacks that arrive after the relevant UI has been torn down.
-
----
-
-## Batch Operations on ObservableCollection
-
-`ObservableCollection<T>` raises a `CollectionChanged` event for every modification. Adding a hundred items one at a time triggers a hundred UI redraws, which can make list controls visibly stutter when populating from a large dataset. The standard .NET library does not provide a built-in way to suppress notifications during batch operations, but the pattern is straightforward to implement.
-
-One approach is to build a `BulkObservableCollection<T>` that defers notifications until a batch scope closes:
-
-```csharp
-public class BulkObservableCollection<T> : ObservableCollection<T>
-{
-    private bool _suppressNotifications;
-
-    public void AddRange(IEnumerable<T> items)
-    {
-        _suppressNotifications = true;
-
-        try
-        {
-            foreach (var item in items)
-                Items.Add(item);
-        }
-        finally
-        {
-            _suppressNotifications = false;
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(
-                NotifyCollectionChangedAction.Reset));
-        }
-    }
-
-    protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
-    {
-        if (!_suppressNotifications)
-            base.OnCollectionChanged(e);
-    }
-}
-```
-
-The `Reset` action tells the bound control that the entire collection has changed, prompting a single full re-render rather than incremental updates. This is slightly more expensive per item than an `Add` action when the collection is small, but substantially cheaper when adding hundreds of items at once.
-
-For scenarios where items need to be replaced entirely, such as refreshing a search result set, replacing the collection reference itself rather than clearing and re-adding is another option. Binding to a property of type `IReadOnlyList<T>` instead of `ObservableCollection<T>` means the UI re-renders only when the property itself changes, with no per-item notifications at all. Combined with `[ObservableProperty]` from CommunityToolkit.Mvvm, this is often the simplest approach for read-heavy lists that are refreshed wholesale.
-
----
-
-## Data Paging for Large Datasets
-
-Incremental loading handles the case where users scroll through a continuously growing list. Server-side paging handles the complementary case where users navigate between discrete pages of results, as in a data grid showing records fifty at a time with explicit "Previous" and "Next" controls.
-
-A paging ViewModel needs to track the current page, the total record count, and whether navigation in either direction is possible:
-
-```csharp
-public partial class PagedOrdersViewModel : ObservableObject
-{
-    private readonly IOrderService _orderService;
-    private const int PageSize = 50;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanGoBack))]
-    [NotifyPropertyChangedFor(nameof(CanGoForward))]
-    [NotifyCanExecuteChangedFor(nameof(PreviousPageCommand))]
-    [NotifyCanExecuteChangedFor(nameof(NextPageCommand))]
-    private int _currentPage = 1;
-
-    [ObservableProperty]
-    private int _totalPages;
-
-    [ObservableProperty]
-    private IReadOnlyList<Order> _orders = [];
-
-    [ObservableProperty]
-    private bool _isLoading;
-
-    public bool CanGoBack => CurrentPage > 1 && !IsLoading;
-    public bool CanGoForward => CurrentPage < TotalPages && !IsLoading;
-
-    public string PageInfo => $"Page {CurrentPage} of {TotalPages}";
-
-    [RelayCommand(CanExecute = nameof(CanGoBack))]
-    private async Task PreviousPageAsync() => await LoadPageAsync(CurrentPage - 1);
-
-    [RelayCommand(CanExecute = nameof(CanGoForward))]
-    private async Task NextPageAsync() => await LoadPageAsync(CurrentPage + 1);
-
-    private async Task LoadPageAsync(int page)
-    {
-        IsLoading = true;
-
-        try
-        {
-            var result = await _orderService.GetPageAsync(page, PageSize);
-            Orders = result.Items;
-            TotalPages = (int)Math.Ceiling((double)result.TotalCount / PageSize);
-            CurrentPage = page;
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-}
-```
-
-Caching individual pages in `IMemoryCache` with a short TTL significantly reduces latency when users navigate back and forth between adjacent pages. Prefetching the next page in the background after a successful load, while the user is reading the current one, can make forward navigation feel near-instant. The prefetch is a fire-and-forget operation that populates the cache; if it completes before the user clicks "Next," the next page loads from memory rather than the network.
-
-For very large datasets where users need to jump to arbitrary pages rather than navigate sequentially, a page number input or a slider control bound to `CurrentPage` works well, but requires debouncing. Without debouncing, every keystroke in the page number input triggers a full reload. A simple approach is to delay the load call by 300 to 500 milliseconds after the last user input using a `CancellationTokenSource` that cancels any pending load when a new input arrives before the delay expires.
+Pass a `CancellationToken` to every network call and cancel it when the user leaves the page or the connection drops, so a response that arrives after its screen is gone doesn't try to update it.

@@ -1,0 +1,62 @@
+---
+title: "Endpoint Filter Order"
+kind: dynamic
+system: aspnet-core
+summary: "Group filters wrap endpoint filters, and the result executes last."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 270" role="img" aria-labelledby="aef-title aef-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aef-title">The order endpoint filters run in around a minimal API handler</title>
+<desc id="aef-desc">After parameter binding, which sets a 400 status if a route, query, or header value fails to bind, the request passes through the outer group's filter, the inner group's filter, and the endpoint's own filter, each running its code before next, and reaches the handler, which returns a result. After a binding failure the filters still run, but the handler is skipped. The result passes back through the endpoint filter, the inner group filter, and the outer group filter, each running its code after next. Only then does the framework execute the result, writing the status code, headers, and body.</desc>
+<style>
+.aef-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aef-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.aef-div { stroke: var(--color-primary, #1A5F8A); stroke-width: 1; stroke-dasharray: 3 3; }
+.aef-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aef-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aef-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.aef-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aef-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="aef-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="aef-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="aef-px" x="20" y="40" width="140" height="110" rx="6"/>
+<text class="aef-n" x="90" y="90" text-anchor="middle">Parameter binding</text>
+<text class="aef-k" x="90" y="108" text-anchor="middle">sets 400 if it fails</text>
+<rect class="aef-box" x="190" y="40" width="140" height="110" rx="6"/>
+<line class="aef-div" x1="190" y1="95" x2="330" y2="95"/>
+<text class="aef-n" x="260" y="64" text-anchor="middle">Outer group filter</text>
+<text class="aef-k" x="260" y="82" text-anchor="middle">before next</text>
+<text class="aef-k" x="260" y="128" text-anchor="middle">after next</text>
+<rect class="aef-box" x="360" y="40" width="140" height="110" rx="6"/>
+<line class="aef-div" x1="360" y1="95" x2="500" y2="95"/>
+<text class="aef-n" x="430" y="64" text-anchor="middle">Inner group filter</text>
+<text class="aef-k" x="430" y="82" text-anchor="middle">before next</text>
+<text class="aef-k" x="430" y="128" text-anchor="middle">after next</text>
+<rect class="aef-box" x="530" y="40" width="140" height="110" rx="6"/>
+<line class="aef-div" x1="530" y1="95" x2="670" y2="95"/>
+<text class="aef-n" x="600" y="64" text-anchor="middle">Endpoint filter</text>
+<text class="aef-k" x="600" y="82" text-anchor="middle">before next</text>
+<text class="aef-k" x="600" y="128" text-anchor="middle">after next</text>
+<rect class="aef-px" x="700" y="40" width="140" height="110" rx="6"/>
+<text class="aef-n" x="770" y="90" text-anchor="middle">Handler</text>
+<text class="aef-k" x="770" y="108" text-anchor="middle">returns a result</text>
+<path class="aef-flow" d="M160,72 L188,72" marker-end="url(#aef-a)"/>
+<path class="aef-flow" d="M330,72 L358,72" marker-end="url(#aef-a)"/>
+<path class="aef-flow" d="M500,72 L528,72" marker-end="url(#aef-a)"/>
+<path class="aef-flow" d="M670,72 L698,72" marker-end="url(#aef-a)"/>
+<path class="aef-back" d="M700,124 L672,124" marker-end="url(#aef-ag)"/>
+<path class="aef-back" d="M530,124 L502,124" marker-end="url(#aef-ag)"/>
+<path class="aef-back" d="M360,124 L332,124" marker-end="url(#aef-ag)"/>
+<path class="aef-back" d="M260,150 L260,220 L162,220" marker-end="url(#aef-ag)"/>
+<rect class="aef-px" x="20" y="190" width="140" height="60" rx="6"/>
+<text class="aef-n" x="90" y="215" text-anchor="middle">Result executes</text>
+<text class="aef-k" x="90" y="233" text-anchor="middle">writes the response</text>
+<path class="aef-flow" d="M380,236 L420,236" marker-end="url(#aef-a)"/>
+<text class="aef-lg" x="428" y="240">request and arguments, in order</text>
+<path class="aef-back" d="M620,236 L660,236" marker-end="url(#aef-ag)"/>
+<text class="aef-lg" x="668" y="240">result, in reverse</text>
+</g>
+</svg>

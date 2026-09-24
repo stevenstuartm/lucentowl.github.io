@@ -3,292 +3,273 @@ title: "Threading and the UI Thread in WinUI 3"
 layout: guide
 category: "WinUI 3"
 subcategory: "Data & MVVM"
-description: "Seed: thread affinity, DispatcherQueue, and getting work back to the UI thread."
-tags: [threading, dispatcherqueue, async, practical]
+description: "Which thread may touch WinUI 3 objects and bound view model state, and how work gets back to it: the DispatcherQueue and its priorities, await and Progress<T>, TryEnqueue and the toolkit's EnqueueAsync, UI-thread timers, feeding collections from background work, multiple windows, and diagnosing wrong-thread errors."
+tags: [threading, ui-thread, dispatcherqueue, thread-affinity, dispatcherqueuetimer, practical]
 ---
 
-## Thread Affinity and the STA Model
+## One Thread Owns the UI
 
-WinUI 3 uses a single-threaded apartment (STA) model inherited from its COM and XAML foundations. Every UI element, including windows, controls, and data-bound properties, is owned by the thread that created it, which is the UI thread. This isn't an arbitrary restriction; the XAML rendering engine, visual tree, and layout system are all designed to run on a single thread because concurrent mutation of a visual tree creates intractable race conditions.
+A WinUI app's UI thread runs a message loop. Each pass takes the next piece of work from a queue and runs it to completion, whether that is an input event, a layout pass, a binding update, or one of your event handlers. Nothing else runs on that thread in the meantime, so a handler that spends two seconds parsing a file freezes the window for two seconds. The window can't repaint, respond to the mouse, or run an animation until the handler returns.
 
-Networking calls in .NET are asynchronous and complete on thread pool threads. When a network response arrives, the continuation runs on whatever thread pool thread picks up the work. If that continuation directly modifies a UI-bound property or an `ObservableCollection`, WinUI 3 throws a `System.Runtime.InteropServices.COMException` with the message "The application called an interface that was marshalled for a different thread" (RPC_E_WRONG_THREAD, 0x8001010E). In some cases you will see an `InvalidOperationException` instead, depending on whether the access is through a binding or direct property set.
+### XAML Objects Belong to Their Thread
 
-This exception typically crashes the application because it occurs inside a callback or event handler where there is no surrounding try/catch. Even when caught, the UI update is lost. Understanding where thread dispatching happens automatically and where you need to handle it manually is the difference between an application that works reliably and one that crashes intermittently under real-world network conditions.
+Nearly every XAML object, whether a control, a brush, a style, or a template, derives from `DependencyObject` and is bound to the UI thread that created it. `Window` is the notable class that doesn't derive from it, but its content does, and a window belongs to the thread that created it. [Microsoft's documentation](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.dependencyobject){:target="_blank" rel="noopener noreferrer"} states the rule plainly. Only code running on that thread can change or even read a dependency property, and every member except the `DispatcherQueue` property throws when called from another thread. The exception is a `COMException` with the COM error code `0x8001010E` (`RPC_E_WRONG_THREAD`), whose message reads "The application called an interface that was marshalled for a different thread."
 
-## Dispatching vs. COM Marshaling
+The rule reaches past controls into your view models. When a view model raises `PropertyChanged` or `CollectionChanged`, the bound control updates itself inside that event, on whichever thread raised it. A property set from a thread-pool thread therefore makes the control read its new value off the UI thread, and the control throws. Any view model state that the UI binds to is UI-thread state, even though the view model is an ordinary C# class.
 
-The .NET ecosystem often uses "marshaling" loosely to mean "getting back to the right thread," but true COM marshaling is a different mechanism. In COM's apartment model, when code on one thread calls a method on a COM object owned by a different apartment, COM intercepts the call through a proxy on the calling thread. The proxy serializes the method parameters into a message and posts it to the target apartment's message queue. A stub on the target thread deserializes the parameters, executes the method on the correct thread, serializes the result, and sends it back through the same channel. The caller blocks (or receives an async callback) while this round-trip happens transparently. From the caller's perspective, it looks like a normal method call even though execution actually crossed a thread boundary.
+That is also why view models shouldn't derive from `DependencyObject`. A plain class with `INotifyPropertyChanged` can at least be created and tested on any thread, while a `DependencyObject` can't be touched anywhere but its UI thread.
 
-The `RPC_E_WRONG_THREAD` exception in WinUI 3 is what happens when COM marshaling **isn't available** for the object being accessed. XAML UI elements don't register proxy/stub pairs for cross-apartment access because cross-thread UI mutation is never safe, so COM rejects the call outright rather than transparently forwarding it.
+### One UI Thread by Default
 
-What `DispatcherQueue.TryEnqueue` does is conceptually simpler: it enqueues a delegate onto the UI thread's dispatcher queue, and the UI thread's message pump picks it up on its next iteration. There is no proxy, no parameter serialization, and no transparent cross-thread call. You are explicitly moving execution to the correct thread by posting work to a queue, not relying on COM infrastructure to forward the call for you. The `SynchronizationContext` that `async/await` uses works the same way; it posts the continuation to the dispatcher queue rather than invoking any COM marshaling machinery.
+By default an app has exactly one UI thread, and every window it opens shares it. Microsoft's multiple-windows documentation describes each `Window` as sharing "the same UI processing thread (including the event dispatcher) from which they were created." The containment that decides what code may do is therefore thread first, then windows. A thread owns a queue, and the queue serves every window created on that thread. Hosting WinUI on more than one UI thread is possible, and it changes where a dispatcher comes from (see [Multiple Windows and Multiple UI Threads](#multiple-windows-and-multiple-ui-threads)).
 
-Throughout this section, "dispatching" refers to this explicit queue-based pattern rather than COM marshaling.
+---
 
-## Automatic Dispatching with async/await
+## The DispatcherQueue
 
-The `async/await` pattern handles the most common dispatching scenario transparently. When you `await` an async method on the UI thread, the compiler-generated state machine captures the current `SynchronizationContext` before yielding. WinUI 3 installs a `DispatcherQueueSynchronizationContext` on the UI thread, so when the awaited task completes, the continuation is posted back to the UI thread's dispatcher queue rather than running on the thread pool.
+A [`DispatcherQueue`](https://learn.microsoft.com/en-us/windows/apps/develop/dispatcherqueue){:target="_blank" rel="noopener noreferrer"} (`Microsoft.UI.Dispatching`) is the queue that feeds a thread's message loop. It holds work items in priority order and runs them one at a time on its own thread. A thread has at most one, and has none until the code that owns the thread's message loop creates it. For a WinUI app's UI thread, the XAML framework creates it when the generated `Main` calls `Application.Start`, before your `App` is constructed. Code that needs a queue on a thread of its own creates one with `DispatcherQueueController.CreateOnDedicatedThread()`, which starts a new thread running a queue, or `CreateOnCurrentThread()`, which attaches one to the calling thread and leaves running the message loop to the caller.
 
-```csharp
-// This method is called from the UI thread (e.g., a button click handler)
-private async Task LoadDataAsync()
-{
-    IsLoading = true;                                                  // UI thread
-    var results = await _weatherService.GetForecastAsync("Seattle");   // yields; resumes on UI thread
-    Forecasts = new ObservableCollection<Forecast>(results);           // UI thread
-    IsLoading = false;                                                 // UI thread
-}
-```
+Code on any thread can add work to the queue, and that is the only sanctioned way for a background thread to affect the UI. The background thread never touches a control. It posts a delegate, and the UI thread runs the delegate when it reaches it. Work arrives by two routes, both covered below. An `await` in a method that started on the UI thread posts the rest of the method back through the queue, and other code queues a delegate explicitly with `TryEnqueue`.
 
-The automatic dispatching works because three conditions are met: the method starts on the UI thread, the `SynchronizationContext` is captured by `await`, and no code between `await` points explicitly abandons the context. If any of these conditions break, the continuation runs on a thread pool thread and UI updates will fail.
+{% include figure.html id="winui-ui-thread-queue" %}
 
-## The ConfigureAwait(false) Trap
+### Getting a Queue
 
-`ConfigureAwait(false)` tells the `await` to not capture the synchronization context, allowing the continuation to run on any available thread pool thread. In library code and service layers this is a best practice because it avoids unnecessary thread transitions and prevents deadlocks in certain synchronous-over-async scenarios. In ViewModel and UI-layer code, it is a bug.
+There are three ways to reach a UI thread's queue:
 
-```csharp
-// BROKEN: ConfigureAwait(false) abandons the UI synchronization context
-private async Task LoadDataAsync()
-{
-    IsLoading = true;
-    var results = await _weatherService.GetForecastAsync("Seattle").ConfigureAwait(false);
-    // Continuation runs on a thread pool thread
-    Forecasts = new ObservableCollection<Forecast>(results);  // COMException: wrong thread
-    IsLoading = false;
-}
-```
-
-The rule is straightforward: never use `ConfigureAwait(false)` in code that touches UI elements or data-bound properties after the `await`. Service classes, HTTP handlers, and data access layers should use `ConfigureAwait(false)` freely because they don't interact with the UI. ViewModels and code-behind should leave `ConfigureAwait` at its default (`true`) so that continuations dispatch back to the UI thread.
-
-A subtler version of this problem occurs in nested async calls. If a ViewModel calls a helper method that internally uses `ConfigureAwait(false)`, the helper's continuation runs on a thread pool thread, but the ViewModel's `await` of that helper still captures its own context and resumes on the UI thread.
-
-```csharp
-// This is safe; the ViewModel's await still captures the UI context
-private async Task LoadDataAsync()
-{
-    var results = await GetResultsInternalAsync();
-    Forecasts = new ObservableCollection<Forecast>(results);  // UI thread
-}
-
-private async Task<List<Forecast>> GetResultsInternalAsync()
-{
-    var response = await _client.GetAsync("forecast").ConfigureAwait(false);
-    // This line runs on a thread pool thread, which is fine because it's not touching UI
-    return await response.Content.ReadFromJsonAsync<List<Forecast>>().ConfigureAwait(false);
-}
-```
-
-The context capture happens at each `await` independently, so `ConfigureAwait(false)` in a lower layer doesn't poison the calling layer's context. Problems arise only when the code after `ConfigureAwait(false)` within the same method tries to access UI-bound state.
-
-## Manual Dispatching with DispatcherQueue
-
-Manual dispatching is necessary when code runs outside the `async/await` chain entirely. This includes event handlers registered on background services, SignalR hub callbacks, `System.Timers.Timer` callbacks, WebSocket receive loops running in `Task.Run`, and any delegate invoked by a library on its own thread.
-
-`DispatcherQueue.TryEnqueue` schedules a delegate to run on the UI thread. It returns `true` if the work item was queued successfully, and `false` if the dispatcher queue has been shut down (which happens during application exit).
-
-```csharp
-public class DashboardViewModel
-{
-    private readonly DispatcherQueue _dispatcherQueue;
-
-    public DashboardViewModel()
-    {
-        // CRITICAL: must be called from the UI thread to capture the correct queue
-        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-    }
-
-    public void SubscribeToUpdates(IRealtimeService service)
-    {
-        service.OnMetricReceived += (sender, metric) =>
-        {
-            // This callback fires on a thread pool thread
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                // This runs on the UI thread
-                CurrentMetric = metric.Value;
-                LastUpdated = metric.Timestamp;
-                MetricHistory.Add(metric);
-            });
-        };
-    }
-}
-```
-
-`DispatcherQueue.GetForCurrentThread()` must be called from the UI thread to capture the correct queue. Calling it from a background thread returns `null`. A common mistake is constructing a ViewModel from a background thread or from a DI container that resolves on a thread pool thread; in that case, the captured queue is either null or wrong. If your application uses dependency injection, ensure ViewModels are resolved on the UI thread, or accept `DispatcherQueue` as a constructor parameter injected from a UI-thread registration.
-
-## Dispatch Priority
-
-`TryEnqueue` accepts a `DispatcherQueuePriority` parameter that controls when the work item runs relative to other queued items. There are three priority levels.
-
-| Priority | Use Case |
+| Source | Returns |
 | --- | --- |
-| `High` | Input processing, navigation responses, and operations where delays cause visible lag |
-| `Normal` | Standard UI updates like refreshing data bindings from network responses (default) |
-| `Low` | Background UI work like pre-rendering off-screen content, analytics updates, or non-urgent status indicators |
+| `element.DispatcherQueue` on any `DependencyObject` | The queue of the thread that owns the element. It is the one member of the element that any thread may read |
+| `window.DispatcherQueue` on a `Window` | The queue of the window's thread |
+| `DispatcherQueue.GetForCurrentThread()` | The calling thread's queue, or `null` if it has none, which is the case on every thread-pool thread. Useful only when called on the UI thread |
+
+Reading it from an element is the safest choice, because it always names the thread that owns the element you are about to update. Code ported from UWP may still read `DependencyObject.Dispatcher`, which always returns `null` in a Windows App SDK app. `CoreDispatcher.RunAsync` becomes `DispatcherQueue.TryEnqueue`.
+
+`HasThreadAccess` reports whether the calling thread is the queue's thread, which lets a helper run a delegate directly when it is already on the right thread and queue it otherwise.
+
+### Priorities
+
+Each work item carries a `DispatcherQueuePriority`, and the queue always runs higher-priority work first:
+
+| Priority | Runs |
+| --- | --- |
+| `High` | First, alongside the system's own high-priority work |
+| `Normal` | Once no `High` work is waiting. The default |
+| `Low` | Only when nothing else is waiting. New `High` or `Normal` work goes ahead of it |
+
+`Normal` fits nearly every update. `High` work runs ahead of everything queued at `Normal`, so overusing it delays the rest of the app's updates. `Low` suits work the user isn't waiting for, like refreshing a status indicator or warming a cache of rendered content, which then yields to anything the user does.
+
+---
+
+## Getting Back to the UI Thread
+
+### await Returns to the UI Thread on Its Own
+
+Most code never calls the queue directly, because `await` does it. When an `await` pauses, it captures the current `SynchronizationContext` and later posts the rest of the method back to it. WinUI's generated `Main` installs a `DispatcherQueueSynchronizationContext` on the UI thread, and posting to that context enqueues onto the UI thread's `DispatcherQueue`. So a method that starts on the UI thread, such as an event handler or a command, resumes on the UI thread after each `await`:
 
 ```csharp
-// High priority: user requested this refresh, so it should preempt background updates
-_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.High, () =>
+private async Task LoadReportAsync(string path)
 {
-    SearchResults.Clear();
-    foreach (var result in newResults)
-        SearchResults.Add(result);
-});
+    IsBusy = true;                                            // UI thread
 
-// Low priority: telemetry indicator the user isn't actively watching
-_dispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
-{
-    ConnectionLatency = latencyMs;
-});
+    string json = await File.ReadAllTextAsync(path);          // I/O; the UI thread is free meanwhile
+    Report report = await Task.Run(() => Report.Parse(json)); // CPU-heavy parse on the thread pool
+
+    CurrentReport = report;                                   // back on the UI thread
+    IsBusy = false;
+}
 ```
 
-Use `Normal` for most network-driven UI updates. Reserve `High` for updates that respond to explicit user actions like search results or navigation, and `Low` for ambient updates that don't affect the user's current task.
+`Task.Run` moves the CPU-heavy parse off the UI thread, and the `await` on it brings the method back. That is the everyday shape of responsive WinUI code. Slow work goes to the thread pool as a task, and the method assigns bound state only after it has awaited the result.
 
-## ObservableCollection and Background Threads
+Three things break the return trip:
 
-`ObservableCollection<T>` fires `CollectionChanged` events synchronously when items are added, removed, or replaced. Those events propagate to the XAML binding engine, which attempts to update the visual tree immediately. If the modification happens on a background thread, the binding engine's UI update fails with the wrong-thread exception.
+- **`ConfigureAwait(false)` in UI code.** It tells that `await` not to capture the context, so the rest of that method runs on the thread pool. Code after it can't touch bound state.
+- **Code inside `Task.Run`.** Everything inside the lambda runs on the thread pool, so setting a bound property there throws. Return a result from the lambda and assign it after the `await`, as the sample does.
+- **A custom `Main`.** A project that defines `DISABLE_XAML_GENERATED_MAIN` and writes its own entry point has to install the synchronization context itself, or call the generated `XamlGeneratedProgram.XamlGeneratedMain()`. Without the context, every `await` in UI code resumes on the thread pool.
 
-This affects streaming scenarios where data arrives continuously from a WebSocket, gRPC stream, or SignalR hub. You cannot simply `await` each item and add it to the collection because the receive loop itself may be running on a background thread.
+Blocking on a task with `.Result` or `.Wait()` on the UI thread is a separate trap. The UI thread waits for a continuation that can only run on the UI thread, and the app deadlocks.
 
-The solution is to batch incoming items and dispatch the batch to the UI thread.
+### Reporting Progress with Progress&lt;T&gt;
+
+`Progress<T>` captures the `SynchronizationContext` that is current when it is constructed and invokes its callback through that context. Create it on the UI thread, pass it as `IProgress<T>` into work running anywhere, and every `Report` call runs the callback on the UI thread:
 
 ```csharp
-public async Task StartStreamingAsync(CancellationToken ct)
+var progress = new Progress<double>(fraction => DownloadPercent = fraction * 100); // created on the UI thread
+
+await _downloader.DownloadAsync(url, destination, progress, token);
+```
+
+The downloader knows nothing about WinUI or threads. It calls `progress.Report(bytesRead / (double)totalBytes)` from whatever thread its loop happens to run on. A `Progress<T>` created on a thread with no context, such as a thread-pool thread, runs its callback on the thread pool instead, and a callback that sets bound state throws.
+
+### Code That Starts Elsewhere Uses TryEnqueue
+
+Some code never started on the UI thread, so there is no captured context to return to. Common sources include:
+
+- a `System.Timers.Timer` or `System.Threading.Timer` callback
+- an event raised by a service, SDK, or device on its own thread, such as a sensor reading or a network-status change
+- a message handler registered with a real-time connection library
+- work started with `Task.Run` that needs to update the UI partway through
+
+These dispatch explicitly with `TryEnqueue`:
+
+```csharp
+public sealed partial class TelemetryPage : Page
 {
-    var batch = new List<DataPoint>();
-    var batchTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
-
-    _ = Task.Run(async () =>
+    public TelemetryPage()
     {
-        await foreach (var point in _service.StreamDataAsync(ct))
-        {
-            lock (batch)
-            {
-                batch.Add(point);
-            }
-        }
-    }, ct);
+        InitializeComponent();
+        _monitor.ReadingReceived += OnReadingReceived;   // raised on a thread-pool thread
+    }
 
-    while (await batchTimer.WaitForNextTickAsync(ct))
+    private void OnReadingReceived(object? sender, Reading reading)
     {
-        List<DataPoint> snapshot;
-        lock (batch)
+        bool queued = DispatcherQueue.TryEnqueue(() =>
         {
-            if (batch.Count == 0) continue;
-            snapshot = new List<DataPoint>(batch);
-            batch.Clear();
-        }
-
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            foreach (var point in snapshot)
-                DataPoints.Add(point);
+            ViewModel.LatestTemperature = reading.Temperature;   // runs on the UI thread
         });
+
+        if (!queued)
+        {
+            _monitor.ReadingReceived -= OnReadingReceived;       // the queue is shutting down
+        }
     }
 }
 ```
 
-Batching at a 100ms interval is generally imperceptible to the user while significantly reducing the number of UI thread transitions compared to dispatching each individual item. Adjust the interval based on the data rate; high-frequency streams benefit from larger batches while low-frequency streams can dispatch immediately.
+`TryEnqueue` returns as soon as the delegate is queued, before it runs. Its `bool` result is `false` once the queue has stopped accepting work during shutdown (see [Shutdown](#shutdown)), and the delegate is then dropped rather than run. An exception thrown inside the delegate surfaces on the UI thread, where the background caller can't catch it, so a delegate that can fail catches its own exceptions.
 
-## Progress Reporting with IProgress<T>
+The delegate also runs later than the code that queued it. Anything it reads from shared state may have changed by then, which is why the sample captures `reading` as a parameter instead of reading a field that the next event would overwrite.
 
-For long-running network operations where you want to report intermediate status to the UI, `IProgress<T>` provides a clean pattern that handles dispatching automatically. When you create a `Progress<T>` instance on the UI thread, its callback is invoked on the UI thread regardless of which thread calls `Report`.
+### Awaiting the Result with EnqueueAsync
+
+`TryEnqueue` returns only a `bool`, so the caller can't wait for the delegate to finish, get a value back, or see its exceptions. The Windows Community Toolkit's [`DispatcherQueueExtensions`](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/windows/extensions/dispatcherqueueextensions){:target="_blank" rel="noopener noreferrer"}, in the `CommunityToolkit.WinUI.Extensions` package and the `CommunityToolkit.WinUI` namespace, adds `EnqueueAsync`, which returns a task:
 
 ```csharp
-private async Task DownloadFileAsync(string url, string destinationPath)
-{
-    var progress = new Progress<double>(percent =>
-    {
-        // This runs on the UI thread automatically
-        DownloadProgress = percent;
-        ProgressText = $"{percent:F0}%";
-    });
+using CommunityToolkit.WinUI;
 
-    await _downloadService.DownloadWithProgressAsync(url, destinationPath, progress);
+// On a background thread: ask the UI thread for the current selection, then continue here.
+IReadOnlyList<Item> selected = await dispatcherQueue.EnqueueAsync(
+    () => ViewModel.SelectedItems.ToList());
+```
+
+Overloads cover an `Action`, a `Func<T>`, and asynchronous delegates, each with an optional priority. When the caller is already on the queue's thread, `EnqueueAsync` runs the delegate immediately instead of queuing it. An exception thrown by the delegate faults the returned task, and a queue that refuses the work faults it with an `InvalidOperationException`, so both reach the caller's `await`.
+
+Awaiting the UI thread from background work ties the two together. The background work now waits behind every input event and layout pass queued ahead of it. Blocking on the returned task instead of awaiting it, from code the UI thread is itself waiting for, deadlocks. Reach for `EnqueueAsync` when the background code needs a value only the UI thread holds, and use `TryEnqueue` when it only needs to hand a result over.
+
+### Choosing a Route Back
+
+| Mechanism | Use when | Caller can await it | Exceptions reach the caller |
+| --- | --- | --- | --- |
+| `await` | The method started on the UI thread | Yes | Yes |
+| `Progress<T>` | Long-running work reports intermediate values | No | No |
+| `TryEnqueue` | Code started elsewhere hands a result to the UI | No | No |
+| `EnqueueAsync` | Code started elsewhere needs a value or completion from the UI thread | Yes | Yes |
+
+---
+
+## Where View Models Get Their Queue
+
+A view model that has to dispatch needs a queue from somewhere. The common pattern is to call `DispatcherQueue.GetForCurrentThread()` in the constructor, which works only when the constructor runs on the UI thread. A view model built on a thread-pool thread, for example by a DI container resolving it from background work, gets `null`, and the failure shows up later as a `NullReferenceException` at the first dispatch. Checking the result in the constructor moves the failure to where the mistake is:
+
+```csharp
+_dispatcherQueue = DispatcherQueue.GetForCurrentThread()
+    ?? throw new InvalidOperationException("Create this view model on the UI thread.");
+```
+
+Taking the queue as a constructor parameter works better. It makes the dependency visible, and the code that creates the view model, which knows which window it is for, can pass that window's queue.
+
+A `DispatcherQueue` is hard to supply in a unit test, because a test thread has no queue and nothing runs one. Two designs keep view models testable:
+
+- **Keep dispatching at the edge.** A view model whose state changes only in commands and `await` continuations never needs a queue, because that code already runs on the UI thread. Dispatch where a background event enters the app instead, in the page, the service adapter, or the code that subscribes to it, as the telemetry sample does.
+- **Hide it behind a small interface.** When a view model has to receive background events itself, give it an interface with one method, like `void Run(Action action)`. The app implements it with `TryEnqueue`, and a test implements it by calling the action inline.
+
+---
+
+## Feeding Collections from Background Work
+
+`ObservableCollection<T>` isn't thread-safe, and its `CollectionChanged` event has the same rule as `PropertyChanged`. The list control bound to it updates inside the event, so an `Add` from a background thread throws. WPF offers `BindingOperations.EnableCollectionSynchronization` to let bindings coordinate with background writers. WinUI has no equivalent, since its `BindingOperations` class has only `SetBinding`, so every change to a bound collection has to happen on the UI thread.
+
+When items arrive faster than a person can read them, dispatching one delegate per item floods the queue, and the window spends its time on list updates instead of input. A common shape is to let background code append to a thread-safe buffer and let a UI-thread timer move whatever has accumulated into the bound collection:
+
+```csharp
+private readonly ConcurrentQueue<LogEntry> _pending = new();
+private readonly DispatcherQueueTimer _flushTimer;
+
+public LogPage()
+{
+    InitializeComponent();
+
+    _flushTimer = DispatcherQueue.CreateTimer();
+    _flushTimer.Interval = TimeSpan.FromMilliseconds(100);
+    _flushTimer.Tick += (_, _) =>
+    {
+        while (_pending.TryDequeue(out LogEntry? entry))
+        {
+            ViewModel.Entries.Add(entry);   // UI thread
+        }
+    };
+    _flushTimer.Start();
+
+    _logSource.EntryWritten += (_, entry) => _pending.Enqueue(entry);   // any thread
 }
 ```
 
-The service layer accepts `IProgress<T>` and reports progress without any knowledge of threading or UI concerns.
+The producer never touches the collection, and the UI thread updates the list at most ten times a second however fast entries arrive. Each `Add` still raises its own `CollectionChanged`, so a burst of thousands of items becomes thousands of list updates inside one tick. Reducing that cost is a collection-design question rather than a threading one.
 
-```csharp
-public async Task DownloadWithProgressAsync(
-    string url, string path, IProgress<double>? progress = null, CancellationToken ct = default)
-{
-    using var response = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-    var totalBytes = response.Content.Headers.ContentLength ?? -1;
-    var bytesRead = 0L;
+---
 
-    await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-    await using var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-    var buffer = new byte[8192];
-    int read;
+## Timers and Which Thread They Tick On
 
-    while ((read = await contentStream.ReadAsync(buffer, ct)) > 0)
-    {
-        await fileStream.WriteAsync(buffer.AsMemory(0, read), ct);
-        bytesRead += read;
-        if (totalBytes > 0)
-            progress?.Report((double)bytesRead / totalBytes * 100);
-    }
-}
-```
+.NET and WinUI offer several timers, and the choice decides whether the callback can touch the UI:
 
-`IProgress<T>` is preferable to manual `DispatcherQueue.TryEnqueue` calls for progress scenarios because it decouples the service from WinUI 3 entirely. The same service works in a console application, a test harness, or any other .NET host without modification. `Progress<T>` uses `SynchronizationContext` internally, so it dispatches to whichever thread created it, with no dependency on WinUI-specific APIs.
+| Timer | Callback runs on | Touching bound state |
+| --- | --- | --- |
+| `DispatcherQueueTimer`, from `DispatcherQueue.CreateTimer()` | The queue's thread | Safe when created from a UI thread's queue |
+| `DispatcherTimer` (`Microsoft.UI.Xaml`) | The UI thread | Safe |
+| `PeriodicTimer`, awaited in a loop started on the UI thread | The UI thread, because each `await` resumes there | Safe |
+| `System.Timers.Timer` | A thread-pool thread | Needs `TryEnqueue` |
+| `System.Threading.Timer` | A thread-pool thread | Needs `TryEnqueue` |
 
-## Common Mistakes and Debugging
+`DispatcherQueueTimer` repeats by default (`IsRepeating` is `true`) and exposes `Interval`, `Start`, `Stop`, and a `Tick` event. It guarantees only that a tick doesn't fire before the interval. Ticks run at a priority below even idle work, so a busy UI thread delays them. It also doesn't keep the queue's message loop running on its own. When the loop ends, pending ticks stop.
 
-**Mistake: Capturing DispatcherQueue on a background thread.** If the ViewModel constructor runs on a thread pool thread (common with some DI container configurations), `DispatcherQueue.GetForCurrentThread()` returns `null`. The `NullReferenceException` when you later call `TryEnqueue` is misleading because it appears at the point of use, not at the point of capture. Validate the captured queue immediately.
+`DispatcherTimer` has the same shape as the WPF and UWP timers of that name, which makes it the familiar choice for ported code, though it is a separate WinUI type. It fires `Tick` at its `Interval` until `Stop` is called, and it suits periodic UI updates. `DispatcherQueueTimer` is the lower-level timer on the queue itself, and the one the toolkit's helpers extend.
 
-```csharp
-public DashboardViewModel()
-{
-    _dispatcherQueue = DispatcherQueue.GetForCurrentThread()
-        ?? throw new InvalidOperationException(
-            "ViewModel must be constructed on the UI thread to capture DispatcherQueue.");
-}
-```
+For search-as-you-type, the toolkit's [`Debounce`](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/windows/extensions/dispatcherqueuetimerextensions){:target="_blank" rel="noopener noreferrer"} extension on `DispatcherQueueTimer` runs an action only after input has paused for an interval, with each new call restarting the wait. Use one timer per debounced action, because `Debounce` takes over the timer's settings.
 
-**Mistake: Using async void for event handlers without error handling.** Event handlers like `OnMessage` or `Clicked` must be `async void` because the delegate signature requires it, but unhandled exceptions in `async void` methods crash the application. Wrap the body in a try/catch.
+---
 
-```csharp
-connection.On<Update>("Notify", async (update) =>
-{
-    try
-    {
-        _dispatcherQueue.TryEnqueue(() => Notifications.Add(update));
-    }
-    catch (Exception ex)
-    {
-        Debug.WriteLine($"Failed to process notification: {ex}");
-    }
-});
-```
+## Multiple Windows and Multiple UI Threads
 
-**Mistake: Modifying a shared ObservableCollection from Task.Run.** Even if the ViewModel method is `async` and started on the UI thread, code inside `Task.Run` executes on the thread pool. Any collection modification inside that block needs explicit dispatching to the UI thread.
+With the default single UI thread, every window's `DispatcherQueue` is the same queue, and a dispatcher captured from any window can update any window.
 
-**Debugging tip:** When you see `COMException` with `RPC_E_WRONG_THREAD`, check `System.Threading.Thread.CurrentThread.ManagedThreadId` at the point of failure. Compare it to the UI thread ID (capture it once in `App.xaml.cs` during startup). If they differ, trace back through the call stack to find where the execution left the UI thread, which is either a missing `await`, a `ConfigureAwait(false)`, a `Task.Run`, or a callback from a library that fires on its own thread.
+WinUI can also run on more than one UI thread. Windows App SDK 2.5.1, for example, fixed a fatal exit during XAML shutdown in apps hosting WinUI 3 on more than one UI thread. Each additional UI thread needs its own queue and message loop, and each window's objects belong to the thread that created that window, and a queue captured from one window can't update another window's controls. Code that serves several windows then has to take the queue from the element it is about to update, never from a single app-wide field.
 
-## Helpers and Extensions
+### No Protection Against Reentrancy
 
-The `CommunityToolkit.WinUI.Extensions` package provides utility methods that surface frequently needed functionality without requiring you to write them from scratch.
+UWP ran its UI thread as an Application STA, a variant of COM's single-threaded apartment that blocked reentrancy. The Windows App SDK uses a standard STA, [which doesn't provide the same safeguards](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/migrate-to-windows-app-sdk/guides/threading){:target="_blank" rel="noopener noreferrer"}. While your code is waiting inside a call that keeps pumping messages, such as a nested message loop, the UI thread can run other queued work, including another event handler that changes the state your code was in the middle of using. Code ported from UWP that assumed a handler couldn't be interrupted this way may now misbehave, and Microsoft names reentrancy into XAML controls as one case to watch for.
 
-`DispatcherQueueExtensions` adds `EnqueueAsync` to `DispatcherQueue`, making it straightforward to marshal work back to the UI thread from a background operation:
+---
 
-```csharp
-await DispatcherQueue.EnqueueAsync(() =>
-{
-    StatusText = "Download complete";
-    IsLoading = false;
-});
-```
+## Shutdown
 
-Without this helper, the equivalent code requires creating a `TaskCompletionSource` and handling the completion callback manually, which is error-prone to write correctly.
+When the app exits, the UI thread leaves its message loop and shuts its queue down in a fixed order:
 
-Visual tree helpers let you traverse the element tree to find ancestors and descendants by type, which is occasionally necessary when working with control templates or third-party controls where the exact visual structure is not known at compile time:
+1. `ShutdownStarting` is raised, for app code, and the queue drains the work already in it.
+2. `FrameworkShutdownStarting` is raised, for frameworks, and the queue drains again.
+3. The queue stops accepting work, and from here `TryEnqueue` returns `false`.
+4. `FrameworkShutdownCompleted` is raised, then `ShutdownCompleted`.
 
-```csharp
-var scrollViewer = MyListView.FindDescendant<ScrollViewer>();
-var parentPage = MyControl.FindAscendant<Page>();
-```
+The `TryEnqueue` API reference puts it more broadly, saying the queue refuses new work once shutdown has been requested, so code shouldn't count on a late enqueue getting in.
 
-String extensions add null-safe operations and convenience methods like `IsNullOrEmpty()` called as an instance method rather than a static call. Color helpers provide conversions between WinUI's `Color` struct and `System.Drawing.Color`, hex strings, and HSV/HSL representations, which is useful for color picker implementations and theme management.
+Background work that outlives the window runs into this. A download still reporting progress, or a service still raising events, tries to dispatch to a queue that no longer accepts work. Give that work a `CancellationToken` and cancel it when the window closes, and treat a `false` from `TryEnqueue` as the signal to stop dispatching, as the telemetry sample does by unsubscribing.
+
+---
+
+## Diagnosing Wrong-Thread Errors
+
+A wrong-thread bug usually appears as `RPC_E_WRONG_THREAD` from a property setter or a collection change, often intermittently, because it depends on which thread a callback happened to run on. To find where execution left the UI thread:
+
+- **Assert the thread where state changes.** `Debug.Assert(dispatcherQueue.HasThreadAccess)`, on the page's queue or the one a view model was given, at the top of a handler or in a setter turns an intermittent crash into a failure at the line that caused it.
+- **Walk back from the failing line to the last thread switch.** It is nearly always a `ConfigureAwait(false)`, code inside `Task.Run`, a `Progress<T>` created off the UI thread, or a callback that a library invoked on its own thread.
+- **Read stowed exceptions from crash dumps.** XAML often records an error and decides later that it is fatal, so the process ends with exception code `0xC000027B` after the stack that caused it has unwound. The direct call stack then points at the wrong place. Microsoft's threading migration guidance recommends opening the dump in WinDbg and using the community `!pde.dse` extension command to list the stowed exceptions, the first of which is usually the one that matters.

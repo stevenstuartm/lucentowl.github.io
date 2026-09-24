@@ -158,6 +158,46 @@ The CloudWatch Agent collects metrics and logs from EC2 instances and on-premise
 - Runs as service, starts automatically on boot
 - Minimal CPU/memory overhead (typically <1% CPU, ~50MB RAM)
 
+### Embedded Metric Format (EMF)
+
+**Best practice**: Emit metrics directly from Lambda logs (no separate API calls).
+
+```python
+def lambda_handler(event, context):
+    order = event['order']
+
+    # Process order
+    result = process_order(order)
+
+    # Emit custom metric (embedded in logs, zero additional latency)
+    print(json.dumps({
+        '_aws': {
+            'Timestamp': int(time.time() * 1000),
+            'CloudWatchMetrics': [{
+                'Namespace': 'ECommerce',
+                'Dimensions': [['Environment', 'OrderType']],
+                'Metrics': [
+                    {'Name': 'OrderTotal', 'Unit': 'None'},
+                    {'Name': 'ProcessingTime', 'Unit': 'Milliseconds'}
+                ]
+            }]
+        },
+        'Environment': 'Production',
+        'OrderType': order['type'],
+        'OrderTotal': order['total'],
+        'ProcessingTime': result['duration_ms']
+    }))
+
+    # CloudWatch automatically extracts metrics from logs
+    # No API calls = zero cost, zero latency impact
+
+# Create CloudWatch alarm on custom metric:
+# Metric: ECommerce/OrderTotal
+# Statistic: Sum
+# Period: 5 minutes
+# Threshold: < $10,000 (alert if orders drop)
+```
+
 ## CloudWatch Alarms
 
 Alarms monitor metrics and trigger actions when thresholds are crossed.

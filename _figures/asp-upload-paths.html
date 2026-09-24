@@ -1,0 +1,49 @@
+---
+title: "Buffered and Streamed Uploads"
+kind: flow
+system: aspnet-core
+summary: "The two upload paths, and where each checks the size limits."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" role="img" aria-labelledby="aup-title aup-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aup-title">How an upload reaches storage on the buffered and streamed paths</title>
+<desc id="aup-desc">On the buffered path, the form reader reads the whole multipart body before the handler runs, keeping each file in memory up to 64 KB and in a temporary file beyond that. The server body limit and the form limit of 128 MiB per section are checked as it reads, so an oversized upload is rejected while the framework binds parameters. The handler then receives an IFormFile and copies it to storage. On the streamed path, the handler reads the body itself, section by section or as raw bytes, and writes each chunk to storage as it arrives, with no temporary copy. The server body limit is checked on each read, so an oversized upload fails partway through, inside the handler.</desc>
+<style>
+.aup-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aup-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.aup-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aup-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aup-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aup-em { font-size: 10.5px; fill: var(--color-accent, #A5486E); }
+.aup-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="aup-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="aup-box" x="20" y="125" width="110" height="80" rx="6"/>
+<text class="aup-n" x="75" y="162" text-anchor="middle">Client</text>
+<text class="aup-k" x="75" y="180" text-anchor="middle">sends the body</text>
+<text class="aup-hd" x="180" y="30">BUFFERED: IFORMFILE, [FROMFORM]</text>
+<rect class="aup-px" x="180" y="42" width="260" height="90" rx="6"/>
+<text class="aup-n" x="310" y="72" text-anchor="middle">Form reader</text>
+<text class="aup-k" x="310" y="92" text-anchor="middle">reads the whole body before the handler:</text>
+<text class="aup-k" x="310" y="108" text-anchor="middle">memory to 64 KB, then a temp file</text>
+<text class="aup-em" x="180" y="150">server limit and form limit (128 MiB per section) checked as it reads</text>
+<rect class="aup-box" x="480" y="42" width="200" height="90" rx="6"/>
+<text class="aup-n" x="580" y="80" text-anchor="middle">Handler</text>
+<text class="aup-k" x="580" y="98" text-anchor="middle">copies the IFormFile</text>
+<text class="aup-hd" x="180" y="200">STREAMED: MULTIPARTREADER OR RAW BODY</text>
+<rect class="aup-box" x="180" y="212" width="500" height="90" rx="6"/>
+<text class="aup-n" x="430" y="246" text-anchor="middle">Handler reads the body itself</text>
+<text class="aup-k" x="430" y="266" text-anchor="middle">writes each chunk as it arrives, no temp copy</text>
+<text class="aup-em" x="180" y="320">server limit checked on each read, so a 413 can arrive mid-upload</text>
+<rect class="aup-box" x="760" y="115" width="160" height="100" rx="6"/>
+<text class="aup-n" x="840" y="156" text-anchor="middle">Storage</text>
+<text class="aup-k" x="840" y="174" text-anchor="middle">disk or blob store</text>
+<path class="aup-flow" d="M130,145 L155,145 L155,87 L178,87" marker-end="url(#aup-a)"/>
+<path class="aup-flow" d="M130,185 L155,185 L155,257 L178,257" marker-end="url(#aup-a)"/>
+<path class="aup-flow" d="M440,87 L478,87" marker-end="url(#aup-a)"/>
+<path class="aup-flow" d="M680,87 L720,87 L720,145 L758,145" marker-end="url(#aup-a)"/>
+<path class="aup-flow" d="M680,257 L720,257 L720,185 L758,185" marker-end="url(#aup-a)"/>
+</g>
+</svg>

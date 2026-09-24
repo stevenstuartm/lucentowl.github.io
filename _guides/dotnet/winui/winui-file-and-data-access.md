@@ -3,146 +3,139 @@ title: "File and Data Access"
 layout: guide
 category: "WinUI 3"
 subcategory: "Data & MVVM"
-description: "Accessing files, local databases, and application settings in WinUI 3 using file pickers, SQLite with Entity Framework Core, ApplicationData, drag and drop, and the clipboard."
-tags: [winui, winui-3, data-access, sqlite, file-system, entity-framework, desktop, practical]
+description: "Where a WinUI 3 app reads and writes data, and how package identity changes the answer: file and folder pickers in the Windows App SDK and the legacy window-handle pattern, app settings and files in ApplicationData, a local SQLite database, drag and drop, and the clipboard."
+tags: [file-pickers, applicationdata, package-identity, sqlite, drag-and-drop, clipboard, practical]
 ---
 
-## Table of Contents
+## Package Identity Decides Which Storage APIs Work
 
-- [File and Folder Pickers](#file-and-folder-pickers)
-- [SQLite with Entity Framework Core](#sqlite-with-entity-framework-core)
-- [ApplicationData and Settings](#applicationdata-and-settings)
-- [Drag and Drop](#drag-and-drop)
-- [Clipboard Access](#clipboard-access)
-- [Choosing the Right Storage Approach](#choosing-the-right-storage-approach)
+By default a WinUI app is a desktop app that runs with full trust. Unlike a UWP app, it doesn't run inside an app container, the sandbox that limits a UWP app to its own storage, so `System.IO` can read and write any path the signed-in user can. The `Windows.Storage` types (`StorageFile`, `FileIO`) are one option among several rather than the only route. (A packaged app can opt into an app container in its manifest, and then these freedoms no longer apply.)
+
+What does vary is whether the app has **package identity**. It has identity when it is installed from an MSIX package, the Windows app package format, or registered with a package that points at its files in an external location. It lacks identity when it runs as a plain unpackaged executable. Several storage APIs are tied to that identity:
+
+| API | Packaged | Unpackaged |
+| --- | --- | --- |
+| `System.IO` with paths from `Environment.GetFolderPath` | Works | Works |
+| Windows App SDK pickers (`Microsoft.Windows.Storage.Pickers`) | Works | Works |
+| `Windows.Storage.ApplicationData.Current` | Works | Throws `InvalidOperationException` ("The process has no package identity") |
+| `Microsoft.Windows.Storage.ApplicationData.GetDefault()` | Works | Requires package identity |
+| `Microsoft.Windows.Storage.ApplicationData.GetForUnpackaged(publisher, product)` | Not needed | Works, from Windows App SDK 2.2 |
+
+Microsoft's app data guidance says the `ApplicationData` APIs "are designed for packaged apps," and that unpackaged apps "should use alternative storage mechanisms such as direct file I/O or registry access."
+
+Packaging also changes what ordinary file I/O does. A packaged app's install folder is read-only once deployed, so nothing the app writes at runtime can go next to its executable. And by default, new files and folders a packaged desktop app creates under the user's `AppData` folder, even through `System.IO`, are redirected to a private per-user, per-package location. The app reads them back at the path it wrote, but other processes can't see them, and Windows removes them when the app is uninstalled. A packaged app that needs a folder shared with other tools declares an exception in its manifest, as [flexible virtualization](https://learn.microsoft.com/en-us/windows/msix/desktop/flexible-virtualization){:target="_blank" rel="noopener noreferrer"} describes.
 
 ---
 
-## File and Folder Pickers
+## Letting the User Pick Files
 
-WinUI 3 desktop applications can open file pickers through the `FileOpenPicker`, `FileSavePicker`, and `FolderPicker` classes, but there is one significant difference from UWP: desktop apps require an explicit window handle before showing any picker dialog. UWP handled this automatically because each app ran in a single-window sandboxed process. Desktop apps run in a standard Win32 process and can have multiple top-level windows, so the system needs to know which window should own the dialog.
+### The Windows App SDK Pickers
 
-You retrieve the window handle using `WindowNative.GetWindowHandle` and pass it to the picker through `InitializeWithWindow.Initialize`:
+Since Windows App SDK 1.8, the [`Microsoft.Windows.Storage.Pickers`](https://learn.microsoft.com/en-us/windows/apps/develop/files/using-file-folder-pickers){:target="_blank" rel="noopener noreferrer"} namespace provides `FileOpenPicker`, `FileSavePicker`, and `FolderPicker`. Each takes the `WindowId` of the window that owns the dialog in its constructor, and each returns a result carrying the chosen **path** rather than a `StorageFile`:
 
 ```csharp
-using Microsoft.UI.Xaml;
-using WinRT.Interop;
-using Windows.Storage.Pickers;
+using Microsoft.Windows.Storage.Pickers;
 
-var picker = new FileOpenPicker();
-picker.FileTypeFilter.Add(".png");
-picker.FileTypeFilter.Add(".jpg");
-
-var hwnd = WindowNative.GetWindowHandle(this); // 'this' is your Window
-InitializeWithWindow.Initialize(picker, hwnd);
-
-var file = await picker.PickSingleFileAsync();
-if (file != null)
+var picker = new FileOpenPicker(XamlRoot.ContentIslandEnvironment.AppWindowId)
 {
-    // file.Path gives you the full path as a string
+    SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+    FileTypeFilter = { ".md", ".txt" },
+};
+
+PickFileResult? result = await picker.PickSingleFileAsync();
+if (result is not null)
+{
+    string text = await File.ReadAllTextAsync(result.Path);
 }
 ```
 
-`FolderPicker` works the same way, and `FileSavePicker` follows the same pattern with `SuggestedStartLocation` and `FileTypeChoices` to control the default directory and allowed extensions. You can also restrict to a single-select or multi-select mode through `PickSingleFileAsync` versus `PickMultipleFilesAsync`.
+From a `Window`, pass `AppWindow.Id`. From a page, go through its `XamlRoot`, the root of the element tree the page is shown in, whose `ContentIslandEnvironment.AppWindowId` gives the ID of the window the page is in, once the page is loaded. The result is `null` when the user cancels. `FileSavePicker` returns the path the user chose without creating the file (it did create it before Windows App SDK 2.0), so the app writes it with ordinary file I/O. Version 2.0 also added a `SettingsIdentifier` that makes each picker remember its own state across sessions, grouped `FileTypeChoices` on `FileOpenPicker` (the save picker already had them), and `FolderPicker.PickMultipleFoldersAsync`.
 
-Windows App SDK 1.8 introduced a simplified picker API that removes the need to manually call `InitializeWithWindow`. When you create the picker through the new factory methods that accept a window reference directly, the initialization step happens internally. If your project targets SDK 1.8 or later, the simplified approach reduces boilerplate, but the `InitializeWithWindow` pattern remains common in older codebases and is worth knowing.
+### The Legacy Pickers and the Window Handle
 
-Once you have a `StorageFile` from a picker, you can read its contents as text using `FileIO.ReadTextAsync(file)` or as a byte stream through `file.OpenAsync(FileAccessMode.Read)`. Writing follows the same pattern with `FileIO.WriteTextAsync` or by acquiring a write stream. These are the same `Windows.Storage` APIs that existed in UWP, so documentation and examples from UWP file access apply directly to WinUI 3 desktop.
+`Windows.Storage.Pickers`, the UWP-era pickers, still work, and code migrated from UWP or targeting Windows App SDK 1.7 or earlier uses them. They don't work when the app runs as an administrator, which the newer pickers do support. A UWP app's picker found its owner from the app's single core window, which a WinUI app doesn't have, so these pickers must be given the owning window's handle before any `Pick*Async` call, or they throw or fail silently:
+
+```csharp
+var picker = new Windows.Storage.Pickers.FileOpenPicker();
+picker.FileTypeFilter.Add(".md");
+
+IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+Windows.Storage.StorageFile? file = await picker.PickSingleFileAsync();
+```
+
+These return a `StorageFile`, which also carries a `Path`.
+
+### Pickers Behind a Service
+
+A picker needs a window ID, which a view model shouldn't know about. Put the picker behind an interface, such as `IFilePickerService` with a method returning `Task<string?>`, whose implementation lives in the UI layer and is given the window it serves. The same approach suits settings and storage in general. A view model that asks an `ISettingsService` for a value can be tested with a fake, and the app can choose a packaged or an unpackaged implementation at startup.
+
+### Remembering What the User Picked
+
+A full-trust app, packaged or not, can reopen a path the user picked earlier just by storing the path, since its access depends on the user's file permissions rather than on a grant from the picker. The [`StorageApplicationPermissions` lists](https://learn.microsoft.com/en-us/windows/apps/develop/files/track-recently-used-files-folders){:target="_blank" rel="noopener noreferrer"} exist mainly for sandboxed apps, where a picked file would otherwise be unreachable later. `FutureAccessList` keeps that permission for up to 1,000 items and never removes any itself. `MostRecentlyUsedList` keeps the 25 most recently used items, dropping the oldest, and can back a recent-files menu. Both store `StorageFile` and `StorageFolder` objects and hand back a token that the app saves and later exchanges for the item. Use them from a packaged app, since at least one report shows `FutureAccessList.Add` failing in an unpackaged one.
 
 ---
 
-## SQLite with Entity Framework Core
+## App Data: Settings and Files
 
-For applications that need to persist structured data locally, SQLite is the natural choice. It is a file-based relational database that requires no installation, no server process, and no network configuration. Entity Framework Core provides a .NET-native data access layer on top of SQLite, letting you work with your database through C# classes and LINQ rather than raw SQL strings.
+### Settings for Small Values
 
-To get started, add the `Microsoft.EntityFrameworkCore.Sqlite` package from NuGet. You will also want `Microsoft.EntityFrameworkCore.Tools` if you plan to use migrations from the package manager console, and `Microsoft.EntityFrameworkCore.Design` for the design-time tooling.
-
-Define your entities as plain C# classes and your context by inheriting from `DbContext`:
+`LocalSettings`, an `ApplicationDataContainer` from a packaged app's `ApplicationData`, stores key-value pairs that survive restarts and app updates:
 
 ```csharp
-public class Note
-{
-    public int Id { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string Content { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; }
-}
+var settings = Microsoft.Windows.Storage.ApplicationData.GetDefault().LocalSettings;
 
-public class AppDbContext : DbContext
-{
-    public DbSet<Note> Notes { get; set; } = null!;
+settings.Values["Theme"] = "Dark";
+settings.Values["LastOpenedPath"] = @"C:\Users\Ana\Documents\notes.md";
 
-    protected override void OnConfiguring(DbContextOptionsBuilder options)
-    {
-        var folder = ApplicationData.Current.LocalFolder.Path;
-        var dbPath = Path.Combine(folder, "app.db");
-        options.UseSqlite($"Data Source={dbPath}");
-    }
-}
+string theme = settings.Values["Theme"] as string ?? "Default";
 ```
 
-Storing the database file in `ApplicationData.Current.LocalFolder` keeps it within the per-user app data directory, where the application always has write access without requiring elevated permissions.
+`LocalSettings` is a container, and its `Values` holds only simple types, namely numbers, `bool`, `char`, `string`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Point`, `Size`, `Rect`, and `ApplicationDataCompositeValue`, which groups related values so they are written together atomically. Anything larger or more structured belongs in a file or a database.
 
-Migrations let EF Core manage schema changes as your entities evolve. You run `Add-Migration InitialCreate` in the package manager console to generate migration files, then apply them at application startup:
+An unpackaged app gets the same API from `ApplicationData.GetForUnpackaged(publisher, product)` on Windows App SDK 2.2 or later, or writes a small JSON file in its own folder under `Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)`.
 
-```csharp
-using var context = new AppDbContext();
-context.Database.Migrate();
-```
+### Files, Cache, and Temporary Data
 
-Calling `Migrate()` at startup creates the database if it does not exist and applies any pending migrations. This is appropriate for desktop apps where you control the upgrade lifecycle; server applications typically apply migrations through a separate deployment step.
+A packaged app's `ApplicationData` also provides folders, each with a `StorageFolder` property and a string path property for `System.IO`:
 
-Querying uses LINQ directly against your `DbSet`:
+| Store | Path property | Use it for |
+| --- | --- | --- |
+| Local | `LocalPath` | Data the app needs between sessions, such as a database or downloaded content. Microsoft's API reference describes this location as backed up to the cloud |
+| Local cache | `LocalCachePath` | Data that can be rebuilt and shouldn't be included in backup and restore |
+| Temporary | `TemporaryPath` | Scratch files. The system can delete them at any time |
 
-```csharp
-var recentNotes = await context.Notes
-    .Where(n => n.CreatedAt > DateTime.Today.AddDays(-7))
-    .OrderByDescending(n => n.CreatedAt)
-    .ToListAsync();
-```
+Roaming data, which once synced app settings and files across a user's devices, is no longer supported as of Windows 11, and Microsoft points to a cloud service instead. Even on Windows 10, Microsoft warns that `RoamingSettings` may not survive a Microsoft Store update, so settings that must last belong in `LocalSettings`.
 
-SQLite works well for single-user desktop applications, small-to-medium datasets, and local caches. It is less suited for scenarios involving concurrent write access from multiple processes, very large datasets where a full relational engine would offer better optimization, or applications requiring stored procedures and advanced database features. For most WinUI 3 desktop apps, SQLite covers the full range of local persistence needs without unnecessary complexity.
+### App Data Is Deleted with the App
+
+Everything in these stores is tied to the app's lifetime and removed when the user uninstalls it. That makes it the right home for preferences, caches, and state, and the wrong home for anything the user created and would expect to keep, such as documents. Save those where the user chooses, through a save picker, or in a cloud service.
 
 ---
 
-## ApplicationData and Settings
+## A Local Database
 
-Not everything belongs in a database. User preferences, window dimensions, last-opened file paths, and feature toggles are better stored as key-value pairs through `ApplicationData`. The `ApplicationData.Current` property gives access to local storage, roaming storage, and temporary storage areas that the OS manages on behalf of the application.
-
-`LocalSettings` stores key-value pairs in the application's local data folder. Values survive application restarts and persist until the user uninstalls the app:
+When data has structure, relationships, or needs querying, a SQLite database is the usual choice for a desktop app. It is a single file with no server, and Entity Framework Core reads and writes it through the `Microsoft.EntityFrameworkCore.Sqlite` provider. What WinUI adds is where the file lives and which thread touches it:
 
 ```csharp
-var settings = ApplicationData.Current.LocalSettings;
+string folder = Microsoft.Windows.Storage.ApplicationData.GetDefault().LocalPath;   // packaged
+string dbPath = Path.Combine(folder, "notes.db");
 
-// Write a setting
-settings.Values["theme"] = "dark";
-settings.Values["lastOpenedPath"] = @"C:\Users\username\Documents";
-
-// Read a setting with a fallback
-var theme = settings.Values["theme"] as string ?? "light";
+services.AddDbContextFactory<NotesContext>(options => options.UseSqlite($"Data Source={dbPath}"));
 ```
 
-Settings values can be strings, numbers, booleans, and other primitive types. For structured data, you can serialize to JSON and store as a string, though if the data grows complex enough to warrant serialization, a SQLite table is often the cleaner choice.
+An unpackaged app builds the path from `LocalApplicationData` instead. A context factory hands out a new `DbContext` for each operation. EF Core designs a context for a single unit of work and doesn't support using one from two threads at once, and a desktop app, with no request to scope a context to, can easily have two view models loading at the same moment.
 
-`LocalFolder` gives you a `StorageFolder` representing the application's local data directory. You can create files and subdirectories here for any content the app needs to persist that is larger than a simple setting value:
+The async methods don't keep the window responsive here. SQLite has no asynchronous I/O, and Microsoft.Data.Sqlite, which the EF Core provider uses, runs its async methods synchronously, so `await context.Notes.ToListAsync()` called on the UI thread does the whole query on the UI thread. Run database work on a background thread, for example inside `Task.Run`, and hand the results back to the UI. Apply migrations the same way, at startup before the first window loads data.
 
-```csharp
-var localFolder = ApplicationData.Current.LocalFolder;
-var cacheFile = await localFolder.CreateFileAsync(
-    "cache.json",
-    CreationCollisionOption.ReplaceExisting);
-await FileIO.WriteTextAsync(cacheFile, jsonContent);
-```
-
-Roaming storage, accessible through `RoamingFolder` and `RoamingSettings`, synchronizes data across devices when the user is signed into a Microsoft account. WinUI 3 packaged apps can use roaming storage, though Microsoft has signaled that roaming storage is a legacy feature with limited investment going forward. For new apps that need cross-device sync, consider a cloud backend rather than relying on roaming storage.
+SQLite handles one app's data well. It serializes writes, with one writer at a time, which makes it a poor fit for data several processes update at once. Databases created by EF Core use write-ahead logging by default, which lets reads proceed while a write is in progress.
 
 ---
 
 ## Drag and Drop
 
-WinUI 3 controls support drag and drop through a set of events on `UIElement`. To allow a control to accept dropped content, set `AllowDrop="True"` in XAML and handle the `DragOver` and `Drop` events. To make a control draggable, handle `DragStarting` and populate a `DataPackage`.
-
-Accepting files dragged from File Explorer is a common pattern:
+Drag and drop moves data as a `DataPackage` from `Windows.ApplicationModel.DataTransfer`, the same type the clipboard uses. The source fills a package, and the target reads it through a read-only `DataPackageView`, checking which formats it holds against the identifiers in `StandardDataFormats`. A control accepts drops when `AllowDrop="True"`, it handles `DragOver` and `Drop`, and it can be hit-tested. A panel with no background can't be, so a drop area that should look empty needs `Background="Transparent"` rather than none:
 
 ```csharp
 private void DropTarget_DragOver(object sender, DragEventArgs e)
@@ -157,99 +150,62 @@ private async void DropTarget_Drop(object sender, DragEventArgs e)
 {
     if (e.DataView.Contains(StandardDataFormats.StorageItems))
     {
-        var items = await e.DataView.GetStorageItemsAsync();
-        foreach (var item in items)
+        IReadOnlyList<IStorageItem> items = await e.DataView.GetStorageItemsAsync();
+        foreach (StorageFile file in items.OfType<StorageFile>())
         {
-            if (item is StorageFile file)
-            {
-                // Process the file
-            }
+            await ImportAsync(file.Path);
         }
     }
 }
 ```
 
-The `DragOver` handler must set `e.AcceptedOperation` to something other than `None` for the `Drop` event to fire. Setting it in `DragOver` also controls the cursor icon shown during the drag, indicating to the user whether a copy, move, or link operation will occur.
+The target sets `AcceptedOperation` in `DragEnter` or `DragOver` to say which operation it will accept, and the drag UI reflects that choice to the user. Files dragged from File Explorer arrive as `StorageFile` items with a `Path`.
 
-For dragging data out of your app, handle `DragStarting` on the source element and populate the event's `Data` property:
+To let the user drag data out of the app, set `CanDrag="True"` on the source element and fill the package in `DragStarting`:
 
 ```csharp
-private void Source_DragStarting(UIElement sender, DragStartingEventArgs e)
+private void Note_DragStarting(UIElement sender, DragStartingEventArgs e)
 {
-    e.Data.SetText("Some draggable text");
+    e.Data.SetText(_note.Content);
     e.Data.RequestedOperation = DataPackageOperation.Copy;
 }
 ```
 
-You can customize the drag visual through `e.DragUI.SetContentFromDataPackage()` or by providing a custom `SoftwareBitmap`. If you do not provide a custom visual, the system generates a thumbnail automatically.
-
-WinUI 3 drag and drop follows the same `DataPackage` model used throughout the Windows App SDK for clipboard and share operations, so the patterns transfer between them.
+Without a custom visual, the system builds a drag image from the element. `e.DragUI` lets the source supply its own. A source that offers `Move` handles `DropCompleted` to learn which operation the target performed, and removes the item only if it was moved.
 
 ---
 
-## Clipboard Access
+## Clipboard
 
-The clipboard in WinUI 3 is accessed through the static `Clipboard` class in the `Windows.ApplicationModel.DataTransfer` namespace. Reading and writing follow the `DataPackage` pattern used in drag and drop, which means the same code structure handles both features.
-
-Writing text to the clipboard:
+The static `Clipboard` class in the same namespace reads and writes a `DataPackage`, so code that builds one for drag and drop can build one for copy:
 
 ```csharp
 var package = new DataPackage();
-package.SetText("Hello, clipboard");
+package.SetText(_note.Content);
 Clipboard.SetContent(package);
-```
 
-Reading from the clipboard requires checking what formats are present before attempting to retrieve a value:
-
-```csharp
-var content = Clipboard.GetContent();
+DataPackageView content = Clipboard.GetContent();
 if (content.Contains(StandardDataFormats.Text))
 {
-    var text = await content.GetTextAsync();
+    string text = await content.GetTextAsync();
 }
 ```
 
-Images use `StandardDataFormats.Bitmap`, and files use `StandardDataFormats.StorageItems`. For HTML, use `StandardDataFormats.Html`, which delivers the content as an HTML fragment string.
+Standard formats include text, HTML, RTF, bitmaps, links, and storage items. An app can also define its own format with a string identifier, writing serialized data such as a JSON string with `SetData("myapp.note", json)` and reading it with `GetDataAsync("myapp.note")`. Only an app that knows the identifier can read it, so an app that also calls `SetText` on the same package lets paste within the app carry the rich data while other apps get plain text.
 
-Custom formats allow applications to share data in proprietary formats that only applications understanding the format can consume. You define a custom format identifier as a string and use `SetData` and `GetDataAsync`:
+Two details catch desktop apps. Microsoft's API reference says an app can access the clipboard only while it has focus, and only from its UI thread. And content an app places on the clipboard can disappear when the app exits, unless the app calls `Clipboard.Flush()`, which hands the content over so it stays available after shutdown.
 
-```csharp
-// Writing a custom format
-package.SetData("com.myapp.notedata", serializedNote);
-
-// Reading a custom format
-if (content.Contains("com.myapp.notedata"))
-{
-    var data = await content.GetDataAsync("com.myapp.notedata");
-}
-```
-
-To receive notifications when the clipboard contents change, subscribe to `Clipboard.ContentChanged`:
-
-```csharp
-Clipboard.ContentChanged += async (s, e) =>
-{
-    var content = Clipboard.GetContent();
-    // Inspect or react to new clipboard contents
-};
-```
-
-Be conservative with clipboard monitoring. Applications that continuously read from the clipboard raise user trust concerns, and Windows 10 and 11 notify users when an app accesses clipboard data. Reading only in direct response to user actions is the right default.
+`Clipboard.ContentChanged` reports changes to the clipboard. Reading the clipboard in response to it, rather than when the user asks to paste, means reading whatever the user copies, passwords included, so reserve it for features that exist to watch the clipboard and make that behavior visible to the user.
 
 ---
 
-## Choosing the Right Storage Approach
+## Choosing Where Data Lives
 
-The four storage mechanisms covered in this guide serve different purposes, and picking the wrong one for a task creates unnecessary friction. A few rules of thumb make the decision straightforward for most cases.
-
-Use `LocalSettings` for small, simple values that control application behavior: the selected theme, remembered window bounds, a boolean for whether a first-run dialog has been shown, or the path of the last opened file. Settings entries should be independent scalar values, not collections or complex objects.
-
-Use `LocalFolder` for files the application manages directly, such as cached data from a web API, exported documents waiting for the user to copy elsewhere, or temporary work files. The folder gives you full file system access within a safe, per-app boundary, and `StorageFile` and `FileIO` provide async-friendly wrappers over the underlying streams.
-
-Use SQLite with EF Core when the data has structure, relationships, or needs querying. A note-taking app's notes belong in SQLite. An inventory list where you filter by category and sort by date belongs in SQLite. A log of application events that you query for the last hundred entries belongs in SQLite. If you find yourself storing JSON strings in `LocalSettings` to represent anything beyond a single object, you have outgrown settings and should move to a local database.
-
-Use file pickers when the user needs to choose where data comes from or goes to. Pickers are for user-initiated open and save operations against arbitrary locations in the file system, not for internal data management. The distinction matters because picker-accessed files live outside the app's private storage and may require `Windows.Storage` bookmarks to re-access without asking the user again.
-
-Drag and drop and clipboard occupy a different dimension from the others: they are transfer mechanisms rather than storage mechanisms. They move or copy data between applications, or between different parts of the same application. The data being transferred will typically land in one of the four storage options once the transfer completes.
-
-One area worth thinking through early is data that needs to survive an application update or reinstall. `LocalSettings` and `LocalFolder` both live under the application's data directory, which the OS may clear when the app is uninstalled. For data users would consider irreplaceable, such as documents or records they have created, the correct pattern is to store it somewhere the user controls, such as their Documents folder accessed via a picker, or in a cloud backend. App-managed local storage is best treated as semi-persistent infrastructure data, not as the primary home for user content.
+| Data | Where it goes |
+| --- | --- |
+| Preferences and small state, like the theme or the last window size | Local settings when packaged, or a small JSON file in the app's own folder under `LocalApplicationData` when unpackaged |
+| Structured or queryable data the app owns | A SQLite database in the app's local data folder, private to the app and removed on uninstall when packaged |
+| Content that can be downloaded or rebuilt | The local cache folder |
+| Scratch files for the current session | The temporary folder |
+| Documents the user creates and expects to keep | A location the user picks, or a cloud service, never app data |
+| Data moving between apps | Drag and drop or the clipboard, landing in one of the rows above |

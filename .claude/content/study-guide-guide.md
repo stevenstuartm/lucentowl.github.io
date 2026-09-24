@@ -178,39 +178,37 @@ Write the guide, front matter, and config entry following this document. Wrap th
 
 ### 4. Independent review
 
-Dispatch a fresh subagent (`general-purpose`, since it needs web access) with the brief below. The reviewer reports; the author fixes. Keeping the fixes with the author means the reviewer never grades its own edits.
-
-**Reviewer brief** (fill in the brackets):
+Dispatch a fresh `guide-reviewer` subagent, defined in [`.claude/agents/guide-reviewer.md`](../agents/guide-reviewer.md), which holds the review brief. The dispatch prompt supplies only what changes per guide:
 
 ```
-You are reviewing a newly drafted study guide before publication. You did not write it; treat every claim as unverified.
-
+Round: [1 or 2]
 Guide: [path]
 Reader question: [one sentence]
 Primary sources: [list]
-Ownership map (if any): [table, or "none"]
-
-Read .claude/content/study-guide-guide.md (the Quality Checklist and Standing Gotchas sections are your checklist) and .claude/skills/refine-prose/writing-standards.md. Then:
-
-1. Item 1 first. List every falsifiable claim, hard number, absolute, code sample, and "X vs Y" table in the guide. Verify each against a primary source with web research. For every named feature, confirm the source actually mentions it; absence is a finding.
-2. Run items 2-9 against the guide as written.
-3. Read it once more as a reader new to the domain at the guide's skill level. List every term or idea used before the guide introduces it, and every section that describes a shape, spatial relationship, or movement between parts with no figure. Also list every figure that only restates a table or a sentence.
-4. Do not edit the file.
-
-Report, most severe first:
-- Factual errors: quote, what the source says, source URL.
-- Unverifiable claims: quote, and what could be verified instead.
-- Missing material a practitioner would expect given the reader question.
-- Findings for items 2-9, each with the section it applies to.
-- Foundation jumps and missing or decorative figures from step 3, each with the section it applies to.
-- A verdict: "ready" only if there are no factual errors and no missing material.
+Ownership map (if any): [the rows that bear on this guide, or "none"]
+Already verified: [cross-guide facts in force that this guide touches; in round 2, also what round 1 confirmed]
+Focus (round 2 only): [the material that changed after round 1]
 ```
+
+The reviewer reports; the author fixes. Keeping the fixes with the author means the reviewer never grades its own edits. The reviewer skips style and mechanical checks, because the author runs those after every round of fixes (step 5), and paying a reviewer to read the style rules again buys nothing.
+
+**Which model reviews.** Round 1 runs on the session's own model, the agent's default. It is the round that catches wrong API behavior and invented features, which takes reasoning a smaller model misses, so it is never downgraded. Round 2 passes `model: "sonnet"`. Its brief is narrowed to the changed material, and every finding it reports is verified against a source by the author before it is applied, so a missed nuance there costs little. Neither round uses Haiku.
 
 ### 5. Fix and re-review
 
-Apply the findings, re-checking any that look wrong against the source rather than taking them on trust. Soften any claim that cannot be verified to what can be. Run at most two review rounds. If the first round's fixes corrected facts or added material, dispatch one new reviewer on the revised guide. Apply the second round's findings the same way, verifying each against the source, and stop there. A third round costs more than it finds, because each round mostly re-litigates wording the previous one settled.
+Apply the findings, re-checking any that look wrong against the source rather than taking them on trust. Soften any claim that cannot be verified to what can be.
+
+**Fixes meet the same bar as the draft.** Material written in response to a review is new, unverified content, and it tends to be written fast. Before the next round, or before step 6 after the last round:
+
+- Verify every new or reworded claim, sample, and table cell against a primary source, as item 1 requires of the first draft. A reviewer's suggested wording is a lead, not a source.
+- Re-run `/refine-prose`: the lint to clean, then its narrative self-review. Review fixes reliably reintroduce colon-joined clauses, repeated facts, and terms used before they are introduced.
+- If a fix changed a figure, re-run `.svgcheck.py` and `.figrender.py` and look at the render.
+
+Run at most two review rounds. If the first round's fixes corrected facts or added material, dispatch one new reviewer on the revised guide. Apply the second round's findings the same way, verifying each against the source, and stop there. A third round costs more than it finds, because each round mostly re-litigates wording the previous one settled.
 
 ### 6. Mechanical checks
+
+Run these on the guide as it stands after the last round's fixes, not on an earlier version.
 
 - `/refine-prose` until clean
 - Config parses, the path exists, and front-matter `category`/`subcategory` match the config exactly
@@ -285,7 +283,7 @@ Learned from completed passes. These hold regardless of domain, and they apply a
 ### On the refinement items
 
 - **Item 5 is a two-way check, not a filter.** The easy reading is to judge the diagrams already present, drop the decorative ones, and add nothing. That is half the check, and it lets a guide pass while every relationship it teaches stays in prose-and-table form. Ask both questions on every guide: does each existing diagram clear the bar, **and** does the guide explain a structure with no diagram? The second finds more than the first. Structures that qualify and are easy to miss: a control that enforces at two levels, two options whose traffic paths differ in shape rather than in attributes, and a topology whose behavior comes from routing rather than from the links drawn.
-- **A guide can be correct and still unlearnable.** Machine Learning had accurate claims, clean prose, and two ASCII diagrams, and it still read as abstract. The pictures it lacked were charts (a line through points, a loss curve, three fits of rising flexibility), which a check that looks only for systems diagrams passes over. Its sections also leaned on terms defined later. Neither problem is visible to someone who already knows the subject, which is why step 3 of the reviewer brief reads the guide as a newcomer would.
+- **A guide can be correct and still unlearnable.** Machine Learning had accurate claims, clean prose, and two ASCII diagrams, and it still read as abstract. The pictures it lacked were charts (a line through points, a loss curve, three fits of rising flexibility), which a check that looks only for systems diagrams passes over. Its sections also leaned on terms defined later. Neither problem is visible to someone who already knows the subject, which is why step 3 of the `guide-reviewer` brief reads the guide as a newcomer would.
 - **Don't let one guide's figures set the bar for its siblings.** After a guide gains figures, the rest of its category can look bare next to it. Judge each sibling on its own subject, depth, and topics. Adding figures to match is the decoration this standard exists to prevent.
 - **Sibling links hide in two forms.** Grepping `](/study-guides/` finds only markdown links; links inside HTML callout blocks use `<a href="/study-guides/...">` and will be missed. Check both. Some cross-references are also unlinked prose ("covered in the X guide") — those are "where this fits" framing and go too.
 - **Some linter hits are ordinary technical phrases.** "In real time" trips the "real" pattern, and "failure mode" trips the AI-tell list even in a reliability guide, including in section titles like "Common Failure Modes". Rephrase ("continuously", "as it happens", "Where X Breaks", "each way an asset fails") rather than arguing with the linter.

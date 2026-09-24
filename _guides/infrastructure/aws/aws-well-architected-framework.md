@@ -2,345 +2,279 @@
 title: "AWS Well-Architected Framework"
 layout: guide
 category: AWS
-subcategory: Architecture Principles
-description: "The six pillars of the AWS Well-Architected Framework and how they guide architectural decision-making for building secure, high-performing, resilient, and efficient cloud infrastructure."
-tags: [infrastructure, aws, best-practices, framework, architecture, reference]
+subcategory: Foundations
+description: "The six pillars of the AWS Well-Architected Framework, their design principles and best-practice areas, how a Well-Architected review runs, and how to trade one pillar against another deliberately."
+tags: [well-architected-framework, well-architected-tool, design-principles, architecture-review, decision-making, fundamentals]
 ---
 
-## What is the AWS Well-Architected Framework
+## What the Well-Architected Framework Is
 
-The **AWS Well-Architected Framework** provides a consistent approach for evaluating cloud architectures and implementing designs that scale with your application needs. It describes key concepts, design principles, and architectural best practices for designing and operating workloads in the cloud.
+The **AWS Well-Architected Framework** is AWS's set of design principles, best practices, and review questions for evaluating cloud architectures. It gives a team a consistent way to ask whether a design is secure, reliable, efficient, and affordable, and to record which of those it chose to favor.
 
-### Purpose
+### The Unit of Review Is a Workload
 
-The framework helps architects:
-- **Evaluate trade-offs** between different architectural approaches
-- **Make informed decisions** about service selection and design patterns
-- **Identify areas for improvement** in existing architectures
-- **Understand the business impact** of architectural decisions
+The framework reviews a **workload**, not an account or a single service. AWS defines the terms it uses at three sizes:
 
-### Not a Checklist
+| Term | Meaning | Example |
+|---|---|---|
+| **Component** | The code, configuration, and AWS resources that together deliver against one requirement. Often the unit of technical ownership. | The order-processing service and its queue |
+| **Workload** | A set of components that together deliver business value. The level business and technology leaders talk about. | An ecommerce website, a mobile app backend, an analytics platform |
+| **Technology portfolio** | The collection of workloads the business needs to operate. | Every workload the company runs |
 
-The framework provides guiding principles, not mandatory requirements. Every architectural decision involves trade-offs. The framework helps you understand what you're optimizing for and what you're sacrificing.
+A review answers questions about one workload at a time, so decide the workload's boundary before starting. A shared platform, such as a central network or logging account, can be reviewed as a workload of its own.
+
+### Guidance, Not a Checklist
+
+The framework describes practices, not mandatory requirements. Every design decision trades something away, and the framework's job is to make that trade visible: what the workload is optimizing for and what it is accepting in return.
+
+---
+
+## How the Framework Is Organized
+
+Each pillar has the same four layers, from general to specific:
+
+- **Design principles.** A handful of principles that set the pillar's direction.
+- **Best-practice areas.** The topics the pillar's questions are grouped into.
+- **Questions.** Numbered per pillar, such as `SEC 2. How do you manage authentication for people and machines?`
+- **Best practices.** The specific practices each question checks, numbered under it, such as `SEC02-BP01 Use strong sign-in mechanisms` and `SEC02-BP02 Use temporary credentials`.
+
+The questions are what a review works through. The design principles and best-practice areas below are the map for reading them.
 
 ---
 
 ## The Six Pillars
 
-The framework organizes best practices into six pillars. Each pillar represents a different aspect of building cloud systems.
-
 ### 1. Operational Excellence
 
-**Definition:** The ability to run and monitor systems to deliver business value and continually improve supporting processes and procedures.
+AWS defines operational excellence as the ability to support development and run workloads effectively, gain insight into their operations, and continuously improve supporting processes and procedures to deliver business value.
 
-**Core Principles:**
-- Perform operations as code
+**Design principles:**
+- Organize teams around business outcomes
+- Implement observability for actionable insights
+- Safely automate where possible
 - Make frequent, small, reversible changes
 - Refine operations procedures frequently
 - Anticipate failure
-- Learn from all operational events and failures
+- Learn from all operational events and metrics
+- Use managed services
 
-**What This Means in Practice:**
+**Best-practice areas:** organization, prepare, operate, evolve.
 
-Infrastructure as code, automated deployments, comprehensive logging and monitoring, and blameless post-mortems. You treat operations like software development: version controlled, tested, and continuously improved.
+In practice, the pillar treats operations like software. Infrastructure and runbooks are defined as code and version controlled, deployments are small and reversible, and the team measures the workload through key performance indicators (KPIs) tied to business outcomes. Automation carries guardrails such as rate limits, error thresholds, and approvals, so an automated change can't do more damage than a manual one.
 
-**Example Decisions:**
-- Using CloudFormation or Terraform instead of manual console clicks
-- Implementing CI/CD pipelines with automated testing
-- Deploying blue-green or canary releases instead of big-bang deployments
-- Building dashboards and alerts in CloudWatch
-- Using Step Functions for visible, auditable workflows
-
-**Questions to Ask:**
-- How do you manage changes to your infrastructure?
-- How do you monitor your workload to ensure it's operating as expected?
-- How do you respond to unplanned operational events?
-- How do you evolve operations over time?
+**Example decisions:**
+- Defining infrastructure in CloudFormation or Terraform instead of creating it in the console
+- Running CI/CD pipelines with automated tests
+- Releasing with blue-green or canary deployments instead of all at once
+- Building CloudWatch dashboards and alarms around business KPIs
+- Using Step Functions for workflows that need a visible, auditable execution history
+- Holding blameless post-incident reviews and sharing what was learned
 
 ---
 
 ### 2. Security
 
-**Definition:** The ability to protect data, systems, and assets while delivering business value through risk assessments and mitigation strategies.
+AWS describes the security pillar as how to take advantage of cloud technologies to protect data, systems, and assets in a way that can improve your security posture.
 
-**Core Principles:**
-- Implement a strong identity foundation (principle of least privilege)
-- Enable traceability (logging and auditing)
-- Apply security at all layers (defense in depth)
+**Design principles:**
+- Implement a strong identity foundation
+- Maintain traceability
+- Apply security at all layers
 - Automate security best practices
 - Protect data in transit and at rest
-- Keep people away from data (reduce manual access)
+- Keep people away from data
 - Prepare for security events
 
-**What This Means in Practice:**
+**Best-practice areas:** security foundations, identity and access management, detection, infrastructure protection, data protection, incident response, application security.
 
-Every AWS service interaction goes through IAM. Data is encrypted at rest and in transit. CloudTrail logs every API call. Security groups and NACLs provide network-level protection. Secrets never appear in code or logs.
+In practice, every authenticated request to an AWS API is evaluated against IAM policies, so identity is the first control. People and workloads use temporary credentials instead of long-lived keys. Data is encrypted at rest and in transit. CloudTrail records API activity, and detection services alert on suspicious behavior. Secrets stay out of code and logs.
 
-**Example Decisions:**
-- Using IAM Identity Center for workforce access (not IAM users with access keys)
-- Using IAM roles for workloads (EC2, Lambda, ECS) instead of long-lived access keys
-- Enabling MFA for human users (mandatory for root users as of 2024)
-- Encrypting S3 buckets with KMS
+**Example decisions:**
+- Using IAM Identity Center for workforce access instead of IAM users with access keys
+- Giving workloads (EC2, Lambda, ECS) IAM roles instead of long-lived access keys
+- Requiring MFA for human users. AWS now enforces MFA for root users across all account types.
+- Encrypting S3 buckets with KMS keys
 - Storing database credentials in Secrets Manager
-- Using VPC security groups, NACLs, and PrivateLink for defense in depth
+- Layering security groups, network ACLs, and PrivateLink
 - Enabling GuardDuty for threat detection
-- Implementing WAF rules on CloudFront and ALB
-
-**Questions to Ask:**
-- How do you control access to your AWS resources?
-- How do you protect your data at rest and in transit?
-- How do you detect and respond to security events?
-- How do you keep your workload secure over time?
+- Putting WAF rules in front of CloudFront distributions and Application Load Balancers
 
 ---
 
 ### 3. Reliability
 
-**Definition:** The ability of a workload to perform its intended function correctly and consistently when expected, including recovering from failures.
+AWS defines reliability as the ability of a workload to perform its intended function correctly and consistently when it's expected to, including the ability to operate and test the workload through its total lifecycle.
 
-**Core Principles:**
+**Design principles:**
 - Automatically recover from failure
 - Test recovery procedures
 - Scale horizontally to increase aggregate workload availability
-- Stop guessing capacity (use auto-scaling)
+- Stop guessing capacity
 - Manage change through automation
 
-**What This Means in Practice:**
+**Best-practice areas:** foundations, workload architecture, change management, failure management.
 
-Systems are designed to survive failures of individual components. Multi-AZ deployments prevent single availability zone failures from causing outages. Auto Scaling handles traffic spikes. Automated backups enable point-in-time recovery. Health checks automatically replace failed instances.
+In practice, the workload is designed to survive the failure of individual components. An AWS **Region** is a geographic area, and each Region contains several isolated groups of data centers called **Availability Zones**. Deploying across multiple Availability Zones means losing one zone doesn't take the workload down. Auto Scaling absorbs demand spikes. Automated backups allow point-in-time recovery, and health checks replace failed instances without a person in the loop. The foundations area also covers limits that are easy to forget, such as service quotas and network topology (`REL 1` and `REL 2`).
 
-**Example Decisions:**
-- Deploying RDS with Multi-AZ enabled
-- Using Auto Scaling groups across multiple availability zones
-- Implementing health checks and automatic failover with ALB
-- Taking automated backups with retention policies
-- Using Route 53 health checks and failover routing
-- Designing for eventual consistency where appropriate
-- Testing chaos engineering scenarios (intentionally breaking things)
-
-**Questions to Ask:**
-- How do you handle failures in your workload?
-- How do you design your workload to meet availability targets?
-- How do you test reliability?
-- How do you recover from failures?
+**Example decisions:**
+- Enabling Multi-AZ on RDS
+- Running Auto Scaling groups across several Availability Zones
+- Using load balancer health checks to route around failed targets
+- Taking automated backups with a retention policy
+- Using Route 53 health checks with failover routing
+- Accepting eventual consistency where the business can tolerate it
+- Injecting failures deliberately to test recovery
 
 ---
 
 ### 4. Performance Efficiency
 
-**Definition:** The ability to use computing resources efficiently to meet system requirements and maintain efficiency as demand changes and technologies evolve.
+AWS defines performance efficiency as the ability to use computing resources efficiently to meet system requirements, and to maintain that efficiency as demand changes and technologies evolve.
 
-**Core Principles:**
-- Democratize advanced technologies (use managed services)
-- Go global in minutes (deploy to multiple regions)
+**Design principles:**
+- Democratize advanced technologies
+- Go global in minutes
 - Use serverless architectures
 - Experiment more often
-- Consider mechanical sympathy (understand how services work)
+- Consider mechanical sympathy
 
-**What This Means in Practice:**
+**Best-practice areas:** architecture selection, compute and hardware, data management, networking and content delivery, process and culture.
 
-Choose the right compute type for the workload. Use caching to reduce latency. Leverage CDNs for global content delivery. Monitor performance metrics and optimize based on data, not assumptions. Take advantage of managed services that automatically scale and optimize.
+In practice, the pillar asks the team to match each resource to how the workload uses it. Mechanical sympathy means understanding how a service behaves, for example choosing a database by its access patterns. Caches and CDNs cut latency, and decisions rest on measured performance rather than assumptions. Consuming a capability as a managed service, such as a NoSQL database or media transcoding, lets the team skip learning to host it.
 
-**Example Decisions:**
-- Using Lambda for event-driven workloads instead of always-on EC2 instances
-- Choosing the right EC2 instance type (compute-optimized, memory-optimized, etc.)
-- Implementing CloudFront for global content delivery
-- Using DynamoDB DAX or ElastiCache for caching
-- Selecting RDS vs. DynamoDB based on access patterns
-- Using S3 Transfer Acceleration for large file uploads
-- Enabling Aurora Auto Scaling for read replicas
-
-**Questions to Ask:**
-- How do you select the best performing architecture?
-- How do you monitor performance over time?
-- How do you use advanced technologies to improve performance?
-- How do you evolve your workload to take advantage of new AWS services?
+**Example decisions:**
+- Running event-driven work on Lambda instead of always-on EC2 instances
+- Choosing a compute-optimized or memory-optimized EC2 family to match the workload
+- Serving global users through CloudFront
+- Caching with ElastiCache or DynamoDB Accelerator (DAX)
+- Picking RDS or DynamoDB based on access patterns
+- Using S3 Transfer Acceleration for long-distance uploads
+- Letting Aurora Auto Scaling add read replicas under load
 
 ---
 
 ### 5. Cost Optimization
 
-**Definition:** The ability to run systems to deliver business value at the lowest price point while avoiding unnecessary costs.
+AWS defines cost optimization as the ability to run systems to deliver business value at the lowest price point.
 
-**Core Principles:**
-- Implement cloud financial management
-- Adopt a consumption model (pay only for what you use)
+**Design principles:**
+- Implement Cloud Financial Management
+- Adopt a consumption model
 - Measure overall efficiency
-- Stop spending money on undifferentiated heavy lifting (use managed services)
+- Stop spending money on undifferentiated heavy lifting
 - Analyze and attribute expenditure
 
-**What This Means in Practice:**
+**Best-practice areas:** practice Cloud Financial Management, expenditure and usage awareness, cost-effective resources, manage demand and supply resources, optimize over time.
 
-Right-size resources based on actual usage. Use Reserved Instances or Savings Plans for predictable workloads. Shut down non-production environments outside business hours. Leverage spot instances for fault-tolerant workloads. Monitor costs with AWS Cost Explorer and set budgets.
+In practice, the team pays for what it uses and can see who is spending what. AWS's own illustration of the consumption model is a development environment used 40 hours a week. Stopping it outside those hours cuts its running time from 168 hours to 40, a saving of about 75%. Right-sizing follows from the same principle, as do Savings Plans and Reserved Instances (discounts in exchange for committing to a level of usage) for steady work and Spot Instances (spare EC2 capacity at a discount, which AWS can reclaim at short notice) for interruptible work.
 
-**Example Decisions:**
-- Purchasing Savings Plans for steady-state workloads
+**Example decisions:**
+- Buying Savings Plans for steady-state usage
 - Using Lambda instead of always-on EC2 for infrequent tasks
-- Implementing auto-scaling to scale down during low traffic
-- Moving infrequently accessed data to S3 Glacier
-- Using spot instances for batch processing
-- Right-sizing EC2 instances based on CloudWatch metrics
-- Enabling S3 Intelligent-Tiering for automated cost optimization
+- Scaling in during low traffic
+- Moving infrequently accessed data to S3 Glacier storage classes
+- Running fault-tolerant batch work on Spot Instances
+- Right-sizing EC2 instances from CloudWatch utilization data
+- Enabling S3 Intelligent-Tiering where access patterns are unknown
 - Deleting unused EBS volumes and snapshots
-
-**Questions to Ask:**
-- How do you govern usage and manage costs?
-- How do you monitor and control spending?
-- How do you select the most cost-effective resources?
-- How do you optimize over time?
 
 ---
 
 ### 6. Sustainability
 
-**Definition:** The ability to continually improve sustainability impacts by reducing energy consumption and increasing efficiency across all components of a workload.
+AWS defines sustainability as the ability to continually improve sustainability impacts by reducing energy consumption and increasing efficiency across all components of a workload, by getting the most out of provisioned resources and minimizing the total resources required.
 
-**Core Principles:**
-- Understand your impact (measure carbon footprint)
+**Design principles:**
+- Understand your impact
 - Establish sustainability goals
-- Maximize utilization (reduce idle resources)
-- Anticipate and adopt more efficient hardware and software
-- Use managed services (AWS optimizes infrastructure efficiency)
-- Reduce downstream impact (efficient data transfer and storage)
+- Maximize utilization
+- Anticipate and adopt new, more efficient hardware and software offerings
+- Use managed services
+- Reduce the downstream impact of your cloud workloads
 
-**What This Means in Practice:**
+**Best-practice areas:** Region selection, alignment to demand, software and architecture, data, hardware and services, process and culture.
 
-Choose regions powered by renewable energy. Use auto-scaling to avoid idle capacity. Leverage serverless and managed services that share infrastructure efficiently. Optimize data storage and transfer to reduce energy consumption.
+In practice, the pillar favors high utilization over idle headroom. AWS's example is that two hosts running at 30% utilization are less efficient than one host at 60%, because each host draws baseline power. Managed services help because AWS runs shared infrastructure at high utilization. Region choice counts too. The framework asks teams to choose a Region on both business requirements and sustainability goals.
 
-**Example Decisions:**
+**Example decisions:**
 - Using Lambda or Fargate instead of over-provisioned EC2 instances
-- Implementing S3 lifecycle policies to move data to colder storage tiers
-- Using Graviton-based instances (more energy efficient)
-- Selecting regions with renewable energy commitments
-- Implementing caching to reduce repeated computations
-- Archiving or deleting unused data and resources
-- Choosing efficient data formats (Parquet instead of CSV)
-
-**Questions to Ask:**
-- How do you minimize unused resources?
-- How do you optimize geographic placement based on sustainability goals?
-- How do you take advantage of more efficient hardware and software?
-- How do you reduce downstream sustainability impacts?
+- Adding S3 Lifecycle rules that move data to colder storage classes
+- Choosing instances on Graviton, AWS's Arm-based processors
+- Weighing sustainability goals alongside business requirements when choosing a Region
+- Caching results to avoid repeated computation
+- Archiving or deleting data and resources nobody uses
+- Storing analytical data in efficient formats such as Parquet instead of CSV
 
 ---
 
-## How to Use the Framework
+## Running a Well-Architected Review
 
-### 1. Review Phase
+### How AWS Recommends Running a Review
 
-Evaluate your architecture against the six pillars using the AWS Well-Architected Tool or manual review. For each pillar, ask the framework's questions and identify areas where best practices aren't followed.
+AWS describes a review as a lightweight process, taking hours rather than days, and as a blame-free conversation rather than an audit. AWS recommends that the team building the workload review it continually as the architecture changes, rather than waiting for a formal review meeting. Reviews matter most at key milestones:
 
-### 2. Prioritize Improvements
+- **Early in design**, before the team commits to decisions that are hard or impossible to reverse (AWS calls these one-way doors).
+- **Before go-live.**
+- **After significant architecture changes**, so the workload's qualities don't erode as features are added.
 
-Not every issue needs immediate attention. Prioritize based on:
-- **Business impact:** Which risks affect business outcomes most?
-- **Current pain points:** What's causing operational problems today?
-- **Compliance requirements:** What must be addressed for regulatory reasons?
-- **Technical debt:** What will become harder to fix later?
+### The Well-Architected Tool
 
-### 3. Implement Changes
+The **AWS Well-Architected Tool** is the console service for running reviews. There is no additional charge for it. You pay only for the AWS resources you run. A review in the tool works like this:
 
-Make incremental improvements. Small, reversible changes reduce risk and allow learning. Document decisions and their rationale.
+1. **Define the workload.** Give it a name, a description, and a review owner, and record its environment and Regions. Account IDs are optional.
+2. **Choose the lenses.** A **lens** is a set of questions to measure the workload against. The Well-Architected Framework lens is applied automatically when you define a workload. The lens catalog adds AWS-official lenses for specific workload types, such as serverless applications, SaaS, and generative AI. Teams can also write **custom lenses** with their own questions, for example to encode internal governance rules.
+3. **Answer the questions.** For each question, mark which best practices the workload follows. For two answers, AWS recommends recording the reason in the question's notes, which appear in the workload report. **Question does not apply to this workload** means it is irrelevant to this workload. **None of these** means it applies but the workload follows none of its practices.
+4. **Read the risks.** Best practices the workload doesn't follow surface as **high-risk issues (HRIs)**, which AWS has found might significantly harm the business, and **medium-risk issues (MRIs)**, which might harm it to a lesser extent.
+5. **Save a milestone.** A **milestone** records the state of the review at a point in the workload's life, such as design, go-live, or production, so later reviews can show what improved.
 
-### 4. Measure and Iterate
+The tool then produces an improvement plan listing the open risks and the best practices that would close them.
 
-Track metrics for each pillar. As the workload evolves and AWS releases new services, re-evaluate the architecture.
+### Acting on What the Review Finds
+
+AWS calls its risk ratings guidelines only. A best practice might not suit the workload for a specific technical or business reason, and then the real risk can be lower than the tool shows. AWS suggests recording those reasons in the workload notes. When the team decides not to implement a best practice, it should record the business-level approval and the reasons too. The notes are where a deliberate trade-off gets written down. Once every remaining risk is either fixed or accepted this way, the team can set the workload's overall improvement status to **Risk Acknowledged**.
+
+For the risks the team will fix, AWS suggests prioritizing by business context and by the impact each issue has on the team's day-to-day work. An issue that causes recurring operational work frees up time once it is fixed. Update the review as fixes land so it shows the architecture improving, and save a new milestone at each significant change.
 
 ---
 
 ## Trade-Offs Between Pillars
 
-Every architectural decision involves trade-offs. Optimizing for one pillar often means compromising another.
+Improving one pillar often costs another. AWS's framework notes that security and operational excellence are generally not traded off against the other pillars. The trade-offs happen among reliability, performance efficiency, cost optimization, and sustainability, and they depend on business context. AWS's own examples:
+
+- In a development environment, a team might favor sustainability and cost at the expense of reliability.
+- In a mission-critical workload, a team might favor reliability and accept higher cost and sustainability impact.
+- In ecommerce, performance can affect revenue directly, which justifies spending on it.
 
 ### Common Trade-Offs
 
-<div class="callout callout--note">
-<p class="callout__title">Understanding Trade-Offs</p>
-<p>Every optimization improves some pillars while compromising others. The framework helps you make intentional trade-offs based on your specific requirements.</p>
-</div>
-
-| Optimization | Gain | Trade-Off |
+| Choice | Gains | Costs |
 |--------------|------|-----------|
-| Use managed services (RDS instead of self-managed DB on EC2) | **Operational Excellence:** Automated backups, patching, scaling<br>**Security:** Built-in encryption and access controls<br>**Reliability:** Multi-AZ deployments | **Cost:** Higher price than self-managed<br>**Performance:** Less control over tuning |
-| Enable Multi-AZ deployments | **Reliability:** Survive AZ failures<br>**Security:** Data replicated securely | **Cost:** Pay for resources in multiple AZs<br>**Performance:** Slight latency for synchronous replication |
-| Use serverless (Lambda) instead of always-on EC2 | **Cost Optimization:** Pay only for execution time<br>**Operational Excellence:** No server management<br>**Sustainability:** No idle capacity | **Performance:** Cold start latency<br>**Reliability:** Execution time limits (15 min max) |
-| Implement caching (CloudFront, ElastiCache) | **Performance:** Lower latency, faster response times<br>**Cost:** Reduced origin load | **Complexity:** Cache invalidation strategies<br>**Operational Excellence:** More components to monitor |
-| Use Reserved Instances or Savings Plans | **Cost Optimization:** 40-75% savings vs. on-demand | **Flexibility:** Committed capacity may not match changing needs |
-| Deploy to multiple regions | **Reliability:** Survive entire region failures<br>**Performance:** Lower latency for global users | **Cost:** Resources in multiple regions<br>**Operational Excellence:** More complex deployments and data synchronization |
+| Managed services (RDS, AWS's managed relational database, instead of a self-managed database on EC2) | **Operational excellence:** automated backups, patching, and failover<br>**Reliability:** Multi-AZ deployment built in | **Cost:** a higher price than the EC2 capacity alone<br>**Performance:** less control over tuning |
+| Multi-AZ deployments | **Reliability:** survives the loss of an Availability Zone | **Cost:** resources in more than one zone<br>**Performance:** added write latency, because each write is copied to the other zone before it is confirmed (synchronous replication) |
+| Lambda instead of always-on EC2 | **Cost:** pay only for execution time<br>**Operational excellence:** no servers to manage<br>**Sustainability:** no idle capacity | **Performance:** cold starts, the delay while Lambda initializes a new execution environment, and a 15-minute limit per invocation on standard functions |
+| Caching (CloudFront, ElastiCache) | **Performance:** lower latency<br>**Cost:** less load on the origin | **Operational excellence:** more components to run and monitor, and an invalidation strategy to get right |
+| Savings Plans or Reserved Instances | **Cost:** up to 72% off On-Demand prices (EC2 Instance Savings Plans and Reserved Instances). Compute Savings Plans trade some of that discount (up to 66%) for flexibility across instance families and services. | **Cost:** a one- or three-year commitment that may not match changing needs |
+| Multiple Regions | **Reliability:** survives a Regional outage<br>**Performance:** lower latency for distant users | **Cost:** resources in every Region<br>**Operational excellence:** more complex deployments and data synchronization |
 
-### Making Intentional Trade-Offs
+### Making Trade-Offs Deliberately
 
-The framework doesn't prescribe solutions. Instead, it helps you make **intentional trade-offs** based on your specific requirements:
+The framework doesn't prescribe the answer. It asks the team to make the trade explicitly:
 
-1. **Identify requirements:** What does the business need? (SLAs, compliance, budget constraints)
-2. **Evaluate options:** How does each service or pattern align with the six pillars?
-3. **Make explicit trade-offs:** Document what you're optimizing for and what you're accepting as a compromise
-4. **Revisit over time:** As requirements change or new AWS services launch, re-evaluate decisions
+1. **Identify requirements.** What does the business need, in SLAs, compliance obligations, and budget?
+2. **Evaluate options.** How does each service or pattern score against each pillar?
+3. **Record the trade.** Write down what the design optimizes for and what it accepts as a cost, in the workload notes if you use the Well-Architected Tool.
+4. **Revisit it.** Re-evaluate as requirements change or new services launch.
 
-**Example:** A startup might prioritize **cost optimization** and **operational excellence** (use managed services, avoid over-engineering) while accepting lower **reliability** (single region, minimal redundancy) initially. As the business grows and SLAs become critical, they shift toward **reliability** even if it increases **cost**.
-
----
-
-## Applying the Framework to Service Selection
-
-The framework guides service selection by mapping requirements to pillars.
-
-### Example: Choosing a Database
-
-**Scenario:** You need to store user profile data for a web application.
-
-**Options:** RDS (managed relational), DynamoDB (managed NoSQL), self-managed database on EC2
-
-**Framework Analysis:**
-
-| Service | Operational Excellence | Security | Reliability | Performance | Cost | Sustainability |
-|---------|----------------------|----------|------------|------------|------|----------------|
-| **RDS (Aurora)** | ✅ Managed backups, patching, Multi-AZ<br>⚠️ Manual schema migrations | ✅ Encryption, IAM, VPC | ✅ Multi-AZ, automated failover, read replicas | ✅ High performance for complex queries | ⚠️ More expensive than DynamoDB for simple lookups | ✅ Shared infrastructure |
-| **DynamoDB** | ✅ Fully managed, auto-scaling<br>✅ No schema migrations | ✅ Encryption, IAM, VPC endpoints | ✅ Multi-AZ by default, global tables | ✅ Single-digit millisecond latency for key-value<br>⚠️ No complex joins | ✅ Pay-per-request option<br>✅ Lower cost for simple access patterns | ✅ Serverless, no idle capacity |
-| **Self-managed on EC2** | ❌ Manual backups, patching, scaling<br>✅ Full control | ⚠️ Must implement encryption, access controls | ⚠️ Must design Multi-AZ yourself | ✅ Full tuning control | ⚠️ Lower base cost but high operational cost | ❌ Must manage idle capacity |
-
-**Decision:**
-- If you need complex queries and joins: **RDS**
-- If you need simple key-value lookups with massive scale: **DynamoDB**
-- If you need specific database features not available in managed services: **Self-managed on EC2** (but reconsider if the operational burden is worth it)
-
-### Example: Choosing a Compute Service
-
-**Scenario:** You need to process images uploaded by users.
-
-**Options:** Lambda, ECS/Fargate, EC2
-
-**Framework Analysis:**
-
-| Service | Operational Excellence | Security | Reliability | Performance | Cost | Use Case Fit |
-|---------|----------------------|----------|------------|------------|------|--------------|
-| **Lambda** | ✅ No servers to manage<br>⚠️ 15-minute execution limit | ✅ Isolated execution environments | ✅ Automatic scaling, built-in retry | ⚠️ Cold starts<br>⚠️ Limited memory (10GB max) | ✅ Pay per invocation | ✅ Good for short tasks (<15 min) |
-| **ECS/Fargate** | ✅ No EC2 management<br>⚠️ Manage container images | ✅ VPC isolation, IAM task roles | ✅ Service auto-scaling | ✅ No execution time limits | ⚠️ Pay for running time, not invocations | ✅ Good for long-running processes |
-| **EC2** | ❌ Manage instances, patching<br>✅ Full control | ⚠️ Must configure security groups, patching | ⚠️ Must implement auto-scaling, health checks | ✅ Dedicated resources | ⚠️ Always-on cost or scaling complexity | ⚠️ Over-engineered for simple tasks |
-
-**Decision:**
-- If image processing takes <15 minutes and is event-driven: **Lambda** (best cost and operational simplicity)
-- If image processing is long-running or requires more than 10GB memory: **ECS/Fargate**
-- If you need GPU processing or very specific instance configurations: **EC2**
+Consider a startup that favors cost and operational simplicity at launch, running in one Region with little redundancy. As its SLAs start to matter, it moves toward reliability and accepts the higher cost. Neither choice is wrong. The failure is making either one without writing it down.
 
 ---
 
 ## Key Takeaways
 
-**The framework is a lens for decision-making, not a compliance checklist.**
-
-1. **Every architectural decision involves trade-offs across the six pillars.** There is no perfect solution, only intentional choices based on your specific requirements.
-
-2. **Start with Operational Excellence and Security as foundational.** Without these, the other pillars become difficult to achieve. Automate infrastructure management and enforce least-privilege access from day one.
-
-3. **Use the framework to evaluate AWS service options.** When choosing between RDS and DynamoDB, or Lambda and EC2, map each option to the six pillars and see which aligns best with your requirements.
-
-4. **Prioritize the pillars based on business needs.** A startup might prioritize Cost Optimization and Operational Excellence (lean operations, managed services). An enterprise might prioritize Security and Reliability (compliance, SLAs).
-
-5. **Revisit architectural decisions as requirements evolve.** What made sense at launch may not make sense at scale. As traffic grows, you might trade Cost Optimization for Performance Efficiency. As the team grows, you might trade Operational Excellence (more managed services) for Cost (more self-managed).
-
-6. **Document trade-offs explicitly.** Future teams need to understand why you chose Lambda over EC2, or DynamoDB over RDS. Without that context, they'll assume incompetence rather than recognizing intentional trade-offs.
-
-7. **Use the [AWS Well-Architected Tool](https://aws.amazon.com/well-architected-tool/){:target="_blank" rel="noopener noreferrer"} for structured reviews.** The tool provides guided questions and generates reports highlighting risks.
-
-**The framework doesn't tell you what to build. It helps you understand what you're optimizing for and what you're accepting as a compromise.**
+1. **The framework is a lens for decisions, not a compliance checklist.** It makes the trade in each design choice visible and asks you to own it.
+2. **Review a workload, not an account.** The workload is the unit every question is asked about, so draw its boundary first.
+3. **Security and operational excellence are generally not traded off.** The trade-offs happen among reliability, performance, cost, and sustainability.
+4. **Favor pillars according to business context.** A development environment and a mission-critical production system should make opposite trades, and both can be well-architected.
+5. **Review early and continually.** A review is a short, blame-free conversation, best held before one-way-door decisions, before go-live, and after major changes. The [AWS Well-Architected Tool](https://aws.amazon.com/well-architected-tool/){:target="_blank" rel="noopener noreferrer"} adds lenses for the workload type and milestones to measure progress.
+6. **Record every trade-off in the workload notes.** A future team that finds Lambda where it expected EC2, or DynamoDB where it expected RDS, needs the reason. Without it, they tend to assume a mistake rather than a decision.
+7. **Revisit decisions as the workload grows.** What made sense at launch may not at scale.

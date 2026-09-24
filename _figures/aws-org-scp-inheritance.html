@@ -1,0 +1,76 @@
+---
+title: "SCP Inheritance From Root to Account"
+kind: rules
+system: aws
+summary: "An action must be allowed at every level above an account."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="awsi-title awsi-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsi-title">How service control policies are inherited from the organization root to an account</title>
+<desc id="awsi-desc">The organization root, the Workloads OU, and the App1 production account each have the FullAWSAccess SCP attached. The Production OU instead has an allow-list SCP that allows only EC2, S3, and RDS actions. For ec2:RunInstances, every level allows the action, so the SCPs permit it and IAM policies then decide. For dynamodb:PutItem, the Production OU's allow list doesn't include DynamoDB, so the action is denied for every account under that OU, even though the account itself has FullAWSAccess attached.</desc>
+<style>
+.awsi-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsi-hot { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 2; }
+.awsi-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsi-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsi-h { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsi-ok { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsi-no { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsi-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsi-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsi-rule { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 3; }
+</style>
+<defs>
+<marker id="awsi-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="awsi-h" x="150" y="28" text-anchor="middle">Hierarchy and attached SCPs</text>
+<text class="awsi-h" x="610" y="28" text-anchor="middle">ec2:RunInstances</text>
+<text class="awsi-h" x="790" y="28" text-anchor="middle">dynamodb:PutItem</text>
+
+<rect class="awsi-box" x="30" y="44" width="240" height="60" rx="6"/>
+<text class="awsi-n" x="150" y="70" text-anchor="middle">Organization root</text>
+<text class="awsi-k" x="150" y="88" text-anchor="middle">FullAWSAccess</text>
+
+<rect class="awsi-box" x="30" y="136" width="240" height="60" rx="6"/>
+<text class="awsi-n" x="150" y="162" text-anchor="middle">Workloads OU</text>
+<text class="awsi-k" x="150" y="180" text-anchor="middle">FullAWSAccess</text>
+
+<rect class="awsi-hot" x="30" y="228" width="240" height="60" rx="6"/>
+<text class="awsi-n" x="150" y="254" text-anchor="middle">Production OU</text>
+<text class="awsi-k" x="150" y="272" text-anchor="middle">allow list: ec2, s3, rds only</text>
+
+<rect class="awsi-box" x="30" y="320" width="240" height="60" rx="6"/>
+<text class="awsi-n" x="150" y="346" text-anchor="middle">App1 production account</text>
+<text class="awsi-k" x="150" y="364" text-anchor="middle">FullAWSAccess</text>
+
+<path class="awsi-flow" d="M150,104 L150,134" marker-end="url(#awsi-a)"/>
+<path class="awsi-flow" d="M150,196 L150,226" marker-end="url(#awsi-a)"/>
+<path class="awsi-flow" d="M150,288 L150,318" marker-end="url(#awsi-a)"/>
+
+<path class="awsi-rule" d="M280,74 L560,74"/>
+<path class="awsi-rule" d="M280,166 L560,166"/>
+<path class="awsi-rule" d="M280,258 L560,258"/>
+<path class="awsi-rule" d="M280,350 L560,350"/>
+
+<text class="awsi-ok" x="610" y="70" text-anchor="middle">allowed</text>
+<text class="awsi-ok" x="610" y="162" text-anchor="middle">allowed</text>
+<text class="awsi-ok" x="610" y="254" text-anchor="middle">allowed</text>
+<text class="awsi-ok" x="610" y="346" text-anchor="middle">allowed</text>
+
+<text class="awsi-ok" x="790" y="70" text-anchor="middle">allowed</text>
+<text class="awsi-ok" x="790" y="162" text-anchor="middle">allowed</text>
+<text class="awsi-no" x="790" y="254" text-anchor="middle">not allowed</text>
+<text class="awsi-ok" x="790" y="346" text-anchor="middle">allowed</text>
+
+<rect class="awsi-box" x="520" y="400" width="180" height="46" rx="6"/>
+<text class="awsi-ok" x="610" y="421" text-anchor="middle">SCPs permit it</text>
+<text class="awsi-lab" x="610" y="437" text-anchor="middle">IAM policies decide next</text>
+<rect class="awsi-hot" x="710" y="400" width="170" height="46" rx="6"/>
+<text class="awsi-no" x="795" y="421" text-anchor="middle">Denied</text>
+<text class="awsi-lab" x="795" y="437" text-anchor="middle">for every account in the OU</text>
+
+<text class="awsi-lab" x="30" y="420">Each level's SCPs must allow the action.</text>
+<text class="awsi-lab" x="30" y="436">An allow at the account can't restore what</text>
+<text class="awsi-lab" x="30" y="452">a level above it left out.</text>
+</g>
+</svg>

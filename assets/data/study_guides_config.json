@@ -320,35 +320,30 @@
     "AWS": {
       "subcategories": [
         {
-          "name": "Architecture Principles",
-          "description": "Well-Architected Framework and architectural decision-making",
+          "name": "Foundations",
+          "description": "Well-Architected reviews, IAM, and the multi-account structure everything else is built inside",
           "guides": [
-            "infrastructure/aws/aws-well-architected-framework.md"
+            "infrastructure/aws/aws-well-architected-framework.md",
+            "infrastructure/aws/aws-iam-fundamentals.md",
+            "infrastructure/aws/aws-organizations-control-tower.md"
           ]
         },
         {
-          "name": "Identity & Access Management",
-          "description": "IAM, Identity Center, Organizations, and security controls",
-          "guides": [
-            "infrastructure/aws/aws-iam-fundamentals.md"
-          ]
-        },
-        {
-          "name": "Networking",
-          "description": "VPC, subnets, routing, PrivateLink, and network connectivity",
+          "name": "Networking & Content Delivery",
+          "description": "VPC design, load balancing, DNS, edge delivery, APIs, and private and hybrid connectivity",
           "guides": [
             "infrastructure/aws/aws-vpc-architecture.md",
+            "infrastructure/aws/aws-elastic-load-balancing.md",
             "infrastructure/aws/aws-route53.md",
             "infrastructure/aws/aws-cloudfront.md",
-            "infrastructure/aws/aws-elastic-load-balancing.md",
             "infrastructure/aws/aws-api-gateway.md",
-            "infrastructure/aws/aws-direct-connect-vpn.md",
-            "infrastructure/aws/aws-privatelink-transit-gateway.md"
+            "infrastructure/aws/aws-privatelink-transit-gateway.md",
+            "infrastructure/aws/aws-direct-connect-vpn.md"
           ]
         },
         {
           "name": "Compute Services",
-          "description": "EC2, Lambda, ECS, EKS, and compute service selection",
+          "description": "EC2, Lambda, and container platforms, and choosing between them",
           "guides": [
             "infrastructure/aws/aws-ec2-fundamentals.md",
             "infrastructure/aws/aws-lambda-fundamentals.md",
@@ -357,7 +352,7 @@
         },
         {
           "name": "Storage Services",
-          "description": "S3, EBS, EFS, and storage architecture patterns",
+          "description": "Object, block, and file storage and choosing between them",
           "guides": [
             "infrastructure/aws/aws-s3-fundamentals.md",
             "infrastructure/aws/aws-ebs-efs.md"
@@ -365,28 +360,17 @@
         },
         {
           "name": "Database Services",
-          "description": "RDS, DynamoDB, Aurora, and database selection",
+          "description": "Relational, key-value, and in-memory databases, and database selection",
           "guides": [
             "infrastructure/aws/aws-rds-aurora.md",
             "infrastructure/aws/aws-dynamodb.md",
             "infrastructure/aws/aws-elasticache.md",
-            "infrastructure/aws/aws-redshift.md",
             "infrastructure/aws/aws-database-selection.md"
           ]
         },
         {
-          "name": "Infrastructure as Code",
-          "description": "CloudFormation for infrastructure automation and management",
-          "guides": [
-            "infrastructure/aws/cloudformation-fundamentals.md",
-            "infrastructure/aws/cloudformation-templates.md",
-            "infrastructure/aws/cloudformation-advanced.md",
-            "infrastructure/aws/cloudformation-migration.md"
-          ]
-        },
-        {
           "name": "Application Integration & Messaging",
-          "description": "SQS, SNS, EventBridge, Step Functions, Kinesis, and messaging patterns",
+          "description": "Queues, topics, event buses, workflows, and streams for decoupling services",
           "guides": [
             "infrastructure/aws/aws-sqs-sns.md",
             "infrastructure/aws/aws-eventbridge.md",
@@ -395,19 +379,37 @@
           ]
         },
         {
-          "name": "Security & Compliance",
-          "description": "Threat detection, security posture, compliance monitoring, and encryption",
+          "name": "Infrastructure as Code",
+          "description": "CloudFormation, the CDK, and SAM for defining AWS infrastructure in code",
           "guides": [
-            "infrastructure/aws/aws-security-hub-guardduty.md",
-            "infrastructure/aws/aws-cloudtrail-config.md",
-            "infrastructure/aws/aws-waf-shield.md",
+            "infrastructure/aws/cloudformation-fundamentals.md",
+            "infrastructure/aws/cloudformation-advanced.md",
+            "infrastructure/aws/aws-cdk.md",
+            "infrastructure/aws/aws-sam.md"
+          ]
+        },
+        {
+          "name": "Developer Tools & CI/CD",
+          "description": "Build pipelines and safe traffic-shifting deployments",
+          "guides": [
+            "infrastructure/aws/aws-codepipeline-codebuild.md",
+            "infrastructure/aws/aws-codedeploy.md"
+          ]
+        },
+        {
+          "name": "Security & Compliance",
+          "description": "End-user identity, encryption and secrets, edge protection, audit, and threat detection",
+          "guides": [
+            "infrastructure/aws/aws-cognito.md",
             "infrastructure/aws/aws-kms-secrets-manager.md",
-            "infrastructure/aws/aws-organizations-control-tower.md"
+            "infrastructure/aws/aws-waf-shield.md",
+            "infrastructure/aws/aws-cloudtrail-config.md",
+            "infrastructure/aws/aws-security-hub-guardduty.md"
           ]
         },
         {
           "name": "Management & Governance",
-          "description": "Monitoring, observability, systems management, and cost optimization",
+          "description": "Monitoring, tracing, fleet operations, and cost management",
           "guides": [
             "infrastructure/aws/aws-cloudwatch.md",
             "infrastructure/aws/aws-xray.md",
@@ -416,38 +418,36 @@
           ]
         },
         {
-          "name": "Developer Tools & CI/CD",
-          "description": "CI/CD pipelines, build automation, and deployment orchestration",
+          "name": "Containers in Production",
+          "description": "Container supply-chain security and production scaling, placement, and networking on ECS and EKS",
           "guides": [
-            "infrastructure/aws/aws-codepipeline-codebuild.md",
-            "infrastructure/aws/aws-codedeploy.md",
-            "infrastructure/aws/aws-cdk.md"
+            "infrastructure/aws/aws-ecr-container-security.md",
+            "infrastructure/aws/advanced-container-patterns.md"
           ]
         },
         {
           "name": "Analytics & Data Processing",
-          "description": "ETL, data lakes, serverless analytics, and BI tools",
+          "description": "ETL, serverless SQL, warehousing, BI, and how they combine into data architectures",
           "guides": [
             "infrastructure/aws/aws-glue.md",
             "infrastructure/aws/aws-athena.md",
+            "infrastructure/aws/aws-redshift.md",
             "infrastructure/aws/aws-quicksight.md",
             "infrastructure/aws/aws-data-architecture.md"
           ]
         },
         {
           "name": "Machine Learning & AI",
-          "description": "SageMaker ML platform and AWS AI services for production workloads",
+          "description": "Choosing an ML tier, prebuilt AI services, foundation models on Bedrock, and custom models on SageMaker",
           "guides": [
-            "infrastructure/aws/aws-sagemaker.md",
-            "infrastructure/aws/aws-rekognition-textract.md",
-            "infrastructure/aws/aws-comprehend-translate.md",
-            "infrastructure/aws/aws-transcribe-polly.md",
-            "infrastructure/aws/aws-ml-service-selection.md"
+            "infrastructure/aws/aws-ml-service-selection.md",
+            "infrastructure/aws/aws-bedrock.md",
+            "infrastructure/aws/aws-sagemaker.md"
           ]
         },
         {
           "name": "Migration & Hybrid Cloud",
-          "description": "Cloud migration strategies, planning, and execution best practices",
+          "description": "Migration portfolio strategy, migration services, and long-lived hybrid architectures",
           "guides": [
             "infrastructure/aws/aws-migration-strategy.md",
             "infrastructure/aws/aws-migration-services.md",
@@ -455,24 +455,8 @@
           ]
         },
         {
-          "name": "Serverless Architecture",
-          "description": "Serverless patterns, event-driven design, and production best practices",
-          "guides": [
-            "infrastructure/aws/serverless-architecture-patterns.md",
-            "infrastructure/aws/aws-sam.md"
-          ]
-        },
-        {
-          "name": "Container Orchestration (Advanced)",
-          "description": "Advanced container patterns, security, and service mesh architectures",
-          "guides": [
-            "infrastructure/aws/aws-ecr-container-security.md",
-            "infrastructure/aws/advanced-container-patterns.md"
-          ]
-        },
-        {
-          "name": "Architecture Patterns (Advanced)",
-          "description": "Multi-region architectures and disaster recovery strategies",
+          "name": "Resilience",
+          "description": "Multi-Region architecture and disaster recovery implementation",
           "guides": [
             "infrastructure/aws/multi-region-architecture.md",
             "infrastructure/aws/disaster-recovery.md"

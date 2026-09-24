@@ -1,0 +1,97 @@
+---
+title: "IAM Policy Evaluation in One Account"
+kind: flow
+system: aws
+summary: "The order AWS checks each policy type, and where a request exits."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 700" role="img" aria-labelledby="awpe-title awpe-desc" style="width:100%; min-width:520px; max-width:760px; height:auto; display:block;">
+<title id="awpe-title">How AWS evaluates IAM policies for a request within one account</title>
+<desc id="awpe-desc">An authenticated request passes a series of checks in order. An explicit Deny in any applicable policy ends in Deny. Resource control policies and service control policies must each allow the action, or the request is denied. If a resource-based policy allows the action for the requesting IAM user or role session by name, the request is allowed with no further checks. If it names the role ARN instead, the identity-based check is skipped but the permissions boundary and session policy still apply. Otherwise the identity-based policies must allow the action, and any permissions boundary and session policy must allow it too. Passing every check ends in Allow.</desc>
+<style>
+.awpe-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awpe-rb { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.awpe-ok { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.awpe-no { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.awpe-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awpe-n-inv { font-size: 14px; font-weight: 700; fill: #FFFFFF; }
+.awpe-n-dk { font-size: 14px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awpe-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awpe-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awpe-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awpe-exit { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 3; }
+</style>
+<defs>
+<marker id="awpe-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awpe-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="awpe-box" x="190" y="12" width="220" height="42" rx="6"/>
+<text class="awpe-n" x="300" y="38" text-anchor="middle">Authenticated request</text>
+
+<rect class="awpe-box" x="170" y="80" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="102" text-anchor="middle">Explicit Deny in any policy?</text>
+<text class="awpe-k" x="300" y="120" text-anchor="middle">every applicable policy type</text>
+
+<rect class="awpe-box" x="170" y="154" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="176" text-anchor="middle">Do the RCPs allow it?</text>
+<text class="awpe-k" x="300" y="194" text-anchor="middle">resource's account, in an organization</text>
+
+<rect class="awpe-box" x="170" y="228" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="250" text-anchor="middle">Do the SCPs allow it?</text>
+<text class="awpe-k" x="300" y="268" text-anchor="middle">principal's account, in an organization</text>
+
+<rect class="awpe-rb" x="170" y="302" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="324" text-anchor="middle">Resource-based policy allows it?</text>
+<text class="awpe-k" x="300" y="342" text-anchor="middle">and whom does it name?</text>
+
+<rect class="awpe-box" x="170" y="376" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="398" text-anchor="middle">Identity-based policy allows it?</text>
+<text class="awpe-k" x="300" y="416" text-anchor="middle">user, group, or role policies</text>
+
+<rect class="awpe-box" x="170" y="450" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="472" text-anchor="middle">Permissions boundary allows it?</text>
+<text class="awpe-k" x="300" y="490" text-anchor="middle">only if a boundary is set</text>
+
+<rect class="awpe-box" x="170" y="524" width="260" height="52" rx="6"/>
+<text class="awpe-n" x="300" y="546" text-anchor="middle">Session policy allows it?</text>
+<text class="awpe-k" x="300" y="564" text-anchor="middle">only if one was passed</text>
+
+<rect class="awpe-ok" x="190" y="604" width="220" height="44" rx="6"/>
+<text class="awpe-n-inv" x="300" y="631" text-anchor="middle">Allow</text>
+
+<rect class="awpe-no" x="540" y="80" width="120" height="496" rx="6"/>
+<text class="awpe-n-dk" x="600" y="333" text-anchor="middle">Deny</text>
+
+<path class="awpe-flow" d="M300,54 L300,78" marker-end="url(#awpe-a)"/>
+<path class="awpe-flow" d="M300,132 L300,152" marker-end="url(#awpe-a)"/>
+<path class="awpe-flow" d="M300,206 L300,226" marker-end="url(#awpe-a)"/>
+<path class="awpe-flow" d="M300,280 L300,300" marker-end="url(#awpe-a)"/>
+<path class="awpe-flow" d="M300,354 L300,374" marker-end="url(#awpe-a)"/>
+<text class="awpe-lab" x="308" y="368">no</text>
+<path class="awpe-flow" d="M300,428 L300,448" marker-end="url(#awpe-a)"/>
+<path class="awpe-flow" d="M300,502 L300,522" marker-end="url(#awpe-a)"/>
+<path class="awpe-flow" d="M300,576 L300,602" marker-end="url(#awpe-a)"/>
+
+<path class="awpe-exit" d="M430,106 L538,106" marker-end="url(#awpe-g)"/>
+<text class="awpe-lab" x="484" y="99" text-anchor="middle">yes</text>
+<path class="awpe-exit" d="M430,180 L538,180" marker-end="url(#awpe-g)"/>
+<text class="awpe-lab" x="484" y="173" text-anchor="middle">no</text>
+<path class="awpe-exit" d="M430,254 L538,254" marker-end="url(#awpe-g)"/>
+<text class="awpe-lab" x="484" y="247" text-anchor="middle">no</text>
+<path class="awpe-exit" d="M430,402 L538,402" marker-end="url(#awpe-g)"/>
+<text class="awpe-lab" x="484" y="395" text-anchor="middle">no</text>
+<path class="awpe-exit" d="M430,476 L538,476" marker-end="url(#awpe-g)"/>
+<text class="awpe-lab" x="484" y="469" text-anchor="middle">no</text>
+<path class="awpe-exit" d="M430,550 L538,550" marker-end="url(#awpe-g)"/>
+<text class="awpe-lab" x="484" y="543" text-anchor="middle">no</text>
+
+<path class="awpe-flow" d="M170,320 L40,320 L40,626 L188,626" marker-end="url(#awpe-a)"/>
+<text class="awpe-lab" x="46" y="560">names the user</text>
+<text class="awpe-lab" x="46" y="574">or session</text>
+<path class="awpe-flow" d="M170,338 L110,338 L110,476 L168,476" marker-end="url(#awpe-a)"/>
+<text class="awpe-lab" x="116" y="400">names the</text>
+<text class="awpe-lab" x="116" y="414">role ARN</text>
+
+<text class="awpe-lab" x="20" y="680">Within one account. A cross-account request is evaluated in both accounts, and both must allow it.</text>
+</g>
+</svg>

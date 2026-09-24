@@ -1,0 +1,63 @@
+---
+title: "A Templated Control and Its Templates"
+kind: structure
+system: winui
+summary: "Fixed control logic that finds its parts and states by name."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" role="img" aria-labelledby="wtc-title wtc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wtc-title">How a templated control's class connects to its default template and to an app's replacement template</title>
+<desc id="wtc-desc">On the left, the CopyField control class sets DefaultStyleKey to typeof(CopyField), declares a TemplatePart named CopyButton and TemplateVisualStates named Normal and Copied, and in OnApplyTemplate calls GetTemplateChild("CopyButton"), later calling GoToState("Copied"). On the right are two templates, and one of them is applied. The first is the default style in Themes/Generic.xaml, a Style whose TargetType is local:CopyField, applied when the app sets no template. DefaultStyleKey selects it. The second is an app's own ControlTemplate, set through Template or a Style, which replaces the default. Both templates contain a Button named CopyButton and visual states named Normal and Copied, and the class finds the part and the states by name in whichever template is applied.</desc>
+<style>
+.wtc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wtc-alt { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.wtc-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wtc-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wtc-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wtc-code { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #1A202C); }
+.wtc-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.wtc-sel { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wtc-name { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; stroke-dasharray: 6 4; }
+.wtc-rep { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="wtc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="wtc-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wtc-hd" x="16" y="46">CONTROL CLASS</text>
+<rect class="wtc-box" x="16" y="62" width="300" height="252" rx="6"/>
+<text class="wtc-n" x="32" y="88">CopyField.cs</text>
+<text class="wtc-k" x="32" y="106">[Logic: fixed, ships with the control]</text>
+<text class="wtc-code" x="32" y="140">DefaultStyleKey = typeof(CopyField)</text>
+<text class="wtc-code" x="32" y="172">[TemplatePart "CopyButton"]</text>
+<text class="wtc-code" x="32" y="194">[TemplateVisualState "Normal"]</text>
+<text class="wtc-code" x="32" y="216">[TemplateVisualState "Copied"]</text>
+<text class="wtc-code" x="32" y="248">OnApplyTemplate():</text>
+<text class="wtc-code" x="47" y="270">GetTemplateChild("CopyButton")</text>
+<text class="wtc-code" x="32" y="296">On click: GoToState("Copied")</text>
+<text class="wtc-hd" x="460" y="46">TEMPLATES (ONE IS APPLIED)</text>
+<rect class="wtc-box" x="460" y="62" width="484" height="130" rx="6"/>
+<text class="wtc-n" x="476" y="88">Themes/Generic.xaml</text>
+<text class="wtc-k" x="476" y="106">[Default style, applied when the app sets no template]</text>
+<text class="wtc-code" x="476" y="134">&lt;Style TargetType="local:CopyField"&gt;</text>
+<text class="wtc-code" x="476" y="156">&lt;Button x:Name="CopyButton" /&gt;</text>
+<text class="wtc-code" x="476" y="178">&lt;VisualState x:Name="Normal" /&gt; &lt;VisualState x:Name="Copied" /&gt;</text>
+<rect class="wtc-alt" x="460" y="236" width="484" height="130" rx="6"/>
+<text class="wtc-n" x="476" y="262">An app's own template</text>
+<text class="wtc-k" x="476" y="280">[Set through Template or a Style, different layout, same names]</text>
+<text class="wtc-code" x="476" y="308">&lt;ControlTemplate TargetType="local:CopyField"&gt;</text>
+<text class="wtc-code" x="476" y="330">&lt;Button x:Name="CopyButton" /&gt;</text>
+<text class="wtc-code" x="476" y="352">&lt;VisualState x:Name="Normal" /&gt; &lt;VisualState x:Name="Copied" /&gt;</text>
+<path class="wtc-sel" d="M316,136 L380,136 L380,100 L458,100" marker-end="url(#wtc-a)"/>
+<path class="wtc-name" d="M316,266 L420,266 L420,160 L458,160" marker-end="url(#wtc-a)"/>
+<path class="wtc-name" d="M420,266 L420,318 L458,318" marker-end="url(#wtc-a)"/>
+<path class="wtc-rep" d="M900,236 L900,194" marker-end="url(#wtc-ag)"/>
+<text class="wtc-lg" x="892" y="219" text-anchor="end">replaces</text>
+<path class="wtc-sel" d="M24,404 L64,404" marker-end="url(#wtc-a)"/>
+<text class="wtc-lg" x="72" y="408">DefaultStyleKey selects the default style</text>
+<path class="wtc-name" d="M300,404 L340,404" marker-end="url(#wtc-a)"/>
+<text class="wtc-lg" x="348" y="408">finds parts and states by name in the applied template</text>
+<path class="wtc-rep" d="M664,404 L704,404" marker-end="url(#wtc-ag)"/>
+<text class="wtc-lg" x="712" y="408">an app's template takes the default's place</text>
+</g>
+</svg>

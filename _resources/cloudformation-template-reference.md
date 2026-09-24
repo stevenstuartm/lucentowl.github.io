@@ -1,10 +1,14 @@
 ---
 title: "CloudFormation Template Reference"
-layout: guide
-category: AWS
-subcategory: Infrastructure as Code
-description: "Complete reference for CloudFormation intrinsic functions, parameters, outputs, mappings, and conditions with practical examples."
-tags: [infrastructure, iac, aws, cloudformation, practical, templates]
+layout: resource
+type: cheatsheet
+category: "AWS"
+description: "CloudFormation intrinsic functions, parameter types and constraints, mappings, conditions, and pseudo parameters, each with a YAML example."
+last_updated: 2026-09-24
+tags: [cloudformation, intrinsic-functions, yaml, iac, templates]
+related_guides:
+  - /study-guides/infrastructure/aws/cloudformation-fundamentals.html
+  - /study-guides/infrastructure/aws/cloudformation-advanced.html
 ---
 
 ## Intrinsic Functions
@@ -344,44 +348,6 @@ Metadata:
         default: "VPC CIDR Block"
       InstanceType:
         default: "Instance Type"
-```
-
----
-
-## Outputs
-
-**Outputs** export values that can be viewed or imported by other stacks.
-
-```yaml
-Outputs:
-  VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
-    Export:
-      Name: !Sub ${AWS::StackName}-VPCID
-
-  PublicSubnets:
-    Description: Public subnet IDs
-    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
-    Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnets
-
-  WebServerURL:
-    Description: URL of web server
-    Value: !Sub http://${WebServer.PublicDnsName}
-
-  LoadBalancerDNS:
-    Description: Load balancer DNS name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-```
-
-**Using exported values in other stacks:**
-```yaml
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      SubnetId: !ImportValue MyNetworkStack-PublicSubnet1
 ```
 
 ---

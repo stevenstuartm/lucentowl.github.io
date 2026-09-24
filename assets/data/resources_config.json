@@ -22,6 +22,8 @@
     "architecture-characteristics-glossary.md",
     "deployment-strategy-comparison.md",
     "infrastructure-diagrams.md",
+    "cloudformation-template-reference.md",
+    "aws-diagrams.md",
     "prompt-engineering-technique-selection.md",
     "sdlc-methodology-selection-guide.md",
     "ai-batch-generation-pipeline-template.md",

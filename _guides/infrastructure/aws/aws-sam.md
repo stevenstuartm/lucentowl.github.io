@@ -2,7 +2,7 @@
 title: "AWS SAM - Serverless Application Model"
 layout: guide
 category: AWS
-subcategory: Serverless Architecture
+subcategory: Infrastructure as Code
 description: "AWS SAM templates, local testing, deployment pipelines, and comparison with AWS CDK for serverless infrastructure as code"
 tags: [aws, serverless, infrastructure-as-code, sam, deployment, automation]
 ---

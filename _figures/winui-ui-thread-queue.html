@@ -1,0 +1,84 @@
+---
+title: "One UI Thread and Its Queue"
+kind: flow
+system: winui
+summary: "Work from other threads reaches XAML objects only through the queue."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" role="img" aria-labelledby="wtq-title wtq-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wtq-title">How work from other threads reaches a WinUI UI thread through its DispatcherQueue</title>
+<desc id="wtq-desc">Left: two sources of work off the UI thread. An await or Progress of T posts its continuation through the DispatcherQueueSynchronizationContext, and background work such as Task.Run, a timer callback, or a service event calls TryEnqueue. Both add items to the UI thread's DispatcherQueue in the middle, which holds High, Normal, and Low priority lanes. The UI thread's message loop on the right takes the next item, highest priority first, and runs it, and only that code reads and writes the XAML objects: the window, its controls, and bound view model state. A dashed line from the background work straight to the XAML objects shows direct access from another thread, which throws RPC_E_WRONG_THREAD.</desc>
+<style>
+.wtq-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wtq-q { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wtq-lane { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.wtq-item { fill: var(--color-primary, #1A5F8A); opacity: 0.75; }
+.wtq-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wtq-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wtq-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wtq-lb { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.wtq-ln { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wtq-bad { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 5; }
+.wtq-badt { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+<defs>
+<marker id="wtq-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="wtq-x" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wtq-hd" x="16" y="40">OTHER THREADS</text>
+<text class="wtq-hd" x="360" y="40">UI THREAD'S QUEUE</text>
+<text class="wtq-hd" x="700" y="40">UI THREAD</text>
+
+<rect class="wtq-box" x="16" y="60" width="250" height="64" rx="6"/>
+<text class="wtq-n" x="32" y="86">await or Progress&lt;T&gt;</text>
+<text class="wtq-k" x="32" y="106">[DispatcherQueueSynchronizationContext]</text>
+
+<rect class="wtq-box" x="16" y="190" width="250" height="64" rx="6"/>
+<text class="wtq-n" x="32" y="216">Background work</text>
+<text class="wtq-k" x="32" y="236">[Task.Run, timer callback, service event]</text>
+
+<rect class="wtq-q" x="360" y="60" width="250" height="240" rx="6"/>
+<text class="wtq-n" x="376" y="84">DispatcherQueue</text>
+<text class="wtq-k" x="376" y="102">[one per UI thread, runs items serially]</text>
+<rect class="wtq-lane" x="376" y="118" width="218" height="48" rx="4"/>
+<text class="wtq-lb" x="390" y="146">High</text>
+<rect class="wtq-item" x="540" y="130" width="22" height="24" rx="3"/>
+<rect class="wtq-lane" x="376" y="178" width="218" height="48" rx="4"/>
+<text class="wtq-lb" x="390" y="206">Normal</text>
+<rect class="wtq-item" x="480" y="190" width="22" height="24" rx="3"/>
+<rect class="wtq-item" x="510" y="190" width="22" height="24" rx="3"/>
+<rect class="wtq-item" x="540" y="190" width="22" height="24" rx="3"/>
+<rect class="wtq-lane" x="376" y="238" width="218" height="48" rx="4"/>
+<text class="wtq-lb" x="390" y="266">Low</text>
+<rect class="wtq-item" x="540" y="250" width="22" height="24" rx="3"/>
+
+<rect class="wtq-box" x="700" y="60" width="244" height="110" rx="6"/>
+<text class="wtq-n" x="716" y="86">Message loop</text>
+<text class="wtq-k" x="716" y="106">[takes the next item, highest</text>
+<text class="wtq-k" x="716" y="122">priority first, and runs it to</text>
+<text class="wtq-k" x="716" y="138">completion]</text>
+
+<rect class="wtq-box" x="700" y="220" width="244" height="92" rx="6"/>
+<text class="wtq-n" x="716" y="246">XAML objects</text>
+<text class="wtq-k" x="716" y="266">[Window, controls, and bound</text>
+<text class="wtq-k" x="716" y="282">view model state, all owned</text>
+<text class="wtq-k" x="716" y="298">by the UI thread]</text>
+
+<path class="wtq-ln" d="M266,92 L358,92" marker-end="url(#wtq-a)"/>
+<text class="wtq-lb" x="312" y="84" text-anchor="middle">Post</text>
+<path class="wtq-ln" d="M266,222 L358,222" marker-end="url(#wtq-a)"/>
+<text class="wtq-lb" x="312" y="214" text-anchor="middle">TryEnqueue</text>
+<path class="wtq-ln" d="M610,115 L698,115" marker-end="url(#wtq-a)"/>
+<text class="wtq-lb" x="654" y="107" text-anchor="middle">next item</text>
+<path class="wtq-ln" d="M822,170 L822,218" marker-end="url(#wtq-a)"/>
+<text class="wtq-lb" x="832" y="198">reads and writes</text>
+
+<path class="wtq-bad" d="M141,254 L141,350 L822,350 L822,314" marker-end="url(#wtq-x)"/>
+<text class="wtq-badt" x="480" y="342" text-anchor="middle">direct access from another thread throws RPC_E_WRONG_THREAD</text>
+
+<path class="wtq-ln" d="M16,410 L60,410"/>
+<text class="wtq-lb" x="70" y="414">Work handed to the UI thread through its queue</text>
+<path class="wtq-bad" d="M16,440 L60,440"/>
+<text class="wtq-lb" x="70" y="444">A XAML object touched from a thread that doesn't own it</text>
+</g>
+</svg>

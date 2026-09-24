@@ -3,997 +3,130 @@ title: "IaC Governance and Compliance"
 layout: guide
 category: Infrastructure & Cloud
 subcategory: Infrastructure as Code
-description: "Enforcing tagging standards, automated drift detection, compliance monitoring, and governance at scale using AWS Config, Organizations, and automation."
-tags: [infrastructure, iac, governance, compliance, security, practical]
+description: "Keeping infrastructure compliant when many teams deploy it: where preventive, detective, and corrective controls sit and which changes each can see, organization-level guardrails in AWS and Azure, a tagging strategy that holds, responding to drift, and handling exceptions."
+tags: [practical, governance, guardrails, tagging, drift-detection, service-control-policies, azure-policy]
 ---
 
-## Overview
+## Where a Control Can Sit
 
-**Goal:** Ensure infrastructure remains compliant, properly tagged, and doesn't drift from IaC definitions.
+A **control** is a rule the organization wants every piece of infrastructure to follow, such as "no storage open to the internet" or "every resource has an owner tag", together with the mechanism that enforces it. Controls come in three kinds:
 
-**Key challenges:**
-- Developers creating resources without required tags
-- Manual changes causing drift from IaC templates
-- Lack of visibility into compliance violations
-- Reactive rather than proactive governance
+- **Preventive** controls stop a non-compliant change before it takes effect.
+- **Detective** controls find non-compliant resources that already exist and report them.
+- **Corrective** controls fix what a detective control found, or revert it.
 
-**AWS tools for governance:**
-- **AWS Config**: Continuous compliance monitoring and drift detection
-- **AWS Organizations + Tag Policies**: Enforce tagging standards across accounts
-- **Service Control Policies (SCPs)**: Prevent non-compliant resource creation
-- **EventBridge + Lambda**: Automated remediation
-- **CloudFormation Hooks**: Block non-compliant stack operations
+Which kind to use depends less on the rule than on the paths a change can take. A resource can arrive through the IaC pipeline, but it can also arrive through the console, a CLI command, a script, or another tool. Each place a control can sit sees only some of those paths:
 
----
+{% include figure.html id="infra-control-placement" %}
 
-## Tag Enforcement
+| Control point | Examples | Sees | Misses |
+|---|---|---|---|
+| **Pipeline checks** | Scanners and policy checks on the plan | Changes made through that pipeline, before they deploy | Every change made any other way |
+| **Deployment-service hooks** | CloudFormation Hooks, which also back the controls AWS Control Tower calls *proactive* (its name for pre-deployment checks) | Deployments through that service from any source, and with CloudFormation, requests through the Cloud Control API, the uniform create, read, update, and delete API that some IaC tools call | Most direct API calls, and IaC tools that deploy through neither. AWS notes proactive controls may not affect requests made through the console, APIs, SDKs, or other IaC tools |
+| **Organization policy at the cloud API** | AWS service control policies, Azure Policy with the `deny` effect, Google Cloud organization policies | Every request from the accounts it covers, whatever tool sent it | Anything the request doesn't carry, resources created before the policy, and exempt principals. AWS SCPs, for example, don't apply to the management account or to service-linked roles, which AWS services assume to act on your behalf |
+| **Detective rules** | AWS Config rules, Azure Policy with the `audit` effect | Every resource of the types and Regions they cover, including ones created before the rule | Resource types the service doesn't record, Regions where it isn't enabled, and anything in the window before evaluation |
 
-Ensure all resources have required tags (environment, layer, domain) using AWS Organizations and preventive controls.
+A rule that must hold absolutely, such as allowed regions or no public storage, belongs at the cloud API, the only preventive point every path crosses. The same rule often belongs at more than one point on purpose, though. The pipeline check gives the author a clear message in the pull request, the API policy catches whatever bypasses the pipeline, and the detective rule covers resources that predate both.
 
-<div class="callout callout--tip">
-<p class="callout__title">Tagging Strategy</p>
-<p>Start with 3-5 required tags: environment, layer, and owner are universally useful. Add domain, cost-center, or compliance tags as organizational needs dictate. Too many required tags create friction.</p>
-</div>
-
-### Tag Policies (AWS Organizations)
-
-**What they do:** Define required tags and allowed values at the organization level.
-
-**How they work:**
-- Create tag policies in AWS Organizations
-- Attach to organization root, OUs, or accounts
-- Resources created without required tags are **tagged automatically** or **blocked**
-
-**Create a tag policy:**
-
-```json
-{
-  "tags": {
-    "environment": {
-      "tag_key": {
-        "@@assign": "environment"
-      },
-      "tag_value": {
-        "@@assign": ["prod", "dev", "staging"]
-      },
-      "enforced_for": {
-        "@@assign": [
-          "ec2:instance",
-          "rds:db",
-          "s3:bucket",
-          "lambda:function"
-        ]
-      }
-    },
-    "layer": {
-      "tag_key": {
-        "@@assign": "layer"
-      },
-      "tag_value": {
-        "@@assign": ["foundation", "platform", "devops", "application"]
-      },
-      "enforced_for": {
-        "@@assign": [
-          "ec2:instance",
-          "rds:db",
-          "s3:bucket"
-        ]
-      }
-    },
-    "domain": {
-      "tag_key": {
-        "@@assign": "domain"
-      },
-      "enforced_for": {
-        "@@assign": [
-          "ec2:instance",
-          "rds:db",
-          "s3:bucket"
-        ]
-      }
-    }
-  }
-}
-```
-
-**Attach tag policy to organization:**
-
-Create and attach tag policies using [AWS Organizations](https://aws.amazon.com/organizations/){:target="_blank" rel="noopener noreferrer"} console or APIs. Attach policies to your organization root (applies to all accounts), organizational units (OUs), or specific accounts depending on scope needs.
-
-### AWS Config Rules for Tag Compliance
-
-[AWS Config](https://aws.amazon.com/config/){:target="_blank" rel="noopener noreferrer"} continuously checks resources for required tags and reports violations.
-
-**Enable required-tags config rule:**
-
-Use the AWS-managed `REQUIRED_TAGS` config rule to check for presence of specific tags. Configure the rule with:
-- Tag keys to require (e.g., environment, layer, domain)
-- Resource types to check (EC2, RDS, S3, Lambda, etc.)
-- Compliance scope (all resources or specific types)
-
-Deploy Config rules via IaC (CloudFormation, Terraform) for consistency across accounts.
-
-**Query non-compliant resources:**
-
-Use AWS Config console or APIs to:
-- View compliance summary by rule
-- List non-compliant resources
-- Export compliance reports
-- Trigger remediation for violations
-
-### Tag on Create (EventBridge + Lambda)
-
-**What it does:** Automatically tag resources when created if tags are missing.
-
-**EventBridge rule:**
-
-```yaml
-TagOnCreateRule:
-  Type: AWS::Events::Rule
-  Properties:
-    Description: Auto-tag resources on creation
-    EventPattern:
-      source:
-        - aws.ec2
-        - aws.rds
-        - aws.s3
-      detail-type:
-        - AWS API Call via CloudTrail
-      detail:
-        eventName:
-          - RunInstances
-          - CreateDBInstance
-          - CreateBucket
-    State: ENABLED
-    Targets:
-      - Arn: !GetAtt AutoTagFunction.Arn
-        Id: AutoTagLambda
-```
-
-**Lambda function (example):**
-
-```csharp
-// Auto-tag resources with default values if missing
-public async Task HandleEvent(CloudWatchEvent<dynamic> evt)
-{
-    var resourceArn = evt.Detail.responseElements.resourceArn;
-
-    var existingTags = await GetResourceTags(resourceArn);
-
-    var requiredTags = new Dictionary<string, string>
-    {
-        { "environment", "dev" },  // Default to dev
-        { "layer", "application" }, // Default to application
-        { "domain", "unknown" }     // Flag for review
-    };
-
-    var tagsToAdd = requiredTags
-        .Where(rt => !existingTags.ContainsKey(rt.Key))
-        .ToList();
-
-    if (tagsToAdd.Any())
-    {
-        await AddResourceTags(resourceArn, tagsToAdd);
-        await SendNotification($"Auto-tagged {resourceArn} - Review required");
-    }
-}
-```
+Corrective controls hang off the detective ones. AWS Config can run a Systems Manager Automation document to remediate a non-compliant resource, Azure Policy runs remediation tasks, and cross-cloud tools such as [Cloud Custodian](https://cloudcustodian.io/){:target="_blank" rel="noopener noreferrer"} express both the rule and the fix in one policy file.
 
 ---
 
-## Automated Drift Detection
+## Organization-Level Guardrails
 
-Continuously monitor for drift between IaC definitions and actual resource state.
+A **guardrail** is a preventive or detective control applied across many accounts or subscriptions at once, set centrally so individual teams cannot switch it off.
 
-### AWS Config for Drift Detection
+### Where Guardrails Attach
 
-**What it does:** Tracks resource configuration changes and compares against desired state.
+Each cloud has a containment hierarchy, and a guardrail applies to everything below the level it is attached to:
 
-**Enable AWS Config:**
+| Cloud | Hierarchy | Guardrail mechanisms |
+|---|---|---|
+| **AWS** | Organization root, then organizational units (OUs), then accounts | Service control policies (SCPs) cap what principals in member accounts can do. Resource control policies (RCPs) cap what can be done to resources. Both are inherited down the tree, never grant permissions on their own, and do not apply to the organization's management account. *Declarative policies* set a baseline configuration for a service across accounts, such as blocking public access to EC2 snapshots |
+| **Azure** | Management groups, then subscriptions, then resource groups, then resources | Azure Policy assignments, inherited downward. Where several assignments apply, the result is the most restrictive combination |
+| **Google Cloud** | Organization, then folders, then projects | Organization policy constraints, including custom constraints |
 
-```bash
-# Create configuration recorder
-aws configservice put-configuration-recorder \
-  --configuration-recorder name=default,roleARN=arn:aws:iam::123456789012:role/config-role \
-  --recording-group allSupported=true,includeGlobalResourceTypes=true
+Attaching at a high level covers new accounts automatically, which is the point. It also means a mistake reaches every account, so a new guardrail is best introduced in a mode that reports without blocking. An Azure Policy assignment can start with the `audit` effect or with enforcement turned off, and Google Cloud supports dry-run organization policies for custom and managed constraints. The findings show what the guardrail would have blocked, and it is switched to enforcing once that list is understood. An SCP has no report-only mode, so it is tried on a test OU first, with accounts moved into it a few at a time.
 
-# Create delivery channel
-aws configservice put-delivery-channel \
-  --delivery-channel name=default,s3BucketName=config-bucket,snsTopicARN=arn:aws:sns:us-east-1:123456789012:config-topic
+### What Azure Policy Can Do
 
-# Start recording
-aws configservice start-configuration-recorder \
-  --configuration-recorder-name default
-```
+Azure Policy's `effect` decides what happens when a resource matches a rule, and the common effects span all three kinds of control:
 
-### CloudFormation Drift Detection Schedule
+| Effect | What it does | Kind |
+|---|---|---|
+| `deny` | Rejects the request before the resource is created or changed | Preventive |
+| `modify`, `append` | Change the request as it passes, such as adding a missing tag | Preventive, and corrective through remediation tasks for `modify` |
+| `audit` | Records non-compliance without blocking | Detective |
+| `auditIfNotExists` | Reports a missing companion resource, such as a diagnostic setting | Detective |
+| `deployIfNotExists` | Deploys the missing companion resource after the main one is created | Corrective, including for existing resources through remediation tasks |
 
-**What it does:** Run drift detection on all stacks on a schedule.
+### Common Guardrails
 
-**EventBridge scheduled rule:**
+Most organizations start with a short list: restrict which regions can be used, prevent disabling audit logging, prevent accounts from leaving the organization, block public access to storage, and require encryption. Broad denials have a cost. A team blocked by a guardrail it didn't know about loses time working out why, so the list of guardrails should be published, along with where to ask for an exception. AWS has been rolling out a fix since early 2026: an access-denied error caused by an explicit deny in an SCP or RCP names that policy's Amazon Resource Name (ARN) when the caller is in the same organization. Azure Policy can attach a custom non-compliance message to a `deny`. The guardrails themselves are best kept as code and reviewed like any other change.
 
-```yaml
-DriftDetectionSchedule:
-  Type: AWS::Events::Rule
-  Properties:
-    Description: Run drift detection daily
-    ScheduleExpression: rate(1 day)
-    State: ENABLED
-    Targets:
-      - Arn: !GetAtt DriftDetectionFunction.Arn
-        Id: DriftDetection
-```
+### Guardrails for Teams Deploying Their Own Infrastructure
 
-**Lambda function:**
-
-```csharp
-public async Task RunDriftDetection()
-{
-    var stacksResponse = await _cloudFormation.ListStacksAsync(new ListStacksRequest
-    {
-        StackStatusFilter = new List<string>
-        {
-            "CREATE_COMPLETE",
-            "UPDATE_COMPLETE"
-        }
-    });
-
-    foreach (var stack in stacksResponse.StackSummaries)
-    {
-        try
-        {
-            var driftResponse = await _cloudFormation.DetectStackDriftAsync(
-                new DetectStackDriftRequest
-                {
-                    StackName = stack.StackName
-                });
-
-            // Check drift status after detection completes
-            var driftStatus = await WaitForDriftDetection(driftResponse.StackDriftDetectionId);
-
-            if (driftStatus.StackDriftStatus == StackDriftStatus.DRIFTED)
-            {
-                await NotifyDrift(stack.StackName);
-                await GetDriftDetails(stack.StackName);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Drift detection failed for {stack.StackName}: {ex.Message}");
-        }
-    }
-}
-```
-
-### AWS Config Conformance Packs
-
-**What they are:** Pre-built compliance rule sets for common standards.
-
-**Deploy conformance pack:**
-
-```bash
-# Deploy operational best practices pack
-aws configservice put-conformance-pack \
-  --conformance-pack-name operational-best-practices \
-  --template-s3-uri s3://aws-config-conformance-packs/Operational-Best-Practices-for-AWS-CloudFormation.yaml
-```
-
-**Custom conformance pack for IaC governance:**
-
-```yaml
-# conformance-pack.yaml
-Resources:
-  CloudFormationStackDriftDetectionCheck:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: cloudformation-stack-drift-detection-check
-      Source:
-        Owner: AWS
-        SourceIdentifier: CLOUDFORMATION_STACK_DRIFT_DETECTION_CHECK
-      MaximumExecutionFrequency: One_Hour
-
-  CloudFormationStackNotificationCheck:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: cloudformation-stack-notification-check
-      Source:
-        Owner: AWS
-        SourceIdentifier: CLOUDFORMATION_STACK_NOTIFICATION_CHECK
-```
+When application teams deploy their own infrastructure code, their pipeline's role is itself a control point. An IAM *permission boundary* sets the maximum permissions a role can ever have, and requiring the same boundary on any role the pipeline creates stops a team from escaping it by creating a more powerful role. Deny statements can protect shared resources, such as the network, from changes by application roles, and Azure resource locks or the `denyAction` policy effect can block deletion of them outright. Production deployments usually also sit behind an approval gate in the pipeline.
 
 ---
 
-## Compliance Monitoring
+## A Tagging Strategy That Holds
 
-Continuously monitor infrastructure for security and compliance violations.
+Tags carry the information that governance, cost reporting, and automation depend on: who owns a resource, which environment and application it belongs to, which cost center pays for it, and whether a scheduler or backup job should act on it.
 
-### AWS Config Rules for IaC Compliance
+### Keep the Required Set Small
 
-**Common rules for IaC governance:**
+A handful of required tags that every resource carries is worth more than a long list that most resources half-follow. A common set is an owner or team, an environment, and an application or cost center, with allowed values defined centrally. In AWS, tag keys and values are case-sensitive, so `Environment=Prod` and `environment=prod` are different tags to every report and policy. AWS cost reports also show a user-defined tag only after it has been activated as a cost allocation tag in the billing console.
 
-```yaml
-# Ensure all resources are managed by CloudFormation
-ResourcesManagedByCloudFormation:
-  Type: AWS::Config::ConfigRule
-  Properties:
-    ConfigRuleName: resources-managed-by-cloudformation
-    Source:
-      Owner: CUSTOM_LAMBDA
-      SourceIdentifier: !GetAtt CheckCFManagementFunction.Arn
-    Scope:
-      ComplianceResourceTypes:
-        - AWS::EC2::Instance
-        - AWS::RDS::DBInstance
-        - AWS::S3::Bucket
+### Enforce in the Code First
 
-# Ensure stacks have termination protection
-StackTerminationProtection:
-  Type: AWS::Config::ConfigRule
-  Properties:
-    ConfigRuleName: stack-termination-protection
-    Source:
-      Owner: AWS
-      SourceIdentifier: CLOUDFORMATION_STACK_NOTIFICATION_CHECK
-```
+The cheapest enforcement is making the code tag everything by default. The Terraform AWS provider's `default_tags` setting applies a set of tags to every resource the provider creates, and a shared module can require the same tags as inputs. Enforcement then catches the gaps rather than every resource.
 
-**Lambda for custom rule (check if resource managed by CFN):**
+### Enforce at the Platform
 
-```csharp
-public async Task<ComplianceType> EvaluateCompliance(string resourceId, string resourceType)
-{
-    // Query CloudFormation to see if resource is in any stack
-    var stacksResponse = await _cloudFormation.ListStacksAsync(new ListStacksRequest());
+- **AWS tag policies** standardize tag keys, their case, and their allowed values across the organization. When enforced for a resource type, they reject a tagging request that breaks the policy. They do not add missing tags, and they do not evaluate untagged resources, so on their own they cannot require a tag. Since November 2025, a tag policy can also list *required* tag keys per resource type, and IaC tools check deployments against it before resources are created: a CloudFormation hook (`AWS::TagPolicies::TaggingComplianceValidator`, in warn or fail mode), the Terraform AWS provider from version 6.22, and a Pulumi policy pack.
+- **An SCP** can deny a create request that lacks a tag, using a condition on `aws:RequestTag`. That only works for actions that accept tags at creation, so it cannot cover every resource type.
+- **Azure Policy** can `deny` resources missing a tag, or `modify` them to add it, including copying a tag from the resource group onto each resource in it.
+- **Detective rules**, such as AWS Config's `required-tags` managed rule, catch what the preventive controls missed and report resources that predate the rules.
 
-    foreach (var stack in stacksResponse.StackSummaries)
-    {
-        var resourcesResponse = await _cloudFormation.ListStackResourcesAsync(
-            new ListStackResourcesRequest { StackName = stack.StackName });
-
-        var managedResource = resourcesResponse.StackResourceSummaries
-            .FirstOrDefault(r => r.PhysicalResourceId == resourceId);
-
-        if (managedResource != null)
-        {
-            return ComplianceType.COMPLIANT;
-        }
-    }
-
-    // Resource not found in any stack
-    return ComplianceType.NON_COMPLIANT;
-}
-```
-
-### Security Hub Integration
-
-**What it does:** Aggregates compliance findings from Config, GuardDuty, Inspector, and other services.
-
-**Enable Security Hub:**
-
-```bash
-aws securityhub enable-security-hub
-
-# Enable AWS Foundational Security Best Practices standard
-aws securityhub batch-enable-standards \
-  --standards-subscription-requests StandardsArn=arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0
-```
-
-**Query Security Hub for IaC-related findings:**
-
-```bash
-aws securityhub get-findings \
-  --filters '{
-    "ProductName": [{"Value": "Config", "Comparison": "EQUALS"}],
-    "ComplianceStatus": [{"Value": "FAILED", "Comparison": "EQUALS"}]
-  }'
-```
-
-### Compliance Dashboard
-
-**What it does:** Central view of all compliance violations.
-
-**Using AWS Config Dashboard:**
-1. AWS Console → Config → Dashboard
-2. View compliance by rule
-3. View non-compliant resources
-4. Drill down into specific violations
-
-**Custom dashboard with CloudWatch:**
-
-```yaml
-ComplianceDashboard:
-  Type: AWS::CloudWatch::Dashboard
-  Properties:
-    DashboardName: IaC-Governance
-    DashboardBody: !Sub |
-      {
-        "widgets": [
-          {
-            "type": "metric",
-            "properties": {
-              "metrics": [
-                ["AWS/Config", "ComplianceScore", {"stat": "Average"}]
-              ],
-              "period": 300,
-              "stat": "Average",
-              "region": "${AWS::Region}",
-              "title": "Overall Compliance Score"
-            }
-          },
-          {
-            "type": "log",
-            "properties": {
-              "query": "fields @timestamp, detail.configRuleName, detail.resourceId | filter detail.newEvaluationResult.complianceType = 'NON_COMPLIANT'",
-              "region": "${AWS::Region}",
-              "title": "Recent Compliance Violations"
-            }
-          }
-        ]
-      }
-```
+Automatically stamping default values onto untagged resources, such as `environment=dev`, looks tidy but hides the gap. A resource tagged by a default is indistinguishable from one tagged on purpose, so blocking, or notifying an owner, usually serves better.
 
 ---
 
-## Preventive Controls
+## Responding to Drift
 
-Block non-compliant infrastructure changes before they happen.
+Drift is a change made outside the IaC code. Governance decides how it is found and what happens next.
 
-### Service Control Policies (SCPs)
+### Finding It
 
-**What they do:** Prevent resource creation without required tags at the organization level.
+- **A scheduled plan.** `terraform plan -detailed-exitcode` exits with code 2 when the plan has changes, so a nightly job can plan every configuration and alert on a non-empty result. A plain plan also reports merged code that hasn't been applied yet, so adding `-refresh-only` narrows the alert to drift alone. HCP Terraform's Standard and Premium editions run a scheduled drift check as a built-in *health assessment*.
+- **CloudFormation drift detection** compares each stack's resources with its template when asked. It marks unsupported resource types as not checked, and it compares only properties set explicitly in the template, so a changed default goes unnoticed. An AWS Config managed rule runs it on a schedule across stacks and reports drifted ones.
+- **Change history.** AWS Config records each configuration change, and CloudTrail or the Azure Activity Log records who made it. A drift finding that names who changed what, and when, is far quicker to resolve.
 
-**Block EC2 creation without required tags:**
+### Deciding What to Do
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "DenyEC2WithoutRequiredTags",
-      "Effect": "Deny",
-      "Action": [
-        "ec2:RunInstances",
-        "ec2:CreateVolume"
-      ],
-      "Resource": [
-        "arn:aws:ec2:*:*:instance/*",
-        "arn:aws:ec2:*:*:volume/*"
-      ],
-      "Condition": {
-        "StringNotEquals": {
-          "aws:RequestTag/environment": ["prod", "dev", "staging"]
-        }
-      }
-    },
-    {
-      "Sid": "DenyEC2WithoutLayerTag",
-      "Effect": "Deny",
-      "Action": "ec2:RunInstances",
-      "Resource": "arn:aws:ec2:*:*:instance/*",
-      "Condition": {
-        "Null": {
-          "aws:RequestTag/layer": "true"
-        }
-      }
-    }
-  ]
-}
-```
+Each drift finding has three possible answers:
 
-**Attach SCP:**
+| Response | When | How |
+|---|---|---|
+| **Revert** | The change was a mistake or unauthorized | Re-apply the code. In CloudFormation a normal update compares template to template and ignores drift, so reverting needs a drift-aware change set, one that compares against the resources' actual state |
+| **Adopt** | The change was right, such as a fix made during an incident | Change the code to match, so the next apply keeps it |
+| **Accept** | The attribute is meant to change at runtime | Exclude it from what the tool manages, for example with Terraform's `ignore_changes` |
 
-```bash
-# Create SCP
-aws organizations create-policy \
-  --name RequireTagsSCP \
-  --description "Prevent resource creation without tags" \
-  --content file://require-tags-scp.json \
-  --type SERVICE_CONTROL_POLICY
-
-# Attach to OU or account
-aws organizations attach-policy \
-  --policy-id p-xxxxxxxxx \
-  --target-id ou-xxxx-xxxxxxxx
-```
-
-### CloudFormation Hooks
-
-**What they do:** Validate CloudFormation templates before deployment and block non-compliant stacks.
-
-**Enable hooks:**
-
-```yaml
-RequireTagsHook:
-  Type: AWS::CloudFormation::Hook
-  Properties:
-    TypeName: AWSSamples::RequireTags::Hook
-    TargetStacks: ALL
-    FailureMode: FAIL
-    Properties:
-      RequiredTags:
-        - environment
-        - layer
-        - domain
-```
-
-**Custom hook (example):**
-
-```csharp
-public class RequireTagsHook : ICloudFormationHook
-{
-    private readonly string[] _requiredTags = { "environment", "layer", "domain" };
-
-    public HookResponse PreCreate(HookContext context)
-    {
-        var resource = context.TargetModel;
-        var tags = resource.Tags ?? new Dictionary<string, string>();
-
-        var missingTags = _requiredTags
-            .Where(rt => !tags.ContainsKey(rt))
-            .ToList();
-
-        if (missingTags.Any())
-        {
-            return new HookResponse
-            {
-                Status = HookStatus.FAILED,
-                Message = $"Missing required tags: {string.Join(", ", missingTags)}"
-            };
-        }
-
-        return new HookResponse { Status = HookStatus.SUCCESS };
-    }
-}
-```
-
-### IAM Permission Boundaries
-
-**What they do:** Limit permissions even for administrators to prevent bypass of governance.
-
-**Permission boundary requiring tags:**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllowWithTags",
-      "Effect": "Allow",
-      "Action": "*",
-      "Resource": "*"
-    },
-    {
-      "Sid": "DenyCreateWithoutTags",
-      "Effect": "Deny",
-      "Action": [
-        "ec2:RunInstances",
-        "rds:CreateDBInstance",
-        "s3:CreateBucket"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "StringNotEquals": {
-          "aws:RequestTag/environment": ["prod", "dev", "staging"]
-        }
-      }
-    }
-  ]
-}
-```
+Reverting automatically is safe for narrow rules with one correct answer, such as re-enabling a storage bucket's public access block. As a blanket policy, it can undo the incident fix that an on-call engineer just made. The durable fix for drift is to make it rare. Production write access in the console can be limited to a *break-glass* role, one that is used only in an emergency and audited whenever it is, with everyday changes going through code.
 
 ---
 
-### Guardrails for Application-Team IaC
+## Handling Exceptions
 
-**The concern:** "Won't app teams abuse permissions if they control IaC?"
+Every guardrail eventually meets a legitimate case it wasn't written for. Without a way to grant an exception, teams route around the control, or someone weakens it for everyone. A well-run exception is:
 
-**The answer:** No, because of multiple layers of preventive controls:
+- **Scoped** to specific resources or a specific rule, not a whole account.
+- **Recorded** with an owner, a reason, and an approver, where the control itself can see it.
+- **Temporary**, with an expiry date that forces a review.
 
-**1. IAM Permission Boundaries**
+Azure Policy builds this in. An *exemption* applies to one assignment, or to specific policies within an *initiative* (a group of policy definitions assigned together), at a chosen scope. It has a category: *waiver* for accepted non-compliance, or *mitigated* when the policy's intent is met another way. It can also carry an `expiresOn` date, after which it stops being honored, though the record stays. Creating one requires a separate permission on the assignment.
 
-Limit what app teams can create even with their deployment role:
+AWS has no single exemption object. The equivalents are conditions in an SCP that exclude a named role or a tagged resource, and scoping a Config rule to leave resources out. Scanner suppressions in code serve the same purpose earlier in the pipeline.
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllowApplicationLayerOnly",
-      "Effect": "Allow",
-      "Action": "*",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "aws:RequestTag/layer": "application",
-          "aws:RequestTag/domain": "payments"
-        }
-      }
-    },
-    {
-      "Sid": "DenyFoundationChanges",
-      "Effect": "Deny",
-      "Action": [
-        "ec2:DeleteVpc",
-        "ec2:DeleteSubnet",
-        "ec2:ModifyVpcAttribute",
-        "ec2:DeleteRouteTable"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-**2. Service Control Policies (SCPs)**
-
-Enforce tagging at organization level:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "RequireTagsOnCreate",
-      "Effect": "Deny",
-      "Action": [
-        "ec2:RunInstances",
-        "rds:CreateDBInstance",
-        "lambda:CreateFunction"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "Null": {
-          "aws:RequestTag/environment": "true",
-          "aws:RequestTag/layer": "true",
-          "aws:RequestTag/domain": "true"
-        }
-      }
-    }
-  ]
-}
-```
-
-**3. CloudFormation Hooks**
-
-Validate templates before deployment:
-
-```yaml
-RequireTagsHook:
-  Type: AWS::CloudFormation::Hook
-  Properties:
-    TypeName: AWSSamples::RequireTags::Hook
-    TargetStacks: ALL
-    FailureMode: FAIL
-    Properties:
-      RequiredTags:
-        - environment
-        - layer
-        - domain
-```
-
-**4. Approval Gates**
-
-Require manual approval for production:
-
-```yaml
-environment: production
-# GitHub/GitLab requires approval from designated reviewers
-```
-
-**5. AWS Config Rules**
-
-Detect non-compliant resources after creation:
-
-```yaml
-ResourcesManagedByTeam:
-  Type: AWS::Config::ConfigRule
-  Properties:
-    ConfigRuleName: resources-have-required-tags
-    Source:
-      Owner: AWS
-      SourceIdentifier: REQUIRED_TAGS
-    InputParameters:
-      tag1Key: environment
-      tag2Key: layer
-      tag3Key: domain
-```
-
-### Runtime Policy Engines
-
-**[Cloud Custodian](https://cloudcustodian.io/){:target="_blank" rel="noopener noreferrer"}:**
-- Cloud governance and compliance tool
-- YAML-based policy definitions
-- Real-time compliance enforcement
-- Automated remediation actions
-
----
-
-## Automated Remediation
-
-Automatically fix compliance violations and drift.
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Detective Controls</h4>
-<ul>
-<li><strong>Timing:</strong> After the violation occurs</li>
-<li><strong>Tools:</strong> AWS Config, drift detection</li>
-<li><strong>Response:</strong> Alert and remediate</li>
-<li><strong>Risk:</strong> Window of exposure exists</li>
-<li><strong>Use:</strong> Monitoring and visibility</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Preventive Controls</h4>
-<ul>
-<li><strong>Timing:</strong> Before the violation occurs</li>
-<li><strong>Tools:</strong> SCPs, IAM boundaries, hooks</li>
-<li><strong>Response:</strong> Block the change</li>
-<li><strong>Risk:</strong> No exposure window</li>
-<li><strong>Use:</strong> Enforce critical requirements</li>
-</ul>
-</div>
-</div>
-
-### AWS Config Remediation Actions
-
-**What they do:** Automatically run SSM documents or Lambda functions to fix non-compliance.
-
-**Auto-remediate missing tags:**
-
-```yaml
-RemediateRequiredTags:
-  Type: AWS::Config::RemediationConfiguration
-  Properties:
-    ConfigRuleName: !Ref RequiredTagsRule
-    TargetType: SSM_DOCUMENT
-    TargetIdentifier: AWS-PublishSNSNotification
-    Parameters:
-      AutomationAssumeRole:
-        StaticValue:
-          Values:
-            - !GetAtt RemediationRole.Arn
-      TopicArn:
-        StaticValue:
-          Values:
-            - !Ref ComplianceNotificationTopic
-      Message:
-        StaticValue:
-          Values:
-            - Resource missing required tags
-    Automatic: true
-    MaximumAutomaticAttempts: 3
-    RetryAttemptSeconds: 60
-```
-
-**Custom remediation with Lambda:**
-
-```csharp
-public async Task RemediateMissingTags(ConfigRuleEvaluationEvent evt)
-{
-    var resourceArn = evt.ConfigRuleInvokingEvent.ConfigurationItem.Arn;
-    var resourceType = evt.ConfigRuleInvokingEvent.ConfigurationItem.ResourceType;
-
-    // Add default tags
-    var defaultTags = new Dictionary<string, string>
-    {
-        { "environment", "dev" },
-        { "layer", "application" },
-        { "domain", "unassigned-needs-review" }
-    };
-
-    await _tagClient.TagResourcesAsync(new TagResourcesRequest
-    {
-        ResourceARNList = new List<string> { resourceArn },
-        Tags = defaultTags
-    });
-
-    // Notify for manual review
-    await _sns.PublishAsync(new PublishRequest
-    {
-        TopicArn = _notificationTopicArn,
-        Subject = "Auto-remediation: Missing tags added",
-        Message = $"Resource {resourceArn} was auto-tagged. Please review and update."
-    });
-}
-```
-
-### Auto-remediate CloudFormation Drift
-
-**What it does:** Detect drift and automatically update resources to match template.
-
-**EventBridge rule:**
-
-```yaml
-DriftRemediationRule:
-  Type: AWS::Events::Rule
-  Properties:
-    Description: Auto-remediate drift
-    EventPattern:
-      source:
-        - aws.cloudformation
-      detail-type:
-        - CloudFormation Drift Detection Status Change
-      detail:
-        status-details:
-          stack-drift-status:
-            - DRIFTED
-    State: ENABLED
-    Targets:
-      - Arn: !GetAtt DriftRemediationFunction.Arn
-        Id: RemediateDrift
-```
-
-**Remediation options:**
-
-```csharp
-public async Task HandleDrift(CloudFormationDriftEvent evt)
-{
-    var stackName = evt.Detail.StackId;
-
-    // Option 1: Update stack to fix drift
-    await _cloudFormation.UpdateStackAsync(new UpdateStackRequest
-    {
-        StackName = stackName,
-        UsePreviousTemplate = true,
-        Capabilities = new List<string> { "CAPABILITY_IAM" }
-    });
-
-    // Option 2: Notify and require manual intervention
-    await _sns.PublishAsync(new PublishRequest
-    {
-        TopicArn = _notificationTopicArn,
-        Subject = $"Drift detected: {stackName}",
-        Message = "Manual review required. Template may need updating."
-    });
-}
-```
-
----
-
-## Governance at Scale
-
-Manage governance across multiple accounts and regions.
-
-### AWS Organizations + StackSets
-
-**What it does:** Deploy governance controls to all accounts in your organization.
-
-**Deploy Config rules organization-wide:**
-
-```yaml
-OrganizationConfigRule:
-  Type: AWS::Config::OrganizationConfigRule
-  Properties:
-    OrganizationConfigRuleName: org-required-tags
-    OrganizationManagedRuleMetadata:
-      RuleIdentifier: REQUIRED_TAGS
-      InputParameters: |
-        {
-          "tag1Key": "environment",
-          "tag2Key": "layer",
-          "tag3Key": "domain"
-        }
-      ResourceTypesScope:
-        - AWS::EC2::Instance
-        - AWS::RDS::DBInstance
-        - AWS::S3::Bucket
-```
-
-**Deploy via StackSets:**
-
-```bash
-aws cloudformation create-stack-set \
-  --stack-set-name governance-controls \
-  --template-body file://governance.yaml \
-  --capabilities CAPABILITY_IAM \
-  --permission-model SERVICE_MANAGED \
-  --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false
-
-# Deploy to all accounts in organization
-aws cloudformation create-stack-instances \
-  --stack-set-name governance-controls \
-  --deployment-targets OrganizationalUnitIds=r-xxxx \
-  --regions us-east-1 us-west-2
-```
-
-### Centralized Compliance Reporting
-
-**AWS Config Aggregator:**
-
-```yaml
-ConfigAggregator:
-  Type: AWS::Config::ConfigurationAggregator
-  Properties:
-    ConfigurationAggregatorName: organization-aggregator
-    OrganizationAggregationSource:
-      RoleArn: !GetAtt AggregatorRole.Arn
-      AllAwsRegions: true
-```
-
-**Query compliance across organization:**
-
-```bash
-# Get compliance summary across all accounts
-aws configservice describe-aggregate-compliance-by-config-rules \
-  --configuration-aggregator-name organization-aggregator
-
-# Get non-compliant resources across organization
-aws configservice get-aggregate-compliance-details-by-config-rule \
-  --configuration-aggregator-name organization-aggregator \
-  --config-rule-name required-tags \
-  --compliance-type NON_COMPLIANT
-```
-
-### Governance Metrics
-
-**Track governance effectiveness:**
-
-```yaml
-GovernanceMetrics:
-  Type: AWS::CloudWatch::Dashboard
-  Properties:
-    DashboardName: Governance-Metrics
-    DashboardBody: !Sub |
-      {
-        "widgets": [
-          {
-            "type": "metric",
-            "properties": {
-              "metrics": [
-                ["CustomMetrics", "ResourcesWithoutTags", {"stat": "Sum"}],
-                ["CustomMetrics", "DriftedStacks", {"stat": "Sum"}],
-                ["CustomMetrics", "NonCompliantResources", {"stat": "Sum"}]
-              ],
-              "period": 3600,
-              "stat": "Sum",
-              "region": "${AWS::Region}",
-              "title": "Governance Health"
-            }
-          }
-        ]
-      }
-```
-
-**Publish custom metrics:**
-
-```csharp
-public async Task PublishGovernanceMetrics()
-{
-    // Count resources without tags
-    var untaggedCount = await CountUntaggedResources();
-
-    // Count drifted stacks
-    var driftedCount = await CountDriftedStacks();
-
-    // Count non-compliant resources
-    var nonCompliantCount = await CountNonCompliantResources();
-
-    await _cloudWatch.PutMetricDataAsync(new PutMetricDataRequest
-    {
-        Namespace = "CustomMetrics",
-        MetricData = new List<MetricDatum>
-        {
-            new MetricDatum
-            {
-                MetricName = "ResourcesWithoutTags",
-                Value = untaggedCount,
-                Timestamp = DateTime.UtcNow
-            },
-            new MetricDatum
-            {
-                MetricName = "DriftedStacks",
-                Value = driftedCount,
-                Timestamp = DateTime.UtcNow
-            },
-            new MetricDatum
-            {
-                MetricName = "NonCompliantResources",
-                Value = nonCompliantCount,
-                Timestamp = DateTime.UtcNow
-            }
-        }
-    });
-}
-```
-
----
+The number of open exceptions against a rule is itself a signal. A rule that needs constant exceptions is usually wrong, too broad, or missing a supported alternative.

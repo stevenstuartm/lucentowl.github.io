@@ -1,0 +1,84 @@
+---
+title: "Where Each Binding Finds Its Source"
+kind: structure
+system: winui
+summary: "x:Bind starts at the page class, {Binding} at the inherited DataContext."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" role="img" aria-labelledby="wbs-title wbs-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wbs-title">Where x:Bind and Binding resolve their paths in a WinUI page</title>
+<desc id="wbs-desc">A page's element tree runs from the Page, whose DataContext is set to the view model, through a StackPanel to three children: a TextBlock with Text bound by x:Bind to ViewModel.Title, a TextBlock with Text bound by Binding to Title, and a ListView whose ItemsSource is bound by x:Bind to ViewModel.Orders. The ListView's DataTemplate, with x:DataType Order, holds a TextBlock bound by x:Bind to Number. The Page's DataContext is the OrderViewModel, and the StackPanel and its children inherit it. The x:Bind binding on the page resolves against the page class, OrdersPage, whose ViewModel property holds the same OrderViewModel. The Binding resolves against the DataContext it inherits down the tree, which is the OrderViewModel with its Title and Orders properties. Inside the DataTemplate, the binding resolves against the Order item the template is showing, one of the items in Orders.</desc>
+<style>
+.wbs-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wbs-tpl { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.wbs-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wbs-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wbs-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wbs-t { font-size: 11px; fill: var(--color-text, #1A202C); }
+.wbs-code { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #1A202C); }
+.wbs-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.wbs-tree { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.wbs-xb { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wbs-bd { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; stroke-dasharray: 6 4; }
+.wbs-mem { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="wbs-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="wbs-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wbs-hd" x="16" y="40">PAGE CLASS</text>
+<rect class="wbs-box" x="16" y="168" width="240" height="96" rx="6"/>
+<text class="wbs-n" x="32" y="194">OrdersPage.xaml.cs</text>
+<text class="wbs-k" x="32" y="212">[Root of every x:Bind path on the page]</text>
+<text class="wbs-t" x="32" y="236">ViewModel property, holding the</text>
+<text class="wbs-t" x="32" y="254">OrderViewModel; named elements</text>
+<text class="wbs-hd" x="300" y="40">ELEMENT TREE</text>
+<rect class="wbs-box" x="300" y="56" width="380" height="52" rx="6"/>
+<text class="wbs-n" x="316" y="78">Page</text>
+<text class="wbs-code" x="316" y="98">DataContext = ViewModel</text>
+<rect class="wbs-box" x="330" y="132" width="200" height="34" rx="6"/>
+<text class="wbs-n" x="346" y="154">StackPanel</text>
+<text class="wbs-k" x="542" y="154">inherits DataContext</text>
+<rect class="wbs-box" x="360" y="190" width="320" height="44" rx="6"/>
+<text class="wbs-n" x="376" y="208">TextBlock</text>
+<text class="wbs-code" x="376" y="225">Text="{x:Bind ViewModel.Title}"</text>
+<rect class="wbs-box" x="360" y="254" width="320" height="44" rx="6"/>
+<text class="wbs-n" x="376" y="272">TextBlock</text>
+<text class="wbs-code" x="376" y="289">Text="{Binding Title}"</text>
+<rect class="wbs-box" x="360" y="318" width="320" height="44" rx="6"/>
+<text class="wbs-n" x="376" y="336">ListView</text>
+<text class="wbs-code" x="376" y="353">ItemsSource="{x:Bind ViewModel.Orders}"</text>
+<rect class="wbs-tpl" x="390" y="386" width="290" height="62" rx="6"/>
+<text class="wbs-k" x="406" y="404">[DataTemplate x:DataType="local:Order"]</text>
+<text class="wbs-n" x="406" y="422">TextBlock</text>
+<text class="wbs-code" x="406" y="439">Text="{x:Bind Number}"</text>
+<path class="wbs-tree" d="M316,108 L316,149 L330,149"/>
+<path class="wbs-tree" d="M346,166 L346,340 L360,340"/>
+<path class="wbs-tree" d="M346,212 L360,212"/>
+<path class="wbs-tree" d="M346,276 L360,276"/>
+<path class="wbs-tree" d="M376,362 L376,417 L390,417"/>
+<text class="wbs-hd" x="740" y="40">DATA OBJECTS</text>
+<rect class="wbs-box" x="740" y="190" width="204" height="84" rx="6"/>
+<text class="wbs-n" x="756" y="214">OrderViewModel</text>
+<text class="wbs-k" x="756" y="232">[The page's DataContext]</text>
+<text class="wbs-t" x="756" y="252">Title</text>
+<text class="wbs-t" x="756" y="266">Orders</text>
+<rect class="wbs-box" x="740" y="386" width="204" height="62" rx="6"/>
+<text class="wbs-n" x="756" y="410">Order</text>
+<text class="wbs-k" x="756" y="428">[One item in Orders]</text>
+<path class="wbs-xb" d="M360,212 L258,212" marker-end="url(#wbs-a)"/>
+<path class="wbs-bd" d="M680,276 L710,276 L710,240 L738,240" marker-end="url(#wbs-a)"/>
+<path class="wbs-xb" d="M680,428 L738,428" marker-end="url(#wbs-a)"/>
+<path class="wbs-mem" d="M842,274 L842,384" marker-end="url(#wbs-ag)"/>
+<path class="wbs-mem" d="M680,82 L842,82 L842,188" marker-end="url(#wbs-ag)"/>
+<path class="wbs-mem" d="M136,168 L136,20 L910,20 L910,188" marker-end="url(#wbs-ag)"/>
+<text class="wbs-lg" x="520" y="14">ViewModel property</text>
+<text class="wbs-lg" x="834" y="140" text-anchor="end">DataContext</text>
+<path class="wbs-xb" d="M24,490 L64,490" marker-end="url(#wbs-a)"/>
+<text class="wbs-lg" x="72" y="494">x:Bind: the page class, or the item inside a template</text>
+<path class="wbs-bd" d="M360,490 L400,490" marker-end="url(#wbs-a)"/>
+<text class="wbs-lg" x="408" y="494">{Binding}: the DataContext inherited down the tree</text>
+<path class="wbs-mem" d="M700,490 L740,490" marker-end="url(#wbs-ag)"/>
+<text class="wbs-lg" x="748" y="494">the object a property holds</text>
+</g>
+</svg>

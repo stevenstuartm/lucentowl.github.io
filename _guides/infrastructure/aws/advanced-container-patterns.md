@@ -2,7 +2,7 @@
 title: "Advanced Container Patterns on AWS for System Architects"
 layout: guide
 category: AWS
-subcategory: Container Orchestration (Advanced)
+subcategory: Containers in Production
 description: "Comprehensive guide to advanced ECS and EKS patterns covering service discovery, capacity providers, service mesh, autoscaling, and multi-cluster architectures"
 tags: [aws, containers, kubernetes, ecs, eks, microservices, architecture, scalability, practical]
 ---

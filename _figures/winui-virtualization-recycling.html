@@ -1,0 +1,89 @@
+---
+title: "Container Recycling in a Virtualized List"
+kind: dynamic
+system: winui
+summary: "Containers exist only near the viewport and are reused as items scroll."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="wvr-title wvr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wvr-title">How a virtualized list reuses item containers while scrolling</title>
+<desc id="wvr-desc">On the left, a column of data items from a collection of 10,000 orders, showing Order 37 through Order 48. On the right, UI containers exist only for Order 38 through Order 46. Orders 39 to 45 sit inside the viewport, the visible part of the list, and Orders 38 and 46 stand for the buffer just outside it, which in practice holds several viewports' worth of items and is shortened here to one item on each side. Each container is joined by a line to the data item it is bound to. Orders 37, 47, and 48 have no container at all. While the user scrolls down, the container for Order 38 moves out of range, and an arrow shows it being moved to the bottom and rebound to Order 47, joined to it by a dashed line, instead of a new container being created.</desc>
+<defs>
+<marker id="wvr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.wvr-data { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wvr-cont { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wvr-buf { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wvr-ghost { fill: none; stroke: var(--color-accent, #C0392B); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wvr-view { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; }
+.wvr-bind { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wvr-move { fill: none; stroke: var(--color-accent, #C0392B); stroke-width: 2; }
+.wvr-rebind { stroke: var(--color-accent, #C0392B); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.wvr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wvr-t { font-size: 12px; fill: var(--color-text, #1A202C); }
+.wvr-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wvr-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wvr-a { font-size: 11px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wvr-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wvr-hd" x="60" y="40">DATA: 10,000 ORDERS</text>
+<text class="wvr-hd" x="480" y="40">UI CONTAINERS</text>
+<text class="wvr-k" x="160" y="62" text-anchor="middle">more orders above</text>
+
+<rect class="wvr-data" x="60" y="80" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="96">Order 37</text>
+<rect class="wvr-data" x="60" y="110" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="126">Order 38</text>
+<rect class="wvr-data" x="60" y="140" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="156">Order 39</text>
+<rect class="wvr-data" x="60" y="170" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="186">Order 40</text>
+<rect class="wvr-data" x="60" y="200" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="216">Order 41</text>
+<rect class="wvr-data" x="60" y="230" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="246">Order 42</text>
+<rect class="wvr-data" x="60" y="260" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="276">Order 43</text>
+<rect class="wvr-data" x="60" y="290" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="306">Order 44</text>
+<rect class="wvr-data" x="60" y="320" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="336">Order 45</text>
+<rect class="wvr-data" x="60" y="350" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="366">Order 46</text>
+<rect class="wvr-data" x="60" y="380" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="396">Order 47</text>
+<rect class="wvr-data" x="60" y="410" width="200" height="24" rx="3"/><text class="wvr-t" x="72" y="426">Order 48</text>
+<text class="wvr-k" x="160" y="454" text-anchor="middle">more orders below</text>
+
+<line class="wvr-bind" x1="260" y1="122" x2="480" y2="122"/>
+<line class="wvr-bind" x1="260" y1="152" x2="480" y2="152"/>
+<line class="wvr-bind" x1="260" y1="182" x2="480" y2="182"/>
+<line class="wvr-bind" x1="260" y1="212" x2="480" y2="212"/>
+<line class="wvr-bind" x1="260" y1="242" x2="480" y2="242"/>
+<line class="wvr-bind" x1="260" y1="272" x2="480" y2="272"/>
+<line class="wvr-bind" x1="260" y1="302" x2="480" y2="302"/>
+<line class="wvr-bind" x1="260" y1="332" x2="480" y2="332"/>
+<line class="wvr-bind" x1="260" y1="362" x2="480" y2="362"/>
+
+<rect class="wvr-buf" x="480" y="110" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="126">Order 38</text>
+<rect class="wvr-cont" x="480" y="140" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="156">Order 39</text>
+<rect class="wvr-cont" x="480" y="170" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="186">Order 40</text>
+<rect class="wvr-cont" x="480" y="200" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="216">Order 41</text>
+<rect class="wvr-cont" x="480" y="230" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="246">Order 42</text>
+<rect class="wvr-cont" x="480" y="260" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="276">Order 43</text>
+<rect class="wvr-cont" x="480" y="290" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="306">Order 44</text>
+<rect class="wvr-cont" x="480" y="320" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="336">Order 45</text>
+<rect class="wvr-buf" x="480" y="350" width="220" height="24" rx="3"/><text class="wvr-n" x="492" y="366">Order 46</text>
+<rect class="wvr-ghost" x="480" y="380" width="220" height="24" rx="3"/><text class="wvr-a" x="492" y="396">rebound to Order 47</text>
+
+<rect class="wvr-view" x="466" y="134" width="248" height="216" rx="6"/>
+<text class="wvr-k" x="458" y="140" text-anchor="end">viewport</text>
+
+<path class="wvr-move" d="M700,122 C790,122 790,392 706,392" marker-end="url(#wvr-arrow)"/>
+<text class="wvr-a" x="790" y="250">recycled</text>
+<text class="wvr-k" x="790" y="266">no new</text>
+<text class="wvr-k" x="790" y="280">container</text>
+
+<text class="wvr-k" x="480" y="62">while the user scrolls down</text>
+<line class="wvr-rebind" x1="260" y1="392" x2="480" y2="392"/>
+
+<rect class="wvr-cont" x="60" y="486" width="28" height="16" rx="3"/>
+<text class="wvr-lg" x="96" y="498">container in the viewport</text>
+<rect class="wvr-buf" x="290" y="486" width="28" height="16" rx="3"/>
+<text class="wvr-lg" x="326" y="498">buffer container (shortened here)</text>
+<rect class="wvr-data" x="560" y="486" width="28" height="16" rx="3"/>
+<text class="wvr-lg" x="596" y="498">data item (only some have UI)</text>
+</g>
+</svg>

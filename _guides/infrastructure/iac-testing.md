@@ -85,7 +85,7 @@ A plan-mode test creates nothing, but it still configures the real provider, whi
 
 ### Programming-Language Tools
 
-Tools built on a general-purpose language use its own test frameworks. An AWS CDK stack can be synthesized in a test and its template checked with the assertions library:
+Tools built on a general-purpose language use its own test frameworks. AWS CDK *synthesizes* a program into a CloudFormation template, and a test can synthesize a stack and check that template with the assertions library:
 
 ```csharp
 var app = new App();
@@ -98,7 +98,7 @@ template.HasResourceProperties("AWS::S3::Bucket", new Dictionary<string, object>
 });
 ```
 
-Pulumi supports the same idea by running the program against mocks, which stand in for the engine and the cloud, inside the language's normal test runner. CDK also supports *snapshot* tests, which compare the whole synthesized template with a stored copy. AWS's guidance is that they help most during refactoring, since any CDK upgrade that changes the generated template breaks them.
+Bicep has no comparable unit-test framework, so Bicep teams lean on the linter, PSRule, and what-if. Pulumi supports the same idea as CDK by running the program against mocks, which stand in for the engine and the cloud, inside the language's normal test runner. CDK also supports *snapshot* tests, which compare the whole synthesized template with a stored copy. AWS's guidance is that they help most during refactoring, as long as nothing else changes, and are poor at catching regressions, because a CDK or construct upgrade or a changed context value also alters the template and breaks them.
 
 ---
 
@@ -128,10 +128,10 @@ A policy check tests the infrastructure against organizational rules rather than
 |---|---|---|
 | **Code or templates** | Checkov, [AWS CloudFormation Guard](https://github.com/aws-cloudformation/cloudformation-guard){:target="_blank" rel="noopener noreferrer"} on CloudFormation templates (including ones CDK synthesizes) | What is written, before any plan |
 | **Synthesis, for CDK** | CDK Aspects, which visit every construct in an app, and validation plugins such as cdk-nag that CDK runs during synthesis | Constructs and the template CDK produces from them |
-| **The plan or preview** | [Open Policy Agent](https://www.openpolicyagent.org/){:target="_blank" rel="noopener noreferrer"} through [Conftest](https://www.conftest.dev/){:target="_blank" rel="noopener noreferrer"} on the plan's JSON, policies HCP Terraform runs between plan and apply, or Pulumi policy packs run on preview | Every resource that will be created or changed, with resolved values, including inside modules |
+| **The plan or preview** | [Open Policy Agent](https://www.openpolicyagent.org/){:target="_blank" rel="noopener noreferrer"} through [Conftest](https://www.conftest.dev/){:target="_blank" rel="noopener noreferrer"} or Checkov on the plan's JSON, policies that HCP Terraform (HashiCorp's hosted platform) runs between plan and apply, or Pulumi policy packs run on preview | Every resource that will be created or changed, with resolved values, including inside modules |
 | **The deployment, inside the service** | CloudFormation Hooks, including hooks that run Guard rules | Each resource as CloudFormation is about to create or update it, whoever started the deployment |
 
-HCP Terraform, HashiCorp's hosted platform, runs policies written in Sentinel (HashiCorp's own policy language) or OPA. A failed Sentinel policy stops the run or only warns depending on its enforcement level: *advisory* warns, *soft mandatory* can be overridden by an authorized user, and *hard mandatory* blocks. A pipeline running Conftest makes the same choice through which failures it treats as errors.
+HCP Terraform runs policies written in Sentinel (HashiCorp's own policy language) or OPA. A failed Sentinel policy stops the run or only warns depending on its enforcement level: *advisory* warns, *soft mandatory* can be overridden by an authorized user, and *hard mandatory* blocks. A pipeline running Conftest makes the same choice through which failures it treats as errors.
 
 All of these checks run before deployment. They cannot see a change made later in the console, which is why they are paired with controls that watch the running environment.
 

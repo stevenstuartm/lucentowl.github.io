@@ -2,7 +2,7 @@
 title: "AWS ECR & Container Security for System Architects"
 layout: guide
 category: AWS
-subcategory: Container Orchestration (Advanced)
+subcategory: Containers in Production
 description: "Comprehensive guide to AWS Elastic Container Registry and container security covering image scanning, lifecycle policies, replication, runtime security, and secrets management"
 tags: [aws, containers, security, docker, kubernetes, devops, infrastructure, practical]
 ---

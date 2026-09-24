@@ -1,0 +1,84 @@
+---
+title: "Where Governance Controls Sit"
+kind: flow
+system: infrastructure
+summary: "Two paths a change can take, and which controls each path passes."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="icp-title icp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="icp-title">Where preventive, detective, and corrective controls sit on the paths a change can take</title>
+<desc id="icp-desc">A change made through infrastructure as code passes pipeline checks, then a deployment-service hook if the tool deploys through one, then the cloud API, where organization policy applies, before it reaches the running resources. A change made by hand in the console, a CLI, or a script bypasses the pipeline checks and the hook and goes straight to the cloud API, where organization policy still applies to every account it covers. Pipeline checks, hooks, and organization policy are preventive. Detective rules evaluate the running resources they cover after the fact, and corrective actions triggered by their findings fix or revert the resources.</desc>
+<style>
+.icp-src { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.icp-prev { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.icp-after { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.icp-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.icp-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.icp-n-acc { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.icp-d { font-size: 11.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.icp-d-inv { font-size: 11.5px; font-style: italic; fill: #FFFFFF; }
+.icp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.icp-obs { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.icp-lab { font-size: 11.5px; fill: var(--color-accent, #A5486E); font-weight: 700; }
+.icp-key { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="icp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="icp-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Main row -->
+<rect class="icp-src" x="20" y="150" width="130" height="70" rx="6"/>
+<text class="icp-n" x="85" y="180" text-anchor="middle">Change</text>
+<text class="icp-n" x="85" y="197" text-anchor="middle">through IaC</text>
+
+<rect class="icp-prev" x="180" y="150" width="140" height="70" rx="6"/>
+<text class="icp-n-inv" x="250" y="178" text-anchor="middle">Pipeline checks</text>
+<text class="icp-d-inv" x="250" y="198" text-anchor="middle">sees this pipeline</text>
+
+<rect class="icp-prev" x="350" y="150" width="140" height="70" rx="6"/>
+<text class="icp-n-inv" x="420" y="178" text-anchor="middle">Service hook</text>
+<text class="icp-d-inv" x="420" y="198" text-anchor="middle">if the tool uses one</text>
+
+<rect class="icp-prev" x="520" y="150" width="160" height="70" rx="6"/>
+<text class="icp-n-inv" x="600" y="172" text-anchor="middle">Cloud API</text>
+<text class="icp-d-inv" x="600" y="190" text-anchor="middle">organization policy</text>
+<text class="icp-d-inv" x="600" y="207" text-anchor="middle">sees covered accounts</text>
+
+<rect class="icp-src" x="720" y="150" width="160" height="70" rx="6"/>
+<text class="icp-n" x="800" y="190" text-anchor="middle">Running resources</text>
+
+<path class="icp-flow" d="M 150,185 L 174,185" marker-end="url(#icp-a)"/>
+<path class="icp-flow" d="M 320,185 L 344,185" marker-end="url(#icp-a)"/>
+<path class="icp-flow" d="M 490,185 L 514,185" marker-end="url(#icp-a)"/>
+<path class="icp-flow" d="M 680,185 L 714,185" marker-end="url(#icp-a)"/>
+
+<!-- Manual path -->
+<rect class="icp-src" x="20" y="280" width="130" height="70" rx="6"/>
+<text class="icp-n" x="85" y="306" text-anchor="middle">Change by hand</text>
+<text class="icp-d" x="85" y="326" text-anchor="middle">console, CLI, script</text>
+<path class="icp-flow" d="M 150,315 L 600,315 L 600,226" marker-end="url(#icp-a)"/>
+<text class="icp-lab" x="335" y="305" text-anchor="middle">skips the pipeline checks and the hook</text>
+
+<!-- After the fact -->
+<rect class="icp-after" x="720" y="20" width="160" height="70" rx="6"/>
+<text class="icp-n-acc" x="800" y="48" text-anchor="middle">Detective rules</text>
+<text class="icp-d" x="800" y="68" text-anchor="middle">sees covered resources</text>
+
+<rect class="icp-after" x="520" y="20" width="160" height="70" rx="6"/>
+<text class="icp-n-acc" x="600" y="48" text-anchor="middle">Corrective action</text>
+<text class="icp-d" x="600" y="68" text-anchor="middle">fixes or reverts</text>
+
+<path class="icp-obs" d="M 840,90 L 840,144" marker-end="url(#icp-r)"/>
+<text class="icp-lab" x="832" y="128" text-anchor="end">evaluates</text>
+<path class="icp-obs" d="M 720,55 L 686,55" marker-end="url(#icp-r)"/>
+<path class="icp-obs" d="M 660,90 L 745,146" marker-end="url(#icp-r)"/>
+<text class="icp-lab" x="712" y="116">fixes</text>
+
+<!-- Legend -->
+<rect class="icp-prev" x="20" y="372" width="40" height="16" rx="3"/>
+<text class="icp-key" x="70" y="384">preventive: stops a change before it takes effect</text>
+<rect class="icp-after" x="420" y="372" width="40" height="16" rx="3"/>
+<text class="icp-key" x="470" y="384">detective and corrective: act after the resource exists</text>
+</g>
+</svg>

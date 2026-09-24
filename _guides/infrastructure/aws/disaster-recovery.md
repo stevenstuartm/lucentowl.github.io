@@ -2,7 +2,7 @@
 title: "Disaster Recovery on AWS for System Architects"
 layout: guide
 category: AWS
-subcategory: Architecture Patterns (Advanced)
+subcategory: Resilience
 description: "Comprehensive guide to disaster recovery on AWS covering RTO/RPO targets, backup strategies, pilot light, warm standby, multi-site, and cost optimization"
 tags: [aws, disaster-recovery, resilience, architecture, reliability, backup, rto-rpo, practical]
 ---
