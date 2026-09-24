@@ -2,7 +2,7 @@
 title: "Rate Limiting and Resilience"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Security & Resilience"
+subcategory: "Security & Resilience"
 description: "Rate limiting middleware, algorithms, and resilience patterns for protecting and stabilizing ASP.NET Core APIs under load and failure scenarios."
 tags: [asp-net-core, rate-limiting, resilience, polly, circuit-breaker, cors, security, performance]
 ---
@@ -311,123 +311,6 @@ builder.Services.AddRateLimiter(options =>
 The OnRejected callback provides an opportunity to customize the response. You might log rate limit violations, include additional context in the response body, or adjust retry hints based on request context.
 
 Clients should implement exponential backoff when receiving 429 responses. Rather than retrying immediately or even respecting Retry-After exactly, clients should add jitter to avoid thundering herd problems where many clients retry simultaneously when the limit resets.
-
-## CORS Middleware
-
-Cross-Origin Resource Sharing controls which browser-based applications can call your API. Without CORS policies, browsers block JavaScript from making requests to APIs hosted on different domains than the page that loaded the script.
-
-CORS addresses a security model enforced by web browsers. When a page at https://example.com attempts to fetch data from https://api.example.com, the browser performs a CORS check. If the API does not explicitly allow requests from example.com, the browser blocks the request before it reaches your API.
-
-ASP.NET Core's CORS middleware adds appropriate headers to responses, allowing browsers to permit cross-origin requests according to your policies.
-
-### Configuring CORS Policies
-
-CORS policies define which origins can access your API, which HTTP methods are allowed, which headers can be included, and whether credentials like cookies can be sent.
-
-```csharp
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowSpecificOrigin", builder =>
-    {
-        builder.WithOrigins("https://example.com", "https://app.example.com")
-               .WithMethods("GET", "POST")
-               .WithHeaders("Authorization", "Content-Type")
-               .AllowCredentials();
-    });
-
-    options.AddPolicy("AllowAnyOrigin", builder =>
-    {
-        builder.AllowAnyOrigin()
-               .AllowAnyMethod()
-               .AllowAnyHeader();
-    });
-});
-
-var app = builder.Build();
-
-app.UseCors();
-```
-
-The WithOrigins method specifies exact origin URLs. Origins include the scheme, host, and port. https://example.com and http://example.com are different origins. The AllowAnyOrigin method permits requests from any origin, which suits public APIs but sacrifices security for convenience.
-
-WithMethods restricts which HTTP verbs are allowed. AllowAnyMethod permits all verbs including GET, POST, PUT, DELETE, and others. WithHeaders specifies which request headers are allowed beyond simple headers. AllowAnyHeader permits any header.
-
-AllowCredentials indicates that requests can include credentials like cookies or authorization headers. This method cannot be combined with AllowAnyOrigin because allowing credentials from any origin creates security risks. If you need credentials, you must specify explicit origins.
-
-### CORS with Preflight Requests
-
-Complex requests trigger preflight checks where the browser sends an OPTIONS request before the actual request. The preflight asks the server whether the actual request is allowed. The server responds with CORS headers indicating which origins, methods, and headers are permitted.
-
-Requests that include custom headers, use methods other than GET or POST, or send Content-Type headers other than application/x-www-form-urlencoded, multipart/form-data, or text/plain require preflight.
-
-```csharp
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("PreflightPolicy", builder =>
-    {
-        builder.WithOrigins("https://example.com")
-               .WithMethods("GET", "POST", "PUT", "DELETE")
-               .WithHeaders("Authorization", "Content-Type", "X-Custom-Header")
-               .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
-    });
-});
-```
-
-SetPreflightMaxAge tells browsers how long they can cache preflight results. Within that duration, browsers skip the preflight for subsequent matching requests. This reduces latency and server load for repeated requests from the same origin.
-
-### Applying CORS to Endpoints
-
-Apply CORS policies globally to all endpoints or selectively per endpoint. Global application uses middleware without parameters, and endpoint-specific application uses RequireCors on minimal APIs or EnableCors attribute on controllers.
-
-```csharp
-app.UseCors("AllowSpecificOrigin");
-
-app.MapGet("/public-data", () => Results.Ok("Available to all"))
-    .RequireCors("AllowAnyOrigin");
-
-app.MapPost("/sensitive-operation", () => Results.Ok("Restricted"))
-    .RequireCors("AllowSpecificOrigin");
-```
-
-Global CORS policies apply unless an endpoint overrides them. Endpoints that specify RequireCors use that policy instead of the global policy. This allows public endpoints to relax restrictions while sensitive endpoints enforce strict origin checks.
-
-For controllers, apply EnableCors at the controller or action level.
-
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-[EnableCors("AllowSpecificOrigin")]
-public class SecureController : ControllerBase
-{
-    [HttpGet("public")]
-    [EnableCors("AllowAnyOrigin")]
-    public IActionResult GetPublicData() => Ok("Public");
-
-    [HttpPost("protected")]
-    public IActionResult PostProtectedData() => Ok("Protected");
-}
-```
-
-The controller-level attribute provides a default, and action-level attributes override it. This mirrors how rate limiting attributes work.
-
-### CORS and Credentials
-
-When allowing credentials, the origin must be explicit. Browsers reject responses that set Access-Control-Allow-Origin to * while also setting Access-Control-Allow-Credentials to true.
-
-```csharp
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("CredentialPolicy", builder =>
-    {
-        builder.WithOrigins("https://app.example.com")
-               .AllowCredentials()
-               .AllowAnyMethod()
-               .AllowAnyHeader();
-    });
-});
-```
-
-Requests that include credentials send cookies, HTTP authentication, or client-side SSL certificates. APIs that rely on cookie-based authentication or require authorization headers must allow credentials and specify exact origins.
 
 ## Resilience with Polly
 

@@ -2,7 +2,7 @@
 title: ".NET Aspire Distributed Applications"
 layout: guide
 category: "ASP.NET Core"
-subcategory: ".NET Aspire"
+subcategory: "Aspire"
 description: "Multi-project orchestration, service discovery, backing services, testing, and deployment patterns for distributed .NET applications using Aspire."
 tags: [aspire, distributed-systems, service-discovery, microservices, cloud-native, testing, deployment, orchestration]
 ---
@@ -399,6 +399,14 @@ Aspire's deployment story bridges the gap between the local development topology
 The AppHost can generate a JSON manifest that describes every resource, its dependencies, and its configuration. This manifest serves as the contract between Aspire and deployment tooling.
 
 The manifest includes project resources with their Dockerfile references, container images with their configuration, connection strings and environment variables, and dependency relationships between resources. Deployment tools read this manifest to understand what infrastructure to create and how to wire services together.
+
+### Deployment Manifests and the Path to Production
+
+While Aspire is primarily a development-time tool, it bridges the gap to production through deployment manifest generation. The `azd` (Azure Developer CLI) can read an Aspire AppHost and generate the corresponding Azure infrastructure: container apps, databases, caches, and networking. This means the topology you define in `Program.cs` translates directly into deployment artifacts without maintaining a separate infrastructure definition.
+
+For teams not using Azure, Aspire can generate Docker Compose files or Kubernetes manifests from the application model. The `dotnet run --publisher manifest` command produces a JSON manifest that deployment tools can consume. This approach ensures that the application topology defined in code remains the single source of truth, reducing the drift between what developers run locally and what gets deployed.
+
+That said, most mature organizations already have established deployment pipelines and infrastructure-as-code practices. In those environments, Aspire's manifest generation is useful as a reference or starting point rather than a replacement for existing Terraform, Bicep, or Helm configurations. The development-time orchestration value stands on its own regardless of whether you adopt the deployment manifest features.
 
 ### Azure Container Apps
 

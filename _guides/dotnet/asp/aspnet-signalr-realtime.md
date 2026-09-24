@@ -2,7 +2,7 @@
 title: "SignalR and Real-Time APIs"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Programming Models"
+subcategory: "Real-Time & RPC"
 description: "Real-time communication patterns in ASP.NET Core using SignalR, Server-Sent Events, and raw WebSockets, including authentication, scaling, and Native AOT support."
 tags: [asp-net-core, signalr, real-time, websockets, server-sent-events, distributed-systems, performance]
 ---
@@ -56,6 +56,33 @@ public class ChatHub : Hub
 Groups are managed through the Groups property on the Hub base class. Adding and removing connections from groups are asynchronous operations that complete immediately in memory. SignalR does not persist group membership, so applications must rejoin groups after reconnection.
 
 The OnConnectedAsync and OnDisconnectedAsync methods provide lifecycle hooks for managing connection state. OnConnectedAsync executes when a client connects, allowing the hub to perform initialization like joining default groups. OnDisconnectedAsync executes when a client disconnects, whether gracefully or due to network failure, allowing cleanup of any per-connection resources.
+
+## Hub Context Outside Hubs
+
+To push telemetry from non-hub code, such as a background service processing IoT Hub events, you inject `IHubContext<THub, TClient>`. This gives you access to the same Groups and Clients APIs without requiring an active hub method call.
+
+```csharp
+public class TelemetryProcessor
+{
+    private readonly IHubContext<TelemetryHub, ITelemetryClient> _hubContext;
+
+    public TelemetryProcessor(IHubContext<TelemetryHub, ITelemetryClient> hubContext)
+    {
+        _hubContext = hubContext;
+    }
+
+    public async Task BroadcastAsync(DeviceTelemetry telemetry)
+    {
+        await _hubContext.Clients
+            .Group($"device:{telemetry.DeviceId}")
+            .ReceiveTelemetry(telemetry);
+    }
+}
+```
+
+This pattern is what connects the IoT event pipeline to the browser. The hub handles client subscriptions; a background service processes incoming telemetry and calls back into the hub context to push updates.
+
+---
 
 ## Strongly-Typed Hub Contracts
 

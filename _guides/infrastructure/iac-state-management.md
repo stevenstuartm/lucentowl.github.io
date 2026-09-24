@@ -3,452 +3,157 @@ title: "IaC State Management"
 layout: guide
 category: Infrastructure & Cloud
 subcategory: Infrastructure as Code
-description: "Understanding infrastructure state, remote backends, state locking, and best practices for managing IaC state across teams."
-tags: [infrastructure, iac, state-management, terraform, practical]
+description: "How Terraform, OpenTofu, and Pulumi keep their state record: what state holds and what one state covers, remote backends and locking, protecting the secrets state contains, refactoring with moved, import, and removed blocks, and recovering or migrating state safely."
+tags: [practical, terraform, opentofu, pulumi, state-locking, security]
 ---
 
-## What is State
+## What State Records
 
-**State** is the record of infrastructure resources currently deployed, tracked by IaC tools to:
-- Map configuration to real resources
-- Track resource metadata
-- Determine what changes are needed
-- Manage dependencies between resources
+**State** is a tool's record of the resources it manages. For each resource it maps an address in the code, such as `aws_instance.web`, to the real resource that address created, such as the instance `i-0abc123`. Alongside that link it keeps the attributes the tool last saw, the dependencies between resources, and the output values the code exports.
 
-### Why State Matters
+This guide is about the tools that leave that record for the team to look after: [Terraform](https://developer.hashicorp.com/terraform/language/state){:target="_blank" rel="noopener noreferrer"} and [OpenTofu](https://opentofu.org/docs/language/state/){:target="_blank" rel="noopener noreferrer"}, which write state as a JSON file, and [Pulumi](https://www.pulumi.com/docs/iac/concepts/state-and-backends/){:target="_blank" rel="noopener noreferrer"}, which keeps an equivalent record. CloudFormation and Bicep keep theirs inside the cloud service.
 
-**Without state, IaC tools cannot:**
-- Know what infrastructure currently exists
-- Determine what needs to be created, updated, or deleted
-- Track resource relationships
-- Detect configuration drift
+The record matters because the code alone cannot say which real resource it refers to. If the state is lost, the tool no longer knows it created anything. The next plan proposes creating every resource again, which either fails on names that must be unique or builds a second copy beside the first, while the originals carry on unmanaged. If the state is overwritten with an older or conflicting copy, the tool loses track of whatever was created after that copy was taken.
 
-**State contains:**
-- Resource IDs
-- Resource attributes
-- Dependencies between resources
-- Provider configurations
-- Sensitive data (passwords, private keys)
+### What One State Covers
+
+A Terraform or OpenTofu state belongs to one *root module*, the directory where `plan` and `apply` run, in one *workspace*. CLI workspaces let the same code keep several separate states, one per workspace, and each backend stores them under its own naming scheme. The S3 backend, for instance, keeps non-default workspaces at `env:/<workspace>/<key>` by default. Pulumi's unit is the *stack*, one deployed instance of a Pulumi program. A program can have many stacks, such as one per environment, each with its own state.
+
+That scope does more than decide which resources a plan considers. A state is also the unit of locking, so one run blocks every other change to anything in it, and the unit of access, since reading any part of a state means reading all of it. A single state for a whole estate makes plans slow and makes every change wait on every other. How to split infrastructure across several states is a layering decision, and it should be made with those two effects in mind.
 
 ---
 
-## Do You Need State Management?
-
-**Cloud-native IaC tools handle state automatically**; you don't need to manage state yourself.
-
-### Tools That Manage State for You
-
-**AWS CloudFormation:**
-- AWS manages all state internally
-- No state files to secure or back up
-- No risk of state corruption
-- No locking concerns
-- Built-in drift detection
-
-**Azure Resource Manager (ARM Templates / Bicep):**
-- Azure manages deployment state
-- Integrated with Azure portal
-- Deployment history tracked automatically
-
-**Google Cloud Deployment Manager:**
-- GCP tracks deployment state
-- Managed through GCP console
-
-### When State Management Is Your Responsibility
-
-[Terraform](https://www.terraform.io/){:target="_blank" rel="noopener noreferrer"} and [Pulumi](https://www.pulumi.com/){:target="_blank" rel="noopener noreferrer"} require you to manage state explicitly (unless using [Terraform Cloud](https://cloud.hashicorp.com/products/terraform){:target="_blank" rel="noopener noreferrer"} or [Pulumi Cloud](https://www.pulumi.com/product/pulumi-cloud/){:target="_blank" rel="noopener noreferrer"}):
-- You must configure remote backends
-- You must implement locking mechanisms
-- You must secure sensitive data in state
-- You must handle backup and recovery
-- You must prevent state corruption
-
-### Should You Accept This Complexity?
-
-**Only add user-managed state when you can articulate specific reasons:**
-
-**Valid reasons:**
-- Multi-cloud requirements (managing AWS + Azure + GCP together)
-- Need for Terraform/Pulumi-specific features not available in cloud-native tools
-- Existing infrastructure already managed by Terraform/Pulumi
-- Organizational standard requires specific tooling
-
-**Not valid reasons:**
-- "Terraform is popular"
-- "We know Terraform already" (unless you have multi-cloud needs)
-- "Terraform is industry standard" (CloudFormation is the standard for AWS-only)
-
-**The cost of user-managed state:**
-- Risk of state corruption causing infrastructure issues
-- Complexity of securing state files containing sensitive data
-- Operational overhead of managing remote backends and locking
-- Recovery procedures when state issues occur
-- Additional infrastructure to support state management
-
-**If you're deploying only to AWS, CloudFormation eliminates all of these risks.**
-
----
-
-## Local vs. Remote State
-
-<div class="callout callout--warning">
-<p class="callout__title">Never Use Local State for Teams</p>
-<p>Local state files are not suitable for teams or production environments. They lack locking, backup, versioning, and team sharing capabilities. Always use remote state for collaborative work.</p>
-</div>
+## Where State Lives
 
 ### Local State
 
-**What it is:** State stored on local filesystem.
+With no backend configured, Terraform writes `terraform.tfstate` to the working directory. That is fine for learning and for throwaway experiments, and wrong for anything shared. A second engineer has no copy of it, two people running at once have nothing to stop them, the file disappears with the laptop, and any secrets it holds sit in plain text on a disk.
 
-```
-terraform.tfstate
-```
+### Remote Backends
 
-**Advantages:**
-- Simple to get started
-- No additional setup required
-- Fast access
+A **backend** stores state somewhere shared, usually an object storage bucket or a hosted service such as HCP Terraform (HashiCorp's hosted platform, formerly Terraform Cloud) or Pulumi Cloud. The common ones differ mainly in how they lock and how they recover:
 
-**Disadvantages:**
-- ❌ Not suitable for teams (no sharing)
-- ❌ No locking (concurrent changes dangerous)
-- ❌ Risk of loss/corruption
-- ❌ No backup/versioning
-- ❌ Contains sensitive data locally
+| Backend | Locking | Recovery |
+|---|---|---|
+| Amazon S3 (`s3`) | A lock file stored next to the state, enabled with `use_lockfile` | Bucket versioning, which HashiCorp highly recommends |
+| Azure Blob Storage (`azurerm`) | Built in, using Blob Storage's own capabilities | The backend's `snapshot` option, which snapshots the state blob before each use, or the storage account's own versioning |
+| Google Cloud Storage (`gcs`) | Built in | Object versioning, which HashiCorp highly recommends |
+| HCP Terraform | Built in | Keeps every state version |
+| Pulumi Cloud | Built in | Keeps every state version |
+| Pulumi self-managed backends (S3, Blob Storage, GCS, PostgreSQL, local files) | A basic file-based lock, on by default | Keeps history files in the storage. Backups are the team's job |
 
-**When to use:**
-- Learning and experimentation only
-- Single developer, non-critical infrastructure
-- Never for production
+The S3 backend used to lock through a separate DynamoDB table. Terraform 1.11 made the S3 lock file generally available and deprecated the DynamoDB arguments, which will be removed in a future minor version. Both can be configured at once while every user moves to a version that supports the lock file. A current [S3 backend](https://developer.hashicorp.com/terraform/language/backend/s3){:target="_blank" rel="noopener noreferrer"} looks like this:
 
-### Remote State
-
-**What it is:** State stored in a remote backend (S3, Azure Blob, GCS, Terraform Cloud).
-
-**Terraform S3 Backend:**
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-locks"
-    encrypt        = true
+    bucket       = "example-terraform-state"
+    key          = "network/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 ```
 
-**Advantages:**
-- ✅ Shared access for teams
-- ✅ State locking (prevents conflicts)
-- ✅ Encryption at rest
-- ✅ Versioning and backup
-- ✅ Audit logging
-- ✅ Centralized management
-
-**Disadvantages:**
-- Requires setup
-- Depends on external service
-- Potential costs
-
-**When to use:**
-- All team environments
-- Production infrastructure
-- Any collaborative work
-
-### Popular Remote Backends
-
-**AWS S3 + DynamoDB:**
-```hcl
-terraform {
-  backend "s3" {
-    bucket         = "terraform-state"
-    key            = "path/to/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-locks"  # For locking
-    encrypt        = true
-    kms_key_id     = "arn:aws:kms:..."  # Optional KMS encryption
-  }
-}
-```
-
-**Azure Blob Storage:**
-```hcl
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "terraform-state-rg"
-    storage_account_name = "terraformstate"
-    container_name       = "tfstate"
-    key                  = "prod.terraform.tfstate"
-  }
-}
-```
-
-**Google Cloud Storage:**
-```hcl
-terraform {
-  backend "gcs" {
-    bucket = "terraform-state"
-    prefix = "prod"
-  }
-}
-```
-
-**Terraform Cloud:**
-```hcl
-terraform {
-  cloud {
-    organization = "my-org"
-    workspaces {
-      name = "production"
-    }
-  }
-}
-```
+In Terraform, the `backend` block cannot refer to variables, because Terraform reads it before evaluating anything else. Values that differ between environments, such as the bucket name, are passed to `terraform init` with `-backend-config` as a *partial configuration* instead. OpenTofu relaxes this and accepts variables and locals in the backend block, provided they can be resolved during `tofu init`. In both, the storage has to exist before the first `init`, so the bucket that holds state is usually created once by hand or by a small separate configuration that keeps its own state locally.
 
 ---
 
-## State Locking
+## Locking
 
-**What it is:** Preventing simultaneous state modifications that could corrupt state.
+Terraform locks the state for every operation that could write it. If it cannot get the lock, it stops rather than carrying on. Given `-lock-timeout`, it keeps retrying for that long before returning an error, which suits a pipeline where runs occasionally overlap.
 
-### How Locking Works
+The lock exists because every run reads the state at the start and writes it back at the end. Without one, two applies that start together both read the same record. Each makes its changes and writes back its own version, and whichever finishes last wins. The resources the other run created still exist in the cloud, but they are missing from the record, so the tool has lost track of them. With a lock, the second run fails or waits until the first has written its record, then starts from that record.
 
-1. Process acquires lock before modifying state
-2. Lock prevents other processes from modifying state
-3. Lock released after operation completes or fails
+{% include figure.html id="infra-state-lock" %}
 
-### Implementations
-
-**DynamoDB (AWS + S3 backend):**
-```hcl
-terraform {
-  backend "s3" {
-    bucket         = "terraform-state"
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-locks"  # Locking table
-  }
-}
-```
-
-**DynamoDB table structure:**
-```hcl
-resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "terraform-locks"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-}
-```
-
-**Consul:**
-```hcl
-terraform {
-  backend "consul" {
-    address = "consul.example.com"
-    path    = "terraform/prod"
-    lock    = true
-  }
-}
-```
-
-### Force Unlock (Use Carefully)
-
-Most IaC tools provide a force-unlock operation for stuck locks. Use with extreme caution.
-
-**When to force unlock:**
-- Process crashed and left lock orphaned
-- Lock is demonstrably stale (check lock timestamp)
-- You've confirmed no one else is running operations
-
-**Never force unlock if:**
-- Someone else might be running operations
-- Uncertain about lock state
-- During normal business hours without team communication
+A lock can outlive the run that took it, when a runner crashes or a pipeline is cancelled mid-apply. Terraform's `force-unlock` command releases it, given the lock ID that a blocked run prints along with the lock's holder. HashiCorp warns that unlocking while someone else holds the lock can produce two writers, so confirm the holder's process is gone before forcing it. Pulumi's equivalent is `pulumi cancel`, which works on Pulumi Cloud and on self-managed backends. Pulumi calls it dangerous, because an update cut off mid-operation can leave the state out of step with the resources, and recommends a `pulumi refresh` afterwards.
 
 ---
 
-## State Management Best Practices
+## Protecting State
 
-### 1. Always Use Remote State for Teams
+### State Holds Secrets in Plain Text
 
-**Never rely on local state files for production or team environments.**
+Terraform writes every resource attribute into state, including the ones that are secret: a generated database password, a private key created by the TLS provider, an access key issued to a service account. Marking a variable `sensitive` hides it from displayed output but not from state or saved plan files. Anyone who can read the state can read every one of them.
 
-```hcl
-# ❌ BAD: No backend configured
-terraform {
-  # Uses local state
-}
+That reach extends further than it looks. Reading another configuration's outputs through the `terraform_remote_state` data source requires read access to that configuration's whole state, not just the outputs, so it grants every secret along with them.
 
-# ✅ GOOD: Remote backend
-terraform {
-  backend "s3" {
-    bucket = "terraform-state"
-    key    = "prod/terraform.tfstate"
-    region = "us-east-1"
-    encrypt = true
-    dynamodb_table = "terraform-locks"
-  }
-}
-```
+### Controlling Who Can Read It
 
-### 2. Secure State Files
+Access to the backend should be limited to the identity the pipeline runs as and a small number of administrators. On S3, Terraform needs only these permissions:
 
-**State contains sensitive data!**
+- `s3:ListBucket` on the bucket
+- `s3:GetObject` and `s3:PutObject` on the state object
+- `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on the lock file
 
-**Enable encryption:**
-```hcl
-terraform {
-  backend "s3" {
-    bucket  = "terraform-state"
-    key     = "terraform.tfstate"
-    encrypt = true  # Enable encryption at rest
-    kms_key_id = "arn:aws:kms:..."  # Use KMS for extra security
-  }
-}
-```
+Encrypting with a KMS key through `kms_key_id` adds a second gate, since reading the state then also requires permission to decrypt with that key. On Azure, the backend supports Microsoft Entra ID authentication to the storage account, which HashiCorp recommends over storage access keys.
 
-**Restrict access:**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
-      "Resource": "arn:aws:s3:::terraform-state/prod/*",
-      "Principal": {
-        "AWS": "arn:aws:iam::123456789012:role/TerraformRole"
-      }
-    }
-  ]
-}
-```
+State files also never belong in version control, where every clone and every past commit would keep a copy. A `.gitignore` covering `*.tfstate` and `*.tfstate.*` keeps the local file and its backup out.
 
-**Never commit state to Git:**
-```
-# .gitignore
-*.tfstate
-*.tfstate.*
-```
+### Keeping Secrets Out of the Readable Record
 
-### 3. Backup State
+Encryption at rest in the storage service protects against someone stealing the disk, not against someone with read access to the bucket. Some tools go further:
 
-**Enable versioning:**
-```hcl
-resource "aws_s3_bucket_versioning" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-```
-
-**Regular backups:**
-- S3 versioning (automatic)
-- Cross-region replication
-- Periodic manual backups
-- Test restore procedures
-
-### 4. Separate State by Environment
-
-**Don't share state across environments:**
-
-```
-s3://terraform-state/
-├── dev/terraform.tfstate
-├── staging/terraform.tfstate
-└── production/terraform.tfstate
-```
-
-**Or use separate buckets:**
-```
-s3://terraform-state-dev/terraform.tfstate
-s3://terraform-state-staging/terraform.tfstate
-s3://terraform-state-prod/terraform.tfstate
-```
-
-### 5. Review Plans Before Applying
-
-Always preview changes before applying them:
-- Generate a plan showing what will change
-- Review the plan carefully for unexpected changes
-- Save the plan and apply exactly what was reviewed
-- Never skip the preview step, especially in production
-
-### 6. State File Security Checklist
-
-- [ ] Remote backend configured
-- [ ] Encryption at rest enabled
-- [ ] State locking enabled
-- [ ] Versioning enabled
-- [ ] Access restricted via IAM
-- [ ] State files not in Git
-- [ ] Regular backups tested
-- [ ] Separate state per environment
+- **OpenTofu** can [encrypt state and plan files](https://opentofu.org/docs/language/state/encryption/){:target="_blank" rel="noopener noreferrer"} on the client before they reach the backend, with a key from a passphrase, AWS KMS, Google Cloud KMS, Azure Key Vault, or OpenBao (an open-source fork of HashiCorp Vault). Anyone with bucket access but not the key sees ciphertext. The key becomes as critical as the state, because losing it loses the state, and encrypting an existing unencrypted state needs a transitional configuration that can still read the old plain copy.
+- **Pulumi** [encrypts values marked secret](https://www.pulumi.com/docs/iac/concepts/secrets/){:target="_blank" rel="noopener noreferrer"}, and everything derived from them, with a per-stack key. On Pulumi Cloud the default key is held by the service, and on a self-managed backend the default is a passphrase. A team can choose a cloud KMS key or HashiCorp Vault instead. A resource's physical ID, the provider's own ID such as `i-0abc123`, stays in plain text even when it was built from a secret.
+- **Terraform** has no state encryption of its own beyond what the backend provides, but its ephemeral values and write-only arguments keep a value out of state and plan files entirely.
 
 ---
 
-## Common State Operations
+## Refactoring Without Rebuilding
 
-IaC tools provide commands for viewing and managing state. Consult your tool's documentation for current syntax:
-- [Terraform State Command](https://developer.hashicorp.com/terraform/cli/commands/state){:target="_blank" rel="noopener noreferrer"}
-- [AWS CloudFormation Stack Operations](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-view-stack-data-resources.html){:target="_blank" rel="noopener noreferrer"}
-- [Pulumi State and Backends](https://www.pulumi.com/docs/concepts/state/){:target="_blank" rel="noopener noreferrer"}
+State links an *address* to a real resource, so changing the address breaks the link. By default, Terraform reads a renamed resource, or one moved into a module, as one resource deleted and a new one added, and plans to destroy the original and create a replacement. For a database, that is data loss from a change that only reorganized the code.
 
-### Viewing State
+### Blocks for Each Kind of State Change
 
-You can:
-- List all resources tracked in state
-- Show details of specific resources
-- View output values
-- Inspect resource metadata and dependencies
+Terraform and OpenTofu handle each kind of state change with a block written in the code:
 
-### Modifying State
+| Change | Block | Older CLI command | Effect on state | Effect on the real resource |
+|---|---|---|---|---|
+| Rename a resource or move it into a module | `moved` (Terraform 1.1+) | `terraform state mv` | The entry moves to the new address | None |
+| Bring an existing resource under management | `import` (1.5+) | `terraform import` | An entry is added for its ID | Updated in place wherever it differs from the code |
+| Stop managing a resource but keep it | `removed` with `destroy = false` (1.7+) | `terraform state rm` | The entry is dropped | None, if `destroy = false` is set |
 
-**Move operations:**
-- Rename resources in state (update reference without recreating)
-- Move resources between modules
-- Reorganize infrastructure code without destroying resources
+The blocks are the better default because they go through a plan, so the refactoring is reviewed like any other change before it touches state. A `moved` block also sits in the code that every environment's state shares, so each state picks up the rename on its next apply, instead of someone running `state mv` against each one by hand with no record left behind. An `import` block names a specific resource ID, which usually differs per environment, so it tends to be written for one state at a time.
 
-**Remove operations:**
-- Remove resources from state tracking (doesn't delete the actual resource)
-- Useful when manually deleting resources or transferring ownership
+HashiCorp recommends leaving old `moved` blocks in place in a shared module. A caller still on an older version of the module needs them on upgrade, so removing one is a breaking change for that caller.
 
-**Import operations:**
-- Import existing infrastructure into state management
-- Add resources created outside IaC to your state
-- Essential for brownfield infrastructure adoption
+### `removed` Can Destroy
 
-### Recovering from State Issues
+The two tools disagree on what a bare `removed` block does. In Terraform, `destroy` defaults to `true`, so a `removed` block without `destroy = false` deletes the real resource along with the state entry. In OpenTofu, a `removed` block without a `lifecycle` block only forgets the resource, and OpenTofu warns that the intent is unstated. The same code can therefore destroy a resource under one tool and keep it under the other. In either tool, set `destroy` explicitly so the intent is visible in review.
 
-**Backup and restore:**
-- Download current state as backup before risky operations
-- Restore from backup if state becomes corrupted
-- Use versioning features (S3 versioning) for automatic backups
+### Adopting Resources in Bulk
 
-**State recovery process:**
-1. Download backup from remote backend
-2. Verify backup integrity
-3. Restore backup to remote backend
-4. Validate infrastructure matches restored state
+Import has grown past one resource at a time. Given `-generate-config-out`, a plan writes starting `resource` blocks for the imported resources, a feature HashiCorp still marks experimental. Terraform can also search a provider for existing resources in bulk and generate the import blocks. Generated code is a starting point and usually needs rewriting before it is maintainable.
 
-### Migrating State
+### Moving Resources Between States
 
-**Backend migration:**
-- Change state storage location (local → remote, or remote → different remote)
-- Tool-specific migration commands handle data transfer
-- Always backup state before migration
-- Verify state after migration completes
+Splitting one state into several means moving resources from one state to another without touching them. In Terraform, the usual path pairs a `removed` block with `destroy = false` in the source configuration and an `import` block in the destination, applied in that order.
+
+### Pulumi's Equivalents
+
+Pulumi covers the same ground with different tools. A resource's `aliases` option records its previous names so a rename does not replace it, `pulumi import` adopts existing resources, `pulumi state delete` drops an entry without touching the resource, and `pulumi state move` moves resources from one stack to another.
 
 ---
 
+## Recovering and Migrating State
+
+### Restoring an Earlier Version
+
+Bucket versioning, or a hosted service's state history, is the backup. Before any manual state operation or backend change, taking a copy gives a known point to return to. `terraform state pull` prints the current state, and `pulumi stack export` writes a stack's state to a file.
+
+Restoring an old version rolls back the record, not the infrastructure. Anything created after that version was written still exists but is no longer tracked, and anything deleted since is still listed. After a restore, run a plan. With the live resources refreshed against the restored record, the plan shows every mismatch, and each one is resolved by importing, removing, or letting the plan recreate it.
+
+Terraform guards against pushing the wrong file. Every state carries a *lineage*, an ID fixed when the state was first created, and a *serial* that increases on every write. `terraform state push` refuses a file whose lineage differs from the destination's, or whose serial is lower. Its `-force` flag skips both checks and overwrites whatever is there.
+
+### When the Final Write Fails
+
+An apply can change resources and then fail to save the record, because a credential expired or the backend refused the write. Terraform then saves the state it could not upload as `errored.tfstate` in the working directory. Pushing that file with `terraform state push errored.tfstate` restores the record. Running apply again first starts from the stale remote copy and loses track of what the failed run created. On a CI runner that is discarded after each job, the file disappears with the runner unless the pipeline keeps it as an artifact.
+
+### Moving to a Different Backend
+
+In Terraform, changing the `backend` block and running `terraform init -migrate-state` copies the existing state to the new location, including the first move from local state to a remote backend. Pulumi's `pulumi stack migrate` moves a stack between backends and re-encrypts its secrets with the target's secrets provider.
+
+Afterwards, a plan that shows no changes confirms the migrated state matches what is running. The old copy stays where it was, secrets included, until someone deletes it.

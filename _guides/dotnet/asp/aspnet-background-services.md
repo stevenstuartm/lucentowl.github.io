@@ -2,7 +2,7 @@
 title: "Background Services and Job Processing"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "Performance & Operations"
+subcategory: "Testing & Operations"
 description: "Learn how to implement background tasks and job processing in ASP.NET Core, from simple hosted services to persistent job scheduling with Hangfire and Quartz.NET."
 tags: [asp-net-core, background-services, job-scheduling, dependency-injection, performance, distributed-systems, observability]
 ---
@@ -58,6 +58,98 @@ When your background service needs to run immediately at startup and then period
 Implement `IHostedService` directly when you need lifecycle hooks beyond simple background execution. Services that coordinate with other components during startup, maintain complex state across start and stop operations, or need to prevent the application from accepting requests until initialization completes benefit from explicit lifecycle control.
 
 Inherit from `BackgroundService` for straightforward background work like periodic cleanup, polling external systems, or processing queued items. The simplified implementation reduces boilerplate while providing the same lifecycle guarantees. Most background services fit this pattern.
+
+## Background Services with IHostedService
+
+ASP.NET Core applications can run background tasks alongside HTTP request processing using hosted services. These tasks start when the application starts and stop when it shuts down.
+
+### IHostedService Interface
+
+IHostedService defines two methods. StartAsync executes when the application starts, receiving a cancellation token that signals application shutdown. StopAsync executes when the application stops, performing cleanup before the process terminates.
+
+```csharp
+public class MetricsCollectorService : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        // Initialize and start background work
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        // Cleanup resources
+        return Task.CompletedTask;
+    }
+}
+
+builder.Services.AddHostedService<MetricsCollectorService>();
+```
+
+StartAsync should complete quickly. Long-running work should happen asynchronously after StartAsync returns, often using a background thread or timer.
+
+### BackgroundService Base Class
+
+BackgroundService provides a simpler pattern for long-running tasks. It implements IHostedService and exposes a single ExecuteAsync method where you place background logic.
+
+```csharp
+public class QueueProcessorService : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            // Process queue items
+            await ProcessQueueAsync(stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        }
+    }
+}
+```
+
+ExecuteAsync runs asynchronously and continues until the cancellation token signals shutdown. Use this pattern for tasks that process queues, poll external systems, or perform periodic maintenance.
+
+### Hosted Services and Dependency Lifetimes
+
+Hosted services register as singletons, and as established earlier, singleton should be your default for stateless, thread-safe services. If you find a hosted service needing scoped dependencies, that is almost always a sign that something has gone wrong in your service design. The dependencies themselves should probably be singletons too.
+
+The canonical example is database access. `DbContext` is registered as scoped by default, but the correct solution is not to pull scoped services into your singleton through `IServiceScopeFactory`. Instead, use `IDbContextFactory<T>`, which registers as a singleton and creates short-lived `DbContext` instances on demand.
+
+```csharp
+builder.Services.AddDbContextFactory<MyDbContext>(options =>
+    options.UseSqlServer(connectionString));
+```
+
+```csharp
+public class DataSyncService : BackgroundService
+{
+    private readonly IDbContextFactory<MyDbContext> _contextFactory;
+
+    public DataSyncService(IDbContextFactory<MyDbContext> contextFactory)
+    {
+        _contextFactory = contextFactory;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            using var dbContext = _contextFactory.CreateDbContext();
+
+            await SyncDataAsync(dbContext);
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+        }
+    }
+}
+```
+
+This pattern keeps the entire dependency chain singleton-compatible. The factory is a singleton, the hosted service is a singleton, and each `DbContext` instance is created, used, and disposed within a single operation. If you find yourself reaching for `IServiceScopeFactory` in a hosted service, step back and ask why your dependencies are not singletons. The answer is almost always that they should be.
+
+### Shutdown Considerations
+
+When deploying to environments that can recycle or terminate processes, hosted services might not complete gracefully. IIS and Azure App Service can recycle app pools, interrupting background work. If deploying to these environments, ensure background tasks can resume from interruption or consider external services like Azure Functions, AWS Lambda, or Kubernetes Jobs for critical background processing.
+
+Containerized deployments in orchestrators like Kubernetes provide more control over instance lifecycles, making hosted services more reliable for background work.
 
 ## Consuming Scoped Services
 
@@ -402,101 +494,6 @@ Clustering requires persistent storage since in-memory schedulers cannot coordin
 Quartz.NET fits scenarios requiring complex scheduling logic. Cron-based schedules, business day awareness, maintenance window exclusions, and sophisticated trigger relationships all favor Quartz.NET. When you need jobs to continue running if the application restarts, when clustering provides high availability for critical work, or when scheduling logic exceeds simple intervals, Quartz.NET provides the necessary capabilities.
 
 The sophistication comes with complexity. Quartz.NET requires careful configuration of job stores, triggers, and clustering behavior. For simple periodic tasks or scenarios with straightforward intervals, the learning curve and configuration overhead may not justify the flexibility. When scheduling requirements justify the investment, Quartz.NET delivers enterprise-grade capabilities.
-
-## Health Checks for Background Services
-
-Background services run silently, making failures difficult to detect. A background service that stops processing work due to an unhandled exception may remain undetected until the impact becomes visible through stale data or unprocessed work items. Health checks expose background service status, enabling monitoring systems to detect failures and trigger alerts or remediation.
-
-ASP.NET Core's health check system provides a framework for implementing custom health checks and exposing them through HTTP endpoints. Background services can register health checks that report their status, enabling orchestrators like Kubernetes, load balancers, and monitoring systems to detect unhealthy instances.
-
-```csharp
-public class BackgroundServiceHealthCheck : IHealthCheck
-{
-    private readonly OrderProcessingService _service;
-
-    public BackgroundServiceHealthCheck(OrderProcessingService service)
-    {
-        _service = service;
-    }
-
-    public Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        if (_service.IsHealthy)
-        {
-            return Task.FromResult(
-                HealthCheckResult.Healthy("Background service is running"));
-        }
-
-        return Task.FromResult(
-            HealthCheckResult.Unhealthy("Background service has stopped"));
-    }
-}
-
-// Configuration
-builder.Services.AddHealthChecks()
-    .AddCheck<BackgroundServiceHealthCheck>("background-service");
-
-app.MapHealthChecks("/health");
-```
-
-The background service exposes an `IsHealthy` property updated during execution. When the service starts successfully, it sets `IsHealthy` to true. If an unhandled exception stops the service, the health check detects the unhealthy state and reports it. External systems polling the health endpoint receive HTTP 503 when the service is unhealthy, triggering appropriate responses.
-
-Health checks can report detailed information beyond binary healthy/unhealthy status. Report the last successful execution time, number of consecutive failures, queue depth, or processing throughput. Health check results support data dictionaries containing arbitrary key-value pairs exposed through the health check response.
-
-### Startup Health Checks
-
-Background services performing expensive initialization at startup can delay application readiness. Health checks can distinguish between startup, liveness, and readiness probes. Startup checks report when long-running initialization completes, liveness checks report whether the service is still running, and readiness checks report whether the service can handle work.
-
-```csharp
-public class StartupService : BackgroundService
-{
-    public bool StartupCompleted { get; private set; }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        await InitializeAsync(stoppingToken);
-        StartupCompleted = true;
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            await ProcessWorkAsync(stoppingToken);
-        }
-    }
-
-    private async Task InitializeAsync(CancellationToken cancellationToken)
-    {
-        // Expensive initialization work
-        await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
-    }
-}
-
-public class StartupHealthCheck : IHealthCheck
-{
-    private readonly StartupService _service;
-
-    public StartupHealthCheck(StartupService service)
-    {
-        _service = service;
-    }
-
-    public Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        if (_service.StartupCompleted)
-        {
-            return Task.FromResult(HealthCheckResult.Healthy());
-        }
-
-        return Task.FromResult(
-            HealthCheckResult.Degraded("Startup in progress"));
-    }
-}
-```
-
-Container orchestrators can use startup checks to delay routing traffic until initialization completes, preventing requests from reaching instances not yet ready to process work. This pattern improves reliability during deployments and scaling operations.
 
 ## Graceful Shutdown and Cancellation Token Propagation
 

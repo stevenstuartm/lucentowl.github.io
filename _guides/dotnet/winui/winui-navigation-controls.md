@@ -16,7 +16,6 @@ tags: [winui, winui-3, xaml, navigation, controls, ui-framework, desktop, practi
 - [BreadcrumbBar](#breadcrumbbar)
 - [Frame Navigation](#frame-navigation)
 - [Choosing a Navigation Pattern](#choosing-a-navigation-pattern)
-- [Deep Linking and Activation-Based Navigation](#deep-linking-and-activation-based-navigation)
 
 ---
 
@@ -206,40 +205,6 @@ Tab-based navigation with `TabView` works when users genuinely work across multi
 Breadcrumb navigation with `BreadcrumbBar` complements either of the above patterns when content lives in a deep hierarchy. A file manager might use `NavigationView` for top-level drives and shares, then `BreadcrumbBar` to show the current folder path within the content area. The two controls work together naturally.
 
 For wizard-style flows where the user moves through a linear sequence, a plain `Frame` with explicit Next and Back buttons is often clearer than any of the above controls. The navigation controls are designed for non-linear exploration; linear flows benefit from explicit directionality.
-
----
-
-## Deep Linking and Activation-Based Navigation
-
-Windows applications can be launched with arguments that specify an initial destination, such as through a protocol activation, a notification click, or a file association. WinUI 3 exposes this through activation events in `App.xaml.cs`.
-
-The `OnLaunched` override receives a `LaunchActivatedEventArgs` with an `Arguments` string for command-line launches. For other activation kinds, subscribe to `AppInstance.GetCurrent().Activated`:
-
-```csharp
-protected override void OnLaunched(Microsoft.UI.Xaml.Application.LaunchActivatedEventArgs args)
-{
-    m_window = new MainWindow();
-    m_window.Activate();
-
-    AppInstance.GetCurrent().Activated += OnActivated;
-}
-
-private void OnActivated(object sender, AppActivationArguments args)
-{
-    if (args.Kind == ExtendedActivationKind.Protocol)
-    {
-        var protocolArgs = args.Data as ProtocolActivatedEventArgs;
-        var uri = protocolArgs?.Uri;
-        DispatcherQueue.TryEnqueue(() => NavigateToUri(uri));
-    }
-}
-```
-
-The `NavigateToUri` method parses the URI, resolves the destination page type, and calls `ContentFrame.Navigate()` with any relevant parameters extracted from the URI path or query string. Because the activation can arrive while the window is already running (if the app instance is shared), the navigation must be dispatched back to the UI thread via `DispatcherQueue`.
-
-When launching from a notification, the `ToastNotificationActivatedEventArgs` carries a launch argument string you define when constructing the notification. Parse that string in the same `Activated` handler and navigate accordingly.
-
-A clean approach is to define a central navigation service or static helper that accepts a destination enum or string and maps it to a page type. This keeps the activation handler thin and puts the mapping logic in one place, which becomes more valuable as the number of navigable destinations grows.
 
 ---
 

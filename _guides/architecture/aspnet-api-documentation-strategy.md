@@ -1,8 +1,8 @@
 ---
 title: "SaaS API Documentation Strategy"
 layout: guide
-category: "ASP.NET Core"
-subcategory: "API Design & Data"
+category: "Architecture"
+subcategory: "Design"
 description: "Guide to building external API documentation for SaaS products, covering developer portal architecture, OpenAPI spec pipelines, documentation tooling, and the separation between internal API exploration and customer-facing documentation."
 tags: [asp-net-core, api-design, documentation, saas, security, developer-experience, openapi]
 ---

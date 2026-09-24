@@ -185,6 +185,60 @@ The advantage of this pattern is that it decouples animation logic from applicat
 
 ---
 
+## Animation Helpers
+
+The `CommunityToolkit.WinUI.Animations` package provides a fluent API called `AnimationBuilder` for constructing composition animations without directly manipulating the Windows Composition API. Composition animations are more performant than storyboard animations because they run on the compositor thread rather than the UI thread, but the raw API has significant ceremony. `AnimationBuilder` reduces that ceremony considerably.
+
+A simple entrance animation that fades a control in while translating it upward looks like this:
+
+```csharp
+await AnimationBuilder.Create()
+    .Opacity(to: 1, from: 0, duration: TimeSpan.FromMilliseconds(300))
+    .Translation(axis: Axis.Y, to: 0, from: 24, duration: TimeSpan.FromMilliseconds(300))
+    .StartAsync(MyControl);
+```
+
+The `StartAsync` method applies the animation to the target element and returns a task that completes when the animation finishes. You can use `Start` for fire-and-forget scenarios or `StartAsync` when subsequent operations depend on the animation completing.
+
+`AnimationBuilder` also supports implicit animations, which trigger automatically when an element's properties change rather than being started explicitly. Attaching an implicit animation means that whenever the element's opacity or offset changes for any reason, including data binding updates, the change happens through the configured animation rather than instantly:
+
+```csharp
+AnimationBuilder.Create()
+    .Opacity(duration: TimeSpan.FromMilliseconds(200))
+    .Translation(duration: TimeSpan.FromMilliseconds(200))
+    .AttachImplicit(MyControl);
+```
+
+For more advanced scenarios, the toolkit exposes typed wrappers around the underlying Windows Composition APIs, including helpers for `ExpressionAnimation` and `KeyFrameAnimation` that reduce boilerplate while preserving the full flexibility of the composition layer.
+
+---
+
+## Lottie Animations
+
+[Lottie-Windows](https://learn.microsoft.com/en-us/windows/communitytoolkit/animations/lottie){:target="_blank" rel="noopener noreferrer"} integrates After Effects animations exported in the [Lottie JSON format](https://airbnb.io/lottie/){:target="_blank" rel="noopener noreferrer"} into WinUI 3 applications. Designers export animations from After Effects using the [Bodymovin plugin](https://aescripts.com/bodymovin/){:target="_blank" rel="noopener noreferrer"} and developers play them using `AnimatedVisualPlayer` and `LottieVisualSource`.
+
+Install the package and reference the Lottie namespace:
+
+```xml
+xmlns:lottie="using:CommunityToolkit.WinUI.Lottie"
+```
+
+Then play a bundled animation file:
+
+```xml
+<AnimatedVisualPlayer x:Name="Player" AutoPlay="True">
+    <lottie:LottieVisualSource UriSource="ms-appx:///Assets/Animations/loading.json" />
+</AnimatedVisualPlayer>
+```
+
+For the best performance, Microsoft provides the [LottieGen tool](https://learn.microsoft.com/en-us/windows/communitytoolkit/animations/lottie-scenarios/getting_started_codegen){:target="_blank" rel="noopener noreferrer"} that converts Lottie JSON files into C# or C++ code at build time. The generated code runs entirely in the composition layer without any JSON parsing at runtime, eliminating startup latency for complex animations. LottieGen-generated classes implement `IAnimatedVisualSource2`, which `AnimatedVisualPlayer` accepts directly.
+
+WinUI 3's `AnimatedIcon` control integrates Lottie animations into interactive controls like buttons and navigation items. An `AnimatedIcon` plays different segments of a Lottie animation based on the control's visual state, so a button can transition smoothly between its normal, hover, pressed, and disabled states with a single coordinated animation rather than separate assets.
+
+Lottie is well-suited for onboarding flows, empty state illustrations, loading indicators, and any scenario where flat animation is preferable to video. The animations scale to any resolution without quality loss, respect the user's animation preference settings, and compose naturally with other WinUI controls.
+
+---
+
 ## Composition Animations and the Visual Layer
 
 Below the XAML layer sits [Microsoft.UI.Composition](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.composition){:target="_blank" rel="noopener noreferrer"}, the visual layer that XAML itself is built on. Composition animations run on the compositor thread, which is separate from the UI thread. Because they bypass the XAML rendering pipeline, they can maintain smooth 60 fps motion even when the UI thread is processing data or handling events.

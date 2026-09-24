@@ -1,0 +1,65 @@
+---
+title: "Where the Endpoint Is Selected and Where It Runs"
+kind: flow
+system: aspnet-core
+summary: "Routing picks the endpoint early; it runs at the end, inside its filters."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 230" role="img" aria-labelledby="aes-title aes-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aes-title">Endpoint selection and endpoint execution in the middleware pipeline</title>
+<desc id="aes-desc">A request passes through the exception handler, then UseRouting, which picks the endpoint but does not run it. Middleware before UseRouting has no endpoint to read. CORS, authentication, authorization, and custom middleware placed after UseRouting can read the selected endpoint and its metadata. The endpoint runs at the end of the pipeline, where filters wrap the handler.</desc>
+<style>
+.aes-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aes-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.aes-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.aes-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.aes-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aes-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.aes-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aes-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.aes-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.aes-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="aes-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="aes-band" x="20" y="36" width="120" height="40" rx="6"/>
+<text class="aes-lab" x="80" y="60" text-anchor="middle">no endpoint yet</text>
+<rect class="aes-band" x="300" y="36" width="540" height="40" rx="6"/>
+<text class="aes-lab" x="570" y="60" text-anchor="middle">can read the selected endpoint and its metadata</text>
+<rect class="aes-band" x="860" y="36" width="160" height="40" rx="6"/>
+<text class="aes-lab" x="940" y="60" text-anchor="middle">runs the endpoint</text>
+<rect class="aes-box" x="20" y="100" width="120" height="80" rx="6"/>
+<text class="aes-n" x="80" y="136" text-anchor="middle">Exception</text>
+<text class="aes-n" x="80" y="152" text-anchor="middle">handler</text>
+<rect class="aes-sys" x="160" y="100" width="120" height="80" rx="6"/>
+<text class="aes-n-inv" x="220" y="136" text-anchor="middle">UseRouting</text>
+<text class="aes-k-inv" x="220" y="154" text-anchor="middle">picks the endpoint</text>
+<rect class="aes-box" x="300" y="100" width="120" height="80" rx="6"/>
+<text class="aes-n" x="360" y="136" text-anchor="middle">UseCors</text>
+<text class="aes-k" x="360" y="154" text-anchor="middle">adds CORS headers</text>
+<rect class="aes-box" x="440" y="100" width="120" height="80" rx="6"/>
+<text class="aes-n" x="500" y="136" text-anchor="middle">Authentication</text>
+<text class="aes-k" x="500" y="154" text-anchor="middle">sets the user</text>
+<rect class="aes-box" x="580" y="100" width="120" height="80" rx="6"/>
+<text class="aes-n" x="640" y="136" text-anchor="middle">Authorization</text>
+<text class="aes-k" x="640" y="154" text-anchor="middle">applies its rules</text>
+<rect class="aes-box" x="720" y="100" width="120" height="80" rx="6"/>
+<text class="aes-n" x="780" y="136" text-anchor="middle">Custom</text>
+<text class="aes-k" x="780" y="154" text-anchor="middle">your middleware</text>
+<rect class="aes-px" x="860" y="100" width="160" height="80" rx="6"/>
+<text class="aes-n" x="940" y="119" text-anchor="middle">Endpoint execution</text>
+<rect class="aes-box" x="870" y="130" width="60" height="40" rx="5"/>
+<text class="aes-n" x="900" y="155" text-anchor="middle">Filters</text>
+<rect class="aes-box" x="950" y="130" width="60" height="40" rx="5"/>
+<text class="aes-n" x="980" y="155" text-anchor="middle">Handler</text>
+<path class="aes-flow" d="M140,140 L158,140" marker-end="url(#aes-a)"/>
+<path class="aes-flow" d="M280,140 L298,140" marker-end="url(#aes-a)"/>
+<path class="aes-flow" d="M420,140 L438,140" marker-end="url(#aes-a)"/>
+<path class="aes-flow" d="M560,140 L578,140" marker-end="url(#aes-a)"/>
+<path class="aes-flow" d="M700,140 L718,140" marker-end="url(#aes-a)"/>
+<path class="aes-flow" d="M840,140 L858,140" marker-end="url(#aes-a)"/>
+<path class="aes-flow" d="M930,150 L948,150" marker-end="url(#aes-a)"/>
+<text class="aes-lab" x="20" y="212">The endpoint is chosen at UseRouting but doesn't run until the end of the pipeline.</text>
+</g>
+</svg>

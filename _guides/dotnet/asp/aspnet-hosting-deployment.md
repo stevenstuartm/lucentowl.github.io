@@ -2,7 +2,7 @@
 title: "Hosting, Deployment, and Operational Patterns"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "Performance & Operations"
+subcategory: "Testing & Operations"
 description: "Covers hosting models, server configuration, containerization strategies, Native AOT deployment, and operational patterns for production ASP.NET Core applications."
 tags: [asp-net-core, hosting, deployment, docker, native-aot, kestrel, reverse-proxy, performance]
 ---
@@ -40,6 +40,87 @@ Using a reverse proxy with Kestrel provides several operational advantages. The 
 Running Kestrel behind a reverse proxy also isolates the application server from direct internet exposure, allowing the proxy to absorb malicious traffic before it reaches the application. The reverse proxy can enforce security headers, block known attack patterns, and provide DDoS mitigation.
 
 In containerized environments, reverse proxies like Nginx or Traefik run as separate containers that route traffic to application containers, enabling independent scaling of the proxy layer and application layer. In cloud platforms, managed load balancers or API gateways serve the reverse proxy role while providing integration with cloud-native security, monitoring, and routing features.
+
+## Kestrel: The Cross-Platform Web Server
+
+Kestrel serves as the default, cross-platform web server for ASP.NET Core. Built for performance and efficiency, it handles HTTP requests directly and runs on Windows, Linux, and macOS.
+
+### Kestrel Architecture
+
+Kestrel uses a layered architecture with distinct responsibilities. The transport layer manages network connections and sockets, handling TCP listeners and connection establishment. The connection management layer sits above transport, managing connection lifecycles, pooling, keep-alive mechanisms, and protocol-specific handling. The middleware pipeline receives requests from connection management and processes them through your application's middleware stack.
+
+This separation allows Kestrel to optimize for different workloads. The transport layer can be swapped for different implementations, including specialized transports for Unix domain sockets or named pipes. Connection management applies pooling and keep-alive strategies that reduce overhead for high-frequency requests.
+
+### Performance Characteristics
+
+Kestrel optimizes for throughput and concurrent connections. It uses asynchronous I/O throughout, minimizing thread pool usage. Connection pooling reduces allocation overhead. Keep-alive support reuses connections across multiple requests, avoiding TCP handshake costs.
+
+These optimizations make Kestrel effective for microservices, containerized workloads, and resource-constrained environments. Running in containers with limited memory, Kestrel manages resources efficiently without sacrificing request throughput.
+
+### Configuration Patterns
+
+Kestrel configuration happens through KestrelServerOptions, accessible via builder.WebHost.ConfigureKestrel(). Common configuration includes URL bindings for HTTP and HTTPS endpoints, connection limits to prevent resource exhaustion under load, timeouts for keep-alive pings and request processing, and HTTPS certificate configuration for TLS termination.
+
+```csharp
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxConcurrentConnections = 100;
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+});
+```
+
+### When Kestrel Is Sufficient
+
+Kestrel works well as a standalone server for many scenarios. Internal microservices behind API gateways, containerized applications in orchestrated environments like Kubernetes, and applications behind cloud load balancers that handle SSL termination and traffic distribution all benefit from Kestrel's lightweight design.
+
+You can expose Kestrel directly to the internet when paired with proper security hardening. However, production deployments typically place Kestrel behind a reverse proxy for additional features Kestrel intentionally omits.
+
+## HTTP.sys: Windows-Only Alternative
+
+HTTP.sys provides a Windows-specific web server option that differs from Kestrel in architecture and capabilities. It operates as a kernel-mode component within Windows, sharing infrastructure with IIS.
+
+### Kernel-Mode Operation
+
+Unlike Kestrel, which runs in user mode, HTTP.sys operates in kernel mode. This provides performance advantages for certain workloads by reducing context switches between kernel and user space. It also provides mature security features built into Windows, including kernel-mode Windows Authentication without user-mode code.
+
+### When to Choose HTTP.sys
+
+Use HTTP.sys when you need features unavailable in Kestrel and cannot use a reverse proxy to provide them. Windows Authentication without a reverse proxy, port sharing where multiple applications listen on the same port differentiated by host headers or paths, and direct internet exposure on Windows without a reverse proxy all favor HTTP.sys.
+
+HTTP.sys requires Windows Server or Windows 10/11. It cannot run on Linux or macOS, limiting portability compared to Kestrel-based applications.
+
+### Incompatibility with ASP.NET Core Module
+
+HTTP.sys cannot work with the ASP.NET Core Module for IIS hosting. If deploying to IIS or IIS Express, you must use Kestrel. HTTP.sys serves as an alternative for standalone Windows deployments, not as an IIS hosting model.
+
+## Reverse Proxy Patterns
+
+Production deployments commonly place ASP.NET Core applications behind reverse proxies that provide features beyond basic HTTP handling. Reverse proxies offload concerns like SSL termination, static file serving, request caching, and load balancing from the application server.
+
+### Common Reverse Proxy Options
+
+IIS serves as a reverse proxy for ASP.NET Core on Windows through the ASP.NET Core Module. This module manages application lifecycle, forwards requests to Kestrel, and provides process management. Nginx provides a lightweight, high-performance reverse proxy commonly used on Linux for SSL termination, load balancing, and static file serving. Apache serves similar purposes with mod_proxy, offering mature configuration options and integration with existing Apache-based infrastructure.
+
+Cloud load balancers like AWS Application Load Balancer, Azure Application Gateway, and Google Cloud Load Balancing provide reverse proxy capabilities at the infrastructure layer, handling SSL termination, health checks, and traffic distribution across multiple application instances.
+
+### Forwarded Headers
+
+When running behind a reverse proxy, the application sees requests originating from the proxy's IP address rather than the original client. The proxy forwards the original request information through headers like X-Forwarded-For, X-Forwarded-Proto, and X-Forwarded-Host.
+
+ASP.NET Core provides Forwarded Headers Middleware to process these headers and update the request properties accordingly. Enable this middleware by setting the ASPNETCORE_FORWARDEDHEADERS_ENABLED environment variable to true, or configure it explicitly in code.
+
+```csharp
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+```
+
+Without forwarded headers middleware, URL generation, redirects, and authentication schemes may fail because they generate URLs using the proxy's address rather than the original request address.
+
+### Security Considerations
+
+Configure forwarded headers middleware carefully to prevent spoofing. Limit the proxy IP addresses that the application trusts using KnownProxies or KnownNetworks properties. Without these restrictions, malicious clients can send forged forwarded headers that the application might trust, potentially bypassing IP-based security controls.
 
 ## Kestrel Configuration
 

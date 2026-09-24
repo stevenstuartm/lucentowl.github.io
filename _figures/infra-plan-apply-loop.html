@@ -1,0 +1,67 @@
+---
+title: "The Plan/Apply Loop"
+kind: flow
+system: infrastructure
+summary: "Code, state record, and live resources compared into a reviewed plan."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" role="img" aria-labelledby="ipa-title ipa-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ipa-title">How an IaC tool turns definition files into changes</title>
+<desc id="ipa-desc">The tool compares the definition files, which describe what should exist, with its state record, which maps each definition to a real resource ID. Terraform, OpenTofu, and Bicep also read the live infrastructure's current configuration on every plan; Pulumi and CloudFormation read it only on request. Bicep keeps no state record. The comparison produces a plan of create, update, replace, and delete actions. After review, apply changes the live resources and updates the state record.</desc>
+<style>
+.ipa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ipa-step { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ipa-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ipa-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.ipa-d { font-size: 11.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ipa-d-inv { font-size: 11.5px; font-style: italic; fill: #FFFFFF; }
+.ipa-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.ipa-opt { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.ipa-lab { font-size: 11.5px; fill: var(--color-accent, #A5486E); font-weight: 700; }
+.ipa-key { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="ipa-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="ipa-box" x="30" y="40" width="230" height="70" rx="6"/>
+<text class="ipa-n" x="145" y="66" text-anchor="middle">State record</text>
+<text class="ipa-d" x="145" y="84" text-anchor="middle">definition → real resource ID</text>
+<text class="ipa-d" x="145" y="100" text-anchor="middle">(Bicep needs none)</text>
+
+<rect class="ipa-box" x="30" y="170" width="230" height="70" rx="6"/>
+<text class="ipa-n" x="145" y="198" text-anchor="middle">Definition files</text>
+<text class="ipa-d" x="145" y="218" text-anchor="middle">what should exist</text>
+
+<rect class="ipa-box" x="30" y="300" width="230" height="70" rx="6"/>
+<text class="ipa-n" x="145" y="328" text-anchor="middle">Live infrastructure</text>
+<text class="ipa-d" x="145" y="348" text-anchor="middle">read through the cloud API</text>
+
+<rect class="ipa-step" x="350" y="170" width="200" height="70" rx="6"/>
+<text class="ipa-n-inv" x="450" y="198" text-anchor="middle">Compare</text>
+<text class="ipa-d-inv" x="450" y="218" text-anchor="middle">desired vs. current</text>
+
+<rect class="ipa-step" x="630" y="170" width="240" height="70" rx="6"/>
+<text class="ipa-n-inv" x="750" y="198" text-anchor="middle">Plan</text>
+<text class="ipa-d-inv" x="750" y="218" text-anchor="middle">create · update · replace · delete</text>
+
+<rect class="ipa-step" x="630" y="300" width="240" height="70" rx="6"/>
+<text class="ipa-n-inv" x="750" y="340" text-anchor="middle">Apply</text>
+
+<path class="ipa-flow" d="M 260,75 C 310,75 310,188 344,188" marker-end="url(#ipa-a)"/>
+<path class="ipa-flow" d="M 260,205 L 344,205" marker-end="url(#ipa-a)"/>
+<path class="ipa-opt" d="M 260,315 C 310,315 310,222 344,222" marker-end="url(#ipa-a)"/>
+<path class="ipa-flow" d="M 550,205 L 624,205" marker-end="url(#ipa-a)"/>
+<path class="ipa-flow" d="M 750,240 L 750,294" marker-end="url(#ipa-a)"/>
+<text class="ipa-lab" x="762" y="272">review</text>
+<path class="ipa-flow" d="M 630,350 L 266,350" marker-end="url(#ipa-a)"/>
+<text class="ipa-lab" x="448" y="340" text-anchor="middle">changes resources</text>
+<path class="ipa-flow" d="M 870,335 L 886,335 L 886,16 L 145,16 L 145,34" marker-end="url(#ipa-a)"/>
+<text class="ipa-lab" x="515" y="32" text-anchor="middle">updates the record</text>
+
+<path class="ipa-flow" d="M 30,405 L 70,405"/>
+<text class="ipa-key" x="78" y="409">every tool (Bicep has no record)</text>
+<path class="ipa-opt" d="M 260,405 L 300,405"/>
+<text class="ipa-key" x="308" y="409">every plan for Terraform, OpenTofu, and Bicep; on request for Pulumi and CloudFormation</text>
+</g>
+</svg>

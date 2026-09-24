@@ -2,7 +2,7 @@
 title: "Testing ASP.NET Core APIs"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "Testing & Quality"
+subcategory: "Testing & Operations"
 description: "Comprehensive guide to testing ASP.NET Core APIs including integration testing with WebApplicationFactory, database testing strategies, authentication testing, snapshot testing, architecture testing, and performance testing approaches."
 tags: [asp-net-core, testing, integration-testing, testcontainers, performance, architecture]
 ---

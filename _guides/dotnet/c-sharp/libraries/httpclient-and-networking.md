@@ -3,8 +3,8 @@ title: "C# HttpClient and Networking"
 layout: guide
 category: ".NET & C#"
 subcategory: "Core Libraries"
-description: "How HttpClient manages connections and why its lifetime matters: long-lived clients with SocketsHttpHandler versus IHttpClientFactory, named and typed clients, per-request headers and content, timeouts versus cancellation, HttpRequestException, delegating handlers, resilience with Microsoft.Extensions.Http.Resilience, streaming, and HTTP/2 and HTTP/3."
-tags: [httpclient, ihttpclientfactory, socketshttphandler, delegatinghandler, resilience, networking, practical]
+description: "How HttpClient manages connections and why its lifetime matters: long-lived clients with SocketsHttpHandler versus IHttpClientFactory, named and typed clients, per-request headers and content, timeouts versus cancellation, HttpRequestException, delegating handlers, resilience with Microsoft.Extensions.Http.Resilience, streaming, HTTP/2 and HTTP/3, and WebSocket clients with ClientWebSocket."
+tags: [httpclient, ihttpclientfactory, socketshttphandler, resilience, clientwebsocket, networking, practical]
 ---
 
 ## What an HttpClient Owns
@@ -510,6 +510,77 @@ var client = new HttpClient(new SocketsHttpHandler
 
 HTTP/3 runs over QUIC instead of TCP and has been supported since .NET 7. It depends on the MsQuic library, which ships with Windows 11 and Windows Server 2022 and has to be installed as `libmsquic` on Linux. It also requires TLS 1.3. Where those requirements aren't met, HTTP/3 is unavailable. Because some networks block QUIC, Microsoft recommends asking for a lower version with `RequestVersionOrHigher`, which lets the client move up to HTTP/3 when the server advertises it and fall back otherwise.
 
+## WebSockets with ClientWebSocket
+
+HTTP is request and response. A WebSocket upgrades one HTTP connection into a long-lived, two-way channel where either side can send a message at any time, which suits chat, live dashboards, and collaborative editing. `ClientWebSocket` in `System.Net.WebSockets` is the client. It is a different type from `HttpClient` and has its own options, set through `Options` before `ConnectAsync`.
+
+A WebSocket carries messages, but `ReceiveAsync` returns frames. A message larger than the buffer, or one the sender split, arrives across several receives, and `EndOfMessage` marks the last one. A receive loop has to accumulate until it sees that flag:
+
+```csharp
+public static async IAsyncEnumerable<string> ReadMessagesAsync(
+    ClientWebSocket socket,
+    [EnumeratorCancellation] CancellationToken ct = default)
+{
+    var buffer = new byte[4096];
+    using var message = new MemoryStream();
+
+    while (socket.State == WebSocketState.Open)
+    {
+        ValueWebSocketReceiveResult result = await socket.ReceiveAsync(buffer.AsMemory(), ct);
+
+        if (result.MessageType == WebSocketMessageType.Close)
+        {
+            // Acknowledge the server's close without waiting for a reply
+            await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, ct);
+            yield break;
+        }
+
+        message.Write(buffer, 0, result.Count);
+
+        if (result.EndOfMessage)
+        {
+            yield return Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
+            message.SetLength(0);
+        }
+    }
+}
+```
+
+A `ClientWebSocket` supports exactly one outstanding send and one outstanding receive at a time. Two sends issued concurrently, say from two UI events, produce undefined behavior, so serialize sends with a `SemaphoreSlim` or a single sending loop fed by a `Channel<T>`. The one receive is usually the loop above running for the life of the connection.
+
+Closing has two forms. `CloseAsync` sends a close frame and waits for the server's close in return. `CloseOutputAsync` sends the close frame and returns without waiting, which is the right reply when the server closed first.
+
+### Keep-Alive and Dead Connections
+
+By default a `ClientWebSocket` sends an unsolicited PONG frame every `KeepAliveInterval`, which is `WebSocket.DefaultKeepAliveInterval`, typically 30 seconds. That stops idle connections from being dropped by proxies, but it never expects an answer, so a server that crashed goes unnoticed until the TCP connection times out.
+
+.NET 9 added `KeepAliveTimeout`. When it is set to a finite value, the client sends a PING after `KeepAliveInterval` of silence from the server and aborts the connection if no PONG arrives within the timeout. The pending `ReceiveAsync` then throws an `OperationCanceledException`. Incoming frames, PONGs included, are only processed while a receive is pending, so a connection with a keep-alive timeout needs a receive outstanding at all times or it can abort a healthy connection.
+
+```csharp
+using var socket = new ClientWebSocket();
+socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+socket.Options.KeepAliveTimeout = TimeSpan.FromSeconds(10);
+await socket.ConnectAsync(new Uri("wss://example.com/live"), ct);
+```
+
+Nothing reconnects a dropped WebSocket automatically. The owning service has to notice the loop ending or throwing, wait with backoff, and connect a new `ClientWebSocket`, since a closed instance can't be reopened. Libraries that sit on top of WebSockets, such as the SignalR client, add reconnection and message framing for you.
+
+### Sharing Connections Over HTTP/2
+
+A WebSocket normally takes over its own HTTP/1.1 connection. Since .NET 7, `ClientWebSocket` can also run over HTTP/2, where each WebSocket is one stream on a shared connection. Set `Options.HttpVersion` and `Options.HttpVersionPolicy`, and pass a handler through the `ConnectAsync(Uri, HttpMessageInvoker, CancellationToken)` overload so the socket uses that handler's connection pool:
+
+```csharp
+var handler = new SocketsHttpHandler();
+using var socket = new ClientWebSocket();
+socket.Options.HttpVersion = HttpVersion.Version20;
+socket.Options.HttpVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
+await socket.ConnectAsync(uri, new HttpMessageInvoker(handler), ct);
+```
+
+When an invoker is passed, settings such as credentials, proxy, and certificate validation belong on the handler. Changing the equivalent `ClientWebSocketOptions` as well makes `ConnectAsync` throw an `ArgumentException`.
+
+`Options.DangerousDeflateOptions` enables per-message compression when the server agrees to it. The name is a warning: compressing secrets alongside attacker-influenced data exposes them to CRIME and BREACH style attacks, so send such messages with the `WebSocketMessageFlags.DisableCompression` flag.
+
 ## Testing Code That Uses HttpClient
 
 `HttpClient` has no interface to mock, and it doesn't need one. The seam is the handler. A stub handler returns canned responses without touching the network, and the code under test receives an ordinary `HttpClient` built around it:
@@ -549,3 +620,5 @@ This works because a typed client takes `HttpClient` through its constructor. A 
 **Use `Microsoft.Extensions.Http.Resilience`, not the deprecated Polly integration,** and decide explicitly whether a `POST` may be retried.
 
 **Put cross-cutting behavior in delegating handlers,** and keep request-scoped state out of them, since they outlive any one request.
+
+**Read WebSocket messages until `EndOfMessage`,** send from one place at a time, and set `KeepAliveTimeout` when a dead server has to be noticed quickly.

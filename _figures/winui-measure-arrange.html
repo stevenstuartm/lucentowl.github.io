@@ -1,0 +1,59 @@
+---
+title: "Measure and Arrange"
+kind: dynamic
+system: winui
+summary: "A panel measures every child, then arranges each one."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" role="img" aria-labelledby="wma-title wma-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wma-title">The measure and arrange exchange between a StackPanel and its children</title>
+<desc id="wma-desc">A vertical StackPanel, the parent panel, offers its width and unlimited height. In the measure pass it calls Measure on the TextBlock (step 1), which reports its DesiredSize (step 2), then does the same for the Button (steps 3 and 4). Only after both are measured does the arrange pass call Arrange on the TextBlock (step 5) and the Button (step 6), giving each its layout slot, the final rectangle it occupies. Each child measures its own children, if it has any, before reporting.</desc>
+<style>
+.wma-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wma-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.wma-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wma-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.wma-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wma-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.wma-lbl { font-size: 11px; fill: var(--color-text, #1A202C); }
+.wma-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.wma-measure { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wma-desired { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.wma-arrange { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 3; }
+</style>
+<defs>
+<marker id="wma-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="wma-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="wma-as" markerWidth="8" markerHeight="8" refX="6" refY="2.6" orient="auto-start-reverse"><path d="M0,0 L6.5,2.6 L0,5.2 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="wma-sys" x="40" y="36" width="200" height="256" rx="6"/>
+<text class="wma-n-inv" x="140" y="150" text-anchor="middle">StackPanel</text>
+<text class="wma-k-inv" x="140" y="168" text-anchor="middle">[Parent panel]</text>
+<text class="wma-k-inv" x="140" y="192" text-anchor="middle">offers its width and</text>
+<text class="wma-k-inv" x="140" y="208" text-anchor="middle">unlimited height</text>
+<rect class="wma-box" x="640" y="36" width="220" height="96" rx="6"/>
+<text class="wma-n" x="750" y="78" text-anchor="middle">TextBlock</text>
+<text class="wma-k" x="750" y="96" text-anchor="middle">needs the size of its text</text>
+<rect class="wma-box" x="640" y="196" width="220" height="96" rx="6"/>
+<text class="wma-n" x="750" y="238" text-anchor="middle">Button</text>
+<text class="wma-k" x="750" y="256" text-anchor="middle">needs its label plus padding</text>
+<text class="wma-lbl" x="440" y="52" text-anchor="middle">1  Measure(available size)</text>
+<path class="wma-measure" d="M240,58 L638,58" marker-end="url(#wma-a)"/>
+<text class="wma-lbl" x="440" y="80" text-anchor="middle">2  DesiredSize</text>
+<path class="wma-desired" d="M640,86 L242,86" marker-end="url(#wma-ag)"/>
+<text class="wma-lbl" x="440" y="108" text-anchor="middle">5  Arrange(layout slot)</text>
+<path class="wma-arrange" d="M240,114 L636,114" marker-end="url(#wma-as)"/>
+<text class="wma-lbl" x="440" y="212" text-anchor="middle">3  Measure(available size)</text>
+<path class="wma-measure" d="M240,218 L638,218" marker-end="url(#wma-a)"/>
+<text class="wma-lbl" x="440" y="240" text-anchor="middle">4  DesiredSize</text>
+<path class="wma-desired" d="M640,246 L242,246" marker-end="url(#wma-ag)"/>
+<text class="wma-lbl" x="440" y="268" text-anchor="middle">6  Arrange(layout slot)</text>
+<path class="wma-arrange" d="M240,274 L636,274" marker-end="url(#wma-as)"/>
+<path class="wma-measure" d="M40,322 L80,322" marker-end="url(#wma-a)"/>
+<text class="wma-lg" x="88" y="326">measure pass, down</text>
+<path class="wma-desired" d="M240,322 L280,322" marker-end="url(#wma-ag)"/>
+<text class="wma-lg" x="288" y="326">result, back up</text>
+<path class="wma-arrange" d="M420,322 L458,322" marker-end="url(#wma-as)"/>
+<text class="wma-lg" x="466" y="326">arrange pass, after all measuring</text>
+</g>
+</svg>

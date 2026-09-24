@@ -2,529 +2,239 @@
 title: "Minimal APIs"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Programming Models"
-description: "Explores ASP.NET Core Minimal APIs as a lightweight alternative to controllers, covering parameter binding, strongly-typed responses, route organization, filters, validation, and Native AOT compatibility."
-tags: [asp-net-core, minimal-apis, web-api, performance, aot, endpoint-filters, parameter-binding]
+subcategory: "Building APIs"
+description: "Building HTTP APIs with ASP.NET Core minimal APIs: when to choose them over controllers, how parameters bind and what happens when binding fails, Results versus TypedResults, organizing endpoints with route groups, endpoint filters, the JSON options trap, and what Native AOT requires."
+tags: [practical, minimal-apis, parameter-binding, typedresults, endpoint-filters, native-aot]
 ---
 
-## Philosophy and Choosing an Approach
+## Minimal APIs or Controllers
 
-Minimal APIs provide a streamlined approach to building HTTP APIs in ASP.NET Core. Rather than organizing endpoints into controller classes with action methods, minimal APIs define individual route handlers directly on the application builder. This reduces ceremony, improves startup time, and aligns naturally with microservices and serverless architectures where each endpoint often serves a narrow, focused purpose.
-
-The choice between minimal APIs and controllers comes down to application needs and team preferences. Minimal APIs work well for focused APIs with straightforward routing and relatively few endpoints. Controllers excel when you need extensive shared behavior across related endpoints, complex action filters, or MVC features like view rendering. Minimal APIs offer faster startup and lower memory overhead, especially when published with Native AOT. Controllers provide more structure and familiarity for teams transitioning from traditional ASP.NET or MVC backgrounds.
-
-Performance differences are measurable but often negligible in real applications. Minimal APIs can cold-start three to five times faster under Native AOT compared to controller-based equivalents, and they avoid loading MVC assemblies and features like the Razor view engine. For high-throughput scenarios and serverless deployments where cold start time matters, minimal APIs deliver tangible benefits. For typical line-of-business applications, the difference rarely justifies rewriting existing controller-based code.
-
-## Defining Route Handlers
-
-Route handlers in minimal APIs are the methods that process HTTP requests and generate responses. You can define handlers as inline lambda expressions, local functions, method groups referencing named methods, or instance methods on separate classes.
-
-Inline lambdas work well for simple handlers:
+A minimal API maps a handler function straight to a route, with no controller class around it:
 
 ```csharp
-app.MapGet("/hello", () => "Hello World");
-
-app.MapPost("/users", (User user) => Results.Created($"/users/{user.Id}", user));
+app.MapGet("/orders/{id:int}", (int id, IOrderStore orders) => orders.Find(id));
 ```
 
-Named methods improve readability and testability for handlers with more logic:
+Minimal APIs and controllers both produce endpoints in the same routing system, run behind the same middleware, and can live in one app. The difference is in how handlers are written and what comes built in. Microsoft recommends minimal APIs for new projects. They have less per-request machinery, and apart from gRPC services they are the only way to build an HTTP API with Native AOT, since MVC doesn't support it.
+
+Controllers still earn their place when an API needs something MVC provides out of the box:
+
+| Need | Minimal APIs | Controllers |
+| --- | --- | --- |
+| Custom model binding (`IModelBinder`, `IModelBinderProvider`) | `TryParse` and `BindAsync` on the parameter type only | Full model binding extensibility |
+| Response formats other than JSON (XML, custom formatters, content negotiation) | JSON through `System.Text.Json` only | Input and output formatters |
+| Validation beyond data annotations (`IModelValidator`) | Data annotations and `IValidatableObject`, built in since .NET 10 | Full MVC validation pipeline |
+| Application parts, the application model, OData | Not available | Available |
+| Native AOT | Supported, with source-generated JSON | Not supported |
+
+For an API without those needs, the choice is mostly about organization and team habit, and the performance difference rarely decides it. Request time in a typical API goes to databases and downstream calls, not to the framework.
+
+## Handlers and Return Values
+
+A handler can be a lambda, a local function, or a static or instance method passed as a method group. Named methods keep route registration readable and let handlers be unit tested directly:
 
 ```csharp
-app.MapGet("/products/{id}", GetProduct);
+app.MapGet("/orders/{id:int}", GetOrder);
 
-IResult GetProduct(int id, IProductRepository repo)
-{
-    var product = repo.FindById(id);
-    return product is not null
-        ? Results.Ok(product)
-        : Results.NotFound();
-}
+static async Task<Results<Ok<Order>, NotFound>> GetOrder(int id, IOrderStore orders) =>
+    await orders.FindAsync(id) is { } order
+        ? TypedResults.Ok(order)
+        : TypedResults.NotFound();
 ```
 
-Method groups allow you to reference existing static or instance methods without explicitly writing a lambda wrapper. When a handler grows beyond a few lines, extracting it to a named method or separate class makes the route registration cleaner and the handler easier to test in isolation.
+What the handler returns decides the response:
+
+| Return type | Response |
+| --- | --- |
+| `string` | `200` with the string as `text/plain` |
+| `IResult` (from `Results` or `TypedResults`) | Whatever the result writes: status code, headers, and body |
+| Any other type `T` | `200` with `T` serialized as JSON |
+
+`Task<T>` and `ValueTask<T>` of each behave the same way.
 
 ## Parameter Binding
 
-Parameter binding is the mechanism that converts incoming HTTP request data into strongly typed method parameters. Minimal APIs support binding from route values, query strings, headers, request body, and dependency injection services.
+Every handler parameter gets its value from somewhere in the request, or from the container. For a parameter with no attribute, the framework decides the source from its type and name, in this order:
 
-Route parameters appear in the route template with curly braces and bind by name:
+1. **Special types** bind to parts of the request: `HttpContext`, `HttpRequest`, `HttpResponse`, `ClaimsPrincipal` (the user), `CancellationToken` (cancelled if the client disconnects), `IFormFile` and other form types, `Stream` and `PipeReader` for the raw body.
+2. **Types with a static `BindAsync` method** bind themselves from the `HttpContext`.
+3. **Strings and types with a static `TryParse` method**, such as `int`, `Guid`, and `DateOnly`, bind from the route value of the same name if the template has one, and from the query string otherwise.
+4. **Types registered in the container** are injected as services.
+5. **Anything else** is read from the JSON request body, except for `GET`, `HEAD`, `OPTIONS`, and `DELETE`, which never bind a body implicitly.
+
+`[FromRoute]`, `[FromQuery]`, `[FromHeader]`, `[FromBody]`, `[FromForm]`, and `[FromServices]` override this. Headers always need `[FromHeader]`, because a plain string parameter binds from the route or query string:
 
 ```csharp
-app.MapGet("/orders/{orderId}/items/{itemId}", (int orderId, int itemId) =>
+app.MapGet("/search", (
+    string term,                                         // query: ?term=...
+    int page,                                            // query: ?page=...
+    [FromHeader(Name = "X-Tenant")] string? tenant,      // header, optional
+    ISearchService search,                               // service
+    CancellationToken cancellationToken) =>
+    search.RunAsync(term, page, tenant, cancellationToken));
+```
+
+A form parameter, whether `[FromForm]` or an `IFormFile`, also brings antiforgery validation with it, since forms are what cross-site request forgery attacks submit. The app has to register antiforgery (`AddAntiforgery` and `UseAntiforgery`), or the endpoint fails.
+
+### Required, Optional, and Failed Bindings
+
+A parameter's nullability decides whether it is required. `string term` and `int page` above are required, `string? tenant` is optional, and a parameter with a default value, such as `int page = 1`, is optional and takes the default when absent.
+
+A request that leaves out a required value, or supplies one that doesn't parse, never reaches the handler:
+
+| Failure | Response |
+| --- | --- |
+| Required value missing | `400` |
+| `TryParse` returns `false`, as with `?page=two` for an `int` | `400` |
+| The JSON body can't be deserialized | `400` |
+| The body's `Content-Type` isn't JSON | `415` |
+| `BindAsync` throws | `500` |
+
+In production the `400` goes out with an empty body and a debug-level log entry, which makes binding failures easy to miss. In Development the framework throws a `BadHttpRequestException` instead, so the developer exception page names the parameter that failed.
+
+### Custom Types and Grouped Parameters
+
+A type becomes bindable from the route or query string by implementing `IParsable<T>`, or by declaring a static `TryParse` method. A type that needs more than one string, such as a paging object built from two query values and a header, declares a static `BindAsync(HttpContext, ParameterInfo)` instead.
+
+Handlers with many parameters can group them with `[AsParameters]`, which binds each property or constructor parameter of a type as if it were a handler parameter of its own. It groups; it doesn't nest. Each member binds by the rules above, so a complex property still comes from the body.
+
+```csharp
+public record OrderQuery(int Page, int PageSize, [FromHeader(Name = "X-Tenant")] string? Tenant);
+
+app.MapGet("/orders", ([AsParameters] OrderQuery query, IOrderStore orders) =>
+    orders.List(query.Page, query.PageSize, query.Tenant));
+```
+
+## Results and TypedResults
+
+Handlers that need a status code other than 200 return an `IResult`. Two factory classes create them. `Results.Ok(order)` and its siblings return the `IResult` interface. `TypedResults.Ok(order)` returns the concrete type, here `Ok<Order>`.
+
+Prefer `TypedResults`, for two reasons. The concrete types describe themselves to OpenAPI generation, so an endpoint that returns `Ok<Order>` documents a `200` with an `Order` body without any extra metadata. And a unit test can check the returned type and its value directly rather than executing the result.
+
+The cost is at the return statement. A handler that returns `TypedResults.Ok(order)` on one path and `TypedResults.NotFound()` on another returns two unrelated types, and the compiler can't infer a return type for the lambda. The handler has to declare a union with `Results<T1, T2, ...>`:
+
+```csharp
+app.MapGet("/orders/{id:int}", async Task<Results<Ok<Order>, NotFound>> (int id, IOrderStore orders) =>
+    await orders.FindAsync(id) is { } order
+        ? TypedResults.Ok(order)
+        : TypedResults.NotFound());
+```
+
+The union also documents both responses for OpenAPI, and returning a result type that isn't listed is a compile error. `Results` doesn't have the problem because every method returns `IResult`, but the endpoint then documents nothing unless it adds `Produces` metadata by hand.
+
+`TypedResults` covers most HTTP responses, including `Problem` and `ValidationProblem` for Problem Details bodies, file and stream results, redirects, and, since .NET 10, `ServerSentEvents`, which streams an `IAsyncEnumerable` to the client as server-sent events.
+
+### The JSON Options Trap
+
+Minimal APIs and controllers read JSON settings from two different options types. `builder.Services.ConfigureHttpJsonOptions(...)` configures minimal APIs, and `builder.Services.AddControllers().AddJsonOptions(...)` configures controllers. Neither affects the other. An app that sets a naming policy or a custom converter for its controllers and then adds minimal API endpoints gets the defaults on the new endpoints, and the two halves of the API serialize the same type differently.
+
+## Organizing Endpoints
+
+A `Program.cs` that maps every endpoint inline stops being readable after a few dozen routes. Two tools keep it in shape.
+
+**Route groups.** `MapGroup` returns a builder that prefixes every endpoint mapped on it and applies the same conventions to all of them. Anything set on the group, such as `RequireAuthorization`, `WithTags`, a filter, or a rate-limiting policy, applies to every endpoint in it, and groups nest:
+
+```csharp
+var orders = app.MapGroup("/orders")
+    .RequireAuthorization()
+    .WithTags("Orders");
+
+orders.MapGet("/", ListOrders);
+orders.MapGet("/{id:int}", GetOrder);
+orders.MapPost("/", CreateOrder);
+
+var lines = orders.MapGroup("/{orderId:int}/lines");
+lines.MapGet("/", ListLines);
+```
+
+**Extension methods per feature.** Each feature exposes one method that maps its group, the same convention `Add{Feature}` methods follow for service registration:
+
+```csharp
+public static class OrderEndpoints
 {
-    return $"Order {orderId}, Item {itemId}";
-});
+    public static RouteGroupBuilder MapOrderEndpoints(this IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/orders").WithTags("Orders");
+        group.MapGet("/", ListOrders);
+        group.MapGet("/{id:int}", GetOrder);
+        return group;
+    }
+
+    static async Task<Results<Ok<Order>, NotFound>> GetOrder(int id, IOrderStore orders) =>
+        await orders.FindAsync(id) is { } order ? TypedResults.Ok(order) : TypedResults.NotFound();
+
+    static Task<Order[]> ListOrders(IOrderStore orders) => orders.ListAsync();
+}
+
+// Program.cs
+app.MapOrderEndpoints();
 ```
 
-Query string parameters bind automatically when parameter names match query keys:
+`Program.cs` then reads as a list of features. Teams that want one class per endpoint, each with its own request and response types (the *request-endpoint-response* or REPR style), can apply the same pattern at a finer grain.
 
-```csharp
-app.MapGet("/search", (string query, int page = 1, int size = 20) =>
-{
-    // Binds ?query=foo&page=2&size=50
-    return $"Searching for '{query}' (page {page}, size {size})";
-});
-```
-
-Header values bind when decorated with the `[FromHeader]` attribute:
-
-```csharp
-app.MapGet("/protected", ([FromHeader(Name = "X-Api-Key")] string apiKey) =>
-{
-    return string.IsNullOrEmpty(apiKey) ? Results.Unauthorized() : Results.Ok();
-});
-```
-
-The request body binds to complex types when decorated with `[FromBody]`:
-
-```csharp
-app.MapPost("/products", ([FromBody] Product product) =>
-{
-    return Results.Created($"/products/{product.Id}", product);
-});
-```
-
-Services registered in the dependency injection container bind automatically when a parameter type matches a registered service:
-
-```csharp
-app.MapGet("/inventory", (IInventoryService inventory) =>
-{
-    return inventory.GetStockLevels();
-});
-```
-
-Special types like `HttpContext`, `HttpRequest`, `HttpResponse`, `ClaimsPrincipal`, and `CancellationToken` bind automatically without attributes. The framework inspects each parameter's type and source to determine the appropriate binding strategy. When ambiguity arises, explicit attributes like `[FromRoute]`, `[FromQuery]`, or `[FromServices]` clarify intent.
-
-## Grouped Parameters with AsParameters
-
-The `[AsParameters]` attribute groups multiple parameter sources into a single parameter object, reducing clutter in route handler signatures. Instead of declaring many individual parameters, you define a record or class that holds related values and decorate it with `[AsParameters]`.
-
-```csharp
-public record GetOrderRequest(
-    int OrderId,
-    [FromQuery] bool includeItems,
-    [FromServices] IOrderRepository repository
-);
-
-app.MapGet("/orders/{orderId}", ([AsParameters] GetOrderRequest request) =>
-{
-    var order = request.repository.FindById(request.OrderId);
-    if (order is null) return Results.NotFound();
-
-    return request.includeItems
-        ? Results.Ok(order)
-        : Results.Ok(order with { Items = null });
-});
-```
-
-This pattern keeps handler signatures concise while maintaining strong typing and clear parameter sources. When an endpoint requires many inputs, grouping them into a dedicated type improves readability and makes the handler easier to refactor or test.
-
-## Strongly-Typed Responses with TypedResults
-
-The `Results` helper class provides factory methods for common HTTP responses like `Ok()`, `NotFound()`, `Created()`, and `BadRequest()`. These methods return `IResult`, which is the base interface for all result types. The `TypedResults` class offers the same factory methods but returns concrete types instead of the interface, enabling the compiler and tooling to understand the exact response shape.
-
-```csharp
-app.MapGet("/products/{id}", (int id, IProductRepository repo) =>
-{
-    var product = repo.FindById(id);
-    return product is not null
-        ? TypedResults.Ok(product)
-        : TypedResults.NotFound();
-});
-```
-
-Using `TypedResults` instead of `Results` improves compile-time safety and automatically provides OpenAPI metadata for each response type. The endpoint description will reflect both the 200 OK response with a `Product` payload and the 404 Not Found response without requiring explicit `Produces` attributes.
-
-For handlers that return multiple possible result types, the `Results<T1, T2, ...>` union type documents all return possibilities:
-
-```csharp
-app.MapGet("/products/{id}", Results<Ok<Product>, NotFound> (int id, IProductRepository repo) =>
-{
-    var product = repo.FindById(id);
-    return product is not null
-        ? TypedResults.Ok(product)
-        : TypedResults.NotFound();
-});
-```
-
-This approach makes return types explicit in the method signature, improving both code clarity and generated API documentation. The tradeoff is slightly more verbose signatures, which may not matter for endpoints with simple return types but becomes valuable for complex handlers with varied responses.
-
-## Organizing Routes with MapGroup
-
-Route groups reduce repetition when multiple endpoints share a common prefix or configuration. The `MapGroup()` method creates a group with a shared route prefix, and you can chain additional configuration like filters, metadata, or authorization requirements.
-
-```csharp
-var api = app.MapGroup("/api");
-
-api.MapGet("/products", GetProducts);
-api.MapGet("/products/{id}", GetProduct);
-api.MapPost("/products", CreateProduct);
-api.MapPut("/products/{id}", UpdateProduct);
-api.MapDelete("/products/{id}", DeleteProduct);
-```
-
-Groups can nest to represent hierarchical structures:
-
-```csharp
-var api = app.MapGroup("/api");
-var productsGroup = api.MapGroup("/products");
-
-productsGroup.MapGet("/", GetProducts);
-productsGroup.MapGet("/{id}", GetProduct);
-productsGroup.MapPost("/", CreateProduct);
-
-var reviewsGroup = productsGroup.MapGroup("/{productId}/reviews");
-reviewsGroup.MapGet("/", GetReviews);
-reviewsGroup.MapPost("/", AddReview);
-```
-
-You can apply filters, authorization policies, or OpenAPI tags at the group level, and they propagate to all endpoints within that group:
-
-```csharp
-var adminGroup = app.MapGroup("/admin")
-    .RequireAuthorization("AdminPolicy")
-    .WithTags("Administration")
-    .AddEndpointFilter<AuditLogFilter>();
-
-adminGroup.MapGet("/users", GetUsers);
-adminGroup.MapPost("/users", CreateUser);
-```
-
-Groups with an empty prefix allow applying shared configuration without changing route patterns. This is useful when you want to attach metadata or filters to a set of endpoints that don't share a common path segment.
+Endpoints also carry the metadata that OpenAPI documents are generated from: `WithName` for a stable operation ID, `WithTags`, `WithSummary`, `WithDescription`, and `Produces` for responses a handler returns as plain `IResult`. `WithOpenApi`, the older way to edit the generated operation, is deprecated in .NET 10 in favor of the OpenAPI package's transformers.
 
 ## Endpoint Filters
 
-Endpoint filters run before and after route handlers, similar to action filters in MVC. They intercept requests, inspect or modify context, and optionally short-circuit execution. Filters are useful for cross-cutting concerns like logging, validation, caching, or authorization checks that apply to specific endpoints or groups.
-
-You implement a filter by creating a class that implements `IEndpointFilter`:
+An *endpoint filter* runs around a handler after its parameters have been bound. It can read and change the arguments, return a result of its own without calling the handler, or inspect and replace the handler's result on the way out. That makes filters the place for logic that depends on what the handler receives, which middleware can't see.
 
 ```csharp
-public class RequestTimingFilter : IEndpointFilter
+public class RequireActiveTenantFilter(ITenantDirectory tenants) : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(
-        EndpointFilterInvocationContext context,
-        EndpointFilterDelegate next)
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var stopwatch = Stopwatch.StartNew();
-        var result = await next(context);
-        stopwatch.Stop();
+        var query = context.GetArgument<OrderQuery>(0);   // arguments in declaration order
 
-        context.HttpContext.Response.Headers.Append(
-            "X-Response-Time-Ms",
-            stopwatch.ElapsedMilliseconds.ToString());
-
-        return result;
-    }
-}
-```
-
-Attach filters to individual endpoints or route groups:
-
-```csharp
-app.MapGet("/products", GetProducts)
-    .AddEndpointFilter<RequestTimingFilter>();
-
-var apiGroup = app.MapGroup("/api")
-    .AddEndpointFilter<RequestTimingFilter>();
-```
-
-Filters execute in the order they are added at each level. If a route group has two filters and an endpoint within that group has one filter, the group filters run first, then the endpoint filter. When multiple groups nest, outer group filters execute before inner group filters, regardless of the order they were added.
-
-Filters can short-circuit the pipeline by returning a result directly instead of calling `next()`:
-
-```csharp
-public class ApiKeyFilter : IEndpointFilter
-{
-    public async ValueTask<object?> InvokeAsync(
-        EndpointFilterInvocationContext context,
-        EndpointFilterDelegate next)
-    {
-        var apiKey = context.HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
-        if (string.IsNullOrEmpty(apiKey) || !IsValidApiKey(apiKey))
+        if (query.Tenant is null || !await tenants.IsActiveAsync(query.Tenant))
         {
-            return Results.Unauthorized();
+            return TypedResults.Problem("Unknown or inactive tenant.", statusCode: 403);
         }
 
         return await next(context);
     }
-
-    private bool IsValidApiKey(string key) => /* validation logic */;
-}
-```
-
-When a filter short-circuits, subsequent filters and the route handler do not execute. This behavior is useful for authentication, rate limiting, or request validation that must pass before processing continues.
-
-## OpenAPI Metadata
-
-Minimal APIs generate OpenAPI descriptions automatically based on parameter types and return types. You can enrich the generated documentation with extension methods that add names, tags, descriptions, and explicit response types.
-
-```csharp
-app.MapGet("/products/{id}", GetProduct)
-    .WithName("GetProductById")
-    .WithTags("Products")
-    .WithDescription("Retrieves a product by its unique identifier")
-    .Produces<Product>(StatusCodes.Status200OK)
-    .Produces(StatusCodes.Status404NotFound);
-```
-
-The `WithName()` method assigns an operation ID that tools like Swagger UI and client generators use to create unique method names. Without explicit names, the framework generates operation IDs based on HTTP method and route pattern, which can be unstable if routes change.
-
-Tags group related operations in Swagger UI and other documentation tools. The `WithTags()` method accepts multiple tags, and you can apply tags to route groups to avoid repeating them on every endpoint.
-
-The `Produces()` method specifies possible response types and status codes. When using `TypedResults`, explicit `Produces()` calls are often unnecessary because the framework infers response types from the return signature. For endpoints that return `IResult` or use `Results`, adding `Produces()` improves generated documentation.
-
-The `Accepts()` method documents request body content types:
-
-```csharp
-app.MapPost("/products", CreateProduct)
-    .Accepts<Product>("application/json")
-    .WithOpenApi();
-```
-
-The `WithOpenApi()` method allows modifying the generated OpenAPI operation with a custom transformation:
-
-```csharp
-app.MapGet("/products", GetProducts)
-    .WithOpenApi(operation =>
-    {
-        operation.Summary = "Lists all products";
-        operation.Description = "Returns a paginated list of products...";
-        return operation;
-    });
-```
-
-This level of customization is useful when the generated metadata needs adjustments that extension methods don't cover directly.
-
-## Validation in .NET 10
-
-Starting with .NET 10, minimal APIs include built-in validation that integrates with data annotations from the `System.ComponentModel.DataAnnotations` namespace. When you enable validation with `builder.Services.AddValidation()`, models bound from requests are automatically validated, and invalid requests receive a standardized 400 Bad Request response with a `ProblemDetails` payload.
-
-```csharp
-public record CreateProductRequest(
-    [Required, StringLength(100)] string Name,
-    [Range(0.01, 10000)] decimal Price,
-    [Required] string Category
-);
-
-app.MapPost("/products", (CreateProductRequest request) =>
-{
-    // If validation fails, this handler never executes
-    return Results.Created($"/products/{request.Name}", request);
-});
-```
-
-Validation applies to query parameters, headers, route parameters, and request bodies. You can decorate individual properties with attributes like `[Required]`, `[StringLength]`, `[Range]`, `[EmailAddress]`, and others.
-
-For scenarios requiring custom validation logic beyond what data annotations provide, implement `IValidatableObject`:
-
-```csharp
-public record CreateOrderRequest(
-    [Required] string CustomerId,
-    [Required] List<OrderItem> Items
-) : IValidatableObject
-{
-    public IEnumerable<ValidationResult> Validate(ValidationContext context)
-    {
-        if (Items.Count == 0)
-        {
-            yield return new ValidationResult(
-                "Order must contain at least one item",
-                new[] { nameof(Items) });
-        }
-
-        if (Items.Sum(i => i.Quantity) > 100)
-        {
-            yield return new ValidationResult(
-                "Total quantity cannot exceed 100",
-                new[] { nameof(Items) });
-        }
-    }
-}
-```
-
-When validation fails, the framework returns a response that follows the RFC 7807 Problem Details specification, making error responses consistent across your API. If you need to disable validation for specific endpoints, use the `DisableValidation()` extension method:
-
-```csharp
-app.MapPost("/legacy-endpoint", LegacyHandler)
-    .DisableValidation();
-```
-
-This built-in validation eliminates the need for manual validation checks or third-party libraries in many scenarios while maintaining consistency with controller-based APIs that use model validation.
-
-## File Upload and Streaming
-
-Minimal APIs support file uploads through the `IFormFile` and `IFormFileCollection` types. These bind automatically when a request includes multipart form data:
-
-```csharp
-app.MapPost("/upload", async (IFormFile file) =>
-{
-    if (file.Length == 0)
-        return Results.BadRequest("File is empty");
-
-    var path = Path.Combine("uploads", file.FileName);
-    using var stream = File.OpenWrite(path);
-    await file.CopyToAsync(stream);
-
-    return Results.Ok(new { FileName = file.FileName, Size = file.Length });
-});
-```
-
-For multiple files, use `IFormFileCollection`:
-
-```csharp
-app.MapPost("/upload-multiple", async (IFormFileCollection files) =>
-{
-    var results = new List<object>();
-    foreach (var file in files)
-    {
-        var path = Path.Combine("uploads", file.FileName);
-        using var stream = File.OpenWrite(path);
-        await file.CopyToAsync(stream);
-        results.Add(new { FileName = file.FileName, Size = file.Length });
-    }
-
-    return Results.Ok(results);
-});
-```
-
-Streaming responses allow sending data incrementally without buffering the entire payload in memory. This is useful for large files, real-time data feeds, or long-running operations. You can return a `Stream` directly, and the framework streams its contents to the client:
-
-```csharp
-app.MapGet("/download/{filename}", (string filename) =>
-{
-    var path = Path.Combine("files", filename);
-    if (!File.Exists(path))
-        return Results.NotFound();
-
-    var stream = File.OpenRead(path);
-    return Results.Stream(stream, contentType: "application/octet-stream");
-});
-```
-
-For custom streaming scenarios, access the response body stream directly:
-
-```csharp
-app.MapGet("/stream-data", async (HttpContext context) =>
-{
-    context.Response.ContentType = "text/plain";
-    var writer = new StreamWriter(context.Response.Body, leaveOpen: true);
-
-    for (int i = 0; i < 10; i++)
-    {
-        await writer.WriteLineAsync($"Line {i}");
-        await writer.FlushAsync();
-        await Task.Delay(1000);
-    }
-});
-```
-
-Streaming works well with Server-Sent Events, which push updates from server to client over a long-lived HTTP connection.
-
-## Server-Sent Events
-
-Server-Sent Events provide a simple mechanism for pushing real-time updates to clients over HTTP. The server maintains an open connection and sends messages in a text-based format with the `text/event-stream` content type. Clients receive updates as they arrive without polling.
-
-```csharp
-app.MapGet("/events", async (HttpContext context) =>
-{
-    context.Response.ContentType = "text/event-stream";
-    context.Response.Headers.CacheControl = "no-cache";
-
-    var writer = new StreamWriter(context.Response.Body);
-
-    while (!context.RequestAborted.IsCancellationRequested)
-    {
-        var message = $"data: Server time is {DateTime.UtcNow:O}\n\n";
-        await writer.WriteAsync(message);
-        await writer.FlushAsync();
-        await Task.Delay(1000, context.RequestAborted);
-    }
-});
-```
-
-Each message follows the format `data: <content>\n\n`, with two newlines marking the end of an event. The client connects with JavaScript or another HTTP client that supports SSE:
-
-```javascript
-const eventSource = new EventSource('/events');
-eventSource.onmessage = (event) => {
-    console.log(event.data);
-};
-```
-
-SSE works well for unidirectional updates like notifications, log streaming, or live dashboards. For bidirectional communication or more complex messaging, WebSockets may be more appropriate.
-
-## REPR Pattern
-
-The REPR (Request-Endpoint-Response) pattern organizes each endpoint as an independent class with a single responsibility. Instead of grouping related endpoints into controller classes, each endpoint becomes its own unit with explicit request and response types. This aligns naturally with vertical slice architecture, where each feature encapsulates its data access, business logic, and API surface.
-
-In minimal APIs, you can adopt REPR principles by defining endpoints as classes with dedicated request and response types:
-
-```csharp
-public record GetProductRequest(int Id);
-public record GetProductResponse(int Id, string Name, decimal Price);
-
-public class GetProductEndpoint
-{
-    public static async Task<Results<Ok<GetProductResponse>, NotFound>> Handle(
-        [AsParameters] GetProductRequest request,
-        IProductRepository repository)
-    {
-        var product = await repository.FindByIdAsync(request.Id);
-        if (product is null)
-            return TypedResults.NotFound();
-
-        var response = new GetProductResponse(product.Id, product.Name, product.Price);
-        return TypedResults.Ok(response);
-    }
 }
 
-app.MapGet("/products/{id}", GetProductEndpoint.Handle);
+app.MapGet("/orders", ([AsParameters] OrderQuery query, IOrderStore orders) =>
+        orders.List(query.Page, query.PageSize, query.Tenant))
+   .AddEndpointFilter<RequireActiveTenantFilter>();
 ```
 
-This structure makes each endpoint easier to test, understand, and modify in isolation. You avoid coupling unrelated endpoints through shared controller state or dependencies, and each endpoint's request and response contracts are explicit.
+Filters nest like middleware. The code before `next` runs in the order filters were added, and the code after `next` in reverse. Filters on a group run before filters on its endpoints, and an outer group's filters run before an inner group's, whatever order they were added in. Filter classes receive constructor dependencies from the container. The result a filter returns executes after the whole filter chain finishes, so a filter can still set response headers after `next` returns, unless the handler wrote to the response directly.
 
-## FastEndpoints
+Two variations cover the less common cases. `AddEndpointFilterFactory` runs once per endpoint at startup with the handler's `MethodInfo`, so a filter can check the handler's signature and attach itself only where it applies. And endpoint filters aren't limited to minimal APIs: attached through `app.MapControllers().AddEndpointFilter(...)`, the same filter runs for controller actions too.
 
-FastEndpoints is an open-source library that brings REPR principles and vertical slice architecture to ASP.NET Core with additional conventions and features. It provides base classes, built-in support for FluentValidation, and patterns for organizing endpoints as self-contained classes. While minimal APIs require you to manually wire up endpoints and dependencies, FastEndpoints automates discovery and registration based on conventions.
+Since .NET 10, the framework's own validation for minimal APIs, enabled with `builder.Services.AddValidation()`, checks data annotations on bound parameters and returns a `400` Problem Details response before the handler runs, which covers most of what hand-written validation filters used to do.
 
-FastEndpoints performance is comparable to minimal APIs, with both outperforming traditional controllers in startup time and memory overhead. The library does not support data annotations validation and requires FluentValidation instead, which may be a consideration depending on your existing validation approach.
+## Native AOT
 
-Minimal APIs remain the framework-native solution with full Microsoft support, Native AOT compatibility, and no additional dependencies. FastEndpoints offers more structure and conventions for teams that prefer explicit REPR patterns without building that infrastructure themselves. Choosing between the two depends on whether you value framework minimalism or prefer the additional structure and tooling that FastEndpoints provides.
+*Native AOT* publishing compiles the app ahead of time to a single native executable, with no JIT compiler at runtime. The payoff is faster startup, a smaller deployment, and lower memory use, which matter most for containers that scale out often and for serverless hosts. The cost is that nothing can depend on runtime reflection or code generation.
 
-## Performance Characteristics
+Minimal APIs support Native AOT because the framework can generate their binding code at compile time. With `PublishAot` set, a source generator, the Request Delegate Generator, writes the code that binds each handler's parameters and writes its results, replacing the reflection-based code the framework would otherwise build at startup. The app then has to do its part:
 
-Minimal APIs are optimized for low overhead and fast startup. They avoid loading MVC assemblies, the Razor view engine, and controller-specific features, reducing the application's memory footprint and initialization time. In synthetic benchmarks, minimal APIs perform comparably to controllers for request throughput but show significant advantages in cold start scenarios.
+- **Source-generated JSON.** Every type read from a request body or written to a response must be declared on a `JsonSerializerContext`, registered through the options that minimal APIs read:
 
-When published with Native AOT, minimal APIs can cold-start three to five times faster than controller-based equivalents. This makes them particularly well-suited for serverless environments where cold starts directly impact user experience and costs. The difference is less pronounced in long-running applications where startup time is amortized over many requests, but the reduced memory usage remains beneficial.
+  ```csharp
+  builder.Services.ConfigureHttpJsonOptions(options =>
+      options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonContext.Default));
 
-For typical APIs handling thousands of requests per second, the performance difference between minimal APIs and controllers is often negligible. Bottlenecks usually lie in database access, external service calls, or business logic rather than framework overhead. The choice between minimal APIs and controllers should weigh development ergonomics, team familiarity, and architectural fit alongside raw performance metrics.
+  [JsonSerializable(typeof(Order))]
+  [JsonSerializable(typeof(Order[]))]
+  internal partial class AppJsonContext : JsonSerializerContext { }
+  ```
 
-## Native AOT Compatibility
+- **AOT-compatible dependencies.** Libraries that scan assemblies, load plugins, or emit code at runtime won't work. MVC is the obvious one, along with most authentication handlers other than JWT bearer.
+- **Zero AOT warnings.** Publishing analyzes the whole app, including NuGet packages, and reports anything that relies on unsupported features. An app that publishes with warnings may fail at runtime where the JIT-compiled build worked, so test the published executable, not just `dotnet run`.
 
-Native AOT (Ahead-of-Time) compilation compiles .NET applications to native machine code, eliminating the need for the just-in-time compiler at runtime. This reduces startup time, memory usage, and deployment size, making it attractive for containers, serverless functions, and resource-constrained environments.
+The `webapiaot` template starts a project this way, using `CreateSlimBuilder` and source-generated JSON. An app that doesn't need AOT's startup and size gains has no reason to accept its constraints, and minimal APIs work the same with or without it.
 
-Minimal APIs are designed to be AOT-friendly. They avoid runtime reflection, dynamic code generation, and metadata inspection that AOT restricts or penalizes. Controllers, by contrast, rely heavily on reflection for routing, model binding, and action discovery, which increases AOT complexity and limits compatibility.
+## Key Takeaways
 
-When targeting Native AOT, minimal APIs are currently the only supported approach in ASP.NET Core. Controllers require additional trimming configuration and linker hints to function correctly under AOT, and even with those adjustments, some MVC features remain unsupported.
-
-Native AOT has constraints beyond just the programming model. It does not support dynamic assembly loading, runtime code generation, or certain reflection patterns. Frameworks and libraries that depend on these features may not work or may require alternative implementations. JSON serialization with `System.Text.Json` is fully supported with source generators that produce serialization code at compile time, but libraries using Reflection.Emit or dynamic proxies may not function under AOT.
-
-The decision to use Native AOT should consider deployment environment, startup time requirements, and compatibility with existing dependencies. For applications where cold start time is critical and dependencies support AOT, minimal APIs combined with Native AOT publish deliver measurable performance improvements. For applications with complex dependencies or those using features incompatible with AOT, traditional runtime compilation remains the pragmatic choice.
-
-## Red Flags
-
-Watch for these patterns that indicate minimal APIs may not be the best fit or that implementation needs adjustment:
-
-Repeating the same filters, metadata, or configuration across many endpoints suggests that route groups could consolidate shared setup. When multiple endpoints share common prefixes or require identical authorization, validation, or error handling, grouping them reduces duplication and makes changes easier.
-
-Inline lambdas that span many lines make route registrations hard to read and test. Extract handlers to named methods or separate classes when logic exceeds a few lines. This improves testability and keeps the route configuration clean.
-
-Missing OpenAPI metadata results in poor generated documentation. Without explicit names, tags, and response types, tools like Swagger UI generate incomplete or confusing descriptions. Adding metadata as endpoints are created avoids rework later when documentation becomes a priority.
-
-Ignoring parameter binding sources can lead to ambiguous or incorrect bindings. When parameters could plausibly come from multiple sources, explicitly specify `[FromRoute]`, `[FromQuery]`, `[FromBody]`, or `[FromServices]` to avoid surprises.
-
-Overusing `IResult` instead of `TypedResults` loses compile-time safety and metadata inference. While `IResult` works, `TypedResults` improves tooling support and makes return types explicit in method signatures.
-
-Mixing minimal APIs and controllers in the same application without a clear strategy creates confusion. If certain endpoints use minimal APIs for performance and others use controllers for complex action filters, document the decision criteria so future maintainers understand the pattern.
-
-Adopting Native AOT without verifying dependency compatibility can lead to runtime failures or missing functionality. Test thoroughly and review third-party libraries for AOT support before committing to Native AOT deployment.
+- Minimal APIs are the recommended default for new APIs and the only option for Native AOT. Controllers remain the better fit for custom model binding, non-JSON formats, and MVC's application model.
+- Binding picks a source from the parameter's type and name: special types, `BindAsync`, route then query for parseable types, services, then the body. Headers always need `[FromHeader]`.
+- A missing required value or an unparseable one is a `400` before the handler runs, with an empty body in production. Nullability decides what is required.
+- `TypedResults` document themselves for OpenAPI and are easy to test. Handlers returning several of them declare a `Results<...>` return type.
+- `ConfigureHttpJsonOptions` and `AddJsonOptions` configure different options objects, so a mixed app has to set both.
+- Route groups and one `Map{Feature}Endpoints` method per feature keep `Program.cs` readable, and group conventions apply to every endpoint inside.
+- Endpoint filters see bound arguments and results, run in registration order with group filters first, and can be attached to controllers too.
+- Native AOT needs source-generated JSON, AOT-compatible libraries, and a warning-free publish.

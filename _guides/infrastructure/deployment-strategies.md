@@ -173,64 +173,6 @@ A/B Testing deployment runs experiments comparing different versions simultaneou
 - Organizations with strong analytics and experimentation culture
 - Applications where user behavior data is crucial for decisions
 
-## Chaos Engineering Testing
-
-Chaos Monkey Testing is a form of resilience testing where random failures are injected into a system to test its ability to withstand and recover from unexpected disruptions. Chaos experiments range from simple manual actions in test environments to complex automated tests in production.
-
-<div class="callout callout--warning">
-<p class="callout__title">Production Risk Warning</p>
-<p>Chaos engineering tests are designed to break things in production. Start small in non-production environments and gradually expand scope. Always have rollback mechanisms and safety measures in place.</p>
-</div>
-
-### Core Principles
-Chaos engineering is made up of five main principles:
-
-1. **Define Steady State**: Establish measurable system output indicating normal behavior
-2. **Hypothesis Formation**: Predict that steady state will continue during experiments  
-3. **Real-World Variables**: Introduce realistic failure scenarios
-4. **Minimize Blast Radius**: Limit experiment impact to avoid customer disruption
-5. **Continuous Testing**: Run experiments regularly to maintain system resilience
-
-### Common Failure Scenarios
-- **Instance Termination**: Random server/container shutdowns
-- **Network Partitions**: Simulate network connectivity issues
-- **Resource Exhaustion**: CPU, memory, or disk space depletion
-- **Latency Injection**: Introduce delays in service communications
-- **Regional Outages**: Simulate entire availability zone failures
-
-### Popular Tools
-- **Chaos Monkey**: Netflix's original tool for random instance termination
-- **Gremlin**: Comprehensive chaos engineering platform
-- **LitmusChaos**: Kubernetes-native chaos engineering
-- **AWS Fault Injection Simulator**: AWS-specific fault injection service
-
-### Advantages
-- **Proactive Issue Discovery**: Find weaknesses before they cause outages
-- **Increased Confidence**: Build confidence in system resilience
-- **Improved Incident Response**: Better preparedness for real failures
-- **Cultural Benefits**: Promotes resilience-focused development practices
-
-### Disadvantages
-- **Production Risk**: Potential for unintended service disruption
-- **Complexity**: Requires sophisticated monitoring and safety mechanisms
-- **Resource Investment**: Dedicated team and tooling requirements
-- **Organizational Change**: Need for cultural shift toward failure acceptance
-
-### Implementation Best Practices
-Start by clearly setting the objectives and goals for the chaos tests. It's important to Identify how the system behaves in a stable state without disruptions:
-
-1. **Start Small**: Begin with non-production environments
-2. **Establish Baselines**: Know normal system behavior before testing
-3. **Implement Safety**: Have rollback mechanisms and monitoring in place
-4. **Document Everything**: Record experiments, results, and lessons learned
-5. **Gradual Expansion**: Increase experiment scope and frequency over time
-
-### When to Use
-- Mission-Critical Systems: When system uptime is non-negotiable
-- Complex distributed systems with multiple dependencies
-- Organizations with mature monitoring and incident response capabilities
-- Teams committed to building resilient, anti-fragile systems
-
 ## Comparison Matrix
 
 | Strategy | Downtime | Cost | Complexity | Rollback Speed | User Impact | Best For |
@@ -239,7 +181,6 @@ Start by clearly setting the objectives and goals for the chaos tests. It's impo
 | **Blue-Green** | Zero | High | Medium | Instant | All-or-nothing | Zero-downtime requirements |
 | **Canary** | Zero | Medium | High | Fast | Limited subset | Risk-averse, data-driven teams |
 | **A/B Testing** | Zero | Medium | High | Medium | Split audience | Feature optimization |
-| **Chaos Engineering** | Varies | Medium | High | N/A | Controlled | Resilience testing |
 
 ## Best Practices
 

@@ -2,7 +2,7 @@
 title: "Health Checks and Diagnostics"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "Performance & Operations"
+subcategory: "Testing & Operations"
 description: "Health checks, observability, and distributed tracing in ASP.NET Core APIs using IHealthCheck, OpenTelemetry, and Activity-based diagnostics."
 tags: [asp-net-core, health-checks, observability, opentelemetry, distributed-tracing, monitoring, diagnostics, kubernetes]
 ---
@@ -204,6 +204,95 @@ builder.Services.AddHealthChecks()
 Each check includes configuration options for timeouts, custom queries, and failure thresholds. The library also provides UI middleware that renders health check results as HTML or JSON, making it easier to inspect health status during development.
 
 Health check libraries reduce the boilerplate required to verify common dependencies and provide consistent behavior across services. However, custom health checks remain necessary for application-specific logic like checking message queue depth, validating circuit breaker state, or verifying background job health.
+
+## Request and Response Logging
+
+Logging HTTP requests and responses is common for diagnostics and auditing. ASP.NET Core provides built-in HTTP logging middleware as well as patterns for custom logging.
+
+### Built-In HTTP Logging
+
+Since .NET 6, ASP.NET Core includes an HTTP logging middleware that logs request and response properties like path, status code, and headers.
+
+```csharp
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields = HttpLoggingFields.RequestPath
+        | HttpLoggingFields.RequestMethod
+        | HttpLoggingFields.ResponseStatusCode;
+});
+
+app.UseHttpLogging();
+```
+
+The middleware supports filtering, redaction, and selective logging based on request properties. You can exclude sensitive headers like `Authorization` or redact query string parameters that contain tokens.
+
+### Custom Logging Middleware
+
+For more control, you can implement custom logging middleware. A common pattern is to log the request when it arrives and log the response when the pipeline completes.
+
+```csharp
+public class CustomLoggingMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<CustomLoggingMiddleware> _logger;
+
+    public CustomLoggingMiddleware(RequestDelegate next, ILogger<CustomLoggingMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        _logger.LogInformation("Request {Method} {Path} from {RemoteIp}",
+            context.Request.Method,
+            context.Request.Path,
+            context.Connection.RemoteIpAddress);
+
+        await _next(context);
+
+        _logger.LogInformation("Response {StatusCode} for {Method} {Path}",
+            context.Response.StatusCode,
+            context.Request.Method,
+            context.Request.Path);
+    }
+}
+```
+
+### Logging Request and Response Bodies
+
+Logging bodies is more complex because the request and response streams are forward-only. Reading the body consumes the stream, and subsequent middleware or model binding receives an empty stream.
+
+To log request bodies, you must enable buffering, which allows the body to be read multiple times.
+
+```csharp
+context.Request.EnableBuffering();
+
+using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+var body = await reader.ReadToEndAsync();
+context.Request.Body.Position = 0; // Reset for next middleware
+
+_logger.LogInformation("Request body: {Body}", body);
+```
+
+Response bodies require capturing the original response stream and replacing it temporarily with a memory stream.
+
+```csharp
+var originalBody = context.Response.Body;
+using var responseBody = new MemoryStream();
+context.Response.Body = responseBody;
+
+await _next(context);
+
+responseBody.Seek(0, SeekOrigin.Begin);
+var responseText = await new StreamReader(responseBody).ReadToEndAsync();
+responseBody.Seek(0, SeekOrigin.Begin);
+await responseBody.CopyToAsync(originalBody);
+
+_logger.LogInformation("Response body: {Body}", responseText);
+```
+
+Logging bodies has performance implications and can expose sensitive data. Use it selectively, typically only in development or for specific diagnostic scenarios.
 
 ## Request Logging and Correlation
 
@@ -414,6 +503,101 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 ```
 
 Custom response writers allow health check endpoints to return whatever format is required by monitoring systems or load balancers. Some systems expect specific JSON schemas, while others parse text responses.
+
+## Health Checks for Background Services
+
+Background services run silently, making failures difficult to detect. A background service that stops processing work due to an unhandled exception may remain undetected until the impact becomes visible through stale data or unprocessed work items. Health checks expose background service status, enabling monitoring systems to detect failures and trigger alerts or remediation.
+
+ASP.NET Core's health check system provides a framework for implementing custom health checks and exposing them through HTTP endpoints. Background services can register health checks that report their status, enabling orchestrators like Kubernetes, load balancers, and monitoring systems to detect unhealthy instances.
+
+```csharp
+public class BackgroundServiceHealthCheck : IHealthCheck
+{
+    private readonly OrderProcessingService _service;
+
+    public BackgroundServiceHealthCheck(OrderProcessingService service)
+    {
+        _service = service;
+    }
+
+    public Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        if (_service.IsHealthy)
+        {
+            return Task.FromResult(
+                HealthCheckResult.Healthy("Background service is running"));
+        }
+
+        return Task.FromResult(
+            HealthCheckResult.Unhealthy("Background service has stopped"));
+    }
+}
+
+// Configuration
+builder.Services.AddHealthChecks()
+    .AddCheck<BackgroundServiceHealthCheck>("background-service");
+
+app.MapHealthChecks("/health");
+```
+
+The background service exposes an `IsHealthy` property updated during execution. When the service starts successfully, it sets `IsHealthy` to true. If an unhandled exception stops the service, the health check detects the unhealthy state and reports it. External systems polling the health endpoint receive HTTP 503 when the service is unhealthy, triggering appropriate responses.
+
+Health checks can report detailed information beyond binary healthy/unhealthy status. Report the last successful execution time, number of consecutive failures, queue depth, or processing throughput. Health check results support data dictionaries containing arbitrary key-value pairs exposed through the health check response.
+
+### Startup Health Checks
+
+Background services performing expensive initialization at startup can delay application readiness. Health checks can distinguish between startup, liveness, and readiness probes. Startup checks report when long-running initialization completes, liveness checks report whether the service is still running, and readiness checks report whether the service can handle work.
+
+```csharp
+public class StartupService : BackgroundService
+{
+    public bool StartupCompleted { get; private set; }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await InitializeAsync(stoppingToken);
+        StartupCompleted = true;
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await ProcessWorkAsync(stoppingToken);
+        }
+    }
+
+    private async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        // Expensive initialization work
+        await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
+    }
+}
+
+public class StartupHealthCheck : IHealthCheck
+{
+    private readonly StartupService _service;
+
+    public StartupHealthCheck(StartupService service)
+    {
+        _service = service;
+    }
+
+    public Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        if (_service.StartupCompleted)
+        {
+            return Task.FromResult(HealthCheckResult.Healthy());
+        }
+
+        return Task.FromResult(
+            HealthCheckResult.Degraded("Startup in progress"));
+    }
+}
+```
+
+Container orchestrators can use startup checks to delay routing traffic until initialization completes, preventing requests from reaching instances not yet ready to process work. This pattern improves reliability during deployments and scaling operations.
 
 ## Common Health Check Patterns
 

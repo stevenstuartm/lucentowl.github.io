@@ -2,237 +2,225 @@
 title: "Routing"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "ASP.NET Fundamentals"
-description: "Comprehensive guide to routing in ASP.NET Core APIs, covering endpoint architecture, route templates, constraints, precedence, link generation, and diagnostics."
-tags: [asp-net-core, routing, endpoint-routing, url-generation, minimal-api, mvc, api-design]
+subcategory: "Fundamentals"
+description: "How ASP.NET Core endpoint routing turns a request into one endpoint: endpoints and their metadata, route templates, constraints and what they're not for, how Order and precedence pick one route among several, what happens when nothing matches, fallback and short-circuit routes, host matching, link generation with LinkGenerator, and diagnosing 404, 405, 415, and ambiguous matches."
+tags: [fundamentals, routing, route-templates, route-constraints, link-generation, fallback-routes]
 ---
 
-## Understanding Endpoint Routing
+## Endpoints, Matching, and Execution
 
-Routing sits at the heart of every ASP.NET Core application. The routing system determines which code handles each incoming request by analyzing the URL path, HTTP method, headers, and other request characteristics. Unlike older ASP.NET routing that coupled matching and execution, endpoint routing separates these concerns into distinct middleware components that provide precise control over how requests flow through the pipeline.
+Routing decides which code handles a request. In ASP.NET Core that code is an *endpoint*, made of three things:
 
-Endpoints represent units of executable request-handling code. Each endpoint contains a delegate that processes the request and produces a response, along with metadata that describes requirements like authorization policies, rate limiting rules, and CORS settings. The routing system matches requests to endpoints, then the endpoint middleware executes the selected endpoint's delegate.
+- **A request delegate**, the function that takes the `HttpContext` and writes the response.
+- **A route pattern**, describing the URLs it answers.
+- **Metadata**, a collection of objects describing its requirements, such as an `[Authorize]` attribute, a CORS policy, or the HTTP methods it accepts.
 
-## Endpoint Routing Architecture
+Every minimal API handler (`MapGet`, `MapPost`, and the rest), controller action, Razor Page, SignalR hub, gRPC service, and health check becomes an endpoint in one shared route table, so the rules in this guide apply to all of them.
 
-The routing system splits into two middleware components that work together to match and execute endpoints. This separation enables powerful scenarios like conditional middleware execution, early termination for specific routes, and fine-grained control over the request processing pipeline.
+*Endpoint routing* splits the work into two steps at two points in the middleware pipeline, the chain of components every request passes through. The routing middleware (`UseRouting`) chooses an endpoint and attaches it to the `HttpContext` without running it. The endpoint middleware, at the end of the pipeline, runs whatever was chosen. `WebApplication` places both automatically.
 
-The `UseRouting` middleware performs route matching. It examines the incoming request, compares it against all registered route templates, and selects the best matching endpoint based on the URL path, HTTP method, and any specified constraints. This middleware assigns the selected endpoint to the HttpContext so downstream middleware can inspect it.
+{% include figure.html id="asp-endpoint-selection" %}
 
-The `UseEndpoints` middleware executes the selected endpoint. After authorization, CORS, rate limiting, and other middleware have run, the endpoint middleware invokes the delegate associated with the matched endpoint. This separation allows middleware to make decisions based on which endpoint was matched without actually executing it yet.
+The gap between the two steps lets other middleware act on the chosen endpoint before it runs. Methods such as `RequireAuthorization`, `RequireCors`, and `RequireRateLimiting` don't enforce anything themselves. They add metadata to the endpoint, and the authorization, CORS (cross-origin request), and rate-limiting middleware read that metadata from the chosen endpoint and enforce it. Custom metadata attached with `WithMetadata` works the same way for an app's own middleware, which reads it through `context.GetEndpoint()`. Route groups (`MapGroup`) apply a shared prefix and shared metadata to many minimal API endpoints at once.
 
-Between these two middleware, you can place conditional logic that inspects the matched endpoint's metadata and decides whether to continue processing or short-circuit the pipeline. Authorization middleware uses this pattern to check whether the matched endpoint requires authentication before executing it.
+### What Routing Looks At
 
-### Short-Circuit Routing
+Routing reads `Request.Path`, the HTTP method, the `Host` header, and, for endpoints that declare which request body types they accept, the `Content-Type` header. The query string plays no part, so `/orders?status=open` and `/orders` match the same endpoints. Neither does `Request.PathBase`, a prefix the app is mounted under, such as `/shop` behind a reverse proxy. `UsePathBase` moves that prefix out of `Path`, and in a `WebApplication` it has to run before an explicit `UseRouting` to take effect.
 
-Starting in .NET 8, endpoints can execute immediately in the routing middleware instead of waiting for the endpoint middleware. Short-circuit routing bypasses the authorization, CORS, and other middleware that normally runs between route matching and endpoint execution. This optimization reduces latency for endpoints that don't require those middleware components.
+### How Routing Chooses
 
-Short-circuit endpoints prove useful for health checks, metrics endpoints, and other infrastructure routes that need minimal overhead. However, they should not be used for endpoints requiring authorization, CORS, rate limiting, or other middleware-based features since those middleware will never run.
+Selection narrows the route table in stages:
+
+{% include figure.html id="asp-route-selection" %}
+
+Routing first finds the templates that fit the path. It then filters those candidates by method, host, and body type, drops any whose constraints reject the values in the URL, and finally picks the best survivor. The rest of this guide covers templates, constraints, and how the best is picked. The failures look different to a client:
+
+- **No endpoint.** When no template fits, or filtering and constraints leave nothing, routing doesn't return a `404` itself. It leaves the endpoint unset and the request continues down the pipeline. Later middleware, such as static files, still gets a chance to answer, and only when nothing does is the result a `404`. A request for a host no endpoint accepts ends up here too.
+- **A `405` or `415` endpoint.** When the path fits but no candidate accepts the request's method, routing selects a built-in endpoint that responds `405 Method Not Allowed`. When no candidate accepts the request body's content type, it selects one that responds `415 Unsupported Media Type`, which a minimal API handler with a JSON body parameter can trigger for a request sent as form data. Like any endpoint, these run at the end of the pipeline.
+- **An ambiguous match.** When two candidates tie on every ranking rule, routing throws an `AmbiguousMatchException` naming them, which surfaces as a `500`.
+
+The method check runs before constraints. With only `GET orders/{id:int}` mapped, `POST /orders/abc` returns `405`, even though the constraint would also have rejected `abc`. And the `405` only appears when no candidate accepts every method. A fallback route or a `Map` endpoint that handles all verbs on an overlapping path turns what would be a `405` into whatever that endpoint returns.
 
 ## Route Templates
 
-Route templates define patterns that match URL paths to endpoints. Templates can contain literal segments, parameters, optional parameters, and catch-all parameters that capture varying portions of the URL.
+A *route template* is the pattern an endpoint answers, such as `api/orders/{id}`. It is made of segments separated by `/`, and each segment is literal text, a parameter in braces, or both. Matching uses the decoded path and ignores case throughout.
 
-Literals in route templates must match exactly. The template `api/products` only matches requests to that exact path. Casing depends on your route configuration; by default, route matching is case-insensitive but can be configured to require exact case matches.
+| Form | Example | Matches | Notes |
+| --- | --- | --- | --- |
+| Literal | `api/orders` | `/api/orders` | Only that text |
+| Parameter | `api/orders/{id}` | `/api/orders/42`, `/api/orders/abc` | Captures one segment as the route value `id` |
+| Optional parameter | `api/orders/{status?}` | `/api/orders`, `/api/orders/open` | No `status` route value when the segment is absent |
+| Default value | `api/orders/{status=open}` | `/api/orders`, `/api/orders/closed` | `status` is `open` when the segment is absent |
+| Catch-all | `files/{*path}` | `/files/a/b/c.txt` | Captures the rest of the path. Link generation escapes `/` as `%2F` |
+| Catch-all, preserving `/` | `files/{**path}` | `/files/a/b/c.txt` | Same match. Link generation keeps `/` unescaped |
+| Complex segment | `{name}.{ext}` | `/report.pdf` | Several parameters in one segment. Costlier to match |
 
-Parameters appear within curly braces and capture segments of the URL. The template `api/products/{id}` matches any single-segment path like `api/products/42` or `api/products/laptop-123`, capturing the value into a route parameter named `id`.
-
-Optional parameters use a question mark suffix and match whether the segment is present or not. The template `api/products/{category?}` matches both `api/products` and `api/products/electronics`. When the optional segment is missing, the parameter value is null.
-
-Catch-all parameters use an asterisk prefix and capture all remaining segments including slashes. The template `files/{*filepath}` matches `files/images/photo.jpg`, capturing `images/photo.jpg` as the `filepath` parameter. This pattern is useful for serving static files or handling hierarchical paths.
-
-### Default Values and Constraints
-
-Route parameters can specify default values that apply when the segment is missing. The template `api/products/{category=all}` provides a default value of "all" when no category is specified. Default values differ from optional parameters because they guarantee the parameter has a value.
-
-Inline constraints restrict which values match the parameter. Constraints appear after a colon following the parameter name. The template `api/products/{id:int}` only matches when the id segment can be parsed as an integer. If the segment isn't a valid integer, the route doesn't match and routing continues checking other routes.
-
-Multiple constraints can be chained with additional colons. The template `api/products/{id:int:min(1)}` requires an integer greater than or equal to 1. Constraints run in the order specified and all must pass for the route to match.
+Route values are strings until something converts them. Minimal API parameter binding and MVC model binding do that when they fill the handler's parameters, so the same `{id}` becomes an `int` in a handler declared with `int id`, and a missing optional value becomes `null` in a handler declared with `string? status`.
 
 ## Route Constraints
 
-Constraints validate route parameters before a route is considered a match. They prevent incorrect matches and help disambiguate between similar routes. However, constraints should not be used for input validation; they exist to select the correct route, not to validate business rules.
+A *constraint* restricts which values a parameter accepts, written after a colon: `{id:int}`. A candidate whose segment fails the constraint drops out, and routing considers the rest. Several constraints chain with further colons, as in `{id:int:min(1)}`, and all must pass.
 
-When a constraint fails, routing continues checking other routes. If multiple routes could match the URL but have different constraints, the first route with satisfied constraints wins. This behavior enables patterns like having separate endpoints for integer IDs versus string slugs.
+| Kind | Constraints | Notes |
+| --- | --- | --- |
+| Type | `int`, `long`, `bool`, `guid`, `decimal`, `double`, `float`, `datetime` | Parsed with the invariant culture, so URLs aren't localized |
+| Numeric range | `min(n)`, `max(n)`, `range(min,max)` | Integer bounds |
+| String length | `minlength(n)`, `maxlength(n)`, `length(n)`, `length(min,max)` | |
+| Characters | `alpha` | One or more letters `a` to `z`, case-insensitive |
+| Pattern | `regex(expression)` | See below |
+| File-like | `file`, `nonfile` | Whether the last segment looks like a file name with an extension |
+| Generation | `required` | Requires an explicit value when generating a link |
 
-### Type Constraints
+`WebApplication.CreateSlimBuilder`, the reduced builder meant for trimmed and Native AOT apps, doesn't register the real `regex` constraint, to keep app size down. A route that uses it throws an `InvalidOperationException` on the first request, when routing builds its matcher. Calling `builder.Services.AddRouting()`, or registering the constraint with `RouteOptions.SetParameterPolicy<RegexInlineRouteConstraint>("regex")`, restores it.
 
-Type constraints verify that a parameter can be converted to a specific type. Common type constraints include `int`, `long`, `guid`, `bool`, `decimal`, `double`, and `float`. The `datetime` constraint matches date and time values that can be parsed by the invariant culture.
+### Constraints Select Routes; They Don't Validate Input
 
-The `alpha` constraint requires alphabetic characters only, while `alphanumeric` allows letters and digits. These constraints are useful for slug-based routes where you want to ensure clean URL segments.
+Constraints exist to choose between routes that would otherwise overlap, such as sending `/orders/42` to a lookup by ID and `/orders/recent` to a list. They are the wrong tool for input validation. A value that fails a constraint produces a `404 Not Found`, because as far as routing is concerned no endpoint exists for that URL. A client that sends `/orders/-5` to an endpoint constrained with `{id:int:min(1)}` learns nothing about what it did wrong. Validation belongs in the handler, a filter, or the validation system, where it can return a `400 Bad Request` that says what failed.
 
-### Range and Length Constraints
+### Regex Constraints
 
-Range constraints limit numeric values. The `min(value)` constraint requires the parameter to be at least the specified value, while `max(value)` sets an upper bound. The `range(min, max)` constraint combines both checks.
+A regex constraint runs with `RegexOptions.IgnoreCase`, `Compiled`, and `CultureInvariant`, and with a match timeout, since patterns applied to untrusted URLs can otherwise be used for denial of service. It is not anchored automatically. `{code:regex(\d+)}` matches any segment that *contains* a digit, and only `{code:regex(^\d+$)}` requires the whole segment to be digits. Written in an ordinary C# string, each backslash is doubled as usual.
 
-Length constraints work with string parameters. The `minlength(length)` and `maxlength(length)` constraints enforce minimum and maximum string lengths. The `length(min, max)` constraint combines both checks in a single constraint.
-
-### Pattern Constraints
-
-The `regex(expression)` constraint matches parameters against a regular expression. This powerful constraint enables complex validation patterns but should be used carefully since complex expressions can impact routing performance.
-
-For example, `{action:regex(^(list|get|create)$)}` only matches when the action parameter is exactly "list", "get", or "create". The regex must match the entire parameter value, not just part of it.
+Routing uses `{`, `}`, `[`, and `]` as delimiters, so any of the four inside the expression is written twice. The regex `^[a-z]+$` becomes `{code:regex(^[[a-z]]+$)}` in a template, and a quantifier's braces double the same way. Preferring the typed constraints where one fits avoids both the escaping and the matching cost.
 
 ### Custom Constraints
 
-Custom constraints implement the `IRouteConstraint` interface and provide the `Match` method that determines whether a value satisfies the constraint. Custom constraints enable domain-specific validation logic that goes beyond the built-in constraints.
+A custom constraint implements `IRouteConstraint`, whose `Match` method returns whether a value is acceptable, and is registered under a name in the route options:
 
-Constraints are registered in the routing configuration using a unique name. Once registered, they can be used inline in route templates like any built-in constraint. Custom constraints commonly validate against application-specific rules like checking whether an ID exists in a database or whether a value matches a configured pattern.
+```csharp
+builder.Services.Configure<RouteOptions>(options =>
+    options.ConstraintMap.Add("slug", typeof(SlugConstraint)));
 
-## Route Precedence and Matching
+app.MapGet("/articles/{name:slug}", (string name) => $"Article {name}");
+```
 
-When multiple routes could match a request, the routing system uses precedence rules to select the best match. Route precedence is computed based on specificity, with more specific routes given higher priority.
+Constraints run during matching, potentially for many candidates per request, and synchronously. They should be cheap, self-contained checks on the string. A constraint that looks the value up in a database adds I/O to routing itself, and it turns a "not found" into a `404` from routing rather than an answer from the handler.
 
-Literal segments have the highest precedence. A route with more literal segments will match before one with parameters in those positions. For example, `api/products/new` matches before `api/products/{id}` when the request is for `api/products/new`.
+## When Several Routes Match
 
-Constrained parameters have higher precedence than unconstrained parameters. A route with `{id:int}` matches before `{id}` when the segment is a valid integer. This allows you to have separate endpoints for different parameter types without explicit ordering.
+Many templates can match one URL. `/orders/recent` matches both `orders/recent` and `orders/{id}`. Routing doesn't pick the first one registered. It ranks the survivors, first by each endpoint's `Order` value, lower first, and then, among equal `Order`, by how specific the template is:
 
-Optional and catch-all parameters have the lowest precedence. Routes with required parameters match before routes with optional parameters. This ensures that more specific routes take priority over general fallback routes.
+1. A template with more segments is more specific.
+2. A literal segment is more specific than a parameter.
+3. A parameter with a constraint is more specific than one without.
+4. A complex segment such as `{name}.{ext}` ranks with a constrained parameter.
+5. A catch-all parameter is the least specific.
 
-When precedence rules don't determine a clear winner, the routing system throws an `AmbiguousMatchException`. This exception indicates that multiple routes match equally well and you need to either add constraints to disambiguate them or use explicit route ordering.
+So `orders/recent` wins over `orders/{id}` for `/orders/recent`, and `orders/{id:int}` would win over `orders/{slug}` for `/orders/42` while `/orders/abc` still reaches the slug route. When templates tie too, the filters break the tie where they can: an endpoint for an explicit method beats one that accepts any method, and an exact host beats a wildcard. Only a tie on all of these throws `AmbiguousMatchException`, and the fix is to make one template more specific with a literal or a constraint.
 
-### Route Order
+`Order` is 0 by default for minimal API endpoints and attribute-routed controller actions, and controllers can change it through the `Order` property of route attributes. Two kinds of route start elsewhere:
 
-The `Order` property on route attributes provides explicit control over route precedence. Lower order values have higher priority. When two routes match and have different order values, the route with the lower order wins.
+- **Conventional controller routes**, declared with `MapControllerRoute`, get `Order` 1, 2, 3, and so on, in the order they are declared. Any minimal API endpoint or attribute route that matches therefore beats a conventional route, however specific the conventional template is.
+- **Fallback and short-circuit routes**, covered next, get the highest possible `Order`, so they rank below every ordinary endpoint.
 
-By default, all routes have an order of 0. Setting explicit order values allows you to override the normal precedence rules when needed. However, relying too heavily on explicit ordering can make routing logic difficult to understand; constraints and careful route design usually provide better solutions.
+A route table that depends on explicit `Order` values is harder to reason about than one whose templates don't overlap.
 
-## Link Generation
+## Fallback and Short-Circuit Routes
 
-Generating URLs to endpoints is as important as routing requests to them. Link generation ensures that URLs stay consistent throughout the application and can adapt if route templates change. Instead of hardcoding URLs, you generate them based on endpoint names or route values.
+Two kinds of route exist for requests that shouldn't go through normal endpoint handling.
 
-The `LinkGenerator` service provides the primary API for generating URLs. This service is registered as a singleton and can be injected into any class, making it more flexible than the older `IUrlHelper` which requires controller context.
+### Fallback Routes
 
-### Using LinkGenerator
+A *fallback* route catches requests nothing else matched. `MapFallback` registers a handler that accepts every method, with the highest `Order` and a template of `{*path:nonfile}`, so it answers any unmatched path whose last segment doesn't look like a file name. `MapFallbackToFile("index.html")` is the usual way to serve a single-page application from the same host as its API, so that the client-side router receives deep links like `/orders/42/edit`. Requests for missing files such as `/app.js` still get a `404`, because they fail the `nonfile` constraint.
 
-The `GetPathByAction` method generates a path to a controller action by name. You provide the controller name, action name, and any route values needed to fill the template parameters. The result is a path like `/api/products/42` that you can use in responses or headers.
+The same breadth causes the classic problem with that setup. A mistyped or removed API path, such as `/api/ordrs/5`, also matches the fallback and returns `index.html` with `200 OK`, so an API client sees a successful HTML response rather than a `404`. Because the fallback accepts every method, it also swallows what would have been a `405`: a `POST` to a GET-only API route gets the HTML page too. Route templates have no syntax for excluding a prefix, so the usual fix claims the API's prefix with its own catch-all, as in `app.MapShortCircuit(404, "api")`. That route and the fallback share the highest `Order`, and the literal `api` segment is more specific than the fallback's catch-all, so unmatched API paths get a plain `404`. That route accepts every method as well, so a wrong-verb API request gets a `404` rather than a `405`.
 
-The `GetUriByAction` method works similarly but produces an absolute URI including the scheme and host. This method is useful when you need to return full URLs in API responses, such as Location headers after creating a resource.
+### Short-Circuit Routes
 
-For minimal APIs, the `GetPathByName` and `GetUriByName` methods generate URLs to named endpoints. Endpoints are named using the `WithName` method when mapping routes. Named endpoints provide stable references that don't depend on implementation details like action method names.
+Since .NET 8, an endpoint can run straight from the routing middleware and end the request there, skipping every middleware between routing and the endpoint middleware:
 
-### Route Values and Ambient Values
+```csharp
+app.MapGet("/healthz", () => "Healthy").ShortCircuit();
 
-Route values are the parameters you explicitly provide when generating a link. If you're generating a URL to an endpoint with an `{id}` parameter, you pass the id as a route value.
+// Answer every path under these prefixes with a 404 and nothing else
+app.MapShortCircuit(404, "robots.txt", "favicon.ico");
+```
 
-Ambient values come from the current request's route data. When generating links from within a controller action, the current controller and action are ambient values. Link generation can reuse these values unless you explicitly override them, which simplifies generating links to actions in the same controller.
+This suits endpoints that don't need the middleware in between, such as liveness probes and the steady stream of `robots.txt` and `favicon.ico` requests an API receives from browsers and crawlers. `MapShortCircuit` treats each string as a prefix, matching the path and anything below it, at the highest `Order`, so any ordinary endpoint that also matches wins.
 
-The link generator merges ambient values and explicit route values to fill the template parameters. If a required parameter isn't found in either source, link generation returns null indicating that no route could satisfy the requirements.
+Skipping the middleware also skips the checks it performs. A short-circuit endpoint that carries authorization metadata (`[Authorize]`, `RequireAuthorization`), CORS metadata (`[EnableCors]`, `RequireCors`), or an antiforgery requirement (a token check that protects form posts from cross-site request forgery) throws an `InvalidOperationException` when a request reaches it, rather than silently serving the request unchecked. The check can be turned off with `RouteOptions.SuppressCheckForUnhandledSecurityMetadata`, which only makes sense when something else enforces those requirements.
 
-### IUrlHelper in Controllers
+## Host Matching
 
-Controller-based APIs can use `IUrlHelper` for link generation. This helper is available through the `Url` property on controller base classes. The `Action` method generates a URL to another action, while the `RouteUrl` method generates a URL by route name.
+`RequireHost` limits an endpoint to requests whose `Host` header matches a pattern. It accepts an exact host, a wildcard subdomain, a port, or a host and port, and the endpoint matches if any of the patterns match:
 
-`IUrlHelper` automatically uses the current request's ambient values, making it convenient for generating links within the same area or controller. However, `LinkGenerator` is generally preferred for new code because it doesn't require controller context and can be used in services, middleware, and other non-controller components.
+```csharp
+app.MapGet("/", () => "Contoso").RequireHost("contoso.com", "*.contoso.com");
+app.MapGet("/admin/stats", () => "...").RequireHost("*:8080");
+```
 
-## Area Routing
+The port in a pattern is compared with the port named in the `Host` header, not the port the connection arrived on, and the header is whatever the client sent. A client connected to the public listener can send `Host: example.com:8080` and match the second endpoint. Host matching therefore organizes endpoints and doesn't secure them. An endpoint meant only for an internal port needs a check on `HttpContext.Connection.LocalPort`, authorization, or a listener that isn't publicly reachable. Controllers use the `[Host]` attribute for host matching. Rejecting requests for hosts the app doesn't serve at all is the job of host filtering (`AllowedHosts`), which runs before routing.
 
-Areas partition large applications into separate functional groups, each with its own set of controllers, views, and models. Areas create a hierarchy for routing by adding an `area` route parameter that sits above the controller and action.
+## Generating URLs
 
-The route template for areas typically looks like `{area}/{controller}/{action}/{id?}`. This structure allows the routing middleware to identify the area from the URL first, then the specific controller within that area, and finally the action method to execute.
+Hardcoded URLs break silently when a template changes. *Link generation* builds URLs from the route table instead, so a changed template changes every generated link with it.
 
-Controller classes opt into an area using the `[Area("AreaName")]` attribute. This attribute adds metadata that the routing system uses to match requests. Routes can also require a specific area using constraints, ensuring that a route only matches when the area segment has the expected value.
+`LinkGenerator` is the service for this. It is a singleton, so it can be injected anywhere, including middleware and background services. It generates a path or an absolute URI to an endpoint identified either by name or, for controllers, by action and controller name. Minimal API endpoints get a name with `WithName`, and names must be unique across the app.
 
-Areas prove valuable in large APIs where you want to organize controllers by functional domain. For example, an e-commerce API might have separate areas for catalog, orders, customers, and administration. Each area contains the controllers relevant to that domain, improving code organization and navigation.
+```csharp
+app.MapGet("/orders/{id:int}", (int id, IOrderStore orders) => orders.Find(id))
+   .WithName("GetOrder");
 
-Link generation with areas requires passing the area as a route value. When generating a link to an action in a different area, you must explicitly specify the area name. This ensures that the generated URL includes the correct area segment.
+// Minimal API handlers can take services and the HttpContext as parameters
+app.MapPost("/orders", (CreateOrder request, IOrderStore orders, LinkGenerator links, HttpContext http) =>
+{
+    var order = orders.Create(request);
+    var location = links.GetPathByName(http, "GetOrder", new { id = order.Id });
+    return Results.Created(location, order);
+});
+```
 
-## Route Groups in Minimal APIs
+| Method | Produces |
+| --- | --- |
+| `GetPathByName` | A path such as `/orders/42` to a named endpoint |
+| `GetUriByName` | An absolute URI including scheme and host |
+| `GetPathByAction`, `GetUriByAction` | The same, for a controller action |
 
-Minimal APIs use the `MapGroup` method to organize related endpoints under a common route prefix and configuration. Route groups reduce repetitive code and allow applying middleware, metadata, and filters to entire groups of endpoints with a single method call.
+The overloads that take `HttpContext` fill in the scheme, host, and path base from the current request. The absolute-URI overloads take the host from the request's `Host` header, so an app that builds absolute links this way needs host filtering, or a client can make it emit links to a host of the client's choosing.
 
-Creating a group starts with calling `MapGroup` on the `WebApplication` and providing a route prefix. All endpoints added to the group inherit this prefix. For example, a group with prefix `/api/products` makes all its endpoints appear under that path.
+The action-based overloads also reuse the current request's route values as *ambient values*. Controller routes carry the controller and action names as route values, so a link from one action to another in the same controller doesn't have to repeat the controller name. The name-based overloads don't use ambient values, so every value the template needs has to be passed. When no endpoint can be satisfied by the values given, all of these methods return `null` rather than throw.
 
-Groups can apply shared configuration using methods like `RequireAuthorization`, `WithMetadata`, `AddEndpointFilter`, and `WithOpenApi`. These methods apply to every endpoint in the group, eliminating the need to repeat the same configuration on each individual endpoint.
+Controllers can also use `IUrlHelper` through their `Url` property, as in `Url.Action` or `Url.RouteUrl`. It wraps the same machinery but needs a controller or action context, which `LinkGenerator` doesn't. Setting `RouteOptions.LowercaseUrls` makes generated paths lowercase without changing how incoming URLs match.
 
-Nested groups provide deeper organization. You can create a group for `/api`, then create subgroups for `/products` and `/orders` within it. Each level of nesting adds its prefix and configuration to the endpoints below it.
+## Diagnosing Routing Problems
 
-Empty prefix groups serve a special purpose: applying configuration without changing routes. An empty group like `MapGroup("")` allows you to attach metadata or filters to a collection of endpoints while keeping their original paths. This pattern is useful when you want to apply authorization or OpenAPI configuration to multiple endpoints that don't share a common prefix.
+Each failure in the selection figure has a handful of usual causes:
 
-## Host and Port Matching
-
-Routes can restrict matches based on the request's host header or port. Host matching enables scenarios where different endpoints handle requests to different domains, even when running on the same server.
-
-The `RequireHost` method constrains a route to specific hosts. You can specify exact hosts like `api.example.com` or use wildcards like `*.example.com` to match any subdomain. Multiple host patterns can be provided, and the route matches if any pattern matches.
-
-Port matching works similarly through route constraints. You can specify that a route only matches requests to a particular port, which is useful when running development and production endpoints on the same application instance but different ports.
-
-Host-based routing should be used carefully in production environments. The host header can be spoofed by clients, so don't rely on it for security decisions. Use host matching for convenience and organization, but enforce security through authentication and authorization middleware.
-
-## Endpoint Metadata and Filters
-
-Endpoints carry metadata that describes their requirements and characteristics. Metadata includes authorization policies, CORS settings, rate limiting rules, content type restrictions, and custom data that middleware and filters can inspect.
-
-Methods like `RequireAuthorization` and `RequireCors` add metadata to endpoints. These methods don't directly enforce the requirements; instead, they attach metadata that the corresponding middleware reads and enforces. This separation allows middleware to make decisions based on what the endpoint requires.
-
-Custom metadata can be added using `WithMetadata`. Any object can be attached as metadata, making it available to middleware, filters, and other components that process the request. Custom metadata enables application-specific logic like feature flags, API versioning schemes, or permission requirements.
-
-Endpoint filters provide lightweight hooks for processing requests before and after endpoint execution. Filters can inspect and modify the arguments passed to an endpoint, short-circuit execution by returning a result directly, or handle exceptions. Filters are simpler than middleware for endpoint-specific logic since they only run for the matched endpoint.
-
-Filters are added to individual endpoints or entire route groups using `AddEndpointFilter`. The filter receives the endpoint context and a next delegate, allowing it to run code before and after the endpoint executes. Filters can be async and support dependency injection, making them powerful tools for cross-cutting concerns.
-
-## Route Debugging and Diagnostics
-
-Understanding which route matched a request is critical when debugging routing issues. Several techniques help diagnose routing problems and understand how requests flow through the routing system.
-
-Built-in metrics track routing operations. The `Microsoft.AspNetCore.Routing` meter reports metrics about route matching attempts and results. These metrics show how many requests matched endpoints versus how many failed to match, helping identify configuration issues.
-
-Middleware between `UseRouting` and `UseEndpoints` can inspect the matched endpoint. The `HttpContext.GetEndpoint()` method returns the endpoint selected by routing, including its route pattern and metadata. This inspection point is useful for logging which endpoint will handle each request.
-
-Route debugger tools can be integrated into applications to visualize all registered routes. These tools typically render a page showing every route template, the controller or handler it maps to, and any constraints or metadata. Comparing the registered routes against failing requests often reveals missing templates or incorrect constraints.
-
-Logging from the routing infrastructure provides detailed information about the matching process. Enabling debug-level logs for the `Microsoft.AspNetCore.Routing` namespace shows which routes were considered, which constraints passed or failed, and why specific routes were selected or rejected.
-
-Common routing failures stem from incorrect constraints, missing route values, or ambiguous matches. When a request returns 404, verify that a route template matches the URL structure. When seeing ambiguous match exceptions, examine the competing routes and add constraints or explicit ordering to disambiguate them.
-
-## Minimal API vs Controller Routing
-
-Minimal APIs and controller-based APIs use the same underlying routing system but configure routes differently. Understanding these differences helps you choose the right approach and mix both styles when appropriate.
-
-Minimal APIs define routes inline using methods like `MapGet`, `MapPost`, and `MapGroup` directly on the `WebApplication`. Each endpoint is registered with an explicit route template and handler delegate. This approach provides maximum flexibility and makes the route structure visible at a glance.
-
-Controller-based APIs use attribute routing with `[Route]`, `[HttpGet]`, and similar attributes on controller classes and action methods. The routing system discovers these attributes through reflection and builds the route table automatically. This approach scales well for APIs with many endpoints organized into controllers.
-
-Combining both styles in the same application is fully supported. You can use controllers for CRUD operations on domain entities while using minimal APIs for health checks, metrics, or simple utility endpoints. The routing system treats all endpoints uniformly regardless of whether they came from controllers or minimal API methods.
-
-Route precedence works identically for both styles. A minimal API route and a controller route can both match the same URL pattern, and the normal precedence rules determine which one wins. Constraints, order values, and specificity all apply consistently across both programming models.
-
-## Common Routing Patterns
-
-Several routing patterns appear frequently in well-designed APIs. These patterns solve common organizational and technical challenges while keeping routes clean and maintainable.
-
-Versioning through route prefixes places the API version in the URL like `/api/v1/products` and `/api/v2/products`. Route groups or area routing naturally support this pattern by applying version-specific prefixes to groups of endpoints. This explicit versioning makes it clear which version of the API a client is using.
-
-Resource-oriented routes follow REST conventions with patterns like `/api/products/{id}` for single resources and `/api/products` for collections. The HTTP method determines the operation, with GET for retrieval, POST for creation, PUT for updates, and DELETE for removal. This pattern keeps URLs clean and predictable.
-
-Hierarchical resources use nested paths like `/api/orders/{orderId}/items/{itemId}` to represent relationships. These routes express that items belong to orders, making the API structure self-documenting. However, deeply nested routes can become unwieldy; limiting nesting to two or three levels keeps URLs manageable.
-
-Action-based routes include the operation in the path like `/api/products/search` or `/api/orders/{id}/cancel`. These routes work well for operations that don't fit cleanly into CRUD patterns. While less RESTful, they often provide clearer intent than trying to force operations into standard HTTP methods.
-
-## Performance Considerations
-
-Routing performance matters in high-throughput APIs. While the routing system is highly optimized, certain patterns and configurations can impact performance.
-
-Route constraints execute for every potential match. Complex regex constraints can slow down routing, especially when many routes need to be evaluated. Using simpler constraints like type checks instead of regex when possible keeps routing fast.
-
-The number of routes affects matching time, though the routing system uses optimizations like tries to minimize this impact. Applications with thousands of routes should consider route organization and precedence to ensure commonly accessed endpoints match early in the evaluation process.
-
-Link generation performance depends on the number of route values and the complexity of the templates being filled. Generating URLs happens frequently in APIs that return hypermedia, so caching generated URLs or route patterns can improve performance.
-
-Short-circuit routing provides measurable performance improvements for endpoints that don't need authorization or CORS middleware. Health checks and metrics endpoints are excellent candidates for short-circuiting since they bypass middleware that would just allow the request through anyway.
-
-## Red Flags
-
-Certain routing configurations indicate potential problems that can cause runtime errors, maintenance difficulties, or poor performance.
-
-Ambiguous routes that throw `AmbiguousMatchException` indicate insufficient disambiguation. When two routes match equally well, add constraints or order values to establish clear precedence. Relying on route registration order without explicit configuration makes the routing logic fragile.
-
-Using route constraints for input validation leads to poor error handling. When a constraint fails, routing returns 404 Not Found instead of 400 Bad Request with validation details. Validate input in endpoint handlers or filters where you can provide meaningful error messages.
-
-Hardcoded URLs scattered throughout the application make routes difficult to change. Always use link generation to produce URLs to other endpoints. When route templates change, link generation adapts automatically while hardcoded URLs break.
-
-Overly complex route templates with many optional parameters and defaults become difficult to understand and maintain. If a single route template handles too many URL variations, consider splitting it into multiple simpler routes that are easier to reason about.
-
-Missing host validation when using `RequireHost` creates security risks. The host header can be spoofed, so don't make security decisions based solely on host matching. Use it for convenience but enforce authorization through proper authentication and authorization middleware.
-
-Deeply nested areas or route groups create long URLs that are hard to type and remember. Flat or minimally nested structures usually provide better usability. If you need deep nesting for organization, consider whether your domain model is too complex or whether the API structure needs simplification.
+| Symptom | Causes to check |
+| --- | --- |
+| `404 Not Found` | No template fits the path, a constraint rejected the value, the endpoint requires a different host, a path base wasn't removed before routing, or no later middleware answered |
+| `405 Method Not Allowed` | The path fits, but its endpoints accept other methods |
+| `415 Unsupported Media Type` | The endpoint declares the body types it accepts, and the request's `Content-Type` isn't one of them |
+| `AmbiguousMatchException` (a `500`) | Two endpoints tie on `Order`, template precedence, and the method and host filters |
+| `200 OK` with HTML from an API path | An SPA fallback caught a path, or a method, the API doesn't handle |
+
+Several tools show what routing actually did:
+
+- **Debug logging.** Setting the `Microsoft.AspNetCore.Routing` log category to `Debug` logs the candidates considered for each request, which of them a constraint rejected, which endpoint matched, and the steps of link generation.
+- **The route table.** `EndpointDataSource`, available from the container, lists every registered endpoint with its display name, a readable label such as `HTTP: GET /orders/{id:int}`, and its metadata. A `WebApplication` adds its endpoints to that list as the pipeline is built, which happens when the app starts, so read it after startup, for example from an `ApplicationStarted` callback, rather than just before `app.Run()`.
+- **The chosen endpoint.** Middleware placed after routing can log `context.GetEndpoint()?.DisplayName` for each request.
+- **Metrics.** The `Microsoft.AspNetCore.Routing` meter's `aspnetcore.routing.match_attempts` counter records each match attempt, tagged by whether it succeeded and whether a fallback route matched. The fallback tag exposes the SPA problem above in production.
+
+## Routing Performance
+
+Endpoint routing compiles the whole route table into a state machine that consumes the request path segment by segment, so matching time depends on the length of the path rather than on how many routes exist. A typical app is unlikely to have a performance problem just from having many routes.
+
+The costs that do appear come from specific features:
+
+- **Regex constraints**, especially ones whose running time grows quickly on unusual input.
+- **Complex segments** like `{name}.{ext}`, which allocate substrings to try each split.
+- **Custom constraints that do I/O**, which put data access on the path of every request.
+- **Very large route tables with parameters in early segments**, such as thousands of `{tenant}/orders/...` templates. These make the state machine large, and the app uses a lot of memory at startup. Adding constraints to those parameters reduces that memory drastically. Moving parameters to later segments also helps, and dynamic routes (`MapDynamicControllerRoute`) replace many templates with one that resolves its target at request time.
+
+## Key Takeaways
+
+- Every handler becomes an endpoint in one route table. Routing chooses the endpoint early in the pipeline and it runs at the end, so middleware in between can enforce what the endpoint's metadata requires.
+- Routing matches the path, method, host, and declared body type, never the query string. Method and host filtering happen before constraints are checked.
+- No match isn't a `404` from routing. The request carries on with no endpoint, and the `404` comes from the end of the pipeline if nothing else answers. A wrong method returns `405` and a wrong body type `415`, unless an endpoint that accepts everything overlaps the path.
+- Constraints choose between overlapping routes. Using them for validation turns bad input into a `404` with no explanation.
+- A regex constraint matches anywhere in the segment unless it is anchored with `^` and `$`.
+- `Order` ranks first, then template specificity. Conventional controller routes start at `Order` 1 and lose to any matching minimal API or attribute route.
+- An SPA fallback on the same host as an API turns mistyped API paths and wrong methods into `200` HTML responses unless the API prefix is claimed by its own route.
+- Short-circuit routes skip the middleware after routing, and refuse to serve endpoints that carry authorization, CORS, or antiforgery requirements.
+- `RequireHost` compares patterns with the client-supplied `Host` header, including its port, so it organizes endpoints and doesn't secure them.
+- Generate links with `LinkGenerator` and named endpoints. A `null` result means no endpoint could be satisfied by the values given.

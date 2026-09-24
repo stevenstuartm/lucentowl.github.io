@@ -109,6 +109,7 @@
           "guides": [
             "architecture/domain-driven-design.md",
             "architecture/api-design-architecture.md",
+            "architecture/aspnet-api-documentation-strategy.md",
             "architecture/grpc-architecture-design.md",
             "architecture/expressing-change-intent-in-api-payloads.md",
             "architecture/multi-tenant-architecture.md"
@@ -672,8 +673,8 @@
           "guides": [
             "infrastructure/iac-fundamentals.md",
             "infrastructure/iac-tools-comparison.md",
-            "infrastructure/iac-implementation-patterns.md",
             "infrastructure/iac-state-management.md",
+            "infrastructure/iac-implementation-patterns.md",
             "infrastructure/iac-environment-lifecycle.md",
             "infrastructure/iac-testing.md",
             "infrastructure/iac-governance.md"
@@ -880,8 +881,8 @@
     "ASP.NET Core": {
       "subcategories": [
         {
-          "name": "ASP.NET Fundamentals",
-          "description": "ASP.NET Core hosting, HTTP pipeline, middleware, and routing",
+          "name": "Fundamentals",
+          "description": "The host, the request pipeline, and how requests are matched to endpoints",
           "guides": [
             "dotnet/asp/aspnet-core-fundamentals.md",
             "dotnet/asp/aspnet-middleware.md",
@@ -889,19 +890,28 @@
           ]
         },
         {
-          "name": "API Programming Models",
-          "description": "Controller-based APIs, minimal APIs, gRPC, and real-time communication",
+          "name": "Building APIs",
+          "description": "Minimal APIs and controllers, input validation, large payloads, versioning, and OpenAPI",
           "guides": [
-            "dotnet/asp/aspnet-controller-apis.md",
             "dotnet/asp/aspnet-minimal-apis.md",
+            "dotnet/asp/aspnet-controller-apis.md",
+            "dotnet/asp/aspnet-validation-data-handling.md",
+            "dotnet/asp/aspnet-large-payloads.md",
+            "dotnet/asp/aspnet-versioning-openapi.md"
+          ]
+        },
+        {
+          "name": "Real-Time & RPC",
+          "description": "gRPC services, SignalR, Server-Sent Events, and WebSockets",
+          "guides": [
             "dotnet/asp/aspnet-grpc.md",
             "dotnet/asp/aspnet-signalr-realtime.md",
             "dotnet/asp/signalr-iot-dashboards.md"
           ]
         },
         {
-          "name": "API Security & Resilience",
-          "description": "Authentication, authorization, rate limiting, and API hardening",
+          "name": "Security & Resilience",
+          "description": "Authentication, authorization, API hardening, and protection against overload",
           "guides": [
             "dotnet/asp/aspnet-auth.md",
             "dotnet/asp/aspnet-api-security.md",
@@ -909,34 +919,19 @@
           ]
         },
         {
-          "name": "API Design & Data",
-          "description": "Validation, serialization, versioning, and OpenAPI documentation",
+          "name": "Testing & Operations",
+          "description": "Integration testing, caching, background work, health checks, and hosting in production",
           "guides": [
-            "dotnet/asp/aspnet-validation-data-handling.md",
-            "dotnet/asp/aspnet-versioning-openapi.md",
-            "dotnet/asp/aspnet-api-documentation-strategy.md"
-          ]
-        },
-        {
-          "name": "Testing & Quality",
-          "description": "Integration testing, architecture testing, and performance testing",
-          "guides": [
-            "dotnet/asp/aspnet-api-testing.md"
-          ]
-        },
-        {
-          "name": "Performance & Operations",
-          "description": "Caching, health checks, deployment, and background services",
-          "guides": [
+            "dotnet/asp/aspnet-api-testing.md",
             "dotnet/asp/aspnet-caching-performance.md",
+            "dotnet/asp/aspnet-background-services.md",
             "dotnet/asp/aspnet-health-checks-diagnostics.md",
-            "dotnet/asp/aspnet-hosting-deployment.md",
-            "dotnet/asp/aspnet-background-services.md"
+            "dotnet/asp/aspnet-hosting-deployment.md"
           ]
         },
         {
-          "name": ".NET Aspire",
-          "description": "Cloud-native orchestration, service defaults, dashboard, and integrations for distributed .NET applications",
+          "name": "Aspire",
+          "description": "Orchestrating, observing, testing, and deploying multi-service applications with Aspire",
           "guides": [
             "dotnet/aspire/aspire-fundamentals.md",
             "dotnet/aspire/aspire-distributed-applications.md"
@@ -1018,10 +1013,11 @@
         },
         {
           "name": "Data & MVVM",
-          "description": "Data binding, MVVM pattern, dependency injection, and data access in WinUI 3",
+          "description": "Data binding, MVVM, the UI thread, dependency injection, and data access in WinUI 3",
           "guides": [
             "dotnet/winui/winui-data-binding.md",
             "dotnet/winui/winui-mvvm-toolkit.md",
+            "dotnet/winui/winui-threading-and-dispatching.md",
             "dotnet/winui/winui-dependency-injection.md",
             "dotnet/winui/winui-file-and-data-access.md",
             "dotnet/winui/winui-advanced-data-patterns.md"
@@ -1031,8 +1027,8 @@
           "name": "Styling & Resources",
           "description": "Visual styling, theming, resource management, and animations in WinUI 3",
           "guides": [
-            "dotnet/winui/winui-styling-and-theming.md",
             "dotnet/winui/winui-resource-management.md",
+            "dotnet/winui/winui-styling-and-theming.md",
             "dotnet/winui/winui-animations-and-motion.md"
           ]
         },
@@ -1046,22 +1042,21 @@
         },
         {
           "name": "Platform Integration",
-          "description": "App lifecycle, packaging, notifications, networking, interop, and migration",
+          "description": "App lifecycle, notifications, Win32 interop, packaging, and migration",
           "guides": [
-            "dotnet/winui/winui-notifications.md",
-            "dotnet/winui/winui-networking.md",
             "dotnet/winui/winui-app-lifecycle.md",
-            "dotnet/winui/winui-packaging-and-deployment.md",
+            "dotnet/winui/winui-notifications.md",
             "dotnet/winui/winui-win32-interop.md",
+            "dotnet/winui/winui-packaging-and-deployment.md",
             "dotnet/winui/winui-migration-wpf-uwp.md"
           ]
         },
         {
           "name": "Advanced Features",
-          "description": "Media, graphics, community toolkit, security, and AI integration",
+          "description": "Media and graphics, web content, security, and on-device AI",
           "guides": [
             "dotnet/winui/winui-media-and-graphics.md",
-            "dotnet/winui/winui-community-toolkit.md",
+            "dotnet/winui/winui-webview2.md",
             "dotnet/winui/winui-security.md",
             "dotnet/winui/winui-ai-integration.md"
           ]

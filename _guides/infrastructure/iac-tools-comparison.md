@@ -1,566 +1,159 @@
 ---
-title: "IaC Tools Comparison and Selection Guide"
+title: "Choosing an IaC Tool"
 layout: guide
 category: Infrastructure & Cloud
 subcategory: Infrastructure as Code
-description: "Comprehensive comparison of IaC tools including CloudFormation, Terraform, Pulumi, Ansible, and others to help choose the right tool for your needs."
-tags: [infrastructure, iac, tools, comparison, decision-making, reference]
+description: "How to choose between CloudFormation, CDK, Bicep, Terraform, OpenTofu, Pulumi, and Ansible by the questions that actually separate them: provisioning or configuration, one cloud or many, a configuration language or a programming language, who holds the state, and who stewards the tool."
+tags: [practical, decision-making, terraform, opentofu, pulumi, bicep, cloudformation]
 ---
 
-## Overview
+## The Questions That Separate the Tools
 
-Different IaC tools serve different purposes and excel in different scenarios. This guide helps you understand the landscape and choose the right tool for your needs.
+Most IaC tools can create most cloud resources, so comparing feature lists rarely decides anything. What separates them is a handful of design choices, each of which suits some teams and costs others:
 
-### Tool Categories
+1. **Provisioning or configuration management?** Creating cloud resources, or setting up software inside machines.
+2. **One cloud or several?** A tool built by one cloud vendor, or one that talks to many APIs.
+3. **A configuration language or a programming language?** A restricted language built for describing resources, or C#, TypeScript, or Python.
+4. **Who holds the state?** The cloud service, storage the team looks after, or a hosted service.
+5. **Who stewards the tool?** A cloud vendor, a single company, or a foundation, and under what license.
 
-**Cloud-Specific:**
-- Deep integration with single cloud provider
-- Native features and immediate support for new services
-- No additional cost (built into cloud platform)
-- Examples: CloudFormation (AWS), ARM Templates (Azure), Deployment Manager (GCP)
-
-**Multi-Cloud:**
-- Work across multiple cloud providers
-- Consistent syntax and workflow
-- Provider-agnostic abstractions
-- Examples: Terraform, Pulumi, OpenTofu
-
-**Configuration Management:**
-- Focus on configuring existing infrastructure
-- Can also provision infrastructure
-- Often imperative or hybrid approach
-- Examples: Ansible, Chef, Puppet
+The sections below take each question in turn, and the decision tree at the end combines them.
 
 ---
 
-## Cloud-Specific Tools
+## Provisioning or Configuration Management
 
-### AWS CloudFormation
+The first question usually settles which *kind* of tool, not which tool. Provisioning tools are the main subject of this guide. Configuration management tools fill a narrower need, and a team that builds its configuration into machine or container images may not need one at all. Where both are needed, the common answer is two tools: a provisioning tool creates the machines, and a configuration tool sets them up.
 
-**What it is:** AWS's native IaC service for provisioning AWS resources using JSON or YAML templates.
+Using one tool for both jobs tends to go badly. [Ansible](https://docs.ansible.com/){:target="_blank" rel="noopener noreferrer"} can create cloud resources, but it keeps no record of what it created, so removing a resource from a *playbook* (Ansible's file of ordered tasks) does not remove it from the cloud. Provisioning tools can hand a machine a startup script, but they have no way to keep what runs inside it configured afterwards.
 
-**Key features:**
-- Native AWS integration
-- Stack management (create, update, delete as a unit)
-- Change sets (preview changes before applying)
-- Drift detection
-- No additional cost (free service)
-- StackSets for multi-account/multi-region deployments
-
-**Advantages:**
-- Deepest AWS feature support
-- New AWS features available immediately
-- AWS-managed (no servers to maintain)
-- Free to use
-- Native drift detection
-- Excellent AWS console integration
-
-**Disadvantages:**
-- AWS-only (vendor lock-in)
-- YAML/JSON can be verbose
-- Limited abstraction capabilities
-- Steeper learning curve for complex scenarios
-
-**Best for:**
-- AWS-only deployments
-- Teams already using AWS
-- Need for AWS-specific features
-- Organizations wanting AWS-managed solution
-
-<div class="callout callout--tip">
-<p class="callout__title">CloudFormation vs Terraform for AWS</p>
-<p>If you're AWS-only and want native integration with zero additional cost, choose CloudFormation. If you value multi-cloud flexibility and a larger community ecosystem, choose Terraform. Both are excellent tools for AWS infrastructure.</p>
-</div>
-
-**Resources:**
-- [AWS CloudFormation Documentation](https://docs.aws.amazon.com/cloudformation/){:target="_blank" rel="noopener noreferrer"}
-- [CloudFormation Template Reference](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-reference.html){:target="_blank" rel="noopener noreferrer"}
-
-### Azure Resource Manager (ARM) Templates
-
-**What it is:** Azure's declarative template language for deploying Azure resources.
-
-**Key features:**
-- Native Azure integration
-- JSON-based templates
-- Resource dependencies
-- Template validation
-- Free (built into Azure)
-- Bicep (newer, simpler syntax)
-
-**Advantages:**
-- Deepest Azure integration
-- Immediate support for new Azure services
-- Azure-managed solution
-- Free to use
-- Bicep provides cleaner syntax
-
-**Disadvantages:**
-- Azure-only (vendor lock-in)
-- JSON can be verbose
-- Limited multi-cloud support
-- Complex for large deployments
-
-**Best for:**
-- Azure-only deployments
-- Microsoft-centric organizations
-- Teams already using Azure
-
-**Resources:**
-- [ARM Templates Documentation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/){:target="_blank" rel="noopener noreferrer"}
-- [Bicep Documentation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/){:target="_blank" rel="noopener noreferrer"}
-
-### Google Cloud Deployment Manager
-
-**What it is:** Google Cloud's infrastructure deployment service using YAML, Python, or Jinja2 templates.
-
-**Key features:**
-- Native GCP integration
-- Python-based templates (flexibility)
-- Preview mode
-- Parallel deployment
-- Free service
-
-**Advantages:**
-- Deep GCP integration
-- Python templates allow complex logic
-- Free to use
-- Google-managed
-
-**Disadvantages:**
-- GCP-only (vendor lock-in)
-- Smaller community than AWS/Azure
-- Less mature ecosystem
-
-**Best for:**
-- GCP-only deployments
-- Teams using Google Cloud
-- Need for Python-based templating
-
-**Resources:**
-- [Deployment Manager Documentation](https://cloud.google.com/deployment-manager/docs){:target="_blank" rel="noopener noreferrer"}
+Among configuration tools, the main choice is how changes reach machines. Ansible is **agentless**. It connects over SSH (or WinRM, Windows' remote management protocol) from wherever it runs and needs nothing installed on the target. [Chef](https://www.chef.io/){:target="_blank" rel="noopener noreferrer"} and [Puppet](https://www.puppet.com/){:target="_blank" rel="noopener noreferrer"} traditionally run an **agent** on every machine that pulls its configuration from a server and re-applies it on a schedule. The agent corrects drift continuously, but it is one more thing to install, secure, and upgrade on every server.
 
 ---
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Cloud-Specific Tools</h4>
-<ul>
-<li><strong>Integration:</strong> Deepest native integration</li>
-<li><strong>Features:</strong> Immediate access to new services</li>
-<li><strong>Cost:</strong> Free (built into cloud)</li>
-<li><strong>Lock-in:</strong> High; single cloud only</li>
-<li><strong>Examples:</strong> CloudFormation, ARM, Deployment Manager</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Multi-Cloud Tools</h4>
-<ul>
-<li><strong>Integration:</strong> Works across clouds</li>
-<li><strong>Features:</strong> Lags behind cloud-native tools</li>
-<li><strong>Cost:</strong> Free core (paid SaaS optional)</li>
-<li><strong>Lock-in:</strong> Low; cloud-agnostic</li>
-<li><strong>Examples:</strong> Terraform, Pulumi, OpenTofu</li>
-</ul>
-</div>
-</div>
+## One Cloud or Several
 
-## Multi-Cloud Tools
+**Cloud-native tools** are built by a cloud vendor for its own platform. On AWS that means [CloudFormation](https://docs.aws.amazon.com/cloudformation/){:target="_blank" rel="noopener noreferrer"} and [AWS CDK](https://docs.aws.amazon.com/cdk/){:target="_blank" rel="noopener noreferrer"}, which generates CloudFormation templates. On Azure it means [Bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview){:target="_blank" rel="noopener noreferrer"}, which compiles to the JSON templates that Azure Resource Manager (ARM), Azure's deployment service, accepts. Google Cloud no longer has a separate native language. Its old Deployment Manager is out of support and shuts down in mid-2027, and its replacement, Infrastructure Manager, runs Terraform, though only versions up to 1.5.7, the last release under the open-source license.
 
-### Terraform (HashiCorp)
+The cloud-native tools add no charge for the vendor's own resource types (CloudFormation bills only for third-party resource types and custom hooks, which are checks that run before a deployment), the vendor supports them, and they often support new services early. Coverage is not complete, though. AWS publishes a coverage roadmap because some features reach CloudFormation after they reach the API.
 
-**What it is:** Open-source, cloud-agnostic IaC tool using HashiCorp Configuration Language (HCL).
+**Multi-cloud tools** such as [Terraform](https://developer.hashicorp.com/terraform){:target="_blank" rel="noopener noreferrer"}, [OpenTofu](https://opentofu.org/){:target="_blank" rel="noopener noreferrer"}, and [Pulumi](https://www.pulumi.com/docs/){:target="_blank" rel="noopener noreferrer"} reach each API through providers. The Terraform and OpenTofu registries hold providers for every major cloud and for thousands of other services, including Kubernetes, GitHub, DNS hosts, and monitoring products, and Pulumi can use Terraform providers alongside its own.
 
-**Key features:**
-- Multi-cloud support (AWS, Azure, GCP, 1000+ providers)
-- Strong community and ecosystem
-- Module registry for reusable components
-- Plan/apply workflow (preview changes)
-- State management
-- Terraform Cloud for collaboration
+"Multi-cloud" is easy to misread. It means one language, one workflow, and one state model across providers. It does not mean portable definitions. An AWS database and an Azure database are different resources with different settings, and moving a workload between clouds still means rewriting its definitions. The value lies in not learning a second toolchain.
 
-**Advantages:**
-- Works across all major clouds
-- Largest community and ecosystem
-- Extensive provider support
-- Declarative and idempotent
-- Mature and battle-tested
-- Great documentation
+That makes the question broader than it first looks. A team whose compute runs entirely on AWS may still manage DNS at another provider, repositories in GitHub, and alerts in a monitoring service. A multi-cloud tool can manage all of those in the same plan. A cloud-native tool reaches only some of them, through third-party extensions, with far thinner coverage than the Terraform registry's. So the cloud-native answer fits best when everything the team wants under code lives in one cloud, which is a narrower condition than it sounds.
 
-**Disadvantages:**
-- State management complexity (requires setup)
-- HCL learning curve
-- Not always first to support new cloud features
-- Terraform Cloud costs for teams
+---
 
-**Best for:**
-- Multi-cloud environments
-- Teams wanting flexibility
-- Strong community support needed
-- Avoiding vendor lock-in
+## A Configuration Language or a Programming Language
 
-**Example:**
+Some tools use a language designed only for describing resources: **HCL** (HashiCorp Configuration Language) for Terraform and OpenTofu, **YAML or JSON** for CloudFormation, and **Bicep's own language** for Azure. Others use general-purpose languages. AWS CDK supports TypeScript, JavaScript, Python, Java, C#, and Go, and Pulumi supports TypeScript, JavaScript, Python, Go, .NET languages, and Java. Pulumi also accepts YAML and, since 2026, HCL, running Terraform-style `.tf` files directly, so it now spans both groups.
+
+Loops and conditionals are not what separates the two groups, because the configuration languages have them too. Here is a set of versioned log buckets, one per environment, in Terraform and in AWS CDK with C#:
+
 ```hcl
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
+# Terraform
+resource "aws_s3_bucket" "logs" {
+  for_each = toset(["dev", "staging", "prod"])
+  bucket   = "example-logs-${each.key}"
 }
 
-resource "aws_s3_bucket" "example" {
-  bucket = "my-unique-bucket-name"
-
-  tags = {
-    Environment = "Production"
+resource "aws_s3_bucket_versioning" "logs" {
+  for_each = aws_s3_bucket.logs
+  bucket   = each.value.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 ```
 
-**Resources:**
-- [Terraform Documentation](https://www.terraform.io/docs){:target="_blank" rel="noopener noreferrer"}
-- [Terraform Registry](https://registry.terraform.io/){:target="_blank" rel="noopener noreferrer"}
-- [HashiCorp Learn](https://learn.hashicorp.com/terraform){:target="_blank" rel="noopener noreferrer"}
-
-### AWS CDK (Cloud Development Kit)
-
-**What it is:** AWS's framework for defining cloud infrastructure using familiar programming languages, which synthesizes to CloudFormation templates.
-
-**Key features:**
-- Use TypeScript, Python, Java, C#, or Go
-- AWS-focused (deep AWS integration)
-- Generates CloudFormation templates
-- Rich library of high-level constructs
-- Type safety and IDE support
-- Built-in best practices
-
-**Advantages:**
-- Use languages you already know
-- CloudFormation benefits (drift detection, change sets, rollback)
-- Higher-level abstractions than raw CloudFormation
-- Excellent AWS integration and support
-- Free (generates CloudFormation)
-- Great for developers already in AWS
-
-**Disadvantages:**
-- AWS-only (no multi-cloud support)
-- Generated CloudFormation can be hard to debug
-- Learning curve for construct patterns
-- More verbose than raw CloudFormation for simple resources
-
-**Best for:**
-- AWS-focused development teams
-- Developers wanting CloudFormation power with code
-- Teams already using TypeScript/Python
-- Need for higher-level AWS abstractions
-
-**Example:**
 ```csharp
-using Amazon.CDK;
-using Amazon.CDK.AWS.S3;
-
-namespace MyCdkApp
+// AWS CDK (C#)
+foreach (var env in new[] { "dev", "staging", "prod" })
 {
-    public class MyStack : Stack
+    new Bucket(this, $"Logs-{env}", new BucketProps
     {
-        public MyStack(Construct scope, string id, IStackProps props = null)
-            : base(scope, id, props)
-        {
-            new Bucket(this, "MyBucket", new BucketProps
-            {
-                WebsiteIndexDocument = "index.html",
-                Versioned = true,
-                Encryption = BucketEncryption.S3_MANAGED
-            });
-        }
-    }
+        BucketName = $"example-logs-{env}",
+        Versioned = true
+    });
 }
 ```
 
-[AWS CDK Documentation](https://docs.aws.amazon.com/cdk/){:target="_blank" rel="noopener noreferrer"}
+The differences show up at a larger scale:
 
-### Pulumi
+| | Configuration language | Programming language |
+|---|---|---|
+| Abstraction | Modules with inputs and outputs | Classes, interfaces, and packages from the language's own ecosystem |
+| Testing | The tool's test command where one exists, plus linters and policy scanners | The language's unit test frameworks, plus the tool's testing support |
+| Editor support | Syntax checking and completion through tool-specific extensions | The language's full compiler, type checking, and refactoring |
+| Reading a change | The code is close to what gets created | The code *builds* the resources, so reviewers often read the generated CloudFormation template or the plan instead |
+| Who already knows it | Often operations engineers | Often application developers |
+| Main risk | Repetition when abstraction runs out | Layers of abstraction that hide what gets created |
 
-**What it is:** Multi-cloud IaC tool using familiar programming languages (TypeScript, Python, Go, C#, Java) with its own state management.
+The last row matters most. A configuration language limits what an author can do, which also limits how confusing the result can get. A programming language lets a platform team build a tested library of approved components that application teams use in a few lines, and it also lets someone build a framework nobody else can follow. Whichever the team picks, reviewing the plan stays the reliable check, because it shows the effect no matter how the code produced it.
 
-**Key features:**
-- Use real programming languages
-- Multi-cloud support (AWS, Azure, GCP, Kubernetes, 100+ providers)
-- Strong typing and IDE support
-- Pulumi Cloud for state management
-- Import existing infrastructure
-- Native testing with standard test frameworks
+---
 
-**Advantages:**
-- Use languages you already know
-- Full programming language features (loops, conditionals, functions)
-- Better IDE support (autocomplete, refactoring)
-- Easier testing with standard frameworks
-- Multi-cloud from day one
-- Great for developers
+## Who Holds the State
 
-**Disadvantages:**
-- Smaller community than Terraform
-- More complex than declarative approaches
-- Pulumi Cloud costs for teams (or self-manage state)
-- Learning curve for IaC concepts
+Most tools keep a record that maps each definition to the real resource it created, and they differ in who looks after it.
 
-**Best for:**
-- Developers preferring code over config
-- Multi-cloud deployments
-- Complex logic in templates
-- Teams with strong programming background
-- Need for standard testing tools
+| Model | Tools | What the team looks after |
+|---|---|---|
+| **Kept by the cloud service** | CloudFormation (as a stack), CDK (through CloudFormation) | Nothing; the service stores and locks it |
+| **No record kept** | Bicep, whose resources have predictable IDs | Deletion. By default, removing a definition leaves the resource in Azure; deleting it takes Azure's deployment stacks (or the older complete mode, which is being deprecated) |
+| **Hosted service** | [HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs){:target="_blank" rel="noopener noreferrer"} (formerly Terraform Cloud), [Pulumi Cloud](https://www.pulumi.com/docs/iac/concepts/state-and-backends/){:target="_blank" rel="noopener noreferrer"} (Pulumi's default, which since 2026 also hosts Terraform and OpenTofu state), and third-party platforms such as Spacelift, env0, and Scalr | Access control and the subscription |
+| **Self-managed** | Terraform, OpenTofu, or Pulumi with storage the team runs | Storage, locking, encryption, access, backups, and recovery |
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Declarative (HCL/YAML)</h4>
-<ul>
-<li><strong>Tools:</strong> Terraform, CloudFormation</li>
-<li><strong>Learning Curve:</strong> Moderate; new syntax</li>
-<li><strong>Complexity:</strong> Limited logic capabilities</li>
-<li><strong>Testing:</strong> External tools required</li>
-<li><strong>Best for:</strong> Ops teams, simple infrastructure</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Code-Based (TypeScript/Python)</h4>
-<ul>
-<li><strong>Tools:</strong> Pulumi, AWS CDK</li>
-<li><strong>Learning Curve:</strong> Low; familiar languages</li>
-<li><strong>Complexity:</strong> Full programming features</li>
-<li><strong>Testing:</strong> Native test frameworks</li>
-<li><strong>Best for:</strong> Dev teams, complex logic</li>
-</ul>
-</div>
-</div>
+Self-managed state is the model with an ongoing operating cost. The state holds every managed resource's attributes, often including secrets, and losing or corrupting it leaves the tool unaware of what it manages. None of the safeguards is hard, but all of them are the team's job, and getting them wrong is a common reason a first Terraform setup goes badly.
 
-**Example:**
-```python
-import pulumi
-import pulumi_aws as aws
+That cost pays off when the tool brings something the service-held ones cannot. The usual reasons are managing more than one cloud, or non-cloud services, from one codebase, an organization standard, or a team and codebase that already use the tool. The cost is harder to justify for a team that is entirely on AWS or Azure, has no existing investment, and picks a self-managed tool by default. There, CloudFormation, CDK, or Bicep removes most of the state problem.
 
-bucket = aws.s3.Bucket("my-bucket",
-    website=aws.s3.BucketWebsiteArgs(
-        index_document="index.html"
-    ),
-    tags={
-        "Environment": "Production"
-    }
-)
+---
 
-pulumi.export("bucket_name", bucket.id)
-pulumi.export("website_url", bucket.website_endpoint)
+## Who Stewards the Tool
+
+A tool chosen now will be in use for years, and several have changed hands, licenses, or status recently:
+
+- **Terraform** moved in 2023 from an open-source license to the Business Source License, which allows free use but forbids offering Terraform in a product that competes with HashiCorp. HashiCorp is now part of IBM.
+- **OpenTofu** is a fork of Terraform: a copy of its last open-source code, developed independently since under the MPL 2.0 license. It joined the Cloud Native Computing Foundation (CNCF) in 2025 at *sandbox* level, the foundation's entry stage for early projects. It started as a drop-in replacement and has since added features Terraform lacks, such as built-in state encryption, so the two are gradually diverging.
+- **CDK for Terraform**, HashiCorp's programming-language front end for Terraform, was archived in December 2025.
+- **Google Cloud Deployment Manager** reached end of support in 2026, replaced by Terraform through Infrastructure Manager.
+- **Puppet's** owner, Perforce, moved its builds to private repositories in 2025 under a license that is free only up to 25 nodes. The community forked the open-source code as OpenVox.
+
+The pattern is that tools backed by one company's commercial interests can change terms, and tools with a thin user base can be retired. For most teams this argues for a mainstream tool with a large community and a credible fallback. Terraform and OpenTofu are each other's fallback, and CloudFormation and Bicep are backed by the clouds they serve.
+
+---
+
+## Deciding
+
+```
+Is the job configuring software inside machines rather than creating cloud resources?
+├─ Yes → Ansible (agentless), or Chef/Puppet where already in place
+└─ No → Does everything to be managed live in one cloud (no other clouds,
+        and no GitHub, DNS, or monitoring services under the same code)?
+        ├─ Yes, AWS          → CloudFormation, or AWS CDK for a programming language
+        ├─ Yes, Azure        → Bicep, with deployment stacks if removals should delete
+        ├─ Yes, Google Cloud → Terraform, through Infrastructure Manager or directly
+        └─ No → A tool with its own state: host it, or run storage for it
+                 ├─ Programming language wanted → Pulumi
+                 └─ Configuration language      → Terraform, or OpenTofu where an
+                                                  open-source license matters
 ```
 
-[Pulumi Documentation](https://www.pulumi.com/docs/){:target="_blank" rel="noopener noreferrer"} | [Pulumi Examples](https://github.com/pulumi/examples){:target="_blank" rel="noopener noreferrer"}
-
-### OpenTofu
-
-**What it is:** Open-source fork of Terraform, created after HashiCorp's license change to BSL.
-
-**Key features:**
-- Terraform-compatible
-- Community-driven
-- Open-source (MPL 2.0 license)
-- Backward compatible with Terraform
-- Same HCL syntax
-
-**Advantages:**
-- True open-source (no licensing concerns)
-- Community governance
-- Terraform compatibility (easy migration)
-- No vendor lock-in
-
-**Disadvantages:**
-- Newer project (less mature)
-- Smaller community than Terraform
-- Uncertain long-term trajectory
-
-**Best for:**
-- Teams wanting open-source guarantees
-- Avoiding vendor lock-in
-- Migration from Terraform
-- Organizations with strict open-source requirements
-
-**Resources:**
-- [OpenTofu Documentation](https://opentofu.org/docs/){:target="_blank" rel="noopener noreferrer"}
-- [OpenTofu GitHub](https://github.com/opentofu/opentofu){:target="_blank" rel="noopener noreferrer"}
+Treat the tree as a default, not a rule. A team on one cloud that strongly prefers a programming language may still choose Pulumi and accept the state cost. An existing codebase, the team's experience, or an organization standard can outweigh any branch, because switching tools has a cost that a small advantage does not repay.
 
 ---
 
-## Configuration Management Tools
+## Switching Tools Later
 
-### Ansible
+A switch rarely means recreating infrastructure. Tools that keep state can *import* resources that already exist, taking them under management without rebuilding them, and Bicep takes over any existing resource whose type, name, and resource group match a definition, but the first deployment resets any property the definition leaves out to its default, so definitions have to be complete before they take over live resources. So a migration can move resources one group at a time. The work is in rewriting the definitions and in the period when two tools each manage part of the estate.
 
-**What it is:** Agentless automation tool for configuration management, application deployment, and orchestration.
+Some paths are easier than others:
 
-**Key features:**
-- Agentless (SSH-based)
-- YAML playbooks
-- Large module library
-- Can provision infrastructure (imperative)
-- Easy to learn
+- **Terraform to OpenTofu** is documented and usually straightforward, though the gap grows as the two diverge.
+- **CloudFormation to CDK** can start by including existing templates in a CDK app and converting them gradually.
+- **Terraform to Pulumi** can keep the existing HCL, which Pulumi now runs directly, or convert it into a Pulumi program in another language. Either way, Pulumi does not read Terraform's state, so existing resources come across through Pulumi's import.
+- **Anything to Terraform or OpenTofu** relies on import, which can bring in many resources in one plan and generate starting definitions for them, though those still need rewriting into maintainable code.
 
-**Advantages:**
-- No agents required
-- Simple YAML syntax
-- Large ecosystem
-- Good for both infrastructure and configuration
-- Easy to get started
-
-**Disadvantages:**
-- Slower than agent-based tools
-- Less declarative than Terraform/CloudFormation
-- State management not as robust
-- Can become complex at scale
-
-**Best for:**
-- Configuration management
-- Hybrid IaC/config approach
-- Teams already using Ansible
-- Need for agentless solution
-
-**Example:**
-```yaml
----
-- name: Provision AWS EC2 instance
-  hosts: localhost
-  tasks:
-    - name: Create EC2 instance
-      amazon.aws.ec2_instance:
-        name: "web-server"
-        instance_type: "t2.micro"
-        image_id: "ami-0c55b159cbfafe1f0"
-        region: "us-east-1"
-        tags:
-          Environment: "Production"
-```
-
-**Resources:**
-- [Ansible Documentation](https://docs.ansible.com/){:target="_blank" rel="noopener noreferrer"}
-
-### Chef & Puppet
-
-[Chef](https://www.chef.io/){:target="_blank" rel="noopener noreferrer"} and [Puppet](https://www.puppet.com/){:target="_blank" rel="noopener noreferrer"} are configuration management tools for defining infrastructure state using code.
-
-**Key features:**
-- Mature ecosystems
-- Agent-based architecture
-- Domain-specific languages (Ruby-based)
-- Strong enterprise support
-- Compliance automation
-
-**Advantages:**
-- Mature and battle-tested
-- Strong enterprise features
-- Compliance and security focus
-- Large module libraries
-
-**Disadvantages:**
-- Agent-based (more complexity)
-- Steeper learning curve
-- Less popular for new projects
-- Primarily configuration, not provisioning
-
-**Best for:**
-- Large enterprises
-- Existing Chef/Puppet investments
-- Compliance-heavy environments
-- Configuration management over provisioning
-
----
-
-## Tool Comparison Matrix
-
-| Feature | CloudFormation | AWS CDK | Terraform | Pulumi | Ansible |
-|---------|---------------|---------|-----------|---------|---------|
-| **Cloud Support** | AWS only | AWS only | Multi-cloud | Multi-cloud | Multi-cloud |
-| **Language** | JSON/YAML | TypeScript, Python, Java, C#, Go | HCL | TypeScript, Python, Go, C#, Java | YAML |
-| **Approach** | Declarative | Imperative (→ CFN) | Declarative | Declarative/Imperative | Imperative |
-| **State Management** | AWS-managed | AWS-managed (CFN) | User-managed | Pulumi-managed | Limited |
-| **Output** | Direct deployment | CloudFormation | Direct deployment | Direct deployment | Direct deployment |
-| **Cost** | Free | Free | Free (Cloud paid) | Free (Cloud paid) | Free |
-| **Learning Curve** | Moderate | Moderate | Moderate | Low-Moderate | Low |
-| **Community** | Large | Growing | Very Large | Growing | Large |
-| **Maturity** | Very mature | Mature | Very mature | Moderate | Mature |
-| **Drift Detection** | Built-in | Built-in (CFN) | Via plan | Via plan | Limited |
-| **Testing** | External tools | Native (test frameworks) | External tools | Native (test frameworks) | External tools |
-
----
-
-## Choosing the Right Tool
-
-<div class="callout callout--note">
-<p class="callout__title">Decision Framework</p>
-<p>The right tool depends on four key factors: cloud strategy (single vs multi-cloud), team background (ops vs dev), primary use case (provisioning vs configuration), and organizational constraints (cost, licensing, support).</p>
-</div>
-
-### Decision Framework
-
-**Question 1: Single cloud or multi-cloud?**
-- **Single cloud (AWS)** → Consider CloudFormation
-- **Single cloud (Azure)** → Consider ARM/Bicep
-- **Single cloud (GCP)** → Consider Deployment Manager
-- **Multi-cloud or future flexibility** → Terraform or Pulumi
-
-**Question 2: Team background?**
-- **Ops/Infrastructure background** → Terraform or CloudFormation
-- **Developer background (AWS-focused)** → AWS CDK
-- **Developer background (multi-cloud)** → Pulumi
-- **Prefer simplicity** → Ansible or CloudFormation
-
-**Question 3: Primary use case?**
-- **Infrastructure provisioning** → Terraform, CloudFormation, Pulumi
-- **Configuration management** → Ansible, Chef, Puppet
-- **Both** → Terraform + Ansible, or Pulumi
-
-**Question 4: Organizational constraints?**
-- **Must be open-source** → OpenTofu, Ansible
-- **Need vendor support** → Terraform (with HCP), Pulumi Cloud
-- **No additional costs** → CloudFormation, ARM, Deployment Manager
-
-### Common Scenarios
-
-**Scenario: AWS-only startup**
-- **Recommendation:** CloudFormation
-- **Why:** Free, native, deep AWS integration, no vendor lock-in risk for AWS-only
-
-**Scenario: Multi-cloud enterprise**
-- **Recommendation:** Terraform
-- **Why:** Largest ecosystem, mature, works everywhere
-
-**Scenario: Developer-heavy team (AWS-focused)**
-- **Recommendation:** AWS CDK
-- **Why:** Use familiar languages, CloudFormation benefits, AWS best practices built-in
-
-**Scenario: Developer-heavy team (multi-cloud)**
-- **Recommendation:** Pulumi
-- **Why:** Use familiar languages, better IDE support, easier testing, multi-cloud from day one
-
-**Scenario: Hybrid infrastructure + configuration**
-- **Recommendation:** Terraform + Ansible
-- **Why:** Terraform for provisioning, Ansible for configuration
-
-**Scenario: Open-source requirement**
-- **Recommendation:** OpenTofu
-- **Why:** True open-source, Terraform-compatible
-
-### Migration Considerations
-
-**From manual to IaC:**
-1. Start with cloud-native tool (CloudFormation/ARM)
-2. Import existing resources
-3. Build new resources as code
-4. Gradually convert legacy infrastructure
-
-**From one IaC tool to another:**
-- Terraform → OpenTofu: Easy (compatible)
-- CloudFormation → AWS CDK: Easy (CDK can import CloudFormation)
-- CloudFormation → Terraform: Moderate (import existing)
-- Any → Pulumi: Easy (Pulumi can import from others)
-
----
-
+The easiest switch is the one avoided. Settling the questions above before the codebase grows is cheaper than any migration.

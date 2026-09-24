@@ -1,0 +1,45 @@
+---
+title: "An Element in Its Layout Slot"
+kind: structure
+system: winui
+summary: "Margin, border, padding, and content inside the slot a parent assigns."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 350" role="img" aria-labelledby="wls-title wls-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wls-title">Margin, border, padding, and content inside an element's layout slot</title>
+<desc id="wls-desc">The layout slot is the rectangle the parent's Arrange call gives the element. The element's margin sits just inside the slot and is outside the element itself, so it is not counted in ActualWidth. Inside the margin is the element's border, then its padding, then its content. With HorizontalAlignment Left and VerticalAlignment Center, the element sits at the left of the slot, centered vertically, and the rest of the slot is unused.</desc>
+<style>
+.wls-slot { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.wls-margin { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 2 3; }
+.wls-border { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.wls-content { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1; }
+.wls-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wls-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.wls-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wls-band { font-size: 10px; fill: var(--color-text-light, #4A5568); }
+.wls-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wls-lead { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wls-hd" x="40" y="36">LAYOUT SLOT FROM THE PARENT</text>
+<rect class="wls-slot" x="40" y="50" width="520" height="260" rx="4"/>
+<rect class="wls-margin" x="42" y="90" width="298" height="180"/>
+<text class="wls-band" x="50" y="104">margin</text>
+<rect class="wls-border" x="62" y="110" width="258" height="140" rx="4"/>
+<text class="wls-band" x="72" y="128">padding</text>
+<rect class="wls-content" x="86" y="134" width="210" height="92" rx="3"/>
+<text class="wls-n-inv" x="191" y="185" text-anchor="middle">Content</text>
+<path class="wls-lead" d="M592,70 L562,70"/>
+<text class="wls-n" x="600" y="68">Layout slot</text>
+<text class="wls-k" x="600" y="84">the rectangle Arrange gives the element</text>
+<path class="wls-lead" d="M592,130 L342,100"/>
+<text class="wls-n" x="600" y="128">Margin</text>
+<text class="wls-k" x="600" y="144">outside the element, not in ActualWidth</text>
+<path class="wls-lead" d="M592,190 L322,124"/>
+<text class="wls-n" x="600" y="188">Border and padding</text>
+<text class="wls-k" x="600" y="204">inside the element, around its content</text>
+<path class="wls-lead" d="M592,250 L450,232"/>
+<text class="wls-n" x="600" y="248">Unused slot space</text>
+<text class="wls-k" x="600" y="264">HorizontalAlignment Left,</text>
+<text class="wls-k" x="600" y="280">VerticalAlignment Center</text>
+</g>
+</svg>

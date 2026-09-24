@@ -2,7 +2,7 @@
 title: "Controller-Based APIs"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Programming Models"
+subcategory: "Building APIs"
 description: "Comprehensive guide to building controller-based Web APIs in ASP.NET Core, covering routing, model binding, filters, return types, and content negotiation."
 tags: [asp-net-core, web-api, mvc, controllers, routing, model-binding, filters]
 ---
@@ -646,124 +646,172 @@ Inserting at index 0 makes the custom formatter the highest priority during cont
 
 Input formatters work similarly but derive from `TextInputFormatter` or `InputFormatter` and implement `ReadRequestBodyAsync` to deserialize request bodies into .NET objects.
 
-## File Uploads and Downloads
+## Content Negotiation
 
-APIs frequently need to accept file uploads from clients or stream file downloads in responses. ASP.NET Core provides specialized support for handling files efficiently.
+Content negotiation allows clients to specify the desired response format using the `Accept` header and informs the server of request body formats using the `Content-Type` header. ASP.NET Core selects formatters based on these headers.
 
-### File Uploads with IFormFile
+### How Content Negotiation Works
 
-The `IFormFile` interface represents a file uploaded in an HTTP request with multipart/form-data encoding. It provides access to file metadata like the filename, content type, and length, along with methods to read the file content.
+When a request includes an `Accept` header, ASP.NET Core enumerates the media types in preference order and attempts to find a formatter capable of producing one of those formats. If no formatter matches, the framework uses the default JSON formatter.
+
+By default, ASP.NET Core ignores the `Accept` header for browsers because browsers often send overly permissive accept headers like `*/*` or `text/html`, which don't reflect API client needs. To respect browser accept headers, set `RespectBrowserAcceptHeader` to true:
 
 ```csharp
-[HttpPost("upload")]
-public async Task<IActionResult> Upload(IFormFile file)
+builder.Services.AddControllers(options =>
 {
-    if (file == null || file.Length == 0)
-        return BadRequest("No file uploaded");
+    options.RespectBrowserAcceptHeader = true;
+});
+```
 
-    var filePath = Path.Combine("uploads", file.FileName);
+### Returning Specific Formats
 
-    await using var stream = new FileStream(filePath, FileMode.Create);
-    await file.CopyToAsync(stream);
+Controllers can return specific formats using `Produces` attributes or by returning typed results that specify the content type.
 
-    return Ok(new { file.FileName, file.Length });
+```csharp
+[HttpGet("{id}")]
+[Produces("application/json", "application/xml")]
+public IActionResult GetUser(int id)
+{
+    var user = _repository.GetUser(id);
+    return Ok(user);
 }
 ```
 
-The `CopyToAsync` method copies the uploaded file to a target stream. This approach buffers the entire file in memory or in a temporary location before copying, making it suitable for smaller files.
+The `Produces` attribute informs OpenAPI documentation generators about supported response types and restricts the formatter selection to those types.
 
-When accepting multiple files, use `IFormFileCollection` or a list of `IFormFile`:
+In minimal APIs, specify content types using typed results:
 
 ```csharp
-[HttpPost("upload-multiple")]
-public async Task<IActionResult> UploadMultiple(List<IFormFile> files)
+app.MapGet("/users/{id}", (int id) =>
 {
-    foreach (var file in files)
+    var user = repository.GetUser(id);
+    return Results.Json(user);
+});
+```
+
+The `Results.Json` method forces JSON serialization regardless of the `Accept` header.
+
+## Input and Output Formatters
+
+Formatters convert between raw HTTP request bodies and C# objects during input binding, and between C# objects and HTTP response bodies during output serialization. ASP.NET Core includes JSON and text formatters by default. Adding XML support or custom formats requires registering additional formatters.
+
+### Adding XML Formatter Support
+
+To support XML input and output, add the XML formatters package and register them:
+
+```csharp
+builder.Services.AddControllers()
+    .AddXmlSerializerFormatters();
+```
+
+With XML formatters registered, clients can send `Content-Type: application/xml` requests and receive `Accept: application/xml` responses.
+
+```csharp
+[HttpPost]
+[Consumes("application/json", "application/xml")]
+[Produces("application/json", "application/xml")]
+public IActionResult Create([FromBody] CreateUserRequest request)
+{
+    return Ok(request);
+}
+```
+
+The `Consumes` attribute restricts acceptable input formats. The `Produces` attribute restricts output formats. If a client sends a format not listed in `Consumes`, the framework returns 415 Unsupported Media Type.
+
+### Custom Input Formatters
+
+Custom input formatters handle non-standard content types. Extend `TextInputFormatter` for text-based formats or `InputFormatter` for binary formats.
+
+```csharp
+public class CsvInputFormatter : TextInputFormatter
+{
+    public CsvInputFormatter()
     {
-        // Process each file
+        SupportedMediaTypes.Add(MediaTypeHeaderValue.Parse("text/csv"));
+        SupportedEncodings.Add(Encoding.UTF8);
     }
-    return Ok();
-}
-```
 
-For large file uploads, buffering the entire file can exhaust server resources. In these scenarios, use streaming to process the file as it arrives:
-
-```csharp
-[HttpPost("upload-stream")]
-[DisableFormValueModelBinding]
-public async Task<IActionResult> UploadStream()
-{
-    var boundary = Request.GetMultipartBoundary();
-    var reader = new MultipartReader(boundary, Request.Body);
-
-    var section = await reader.ReadNextSectionAsync();
-    while (section != null)
+    protected override bool CanReadType(Type type)
     {
-        var fileSection = section.AsFileSection();
-        if (fileSection != null)
-        {
-            await using var stream = fileSection.FileStream;
-            // Process stream without buffering entire file
-        }
-        section = await reader.ReadNextSectionAsync();
+        return type == typeof(List<UserRecord>);
     }
 
-    return Ok();
+    public override async Task<InputFormatterResult> ReadRequestBodyAsync(
+        InputFormatterContext context, Encoding encoding)
+    {
+        var httpContext = context.HttpContext;
+        using var reader = new StreamReader(httpContext.Request.Body, encoding);
+        var csv = await reader.ReadToEndAsync();
+
+        var records = ParseCsv(csv);
+        return await InputFormatterResult.SuccessAsync(records);
+    }
+
+    private List<UserRecord> ParseCsv(string csv)
+    {
+        // Parse CSV into list of records
+        return new List<UserRecord>();
+    }
 }
 ```
 
-Streaming processes the file content directly from the request body without buffering it entirely in memory. This approach is more complex but essential for handling uploads that might exceed available memory.
-
-Always validate uploaded files before processing them. Check file size limits, verify content types, scan for malicious content, and sanitize filenames to prevent security vulnerabilities.
-
-### File Downloads
-
-Returning files from APIs can be done through several action result types depending on whether the file exists on disk, in memory, or needs to be generated on demand.
-
-The `PhysicalFileResult` streams a file from the file system:
+Register the custom formatter:
 
 ```csharp
-[HttpGet("download/{filename}")]
-public IActionResult Download(string filename)
+builder.Services.AddControllers(options =>
 {
-    var filePath = Path.Combine("files", filename);
-
-    if (!System.IO.File.Exists(filePath))
-        return NotFound();
-
-    return PhysicalFile(filePath, "application/octet-stream", filename);
-}
+    options.InputFormatters.Add(new CsvInputFormatter());
+});
 ```
 
-The `PhysicalFile` method returns a result that streams the file content directly from disk. The second parameter specifies the content type, while the third parameter sets the download filename shown to the user.
+Now clients can post CSV data with `Content-Type: text/csv`, and the formatter converts it to a strongly typed list.
 
-For files generated in memory, use `FileContentResult`:
+### Custom Output Formatters
+
+Custom output formatters convert C# objects to non-standard response formats. Extend `TextOutputFormatter` for text formats or `OutputFormatter` for binary formats.
 
 ```csharp
-[HttpGet("report")]
-public IActionResult GetReport()
+public class CsvOutputFormatter : TextOutputFormatter
 {
-    var reportData = GenerateReport();
-    return File(reportData, "application/pdf", "report.pdf");
+    public CsvOutputFormatter()
+    {
+        SupportedMediaTypes.Add(MediaTypeHeaderValue.Parse("text/csv"));
+        SupportedEncodings.Add(Encoding.UTF8);
+    }
+
+    protected override bool CanWriteType(Type type)
+    {
+        return typeof(IEnumerable<UserRecord>).IsAssignableFrom(type);
+    }
+
+    public override async Task WriteResponseBodyAsync(
+        OutputFormatterWriteContext context, Encoding encoding)
+    {
+        var httpContext = context.HttpContext;
+        var records = context.Object as IEnumerable<UserRecord>;
+
+        var csv = GenerateCsv(records);
+        await httpContext.Response.WriteAsync(csv, encoding);
+    }
+
+    private string GenerateCsv(IEnumerable<UserRecord> records)
+    {
+        // Generate CSV from records
+        return string.Empty;
+    }
 }
 ```
 
-The `File` method with a byte array creates a result that sends the content directly from memory. This works well for dynamically generated content like reports or images.
-
-For large files or content generated on the fly, stream the response directly:
+Register the formatter:
 
 ```csharp
-[HttpGet("large-file")]
-public async Task<IActionResult> GetLargeFile()
+builder.Services.AddControllers(options =>
 {
-    var stream = await GenerateLargeContentAsync();
-    return File(stream, "application/octet-stream", "large-file.dat");
-}
+    options.OutputFormatters.Add(new CsvOutputFormatter());
+});
 ```
 
-The stream is consumed and sent to the client as it's generated, avoiding the need to hold the entire file in memory. The framework automatically disposes of the stream after the response completes.
-
-When streaming large responses, set appropriate buffer sizes and consider implementing range request support to allow clients to resume interrupted downloads. The `FileStreamResult` supports range requests automatically when the underlying stream supports seeking.
+When a client sends `Accept: text/csv`, the custom formatter generates a CSV response instead of JSON.
 
 ## Common Patterns and Best Practices
 

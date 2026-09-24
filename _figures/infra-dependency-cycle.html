@@ -1,0 +1,65 @@
+---
+title: "Breaking a Dependency Cycle"
+kind: graph
+system: infrastructure
+summary: "Two security groups that reference each other, before and after separating the rule."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="idc-title idc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="idc-title">A dependency cycle between two security groups, and how a separate rule resource breaks it</title>
+<desc id="idc-desc">With rules written inline, the app security group depends on the db security group and the db security group depends on the app security group, so the dependency graph has a cycle and neither can be created first. With the rule as a separate resource, both security groups depend on nothing, and the rule depends on both, so the tool creates the two groups first and the rule last.</desc>
+<style>
+.idc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.idc-rule { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.idc-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.idc-h { font-size: 15px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.idc-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.idc-d { font-size: 11.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.idc-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.idc-d-inv { font-size: 11.5px; font-style: italic; fill: #FFFFFF; }
+.idc-dep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.idc-cyc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.idc-lab-bad { font-size: 11.5px; fill: var(--color-accent, #A5486E); font-weight: 700; }
+.idc-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.idc-key { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="idc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="idc-r" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Panel 1: inline rules -->
+<text class="idc-h" x="225" y="26" text-anchor="middle">Rules inline: a cycle</text>
+<rect class="idc-bad" x="40" y="70" width="140" height="58" rx="6"/>
+<text class="idc-n" x="110" y="95" text-anchor="middle">app group</text>
+<text class="idc-d" x="110" y="114" text-anchor="middle">rule names db</text>
+<rect class="idc-bad" x="270" y="70" width="140" height="58" rx="6"/>
+<text class="idc-n" x="340" y="95" text-anchor="middle">db group</text>
+<text class="idc-d" x="340" y="114" text-anchor="middle">rule names app</text>
+<path class="idc-cyc" d="M 180,88 L 264,88" marker-end="url(#idc-r)"/>
+<path class="idc-cyc" d="M 270,112 L 186,112" marker-end="url(#idc-r)"/>
+<text class="idc-lab-bad" x="225" y="165" text-anchor="middle">neither can be created first</text>
+<text class="idc-note" x="225" y="188" text-anchor="middle">Terraform stops with a cycle error</text>
+
+<!-- Panel 2: separate rule -->
+<text class="idc-h" x="675" y="26" text-anchor="middle">Rule separate: no cycle</text>
+<rect class="idc-box" x="490" y="70" width="140" height="58" rx="6"/>
+<text class="idc-n" x="560" y="95" text-anchor="middle">app group</text>
+<text class="idc-d" x="560" y="114" text-anchor="middle">no rules</text>
+<rect class="idc-box" x="720" y="70" width="140" height="58" rx="6"/>
+<text class="idc-n" x="790" y="95" text-anchor="middle">db group</text>
+<text class="idc-d" x="790" y="114" text-anchor="middle">no rules</text>
+<rect class="idc-rule" x="590" y="190" width="170" height="58" rx="6"/>
+<text class="idc-n-inv" x="675" y="215" text-anchor="middle">ingress rule</text>
+<text class="idc-d-inv" x="675" y="234" text-anchor="middle">db allows app</text>
+<path class="idc-dep" d="M 650,190 L 578,134" marker-end="url(#idc-a)"/>
+<path class="idc-dep" d="M 700,190 L 772,134" marker-end="url(#idc-a)"/>
+<text class="idc-note" x="675" y="282" text-anchor="middle">Created in order: both groups, then the rule</text>
+
+<!-- Legend -->
+<path class="idc-dep" d="M 40,312 L 80,312" marker-end="url(#idc-a)"/>
+<text class="idc-key" x="90" y="316">depends on (must be created after)</text>
+<path class="idc-cyc" d="M 330,312 L 370,312" marker-end="url(#idc-r)"/>
+<text class="idc-key" x="380" y="316">a dependency that closes a cycle</text>
+</g>
+</svg>

@@ -2,7 +2,7 @@
 title: "API Security"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Security & Resilience"
+subcategory: "Security & Resilience"
 description: "Comprehensive security practices for ASP.NET Core APIs, covering transport security, input validation, authentication, secrets management, and defense against common vulnerabilities."
 tags: [asp-net-core, security, authentication, api-security, owasp, data-protection, encryption]
 ---
@@ -51,6 +51,60 @@ HSTS configuration allows you to specify the max-age duration, whether to includ
 HSTS is primarily a browser security feature. Non-browser clients like mobile apps, desktop applications, or server-to-server API calls generally ignore HSTS headers. For APIs that serve non-browser clients, requiring HTTPS at the server configuration level provides stronger enforcement than relying on HSTS.
 
 In development environments, HSTS should typically be disabled because the header is highly cacheable and can interfere with local testing when switching between HTTP and HTTPS configurations.
+
+## HTTPS Redirection and HSTS
+
+HTTPS redirection and HTTP Strict Transport Security (HSTS) are middleware components that enforce secure connections.
+
+### HTTPS Redirection Middleware
+
+The `UseHttpsRedirection` middleware intercepts HTTP requests and responds with a redirect to the HTTPS equivalent. This ensures that clients always communicate over an encrypted connection.
+
+```csharp
+app.UseHttpsRedirection();
+```
+
+The middleware responds with a 307 Temporary Redirect by default, though you can configure it to use 301 Permanent Redirect for production environments.
+
+```csharp
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.RedirectStatusCode = StatusCodes.Status301MovedPermanently;
+    options.HttpsPort = 443;
+});
+```
+
+HTTPS redirection should appear early in the pipeline, before routing and authentication, so that insecure requests are upgraded before reaching sensitive middleware.
+
+### HSTS Middleware
+
+The `UseHsts` middleware adds the `Strict-Transport-Security` header to responses, instructing browsers to only access the site over HTTPS for a specified duration. This prevents downgrade attacks where an attacker forces the client to use HTTP.
+
+```csharp
+app.UseHsts();
+```
+
+HSTS is generally a browser-only instruction. Phone and desktop API clients do not obey the header, so HSTS is less relevant for pure APIs. However, if your API is also accessed by web browsers, HSTS provides an additional layer of security.
+
+Configure HSTS behavior through options.
+
+```csharp
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+    options.Preload = true;
+});
+```
+
+HSTS should not be used in development because the header persists in the browser, and you cannot easily revert to HTTP. Only enable HSTS in production.
+
+```csharp
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+```
 
 ## Input Validation as a Security Boundary
 
@@ -351,6 +405,123 @@ var timeLimitedProtector = _protector.ToTimeLimitedDataProtector();
 var protectedData = timeLimitedProtector.Protect(data, TimeSpan.FromHours(1));
 ```
 
+## CORS Middleware
+
+Cross-Origin Resource Sharing controls which browser-based applications can call your API. Without CORS policies, browsers block JavaScript from making requests to APIs hosted on different domains than the page that loaded the script.
+
+CORS addresses a security model enforced by web browsers. When a page at https://example.com attempts to fetch data from https://api.example.com, the browser performs a CORS check. If the API does not explicitly allow requests from example.com, the browser blocks the request before it reaches your API.
+
+ASP.NET Core's CORS middleware adds appropriate headers to responses, allowing browsers to permit cross-origin requests according to your policies.
+
+### Configuring CORS Policies
+
+CORS policies define which origins can access your API, which HTTP methods are allowed, which headers can be included, and whether credentials like cookies can be sent.
+
+```csharp
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowSpecificOrigin", builder =>
+    {
+        builder.WithOrigins("https://example.com", "https://app.example.com")
+               .WithMethods("GET", "POST")
+               .WithHeaders("Authorization", "Content-Type")
+               .AllowCredentials();
+    });
+
+    options.AddPolicy("AllowAnyOrigin", builder =>
+    {
+        builder.AllowAnyOrigin()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
+
+var app = builder.Build();
+
+app.UseCors();
+```
+
+The WithOrigins method specifies exact origin URLs. Origins include the scheme, host, and port. https://example.com and http://example.com are different origins. The AllowAnyOrigin method permits requests from any origin, which suits public APIs but sacrifices security for convenience.
+
+WithMethods restricts which HTTP verbs are allowed. AllowAnyMethod permits all verbs including GET, POST, PUT, DELETE, and others. WithHeaders specifies which request headers are allowed beyond simple headers. AllowAnyHeader permits any header.
+
+AllowCredentials indicates that requests can include credentials like cookies or authorization headers. This method cannot be combined with AllowAnyOrigin because allowing credentials from any origin creates security risks. If you need credentials, you must specify explicit origins.
+
+### CORS with Preflight Requests
+
+Complex requests trigger preflight checks where the browser sends an OPTIONS request before the actual request. The preflight asks the server whether the actual request is allowed. The server responds with CORS headers indicating which origins, methods, and headers are permitted.
+
+Requests that include custom headers, use methods other than GET or POST, or send Content-Type headers other than application/x-www-form-urlencoded, multipart/form-data, or text/plain require preflight.
+
+```csharp
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("PreflightPolicy", builder =>
+    {
+        builder.WithOrigins("https://example.com")
+               .WithMethods("GET", "POST", "PUT", "DELETE")
+               .WithHeaders("Authorization", "Content-Type", "X-Custom-Header")
+               .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    });
+});
+```
+
+SetPreflightMaxAge tells browsers how long they can cache preflight results. Within that duration, browsers skip the preflight for subsequent matching requests. This reduces latency and server load for repeated requests from the same origin.
+
+### Applying CORS to Endpoints
+
+Apply CORS policies globally to all endpoints or selectively per endpoint. Global application uses middleware without parameters, and endpoint-specific application uses RequireCors on minimal APIs or EnableCors attribute on controllers.
+
+```csharp
+app.UseCors("AllowSpecificOrigin");
+
+app.MapGet("/public-data", () => Results.Ok("Available to all"))
+    .RequireCors("AllowAnyOrigin");
+
+app.MapPost("/sensitive-operation", () => Results.Ok("Restricted"))
+    .RequireCors("AllowSpecificOrigin");
+```
+
+Global CORS policies apply unless an endpoint overrides them. Endpoints that specify RequireCors use that policy instead of the global policy. This allows public endpoints to relax restrictions while sensitive endpoints enforce strict origin checks.
+
+For controllers, apply EnableCors at the controller or action level.
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+[EnableCors("AllowSpecificOrigin")]
+public class SecureController : ControllerBase
+{
+    [HttpGet("public")]
+    [EnableCors("AllowAnyOrigin")]
+    public IActionResult GetPublicData() => Ok("Public");
+
+    [HttpPost("protected")]
+    public IActionResult PostProtectedData() => Ok("Protected");
+}
+```
+
+The controller-level attribute provides a default, and action-level attributes override it. This mirrors how rate limiting attributes work.
+
+### CORS and Credentials
+
+When allowing credentials, the origin must be explicit. Browsers reject responses that set Access-Control-Allow-Origin to * while also setting Access-Control-Allow-Credentials to true.
+
+```csharp
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CredentialPolicy", builder =>
+    {
+        builder.WithOrigins("https://app.example.com")
+               .AllowCredentials()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
+```
+
+Requests that include credentials send cookies, HTTP authentication, or client-side SSL certificates. APIs that rely on cookie-based authentication or require authorization headers must allow credentials and specify exact origins.
+
 ## Security Headers
 
 HTTP security headers instruct browsers to enable additional security protections. While these headers primarily benefit browser-based clients, APIs that serve web applications should include them to protect against common browser-based attacks.
@@ -385,43 +556,6 @@ context.Response.Headers.Add("X-Frame-Options", "DENY");
 ```
 
 Applying security headers through middleware ensures they are added to all responses consistently. Alternatively, headers can be configured at the reverse proxy or load balancer level, centralizing security policy across multiple applications.
-
-## Certificate-Based Authentication
-
-Certificate-based authentication uses client certificates to verify identity, providing stronger assurance than password-based authentication. The client presents a certificate during TLS handshake, and the server validates the certificate against trusted issuers.
-
-ASP.NET Core certificate authentication middleware processes client certificates forwarded from the TLS layer or reverse proxy. The middleware validates certificates and creates an authenticated principal based on certificate properties.
-
-```csharp
-builder.Services.AddAuthentication(
-    CertificateAuthenticationDefaults.AuthenticationScheme)
-    .AddCertificate(options =>
-    {
-        options.AllowedCertificateTypes = CertificateTypes.All;
-        options.Events = new CertificateAuthenticationEvents
-        {
-            OnCertificateValidated = context =>
-            {
-                var claims = new[]
-                {
-                    new Claim(ClaimTypes.Name,
-                        context.ClientCertificate.Subject,
-                        ClaimValueTypes.String)
-                };
-                context.Principal = new ClaimsPrincipal(
-                    new ClaimsIdentity(claims, context.Scheme.Name));
-                context.Success();
-                return Task.CompletedTask;
-            }
-        };
-    });
-```
-
-Certificate validation includes checking the certificate chain, verifying it was issued by a trusted authority, and confirming it has not expired or been revoked. Custom validation logic can enforce additional requirements like checking certificate thumbprints or subject names against an allowlist.
-
-Mutual TLS (mTLS) requires both client and server to present certificates, providing bidirectional authentication. Service-to-service communication often uses mTLS to ensure both parties are authenticated and communication is encrypted.
-
-When running behind a reverse proxy like IIS or Azure App Service, certificates are validated at the proxy layer and forwarded to the application. The application must trust the forwarded certificate header and configure middleware to accept certificates from the proxy.
 
 ## IP Filtering and Allowlisting
 

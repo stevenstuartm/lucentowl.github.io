@@ -1,0 +1,65 @@
+---
+title: "How Routing Picks One Endpoint"
+kind: flow
+system: aspnet-core
+summary: "The narrowing steps, and the three ways selection can fail."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" role="img" aria-labelledby="ars-title ars-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ars-title">How the routing middleware narrows the route table to one endpoint</title>
+<desc id="ars-desc">Routing first finds the templates that fit the request path. It then filters them by HTTP method, host, and request content type, then drops candidates whose constraints fail, and finally picks the best survivor by Order and then precedence. The chosen endpoint runs at the end of the pipeline. If no template fits the path, or filtering and constraints leave no candidate, no endpoint is selected, the request continues, and a 404 results at the end of the pipeline. If the path fits but no candidate accepts the method or the request body's content type, routing selects a built-in 405 or 415 endpoint. If two candidates tie, routing throws an ambiguous match exception.</desc>
+<style>
+.ars-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ars-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.ars-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.ars-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ars-n-warn { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ars-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ars-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.ars-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.ars-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ars-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="ars-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ars-ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ars-box" x="20" y="60" width="150" height="60" rx="6"/>
+<text class="ars-n" x="95" y="86" text-anchor="middle">Match the path</text>
+<text class="ars-k" x="95" y="104" text-anchor="middle">fitting templates</text>
+<rect class="ars-box" x="204" y="60" width="150" height="60" rx="6"/>
+<text class="ars-n" x="279" y="86" text-anchor="middle">Filter the request</text>
+<text class="ars-k" x="279" y="104" text-anchor="middle">method, host, body type</text>
+<rect class="ars-box" x="388" y="60" width="150" height="60" rx="6"/>
+<text class="ars-n" x="463" y="86" text-anchor="middle">Check constraints</text>
+<text class="ars-k" x="463" y="104" text-anchor="middle">drop failing values</text>
+<rect class="ars-box" x="572" y="60" width="150" height="60" rx="6"/>
+<text class="ars-n" x="647" y="86" text-anchor="middle">Pick the best</text>
+<text class="ars-k" x="647" y="104" text-anchor="middle">Order, then precedence</text>
+<rect class="ars-px" x="756" y="60" width="184" height="60" rx="6"/>
+<text class="ars-n" x="848" y="86" text-anchor="middle">Endpoint selected</text>
+<text class="ars-k" x="848" y="104" text-anchor="middle">runs at the pipeline end</text>
+<path class="ars-flow" d="M170,90 L202,90" marker-end="url(#ars-a)"/>
+<path class="ars-flow" d="M354,90 L386,90" marker-end="url(#ars-a)"/>
+<path class="ars-flow" d="M538,90 L570,90" marker-end="url(#ars-a)"/>
+<path class="ars-flow" d="M722,90 L754,90" marker-end="url(#ars-a)"/>
+<rect class="ars-warn" x="204" y="200" width="150" height="60" rx="6"/>
+<text class="ars-n-warn" x="279" y="226" text-anchor="middle">405 or 415 endpoint</text>
+<text class="ars-k" x="279" y="244" text-anchor="middle">wrong verb or body type</text>
+<rect class="ars-warn" x="388" y="200" width="150" height="60" rx="6"/>
+<text class="ars-n-warn" x="463" y="226" text-anchor="middle">No endpoint</text>
+<text class="ars-k" x="463" y="244" text-anchor="middle">404 at the pipeline end</text>
+<rect class="ars-warn" x="572" y="200" width="150" height="60" rx="6"/>
+<text class="ars-n-warn" x="647" y="226" text-anchor="middle">Ambiguous match</text>
+<text class="ars-k" x="647" y="244" text-anchor="middle">exception thrown</text>
+<path class="ars-hot" d="M95,120 L95,290 L463,290 L463,262" marker-end="url(#ars-ah)"/>
+<text class="ars-lab" x="103" y="170">none fit</text>
+<path class="ars-hot" d="M279,120 L279,198" marker-end="url(#ars-ah)"/>
+<text class="ars-lab" x="287" y="170">none accept it</text>
+<path class="ars-hot" d="M463,120 L463,198" marker-end="url(#ars-ah)"/>
+<text class="ars-lab" x="471" y="170">none left</text>
+<path class="ars-hot" d="M647,120 L647,198" marker-end="url(#ars-ah)"/>
+<text class="ars-lab" x="655" y="170">a tie</text>
+<text class="ars-note" x="20" y="326">Routing narrows the route table to one endpoint, or ends in one of three failures.</text>
+</g>
+</svg>

@@ -2,7 +2,7 @@
 title: "Authentication and Authorization"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Security & Resilience"
+subcategory: "Security & Resilience"
 description: "Comprehensive guide to authentication schemes, authorization policies, and securing ASP.NET Core API endpoints using JWT, OAuth, Identity, and custom handlers."
 tags: [asp-net-core, authentication, authorization, jwt, oauth, security, identity]
 ---
@@ -154,6 +154,43 @@ APIs often need to support multiple authentication methods simultaneously. A pub
 The authentication middleware can be configured with a default scheme and additional named schemes. When an endpoint requires authentication but doesn't specify a scheme, the default scheme is used. Endpoints can specify a specific scheme using authorization attributes or RequireAuthorization with a policy that specifies the scheme.
 
 Composite authentication is another pattern where multiple schemes are evaluated in sequence until one succeeds. This allows fallback behavior, such as trying JWT bearer authentication first and falling back to API key authentication if no bearer token is present. Implementing this requires a custom handler that delegates to other handlers based on request content.
+
+## Certificate-Based Authentication
+
+Certificate-based authentication uses client certificates to verify identity, providing stronger assurance than password-based authentication. The client presents a certificate during TLS handshake, and the server validates the certificate against trusted issuers.
+
+ASP.NET Core certificate authentication middleware processes client certificates forwarded from the TLS layer or reverse proxy. The middleware validates certificates and creates an authenticated principal based on certificate properties.
+
+```csharp
+builder.Services.AddAuthentication(
+    CertificateAuthenticationDefaults.AuthenticationScheme)
+    .AddCertificate(options =>
+    {
+        options.AllowedCertificateTypes = CertificateTypes.All;
+        options.Events = new CertificateAuthenticationEvents
+        {
+            OnCertificateValidated = context =>
+            {
+                var claims = new[]
+                {
+                    new Claim(ClaimTypes.Name,
+                        context.ClientCertificate.Subject,
+                        ClaimValueTypes.String)
+                };
+                context.Principal = new ClaimsPrincipal(
+                    new ClaimsIdentity(claims, context.Scheme.Name));
+                context.Success();
+                return Task.CompletedTask;
+            }
+        };
+    });
+```
+
+Certificate validation includes checking the certificate chain, verifying it was issued by a trusted authority, and confirming it has not expired or been revoked. Custom validation logic can enforce additional requirements like checking certificate thumbprints or subject names against an allowlist.
+
+Mutual TLS (mTLS) requires both client and server to present certificates, providing bidirectional authentication. Service-to-service communication often uses mTLS to ensure both parties are authenticated and communication is encrypted.
+
+When running behind a reverse proxy like IIS or Azure App Service, certificates are validated at the proxy layer and forwarded to the application. The application must trust the forwarded certificate header and configure middleware to accept certificates from the proxy.
 
 ## Authorization Fundamentals
 

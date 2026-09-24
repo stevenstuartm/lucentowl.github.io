@@ -582,6 +582,131 @@ public class RequireTagsHook : ICloudFormationHook
 
 ---
 
+### Guardrails for Application-Team IaC
+
+**The concern:** "Won't app teams abuse permissions if they control IaC?"
+
+**The answer:** No, because of multiple layers of preventive controls:
+
+**1. IAM Permission Boundaries**
+
+Limit what app teams can create even with their deployment role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowApplicationLayerOnly",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/layer": "application",
+          "aws:RequestTag/domain": "payments"
+        }
+      }
+    },
+    {
+      "Sid": "DenyFoundationChanges",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:DeleteVpc",
+        "ec2:DeleteSubnet",
+        "ec2:ModifyVpcAttribute",
+        "ec2:DeleteRouteTable"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+**2. Service Control Policies (SCPs)**
+
+Enforce tagging at organization level:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RequireTagsOnCreate",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "rds:CreateDBInstance",
+        "lambda:CreateFunction"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "Null": {
+          "aws:RequestTag/environment": "true",
+          "aws:RequestTag/layer": "true",
+          "aws:RequestTag/domain": "true"
+        }
+      }
+    }
+  ]
+}
+```
+
+**3. CloudFormation Hooks**
+
+Validate templates before deployment:
+
+```yaml
+RequireTagsHook:
+  Type: AWS::CloudFormation::Hook
+  Properties:
+    TypeName: AWSSamples::RequireTags::Hook
+    TargetStacks: ALL
+    FailureMode: FAIL
+    Properties:
+      RequiredTags:
+        - environment
+        - layer
+        - domain
+```
+
+**4. Approval Gates**
+
+Require manual approval for production:
+
+```yaml
+environment: production
+# GitHub/GitLab requires approval from designated reviewers
+```
+
+**5. AWS Config Rules**
+
+Detect non-compliant resources after creation:
+
+```yaml
+ResourcesManagedByTeam:
+  Type: AWS::Config::ConfigRule
+  Properties:
+    ConfigRuleName: resources-have-required-tags
+    Source:
+      Owner: AWS
+      SourceIdentifier: REQUIRED_TAGS
+    InputParameters:
+      tag1Key: environment
+      tag2Key: layer
+      tag3Key: domain
+```
+
+### Runtime Policy Engines
+
+**[Cloud Custodian](https://cloudcustodian.io/){:target="_blank" rel="noopener noreferrer"}:**
+- Cloud governance and compliance tool
+- YAML-based policy definitions
+- Real-time compliance enforcement
+- Automated remediation actions
+
+---
+
 ## Automated Remediation
 
 Automatically fix compliance violations and drift.

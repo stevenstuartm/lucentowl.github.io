@@ -42,6 +42,32 @@ The output of a successful MSIX build is a `.msix` or `.msixbundle` file. A bund
 
 ---
 
+## Code Signing (moved from security)
+
+Code signing serves two purposes. First, it establishes the identity of the publisher so Windows and users can verify who produced the executable. Second, it provides tamper detection: if the binary changes after signing, the signature becomes invalid and Windows will warn or block execution depending on the security policy.
+
+MSIX packages require signing before they can be installed. An unsigned MSIX is rejected by the Windows installer. During development, Visual Studio supports signing with a self-signed certificate for local testing, but production packages distributed outside the Microsoft Store must be signed with a certificate from a trusted Certificate Authority such as [DigiCert](https://www.digicert.com/signing/code-signing-certificates){:target="_blank" rel="noopener noreferrer"} or [Sectigo](https://sectigo.com/ssl-certificates-tls/code-signing){:target="_blank" rel="noopener noreferrer"}.
+
+For Store submissions, Microsoft signs the package on your behalf during the submission process, so you do not need a separate code-signing certificate for Store distribution.
+
+To sign a package with `signtool.exe` during a CI/CD pipeline:
+
+```bash
+signtool sign \
+  /fd SHA256 \
+  /tr http://timestamp.digicert.com \
+  /td SHA256 \
+  /f MyApp.pfx \
+  /p $CERT_PASSWORD \
+  MyApp.msix
+```
+
+The `/tr` and `/td` flags specify a timestamp server and timestamp digest algorithm. Timestamping is not optional for production packages: without it, the package signature expires when the signing certificate expires, which would invalidate all previously distributed installers. With a timestamp, the signature remains valid as long as it was created while the certificate was valid, even after the certificate itself has expired.
+
+Extended Validation (EV) certificates provide a higher level of trust and bypass the SmartScreen reputation warning period that new publishers typically encounter. Standard OV (Organization Validation) certificates also work but may trigger SmartScreen warnings until the publisher accumulates reputation. For enterprise applications distributed internally, certificates from an internal CA trusted by the organization's machines work without these restrictions.
+
+---
+
 ## Unpackaged Deployment
 
 MSIX is the recommended path for most applications, but WinUI 3 also supports running without a package. This mode is called unpackaged deployment, and it is enabled by setting `WindowsPackageType` to `None` in the project file.

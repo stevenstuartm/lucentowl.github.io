@@ -208,7 +208,7 @@ Report, most severe first:
 
 ### 5. Fix and re-review
 
-Apply the findings, re-checking any that look wrong against the source rather than taking them on trust. Soften any claim that cannot be verified to what can be. If the fixes corrected facts or added material, dispatch a new reviewer on the revised guide; stop when a round returns "ready". After three rounds without "ready," stop and bring the open findings to the user.
+Apply the findings, re-checking any that look wrong against the source rather than taking them on trust. Soften any claim that cannot be verified to what can be. Run at most two review rounds. If the first round's fixes corrected facts or added material, dispatch one new reviewer on the revised guide. Apply the second round's findings the same way, verifying each against the source, and stop there. A third round costs more than it finds, because each round mostly re-litigates wording the previous one settled.
 
 ### 6. Mechanical checks
 
@@ -220,7 +220,7 @@ Apply the findings, re-checking any that look wrong against the source rather th
 
 ### Done
 
-The guide is done when the last review returned "ready" and the mechanical checks pass. This is the same bar as `Complete` in the depth refinement standard. When handing it over, report any claims that were softened because they could not be verified; there is no plan document to record them in.
+The guide is done when the review rounds have run (at most two), every finding is applied or rejected against a source, and the mechanical checks pass. This is the same bar as `Complete` in the depth refinement standard. When handing it over, report any claims that were softened because they could not be verified; there is no plan document to record them in.
 
 ---
 
@@ -345,11 +345,14 @@ When writing about software architecture, use correct terminology:
 | Data & Analytics | Analytics |
 | Observability | Monitoring & Observability |
 | Networking | Network Fundamentals |
+| Infrastructure & Cloud | Infrastructure as Code, Cloud Operations |
 | Web Development | SEO & Web |
 | Developer Tools | Git Fundamentals, GitHub |
 | IoT | Foundations, Architecture & Data, Security & Firmware, Fleet Operations, Industrial IoT |
 | Leadership & Team Management | Engineering Leadership |
+| ASP.NET Core | Fundamentals, Building APIs, Real-Time & RPC, Security & Resilience, Testing & Operations, Aspire |
 | .NET & C# | Platform & Runtime, Language Fundamentals, Object-Oriented Programming, Async & Concurrency, Collections & Data, Core Libraries, Advanced Topics, IoT & Embedded, Tooling & Quality |
+| WinUI 3 | WinUI Fundamentals, Controls & UI, Data & MVVM, Styling & Resources, Window & Input, Platform Integration, Advanced Features, Quality & Testing |
 
 **File organization conventions**:
 - Architecture guides: `_guides/architecture/`
@@ -362,6 +365,7 @@ When writing about software architecture, use correct terminology:
 - IoT guides: `_guides/iot/` (vendor-neutral; Azure IoT product guides live under `_guides/infrastructure/azure/`)
 - Leadership guides: `_guides/leadership/` (including architecture decision-making, which is a leadership topic rather than an architecture one)
 - .NET & C# guides: `_guides/dotnet/c-sharp/` (by subcategory: `foundations/`, `fundamentals/`, `oop/`, `async/`, `collections/`, `libraries/`, `advanced/`, `tooling/`) plus `_guides/dotnet/iot/` for the IoT & Embedded subcategory. `_guides/dotnet/asp/`, `_guides/dotnet/aspire/`, and `_guides/dotnet/winui/` belong to the separate ASP.NET Core and WinUI 3 categories
+- Infrastructure & Cloud guides: `_guides/infrastructure/` top level (vendor-neutral). The AWS and Azure categories live in `_guides/infrastructure/aws/` and `_guides/infrastructure/azure/`
 - Networking guides: `_guides/networking/`
 - Web Development guides: `_guides/web/`
 - Developer Tools guides: `_guides/developer-tools/` (Git and GitHub; the Azure-specific GitHub Actions guide lives under `_guides/infrastructure/azure/`)

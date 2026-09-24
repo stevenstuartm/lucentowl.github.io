@@ -1,0 +1,54 @@
+---
+title: "Pipeline Branches: UseWhen and Map"
+kind: flow
+system: aspnet-core
+summary: "A UseWhen branch rejoins the main pipeline; a Map branch never does."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="amb-title amb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="amb-title">How UseWhen and Map branch the middleware pipeline</title>
+<desc id="amb-desc">Left: with UseWhen, a request for which the predicate is true runs the branch middleware and then continues to Middleware B. A request for which it is false goes straight to Middleware B. Both paths continue down the main pipeline. Right: with Map, a request whose path matches runs the branch, which ends in a terminal Run delegate, and never reaches Middleware B. The matched path segment moves from Path to PathBase. A request whose path doesn't match continues to Middleware B.</desc>
+<style>
+.amb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.amb-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.amb-rule { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 4; }
+.amb-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.amb-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.amb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.amb-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.amb-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.amb-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="amb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="amb-hd" x="40" y="60">USEWHEN: THE BRANCH REJOINS</text>
+<rect class="amb-box" x="40" y="100" width="120" height="60" rx="6"/>
+<text class="amb-n" x="100" y="135" text-anchor="middle">Middleware A</text>
+<rect class="amb-box" x="330" y="100" width="120" height="60" rx="6"/>
+<text class="amb-n" x="390" y="135" text-anchor="middle">Middleware B</text>
+<rect class="amb-px" x="175" y="220" width="140" height="60" rx="6"/>
+<text class="amb-n" x="245" y="255" text-anchor="middle">Branch middleware</text>
+<path class="amb-flow" d="M160,130 L328,130" marker-end="url(#amb-a)"/>
+<text class="amb-lab" x="244" y="122" text-anchor="middle">predicate false</text>
+<path class="amb-flow" d="M100,160 L100,250 L173,250" marker-end="url(#amb-a)"/>
+<text class="amb-lab" x="108" y="205">predicate true</text>
+<path class="amb-flow" d="M315,250 L390,250 L390,162" marker-end="url(#amb-a)"/>
+<text class="amb-note" x="40" y="320">Both paths continue to Middleware B.</text>
+<line class="amb-rule" x1="480" y1="40" x2="480" y2="340"/>
+<text class="amb-hd" x="510" y="60">MAP: THE BRANCH NEVER REJOINS</text>
+<rect class="amb-box" x="510" y="100" width="120" height="60" rx="6"/>
+<text class="amb-n" x="570" y="135" text-anchor="middle">Middleware A</text>
+<rect class="amb-box" x="800" y="100" width="120" height="60" rx="6"/>
+<text class="amb-n" x="860" y="135" text-anchor="middle">Middleware B</text>
+<rect class="amb-px" x="645" y="220" width="140" height="60" rx="6"/>
+<text class="amb-n" x="715" y="246" text-anchor="middle">Branch middleware</text>
+<text class="amb-k" x="715" y="264" text-anchor="middle">ends in Run</text>
+<path class="amb-flow" d="M630,130 L798,130" marker-end="url(#amb-a)"/>
+<text class="amb-lab" x="714" y="122" text-anchor="middle">path doesn't match</text>
+<path class="amb-flow" d="M570,160 L570,250 L643,250" marker-end="url(#amb-a)"/>
+<text class="amb-lab" x="578" y="205">path matches /legacy</text>
+<text class="amb-note" x="510" y="320">A matched request never reaches Middleware B,</text>
+<text class="amb-note" x="510" y="338">and /legacy moves from Path to PathBase.</text>
+</g>
+</svg>

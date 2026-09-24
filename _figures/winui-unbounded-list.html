@@ -1,0 +1,58 @@
+---
+title: "A List in a StackPanel vs a Star Row"
+kind: structure
+system: winui
+summary: "The same ListView given unlimited height and given a finite row."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 390" role="img" aria-labelledby="wul-title wul-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wul-title">A ListView inside a vertical StackPanel compared with one in a star-sized Grid row</title>
+<desc id="wul-desc">On the left, a window holds a vertical StackPanel containing a TextBlock and a ListView. The StackPanel offers unlimited height, so the ListView measures itself as tall as all its items, extends past the bottom of the window, and shows no scroll bar. On the right, the same window holds a Grid whose first row is Auto, holding the TextBlock, and whose second row is star-sized, holding the ListView. The Grid gives the ListView the row's finite height, so the list fits inside the window and shows a scroll bar.</desc>
+<style>
+.wul-win { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; }
+.wul-box { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wul-over { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wul-item { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1; }
+.wul-item-over { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1; stroke-dasharray: 3 3; }
+.wul-track { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 0.75; }
+.wul-thumb { fill: var(--color-primary, #1A5F8A); }
+.wul-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wul-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wul-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wul-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wul-hd" x="40" y="34">VERTICAL STACKPANEL</text>
+<rect class="wul-win" x="40" y="46" width="360" height="250" rx="6"/>
+<text class="wul-k" x="392" y="62" text-anchor="end">window</text>
+<rect class="wul-box" x="60" y="70" width="300" height="30" rx="4"/>
+<text class="wul-n" x="72" y="90">TextBlock</text>
+<rect class="wul-box" x="60" y="110" width="300" height="186"/>
+<rect class="wul-over" x="60" y="296" width="300" height="60"/>
+<text class="wul-n" x="72" y="128">ListView</text>
+<rect class="wul-item" x="72" y="138" width="276" height="24" rx="3"/>
+<rect class="wul-item" x="72" y="168" width="276" height="24" rx="3"/>
+<rect class="wul-item" x="72" y="198" width="276" height="24" rx="3"/>
+<rect class="wul-item" x="72" y="228" width="276" height="24" rx="3"/>
+<rect class="wul-item" x="72" y="258" width="276" height="24" rx="3"/>
+<rect class="wul-item-over" x="72" y="300" width="276" height="20" rx="3"/>
+<rect class="wul-item-over" x="72" y="326" width="276" height="20" rx="3"/>
+<text class="wul-lg" x="40" y="378">Unlimited height: the list runs past the window, no scroll bar</text>
+<text class="wul-hd" x="500" y="34">GRID: AUTO ROW, THEN STAR ROW</text>
+<rect class="wul-win" x="500" y="46" width="360" height="250" rx="6"/>
+<text class="wul-k" x="852" y="62" text-anchor="end">window</text>
+<rect class="wul-box" x="520" y="70" width="300" height="30" rx="4"/>
+<text class="wul-n" x="532" y="90">TextBlock</text>
+<text class="wul-k" x="812" y="90" text-anchor="end">Auto row</text>
+<rect class="wul-box" x="520" y="110" width="300" height="172"/>
+<text class="wul-n" x="532" y="128">ListView</text>
+<text class="wul-k" x="790" y="128" text-anchor="end">star row</text>
+<rect class="wul-item" x="532" y="138" width="262" height="24" rx="3"/>
+<rect class="wul-item" x="532" y="168" width="262" height="24" rx="3"/>
+<rect class="wul-item" x="532" y="198" width="262" height="24" rx="3"/>
+<rect class="wul-item" x="532" y="228" width="262" height="24" rx="3"/>
+<rect class="wul-item" x="532" y="258" width="262" height="20" rx="3"/>
+<rect class="wul-track" x="804" y="136" width="8" height="140" rx="4"/>
+<rect class="wul-thumb" x="804" y="136" width="8" height="56" rx="4"/>
+<text class="wul-lg" x="500" y="318">The row's height: the list fits and scrolls</text>
+</g>
+</svg>

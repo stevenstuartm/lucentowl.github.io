@@ -2,11 +2,11 @@
 title: "The Root Provider and Its Scopes"
 kind: structure
 system: dotnet
-summary: "Which provider holds each instance, and a singleton capturing a scoped one."
+summary: "Which provider holds each instance, and where a singleton's scoped dependency ends up."
 ---
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="dis-title dis-desc" style="width:100%; min-width:680px; height:auto; display:block;">
 <title id="dis-title">Where the DI container keeps singleton, scoped, and transient instances</title>
-<desc id="dis-desc">The root provider lives as long as the app and holds one instance of each singleton, plus every disposable transient resolved directly from the root, which it keeps until the app shuts down. Each scope, such as one per HTTP request, holds its own scoped instances and the disposable transients resolved in it, and disposes them in reverse order when the scope ends. A singleton that takes a scoped service in its constructor keeps that scoped instance alive after its scope is disposed, which is a captive dependency.</desc>
+<desc id="dis-desc">The root provider lives as long as the app and holds one instance of each singleton, plus every disposable transient resolved directly from the root, which it keeps until the app shuts down. Each scope, such as one per HTTP request, holds its own scoped instances and the disposable transients resolved in it, and disposes them in reverse order when the scope ends. A singleton that takes a scoped service in its constructor gets an instance created by the root provider rather than by any scope, so that instance lives until the app shuts down and every request shares it, which is a captive dependency.</desc>
 <style>
 .dis-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
 .dis-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
@@ -74,9 +74,14 @@ summary: "Which provider holds each instance, and a singleton capturing a scoped
 <text class="dis-lab" x="656" y="280">Disposing the scope disposes</text>
 <text class="dis-lab" x="656" y="295">everything it created, in</text>
 <text class="dis-lab" x="656" y="310">reverse order of creation.</text>
-<path class="dis-hot" d="M290,98 L318,98 L318,138 L354,138" marker-end="url(#dis-ah)"/>
-<text class="dis-em" x="40" y="250">Captive dependency: a singleton that</text>
-<text class="dis-em" x="40" y="267">takes a scoped service keeps that</text>
-<text class="dis-em" x="40" y="284">instance alive after Scope A ends.</text>
+<rect class="dis-warn" x="40" y="226" width="250" height="64" rx="6"/>
+<text class="dis-n" x="52" y="246.0">Captured scoped instance</text>
+<text class="dis-k" x="52" y="264.0">created by the root for a singleton:</text>
+<text class="dis-k" x="52" y="280.0">held until the app shuts down</text>
+<path class="dis-hot" d="M290,110 L312,110 L312,258 L294,258" marker-end="url(#dis-ah)"/>
+<text class="dis-em" x="40" y="322">Captive dependency: a singleton's</text>
+<text class="dis-em" x="40" y="339">scoped dependency never belongs to</text>
+<text class="dis-em" x="40" y="356">a request scope, so every request</text>
+<text class="dis-em" x="40" y="373">shares that one instance.</text>
 </g>
 </svg>

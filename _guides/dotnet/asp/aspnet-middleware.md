@@ -2,570 +2,359 @@
 title: "Middleware Pipeline"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "ASP.NET Fundamentals"
-description: "Understanding the ASP.NET Core middleware pipeline, request delegates, middleware ordering, custom middleware patterns, and exception handling strategies."
-tags: [asp-net-core, middleware, request-pipeline, exception-handling, dependency-injection, filters, security]
+subcategory: "Fundamentals"
+description: "How the ASP.NET Core middleware pipeline runs a request: code before and after next, short-circuiting, branching with Map and UseWhen, the order built-in middleware must follow, writing convention-based and IMiddleware classes, centralized exception handling with IExceptionHandler and Problem Details, and when a filter fits better than middleware."
+tags: [fundamentals, middleware, request-pipeline, exception-handling, problem-details, filters]
 ---
 
-## The Heart of Request Processing
+## How a Request Passes Through Middleware
 
-ASP.NET Core applications are built around a middleware pipeline. Each HTTP request flows through a sequence of middleware components, and each can examine or modify the request, perform side effects like logging, or short-circuit the pipeline entirely. Understanding how middleware works, when to use it versus filters, and how to implement custom middleware safely is critical for building robust APIs.
+Every request an ASP.NET Core app receives is represented by an `HttpContext`, one object holding the request, the response being built, the user, and the request's services. The request travels through the *pipeline*, a chain of middleware, and usually ends at an *endpoint*: the minimal API handler, controller action, or SignalR hub method that produces the response, together with its metadata (its route, its `[Authorize]` attributes, and so on).
 
-## Request Delegates and Pipeline Construction
-
-The middleware pipeline is built using request delegates. These are functions that handle an HTTP request, and they are configured using three extension methods on the application builder.
-
-### Use: Chaining Middleware
-
-The `Use` method adds middleware that can perform work before and after the next component in the pipeline. Each middleware receives a `next` delegate representing the subsequent component. Calling `next` passes control forward; not calling it short-circuits the pipeline.
+A *middleware* is a component that receives the `HttpContext` and a delegate named `next` that invokes the rest of the pipeline. Everything it does before calling `next` runs on the way in, and everything after `next` returns runs on the way out, once the endpoint and every later middleware have finished. Each middleware therefore wraps everything registered after it. The first one registered is the outermost: it sees the request first and the response last.
 
 ```csharp
 app.Use(async (context, next) =>
 {
-    // Work before next middleware
+    // Runs on the way in, before anything later in the pipeline
     await next(context);
-    // Work after next middleware
+    // Runs on the way out, after everything later has finished
 });
 ```
 
-This pattern allows middleware to wrap later components. You might log the request before calling `next`, then log the response after `next` returns. The same instance handles both the inbound and outbound phases.
+The `Use` extension method has two overloads. One gives the delegate a parameterless `Func<Task>` for `next`, and the other gives it a `RequestDelegate`, a function that takes an `HttpContext` and returns a `Task`, as above. Prefer the second, which saves two allocations per request.
 
-### Run: Terminal Middleware
+### Short-Circuiting
 
-The `Run` method adds terminal middleware that does not receive a `next` delegate. Any middleware added after a `Run` delegate is unreachable because `Run` ends the pipeline.
+A middleware that doesn't call `next` *short-circuits* the pipeline. Nothing registered after it runs, and the response travels back out through the middleware that already ran, which still execute their code after `next`. That is how static file middleware (`UseStaticFiles`) works: when a request matches a file on disk, it writes the file and returns without calling `next`, so routing and endpoints never see the request. Endpoint routing has its own form, `ShortCircuit()`, which runs a matched endpoint immediately and skips the middleware after routing.
 
-```csharp
-app.Run(async context =>
-{
-    await context.Response.WriteAsync("Pipeline ends here.");
-});
-```
+{% include figure.html id="asp-middleware-nesting" %}
 
-Use `Run` when you want to guarantee that no further middleware executes. Static file handlers or health check endpoints sometimes use this pattern when they know they handle the request completely.
-
-### Map: Path-Based Branching
-
-The `Map` method creates a branch in the pipeline based on the request path. If the request path starts with the specified segment, the branch executes; otherwise, the request continues down the main pipeline.
-
-```csharp
-app.Map("/api", apiApp =>
-{
-    apiApp.UseMiddleware<ApiKeyAuthenticationMiddleware>();
-    apiApp.MapControllers();
-});
-```
-
-Map branches are terminal. If the path matches, the main pipeline below the `Map` call is skipped. This allows you to configure different middleware stacks for different parts of your application.
-
-### MapWhen: Conditional Branching
-
-The `MapWhen` method branches the pipeline based on any predicate. You provide a function that inspects the `HttpContext` and returns true or false.
-
-```csharp
-app.MapWhen(context => context.Request.Headers.UserAgent.ToString().Contains("Mobile"),
-    mobileApp =>
-    {
-        mobileApp.UseMiddleware<MobileOptimizedMiddleware>();
-        mobileApp.MapControllers();
-    });
-```
-
-Like `Map`, the `MapWhen` branch is terminal. If the predicate is true, the main pipeline is skipped. Use `MapWhen` when branching logic depends on headers, query strings, or other request properties rather than just the path.
-
-### UseWhen: Rejoining Branches
-
-While `Map` and `MapWhen` create terminal branches, `UseWhen` branches the pipeline conditionally and then rejoins the main pipeline if the branch does not contain terminal middleware.
-
-```csharp
-app.UseWhen(context => context.Request.Path.StartsWithSegments("/admin"),
-    adminApp =>
-    {
-        adminApp.UseMiddleware<AdminLoggingMiddleware>();
-    });
-```
-
-If the condition is met, the branch executes, but control returns to the main pipeline afterward. This is useful for adding extra middleware to specific paths without completely isolating them.
-
-## Middleware Ordering
-
-The order in which middleware is registered matters because each component has access to the request and response as they flow through the pipeline. Middleware executes in registration order for inbound requests and reverse order for outbound responses.
-
-### Standard Middleware Order
-
-ASP.NET Core has an established middleware order that aligns with how the framework expects requests to be processed. Deviating from this order causes failures, often subtle ones that only appear under specific conditions.
-
-The recommended order is:
-
-1. Exception handling and diagnostics
-2. HTTPS redirection
-3. Static files
-4. Routing
-5. CORS
-6. Authentication
-7. Authorization
-8. Custom middleware
-9. Endpoint execution
-
-This sequence ensures that exception handlers catch all failures, HTTPS redirection happens before expensive processing, static files bypass unnecessary middleware, and authentication runs before authorization.
-
-### Why Authentication Before Authorization
-
-Authorization depends on identity. The authorization middleware checks whether the authenticated user has permission to access the requested resource. If `UseAuthorization` runs before `UseAuthentication`, the `HttpContext.User` property is empty, and authorization fails because the user has not been identified yet.
-
-```csharp
-app.UseAuthentication(); // Identifies the user
-app.UseAuthorization();  // Checks permissions
-```
-
-Reversing this order means authorization decisions happen without knowing who the user is. The result is that all requests appear unauthenticated, and protected endpoints reject every request.
-
-### Why CORS Before Authentication
-
-CORS is a preflight check that determines whether the browser should allow a cross-origin request. If you place authentication or authorization before CORS, the browser receives a 401 or 403 response to the preflight OPTIONS request, and the CORS check fails. The browser blocks the actual request before it even sends credentials.
-
-```csharp
-app.UseCors(); // Handles preflight
-app.UseAuthentication();
-app.UseAuthorization();
-```
-
-This order allows the CORS middleware to respond to preflight requests without requiring authentication, which is how the standard expects it to work.
-
-### Why Routing Before Authentication
-
-The routing middleware (`UseRouting`) determines which endpoint will handle the request. Authentication and authorization middleware use this routing information to apply policies specific to the selected endpoint. If you reverse this order, the authentication and authorization middleware do not know which endpoint is being accessed, and endpoint-specific policies do not apply.
-
-```csharp
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapControllers();
-```
-
-The endpoint selection happens between `UseRouting` and `MapControllers`. Authentication and authorization run in the middle, with knowledge of which endpoint was matched.
-
-## Writing Custom Middleware
-
-There are two main approaches to writing custom middleware: convention-based middleware and factory-based middleware using the `IMiddleware` interface. Both are production-ready; the choice depends on your dependency injection requirements.
-
-### Convention-Based Middleware
-
-Convention-based middleware is the standard pattern. The middleware class requires a constructor that accepts a `RequestDelegate` and an `InvokeAsync` method with an `HttpContext` parameter.
-
-```csharp
-public class RequestTimingMiddleware
-{
-    private readonly RequestDelegate _next;
-
-    public RequestTimingMiddleware(RequestDelegate next)
-    {
-        _next = next;
-    }
-
-    public async Task InvokeAsync(HttpContext context)
-    {
-        var stopwatch = Stopwatch.StartNew();
-        await _next(context);
-        stopwatch.Stop();
-
-        context.Response.Headers["X-Response-Time-Ms"] = stopwatch.ElapsedMilliseconds.ToString();
-    }
-}
-```
-
-Convention-based middleware instances are singletons. The framework creates one instance when the application starts and reuses it for all requests. This means you cannot inject scoped services like database contexts into the constructor; they have per-request lifetimes.
-
-Dependencies required in `InvokeAsync` can be injected as method parameters. The framework resolves these from the request's service scope, allowing safe access to scoped dependencies.
-
-```csharp
-public async Task InvokeAsync(HttpContext context, ILogger<RequestTimingMiddleware> logger)
-{
-    logger.LogInformation("Request started");
-    await _next(context);
-}
-```
-
-Register convention-based middleware using `UseMiddleware<T>` or by creating an extension method.
-
-```csharp
-app.UseMiddleware<RequestTimingMiddleware>();
-```
-
-### Factory-Based Middleware with IMiddleware
-
-Factory-based middleware implements the `IMiddleware` interface, which defines a single `InvokeAsync` method. Unlike convention-based middleware, factory-based middleware is activated per request, which allows scoped services to be injected into the constructor.
-
-```csharp
-public class RequestLoggingMiddleware : IMiddleware
-{
-    private readonly ILogger<RequestLoggingMiddleware> _logger;
-
-    public RequestLoggingMiddleware(ILogger<RequestLoggingMiddleware> logger)
-    {
-        _logger = logger;
-    }
-
-    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
-    {
-        _logger.LogInformation("Handling request: {Method} {Path}",
-            context.Request.Method, context.Request.Path);
-        await next(context);
-    }
-}
-```
-
-Factory-based middleware must be registered in the dependency injection container before being added to the pipeline.
-
-```csharp
-builder.Services.AddScoped<RequestLoggingMiddleware>();
-app.UseMiddleware<RequestLoggingMiddleware>();
-```
-
-When `UseMiddleware<T>` detects that the middleware type implements `IMiddleware`, it resolves instances from the service container instead of using singleton activation. This allows per-request instantiation and scoped dependency injection.
-
-### When to Use Each Pattern
-
-Use convention-based middleware when dependencies are transient or singleton, and when you want slightly better performance from singleton activation. Use factory-based middleware when you need scoped dependencies like database contexts or when you want explicit control over middleware lifecycle through dependency injection.
-
-Both patterns are valid. Teams often standardize on one approach for consistency.
-
-## Terminal Middleware and Short-Circuiting
-
-Short-circuiting happens when middleware does not call the `next` delegate. The request pipeline stops at that middleware, and the response flows back through the components that already executed.
-
-### When to Short-Circuit
-
-Short-circuit when the middleware has enough information to generate a complete response. Static file handlers short-circuit when they find the requested file because no further processing is needed. Authentication middleware short-circuits when a request fails authentication checks, returning a 401 response without reaching the application logic.
+Short-circuiting is intentional when the middleware can write a complete response on its own:
 
 ```csharp
 app.Use(async (context, next) =>
 {
     if (!context.Request.Headers.ContainsKey("X-Api-Key"))
     {
-        context.Response.StatusCode = 401;
-        await context.Response.WriteAsync("API key required");
-        return; // Short-circuit
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return; // later middleware and the endpoint never run
     }
 
     await next(context);
 });
 ```
 
-Short-circuiting avoids unnecessary work. If the request cannot be authenticated, there is no reason to execute routing, authorization, or application logic.
+It is a bug when it's accidental. A middleware that returns early without calling `next` and without writing anything sends back an empty `200 OK`, because 200 is the default status code. The request never reaches its endpoint, and nothing in the response says why.
 
-### Avoiding Unintended Short-Circuits
+### Once the Response Starts, Headers Are Fixed
 
-Forgetting to call `next` is a common mistake. If middleware performs some work and then exits without calling `next`, the pipeline stops. The endpoint is never reached, and the request appears to hang or return an empty response.
+Headers and the status code go to the client just before the first byte of the body. After that, `context.Response.HasStarted` is `true`, and setting a header or the status code throws an exception. Writing to the body after `next` returns can also corrupt the response, for example by writing more bytes than the `Content-Length` header announced.
 
-Always ensure that non-terminal middleware calls `next` unless you explicitly intend to short-circuit. If you see requests that do not reach your controllers, check that all middleware is calling `next`.
-
-## Exception Handling in Middleware
-
-Exception handling in ASP.NET Core centers around the exception handler middleware and the `IExceptionHandler` interface introduced in .NET 8. This centralizes error handling and allows you to produce consistent Problem Details responses.
-
-### Exception Handler Middleware
-
-The `UseExceptionHandler` middleware catches unhandled exceptions and re-executes the request pipeline in an alternate path, typically an error handling endpoint.
+This catches middleware that measures the request and reports the result in a header. By the time `next` returns, the endpoint has usually written its body, so the header can't be added any more. Register the header with `Response.OnStarting`, which runs just before the headers are sent:
 
 ```csharp
-app.UseExceptionHandler("/error");
-```
+using System.Diagnostics;
 
-This approach redirects errors to a dedicated error controller or endpoint that generates the response. The original exception is available via `IExceptionHandlerFeature`.
-
-### IExceptionHandler for Centralized Handling
-
-The `IExceptionHandler` interface provides a callback for handling exceptions in a central location. Implementations receive the `HttpContext` and `Exception` and return a boolean indicating whether the exception was handled.
-
-```csharp
-public class GlobalExceptionHandler : IExceptionHandler
+public class RequestTimingMiddleware(RequestDelegate next)
 {
-    private readonly ILogger<GlobalExceptionHandler> _logger;
-
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
+    public async Task InvokeAsync(HttpContext context)
     {
-        _logger = logger;
-    }
+        var stopwatch = Stopwatch.StartNew();
 
-    public async ValueTask<bool> TryHandleAsync(
-        HttpContext context,
-        Exception exception,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogError(exception, "Unhandled exception occurred");
-
-        var problemDetails = new ProblemDetails
+        context.Response.OnStarting(() =>
         {
-            Status = StatusCodes.Status500InternalServerError,
-            Title = "An error occurred",
-            Detail = exception.Message
-        };
+            context.Response.Headers["X-Response-Time-Ms"] =
+                stopwatch.ElapsedMilliseconds.ToString();
+            return Task.CompletedTask;
+        });
 
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
-
-        return true; // Exception handled
+        await next(context);
     }
 }
 ```
 
-Register the exception handler in the service collection and add exception handling middleware.
+The header then reports the time until the response began, not the time to send the whole body.
+
+## Building the Pipeline: Use, Run, Map, and UseWhen
+
+The pipeline is assembled on `WebApplication` with a few extension methods, each of which adds a request delegate.
+
+| Method | What it adds | Continues the main pipeline? |
+| --- | --- | --- |
+| `Use` | Middleware that receives `next` | Yes, when it calls `next` |
+| `Run` | *Terminal* middleware, which receives no `next` and always ends the pipeline | No; anything registered after it never runs |
+| `Map` | A branch taken when the request path starts with a given segment | No, for requests that take the branch |
+| `MapWhen` | A branch taken when a predicate on `HttpContext` returns `true` | No, for requests that take the branch |
+| `UseWhen` | A branch taken when a predicate returns `true` | Yes, unless the branch contains terminal middleware |
+
+The difference between `Map` and `UseWhen` is whether the branch rejoins the main pipeline.
+
+{% include figure.html id="asp-middleware-branches" %}
+
+A `UseWhen` branch adds middleware for a subset of requests and then lets them carry on to the same endpoints as everything else. That suits extra logging or a header check on one area of the app:
 
 ```csharp
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-
-app.UseExceptionHandler();
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/admin"),
+    admin => admin.UseMiddleware<AdminAuditMiddleware>());
 ```
 
-The exception handler middleware iterates through registered handlers in order until one returns true. This allows you to register multiple handlers for different exception types, with a catch-all handler at the end.
+A `Map` branch is a separate pipeline for part of the URL space, and it has to produce the response itself, typically ending in `Run`. `Map` also moves the matched segment from `Request.Path` to `Request.PathBase`, so middleware inside a `/legacy` branch sees a request for `/legacy/orders` as a request for `/orders`:
 
-### Problem Details and RFC 9457
+```csharp
+app.Map("/legacy", legacy =>
+{
+    legacy.UseMiddleware<LegacyHeaderTranslationMiddleware>();
+    legacy.Run(async context =>
+        await context.Response.WriteAsync($"Legacy path: {context.Request.Path}"));
+});
+```
 
-Problem Details is a standardized format for HTTP API error responses defined by RFC 9457, which replaces the earlier RFC 7807. The format provides a consistent structure with fields like `type`, `title`, `status`, `detail`, and `instance`.
+Branches work at the middleware level, below endpoint routing, and are rarely the right tool for sending requests to handlers. Routing to controllers, minimal API handlers, and hubs is endpoint routing's job. Endpoint routing also has route groups (`MapGroup`), which give every endpoint under a URL prefix shared metadata and filters. The names invite confusion, because `app.Map("/legacy", ...)` creates a pipeline branch while `app.MapGet("/legacy", ...)` and `app.MapGroup("/legacy")` register endpoints.
 
-ASP.NET Core includes built-in support for Problem Details through the `AddProblemDetails` method. This registers services that automatically emit Problem Details responses for certain errors, and it integrates with exception handling middleware.
+## Middleware Order
+
+The order of `app.Use...` calls is the order middleware runs on the way in, and the reverse on the way out. `WebApplication` also places some middleware on its own when the app doesn't, including routing and, when their services are registered, authentication and authorization. Middleware the app adds lands after that automatic routing step unless the app calls `UseRouting` itself, so an explicit `UseRouting` is how to put middleware before route matching.
+
+### The Recommended Order
+
+For an API, the built-in middleware that the app places explicitly goes in this order:
+
+| Order | Middleware | Why it sits there |
+| --- | --- | --- |
+| 1 | `UseExceptionHandler` (outside Development, which uses the developer exception page instead) and `UseHsts`, which tells browsers to use only HTTPS for the site | Outermost, so the handler catches exceptions thrown by everything after it |
+| 2 | `UseStatusCodePages`, if used | Gives empty error responses a body. It has to run before static files and endpoints |
+| 3 | `UseHttpsRedirection` | Redirects plain HTTP before any work is done on it |
+| 4 | `UseStaticFiles`, if the app serves files | Returns files early and skips the rest of the pipeline |
+| 5 | `UseRouting` | Selects the endpoint, so later middleware can read its metadata |
+| 6 | `UseRateLimiter` | Rejects requests over a configured rate. It goes after routing when limits are attached to endpoints, and can go before it when only a global limiter is used |
+| 7 | `UseCors` | Adds CORS headers before authentication and authorization can reject the request |
+| 8 | `UseAuthentication` | Establishes `HttpContext.User` |
+| 9 | `UseAuthorization` | Checks the user against the selected endpoint's requirements |
+| 10 | Custom middleware | Sees the authenticated user and the selected endpoint |
+| 11 | Endpoints (`MapControllers`, `MapGet`, and so on) | Execute the selected endpoint |
+
+`MapStaticAssets`, the .NET 9 replacement for `UseStaticFiles` in most apps, serves files as endpoints rather than as middleware. Its requests therefore run the whole pipeline, including authentication, authorization, and custom middleware, where `UseStaticFiles` returns files before any of those run. An app whose browser scripts fetch static files from another origin moves `UseCors` ahead of `UseStaticFiles`, so those responses carry CORS headers too.
+
+### Routing Before Authorization
+
+`UseRouting` matches the request to an endpoint and attaches that endpoint to the `HttpContext`, but it doesn't run it. The endpoint runs at the end of the pipeline, inside any filters attached to it (covered at the end of this guide), and any middleware between the two points can read the selected endpoint and its metadata.
+
+{% include figure.html id="asp-endpoint-selection" %}
+
+```csharp
+using Microsoft.AspNetCore.Authorization;
+
+app.Use(async (context, next) =>
+{
+    var endpoint = context.GetEndpoint();
+
+    // [Authorize] and RequireAuthorization add IAuthorizeData. This check doesn't
+    // see the fallback policy, and doesn't account for [AllowAnonymous].
+    var hasAuthorizeAttribute = endpoint?.Metadata.GetMetadata<IAuthorizeData>() is not null;
+    // ...
+    await next(context);
+});
+```
+
+Authorization middleware depends on this. It reads the `[Authorize]` attributes, `RequireAuthorization` calls, and policies from the selected endpoint's metadata, so it has to run after routing. Placed before `UseRouting`, it has no endpoint to read and can't enforce endpoint-specific rules.
+
+### Authentication Before Authorization
+
+Authentication middleware reads the request's credentials, such as a bearer token or a cookie, and sets `HttpContext.User`. It doesn't reject anyone. A request with no credentials or bad ones continues down the pipeline with an anonymous user. Authorization middleware is what rejects requests. When the endpoint requires a user and there is none, it *challenges* the client, asking it to authenticate: a `401` with a `WWW-Authenticate` header for bearer tokens, or a redirect to the login page for cookies. When the user lacks permission, it *forbids* the request, typically with a `403`. Reversing the two typically means authorization sees an anonymous user on every request.
+
+### CORS Before Authentication and Authorization
+
+Before a browser sends certain cross-origin requests, it sends a *preflight*: an `OPTIONS` request, without credentials, asking whether the real request is allowed. CORS middleware answers it. `UseCors` goes after `UseRouting` and before `UseAuthentication` and `UseAuthorization`, so that preflights are answered without credentials and CORS headers are added to every response, including the `401` and `403` responses authorization produces. A browser blocks a cross-origin response that lacks those headers, so without them a client sees an opaque CORS error in place of the `401` its code was written to handle. Because `WebApplication` adds authentication and authorization right after routing when the app doesn't, an app that calls `UseCors` has to call `UseAuthentication` and `UseAuthorization` explicitly after it.
+
+`UseCors` also has to come before response caching middleware, so responses served from the cache carry CORS headers too.
+
+## Writing Middleware Classes
+
+Inline `Use` delegates suit a few lines. Anything larger belongs in a class, exposed through a `Use{Feature}` extension method on `IApplicationBuilder` the same way the built-in middleware is. ASP.NET Core supports two kinds of middleware class, and they differ in when they are created, which decides what services they can take. A *scoped* service has one instance per request, and a *transient* one gets a new instance every time it is resolved.
+
+### Convention-Based Middleware
+
+A convention-based middleware class has no interface. It needs a public constructor that takes a `RequestDelegate`, and a public method named `Invoke` or `InvokeAsync` that returns `Task` and takes `HttpContext` as its first parameter.
+
+The framework constructs the class once, when the app starts, and calls `InvokeAsync` for every request, concurrently. Two consequences follow:
+
+- **No per-request state in fields.** One instance serves every request at the same time, so a field written during one request is visible to, and overwritten by, the others.
+- **No scoped services in the constructor.** Constructor dependencies come from the root provider, the app-wide container rather than a request's scope, and live as long as the app. In Development, where scope validation is on, a scoped service such as a `DbContext` in the constructor throws at startup. In other environments it is silently captured and shared by every request.
+
+Scoped services go on `InvokeAsync` instead, where each parameter after `HttpContext` is resolved from the current request's scope:
+
+```csharp
+public class RequestAuditMiddleware(RequestDelegate next, ILogger<RequestAuditMiddleware> logger)
+{
+    // OrdersDbContext is scoped, so it's injected per request here, not in the constructor
+    public async Task InvokeAsync(HttpContext context, OrdersDbContext db)
+    {
+        await next(context);
+
+        db.AuditEntries.Add(new AuditEntry(context.Request.Path, context.Response.StatusCode));
+        await db.SaveChangesAsync();
+        logger.LogDebug("Audited {Path}", context.Request.Path);
+    }
+}
+
+public static class RequestAuditMiddlewareExtensions
+{
+    public static IApplicationBuilder UseRequestAudit(this IApplicationBuilder app)
+        => app.UseMiddleware<RequestAuditMiddleware>();
+}
+```
+
+`UseMiddleware<T>` can also pass extra constructor arguments that don't come from the container, such as a settings object.
+
+### Factory-Based Middleware with IMiddleware
+
+A class that implements `IMiddleware` is created differently. `UseMiddleware<T>` sees the interface and asks the `IMiddlewareFactory` to resolve an instance from the request's service scope on every request, so the class is registered in the container like any other service, as scoped or transient. Its constructor can take scoped services directly:
+
+```csharp
+public class RequestAuditMiddleware(OrdersDbContext db) : IMiddleware
+{
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        await next(context);
+
+        db.AuditEntries.Add(new AuditEntry(context.Request.Path, context.Response.StatusCode));
+        await db.SaveChangesAsync();
+    }
+}
+
+// Program.cs
+builder.Services.AddScoped<RequestAuditMiddleware>();
+// ...
+app.UseMiddleware<RequestAuditMiddleware>();
+```
+
+`IMiddleware` classes can't receive extra arguments through `UseMiddleware`. Passing one throws a `NotSupportedException` at runtime, so settings have to come from the container, typically through the options pattern (`IOptions<T>` bound from configuration).
+
+### Choosing Between Them
+
+| | Convention-based | `IMiddleware` |
+| --- | --- | --- |
+| Created | Once, at startup | Per request, from the request scope |
+| Scoped services | As `InvokeAsync` parameters | In the constructor |
+| Container registration | Not needed | Required, as scoped or transient |
+| Extra `UseMiddleware` arguments | Supported | Throw `NotSupportedException` |
+| Compile-time checking of the method shape | None; a wrong signature fails at startup | Enforced by the interface |
+
+Convention-based middleware is what the built-in middleware and most libraries use, and it doesn't create an instance per request. `IMiddleware` suits teams that want constructor injection everywhere and a compiler-checked signature.
+
+## Handling Exceptions
+
+The exception handler middleware catches exceptions thrown anywhere after it in the pipeline. It clears the response, sets the status to `500` (or the code `StatusCodeSelector` returns, described below), and first offers the exception to every registered `IExceptionHandler` (covered below). If none of them handles it, the configured fallback produces the response:
+
+| Fallback | What produces the response |
+| --- | --- |
+| `UseExceptionHandler("/error")` | The part of the pipeline after the handler runs again with the path changed to `/error`, and whatever endpoint handles that path writes the response |
+| `UseExceptionHandler(errorApp => ...)` | A small pipeline the app builds for errors, typically ending in `Run` |
+| `AddProblemDetails()` plus `UseExceptionHandler()` | A Problem Details body written by the framework |
+
+Calling `UseExceptionHandler()` with no arguments needs a fallback from somewhere. Without an error path, an error pipeline, or `AddProblemDetails`, the app throws an `InvalidOperationException` at startup.
+
+No form can help once the response has started, because the status code and headers are already sent, so the middleware rethrows and the connection is aborted. The error-path form has more constraints, because it runs part of the pipeline a second time for the same request. The handler clears the selected endpoint and changes the path, and everything registered after it runs again, so routing selects the error endpoint. Middleware registered before the handler runs once.
+
+{% include figure.html id="asp-exception-reexecute" %}
+
+- **Later middleware sees the request twice.** It must tolerate that, for example by not re-reading a request body it has already consumed.
+- **The error endpoint has to accept every HTTP method.** If the second pass produces a `404`, the middleware throws an `InvalidOperationException` wrapping the original exception, rather than send a `404` for what was a server error. An error endpoint mapped with `MapGet` or `[HttpGet]` causes exactly that for a failed `POST`, so map it without a method restriction.
+- **Scoped services carry over.** The second pass reuses the request's scoped services unless `ExceptionHandlerOptions.CreateScopeForErrors` is set, which the Blazor template does.
+
+In Development, the developer exception page shows stack traces, headers, and endpoint metadata instead. `WebApplication` adds it automatically as the outermost middleware, so an app that registers the exception handler only outside Development keeps the page for local debugging. Registered in Development too, the handler sits inside the page and catches exceptions first. JSON APIs often do this on purpose, so that local clients get the same error bodies as production.
+
+### Problem Details
+
+Problem Details is the standard JSON shape for HTTP API errors, defined by RFC 9457, which replaced RFC 7807. It carries `type`, `title`, `status`, `detail`, and `instance`, and allows extension members.
+
+`AddProblemDetails` registers `IProblemDetailsService`, the service that writes these bodies. Once it is registered, the exception handler, the developer exception page, and status code pages middleware all write Problem Details to clients whose `Accept` header allows JSON or that send none. The default writer also adds a `traceId`, the request's trace ID, which ties a client's error report to the server's logs and traces. `UseStatusCodePages` extends the same format to error responses that have no body yet, such as a `404` for an unmatched route.
+
+`CustomizeProblemDetails` adjusts every response in one place, for example to add the name of the server instance that handled the request:
 
 ```csharp
 builder.Services.AddProblemDetails(options =>
-{
     options.CustomizeProblemDetails = context =>
+        context.ProblemDetails.Extensions["instanceName"] = Environment.MachineName);
+```
+
+### IExceptionHandler
+
+`IExceptionHandler`, added in .NET 8, gives exception handling a class of its own with dependency injection. Each implementation's `TryHandleAsync` returns `true` if it handled the exception. The middleware calls the registered handlers in registration order until one returns `true`, so specific handlers go first and a general one last.
+
+Handlers are registered as singletons. Like convention-based middleware, they take only singleton-safe services in their constructor, and reach request-scoped ones through `context.RequestServices`.
+
+```csharp
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+
+public sealed class OrderNotFoundHandler(IProblemDetailsService problemDetails) : IExceptionHandler
+{
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
-        context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
-    };
-});
-```
+        if (exception is not OrderNotFoundException notFound)
+        {
+            return false; // let the next handler try
+        }
 
-When combined with `IExceptionHandler`, you can tailor Problem Details responses for specific exceptions. Check the exception type in `TryHandleAsync` and construct an appropriate Problem Details object.
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        var written = await problemDetails.TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context,
+            ProblemDetails = new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Order not found",
+                Detail = $"Order {notFound.OrderId} does not exist."
+            }
+        });
 
-### Development vs. Production Exception Handling
+        if (!written)
+        {
+            // The client doesn't accept JSON. Restore the status so the fallback starts clean.
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        }
 
-In development environments, the developer exception page (`UseDeveloperExceptionPage`) provides detailed stack traces and diagnostic information. In production, this information is hidden, and the exception handler middleware returns generic error responses.
-
-Separate the two behaviors using environment checks.
-
-```csharp
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-}
-else
-{
-    app.UseExceptionHandler();
-}
-```
-
-This ensures that sensitive information like stack traces does not leak to clients in production while preserving the detailed diagnostics developers need during development.
-
-## HTTPS Redirection and HSTS
-
-HTTPS redirection and HTTP Strict Transport Security (HSTS) are middleware components that enforce secure connections.
-
-### HTTPS Redirection Middleware
-
-The `UseHttpsRedirection` middleware intercepts HTTP requests and responds with a redirect to the HTTPS equivalent. This ensures that clients always communicate over an encrypted connection.
-
-```csharp
-app.UseHttpsRedirection();
-```
-
-The middleware responds with a 307 Temporary Redirect by default, though you can configure it to use 301 Permanent Redirect for production environments.
-
-```csharp
-builder.Services.AddHttpsRedirection(options =>
-{
-    options.RedirectStatusCode = StatusCodes.Status301MovedPermanently;
-    options.HttpsPort = 443;
-});
-```
-
-HTTPS redirection should appear early in the pipeline, before routing and authentication, so that insecure requests are upgraded before reaching sensitive middleware.
-
-### HSTS Middleware
-
-The `UseHsts` middleware adds the `Strict-Transport-Security` header to responses, instructing browsers to only access the site over HTTPS for a specified duration. This prevents downgrade attacks where an attacker forces the client to use HTTP.
-
-```csharp
-app.UseHsts();
-```
-
-HSTS is generally a browser-only instruction. Phone and desktop API clients do not obey the header, so HSTS is less relevant for pure APIs. However, if your API is also accessed by web browsers, HSTS provides an additional layer of security.
-
-Configure HSTS behavior through options.
-
-```csharp
-builder.Services.AddHsts(options =>
-{
-    options.MaxAge = TimeSpan.FromDays(365);
-    options.IncludeSubDomains = true;
-    options.Preload = true;
-});
-```
-
-HSTS should not be used in development because the header persists in the browser, and you cannot easily revert to HTTP. Only enable HSTS in production.
-
-```csharp
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHsts();
-}
-```
-
-## Request and Response Logging
-
-Logging HTTP requests and responses is common for diagnostics and auditing. ASP.NET Core provides built-in HTTP logging middleware as well as patterns for custom logging.
-
-### Built-In HTTP Logging
-
-Since .NET 6, ASP.NET Core includes an HTTP logging middleware that logs request and response properties like path, status code, and headers.
-
-```csharp
-builder.Services.AddHttpLogging(options =>
-{
-    options.LoggingFields = HttpLoggingFields.RequestPath
-        | HttpLoggingFields.RequestMethod
-        | HttpLoggingFields.ResponseStatusCode;
-});
-
-app.UseHttpLogging();
-```
-
-The middleware supports filtering, redaction, and selective logging based on request properties. You can exclude sensitive headers like `Authorization` or redact query string parameters that contain tokens.
-
-### Custom Logging Middleware
-
-For more control, you can implement custom logging middleware. A common pattern is to log the request when it arrives and log the response when the pipeline completes.
-
-```csharp
-public class CustomLoggingMiddleware
-{
-    private readonly RequestDelegate _next;
-    private readonly ILogger<CustomLoggingMiddleware> _logger;
-
-    public CustomLoggingMiddleware(RequestDelegate next, ILogger<CustomLoggingMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
-
-    public async Task InvokeAsync(HttpContext context)
-    {
-        _logger.LogInformation("Request {Method} {Path} from {RemoteIp}",
-            context.Request.Method,
-            context.Request.Path,
-            context.Connection.RemoteIpAddress);
-
-        await _next(context);
-
-        _logger.LogInformation("Response {StatusCode} for {Method} {Path}",
-            context.Response.StatusCode,
-            context.Request.Method,
-            context.Request.Path);
+        return written;
     }
 }
+
+// Program.cs
+builder.Services.AddExceptionHandler<OrderNotFoundHandler>();
+builder.Services.AddProblemDetails();
+// ...
+app.UseExceptionHandler();
 ```
 
-### Logging Request and Response Bodies
+An exception no handler claims falls through to the default Problem Details response, a `500` with a generic title. Handlers should write only what the client may see. `exception.Message` and stack traces can reveal table names, file paths, and internal state, so they belong in logs, not responses. For the common case of mapping exception types to status codes with no other logic, `ExceptionHandlerOptions.StatusCodeSelector` (.NET 9) does it without a handler class.
 
-Logging bodies is more complex because the request and response streams are forward-only. Reading the body consumes the stream, and subsequent middleware or model binding receives an empty stream.
+Since .NET 10, when a handler returns `true`, the middleware no longer logs the exception or tags the request's metrics as an error. A handler that returns `true` has to log the exception itself if the team still wants it in the logs. Setting `ExceptionHandlerOptions.SuppressDiagnosticsCallback` to return `false` restores the .NET 8 and 9 behavior.
 
-To log request bodies, you must enable buffering, which allows the body to be read multiple times.
+## Middleware or a Filter
 
-```csharp
-context.Request.EnableBuffering();
+Filters are the other place to run code around request handling. They run inside endpoint execution, wrapped around the handler, and they come in two families: MVC filters for controllers and Razor Pages, and endpoint filters for minimal APIs.
 
-using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-var body = await reader.ReadToEndAsync();
-context.Request.Body.Position = 0; // Reset for next middleware
+| | Middleware | MVC filters | Endpoint filters |
+| --- | --- | --- | --- |
+| Runs for | Every request that reaches its position, including static files and unmatched routes | Controller actions and Razor Pages only | The minimal API handlers and route groups they're attached to, and controller actions when attached through `MapControllers()` |
+| Knows the selected endpoint | Only if placed after `UseRouting` | Yes | Yes |
+| Sees bound arguments | No | Yes, plus `ModelState` (the validation results) | Yes, as handler arguments |
+| Sees the action result before it executes | No | Yes | Yes, as the handler's return value |
+| Scope | The whole pipeline, or a branch | Global, controller, or action | Endpoint or route group |
 
-_logger.LogInformation("Request body: {Body}", body);
-```
+Use middleware for concerns that apply to requests as HTTP traffic, whatever handles them: exception handling, CORS, compression, request logging, and anything that must happen before routing. Use a filter when the logic depends on what the handler receives or returns, such as bound arguments, model state, or the result object, or when it should apply to specific endpoints rather than to URL patterns. An app with both controllers and minimal APIs can share argument-level logic by writing it as an endpoint filter and attaching it to the controllers too, with `app.MapControllers().AddEndpointFilter(...)`.
 
-Response bodies require capturing the original response stream and replacing it temporarily with a memory stream.
-
-```csharp
-var originalBody = context.Response.Body;
-using var responseBody = new MemoryStream();
-context.Response.Body = responseBody;
-
-await _next(context);
-
-responseBody.Seek(0, SeekOrigin.Begin);
-var responseText = await new StreamReader(responseBody).ReadToEndAsync();
-responseBody.Seek(0, SeekOrigin.Begin);
-await responseBody.CopyToAsync(originalBody);
-
-_logger.LogInformation("Response body: {Body}", responseText);
-```
-
-Logging bodies has performance implications and can expose sensitive data. Use it selectively, typically only in development or for specific diagnostic scenarios.
-
-## Middleware vs. Filters
-
-Both middleware and filters allow you to execute code during request processing, but they operate at different levels of the pipeline and serve different purposes.
-
-### Scope and Execution
-
-Middleware runs globally for every HTTP request, regardless of whether the request reaches an MVC controller, a Razor Page, or a minimal API endpoint. Middleware executes before the routing and endpoint selection phase.
-
-Filters run only within the MVC pipeline, around controller actions and results. Filters have access to MVC-specific concepts like action descriptors, model binding results, and controller instances. Filters do not run for requests that do not reach MVC, such as static files or minimal API endpoints.
-
-### When to Use Middleware
-
-Use middleware for cross-cutting concerns that apply to all requests or that must run before MVC. Examples include authentication, CORS, request logging, and exception handling. Middleware is appropriate when the logic does not depend on MVC-specific features.
-
-Middleware is also preferable when the same logic applies to multiple endpoint types. If your API uses both MVC controllers and minimal API endpoints, middleware ensures the logic runs for both.
-
-### When to Use Filters
-
-Use filters for concerns tied to MVC actions, such as model validation, action-level authorization, or result transformation. Filters have access to route data, action parameters, and model state, which middleware does not.
-
-Filters are scoped more narrowly than middleware. You can apply filters globally, to specific controllers, or to individual actions. This granularity is useful when different endpoints need different behavior.
-
-Filters also execute later in the pipeline, after routing and model binding. If your logic depends on knowing which action was selected or on the bound model, filters are the correct choice.
-
-### Performance Considerations
-
-Middleware runs before MVC and avoids MVC overhead for requests that do not reach controllers. For global concerns that do not require MVC features, middleware is faster.
-
-Filters incur MVC overhead but benefit from the richer context MVC provides. If you need action-level granularity or access to MVC abstractions, the performance cost of filters is justified.
-
-## Common Pitfalls
-
-### Forgetting to Call Next
-
-The most common middleware mistake is forgetting to call the `next` delegate. If middleware does not call `next` and does not write a response, the request hangs, and the client times out.
-
-Always ensure middleware calls `next` unless it explicitly intends to short-circuit the pipeline and write a complete response.
-
-### Incorrect Middleware Ordering
-
-Middleware order is not arbitrary. Placing authorization before authentication, CORS after authentication, or routing after endpoint execution causes failures. These errors are often subtle and only appear under specific conditions, such as when a preflight request arrives or when an unauthenticated user accesses a protected resource.
-
-Follow the standard middleware order unless you have a specific reason to deviate, and test thoroughly when you do.
-
-### Singleton Middleware with Scoped Dependencies
-
-Convention-based middleware instances are singletons. Injecting scoped services like database contexts into the constructor causes the scoped service to become a singleton, leading to incorrect behavior or crashes.
-
-Inject scoped dependencies as parameters to `InvokeAsync`, not in the constructor. Alternatively, use factory-based middleware with `IMiddleware`.
-
-### Modifying Response After It Starts
-
-Once the response has started sending to the client, you cannot modify headers or status codes. Middleware that calls `next` and then tries to set headers will fail if `next` has already started writing the response.
-
-If you need to modify the response after `next` executes, ensure that middleware higher in the pipeline has not yet started the response. Alternatively, use response caching or buffering techniques to delay the response until all modifications are complete.
-
-### Excessive Middleware
-
-Each middleware component adds overhead. Adding middleware for every small concern creates a long pipeline that slows down request processing. Consolidate related logic into fewer middleware components when possible.
+Exceptions follow the same split. MVC's exception filters (`IExceptionFilter`) catch exceptions from MVC action execution, including model binding and action filters, but not from result execution, middleware, or minimal APIs. Exception handling middleware sees them all, which is why it is the default for centralized handling. An exception filter earns its place only when one controller needs different handling from the rest of the app.
 
 ## Key Takeaways
 
-Middleware forms the backbone of ASP.NET Core request processing. The pipeline is built using request delegates configured with `Use`, `Run`, `Map`, and `MapWhen`. Middleware executes in registration order for inbound requests and reverse order for outbound responses, and the order matters critically for concerns like authentication, authorization, and CORS.
-
-Custom middleware comes in two forms: convention-based middleware with singleton activation, and factory-based middleware using `IMiddleware` with per-request activation and scoped dependency injection. Both patterns are production-ready and offer different tradeoffs around dependency injection and performance.
-
-Exception handling centers around the `IExceptionHandler` interface and exception handler middleware, which allows centralized error handling and consistent Problem Details responses conforming to RFC 9457. HTTPS redirection and HSTS enforce secure connections, while request and response logging middleware provides diagnostics and auditing.
-
-Middleware applies globally to all requests; filters apply only within the MVC pipeline. Use middleware for cross-cutting concerns that must run before MVC or that apply to all endpoint types. Use filters for MVC-specific logic that requires access to route data, action parameters, or model state.
+- Middleware wraps the rest of the pipeline. Code before `next` runs on the way in, code after it runs on the way out, and a middleware that skips `next` short-circuits everything after it.
+- Headers and the status code are sent before the first byte of the body, so set response headers with `OnStarting`, not after `next` returns.
+- `UseWhen` branches rejoin the main pipeline; `Map` and `MapWhen` branches don't, and `app.Map` is a pipeline branch, not an endpoint.
+- Routing selects the endpoint early and it runs at the end, so authorization goes after routing. CORS goes before authentication, and authentication before authorization. Authentication identifies the user; only authorization rejects requests.
+- Convention-based middleware is created once and serves concurrent requests, so it keeps no per-request fields and takes scoped services on `InvokeAsync`. `IMiddleware` is resolved per request and can take them in its constructor.
+- `IExceptionHandler` implementations are singletons, run in registration order until one handles the exception, and since .NET 10 a handled exception is no longer logged unless the handler logs it.
+- Middleware handles HTTP-level concerns for every request; filters handle logic that needs the endpoint's bound arguments or result.

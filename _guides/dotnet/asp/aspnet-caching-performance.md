@@ -1,8 +1,8 @@
 ---
-title: "Caching and Performance"
+title: "Output Caching and HTTP Caching"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "Performance & Operations"
+subcategory: "Testing & Operations"
 description: "Comprehensive coverage of ASP.NET Core caching strategies including response caching, output caching, HybridCache, ETag-based validation, compression, async patterns, and JSON serialization optimization for high-performance APIs."
 tags: [asp-net-core, performance, caching, compression, optimization, async-programming, json-serialization]
 ---
@@ -258,100 +258,6 @@ public async Task<IActionResult> GetProduct(int productId)
 
 Combining ETags with caching maximizes efficiency. Output caching or HybridCache stores the full response, eliminating computation and database queries. ETags reduce bandwidth when content hasn't changed. The server checks the ETag first; if it matches, return 304 without retrieving the cached response body. If it doesn't match, retrieve and return the cached response.
 
-## Response Compression
-
-Response compression reduces payload size by compressing HTTP response bodies before sending them to clients. ASP.NET Core provides built-in support for Brotli and gzip compression through the response compression middleware. Brotli achieves better compression ratios than gzip, resulting in smaller file sizes, but requires more CPU for compression. Gzip compresses faster with slightly larger output.
-
-The middleware examines the client's `Accept-Encoding` header to determine supported compression algorithms. Modern browsers support both Brotli and gzip. When both are supported, the middleware prefers Brotli for its superior compression ratio. If the client only supports gzip or doesn't send an `Accept-Encoding` header, the middleware falls back to gzip or sends uncompressed content.
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddResponseCompression(options =>
-{
-    options.EnableForHttps = true;
-    options.Providers.Add<BrotliCompressionProvider>();
-    options.Providers.Add<GzipCompressionProvider>();
-
-    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
-        new[] { "application/json", "application/xml" });
-});
-
-builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
-{
-    options.Level = CompressionLevel.Fastest;
-});
-
-builder.Services.Configure<GzipCompressionProviderOptions>(options =>
-{
-    options.Level = CompressionLevel.Optimal;
-});
-
-var app = builder.Build();
-
-app.UseResponseCompression();
-```
-
-The middleware must be registered early in the pipeline, before middleware that produces responses. `EnableForHttps` allows compression over HTTPS connections, which older guidance discouraged due to CRIME and BREACH attack concerns. Modern applications with proper security controls can safely enable HTTPS compression, particularly for APIs where response content doesn't include user secrets in predictable positions.
-
-The default compression level for Brotli is `Fastest`, which prioritizes speed over compression ratio. Changing it to `Optimal` or `SmallestSize` increases compression time and CPU usage while producing smaller payloads. The right balance depends on your network conditions and CPU capacity. High-latency networks benefit more from smaller payloads, while CPU-constrained servers should prefer faster compression.
-
-### Compression and Caching Interaction
-
-Compressing cached responses requires careful coordination between compression and caching middleware. If compression runs after caching, the middleware caches uncompressed responses and compresses them on every request, wasting CPU. If compression runs before caching, the middleware may cache only one compressed variant while clients request different encoding types.
-
-ASP.NET Core's output caching middleware handles this automatically by storing multiple variants of the same resource based on the `Accept-Encoding` header. When a client requests Brotli encoding, the cached response uses Brotli. When another client requests gzip, the cache stores and serves the gzip variant separately.
-
-Response caching middleware includes similar vary-by-header support through the `VaryByHeader` property, creating separate cache entries for different encoding types. This ensures compressed responses are cached correctly without storing uncompressed variants or repeatedly compressing the same content.
-
-### When Not to Compress
-
-Compression overhead exceeds its benefit for small responses. Responses under 1-2 KB often become larger after compression due to compression metadata and headers. The middleware includes size thresholds to skip compression for small responses automatically, but you can configure this threshold based on your typical response sizes.
-
-Pre-compressed content like images, videos, and already-compressed files should bypass compression middleware. Adding gzip or Brotli compression to a JPEG or PNG provides no benefit and wastes CPU. The `MimeTypes` configuration should include only compressible content types like JSON, XML, HTML, CSS, and JavaScript.
-
-Highly dynamic content that changes on every request reduces caching effectiveness, which diminishes compression benefits. If the response can't be cached, each request pays the full compression cost. In these cases, evaluate whether the network transfer time saved by smaller payloads justifies the additional CPU usage per request.
-
-## Request Decompression
-
-Request decompression middleware automatically decompresses incoming requests that include compressed content. While most APIs focus on compressing responses to reduce bandwidth, large request payloads like file uploads, bulk data imports, or detailed analytics events benefit from client-side compression before transmission.
-
-The middleware examines the `Content-Encoding` header on incoming requests. When the header indicates a supported compression algorithm like gzip, deflate, or Brotli, the middleware wraps the request body stream in a decompression stream. This happens transparently before the request reaches endpoint handlers, so controller actions and minimal API endpoints receive decompressed content without additional code.
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddRequestDecompression(options =>
-{
-    options.DecompressionProviders.Add("br", new BrotliDecompressionProvider());
-    options.DecompressionProviders.Add("gzip", new GzipDecompressionProvider());
-    options.DecompressionProviders.Add("deflate", new DeflateDecompressionProvider());
-});
-
-var app = builder.Build();
-
-app.UseRequestDecompression();
-```
-
-Decompression occurs lazily when the request body is read during model binding or manual stream access. The middleware doesn't eagerly decompress the entire body on arrival; instead, it wraps the body stream so decompression happens as the application reads from it. This lazy approach reduces memory pressure and allows streaming decompression for large payloads.
-
-If the middleware encounters a request with compressed content but cannot decompress it, such as an unsupported `Content-Encoding` value or multiple encoding values, it passes the request through without modification. The endpoint receives the compressed stream, and attempting to read it as uncompressed content will fail or produce garbage data. Proper error handling at the endpoint level should detect these cases and return appropriate error responses.
-
-### Security Considerations
-
-Request decompression creates potential denial-of-service vectors through decompression bombs. A small compressed payload can expand to gigabytes of data when decompressed, consuming excessive memory and CPU. The middleware doesn't include built-in size limits, so implementing request size limits through other means becomes critical.
-
-ASP.NET Core's `MaxRequestBodySize` configuration limits the total request size before decompression. Setting this on the Kestrel server configuration prevents enormous compressed payloads from reaching the decompression middleware.
-
-```csharp
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10 MB
-});
-```
-
-Validating decompressed content size after reading the request body provides defense in depth. If your API expects requests under a certain size, reject requests that exceed that size after decompression, even if the compressed size passed the initial limit.
-
 ## Async Patterns and Non-Blocking I/O
 
 ASP.NET Core uses an async programming model to maximize throughput under high concurrency. When a request handler executes synchronous I/O operations like blocking database queries or HTTP calls, it holds a thread from the thread pool until the operation completes. Under heavy load, thread pool exhaustion occurs when all threads are blocked waiting for I/O, preventing the server from accepting new requests even though CPU and network resources remain available.
@@ -394,87 +300,6 @@ This creates a worse situation than pure synchronous code. The application pays 
 Async methods should avoid CPU-intensive work that doesn't involve I/O. If an operation computes results without waiting for external resources, async provides no benefit. The thread must remain busy performing the computation regardless of whether the method signature uses `async`. Adding `async` to CPU-bound work adds overhead without improving throughput.
 
 Forgetting to await asynchronous calls creates fire-and-forget behavior where the method returns before the async operation completes. The compiler warns about unawaited tasks, but ignoring these warnings leads to incomplete operations, lost exceptions, and unpredictable behavior.
-
-## Streaming Large Result Sets with IAsyncEnumerable
-
-Returning large collections from APIs traditionally requires loading the entire collection into memory, serializing it to JSON, and sending the complete response. For result sets with thousands or millions of items, this approach consumes excessive memory and delays time-to-first-byte while the server loads and serializes everything.
-
-`IAsyncEnumerable<T>` enables streaming results to clients as items become available. Instead of buffering the entire collection, the API yields items one at a time or in small batches. The serializer sends each item to the client immediately, reducing memory usage and allowing clients to process data incrementally.
-
-```csharp
-public async IAsyncEnumerable<Product> GetProductsAsync(
-    [EnumeratorCancellation] CancellationToken cancellationToken)
-{
-    await foreach (var product in _repository.StreamProductsAsync(cancellationToken))
-    {
-        yield return product;
-    }
-}
-```
-
-When an endpoint returns `IAsyncEnumerable<T>`, ASP.NET Core's JSON serializer recognizes the streaming intent and begins sending the response immediately. As each item yields, the serializer converts it to JSON and writes it to the response stream. The client receives a standard JSON array but the server doesn't buffer the entire array before transmission.
-
-Entity Framework Core supports `IAsyncEnumerable<T>` natively through `AsAsyncEnumerable()`. Database results stream from the database to the API to the client without materializing the entire result set in memory.
-
-```csharp
-public async IAsyncEnumerable<Product> GetAllProductsAsync(
-    [EnumeratorCancellation] CancellationToken cancellationToken)
-{
-    await foreach (var product in _dbContext.Products
-        .AsAsyncEnumerable()
-        .WithCancellation(cancellationToken))
-    {
-        yield return product;
-    }
-}
-```
-
-The `[EnumeratorCancellation]` attribute ensures the cancellation token is properly integrated with the async enumeration. When the client disconnects or cancels the request, the enumeration stops, preventing wasted work processing results that will never be consumed.
-
-### When to Stream Results
-
-Streaming benefits APIs that return large collections where clients need all data but loading everything into memory is impractical. Paginated APIs often work better than streaming for interactive applications where users navigate through results incrementally. Streaming makes sense when the client intends to consume the entire dataset, such as export operations, analytics processing, or bulk synchronization.
-
-Streaming adds complexity to error handling. When the server begins sending items and encounters an error halfway through, it cannot return a clean error response because the response has already started. The JSON array is incomplete, and the client must detect the truncation. Paginated APIs allow each page to return proper error responses independently.
-
-Clients must support streaming consumption to benefit from server-side streaming. If the client buffers the entire response before processing, streaming provides no advantage and may increase total time due to serialization overhead. Streaming works best when both server and client process data incrementally.
-
-## Minimal API vs Controller Performance
-
-Minimal APIs introduced in .NET 6 provide a simplified programming model for building APIs without the overhead of MVC controllers. Benchmarks show minimal APIs consistently perform better than controller-based APIs, though the practical difference in real-world scenarios is often negligible.
-
-Minimal APIs avoid the MVC model binding and action filter infrastructure that controllers rely on. Controllers invoke a pipeline of filters, perform model validation, and resolve parameters through a complex binding system. Minimal APIs use a simpler parameter resolution mechanism and skip features like action filters unless explicitly added.
-
-This reduced infrastructure translates to lower memory allocations per request and faster request processing. In high-throughput scenarios serving thousands of requests per second, the difference becomes measurable. For typical APIs handling hundreds of requests per second, the performance gap is small enough that other factors like database query performance and caching strategy matter more.
-
-```csharp
-// Minimal API - lower overhead
-app.MapGet("/products/{id}", async (int id, IProductRepository repo) =>
-{
-    var product = await repo.GetProductByIdAsync(id);
-    return product is not null ? Results.Ok(product) : Results.NotFound();
-});
-
-// Controller-based API - more infrastructure
-[HttpGet("{id}")]
-public async Task<ActionResult<Product>> GetProduct(int id)
-{
-    var product = await _repository.GetProductByIdAsync(id);
-    return product is not null ? Ok(product) : NotFound();
-}
-```
-
-The minimal API version explicitly returns result types like `Results.Ok()` and `Results.NotFound()`, while the controller version uses inherited methods and automatic result conversion. This explicit approach in minimal APIs gives the runtime fewer decisions to make and fewer abstractions to traverse.
-
-### Choosing Between Minimal APIs and Controllers
-
-Performance alone rarely justifies choosing minimal APIs over controllers. The decision should consider team familiarity, project structure preferences, and whether you need controller-specific features like action filters, model binding customization, and the structured organization controllers provide.
-
-Controllers offer better organization for large APIs with many endpoints. Action filters, route groups, and controller-level attributes reduce code duplication. The framework provides more out-of-the-box functionality like automatic model validation and binding from multiple sources simultaneously.
-
-Minimal APIs work well for small to medium APIs, microservices with focused responsibilities, and teams that prefer functional programming styles over object-oriented controller hierarchies. The reduced ceremony and explicit nature make endpoints easier to understand in isolation.
-
-For new projects, Microsoft recommends minimal APIs as the default choice, and controller-based APIs remain fully supported for teams that prefer their structure and features. Hybrid approaches work too; a single application can use minimal APIs for simple endpoints and controllers for complex ones.
 
 ## JSON Serialization Performance with Source Generators
 

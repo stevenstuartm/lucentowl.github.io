@@ -2,7 +2,7 @@
 title: "Real-Time IoT Dashboards with SignalR"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Programming Models"
+subcategory: "Real-Time & RPC"
 description: "Building real-time IoT dashboards with ASP.NET Core SignalR and Azure SignalR Service, covering the telemetry pipeline from device to browser, Blazor integration, and scaling patterns."
 tags: [iot, dotnet, real-time, telemetry, azure, practical, architecture]
 ---
@@ -63,33 +63,6 @@ Groups organize connections so you can target messages without broadcasting to e
 A connection can belong to multiple groups simultaneously. A user viewing a floor-level map and a specific sensor detail panel at the same time can be in both `location:floor-3` and `device:sensor-42` groups. When the server sends to `location:floor-3`, that user receives the update; when a reading arrives for sensor-42, they also receive that targeted update.
 
 Groups are ephemeral by design. Membership does not survive a disconnection. When a client reconnects, it must rejoin the groups it needs. Plan for this in your client-side reconnection logic.
-
-### Hub Context Outside Hubs
-
-To push telemetry from non-hub code, such as a background service processing IoT Hub events, you inject `IHubContext<THub, TClient>`. This gives you access to the same Groups and Clients APIs without requiring an active hub method call.
-
-```csharp
-public class TelemetryProcessor
-{
-    private readonly IHubContext<TelemetryHub, ITelemetryClient> _hubContext;
-
-    public TelemetryProcessor(IHubContext<TelemetryHub, ITelemetryClient> hubContext)
-    {
-        _hubContext = hubContext;
-    }
-
-    public async Task BroadcastAsync(DeviceTelemetry telemetry)
-    {
-        await _hubContext.Clients
-            .Group($"device:{telemetry.DeviceId}")
-            .ReceiveTelemetry(telemetry);
-    }
-}
-```
-
-This pattern is what connects the IoT event pipeline to the browser. The hub handles client subscriptions; a background service processes incoming telemetry and calls back into the hub context to push updates.
-
----
 
 ## The IoT Dashboard Pipeline
 

@@ -14,7 +14,6 @@ tags: [winui, winui-3, xaml, styling, theming, fluent-design, desktop, practical
 - [Control Templates](#control-templates)
 - [Fluent Design System](#fluent-design-system)
 - [Theme Switching](#theme-switching)
-- [Creating Custom Theme Resources](#creating-custom-theme-resources)
 - [Best Practices](#best-practices)
 
 ---
@@ -188,50 +187,6 @@ var uiSettings = new Windows.UI.ViewManagement.UISettings();
 var background = uiSettings.GetColorValue(
     Windows.UI.ViewManagement.UIColorType.Background);
 bool isDark = background == Windows.UI.Color.FromArgb(255, 0, 0, 0);
-```
-
----
-
-## Creating Custom Theme Resources
-
-Defining your own resources that respond to theme changes follows the same pattern WinUI uses internally. You create a `ResourceDictionary` with a `ThemeDictionaries` section containing three child dictionaries keyed as `Light`, `Dark`, and `HighContrast`.
-
-```xml
-<ResourceDictionary>
-    <ResourceDictionary.ThemeDictionaries>
-        <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F5F5F5" />
-            <SolidColorBrush x:Key="AppAccentBrush" Color="#0063B1" />
-        </ResourceDictionary>
-        <ResourceDictionary x:Key="Dark">
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#1C1C1C" />
-            <SolidColorBrush x:Key="AppAccentBrush" Color="#60CDFF" />
-        </ResourceDictionary>
-        <ResourceDictionary x:Key="HighContrast">
-            <SolidColorBrush x:Key="AppSurfaceBrush"
-                             Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="AppAccentBrush"
-                             Color="{ThemeResource SystemColorHighlightColor}" />
-        </ResourceDictionary>
-    </ResourceDictionary.ThemeDictionaries>
-</ResourceDictionary>
-```
-
-Any resource defined inside `ThemeDictionaries` and referenced with `ThemeResource` will automatically serve the correct variant for the active theme. Resources defined outside `ThemeDictionaries` in the same dictionary are theme-neutral and behave like `StaticResource` values regardless of the markup extension used to reference them.
-
-For the High Contrast dictionary, prefer mapping to the Windows system color resources like `SystemColorWindowColor` and `SystemColorButtonTextColor` rather than hard-coding specific colors. Windows surfaces these system colors correctly for each High Contrast theme variant, so deferring to them keeps your application compatible with all the contrast modes a user might have configured.
-
-Organizing themed resource dictionaries in separate files keeps `App.xaml` from becoming unwieldy. A common pattern places the theme dictionaries in a `Themes/` folder and merges them into `App.xaml` through `ResourceDictionary.MergedDictionaries`.
-
-```xml
-<Application.Resources>
-    <ResourceDictionary>
-        <ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary Source="Themes/BrandBrushes.xaml" />
-            <ResourceDictionary Source="Themes/Typography.xaml" />
-        </ResourceDictionary.MergedDictionaries>
-    </ResourceDictionary>
-</Application.Resources>
 ```
 
 ---

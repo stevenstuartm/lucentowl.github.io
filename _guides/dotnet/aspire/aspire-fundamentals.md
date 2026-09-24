@@ -2,7 +2,7 @@
 title: ".NET Aspire Fundamentals"
 layout: guide
 category: "ASP.NET Core"
-subcategory: ".NET Aspire"
+subcategory: "Aspire"
 description: "The .NET Aspire application model, project structure, service defaults, dashboard, and integrations for building cloud-native .NET applications."
 tags: [aspire, cloud-native, orchestration, distributed-systems, observability, service-discovery, dotnet]
 ---
@@ -309,14 +309,6 @@ Aspire is less relevant for applications that do not involve distributed service
 Aspire does not replace your production infrastructure tools. It is not a substitute for Docker Compose in scenarios where non-.NET services dominate the stack, although it can replace Docker Compose for .NET-centric applications. It does not replace Kubernetes for production orchestration, Terraform or Bicep for infrastructure provisioning, or your CI/CD pipeline. Aspire generates deployment manifests that these tools can consume, but it does not own your production environment.
 
 The clearest signal that Aspire fits is when developers on your team spend meaningful time on "plumbing" rather than building features: starting containers manually, copying connection strings, debugging telemetry configuration, or troubleshooting why service A cannot reach service B locally. Aspire absorbs that plumbing into a declarative model that works the same way on every developer's machine.
-
-### Deployment Manifests and the Path to Production
-
-While Aspire is primarily a development-time tool, it bridges the gap to production through deployment manifest generation. The `azd` (Azure Developer CLI) can read an Aspire AppHost and generate the corresponding Azure infrastructure: container apps, databases, caches, and networking. This means the topology you define in `Program.cs` translates directly into deployment artifacts without maintaining a separate infrastructure definition.
-
-For teams not using Azure, Aspire can generate Docker Compose files or Kubernetes manifests from the application model. The `dotnet run --publisher manifest` command produces a JSON manifest that deployment tools can consume. This approach ensures that the application topology defined in code remains the single source of truth, reducing the drift between what developers run locally and what gets deployed.
-
-That said, most mature organizations already have established deployment pipelines and infrastructure-as-code practices. In those environments, Aspire's manifest generation is useful as a reference or starting point rather than a replacement for existing Terraform, Bicep, or Helm configurations. The development-time orchestration value stands on its own regardless of whether you adopt the deployment manifest features.
 
 ## Key Takeaways
 

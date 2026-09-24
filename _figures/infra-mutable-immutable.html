@@ -1,0 +1,79 @@
+---
+title: "Mutable vs. Immutable Servers"
+kind: flow
+system: infrastructure
+summary: "Patching running servers in place vs. replacing them from a new image."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" role="img" aria-labelledby="imi-title imi-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="imi-title">How a change reaches servers under mutable and immutable infrastructure</title>
+<desc id="imi-desc">On the mutable side, a configuration tool pushes version 2 onto three running servers. Two upgrade cleanly and one is only partly upgraded, and each server keeps every change ever applied to it. On the immutable side, an image build produces a version 2 image, three new servers start from it, and then the three old version 1 servers are removed.</desc>
+<style>
+.imi-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.imi-step { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.imi-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.imi-old { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.imi-h { font-size: 14px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.imi-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.imi-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.imi-n-old { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.imi-d { font-size: 11.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.imi-d-inv { font-size: 11.5px; font-style: italic; fill: #FFFFFF; }
+.imi-d-bad { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.imi-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.imi-div { stroke: var(--color-border, #D5DDE5); stroke-width: 1.25; }
+</style>
+<defs>
+<marker id="imi-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<line class="imi-div" x1="450" y1="15" x2="450" y2="325"/>
+
+<text class="imi-h" x="215" y="28" text-anchor="middle">Mutable: change the servers you have</text>
+<rect class="imi-step" x="95" y="45" width="240" height="50" rx="6"/>
+<text class="imi-n-inv" x="215" y="66" text-anchor="middle">Configuration tool</text>
+<text class="imi-d-inv" x="215" y="84" text-anchor="middle">pushes v2 to each server</text>
+
+<rect class="imi-box" x="30" y="160" width="115" height="55" rx="6"/>
+<text class="imi-n" x="87" y="182" text-anchor="middle">Server 1</text>
+<text class="imi-d" x="87" y="201" text-anchor="middle">v1 → v2</text>
+<rect class="imi-box" x="157" y="160" width="115" height="55" rx="6"/>
+<text class="imi-n" x="214" y="182" text-anchor="middle">Server 2</text>
+<text class="imi-d" x="214" y="201" text-anchor="middle">v1 → v2</text>
+<rect class="imi-bad" x="285" y="160" width="115" height="55" rx="6"/>
+<text class="imi-n" x="342" y="182" text-anchor="middle">Server 3</text>
+<text class="imi-d-bad" x="342" y="201" text-anchor="middle">partly v2</text>
+
+<path class="imi-flow" d="M 215,95 C 215,130 87,125 87,154" marker-end="url(#imi-a)"/>
+<path class="imi-flow" d="M 215,95 L 215,154" marker-end="url(#imi-a)"/>
+<path class="imi-flow" d="M 215,95 C 215,130 342,125 342,154" marker-end="url(#imi-a)"/>
+<text class="imi-d" x="215" y="250" text-anchor="middle">each server keeps every change ever applied to it</text>
+
+<text class="imi-h" x="675" y="28" text-anchor="middle">Immutable: replace them</text>
+<rect class="imi-step" x="555" y="45" width="240" height="50" rx="6"/>
+<text class="imi-n-inv" x="675" y="66" text-anchor="middle">Image build</text>
+<text class="imi-d-inv" x="675" y="84" text-anchor="middle">produces image v2</text>
+
+<rect class="imi-box" x="480" y="160" width="115" height="55" rx="6"/>
+<text class="imi-n" x="537" y="182" text-anchor="middle">Server 4</text>
+<text class="imi-d" x="537" y="201" text-anchor="middle">started from v2</text>
+<rect class="imi-box" x="617" y="160" width="115" height="55" rx="6"/>
+<text class="imi-n" x="674" y="182" text-anchor="middle">Server 5</text>
+<text class="imi-d" x="674" y="201" text-anchor="middle">started from v2</text>
+<rect class="imi-box" x="755" y="160" width="115" height="55" rx="6"/>
+<text class="imi-n" x="812" y="182" text-anchor="middle">Server 6</text>
+<text class="imi-d" x="812" y="201" text-anchor="middle">started from v2</text>
+
+<path class="imi-flow" d="M 675,95 C 675,130 537,125 537,154" marker-end="url(#imi-a)"/>
+<path class="imi-flow" d="M 675,95 L 675,154" marker-end="url(#imi-a)"/>
+<path class="imi-flow" d="M 675,95 C 675,130 812,125 812,154" marker-end="url(#imi-a)"/>
+
+<text class="imi-d" x="675" y="236" text-anchor="middle">the v1 servers they replace</text>
+<rect class="imi-old" x="480" y="245" width="115" height="45" rx="6"/>
+<text class="imi-n-old" x="537" y="272" text-anchor="middle">Old server (v1)</text>
+<rect class="imi-old" x="617" y="245" width="115" height="45" rx="6"/>
+<text class="imi-n-old" x="674" y="272" text-anchor="middle">Old server (v1)</text>
+<rect class="imi-old" x="755" y="245" width="115" height="45" rx="6"/>
+<text class="imi-n-old" x="812" y="272" text-anchor="middle">Old server (v1)</text>
+<text class="imi-d" x="675" y="315" text-anchor="middle">removed after the new servers start</text>
+</g>
+</svg>

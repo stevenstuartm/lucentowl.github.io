@@ -1,0 +1,83 @@
+---
+title: "Three Developer Environment Models"
+kind: structure
+system: infrastructure
+summary: "Which layers each model shares and which each developer gets a copy of."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 290" role="img" aria-labelledby="idm-title idm-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="idm-title">Shared and per-developer layers in three developer environment models</title>
+<desc id="idm-desc">In the shared data model, each developer has their own application stack, and the data stores and the network are shared by all developers. In the dedicated model, each developer has their own application stack, data stores, and network. In the shared network, personal data stores model, each developer has their own application stack and data stores, and the network is shared.</desc>
+<style>
+.idm-shared { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.idm-own { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.idm-h { font-size: 14px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.idm-row { font-size: 12.5px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.idm-t-inv { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
+.idm-t { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.idm-key { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Row labels -->
+<text class="idm-row" x="100" y="87" text-anchor="end">Application</text>
+<text class="idm-row" x="100" y="143" text-anchor="end">Data stores</text>
+<text class="idm-row" x="100" y="199" text-anchor="end">Network</text>
+
+<!-- Panel 1: shared data -->
+<text class="idm-h" x="232" y="40" text-anchor="middle">Shared data</text>
+<rect class="idm-own" x="110" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="147" y="87" text-anchor="middle">dev 1</text>
+<rect class="idm-own" x="195" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="232" y="87" text-anchor="middle">dev 2</text>
+<rect class="idm-own" x="280" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="317" y="87" text-anchor="middle">dev 3</text>
+<rect class="idm-shared" x="110" y="116" width="245" height="44" rx="5"/>
+<text class="idm-t-inv" x="232" y="143" text-anchor="middle">shared</text>
+<rect class="idm-shared" x="110" y="172" width="245" height="44" rx="5"/>
+<text class="idm-t-inv" x="232" y="199" text-anchor="middle">shared</text>
+
+<!-- Panel 2: dedicated -->
+<text class="idm-h" x="499" y="40" text-anchor="middle">Dedicated</text>
+<rect class="idm-own" x="377" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="414" y="87" text-anchor="middle">dev 1</text>
+<rect class="idm-own" x="462" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="499" y="87" text-anchor="middle">dev 2</text>
+<rect class="idm-own" x="547" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="584" y="87" text-anchor="middle">dev 3</text>
+<rect class="idm-own" x="377" y="116" width="75" height="44" rx="5"/>
+<text class="idm-t" x="414" y="143" text-anchor="middle">dev 1</text>
+<rect class="idm-own" x="462" y="116" width="75" height="44" rx="5"/>
+<text class="idm-t" x="499" y="143" text-anchor="middle">dev 2</text>
+<rect class="idm-own" x="547" y="116" width="75" height="44" rx="5"/>
+<text class="idm-t" x="584" y="143" text-anchor="middle">dev 3</text>
+<rect class="idm-own" x="377" y="172" width="75" height="44" rx="5"/>
+<text class="idm-t" x="414" y="199" text-anchor="middle">dev 1</text>
+<rect class="idm-own" x="462" y="172" width="75" height="44" rx="5"/>
+<text class="idm-t" x="499" y="199" text-anchor="middle">dev 2</text>
+<rect class="idm-own" x="547" y="172" width="75" height="44" rx="5"/>
+<text class="idm-t" x="584" y="199" text-anchor="middle">dev 3</text>
+
+<!-- Panel 3: shared network, personal data -->
+<text class="idm-h" x="766" y="40" text-anchor="middle">Shared network, personal data</text>
+<rect class="idm-own" x="644" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="681" y="87" text-anchor="middle">dev 1</text>
+<rect class="idm-own" x="729" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="766" y="87" text-anchor="middle">dev 2</text>
+<rect class="idm-own" x="814" y="60" width="75" height="44" rx="5"/>
+<text class="idm-t" x="851" y="87" text-anchor="middle">dev 3</text>
+<rect class="idm-own" x="644" y="116" width="75" height="44" rx="5"/>
+<text class="idm-t" x="681" y="143" text-anchor="middle">dev 1</text>
+<rect class="idm-own" x="729" y="116" width="75" height="44" rx="5"/>
+<text class="idm-t" x="766" y="143" text-anchor="middle">dev 2</text>
+<rect class="idm-own" x="814" y="116" width="75" height="44" rx="5"/>
+<text class="idm-t" x="851" y="143" text-anchor="middle">dev 3</text>
+<rect class="idm-shared" x="644" y="172" width="245" height="44" rx="5"/>
+<text class="idm-t-inv" x="766" y="199" text-anchor="middle">shared</text>
+
+<!-- Legend -->
+<rect class="idm-shared" x="110" y="250" width="40" height="18" rx="3"/>
+<text class="idm-key" x="160" y="263">one copy used by every developer</text>
+<rect class="idm-own" x="400" y="250" width="40" height="18" rx="3"/>
+<text class="idm-key" x="450" y="263">a separate copy per developer</text>
+</g>
+</svg>

@@ -3,210 +3,225 @@ title: "WinUI 3 Layout System"
 layout: guide
 category: "WinUI 3"
 subcategory: "WinUI Fundamentals"
-description: "Understanding the WinUI 3 layout system including layout panels, the measure-arrange cycle, spacing and alignment, and building responsive adaptive layouts."
-tags: [winui, winui-3, xaml, xaml-layout, responsive-design, desktop, fundamentals]
+description: "How WinUI 3 sizes and positions elements: effective pixels, the measure and arrange passes, margin, padding, and alignment within a layout slot, the built-in and Community Toolkit panels and when to use each, and adaptive layouts with VisualStateManager and AdaptiveTrigger."
+tags: [xaml-layout, layout-panels, measure-arrange, effective-pixels, visual-state-manager, responsive-design, fundamentals]
 ---
 
-## Table of Contents
+## Effective Pixels
 
-- [The Measure-Arrange Cycle](#the-measure-arrange-cycle)
-- [Grid](#grid)
-- [StackPanel](#stackpanel)
-- [RelativePanel](#relativepanel)
-- [Canvas](#canvas)
-- [VariableSizedWrapGrid](#variablesizedwrapgrid)
-- [Margin, Padding, and Alignment](#margin-padding-and-alignment)
-- [Responsive Layout with VisualStateManager](#responsive-layout-with-visualstatemanager)
-- [Choosing the Right Panel](#choosing-the-right-panel)
+Every size and position in WinUI, from `Width="120"` to `Margin="16"`, is in **effective pixels** (epx), not physical pixels. Windows gives each display a scale factor based on its pixel density and typical viewing distance, and WinUI multiplies every epx value by it. A 120 epx button is 120 physical pixels wide at 100% scaling and 240 at 200%, so it looks the same size on a laptop screen and on a 4K monitor.
+
+A fixed size is therefore not a DPI problem, because it scales with the display. Its problem is that it doesn't adapt to the window or to the content. A fixed-width button clips its label when the text grows, whether from translation into a longer language or from the user's text-size setting.
+
+Microsoft's guidance is to keep sizes, margins, and padding in multiples of 4 epx. Scale factors move in steps of 25% (100%, 125%, 150%, and so on), and 4 epx times any of them is a whole number of physical pixels, so those values render sharply. Text sizes are exempt.
 
 ---
 
-## The Measure-Arrange Cycle
+## The Measure and Arrange Passes
 
-Every time WinUI renders a window, it runs a two-pass layout algorithm that determines where each element ends up on screen. Understanding this cycle helps explain why layouts behave the way they do and how to avoid common pitfalls.
+WinUI positions elements in two passes over the element tree. A **panel** is an element whose job is to size and place its children, such as a `Grid` or a `StackPanel`, and every panel takes part in both passes.
 
-The first pass is the measure pass. Starting from the root element and working downward through the visual tree, each panel asks its children: "Given this much available space, how much space do you need?" Children report their desired size, which may be smaller than, equal to, or (in special cases) larger than the space offered. Panels use these reported sizes to make decisions about how to distribute available space among their children.
+In the **measure** pass, the window offers its size to the root element, and from there each panel calls `Measure` on each of its children, passing the space it can offer. Each child works out how much it needs, measuring its own children first if it has any, and reports that as its `DesiredSize`. A panel can offer infinite space in a direction, which tells the child it can be as large as it likes that way.
 
-The second pass is the arrange pass. With desired sizes in hand, each panel positions its children within the space actually allocated to them, not necessarily the space they desired. A child that wanted 200 pixels of height might receive only 120 pixels if the panel has constraints to enforce. The child must render within whatever rectangle the parent allocates.
+In the **arrange** pass, which starts once measuring is done, each panel calls `Arrange` on each child with a final rectangle, its **layout slot**. The panel decides the slot from the desired sizes, its own rules, and the space it was given. A child that asked for 200 epx of height can receive 120 if that is all there is, and it then draws within 120 and is clipped.
 
-This two-pass system matters for a practical reason: it separates negotiation from commitment. During measure, elements can report their needs without yet knowing their final position. During arrange, parents make final placement decisions with full knowledge of all their children's needs. The result is a composable system where panels can be nested freely, each making locally correct decisions that add up to a globally correct layout.
+{% include figure.html id="winui-measure-arrange" %}
 
-When you set a fixed `Width` or `Height` on an element, you short-circuit part of this negotiation for that element. The element ignores the available space offered by the measure pass and reports its fixed size instead. This is sometimes intentional, but it also means the element will clip or overflow if the window shrinks below that size, which is why hardcoded dimensions are often better replaced with alignment and sizing constraints.
+The split lets panels nest freely. Measuring asks what each element needs before anything is placed, and arranging places everything once all the needs are known. When something changes, WinUI runs the passes again, and it can skip straight to arrange when only a property that affects placement, such as `HorizontalAlignment`, changed. Layout runs asynchronously. Setting `Width` doesn't update `ActualWidth` on the next line. `ActualWidth` and `ActualHeight` hold an element's final size only after the next layout pass, when its `SizeChanged` event fires. Code that needs a rendered size reads it in a `SizeChanged` or `Loaded` handler. `Width` and `Height` are only requests, and they read as `NaN` when unset.
 
 ---
 
-## Grid
+## Sizing and Placing an Element
 
-Grid is the workhorse of WinUI layout. It divides space into rows and columns, and children occupy cells within that grid. Most complex UI compositions rely on one or more Grid panels at their core.
+Within its layout slot, an element's size and position come from four groups of properties on `FrameworkElement` and its subclasses.
 
-Rows and columns are defined using `RowDefinition` and `ColumnDefinition` elements, each accepting a `Height` or `Width` value. Three sizing modes control how those dimensions work:
+**Size.** `Width` and `Height` request a size. `MinWidth`, `MaxWidth`, `MinHeight`, and `MaxHeight` bound it while leaving it fluid, which usually serves better than a fixed value.
 
-- **Star sizing** (`*` or `2*`) distributes remaining space proportionally. A row with `Height="*"` gets whatever space is left after fixed and Auto rows are satisfied. Two star rows split the remainder equally; `*` and `2*` split it one-third and two-thirds.
-- **Auto sizing** measures the tallest (or widest) child in that row (or column) and allocates exactly that much space, nothing more.
-- **Pixel sizing** allocates a fixed number of device-independent pixels regardless of content or window size.
+**Margin** is empty space outside the element. `Margin="20"` applies 20 epx on every side, and `Margin="0,10,5,25"` applies left, top, right, and bottom, in that order. The parent leaves room for the margin inside the element's slot, but the margin isn't part of the element. It isn't included in `ActualWidth`, and clicks on it don't reach the element. Margins between neighbors add up, so two adjacent elements with 10 epx margins sit 20 epx apart.
 
-A typical app shell uses a combination: a fixed-height title bar row, an Auto-height toolbar row, a star-height content row that fills the remaining space, and a fixed-height status bar row at the bottom.
+**Padding** is space inside the element, between its edge or border and its content. Unlike margin, it isn't defined on every element. `Control`, `Border`, `Grid`, `StackPanel`, `RelativePanel`, and `TextBlock` each have a `Padding` property, and `Canvas` and shapes don't. `Grid`, `StackPanel`, and `RelativePanel` also have their own `BorderBrush`, `BorderThickness`, and `CornerRadius`, so they don't need to be wrapped in a `Border` to draw one.
 
-Children declare which cell they occupy using attached properties.
+**Alignment.** `HorizontalAlignment` (`Left`, `Center`, `Right`, `Stretch`) and `VerticalAlignment` (`Top`, `Center`, `Bottom`, `Stretch`) decide where the element sits when its slot is bigger than it needs. `Stretch` is the default and fills the slot. Two things override it. Setting an explicit `Width` or `Height` cancels `Stretch` in that direction, and the element is centered instead. And many controls change the default in their style. A `Button` defaults to `Left` and `Center`, so a button in a `Grid` cell sizes to its content rather than filling the cell, while a `Border` or `Rectangle` in the same cell fills it.
+
+{% include figure.html id="winui-layout-slot" %}
+
+When content is larger than the space it gets, alignment decides which side is clipped. A `Left`-aligned element that is too wide loses its right edge.
+
+---
+
+## The Layout Panels
+
+Children tell their parent panel how they want to be placed through attached properties such as `Grid.Row`, and only the immediate parent reads them. Panels differ in how they position children and in how they treat a child's `Stretch` alignment, and those two rules decide which panel fits a layout.
+
+### Grid
+
+`Grid` divides its space into rows and columns, and each child occupies a cell. It is the usual root of a page's layout because it can express most arrangements, and it's the panel whose sizing rules take the most practice.
+
+Each `RowDefinition` height and `ColumnDefinition` width takes one of three kinds of value:
+
+- **A number** (`Height="44"`) is a fixed size in epx.
+- **`Auto`** sizes the row to the largest child in it. To find that size, the `Grid` measures the row's children with unlimited height, or a column's with unlimited width.
+- **Star** (`*`, `2*`) shares whatever space the fixed and `Auto` rows leave. `*` and `2*` split it one-third and two-thirds. A definition with no size is `*`.
+
+Row and column definitions also accept `MinHeight`, `MaxHeight`, `MinWidth`, and `MaxWidth`. A typical window layout uses all three kinds of size:
 
 ```xml
 <Grid>
     <Grid.RowDefinitions>
-        <RowDefinition Height="48"/>
+        <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
-        <RowDefinition Height="24"/>
+        <RowDefinition Height="28"/>
     </Grid.RowDefinitions>
 
-    <TitleBar Grid.Row="0"/>
-    <Toolbar Grid.Row="1"/>
-    <ContentArea Grid.Row="2"/>
-    <StatusBar Grid.Row="3"/>
+    <TitleBar Grid.Row="0" Title="Contoso"/>
+    <CommandBar Grid.Row="1"/>
+    <Frame Grid.Row="2" x:Name="ContentFrame"/>
+    <TextBlock Grid.Row="3" Text="Ready" Margin="12,4"/>
 </Grid>
 ```
 
-`RowSpan` and `ColumnSpan` allow a child to occupy multiple cells. An overlay panel that covers several columns, or a sidebar that spans multiple rows, uses these properties. The child still participates in the measure-arrange cycle normally; it simply receives the combined space of all cells it spans.
+The title bar and command bar rows take their controls' heights, the content frame gets everything left over, and the status row is fixed at the bottom. As the window grows taller, only the star row changes. (The `TitleBar` control replaces the system title bar only when the window extends its content into the title bar area, which is set up on the window.) `Grid.RowSpan` and `Grid.ColumnSpan` let a child cover several cells, and `RowSpacing` and `ColumnSpacing` add gaps between them.
 
-Grid is the right choice when your layout has a clear grid structure, when you need precise control over how space is divided, or when elements need to be positioned relative to each other across rows and columns. It handles both simple two-column forms and complex multi-region app shells with equal facility.
+A `Grid` respects `Stretch`, so a child with no size set fills its cell. It clips content larger than the panel and holds its children to its own bounds. Several children in the same cell overlap, with later children drawn on top. A single-cell `Grid`, with no row or column definitions, is the efficient way to layer elements, such as text centered over an image.
 
----
+### StackPanel
 
-## StackPanel
+`StackPanel` places its children in one line, vertically by default or horizontally with `Orientation="Horizontal"`. `Spacing` adds an even gap between children without giving each one a margin.
 
-StackPanel arranges children in a single line, either horizontally or vertically, by stacking them one after another. It is the simplest panel for ordered, linear arrangements.
+In the stacking direction the panel offers each child infinite space, so a child gets exactly the size it asks for. In the other direction it respects `Stretch`, so the children of a vertical stack fill its width. It suits short, linear groups: a row of buttons, a column of form fields, a label beside its value. It never wraps, and children beyond its edge are clipped.
 
-The `Orientation` property controls the direction. `Vertical` (the default) stacks children top to bottom; `Horizontal` stacks them left to right. Children are given as much space as they need in the stacking direction and as much space as the panel itself has in the perpendicular direction.
+The infinite space has two consequences that catch people. A child can't fill the remaining height of a vertical stack, because the stack has no remaining height to give. That layout needs a `Grid` with a star row. And a scrolling control can't scroll inside one. A `ListView` or `ScrollViewer` in a vertical `StackPanel` measures itself as tall as all of its content, never shows a scroll bar, and runs off the bottom of the window. A `ListView` in that position also loses virtualization, the optimization that creates elements only for the items on screen, so it creates every item up front. An `Auto` row in a `Grid` has the same effect, because it also measures with unlimited height. Put a scrolling control in a star-sized `Grid` row, where the `Grid` gives it a finite height, or set its `MaxHeight`.
 
-The `Spacing` property adds uniform gaps between children without requiring each child to carry its own margin. Setting `Spacing="8"` inserts 8 pixels of space between every adjacent pair of children, which is far cleaner than individually setting `Margin="0,0,0,8"` on each child.
+{% include figure.html id="winui-unbounded-list" %}
 
-StackPanel works well for small, linear groups of related controls: a column of form fields, a row of action buttons, a list of labels. Where it breaks down is in scenarios requiring precise proportional sizing. StackPanel does not know the total available space in its stacking direction; it simply grows as large as its content demands. If you need a child to fill remaining space, StackPanel cannot express that. Grid with star sizing is the correct tool instead.
+### RelativePanel
 
-StackPanel also has no concept of wrapping. If a horizontal StackPanel's children exceed the available width, they overflow and clip rather than wrapping to a new line. For wrapping behavior, look at `ItemsWrapGrid` inside an `ItemsControl`, or the `VariableSizedWrapGrid` panel.
+`RelativePanel` places each child in relation to the panel's edges or to named siblings, using attached properties in three families:
 
----
-
-## RelativePanel
-
-RelativePanel positions children relative to other named siblings or relative to the panel's own edges. Unlike Grid, which partitions space into cells, RelativePanel lets you express positional relationships directly: "this element should be to the right of that element" or "this element should align with the panel's right edge."
-
-Children use attached properties from the `RelativePanel` class to declare their relationships.
+| Family | Examples | Meaning |
+| --- | --- | --- |
+| Panel alignment | `AlignTopWithPanel`, `AlignRightWithPanel`, `AlignHorizontalCenterWithPanel` | Line an edge or center up with the panel's |
+| Sibling alignment | `AlignLeftWith`, `AlignBottomWith`, `AlignVerticalCenterWith` | Line an edge or center up with a named sibling's |
+| Sibling position | `Above`, `Below`, `LeftOf`, `RightOf` | Place next to a named sibling |
 
 ```xml
 <RelativePanel>
-    <TextBlock x:Name="Label" Text="Name:"/>
-    <TextBox x:Name="Input"
-             RelativePanel.RightOf="Label"
-             RelativePanel.AlignTopWith="Label"/>
+    <TextBlock x:Name="NameLabel" Text="Name"/>
+    <TextBox x:Name="NameBox"
+             RelativePanel.Below="NameLabel"
+             RelativePanel.AlignLeftWithPanel="True"
+             RelativePanel.AlignRightWithPanel="True"/>
     <Button Content="Submit"
-            RelativePanel.Below="Input"
+            RelativePanel.Below="NameBox"
             RelativePanel.AlignRightWithPanel="True"/>
 </RelativePanel>
 ```
 
-RelativePanel is particularly useful for layouts that cannot be cleanly described as a grid. A floating action button anchored to the bottom-right corner, a label and value pair where the value wraps independently, or a set of controls that rearrange based on their content sizes are all good candidates. It also appears frequently inside `VisualStateManager` transitions, where elements need to reposition themselves relative to each other when the window width changes.
+A child with no relationship sits in the top-left corner. Relationships on one child combine, so `Below` plus `AlignRightWithPanel` puts the button under the text box at the panel's right edge. `RelativePanel` ignores `Stretch` unless two relationships pin opposite edges, as the text box above is pinned to both sides of the panel and so stretches between them.
 
-The main caveat is that RelativePanel can become difficult to reason about as the number of elements grows. When elements form a chain of dependencies, a single renaming or restructuring can break multiple relationships. For complex, grid-like layouts, Grid remains clearer and easier to maintain.
+Its strength is layouts that rearrange at different window sizes. Moving the text box beside its label, for example, means replacing its `Below` relationship with `RightOf` and `AlignVerticalCenterWith`, a few property changes where a `Grid` would need its rows and columns reworked. Its cost is that a long chain of relationships becomes hard to follow, and renaming one element breaks every relationship that names it.
 
----
+### Canvas
 
-## Canvas
+`Canvas` places each child at the coordinates in its `Canvas.Left` and `Canvas.Top` attached properties. It does no sizing. `Stretch` is ignored, and a child without an explicit size is its content size. It doesn't clip children that extend past it, and `Canvas.ZIndex` changes which children draw on top.
 
-Canvas places children at absolute coordinates using `Canvas.Left` and `Canvas.Top` attached properties. It does not participate in the measure-arrange negotiation in any meaningful way for its children; each child is placed exactly where you tell it to go.
+`Canvas` fits content whose coordinates mean something, such as a diagram editor, a drawing surface, or a chart drawn from data. For ordinary UI it is the wrong panel, because nothing in it responds to the window's size.
 
-```xml
-<Canvas Width="400" Height="300">
-    <Ellipse Canvas.Left="50" Canvas.Top="80" Width="100" Height="100" Fill="Blue"/>
-    <TextBlock Canvas.Left="60" Canvas.Top="120" Text="Label"/>
-</Canvas>
-```
+### VariableSizedWrapGrid
 
-Canvas is appropriate for drawing surfaces where coordinates are meaningful in themselves, such as a custom chart, a diagram editor, or a game-style overlay. It is also useful for UI overlays that need to appear at specific positions regardless of surrounding content, and for animating elements along explicit paths where coordinate control is necessary.
+`VariableSizedWrapGrid` places children in cells of equal size and wraps to a new column when it runs out of room. Its default orientation is `Vertical`, which fills a column top to bottom before starting the next. `MaximumRowsOrColumns` sets how many cells a column holds before it wraps. `ItemWidth` and `ItemHeight` set the cell size, or the first child's size sets it for all. A child can cover several cells with the `VariableSizedWrapGrid.RowSpan` and `ColumnSpan` attached properties, which makes the panel suited to tile layouts with a few larger tiles.
 
-For general application layout, Canvas is the wrong choice. It does not respond to window resizing, does not reflow content, and places the burden of layout math entirely on the developer. An interface built primarily with Canvas will not scale to different screen sizes or DPI settings without significant additional code. Every other panel is a better default for general UI composition.
+List controls such as `ListView` and `GridView` use their own **items panels**, including `ItemsStackPanel` and `ItemsWrapGrid`, which lay out the list's items. Those panels work only inside a list and can't be used for general layout.
 
----
+### Toolkit Panels
 
-## VariableSizedWrapGrid
+The [Windows Community Toolkit](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/windows/){:target="_blank" rel="noopener noreferrer"} adds panels that WinUI doesn't include, in the `CommunityToolkit.WinUI.Controls.Primitives` package under the `CommunityToolkit.WinUI.Controls` namespace:
 
-VariableSizedWrapGrid arranges children in a wrapping grid where each child can span multiple rows or columns. It is designed for tile-like interfaces where items have different sizes but need to flow together in a grid pattern.
-
-Children declare how many cells they occupy using `VariableSizedWrapGrid.RowSpan` and `VariableSizedWrapGrid.ColumnSpan` attached properties. The panel fills cells from left to right, wrapping to the next row when a row is full, similar to how text wraps in a paragraph. Items that are too wide to fit on the current row start a new row automatically.
-
-This panel appears most often inside `ScrollViewer` controls, where a collection of mixed-size tiles needs to flow and wrap as the collection grows. It works with `ItemsControl` via the `ItemsPanel` template when you want tile-based item layouts.
-
-For collections with uniform-size items, `ItemsWrapGrid` inside an `ItemsControl` is generally simpler and more flexible. VariableSizedWrapGrid is the right choice specifically when items genuinely need to span different numbers of grid cells.
-
----
-
-## Margin, Padding, and Alignment
-
-Margin, padding, and alignment are the tools that fine-tune placement within whatever space a panel allocates. Getting these right is what separates layouts that feel polished from those that feel cramped or haphazard.
-
-Margin is space outside an element's border. It pushes the element away from its neighbors or from its containing panel's edges. `Margin="16"` adds 16 pixels on all four sides. `Margin="16,8,16,8"` follows the CSS convention of left, top, right, bottom. Margin participates in the measure pass: a child with a 16-pixel margin reports its desired size as its content size plus 32 pixels (16 on each side), so the parent allocates space accordingly.
-
-Padding is space inside an element's border, between the border and its content. It is a property of the element itself, not of its relationship to siblings. A `Button` with `Padding="12,8"` has 12 pixels of horizontal padding and 8 pixels of vertical padding inside the button boundary, pushing the content label inward. Not every element supports padding; panels and content controls do, but simple shapes and many primitives do not.
-
-`HorizontalAlignment` and `VerticalAlignment` control how an element fills the space allocated to it by its parent. The options are `Stretch` (fills the allocated space), `Left`/`Top` (anchors to the near edge), `Right`/`Bottom` (anchors to the far edge), and `Center` (centers within the allocated space). The default for most elements is `Stretch`, which is why a `Button` placed directly in a `Grid` cell fills the entire cell unless you change its alignment.
-
-The practical principle here is to avoid hardcoded widths and heights whenever possible. A button with `Width="120"` will look exactly right on a 1920x1080 display and awkward on a 3840x2160 display, or clipped on a small surface device. Using `HorizontalAlignment="Left"` and letting the button size to its content produces a more robust result. When a minimum size matters, prefer `MinWidth` over `Width`.
-
----
-
-## Responsive Layout with VisualStateManager
-
-WinUI applications run on devices ranging from small tablets to ultra-wide desktop monitors. VisualStateManager provides a structured way to redefine layout at different window sizes, without duplicating markup or writing imperative resize handlers.
-
-Visual states are named configurations of property values. `AdaptiveTrigger` activates a state when the window width crosses a defined threshold. Inside each state, setters override the default values of properties on named elements.
+- **`WrapPanel`** places children in a line and wraps to the next line at the panel's edge, which suits tags, chips, and other items of varying width. `HorizontalSpacing` and `VerticalSpacing` set the gaps.
+- **`DockPanel`** docks each child to an edge with `DockPanel.Dock`, and the last child fills what is left, the arrangement WPF and Windows Forms developers know.
+- **`UniformGrid`** divides its space into equal cells, useful for dashboards and button pads.
 
 ```xml
-<VisualStateManager.VisualStateGroups>
-    <VisualStateGroup>
-        <VisualState x:Name="NarrowLayout">
-            <VisualState.StateTriggers>
-                <AdaptiveTrigger MinWindowWidth="0"/>
-            </VisualState.StateTriggers>
-            <VisualState.Setters>
-                <Setter Target="Sidebar.Visibility" Value="Collapsed"/>
-                <Setter Target="ContentArea.(Grid.ColumnSpan)" Value="2"/>
-            </VisualState.Setters>
-        </VisualState>
-        <VisualState x:Name="WideLayout">
-            <VisualState.StateTriggers>
-                <AdaptiveTrigger MinWindowWidth="720"/>
-            </VisualState.StateTriggers>
-            <VisualState.Setters>
-                <Setter Target="Sidebar.Visibility" Value="Visible"/>
-                <Setter Target="ContentArea.(Grid.ColumnSpan)" Value="1"/>
-            </VisualState.Setters>
-        </VisualState>
-    </VisualStateGroup>
-</VisualStateManager.VisualStateGroups>
+<Page xmlns:controls="using:CommunityToolkit.WinUI.Controls" ...>
+    <controls:DockPanel>
+        <CommandBar controls:DockPanel.Dock="Top"/>
+        <TextBlock controls:DockPanel.Dock="Bottom" Text="Ready"/>
+        <Frame x:Name="ContentFrame"/>
+    </controls:DockPanel>
+</Page>
 ```
 
-States are evaluated from most specific to least specific within a group. The `MinWindowWidth="0"` state applies at any width, but `MinWindowWidth="720"` overrides it when the window is 720 pixels or wider. This means you define your narrow (default) layout as the base, then layer wider layouts on top. The approach is similar to mobile-first responsive design in CSS.
+### Choosing a Panel
 
-AdaptiveTrigger responds only to window width by default. For more complex conditions, such as checking a data property or responding to both width and height, you can implement `IStateTrigger` to create a custom trigger. Most common breakpoint scenarios, however, are handled well by AdaptiveTrigger alone.
+| Panel | Use it for | Avoid it for |
+| --- | --- | --- |
+| `Grid` | Page structure, forms with aligned columns, anything that fills the window, layering | Rarely the wrong choice |
+| `StackPanel` | Short runs of controls in one direction | A child that must fill remaining space, or a scrolling list |
+| `RelativePanel` | Layouts that rearrange at different window sizes | Large layouts with long chains of relationships |
+| `Canvas` | Drawing surfaces and coordinate-based content | General UI |
+| `VariableSizedWrapGrid` | A fixed set of tiles, some spanning several cells | Large or data-bound collections, which belong in a list control |
+| Toolkit `WrapPanel` | Items of varying width that should reflow | Very long collections |
+| Toolkit `DockPanel` | Edge-docked chrome around one content area | Anything a star-sized `Grid` already expresses simply |
 
-A common pattern is to define three breakpoints: a narrow layout where panels collapse into a single column, a medium layout where a sidebar appears alongside the main content, and a wide layout where additional panels or expanded controls become visible. Each transition collapses or rearranges named elements using setters, keeping the logic declarative and easy to follow.
-
-For rearrangements that involve changing a child's position within a Grid or RelativePanel, the setter syntax uses parentheses around the attached property name, as shown with `(Grid.ColumnSpan)` in the example above. This is a XAML quirk worth remembering: attached properties in setter targets require the parenthesized form.
+Real layouts nest panels: a `Grid` for the page's regions, a `StackPanel` for a row of buttons inside one of them. Nesting has a cost that matters mainly inside the template a list repeats for every item, where one panel fewer per item adds up. When no panel fits, a custom panel derives from `Panel` and overrides `MeasureOverride` and `ArrangeOverride`, which are its side of the two passes above.
 
 ---
 
-## Choosing the Right Panel
+## Adaptive Layout with VisualStateManager
 
-No single panel fits every situation, but developing a mental model for when to reach for each one makes layout decisions faster and more confident.
+A layout that works at 1400 epx wide can fall apart at 500. Panels handle small changes by stretching and wrapping, but a large change, such as collapsing a side pane or moving a label above its field, needs a different set of property values. `VisualStateManager` holds those sets as named **visual states** and switches between them.
 
-Start with Grid when the layout has a two-dimensional structure, when elements need to be aligned across rows and columns, or when you need precise control over how space is divided. Grid should be your default for any non-trivial composition. It handles most layouts cleanly and scales well as requirements change.
+A visual state contains setters that change properties on named elements. A visual state group holds states that exclude each other, and only one state per group is active at a time. There are two ways to choose it.
 
-Reach for StackPanel when you have a simple, ordered sequence of elements in one direction and do not need any element to fill remaining space proportionally. Button toolbars, vertical form fields, and small groups of related labels are all natural fits.
+### State Triggers
 
-Use RelativePanel when elements need to position themselves relative to specific siblings rather than along a grid structure, or when you need the layout to reorganize based on sibling relationships during VisualState transitions.
+A **state trigger** in markup activates its state when a condition holds. `AdaptiveTrigger` activates when the app's window is at least `MinWindowWidth` wide, at least `MinWindowHeight` tall, or both when both are set.
 
-Reserve Canvas for drawing surfaces and overlays where absolute positioning is inherent to the use case. Avoid it for anything that needs to respond to window size or content changes.
+```xml
+<Page ...>
+    <Grid>
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="640"/>
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="Sidebar.Visibility" Value="Visible"/>
+                        <Setter Target="ContentArea.(Grid.Column)" Value="1"/>
+                        <Setter Target="ContentArea.(Grid.ColumnSpan)" Value="1"/>
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
 
-Use VariableSizedWrapGrid for tile interfaces where items span varying numbers of grid cells and need to wrap as a collection grows.
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <StackPanel x:Name="Sidebar" Visibility="Collapsed"/>
+        <Frame x:Name="ContentArea" Grid.ColumnSpan="2"/>
+    </Grid>
+</Page>
+```
 
-The most effective layouts often nest these panels. A Grid defines the major regions of the window. A StackPanel organizes the controls within a toolbar. A RelativePanel positions a floating action button within a content area. Each panel handles the aspect of layout it is designed for, and the composition does not force any single panel to solve problems it was not built to handle.
+The markup outside the states is the narrow layout, with the sidebar collapsed and the content spanning both columns. At 640 epx and wider the `Wide` state applies its setters. Below that they're removed and the markup's own values return, so the narrow layout needs no state of its own. For another breakpoint, add a state to the group with a larger threshold.
 
-Panels are inexpensive to nest. The measure-arrange cycle handles deeply nested hierarchies without meaningful performance cost in typical UI scenarios, so prefer clarity of structure over attempts to flatten the visual tree. A layout that clearly expresses its structure in markup is easier to maintain and adapt than one that achieves a similar result through a single complex panel with many hacks.
+When several triggers in a group are active at once, a custom trigger outranks an `AdaptiveTrigger` met by its width, which outranks one met by its height. Among triggers that still tie, the first declared wins.
+
+Microsoft's design guidance puts its breakpoints at 640 and 1008 epx, dividing windows into small, medium, and large, and suggests 12 epx gutters in small windows and 24 epx above that. The thresholds compare against the app's window, not the screen, since a window on a large monitor can still be narrow.
+
+Three details trip people up:
+
+- **Where the groups go.** Triggers only run automatically when `VisualStateManager.VisualStateGroups` is set on the root element inside the `Page`, the `Grid` above, not on the `Page` itself.
+- **Attached properties in setters** need parentheses around the attached property's name, as in `ContentArea.(Grid.Column)`.
+- **Collapsed isn't unloaded.** An element with `Visibility="Collapsed"` takes no space but is still created at startup. For large sections shown only in some states, the `x:Load` attribute defers creating them until they're needed.
+
+For a condition `AdaptiveTrigger` can't express, derive a custom trigger from `StateTriggerBase` and call its `SetActive` method when the condition changes. `StateTrigger`, which is active while its `IsActive` property is true, covers the simple case of binding a state to a Boolean.
+
+### GoToState from Code
+
+`VisualStateManager.GoToState(this, "Wide", false)` switches to a state directly. The first argument is a `Control`, usually the `Page` or a `UserControl`, whose root element holds the state groups. The last argument says whether to play any transition animations the states define, and `false` switches instantly. `GoToState` is the older mechanism, and it is still the right one when the condition is something only code knows.
+
+The main case is size that isn't the window's. `AdaptiveTrigger` measures only the window, so a layout inside a resizable pane or one side of a split view can't use it. Make that pane a `UserControl` with its own state groups, handle its `SizeChanged` event, and call `GoToState` on it there. Controls use the same call to switch between their own states, such as pressed and disabled.

@@ -3,618 +3,144 @@ title: "IaC Environment Lifecycle Patterns"
 layout: guide
 category: Infrastructure & Cloud
 subcategory: Infrastructure as Code
-description: "Managing environment recreation, resource discovery, and handling mutable vs. immutable identifiers when recreating infrastructure."
-tags: [infrastructure, iac, environments, lifecycle, practical]
+description: "Keeping references stable when infrastructure is recreated, by knowing which identifiers change and putting DNS names, a parameter store, or service discovery in between, and choosing how to give developers and pull requests their own environments: shared data, dedicated stacks, and ephemeral preview environments, with their costs and cleanup."
+tags: [practical, preview-environments, service-discovery, parameter-store, dns, aws]
 ---
 
-## The Core Challenge
+## What Changes When Infrastructure Is Recreated
 
-When recreating environments (especially dev/test), many resources generate dynamic identifiers that other resources depend on.
+Development and test environments get torn down and rebuilt far more often than production. Resources are also replaced when a change forces it, and copied when each developer or pull request gets its own environment. Each of those events creates new resources, and whether their identifiers change depends on who chose them:
 
-### The Problem
+| Kind of identifier | Examples | After the resource is recreated |
+|---|---|---|
+| **A name the code chooses** | An RDS instance identifier, an S3 bucket name, a queue name | The same, if the code gives the same name. An RDS endpoint is built from the instance identifier and a part fixed per account and region, so deleting and recreating an instance with the same identifier gives the same endpoint |
+| **An ID the provider generates** | EC2 instance IDs, security group IDs, subnet and VPC IDs | New every time |
+| **A DNS name the provider generates** | Load balancer DNS names, CloudFront distribution domains, API Gateway endpoints | New every time |
+| **An ARN** | Any resource's ARN | Follows the name or ID it embeds. Some ARNs, such as a load balancer's or a Secrets Manager secret's, also carry a generated suffix, so they change even when the name stays the same |
 
-**Resources generate unique identifiers each time:**
-- RDS endpoint: `mydb.abc123.us-east-1.rds.amazonaws.com` → `mydb.xyz789.us-east-1.rds.amazonaws.com`
-- ElastiCache configuration endpoints change
-- Load balancer DNS names change
-- Resource ARNs include unique identifiers
+Fixed names look like the easy answer, but they only go so far. Most names must be unique within an account and Region, so two copies of an environment there cannot share one, and per-developer and per-pull-request copies need a suffix. A replacement that creates the new resource before deleting the old one needs both to exist at once. S3 bucket names have a wider scope still, unique across every account in an AWS partition, which is why teams traditionally added a random suffix. S3 now also offers an *account regional namespace*, where a name whose suffix carries the account ID and Region can only ever belong to that account, and AWS recommends it. Every suffix that varies by environment makes the identifier change with the environment.
 
-**Consumers need stable references:**
-- Application configuration
-- IAM policies
-- Parameter Store values
-- Security group rules
-- DNS records
-
-### The Solution: Indirection
-
-**Three patterns for stable references to changing resources:**
-
-**1. DNS Abstraction**
-
-Stable DNS name points to dynamic endpoint:
-
-```hcl
-# DNS record updates automatically when resource recreated
-resource "aws_route53_record" "db" {
-  zone_id = aws_route53_zone.internal.zone_id
-  name    = "db.${var.environment}.internal.example.com"
-  type    = "CNAME"
-  ttl     = 60
-  records = [aws_db_instance.main.address]
-}
-
-# Application always uses: db.dev.internal.example.com
-```
-
-**2. Parameter Store**
-
-Store dynamic values in centralized configuration:
-
-```hcl
-resource "aws_ssm_parameter" "db_endpoint" {
-  name  = "/${var.environment}/database/endpoint"
-  type  = "String"
-  value = aws_db_instance.main.endpoint
-}
-```
-
-Application reads at startup:
-
-```csharp
-var ssmClient = new AmazonSimpleSystemsManagementClient();
-var dbEndpoint = await ssmClient.GetParameterAsync(
-    new GetParameterRequest { Name = $"/{environment}/database/endpoint" }
-);
-```
-
-**3. Service Discovery**
-
-AWS Cloud Map for microservices:
-
-```hcl
-resource "aws_service_discovery_instance" "db" {
-  instance_id = aws_db_instance.main.id
-  service_id  = aws_service_discovery_service.database.id
-
-  attributes = {
-    AWS_INSTANCE_CNAME = aws_db_instance.main.endpoint
-  }
-}
-```
+Anything that holds one of these values breaks when it changes: an application's connection string, another stack's configuration, an IAM policy naming an ARN, a DNS record typed in by hand. The fix is to stop giving consumers the value itself.
 
 ---
 
-## Resource Discovery Patterns
+## Stable Names for Changing Resources
 
-### DNS Abstraction (Recommended for Most Cases)
+The pattern is **indirection**. Consumers refer to a name that never changes, and every apply updates what that name points to. Recreating the resource then changes one pointer, maintained by the same code that created the resource, instead of every consumer's configuration.
 
-**Setup once per environment:**
+### DNS Names
+
+A private DNS zone holds a record with a fixed name for each endpoint, and the IaC code points it at the current resource:
 
 ```hcl
-# Private hosted zone
 resource "aws_route53_zone" "internal" {
   name = "${var.environment}.internal.example.com"
-  vpc { vpc_id = aws_vpc.main.id }
+  vpc {
+    vpc_id = var.vpc_id
+  }
 }
 
-# Stable DNS for database
-resource "aws_route53_record" "database" {
+resource "aws_route53_record" "db" {
   zone_id = aws_route53_zone.internal.zone_id
   name    = "db.${var.environment}.internal.example.com"
   type    = "CNAME"
   ttl     = 60
   records = [aws_db_instance.main.address]
 }
-
-# Stable DNS for cache
-resource "aws_route53_record" "cache" {
-  zone_id = aws_route53_zone.internal.zone_id
-  name    = "cache.${var.environment}.internal.example.com"
-  type    = "CNAME"
-  ttl     = 60
-  records = [aws_elasticache_cluster.main.configuration_endpoint]
-}
 ```
 
-**Application configuration:**
+The application connects to `db.dev.internal.example.com` in every build of the environment. DNS needs no code change in the application, but it has limits. It only covers values reached by hostname, not ARNs, queue URLs, or ports. A private zone answers only inside the networks associated with it. And clients that cache lookups or hold pooled connections keep using the old address until they look the name up again, so a low TTL shortens the window without closing it.
 
-```json
-{
-  "ConnectionStrings": {
-    "Database": "Server=db.dev.internal.example.com;Database=app;...",
-    "Cache": "cache.dev.internal.example.com:6379"
-  }
-}
-```
+### A Parameter Store
 
-**Benefits:**
-- Universal compatibility
-- Low TTL enables fast updates
-- No code changes when infrastructure recreated
-
-### Parameter Store for Complex Configuration
-
-**Hierarchical organization:**
+A parameter store such as [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html){:target="_blank" rel="noopener noreferrer"} or [Azure App Configuration](https://learn.microsoft.com/en-us/azure/azure-app-configuration/overview){:target="_blank" rel="noopener noreferrer"} holds named values that the IaC code writes and consumers read. It handles anything a DNS record can't, and it is also the usual way one layer hands values to another without reading that layer's state. A hierarchy by environment and service keeps the names predictable:
 
 ```
-/{environment}/{service}/{key}
-
-/dev/database/endpoint
-/dev/database/port
-/dev/cache/endpoint
-/global/region
+/dev/orders/database/endpoint
+/dev/orders/queue/url
+/dev/shared/cache/endpoint
 ```
 
-**Write from infrastructure:**
+The value written can be whatever consumers need. An RDS instance's `endpoint` attribute, used below, includes the port, while `address` is the hostname alone:
 
 ```hcl
-resource "aws_ssm_parameter" "db_endpoint" {
-  name  = "/${var.environment}/database/endpoint"
+resource "aws_ssm_parameter" "orders_db_endpoint" {
+  name  = "/${var.environment}/orders/database/endpoint"
   type  = "String"
-  value = aws_db_instance.main.endpoint
-}
-
-resource "aws_ssm_parameter" "cache_endpoint" {
-  name  = "/${var.environment}/cache/config-endpoint"
-  type  = "String"
-  value = aws_elasticache_replication_group.main.configuration_endpoint_address
+  value = aws_db_instance.orders.endpoint
 }
 ```
 
-**Read from application:**
+In .NET, the [`Amazon.Extensions.Configuration.SystemsManager`](https://github.com/aws/aws-dotnet-extensions-configuration){:target="_blank" rel="noopener noreferrer"} package loads a whole path into the application's configuration at startup, here for the environment name the application was started with, stripping the path prefix and handling paging, since the underlying `GetParametersByPath` call returns at most 10 parameters per page.
 
 ```csharp
-public async Task<Dictionary<string, string>> GetConfigAsync(string service)
-{
-    var request = new GetParametersByPathRequest
-    {
-        Path = $"/{_environment}/{service}/",
-        Recursive = true,
-        WithDecryption = true
-    };
-
-    var response = await _ssmClient.GetParametersByPathAsync(request);
-
-    return response.Parameters.ToDictionary(
-        p => p.Name.Split('/').Last(),
-        p => p.Value
-    );
-}
+builder.Configuration.AddSystemsManager($"/{environment}/orders/");
+var endpoint = builder.Configuration["database:endpoint"];
 ```
 
-**Combine with Secrets Manager:**
+Secrets stay in a secrets manager rather than in plain parameters. Parameter Store can pass a Secrets Manager secret through by name under the `/aws/reference/secretsmanager/` prefix, but only by its full name, never through a path. A path load never returns it, so the application adds a separate `AddSystemsManager` call for each secret it reads this way. Access follows the path hierarchy with one trap. A principal allowed to read a path recursively can read every level beneath it, even a parameter an IAM policy explicitly denies, so secrets and sensitive values need their own branch of the tree.
 
-```hcl
-# Secret in Secrets Manager
-resource "aws_secretsmanager_secret" "db_password" {
-  name = "${var.environment}/database/password"
-}
+### Service Discovery
 
-# Store ARN in Parameter Store for discovery
-resource "aws_ssm_parameter" "db_password_arn" {
-  name  = "/${var.environment}/database/password-secret-arn"
-  type  = "String"
-  value = aws_secretsmanager_secret.db_password.arn
-}
-```
+A service registry such as [AWS Cloud Map](https://docs.aws.amazon.com/cloud-map/latest/dg/what-is-cloud-map.html){:target="_blank" rel="noopener noreferrer"}, Consul, or Kubernetes Services tracks instances as they register and deregister, and consumers query it by service name. It suits many instances that come and go on their own, such as tasks scaling in and out, where no IaC apply runs between the change and the lookup. For resources that only change when the IaC code runs, DNS or a parameter store does the same job with fewer moving parts.
 
-### Choosing a Pattern
+### Choosing One
 
-| Use Case | Pattern |
-|----------|---------|
-| Database endpoints | DNS (simple) or RDS Proxy (production) |
-| Cache clusters | DNS + Parameter Store |
-| Complex config (multiple values) | Parameter Store |
-| Microservices | Service Discovery |
-| Simple references | DNS |
-| Mix of static/dynamic config | Parameter Store hierarchy |
+| What consumers need | Pattern |
+|---|---|
+| A hostname, with no change to the application | DNS record |
+| Several values, or values that aren't hostnames (ARNs, queue URLs, ports) | Parameter store |
+| Values another layer's IaC code reads | Parameter store |
+| Instances that scale or move between applies | Service discovery |
+
+Many environments use DNS for endpoints and a parameter store for everything else.
 
 ---
 
-## Layered Lifecycle Management
+## Environments for Developers
 
-Different infrastructure layers have different recreation frequencies.
+Giving each developer somewhere to run their work trades cost and setup effort against isolation. Most teams land on one of three models.
 
-<div class="callout callout--tip">
-<p class="callout__title">Separation Principle</p>
-<p>Separate infrastructure by change frequency. Fast-changing application code should not live in the same state file as slow-changing networking infrastructure. This reduces blast radius and speeds up deployments.</p>
-</div>
+### Shared Data, Personal Application Stacks
 
-### Layer Definitions
+One copy of the network, database, and cache serves every developer. Each developer deploys only the application layer, under their own state and with their name in resource names, and it finds the shared data through the parameter store. A developer can destroy and redeploy their stack freely without touching data.
 
-**Foundation Layer (Weeks to Months)**
-- VPCs, subnets, routing
-- NAT gateways, VPN connections
-- Base security groups
-- Route53 zones
+It is the cheapest model and the quickest to start, but developers share whatever the data holds. A schema change made for one branch reaches everyone. A separate database or schema per developer inside the shared instance restores most of the isolation at little extra cost.
 
-**Data Layer (Days to Weeks)**
-- RDS instances
-- ElastiCache clusters
-- S3 buckets
-- Message queues
+### A Dedicated Environment per Developer
 
-**Application Layer (Hours to Days)**
-- ECS services, Lambda functions
-- Application load balancers
-- Auto-scaling groups
-- IAM roles for applications
+Each developer gets a full copy, including small instances of the database and cache. Schema changes, migrations, and data experiments stay private, and the environment resembles production more closely. The cost is a copy of every stateful resource per developer, and every piece of the environment has to be fully automated, since nobody will build one by hand for each developer.
 
-### Implementation
+### Shared Network, Personal Data Stores
 
-**Separate state files:**
+The expensive, slow-to-create pieces are shared, such as the network and NAT gateways, while each developer gets small copies of the data stores and their own application stack. An S3 bucket can be shared too, with each developer's application writing under its own prefix, recorded in that developer's parameters.
 
-```
-infrastructure/
-├── foundation/
-│   ├── backend.tf     # State: foundation/terraform.tfstate
-│   ├── vpc.tf
-│   └── dns.tf
-├── data/
-│   ├── backend.tf     # State: data/terraform.tfstate
-│   ├── rds.tf
-│   └── elasticache.tf
-└── application/
-    ├── backend.tf     # State: application/terraform.tfstate
-    ├── ecs-service.tf
-    └── lambda.tf
-```
+{% include figure.html id="infra-dev-env-models" %}
 
-**Cross-layer references:**
+### Choosing and Controlling Cost
 
-```hcl
-# data/main.tf - reads from foundation
-data "terraform_remote_state" "foundation" {
-  backend = "s3"
-  config = {
-    bucket = "terraform-state"
-    key    = "${var.environment}/foundation/terraform.tfstate"
-  }
-}
+| Situation | Model |
+|---|---|
+| Stable schema, tight budget, fast application iteration | Shared data |
+| Frequent schema or data-model changes | Dedicated |
+| Production-like behavior required for testing | Dedicated |
+| A large team where full copies cost too much | Shared network, personal data stores |
 
-resource "aws_db_subnet_group" "main" {
-  subnet_ids = data.terraform_remote_state.foundation.outputs.database_subnet_ids
-}
-
-# Write endpoint to Parameter Store for application discovery
-resource "aws_ssm_parameter" "db_endpoint" {
-  name  = "/${var.environment}/database/endpoint"
-  value = aws_db_instance.main.endpoint
-}
-```
-
-**Application discovers via Parameter Store:**
-
-```hcl
-# application/main.tf - no direct Terraform dependency on data layer
-# App reads from Parameter Store at runtime instead
-```
-
-### Benefits
-
-**Faster iteration:**
-- Deploy only the layer that changed (application: ~2 minutes)
-- No need to wait for unchanged layers (data, foundation)
-- Much faster than deploying all layers together (~20+ minutes)
-
-**Reduced blast radius:**
-- Application layer changes don't risk data layer resources
-- Can destroy and recreate application layer without affecting databases
-- Data remains intact during application experimentation
-
-**Independent ownership:**
-- Platform team: Foundation + Data
-- Application teams: Application layer
+Idle development environments are the main cost. Tagging resources with a schedule does nothing by itself. A scheduler, such as AWS's Instance Scheduler solution or a small scheduled function, has to read the tags and stop and start the resources. Stopping has limits too. A stopped RDS instance still bills for its storage and backups, and RDS starts it again automatically after seven days, so a schedule has to stop it again, and an environment unused for weeks is cheaper destroyed and recreated.
 
 ---
 
-## Circular Dependency Resolution
+## Ephemeral Preview Environments
 
-<div class="callout callout--warning">
-<p class="callout__title">Common Gotcha</p>
-<p>Circular dependencies are one of the most common IaC deployment failures. The fix is almost always the same: separate resource creation from rule/policy attachment.</p>
-</div>
+A **preview environment** is a short-lived copy created for one pull request. The pipeline creates it when the pull request opens, updates it on each push, and destroys it when the pull request closes. Reviewers can use the change running, and tests run against real infrastructure instead of a shared environment that other branches are also changing.
 
-### Common Scenarios
+Previews apply everything above at speed:
 
-**Security Groups Referencing Each Other**
+- **Separate state per preview**, such as a state key or workspace named after the pull request number, so destroying one preview cannot touch another.
+- **Unique, short names.** A suffix like `pr-482` keeps copies apart, and it has to fit the tightest name limit in the stack. An AWS load balancer name, for example, allows 32 characters.
+- **A stable way in.** A DNS record such as `pr-482.preview.example.com`, created with the preview, gives reviewers a predictable URL despite the generated load balancer name behind it. A wildcard certificate for `*.preview.example.com` covers every preview's HTTPS without issuing one per pull request.
+- **Shared expensive pieces.** Most previews use the shared-data model, with a database or schema per preview inside a shared instance, because creating a full database for every pull request is slow and costly. Service quotas push the same way. Limits such as VPCs per Region or Elastic IP addresses per Region cap how many full copies can exist at once, whatever the budget.
 
-```hcl
-# ❌ Circular dependency
-resource "aws_security_group" "app" {
-  ingress {
-    security_groups = [aws_security_group.db.id]
-  }
-}
+Teardown is where previews fail. A destroy can stop partway because a bucket still holds objects, a database has deletion protection on, or a final snapshot is required. Preview configurations usually allow these deletions from the start, for example with `force_destroy` on buckets, `skip_final_snapshot` on databases, and deletion protection off, which is safe only because the data is disposable. They have to be in place from the first apply. Terraform acts on the settings recorded in state, so switching them on in the code just before a destroy does nothing until an apply has recorded them.
 
-resource "aws_security_group" "db" {
-  ingress {
-    security_groups = [aws_security_group.app.id]  # Circular!
-  }
-}
-```
-
-**Solution: Separate rules from groups**
-
-```hcl
-# ✅ Create groups first
-resource "aws_security_group" "app" {
-  name = "app-sg"
-}
-
-resource "aws_security_group" "db" {
-  name = "db-sg"
-}
-
-# Then create rules separately
-resource "aws_security_group_rule" "app_to_db" {
-  type                     = "egress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.app.id
-  source_security_group_id = aws_security_group.db.id
-}
-
-resource "aws_security_group_rule" "db_from_app" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.db.id
-  source_security_group_id = aws_security_group.app.id
-}
-```
-
-**IAM Policies Need Resource ARNs Before Resources Exist**
-
-```hcl
-# ✅ Use wildcard patterns
-resource "aws_iam_role_policy" "lambda_s3" {
-  role = aws_iam_role.lambda.id
-
-  policy = jsonencode({
-    Statement = [{
-      Action   = ["s3:GetObject", "s3:PutObject"]
-      Resource = "arn:aws:s3:::${var.environment}-app-*/*"  # Pattern
-    }]
-  })
-}
-
-# Bucket name matches pattern
-resource "aws_s3_bucket" "data" {
-  bucket = "${var.environment}-app-data-${random_id.suffix.hex}"
-}
-```
-
-**Alternative: Tag-based policies**
-
-```hcl
-resource "aws_iam_policy" "app_s3_access" {
-  policy = jsonencode({
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:PutObject"]
-      Resource = "*"
-      Condition = {
-        StringEquals = {
-          "s3:ExistingObjectTag/Environment" = var.environment
-          "s3:ExistingObjectTag/Application" = "myapp"
-        }
-      }
-    }]
-  })
-}
-```
-
-### Resolution Strategies
-
-| Strategy | When to Use |
-|----------|-------------|
-| Wildcard patterns | Resource names follow predictable convention |
-| Separate rules from resources | Security groups, network ACLs |
-| Tag-based policies | Multiple resources with shared access patterns |
-| Two-pass deployment | Complex dependencies unavoidable |
-
----
-
-## Dev Environment Strategies
-
-### Strategy 1: Shared Data Layer
-
-**Structure:**
-
-```
-Shared (persistent):
-- VPC, subnets
-- RDS (dev-shared-db)
-- ElastiCache (dev-shared-cache)
-
-Per-developer (ephemeral):
-- ECS services (dev-alice-app)
-- Lambda functions
-- Load balancers
-```
-
-**Implementation:**
-
-```hcl
-# Shared data (created once, persistent)
-resource "aws_db_instance" "shared_dev" {
-  identifier = "dev-shared-db"
-}
-
-resource "aws_ssm_parameter" "shared_db_endpoint" {
-  name  = "/dev-shared/database/endpoint"
-  value = aws_db_instance.shared_dev.endpoint
-}
-
-# Per-developer app (created/destroyed frequently)
-variable "developer_name" {}
-
-resource "aws_ecs_service" "app" {
-  name = "dev-${var.developer_name}-app"
-  # Reads: /dev-shared/database/endpoint
-}
-```
-
-**Workflow:**
-
-Developers create/destroy only their application layer:
-1. Create workspace or use separate state for their environment
-2. Deploy with developer-specific variables (e.g., developer_name=alice)
-3. Application connects to shared data resources
-4. Can destroy application infrastructure without losing data
-5. Redeploy application layer and reconnects to same shared database
-
-**Best for:** Cost-effective, fast iteration, stable schema
-
-### Strategy 2: Dedicated Environments
-
-**Structure:**
-
-```
-Per-developer (complete isolation):
-- RDS (dev-alice-db)
-- ElastiCache (dev-alice-cache)
-- All application resources
-```
-
-**Implementation:**
-
-```hcl
-variable "developer_name" {}
-
-locals {
-  environment = "dev-${var.developer_name}"
-}
-
-resource "aws_db_instance" "db" {
-  identifier = "${local.environment}-db"
-  instance_class = "db.t3.micro"  # Small for dev
-}
-
-resource "aws_route53_record" "db" {
-  name    = "db.${local.environment}.internal"
-  records = [aws_db_instance.db.endpoint]
-}
-```
-
-**Cost management:**
-
-```hcl
-# Tag resources for automated stop/start
-resource "aws_db_instance" "db" {
-  tags = {
-    Schedule = "dev-business-hours"  # Stop at 6 PM, start at 8 AM
-  }
-}
-```
-
-**Best for:** Schema changes, complete isolation, production parity
-
-### Strategy 3: Hybrid
-
-**Structure:**
-
-```
-Shared foundation:
-- VPC, NAT gateways
-
-Per-developer:
-- RDS (small instance)
-- ElastiCache (minimal)
-- Application resources
-
-Shared with isolation:
-- S3 (shared bucket, isolated prefixes)
-```
-
-**Implementation:**
-
-```hcl
-# Foundation layer (shared)
-resource "aws_vpc" "dev" {
-  cidr_block = "10.0.0.0/16"
-}
-
-# Per-developer data layer
-resource "aws_db_instance" "db" {
-  identifier               = "dev-${var.developer_name}-db"
-  db_subnet_group_name     = data.terraform_remote_state.foundation.outputs.db_subnet_group_name
-}
-
-# S3 with prefix isolation
-resource "aws_ssm_parameter" "data_prefix" {
-  name  = "/dev-${var.developer_name}/s3/data-prefix"
-  value = "developers/${var.developer_name}/"
-}
-```
-
-**Application scopes to prefix:**
-
-```csharp
-var prefix = await GetParameter($"/{environment}/s3/data-prefix");
-var key = $"{prefix}my-file.json";  // developers/alice/my-file.json
-```
-
-**Best for:** Many developers, balanced cost and isolation
-
-### Choosing a Strategy
-
-| Scenario | Recommendation |
-|----------|---------------|
-| Tight budget, stable schema | Shared data layer |
-| Frequent schema changes | Dedicated environments |
-| Many developers (10+) | Hybrid |
-| Short-lived feature branches | Dedicated (ephemeral) |
-| Production parity required | Dedicated |
-| Rapid app iteration | Shared data layer |
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Shared Data Layer</h4>
-<ul>
-<li><strong>Cost:</strong> Lowest; one database for all devs</li>
-<li><strong>Setup:</strong> Simple; deploy once</li>
-<li><strong>Isolation:</strong> Low; shared resources</li>
-<li><strong>Schema Changes:</strong> Difficult; affects everyone</li>
-<li><strong>Best for:</strong> Stable schemas, tight budgets</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Dedicated Environments</h4>
-<ul>
-<li><strong>Cost:</strong> Higher; per-developer resources</li>
-<li><strong>Setup:</strong> Complex; automate everything</li>
-<li><strong>Isolation:</strong> Complete; full separation</li>
-<li><strong>Schema Changes:</strong> Easy; isolated testing</li>
-<li><strong>Best for:</strong> Schema changes, production parity</li>
-</ul>
-</div>
-</div>
-
----
-
-## Key Takeaways
-
-**Use indirection for resource discovery:**
-- DNS provides stable names for dynamic endpoints
-- Parameter Store centralizes configuration
-- Application code never contains infrastructure-specific identifiers
-
-**Layer infrastructure by change frequency:**
-- Separate state files per layer (foundation, data, application)
-- Recreate only what changes
-- Reduced blast radius and faster iteration
-
-**Handle circular dependencies proactively:**
-- Wildcard patterns in IAM policies
-- Separate resource creation from rule association
-- Tag-based policies for flexible access control
-
-**Choose dev environment strategy based on needs:**
-- Shared data: Fast, cost-effective
-- Dedicated: Isolated, safe experimentation
-- Hybrid: Balanced approach
+Pipelines also miss events, so a pull request closed during an outage can leave its preview running indefinitely. A scheduled job that destroys any preview older than a set age, identified by a tag recording when it was created, catches what the pipeline misses.

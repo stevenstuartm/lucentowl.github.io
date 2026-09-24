@@ -1,0 +1,82 @@
+---
+title: "Middleware Around next, and a Short-Circuit"
+kind: dynamic
+system: aspnet-core
+summary: "Code before and after next, and a middleware that skips next."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="amn-title amn-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="amn-title">How middleware wraps the rest of the pipeline, and what a short-circuit skips</title>
+<desc id="amn-desc">Top row: three middleware components and an endpoint. The request passes through each middleware's code before its call to next, reaches the endpoint, and the response returns through each middleware's code after next, in reverse order. Bottom row: the second middleware writes the response and returns without calling next. The third middleware and the endpoint never run, and the response returns through the first middleware's code after next.</desc>
+<style>
+.amn-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.amn-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.amn-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.amn-off { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.amn-div { stroke: var(--color-primary, #1A5F8A); stroke-width: 1; stroke-dasharray: 3 3; }
+.amn-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.amn-n-off { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.amn-n-warn { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.amn-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.amn-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.amn-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.amn-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.amn-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="amn-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="amn-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="amn-hd" x="90" y="40">EVERY MIDDLEWARE CALLS NEXT</text>
+<rect class="amn-box" x="90" y="56" width="170" height="120" rx="6"/>
+<line class="amn-div" x1="90" y1="116" x2="260" y2="116"/>
+<text class="amn-n" x="175" y="80" text-anchor="middle">Middleware 1</text>
+<text class="amn-k" x="175" y="98" text-anchor="middle">code before next</text>
+<text class="amn-k" x="175" y="150" text-anchor="middle">code after next</text>
+<rect class="amn-box" x="310" y="56" width="170" height="120" rx="6"/>
+<line class="amn-div" x1="310" y1="116" x2="480" y2="116"/>
+<text class="amn-n" x="395" y="80" text-anchor="middle">Middleware 2</text>
+<text class="amn-k" x="395" y="98" text-anchor="middle">code before next</text>
+<text class="amn-k" x="395" y="150" text-anchor="middle">code after next</text>
+<rect class="amn-box" x="530" y="56" width="170" height="120" rx="6"/>
+<line class="amn-div" x1="530" y1="116" x2="700" y2="116"/>
+<text class="amn-n" x="615" y="80" text-anchor="middle">Middleware 3</text>
+<text class="amn-k" x="615" y="98" text-anchor="middle">code before next</text>
+<text class="amn-k" x="615" y="150" text-anchor="middle">code after next</text>
+<rect class="amn-px" x="750" y="56" width="170" height="120" rx="6"/>
+<text class="amn-n" x="835" y="110" text-anchor="middle">Endpoint</text>
+<text class="amn-k" x="835" y="128" text-anchor="middle">writes the response</text>
+<path class="amn-flow" d="M30,90 L88,90" marker-end="url(#amn-a)"/>
+<path class="amn-flow" d="M260,90 L308,90" marker-end="url(#amn-a)"/>
+<path class="amn-flow" d="M480,90 L528,90" marker-end="url(#amn-a)"/>
+<path class="amn-flow" d="M700,90 L748,90" marker-end="url(#amn-a)"/>
+<path class="amn-back" d="M750,146 L702,146" marker-end="url(#amn-ag)"/>
+<path class="amn-back" d="M530,146 L482,146" marker-end="url(#amn-ag)"/>
+<path class="amn-back" d="M310,146 L262,146" marker-end="url(#amn-ag)"/>
+<path class="amn-back" d="M90,146 L32,146" marker-end="url(#amn-ag)"/>
+<text class="amn-hd" x="90" y="230">MIDDLEWARE 2 SHORT-CIRCUITS</text>
+<rect class="amn-box" x="90" y="246" width="170" height="120" rx="6"/>
+<line class="amn-div" x1="90" y1="306" x2="260" y2="306"/>
+<text class="amn-n" x="175" y="270" text-anchor="middle">Middleware 1</text>
+<text class="amn-k" x="175" y="288" text-anchor="middle">code before next</text>
+<text class="amn-k" x="175" y="340" text-anchor="middle">code after next</text>
+<rect class="amn-warn" x="310" y="246" width="170" height="120" rx="6"/>
+<text class="amn-n-warn" x="395" y="290" text-anchor="middle">Middleware 2</text>
+<text class="amn-k" x="395" y="308" text-anchor="middle">writes the response</text>
+<text class="amn-k" x="395" y="324" text-anchor="middle">and never calls next</text>
+<rect class="amn-off" x="530" y="246" width="170" height="120" rx="6"/>
+<text class="amn-n-off" x="615" y="300" text-anchor="middle">Middleware 3</text>
+<text class="amn-k" x="615" y="318" text-anchor="middle">never runs</text>
+<rect class="amn-off" x="750" y="246" width="170" height="120" rx="6"/>
+<text class="amn-n-off" x="835" y="300" text-anchor="middle">Endpoint</text>
+<text class="amn-k" x="835" y="318" text-anchor="middle">never runs</text>
+<path class="amn-flow" d="M30,280 L88,280" marker-end="url(#amn-a)"/>
+<path class="amn-flow" d="M260,280 L308,280" marker-end="url(#amn-a)"/>
+<path class="amn-back" d="M310,336 L262,336" marker-end="url(#amn-ag)"/>
+<path class="amn-back" d="M90,336 L32,336" marker-end="url(#amn-ag)"/>
+<path class="amn-flow" d="M90,414 L130,414" marker-end="url(#amn-a)"/>
+<text class="amn-lg" x="138" y="418">request</text>
+<path class="amn-back" d="M230,414 L270,414" marker-end="url(#amn-ag)"/>
+<text class="amn-lg" x="278" y="418">response</text>
+</g>
+</svg>

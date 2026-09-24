@@ -181,7 +181,7 @@ public class PricingCache
 }
 ```
 
-The first request's repository is the only one the cache ever sees. Its `DbContext` is not thread-safe, accumulates tracked entities indefinitely, and keeps a connection it was meant to release at the end of a request. The bug tends to surface only under concurrent load.
+The repository is created by the root provider when the cache is, not by any request, so it is the only one the cache ever sees and it lives until the app shuts down. Its `DbContext` is not thread-safe, accumulates tracked entities indefinitely, and keeps a connection it was meant to release at the end of a request. The bug tends to surface only under concurrent load.
 
 The container detects a singleton that depends on a scoped service when scope validation is on (see [Validation](#validation)). It does not detect a singleton that depends on a transient. That transient is created once, when the singleton is, and lives just as long, with no error or warning. A transient that holds per-operation state or a disposable resource becomes a captive dependency too.
 

@@ -3,892 +3,192 @@ title: "IaC Implementation Patterns"
 layout: guide
 category: Infrastructure & Cloud
 subcategory: Infrastructure as Code
-description: "Modular design, environment separation, layered architecture, and GitOps workflow patterns for organizing IaC code effectively."
-tags: [infrastructure, iac, design-patterns, best-practices, practical]
+description: "How to organize infrastructure code as it grows: modules for reuse, separating environments, layers with their own state, where the code lives and who owns it, breaking circular dependencies, and delivering changes through pull-request workflows and GitOps."
+tags: [practical, terraform, modules, gitops, cicd, atlantis]
 ---
-{% raw %}
 
-## Modular Design
+## Modules
 
-**What it is:** Breaking infrastructure code into reusable, self-contained components (modules).
+### What a Module Is
 
-**Purpose:** Modules encapsulate resources that work together as a logical unit (e.g., a VPC with subnets, a database with backups). They're about **code reuse and abstraction**, not about deployment organization (that's layering).
+A **module** is a set of resource definitions packaged behind input variables and outputs, so other code can create the whole set by calling it with different inputs. It plays the role a function or library plays in application code. A network module might take an address range and a list of availability zones and create the network, its subnets, route tables, and gateways, returning the subnet IDs.
 
-**Think of modules as:** Functions or libraries in programming; reusable building blocks you can use anywhere.
-
-### Benefits
-
-- Code reuse across projects and environments
-- Easier testing (test module once, use everywhere)
-- Encapsulation (module internals hidden, clear interfaces)
-- Standardization (everyone uses same VPC module, for example)
-- Faster development (don't rewrite common patterns)
-
-### Module Structure
-
-**Each module is self-contained:**
-
-```
-modules/
-├── vpc/                    # Reusable VPC module
-│   ├── main.tf            # VPC, subnets, routing, NAT
-│   ├── variables.tf       # Inputs (CIDR, AZ count, etc.)
-│   ├── outputs.tf         # Outputs (VPC ID, subnet IDs)
-│   └── README.md          # How to use this module
-├── rds/                   # Reusable RDS module
-│   ├── main.tf            # RDS instance, subnet group, params
-│   ├── variables.tf       # Inputs (engine, size, etc.)
-│   ├── outputs.tf         # Outputs (endpoint, port)
-│   └── README.md
-└── eks/                   # Reusable EKS module
-    ├── main.tf            # EKS cluster, node groups
-    ├── variables.tf
-    ├── outputs.tf
-    └── README.md
-```
-
-### Using Modules
-
-**Modules are consumed by layers (foundation, platform, etc.):**
+Every tool has the idea under a different name: Terraform and OpenTofu modules, [Bicep modules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/modules){:target="_blank" rel="noopener noreferrer"}, CloudFormation modules and nested stacks, AWS CDK constructs, and Pulumi component resources. A call to a shared Terraform module looks like this:
 
 ```hcl
-# foundation/networking.tf
-# Foundation layer USES the VPC module
-module "vpc" {
-  source = "../modules/vpc"
+module "network" {
+  source  = "app.terraform.io/example-org/network/aws"
+  version = "2.3.0"
 
-  cidr_block     = "10.0.0.0/16"
-  azs            = ["us-east-1a", "us-east-1b", "us-east-1c"]
-  environment    = "prod"
-  enable_nat     = true
-}
-
-# platform/shared-database.tf
-# Platform layer USES the RDS module
-module "shared_db" {
-  source = "../modules/rds"
-
-  vpc_id         = data.terraform_remote_state.foundation.outputs.vpc_id
-  subnet_ids     = data.terraform_remote_state.foundation.outputs.database_subnet_ids
-  engine         = "postgres"
-  instance_class = "db.r5.xlarge"
-  multi_az       = true
+  cidr_block         = "10.0.0.0/16"
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }
 ```
 
-### Module Best Practices
+### Designing the Interface
 
-**1. Single Responsibility**
-- Each module should do one thing well
-- Avoid monolithic modules
-- Keep modules focused and cohesive
+A module earns its place by making decisions its callers would otherwise repeat. A good one wraps resources that belong together, bakes in the organization's defaults such as encryption and logging being on, and exposes only the inputs callers genuinely vary. Inputs can validate themselves, so a bad value fails at plan time with a clear message instead of partway through an apply:
 
-**2. Well-Defined Interfaces**
 ```hcl
-# variables.tf - Clear inputs
 variable "environment" {
-  type        = string
-  description = "Environment name (dev, staging, prod)"
+  type = string
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be dev, staging, or prod."
-  }
-}
-
-# outputs.tf - Clear outputs
-output "vpc_id" {
-  description = "The ID of the VPC"
-  value       = aws_vpc.main.id
-}
-```
-
-**3. Version Modules**
-```hcl
-# Use versioned modules
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "5.1.2"  # Pin to specific version
-}
-```
-
-**4. Document Modules**
-
-Each module should have a README.md with:
-- Purpose and description
-- Usage example
-- Input variables table
-- Output values table
-
-**Example README.md:**
-
-```
-# VPC Module
-
-Creates a VPC with public and private subnets across multiple AZs.
-
-## Usage
-
-    module "vpc" {
-      source = "./modules/vpc"
-
-      cidr_block  = "10.0.0.0/16"
-      environment = "production"
-    }
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|----------|
-| cidr_block | VPC CIDR block | string | n/a | yes |
-| environment | Environment name | string | n/a | yes |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| vpc_id | The ID of the VPC |
-| private_subnet_ids | List of private subnet IDs |
-```
-
----
-
-## Environment Separation
-
-**What it is:** Managing separate infrastructure configurations for different environments (dev, staging, production).
-
-### Approaches
-
-**Approach 1: Directory Structure**
-
-```
-infrastructure/
-├── environments/
-│   ├── dev/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── terraform.tfvars
-│   ├── staging/
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── terraform.tfvars
-│   └── production/
-│       ├── main.tf
-│       ├── variables.tf
-│       └── terraform.tfvars
-└── modules/
-    └── ...
-```
-
-**Advantages:**
-- Clear separation
-- Different configurations per environment
-- Easy to see all environments
-
-**Disadvantages:**
-- Code duplication
-- Must update all environments for changes
-
-**Approach 2: Workspaces (Terraform)**
-
-```bash
-# Create workspaces
-terraform workspace new dev
-terraform workspace new staging
-terraform workspace new production
-
-# Switch workspace
-terraform workspace select production
-
-# Deploy
-terraform apply
-```
-
-```hcl
-# Use workspace in configuration
-resource "aws_instance" "web" {
-  instance_type = terraform.workspace == "production" ? "t3.large" : "t3.micro"
-
-  tags = {
-    Environment = terraform.workspace
+    error_message = "environment must be dev, staging, or prod."
   }
 }
 ```
 
-**Advantages:**
-- Single codebase
-- Easy to switch environments
-- Less duplication
+Two shapes tend to go wrong. A module that wraps a single resource and passes every argument through adds a layer without making any decision, and HashiCorp advises against writing them. A module that nests other modules several levels deep hides what gets created, and a caller who needs to change one setting at the bottom has to thread a new input through every level above it. HashiCorp recommends keeping the module tree flat and composing instead. The configuration that calls the modules wires one module's outputs into the next one's inputs, such as passing the network module's subnet IDs to a database module, so each module stays usable on its own.
 
-**Disadvantages:**
-- All environments share same code
-- Harder to apply different configurations
-- Risk of accidental changes to wrong environment
+### Versioning Modules
 
-**Approach 3: Separate Repositories**
+A shared module is a dependency like any library, so callers pin a version and upgrade deliberately. In Terraform, the `version` argument works only for modules from a registry. A module fetched from Git is pinned with a `ref` in its source address instead, such as `?ref=v2.3.0`. A tag can be moved to a different commit, so pinning to a commit SHA is the stricter choice. Terraform's dependency lock file, `.terraform.lock.hcl`, records provider versions but not module versions, so the pin in the module call is the only thing holding a module still.
 
-```
-infrastructure-dev/
-infrastructure-staging/
-infrastructure-production/
-```
-
-**Advantages:**
-- Complete isolation
-- Different access controls per environment
-- No risk of cross-environment changes
-
-**Disadvantages:**
-- Maximum code duplication
-- Hard to keep synchronized
-- More repositories to manage
-
-### Recommended Approach
-
-**Hybrid: Directories + Separate State**
-
-```
-infrastructure/
-├── modules/              # Shared modules
-│   └── ...
-├── environments/
-│   ├── dev/
-│   │   ├── backend.tf   # Dev state config
-│   │   ├── main.tf      # Uses modules
-│   │   └── dev.tfvars   # Dev-specific values
-│   ├── staging/
-│   │   ├── backend.tf
-│   │   ├── main.tf
-│   │   └── staging.tfvars
-│   └── production/
-│       ├── backend.tf
-│       ├── main.tf
-│       └── production.tfvars
-```
-
-**Benefits:**
-- Shared modules (DRY)
-- Separate state files (isolation)
-- Environment-specific configurations
-- Clear structure
+Pinning is also what makes promotion work. Each environment names the module version it runs, and a change reaches production by raising that version in dev, then staging, then production, each step reviewed and planned on its own.
 
 ---
 
-## Layered Architecture
+## Separating Environments
 
-<div class="callout callout--note">
-<p class="callout__title">Modules vs. Layers</p>
-<p><strong>Modules</strong> = Reusable code (VPC module, RDS module)</p>
-<p><strong>Layers</strong> = Deployment units that USE modules (foundation layer uses VPC module)</p>
-<p>Modules are about code reuse. Layers are about deployment organization and team ownership.</p>
-</div>
+Every environment should run the same code with different inputs, and each needs its own state so that applying to one cannot touch another. Environments that live in separate cloud accounts or subscriptions also get separate credentials, which limits what a mistake in dev can reach. The common layouts trade isolation against duplication:
 
-**What it is:** Organizing infrastructure into separate deployment layers based on ownership and change frequency.
+| Layout | How it works | Suits | Watch for |
+|---|---|---|---|
+| **A directory per environment** | Each environment has a small *root configuration*, the directory Terraform runs `plan` and `apply` in, with its own backend and variable values, calling shared modules | Most teams | Some repetition across the root files, and each environment is updated separately |
+| **Terraform CLI workspaces** | One directory and one backend, with a separate state per workspace | Short-lived copies for testing a change | All workspaces share the backend and its credentials, so HashiCorp calls them unsuitable where environments need separate access. Applying to the wrong workspace is one forgotten command away |
+| **A repository per environment** | Full copies of the code | Rarely a good fit | The copies drift apart, and promoting a change means porting it |
+| **Tool-native environments** | Pulumi stacks with per-stack configuration, HCP Terraform workspaces (each with its own configuration, variables, and state), or HCP Terraform Stacks, which deploy one configuration to several environments as separate *deployments* | Teams already on that tool or platform | Ties the layout to the platform |
 
-**Purpose:** Layers are about **deployment organization and team ownership**, not code reuse (that's modules). Each layer is deployed independently and has its own state.
+[Terragrunt](https://terragrunt.gruntwork.io/){:target="_blank" rel="noopener noreferrer"}, a wrapper around Terraform and OpenTofu, is another common answer to the repetition in the directory-per-environment layout. It generates the backend and shared inputs for each environment directory from one definition.
 
-**Think of layers as:** Deployment units owned by different teams with different release schedules.
+Whatever the layout, environment differences belong in input values, not in conditionals on the environment's name. A resource that reads `terraform.workspace == "production" ? "t3.large" : "t3.micro"` hides the difference inside the code, where a reviewer comparing environments has to hunt for it. An `instance_type` variable set per environment puts every difference in one visible place.
 
-**How layers and modules work together:**
-- **Modules** = Reusable code (VPC module, RDS module)
-- **Layers** = Deployment units that USE modules (foundation layer uses VPC module)
+---
 
-### Why Layer?
+## Layering Deployments
 
-- Faster deployments (deploy only the layer that changed, not everything)
-- Reduced blast radius (change to application layer doesn't risk foundation)
-- Clear dependencies (application depends on platform, platform depends on foundation)
-- Easier rollbacks (rollback one layer without affecting others)
-- Better team ownership (platform team owns platform layer, app teams own application layer)
+### Modules Are Code, Layers Are Deployment Units
 
-### Common Layers
+Modules organize code for reuse. **Layers** organize deployment. A layer is a root configuration with its own state that is planned and applied on its own, usually calling several modules. Splitting infrastructure into layers keeps the unit of locking and the unit of access small, so an application deploy does not wait on a network change, and the team deploying applications cannot read or break the network's state.
 
-**Layer 1: Foundation (rarely changes, managed by platform team)**
-- VPCs and core networking (subnets, routing tables, NAT gateways)
-- Transit gateways and VPN connections
-- Base DNS zones
-- Core security groups
-- Network ACLs
+Layers usually follow how often things change and who owns them:
 
-**Layer 2: Platform (changes occasionally, managed by platform/DevOps)**
-- Shared databases and data stores (not app-specific)
-- Message queues and event buses
-- Container registries
-- Kubernetes/ECS clusters
-- Shared load balancers
-- Monitoring and logging infrastructure
-- Shared caching layers
+| Layer | Typical contents | Changes | Usually owned by |
+|---|---|---|---|
+| **Foundation** | Networks, subnets, routing, VPN and transit connections, DNS zones, baseline security groups | Rarely | Platform or network team |
+| **Shared platform** | Container clusters, shared databases, message buses, container registries, logging and monitoring, CI/CD tooling | Occasionally | Platform team |
+| **Application** | A service's compute, its queues, its load balancer, its IAM roles, its scaling settings | Often | The application's team |
 
-**Layer 3: DevOps (changes occasionally, managed by DevOps team)**
-- Source code repositories
-- CI/CD pipelines
-- Artifact stores
-- Build agents
-- Secret management infrastructure
-- Deployment automation tools
+Placement follows ownership rather than resource type. A database shared by many services sits in the shared platform layer, while a database only one service uses belongs with that service. Stateful resources an application owns are often split into their own layer, so the application layer can be torn down and rebuilt without any plan touching the data.
 
-**Layer 4: Application (changes frequently, managed by app teams)**
-- Application-specific compute (EC2, Lambda, containers)
-- Application-owned databases
-- Application-specific queues/topics
-- Auto-scaling configurations
-- Application load balancers
-- Application-specific IAM roles
-- Feature flags and config
+### Dependencies Flow One Way
 
-**Key principle:** Layers reflect **organizational ownership and change frequency**, not just resource types. A database might be in Platform (shared) or Application (app-owned) depending on who manages it.
+Lower layers publish outputs and higher layers consume them. The foundation exports subnet IDs, for example, and the platform layer places a cluster in those subnets. A higher layer never feeds a lower one, which is what lets each be applied independently and in order.
 
-### Implementation
+Terraform can read another layer's outputs directly with the `terraform_remote_state` data source, but that requires read access to the lower layer's whole state. Many teams instead have each layer publish the values others need to a parameter store and have consumers look them up there.
 
-```
-infrastructure/
-├── foundation/
-│   ├── networking.tf
-│   ├── vpc.tf
-│   └── dns.tf
-├── platform/
-│   ├── shared-databases.tf
-│   ├── message-queues.tf
-│   ├── container-registry.tf
-│   └── monitoring.tf
-├── devops/
-│   ├── pipelines.tf
-│   ├── artifact-stores.tf
-│   └── repositories.tf
-└── applications/
-    ├── webapp/
-    │   ├── compute.tf
-    │   ├── database.tf
-    │   └── load-balancer.tf
-    └── api/
-        ├── lambda.tf
-        └── api-gateway.tf
-```
+Layers have costs. Each one is another state, another pipeline, and another thing to apply in the right order. A change that spans layers, such as a new subnet that a new service needs, takes two applies, lower layer first, and removing it runs in reverse. Renaming or removing an output breaks every layer that reads it. A small estate with one team often does better with two layers, or one, than with a structure copied from a large organization.
 
-### Dependency Management
+---
 
-**Use outputs and data sources:**
+## Where the Code Lives
+
+A common split puts application-layer code in the application's own repository and keeps the shared layers in a platform repository. The service's infrastructure then changes in the same pull request as the code that needs it, the application team deploys both without filing a ticket, and a rollback of the application can carry its infrastructure with it. The shared layers stay with the team that has the networking and security expertise, under stricter review, because a change there reaches every application.
+
+These questions settle where a given resource belongs:
+
+| Question | Points to the application repo | Points to the platform repo |
+|---|---|---|
+| Who uses it? | One application | Several applications |
+| When does it change? | With the application's releases | On its own, rarely |
+| What breaks if a change goes wrong? | That application | Every application |
+| Who can safely change it? | The application team | Specialists in networking or security |
+
+Handing application teams their own infrastructure code works only if their pipeline's permissions are limited to their own resources, with organization-wide guardrails catching anything that slips past review.
+
+---
+
+## Breaking Circular Dependencies
+
+A tool builds its dependency graph from references between definitions. When two resources each refer to an attribute of the other, the graph has a cycle and there is no order to create them in. Terraform stops with a cycle error, and CloudFormation rejects the template.
+
+The classic case is two security groups that allow traffic from each other. If each group's rules are written inline and name the other group, neither can be created first. The fix is to create both groups with no rules, then attach the rules as separate resources, which depend on both groups but on nothing that depends on them.
+
+{% include figure.html id="infra-dependency-cycle" %}
+
+In Terraform, the rule becomes its own resource:
 
 ```hcl
-# Layer 1 (foundation/outputs.tf)
-output "vpc_id" {
-  value = aws_vpc.main.id
+resource "aws_security_group" "app" {
+  name   = "app"
+  vpc_id = var.vpc_id
 }
 
-# Layer 2 (platform/main.tf)
-data "terraform_remote_state" "foundation" {
-  backend = "s3"
-  config = {
-    bucket = "terraform-state"
-    key    = "foundation/terraform.tfstate"
-    region = "us-east-1"
-  }
+resource "aws_security_group" "db" {
+  name   = "db"
+  vpc_id = var.vpc_id
 }
 
-resource "aws_eks_cluster" "main" {
-  vpc_config {
-    subnet_ids = data.terraform_remote_state.foundation.outputs.private_subnet_ids
-  }
+resource "aws_vpc_security_group_ingress_rule" "db_from_app" {
+  security_group_id            = aws_security_group.db.id
+  referenced_security_group_id = aws_security_group.app.id
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
 }
 ```
+
+CloudFormation uses the same move with separate `AWS::EC2::SecurityGroupIngress` resources. The pattern generalizes: separate the attachment (a rule, a policy, a permission) from the resources it connects. When no attachment resource exists, a definition can build the other resource's name or identifier from a naming convention instead of referring to it, at the cost of an access grant that matches anything following the convention.
+
+Cycles between layers have a different fix. If two layers each need an output from the other, the resource they share usually belongs in a lower layer that both read. Applying in two passes, first creating resources and then connecting them, works as a last resort, but it leaves a window where the infrastructure is half-built.
 
 ---
 
-## IaC Code Ownership
+## Delivering Changes Through Pull Requests
 
-**The question:** Should application-specific IaC live with the application code or in a centralized infrastructure repository?
+The usual workflow runs a plan when a pull request opens, posts the plan to the pull request for review, and applies only after approval. Checks such as formatting, validation, and security scans run alongside the plan, some of them against the plan's output. Production applies usually sit behind an approval gate, such as a CI environment that only named reviewers can approve deployments to.
 
-**The answer:** Hybrid approach based on layers; application teams own application layer IaC, DevOps owns foundation/platform/devops layers.
+A plan is not read-only from a security point of view. It runs provider and data-source code with the pipeline's credentials, so a pipeline that plans pull requests from forks or untrusted contributors can leak those credentials. Such pull requests should plan with restricted credentials, or wait for a maintainer to trigger the plan.
 
-### Option 1: IaC With Application Code (Application Layer Only)
+The main design choice is when the apply happens.
 
-**What belongs with the app:**
+- **Apply after merge.** A pipeline on the main branch applies whatever was merged. The main branch shows what was approved, but an apply that fails after merge needs a new pull request to fix. Terraform can apply the exact plan that was reviewed if the pipeline saves it as a file, and it refuses a saved plan whose state has changed since the plan was made. [HCP Terraform](https://developer.hashicorp.com/terraform/cloud-docs/vcs){:target="_blank" rel="noopener noreferrer"} works this way when connected to a repository. It runs *speculative* plans on pull requests, which show the change but can never be applied, and a merge starts a run whose apply waits for confirmation unless auto-apply is on.
+- **Apply before merge.** [Atlantis](https://www.runatlantis.io/){:target="_blank" rel="noopener noreferrer"} is the common example. It plans when a pull request opens, locks that directory and workspace against other pull requests until this one is merged or closed, and applies from the branch on a comment. The branch is merged after the apply succeeds, so the main branch reflects what is deployed, and a failed apply can be fixed and retried in the same pull request.
 
-```
-my-payment-service/
-├── src/
-│   └── ... (application code)
-├── Dockerfile
-├── infrastructure/
-│   ├── compute.tf         # Lambda/ECS/EC2 for this app
-│   ├── database.tf        # App-owned database
-│   ├── queue.tf           # App-specific queue
-│   └── api-gateway.tf     # App-specific API Gateway
-└── .github/workflows/
-    └── deploy.yml         # Deploys both app and infrastructure
-```
-
-**Resources that belong here:**
-- Application-specific compute (Lambda functions, ECS tasks, EC2 instances)
-- Application-owned databases (not shared with other apps)
-- Application-specific queues/topics
-- Auto-scaling configurations
-- Application load balancers
-- Application-specific IAM roles
-
-**Why this works:**
-- **Deployment coupling**: App code and infrastructure change together
-- **Team autonomy**: App team deploys without waiting for DevOps
-- **Versioning**: Infrastructure version matches application version
-- **Rollback simplicity**: Roll back app AND its infrastructure together
-- **Clear ownership**: App team owns everything related to their service
-
-**Example deployment:**
-
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy Payment Service
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: production  # Requires manual approval
-
-    steps:
-      - uses: actions/checkout@v3
-
-      # Deploy infrastructure first
-      - name: Deploy Infrastructure
-        run: |
-          cd infrastructure
-          terraform init
-          terraform apply -auto-approve
-        env:
-          AWS_ROLE_ARN: ${{ secrets.PAYMENTS_DEPLOYMENT_ROLE }}
-
-      # Then deploy application
-      - name: Deploy Application
-        run: |
-          docker build -t payments:${{ github.sha }} .
-          docker push payments:${{ github.sha }}
-          # Deploy to infrastructure created above
-```
-
-### Option 2: Centralized IaC Repository (Foundation, Platform, DevOps Layers)
-
-**What stays centralized:**
-
-```
-platform-infrastructure/
-├── foundation/
-│   ├── networking.tf      # VPCs, subnets, routing
-│   ├── dns.tf             # Route 53 zones
-│   └── security-groups.tf # Base security groups
-├── platform/
-│   ├── shared-database.tf # Shared RDS instance
-│   ├── message-bus.tf     # Shared EventBridge/SQS
-│   ├── container-registry.tf  # ECR
-│   └── monitoring.tf      # CloudWatch, X-Ray
-└── devops/
-    ├── pipelines.tf       # CodePipeline
-    ├── repositories.tf    # CodeCommit
-    └── artifact-stores.tf # S3 for artifacts
-```
-
-**Resources that stay centralized:**
-- Foundation layer: VPCs, networking, DNS, core security groups
-- Platform layer: Shared databases, message queues, container registries, monitoring
-- DevOps layer: CI/CD pipelines, repositories, artifact stores
-
-**Why centralized:**
-- **Shared across applications**: Many apps use the same VPC, shared database, etc.
-- **Requires deep expertise**: Network architecture, security architecture
-- **High blast radius**: Changes affect all applications
-- **Strict change control**: Needs architecture review and approval
-
-### Security Controls That Make This Safe
-
-**The concern:** "Won't app teams abuse permissions if they control IaC?"
-
-**The answer:** No, because of multiple layers of preventive controls:
-
-**1. IAM Permission Boundaries**
-
-Limit what app teams can create even with their deployment role:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllowApplicationLayerOnly",
-      "Effect": "Allow",
-      "Action": "*",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "aws:RequestTag/layer": "application",
-          "aws:RequestTag/domain": "payments"
-        }
-      }
-    },
-    {
-      "Sid": "DenyFoundationChanges",
-      "Effect": "Deny",
-      "Action": [
-        "ec2:DeleteVpc",
-        "ec2:DeleteSubnet",
-        "ec2:ModifyVpcAttribute",
-        "ec2:DeleteRouteTable"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-**2. Service Control Policies (SCPs)**
-
-Enforce tagging at organization level:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "RequireTagsOnCreate",
-      "Effect": "Deny",
-      "Action": [
-        "ec2:RunInstances",
-        "rds:CreateDBInstance",
-        "lambda:CreateFunction"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "Null": {
-          "aws:RequestTag/environment": "true",
-          "aws:RequestTag/layer": "true",
-          "aws:RequestTag/domain": "true"
-        }
-      }
-    }
-  ]
-}
-```
-
-**3. CloudFormation Hooks**
-
-Validate templates before deployment:
-
-```yaml
-RequireTagsHook:
-  Type: AWS::CloudFormation::Hook
-  Properties:
-    TypeName: AWSSamples::RequireTags::Hook
-    TargetStacks: ALL
-    FailureMode: FAIL
-    Properties:
-      RequiredTags:
-        - environment
-        - layer
-        - domain
-```
-
-**4. Approval Gates**
-
-Require manual approval for production:
-
-```yaml
-environment: production
-# GitHub/GitLab requires approval from designated reviewers
-```
-
-**5. AWS Config Rules**
-
-Detect non-compliant resources after creation:
-
-```yaml
-ResourcesManagedByTeam:
-  Type: AWS::Config::ConfigRule
-  Properties:
-    ConfigRuleName: resources-have-required-tags
-    Source:
-      Owner: AWS
-      SourceIdentifier: REQUIRED_TAGS
-    InputParameters:
-      tag1Key: environment
-      tag2Key: layer
-      tag3Key: domain
-```
-
-### Recommended Structure
-
-**Hybrid approach combining both:**
-
-```
-# Application repos (owned by app teams)
-payment-service/
-├── src/
-├── infrastructure/          # Application layer only
-│   ├── compute.tf
-│   ├── database.tf
-│   └── queue.tf
-└── .github/workflows/deploy.yml
-
-identity-service/
-├── src/
-├── infrastructure/          # Application layer only
-│   ├── lambda.tf
-│   ├── api-gateway.tf
-│   └── dynamodb.tf
-└── .github/workflows/deploy.yml
-
-# Platform repo (owned by DevOps/Platform team)
-platform-infrastructure/
-├── foundation/              # Foundation layer
-│   ├── networking.tf
-│   ├── dns.tf
-│   └── security-groups.tf
-├── platform/                # Platform layer
-│   ├── shared-database.tf
-│   ├── message-bus.tf
-│   └── monitoring.tf
-└── devops/                  # DevOps layer
-    ├── pipelines.tf
-    ├── repositories.tf
-    └── artifact-stores.tf
-```
-
-### Decision Matrix
-
-Use this to decide where IaC should live:
-
-| Question | With App Code | Centralized |
-|----------|---------------|-------------|
-| Used by only one application? | ✅ | ❌ |
-| Shared across multiple apps? | ❌ | ✅ |
-| Changes frequently with app? | ✅ | ❌ |
-| Rarely changes (weeks/months)? | ❌ | ✅ |
-| App team has expertise? | ✅ | ❌ |
-| Requires deep infra expertise? | ❌ | ✅ |
-| Blast radius = single app? | ✅ | ❌ |
-| Blast radius = all apps? | ❌ | ✅ |
-
-**Examples:**
-
-- Lambda function for one app → **With app code**
-- VPC used by all apps → **Centralized**
-- App-owned DynamoDB table → **With app code**
-- Shared RDS instance → **Centralized**
-- Application load balancer → **With app code**
-- Container registry (ECR) → **Centralized**
-
-### Benefits of Hybrid Approach
-
-**For application teams:**
-- Deploy infrastructure and code together
-- No waiting for DevOps tickets
-- Full ownership of their domain
-- Faster iteration cycles
-- Clear responsibility boundaries
-
-**For DevOps/Platform team:**
-- Focus on shared infrastructure
-- Enforce standards via guardrails
-- Manage high-impact changes carefully
-- Provide self-service capabilities
-- Reduce ticket queue
-
-**For the organization:**
-- Faster time to market
-- Clear ownership and accountability
-- Reduced bottlenecks
-- Standards enforced via automation
-- Auditability (all changes in Git)
+Reverting a merged change and applying again rolls the infrastructure back to the previous definitions. It does not bring back anything the change deleted, such as data in a replaced database.
 
 ---
 
-## GitOps Workflow
+## GitOps
 
-**What it is:** Using Git as the single source of truth for infrastructure state and changes.
+**GitOps**, as defined by the CNCF's [OpenGitOps](https://opengitops.dev/){:target="_blank" rel="noopener noreferrer"} project, has four principles:
 
-### Core Principles
+1. **Declarative.** The desired state is expressed declaratively.
+2. **Versioned and immutable.** It is stored in a way that enforces immutability and keeps a complete version history, as Git does.
+3. **Pulled automatically.** Software agents pull the desired state from that source.
+4. **Continuously reconciled.** The agents keep observing the actual state and applying the desired state.
 
-1. **Declarative:** Infrastructure defined declaratively
-2. **Versioned:** All changes in Git
-3. **Immutable:** Don't modify running infrastructure directly
-4. **Automated:** Changes automatically applied from Git
-5. **Auditable:** Full history in Git
+The last two separate GitOps from the pull-request workflows above. A CI pipeline or Atlantis *pushes* a change when an event such as a merge or a pull-request comment triggers it, using credentials the pipeline holds. Between runs nothing reconciles, and drift shows up only if a scheduled plan or drift check is set up. A GitOps agent *pulls* from Git on its own schedule and keeps comparing what is running with what Git declares. Whether it also puts back a manual change depends on the tool and its settings. Flux re-applies plain manifests on every interval, while Argo CD only reports the difference unless automated sync with self-healing is turned on.
 
-### Workflow
+{% include figure.html id="infra-push-pull-delivery" %}
 
-```
-Developer
-    ↓
-Create branch
-    ↓
-Make changes to IaC
-    ↓
-Commit and push
-    ↓
-Create Pull Request
-    ↓
-Automated checks (lint, validate, plan)
-    ↓
-Code Review
-    ↓
-Merge to main
-    ↓
-CI/CD Pipeline
-    ↓
-Automated deployment
-    ↓
-Infrastructure Updated
-```
+[Argo CD](https://argo-cd.readthedocs.io/){:target="_blank" rel="noopener noreferrer"} and [Flux](https://fluxcd.io/){:target="_blank" rel="noopener noreferrer"} are the standard agents, built for Kubernetes. Cloud infrastructure reaches GitOps through them in two ways. The first uses Kubernetes *operators*, controllers that extend Kubernetes to manage something outside it. [Crossplane](https://www.crossplane.io/){:target="_blank" rel="noopener noreferrer"}, AWS Controllers for Kubernetes, and Azure Service Operator represent cloud resources as Kubernetes objects. The GitOps agent applies those objects, and the operator creates and corrects the cloud resources behind them, holding the cloud credentials to do so. The second is the [Tofu Controller](https://flux-iac.github.io/tofu-controller/){:target="_blank" rel="noopener noreferrer"}, a community controller for Flux that runs Terraform or OpenTofu configurations on a reconcile loop.
 
-### Implementation
-
-**CI/CD Pipeline Stages:**
-
-**On Pull Request:**
-1. Checkout code
-2. Initialize IaC tool
-3. Validate syntax
-4. Generate plan
-5. Comment plan output on PR for review
-6. Run security/compliance scans
-
-**On Merge to Main:**
-1. Checkout code
-2. Initialize IaC tool
-3. Generate plan (verify it matches approved PR plan)
-4. Require approval gate for production changes
-5. Apply infrastructure changes
-6. Report results
-
-**Key implementation considerations:**
-- Trigger pipelines only when infrastructure code changes
-- Use separate jobs for plan vs. apply (plan runs on PR, apply runs on merge)
-- Store IaC tool state remotely, not in pipeline
-- Use environment protection rules for production deployments
-- Implement approval gates before applying to sensitive environments
-
-### Benefits
-
-**Audit Trail:**
-- Every change tracked in Git
-- Who made what change and when
-- Easy to see change history
-
-**Easy Rollback:**
-- Revert Git commits to previous infrastructure version
-- Push the revert commit
-- CI/CD automatically applies the rollback
-- Full audit trail of what was rolled back and why
-
-**Collaborative:**
-- Code review process enforced
-- Knowledge sharing through PRs
-- Documentation in commit messages
-
-### Tools
-
-**[Atlantis](https://www.runatlantis.io/){:target="_blank" rel="noopener noreferrer"}:**
-- Terraform automation via pull requests
-- Plan on PR, apply on merge
-- Locks to prevent conflicts
-- Self-hosted GitOps for Terraform
-
-**[Flux](https://fluxcd.io/){:target="_blank" rel="noopener noreferrer"} / [ArgoCD](https://argo-cd.readthedocs.io/){:target="_blank" rel="noopener noreferrer"}:**
-- GitOps for Kubernetes
-- Continuous deployment from Git
-- Automatic drift detection and reconciliation
+The pull model moves production credentials out of the CI system and into the cluster that runs the agent or operator, and it can correct drift without a pull request. It also needs a cluster to host those components. Where it reverts manual changes, it will also revert an emergency fix made by hand unless someone pauses reconciliation first, so a team adopting it needs a *break-glass* procedure, an agreed way to bypass the normal path during an incident.
 
 ---
 
-## Best Practices
+## What to Commit
 
-### Code Organization
+Commit the code, the modules, each environment's non-secret variable values, and `.terraform.lock.hcl`. HashiCorp recommends committing the lock file so provider upgrades go through review like any other change. Leave out the `.terraform` directory Terraform downloads providers and modules into, state files, crash logs, saved plan files, which can hold sensitive values, and any variable file that holds a secret:
 
-**1. Consistent Structure**
 ```
-infrastructure/
-├── README.md
-├── .gitignore
-├── modules/
-├── environments/
-└── scripts/
-```
-
-**2. Naming Conventions**
-```hcl
-# Resources: <project>-<environment>-<resource>
-resource "aws_s3_bucket" "data" {
-  bucket = "myapp-prod-s3-data"
-}
-
-# Variables: lowercase with underscores
-variable "instance_type" {
-  type = string
-}
-```
-
-**3. DRY (Don't Repeat Yourself)**
-- Use modules for repeated patterns
-- Use variables for environment differences
-- Use locals for computed values
-
-**4. Documentation**
-- README in each directory
-- Comments for complex logic
-- Variable descriptions
-- Output descriptions
-
-### Change Management
-
-**1. Always Review Changes**
-- Use `terraform plan` before `apply`
-- Review plan output carefully
-- Use change sets (CloudFormation)
-
-**2. Small, Incremental Changes**
-- One logical change per PR
-- Easier to review and test
-- Simpler to roll back
-
-**3. Automated Testing**
-- Lint on every commit
-- Validate on every PR
-- Integration tests before production
-
-**4. Approval Gates**
-```yaml
-# Require manual approval for production
-environment: production
-```
-
-### Version Control
-
-**What to commit:**
-- ✅ Infrastructure code
-- ✅ Module definitions
-- ✅ Documentation
-- ✅ Scripts
-
-**What NOT to commit:**
-- ❌ State files
-- ❌ Sensitive values (.tfvars with secrets)
-- ❌ .terraform/ directory
-- ❌ Provider plugins
-
-**.gitignore:**
-```
-# Terraform
-**/.terraform/*
+.terraform/
 *.tfstate
 *.tfstate.*
 crash.log
-*.tfvars  # Or be selective
-.terraform.lock.hcl
-
-# Sensitive
-*.pem
-*.key
-secrets.yaml
+*tfplan*
+crash.*.log
+# plus whichever variable files hold secrets
 ```
-
----
-{% endraw %}

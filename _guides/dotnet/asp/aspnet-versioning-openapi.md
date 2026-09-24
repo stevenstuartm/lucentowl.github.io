@@ -2,7 +2,7 @@
 title: "API Versioning and OpenAPI"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Design & Data"
+subcategory: "Building APIs"
 description: "Comprehensive guide to API versioning strategies and OpenAPI document generation in ASP.NET Core, covering the Asp.Versioning package, OpenAPI 3.1 support, transformers, and client SDK generation."
 tags: [asp-net-core, api-design, versioning, openapi, documentation, code-generation]
 ---

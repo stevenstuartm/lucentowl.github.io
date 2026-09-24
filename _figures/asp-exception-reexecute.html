@@ -1,0 +1,62 @@
+---
+title: "Exception Handler Re-Execution"
+kind: flow
+system: aspnet-core
+summary: "What runs again when the exception handler re-executes at an error path."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" role="img" aria-labelledby="aer-title aer-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aer-title">How the exception handler re-executes part of the pipeline at an error path</title>
+<desc id="aer-desc">A request passes through earlier middleware, the exception handler, and later middleware to an endpoint, which throws. The exception unwinds back to the exception handler, which offers it to each IExceptionHandler. If none handles it, the handler clears the response and the selected endpoint, changes the path to /error, and runs the later middleware a second time. Routing selects the /error endpoint, which writes the response. Middleware registered before the exception handler runs only once.</desc>
+<style>
+.aer-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aer-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.aer-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.aer-warn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.aer-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aer-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.aer-n-warn { font-size: 12.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.aer-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aer-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.aer-lab { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.aer-em { font-size: 10.5px; fill: var(--color-accent, #A5486E); }
+.aer-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aer-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aer-hot { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="aer-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="aer-ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="aer-hd" x="20" y="90">FIRST PASS</text>
+<rect class="aer-box" x="20" y="100" width="170" height="64" rx="6"/>
+<text class="aer-n" x="105" y="128" text-anchor="middle">Earlier middleware</text>
+<text class="aer-k" x="105" y="146" text-anchor="middle">runs once</text>
+<rect class="aer-sys" x="220" y="100" width="170" height="64" rx="6"/>
+<text class="aer-n-inv" x="305" y="128" text-anchor="middle">Exception handler</text>
+<text class="aer-k-inv" x="305" y="146" text-anchor="middle">tries IExceptionHandlers</text>
+<rect class="aer-box" x="420" y="100" width="170" height="64" rx="6"/>
+<text class="aer-n" x="505" y="128" text-anchor="middle">Later middleware</text>
+<text class="aer-k" x="505" y="146" text-anchor="middle">first pass</text>
+<rect class="aer-warn" x="620" y="100" width="170" height="64" rx="6"/>
+<text class="aer-n-warn" x="705" y="128" text-anchor="middle">Endpoint</text>
+<text class="aer-k" x="705" y="146" text-anchor="middle">throws</text>
+<path class="aer-flow" d="M190,132 L218,132" marker-end="url(#aer-a)"/>
+<path class="aer-flow" d="M390,132 L418,132" marker-end="url(#aer-a)"/>
+<path class="aer-flow" d="M590,132 L618,132" marker-end="url(#aer-a)"/>
+<path class="aer-hot" d="M705,100 L705,56 L305,56 L305,98" marker-end="url(#aer-ah)"/>
+<text class="aer-em" x="505" y="48" text-anchor="middle">the exception unwinds to the handler</text>
+<text class="aer-hd" x="420" y="236">SECOND PASS, PATH /ERROR</text>
+<path class="aer-flow" d="M305,164 L305,278 L418,278" marker-end="url(#aer-a)"/>
+<text class="aer-lab" x="313" y="200">none handled:</text>
+<text class="aer-lab" x="313" y="214">response and</text>
+<text class="aer-lab" x="313" y="228">endpoint cleared</text>
+<rect class="aer-box" x="420" y="246" width="170" height="64" rx="6"/>
+<text class="aer-n" x="505" y="274" text-anchor="middle">Later middleware</text>
+<text class="aer-k" x="505" y="292" text-anchor="middle">second pass</text>
+<rect class="aer-px" x="620" y="246" width="170" height="64" rx="6"/>
+<text class="aer-n" x="705" y="274" text-anchor="middle">/error endpoint</text>
+<text class="aer-k" x="705" y="292" text-anchor="middle">writes the response</text>
+<path class="aer-flow" d="M590,278 L618,278" marker-end="url(#aer-a)"/>
+</g>
+</svg>

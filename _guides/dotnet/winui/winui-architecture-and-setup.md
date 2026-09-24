@@ -3,172 +3,226 @@ title: "WinUI 3 Architecture and Project Setup"
 layout: guide
 category: "WinUI 3"
 subcategory: "WinUI Fundamentals"
-description: "Understanding the Windows App SDK foundation, how WinUI 3 relates to WPF and UWP, project structure, and application startup configuration."
-tags: [winui, winui-3, xaml, desktop, windows-app-sdk, dotnet, fundamentals]
+description: "What WinUI 3 and the Windows App SDK are and how they ship separately from Windows, when to choose WinUI 3 over WPF or UWP, the files in a new project, how the app starts and reports fatal exceptions, and how a Debug run differs from a published build."
+tags: [windows-app-sdk, project-structure, app-startup, msix, hot-reload, fundamentals]
 ---
 
-## What Is the Windows App SDK
+## What the Windows App SDK Is
 
-For most of its history, Windows development meant choosing between two parallel universes. You either wrote WPF or WinForms applications that were deeply integrated with the operating system but shipped with Windows, or you wrote UWP applications that lived inside a sandboxed container and received more frequent updates but came with significant capability restrictions. The [Windows App SDK](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/){:target="_blank" rel="noopener noreferrer"} was Microsoft's attempt to resolve this tension by decoupling the modern Windows UI stack from the OS release cycle entirely.
+For most of Windows' history, the UI framework you used shipped with the operating system. New controls or rendering fixes reached users only when they installed a new version of Windows. That coupling is what the [Windows App SDK](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/){:target="_blank" rel="noopener noreferrer"} removes. It is a set of libraries and a runtime that ship through NuGet, so improvements reach an app when the developer updates a package rather than when the user updates Windows.
 
-The Windows App SDK ships as a NuGet package. This means that when Microsoft ships improvements to the rendering engine, the navigation model, or the control library, those improvements reach developers through a package update rather than a Windows feature update. An application targeting Windows App SDK 1.5 gets the same controls and behaviors whether it runs on Windows 10 or Windows 11, because the SDK brings its own implementation rather than relying on what the OS version happens to include. This decoupling is not a small technical detail; it changes how desktop Windows development works in practice, both for Microsoft's release velocity and for developer access to modern APIs.
+WinUI 3 is the UI layer of the Windows App SDK. It provides the controls, the layout system, and the XAML engine that renders them. The rest of the SDK covers work around the UI:
 
-WinUI 3 is the UI layer within the Windows App SDK. It provides the controls, layout system, and XAML rendering engine. The Windows App SDK also includes other pieces such as the app lifecycle APIs, windowing APIs, and push notification support, all of which are accessible to WinUI 3 applications. Thinking of WinUI 3 and the Windows App SDK as a single thing is reasonable for most purposes, since WinUI 3 is the primary consumer of the SDK's capabilities.
+| Area | What it provides |
+| --- | --- |
+| WinUI 3 | Controls, layout, styling, and the XAML runtime |
+| Windowing | `AppWindow`: the title bar, size and position, and the presenter (normal, full-screen, or compact overlay) |
+| App lifecycle | Activation, single-instancing, power notifications |
+| Notifications | App (toast) notifications and push notifications |
+| Resources | MRT Core, the resource system that picks localized strings and scaled images |
+| Windows AI and ML | On-device models and Windows ML |
 
-The practical consequence of this architecture is that a WinUI 3 application runs as a standard Win32 process. It has an HWND, it participates in the normal Windows message loop, and it can call Win32 APIs directly. The sandboxing restrictions that made UWP awkward for certain desktop scenarios simply do not apply unless you explicitly opt into a restricted deployment model.
+Because the SDK brings its own implementation, the same WinUI version renders the same controls on Windows 10 and Windows 11. The SDK is backward compatible to Windows 10 version 1809, though Microsoft supports it only on Windows releases that are themselves still in support. A few visual features still depend on the OS. Mica, the window background material that picks up a tint from the desktop wallpaper, needs Windows 11.
 
----
+A WinUI 3 app is a standard Win32 desktop process. It has a window handle (HWND), runs a normal Windows message loop, and can call Win32 and COM APIs directly. It doesn't run inside the UWP sandbox. It runs with full trust, like any other desktop app, so it can read the file system and registry and start other processes. It is usually installed as an MSIX package, the modern Windows installer format. When it is, Windows redirects some of its writes to per-user app data locations, which it cleans up at uninstall.
 
-## WinUI 3 vs WPF vs UWP
+The Windows App SDK is also distinct from the **Windows SDK**, the older set of headers and metadata that describes the APIs built into Windows itself. A WinUI 3 project uses both: the Windows App SDK for WinUI and its libraries, and the Windows SDK for OS APIs such as `Windows.Storage`.
 
-Understanding which technology to choose requires understanding how each one came to exist and what problems each was designed to solve.
-
-### The WPF Era
-
-WPF arrived with .NET Framework 3.0 in 2006 and represented a substantial leap forward for Windows desktop development. It introduced XAML as a markup language for describing UI, hardware-accelerated rendering through DirectX, a powerful data binding system, and a flexible styling and templating model. WPF applications run as standard Win32 processes and have unrestricted access to the Windows API. They can read and write the file system, launch processes, access the registry, and call COM APIs without special permissions.
-
-WPF remains the right choice when you are maintaining an existing WPF application, when you need to target Windows 7 (which WinUI 3 does not support), or when you are working in a context where migrating a substantial existing codebase is impractical. WPF is not deprecated and will continue to receive maintenance updates through .NET, but it is not receiving the new controls, visual design updates, or platform integration features that are being built into WinUI 3.
-
-### The UWP Era
-
-UWP launched alongside Windows 10 in 2015 and represented a distinct model for Windows applications, one built around sandboxing rather than the traditional Win32 process model. UWP apps run inside an AppContainer sandbox, which restricts their ability to access the file system, network, and system resources to only what the user explicitly grants through capabilities declarations and runtime permission prompts. The motivation was security, consistent deployment through the Microsoft Store, and cross-device compatibility across PCs, phones, Xbox, and HoloLens.
-
-The sandboxing that made UWP safe for consumer scenarios also made it frustrating for enterprise desktop applications. WinUI 2.x was the XAML control library for UWP, but by the time it matured enough to be truly competitive with WPF's control set, the UWP model itself had fallen out of favor for broad desktop development. Many developer tools, line-of-business applications, and enterprise software could not run inside the AppContainer restrictions without significant rearchitecting.
-
-### WinUI 3: The Convergence
-
-WinUI 3 lifts the WinUI control library out of UWP and makes it available to standard Win32 desktop applications. You get the modern Fluent Design controls, the modern XAML rendering engine, and access to current Windows platform features, but without the AppContainer sandbox. The application runs as a normal Win32 process with full access to the system.
-
-The decision between the three comes down to a small set of practical questions. Use WPF when you have an existing WPF codebase that would require extensive effort to migrate, when you need to target Windows versions below Windows 10 version 1809, or when your team has deep WPF expertise and the project timeline does not justify retraining. Use UWP when you are building a game or an app targeting Xbox or HoloLens, since WinUI 3 does not support those platforms. Choose WinUI 3 for new desktop applications targeting Windows 10 and Windows 11, when you want access to the most current Fluent Design controls, when you want the Windows App SDK's windowing and lifecycle APIs, or when you are building an application that needs to appear in the Microsoft Store with a modern packaging model.
+Since version 2.0, released in April 2026, the SDK follows semantic versioning. The NuGet package version matches the SDK version, stable updates have shipped roughly monthly since then, and breaking changes are reserved for major versions. Microsoft services each major release for a fixed period, so an app has to move forward periodically to stay on a supported release.
 
 ---
 
-## Project Setup and Structure
+## Choosing Between WinUI 3, WPF, and UWP
 
-### Choosing the Right Template
+All three frameworks use XAML, and all three still run. They differ in their process model and in where Microsoft's investment goes. Fluent is Microsoft's current design language, the look of Windows 11's own apps, and each framework gets to it differently.
 
-Visual Studio ships with several WinUI 3 project templates. The naming can be confusing at first, but the right starting point for most desktop applications is "Blank App, Packaged (WinUI 3 in Desktop)." The "Packaged" in the name refers to MSIX packaging, which means the application is deployed as an MSIX installer rather than a loose directory of files. MSIX packaging enables clean installation and uninstallation, per-user or per-machine install, support for the Microsoft Store, and access to certain Windows App SDK features that require a package identity.
+| | WPF | UWP | WinUI 3 |
+| --- | --- | --- | --- |
+| First shipped | 2006, with .NET Framework 3.0 | 2015, with Windows 10 | 2021 |
+| Process model | Win32 desktop process | Sandboxed (AppContainer) | Win32 desktop process |
+| Devices | Windows PCs | PCs, Xbox, HoloLens | Windows PCs |
+| Controls and design | Classic controls; optional Fluent theme since .NET 9 | WinUI 2, the Fluent control library for UWP | WinUI 3 Fluent controls |
+| Where new features land | .NET releases | Little new investment | Windows App SDK releases |
 
-The "Unpackaged" variant exists for scenarios where MSIX deployment is not viable, such as xcopy deployment or environments with restrictive software installation policies. Unpackaged applications have slightly reduced access to some Windows App SDK APIs but cover the majority of desktop application scenarios.
+**WPF** is the mature option. It runs as an ordinary desktop process with a large control ecosystem, and it isn't frozen. .NET 9 added a Fluent theme with light and dark modes and system accent colors. WPF remains a sound choice for maintaining an existing WPF app or when a team's investment in WPF libraries outweighs what WinUI adds.
 
-### The TargetFramework and Platform Targets
+**UWP** ran every app in an AppContainer, a Windows sandbox where file, network, and device access had to be declared as capabilities and often approved by the user. That made UWP safe for consumer apps distributed through the Store and awkward for line-of-business and developer tools. UWP is still the only one of the three that targets Xbox and HoloLens, which WinUI 3 does not.
 
-The project file for a WinUI 3 application targets a platform-specific TFM such as `net8.0-windows10.0.19041.0`. The `windows10.0.19041.0` suffix corresponds to Windows 10 version 2004, which is the minimum supported version for Windows App SDK 1.x applications. This TFM makes the Windows Runtime type projections available at compile time and enables the tooling to generate the necessary interop code for XAML compilation.
+**WinUI 3** takes the Fluent control library that UWP had and makes it available to ordinary desktop processes. Choose it for a new Windows desktop app that should look like a current Windows 11 app, or that needs the Windows App SDK's windowing, lifecycle, notification, and on-device AI APIs.
 
-The project also specifies `<Platforms>` containing `x86`, `x64`, and `arm64`. Unlike most .NET applications where `AnyCPU` is the standard target, WinUI 3 applications must be compiled for a specific processor architecture because the Windows App SDK native components are architecture-specific. Visual Studio handles this automatically during development, defaulting to x64 on most developer machines.
+The choice isn't strictly either-or. The Windows App SDK isn't tied to WinUI, so a WPF or WinForms app can reference it to use app notifications, windowing, or the Windows AI APIs without rewriting its UI. XAML Islands go a step further and host individual WinUI controls inside a Win32 window.
+
+---
+
+## Creating a Project
+
+A WinUI 3 project can come from Visual Studio or from the .NET CLI:
+
+- **Visual Studio 2026** with the **WinUI application development** workload provides the **WinUI Blank App (Packaged)** template.
+- **The .NET CLI** has its own template package, currently published as a preview. After `dotnet new install Microsoft.WindowsAppSDK.WinUI.CSharp.Templates`, `dotnet new winui` creates a project. That project references `Microsoft.Windows.SDK.BuildTools.WinApp`, which lets `dotnet run` register the app and launch it with package identity.
+
+The template name says **Packaged**, which means the app is installed as an MSIX package. Installing a package gives the app a **package identity**: a name and publisher that Windows records and uses to attribute things to the app. Features such as file type associations declared in the manifest and background tasks registered with Windows depend on it.
+
+Either path needs Windows **Developer Mode**, a setting under System > Advanced that allows installing unsigned development packages.
+
+There's no separate unpackaged template. Running from a plain folder means setting `WindowsPackageType` to `None`, choosing the unpackaged launch profile, and either installing the Windows App SDK runtime on the target machine or bundling it with the app.
+
+### The Target Framework and Platforms
+
+The generated project targets a Windows-specific framework moniker such as `net10.0-windows10.0.26100.0`. Two version numbers matter, and they are easy to confuse:
+
+- **The target version** in the moniker (10.0.26100.0) decides which Windows APIs the compiler can see.
+- **`TargetPlatformMinVersion`** (10.0.17763.0, Windows 10 version 1809) is the oldest Windows version the app claims to run on.
+
+The project also lists `x86`, `x64`, and `ARM64` under `<Platforms>`, and sets the runtime identifier to the build machine's architecture by default. Parts of the Windows App SDK are native code compiled per architecture, so a WinUI 3 build targets a specific processor architecture rather than the `AnyCPU` that most .NET class libraries use.
 
 ### Key NuGet Packages
 
-The primary package dependency is `Microsoft.WindowsAppSDK`, which brings in the WinUI 3 controls, the XAML compiler infrastructure, and the Windows App SDK runtime APIs. For most applications, you will also add `CommunityToolkit.WinUI.UI.Controls` to get additional controls from the Windows Community Toolkit, and `CommunityToolkit.Mvvm` to get the MVVM source generator infrastructure. The `Microsoft.Extensions.Hosting` package is commonly added when you want .NET's dependency injection and configuration systems, which integrate well with WinUI 3 despite not being Windows-specific.
+The template references `Microsoft.WindowsAppSDK`, which brings WinUI 3, the XAML compiler, and the SDK runtime APIs, and `Microsoft.Windows.SDK.BuildTools`, which supplies Windows SDK build tooling such as the packaging tools. Most real apps add a few more:
+
+| Package | Adds |
+| --- | --- |
+| `CommunityToolkit.Mvvm` | Source-generated observable properties, commands, and messaging for ViewModels |
+| `CommunityToolkit.WinUI.Controls.*` | Controls and panels WinUI doesn't include, one package per control family |
+| `Microsoft.Extensions.Hosting` | .NET dependency injection, configuration, and logging |
 
 ---
 
-## Project Structure Walkthrough
+## What's in a New Project
+
+A new project splits its UI between a window and a page. The `Window` is the top-level window on screen. Inside it, a `Frame` control shows one `Page` at a time, and the page holds the app's actual UI.
+
+| File | Role |
+| --- | --- |
+| `App.xaml`, `App.xaml.cs` | Application-wide resources, and the entry point for app code |
+| `MainWindow.xaml`, `MainWindow.xaml.cs` | The window: title bar, backdrop, and a `Frame` for pages |
+| `MainPage.xaml`, `MainPage.xaml.cs` | The first page, where the app's UI goes |
+| `Package.appxmanifest` | The package's identity and declarations to Windows |
+| `app.manifest` | The Win32 application manifest: OS compatibility and DPI awareness |
+| `Properties/launchSettings.json` | Launch profiles for running packaged or unpackaged |
+| `Properties/PublishProfiles/` | One publish profile per processor architecture |
+| `Assets/` | Logos and the window icon |
 
 ### App.xaml and App.xaml.cs
 
-Every WinUI 3 application starts with `App.xaml` and its code-behind `App.xaml.cs`. The XAML file is primarily a place to declare application-scoped resources, including merged resource dictionaries for custom styles and the application's global theme resources. The code-behind file is where the application's entry point lives.
+`App.xaml` holds application-wide resources, and even in a new project it isn't empty. It merges `XamlControlsResources`, the dictionary that supplies the default style and template of every WinUI control. Deleting that line leaves controls without their styles, so app styles and third-party dictionaries are added alongside it rather than in place of it. Resources declared here are available to every element in the app and exist before the first window is created.
 
-`App.xaml` typically looks sparse in a new project, containing little more than the application resource dictionary. Its importance grows as you add custom styles, application-wide brushes, or merged dictionaries that pull in third-party control libraries.
+`App.xaml.cs` is the entry point for app code. Its constructor is the first authored code that runs, and `OnLaunched` is where the app creates its first window.
 
-### MainWindow.xaml
+### MainWindow and MainPage
 
-The `MainWindow.xaml` file defines the application's primary window. In a minimal project, it contains a single control, often a `Button` or a `StackPanel` with placeholder content. In a real application, it typically contains a `NavigationView` that provides the top-level navigation shell, with individual pages hosted inside a `Frame`.
+The window and the content are split across two files. `MainWindow.xaml` sets a Mica backdrop, places a `TitleBar` control in the top row, and fills the rest with a `Frame` named `RootFrame`. Its constructor extends the app's content into the title bar area, sets the window icon, and navigates the frame to `MainPage`.
 
-The relationship between `MainWindow.xaml` and the pages your application navigates to is important. The window itself is a container; it does not contain your application's UI directly in most patterns. Instead, the window hosts a `Frame`, and the `Frame` navigates between pages. This separation means the window-level elements like the title bar and the navigation control remain persistent while the content area changes as the user navigates.
+The frame keeps a history of the pages it has shown. `MainPage.xaml` is where the app's UI starts. Building UI in a page rather than directly in the window gives it page features such as navigation events, and it lets the title bar and backdrop stay in place while the frame swaps pages.
 
-### Package.appxmanifest
+### Package.appxmanifest and app.manifest
 
-For packaged applications, the `Package.appxmanifest` file describes the MSIX package. It defines the application's identity (package name, publisher, version), capabilities the application requests such as internet access or webcam access, file type associations, protocol activations, and the application's display name and icons. Think of it as the application's declaration to the operating system of what it is and what permissions it needs.
+The two manifests do different jobs:
 
-Changes to the manifest do not require recompilation of the C# code, but they do affect how the MSIX package is structured and what runtime access the application has. Adding a capability like `Webcam` to the manifest does not automatically grant webcam access; on Windows 11, the user must also grant access through the privacy settings, but without the capability declaration the application will not even be able to prompt for it.
+- **`Package.appxmanifest`** is the packaged app's declaration to Windows. It defines the package identity (name, publisher, version), the display name and logos, the capabilities the app requests, and extensions that integrate with the shell, such as file type associations and URI protocols. Editing it doesn't require recompiling C#, but it changes what the installed package can do.
+- **`app.manifest`** is the classic Win32 manifest embedded in the executable. The template uses it to declare Windows 10 compatibility, which some features need when the app runs unpackaged, and per-monitor DPI awareness, so the app renders sharply when moved between displays with different scaling.
 
-### Assets Folder
+### Launch and Publish Profiles
 
-The Assets folder contains the application's icon images at various sizes and scales. Windows requires multiple image dimensions to display the application icon correctly in different contexts such as the Start menu, the taskbar, and the Windows Settings app. The project template generates placeholder images for all required sizes. In a production application, these get replaced with the actual application icon in each required dimension.
+`Properties/launchSettings.json` defines two ways to start the app from Visual Studio: **Package**, which deploys and runs it as an MSIX package, and **Unpackaged**, which runs the built executable directly. The publish profiles under `Properties/PublishProfiles/` target `win-x86`, `win-x64`, and `win-arm64`, and each one publishes a self-contained app that carries its own copy of the .NET runtime.
+
+### Assets
+
+The `Assets` folder holds the app's logos at the sizes Windows needs for the Start menu, taskbar, and Store listings, plus the `.ico` file used for the window icon. The template ships placeholders, which a production app replaces with its own artwork.
 
 ---
 
-## App.xaml.cs Deep Dive
+## How the App Starts
 
-### The Entry Point and OnLaunched
-
-The `App` class inherits from `Microsoft.UI.Xaml.Application`. The XAML application infrastructure calls `OnLaunched` when the application starts, passing an `AppActivationArguments` object that describes how the application was activated. A standard launch from the Start menu or taskbar provides a `LaunchActivatedEventArgs`, but activation can also come from file associations, protocol handlers, push notifications, or other sources.
-
-The typical `OnLaunched` implementation creates the main window, activates it to make it visible, and optionally performs startup initialization. A minimal implementation looks like this in C#:
+The `App` class derives from `Microsoft.UI.Xaml.Application`. When the process starts, the XAML-generated entry point creates the `App` instance and the framework calls `OnLaunched`. The template's version creates the main window and activates it:
 
 ```csharp
-protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+public partial class App : Application
 {
-    m_window = new MainWindow();
-    m_window.Activate();
-}
+    private Window? _window;
 
-private Window? m_window;
+    public App()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+    {
+        _window = new MainWindow();
+        _window.Activate();
+    }
+}
 ```
 
-The window must be stored in a field to prevent garbage collection. The WinUI 3 `Window` object does not register itself with the process in a way that would keep it alive automatically; once the reference goes out of scope, the garbage collector can collect it and the window will close.
+`Activate()` shows the window and brings it to the foreground. The template keeps the window in a field so the rest of the app can reach it later, for example to change its content, respond to a second activation, or find the window that should own a dialog.
 
-### Global Resources and Startup Configuration
+The `args` parameter describes a normal launch. A WinUI 3 app can also be started by opening a file, following a custom URI, or clicking a notification, and the Windows App SDK's `AppInstance` API reports which of these happened.
 
-The `App` class is where application-wide initialization belongs. Before calling `m_window.Activate()`, you can initialize dependency injection by configuring a service container, configure logging, load application settings from a configuration file, or set up any other application-wide services.
+### Startup Configuration
 
-Resource dictionaries declared in `App.xaml` are available to every control in the application. This is the correct place to put custom brushes, common styles, and merged dictionaries for third-party control themes. Resources defined here are in scope before the first window is shown, so controls that reference them during their constructor or initialization phase will find them available.
+`App` exists for the lifetime of the process and is created before any window, so application-wide setup belongs in its constructor or at the start of `OnLaunched`: building the dependency injection container, loading settings, and configuring logging. Anything a window's constructor needs must be ready before that window is created.
 
-### Handling Unhandled Exceptions
+### Unhandled Exceptions
 
-WinUI 3 applications can receive unhandled exceptions through the `UnhandledException` event on the `App` class. This event fires when an exception propagates to the top of the XAML dispatcher loop without being caught. The handler receives the exception and a flag that controls whether the exception is considered handled. Setting `e.Handled = true` prevents the application from crashing, but this should be used cautiously; swallowing exceptions without logging them or showing appropriate UI leads to silent data loss and confusing behavior.
+`Application.UnhandledException` fires when an exception escapes app code with no remaining chance to be caught, such as an exception thrown from an event handler that the XAML framework invoked, or one raised during layout. After the event, the app is normally terminated.
 
-For async code, `TaskScheduler.UnobservedTaskException` catches exceptions from `Task` objects whose exceptions were never observed. Both handlers together provide a reasonable safety net, but neither replaces proper exception handling at the boundaries where errors should actually be caught and acted upon.
+Setting `e.Handled = true` in the handler prevents termination in most cases, and Microsoft's documentation advises against doing it routinely:
 
----
+- The handler rarely knows whether the app is in a consistent state, so continuing can cause further failures.
+- Some exceptions leave the framework itself inconsistent, and the app is terminated even when the handler sets `Handled`.
+- The event's `Exception` property isn't guaranteed to match the original exception's type, message, or stack trace. The event args' own `Message` property usually carries the original message.
 
-## Window, AppWindow, and HWND
+The practical use of the event is to log what happened and, where it's safe, show the user a message before the app closes. Exceptions that app code can anticipate are better caught where they occur, where the full exception is still available.
 
-WinUI 3 has three distinct but related concepts for representing the application window, and understanding how they relate to each other removes a significant source of confusion.
+The handler must be attached in code, typically in the `App` constructor, because it can't be wired in `App.xaml`. It also sees only exceptions that reach the XAML framework. Other failures surface elsewhere:
 
-The `Microsoft.UI.Xaml.Window` class is the WinUI 3 managed representation of a window. It is what you interact with from XAML and C# to control the window's content, show or hide it, and respond to window-level events through the XAML framework. This is the type you instantiate in `OnLaunched` and the type you reference when you need to set the window's content or title.
-
-The `Microsoft.UI.Windowing.AppWindow` class provides access to the window's presentation model. This is where you go to customize the title bar, change the window presenter between windowed, maximized, full-screen, and compact overlay modes, control the window's position and size at the OS level, and respond to window state changes like minimize and restore. You get the `AppWindow` from a `Window` instance through the `AppWindow` property, which is available on `Window` in Windows App SDK 1.3 and later.
-
-The HWND is the underlying Win32 window handle. Every WinUI 3 window has an HWND because it runs as a standard Win32 process. You need the HWND when interacting with Win32 APIs directly, such as when using file dialogs that require a parent window handle, calling into COM APIs that expect an HWND, or configuring certain platform integrations. You retrieve the HWND using `WinRT.Interop.WindowNative.GetWindowHandle(window)` where `window` is the `Microsoft.UI.Xaml.Window` instance.
-
-The pattern these three types establish is that the XAML `Window` manages XAML content, the `AppWindow` manages the OS-level window presentation, and the HWND is the identity that Win32 APIs use to locate the window. Applications that only display XAML content and respond to standard user interactions rarely need to work with anything below `Window`. Applications that customize the title bar or integrate with Win32 APIs will work with both `AppWindow` and potentially the HWND.
-
----
-
-## Debug vs Release and XAML Hot Reload
-
-### Build Configuration Differences
-
-WinUI 3 applications behave somewhat differently between Debug and Release builds in ways that matter during development. The Debug configuration includes XAML debugging infrastructure and disables certain optimizations to make the debugger experience more accurate. The Release configuration enables Native AOT compilation of the XAML markup, which improves startup time and reduces memory usage but also means that XAML errors that were soft failures in Debug become hard failures in Release.
-
-Testing the Release build before shipping is more important for WinUI 3 applications than for many other .NET application types. XAML binding errors, missing resources, and improperly declared data templates can all manifest differently between the two configurations.
-
-### XAML Hot Reload
-
-XAML Hot Reload allows you to modify XAML markup while the application is running and see the changes reflected immediately without restarting. It works through a side channel that the Debug build maintains with Visual Studio, watching for XAML file changes and pushing updates to the running process.
-
-Hot Reload has meaningful constraints. It does not execute C# code-behind changes; for those, you still need to restart. It does not always handle changes to control templates or resource dictionaries correctly, and complex binding expressions can cause it to fall back to a full refresh. Despite these limitations, it is genuinely useful for layout adjustments, visual tweaks, and iterating on styles without the overhead of a full restart cycle.
-
-XAML Hot Reload in WinUI 3 is generally reliable for changes to element properties, layout values, and simple style modifications. Treat it as a productivity accelerator for visual work rather than a general-purpose live coding tool.
+| Where the exception happens | Where it's reported |
+| --- | --- |
+| Code the XAML framework called on the UI thread, or layout | `Application.UnhandledException` |
+| A background thread | `AppDomain.CurrentDomain.UnhandledException`, and the process ends |
+| A faulted `Task` that nothing awaited | `TaskScheduler.UnobservedTaskException`, when the task is garbage collected, possibly long after the failure |
 
 ---
 
-## Common Pitfalls
+## Debug Runs, Published Builds, and the Edit Loop
 
-### Not Storing a Window Reference
+### What Changes When You Publish
 
-Creating a window in `OnLaunched` and calling `Activate()` without storing the window in a field will cause the window to be garbage collected shortly after launch. The window appears, flickers, and closes. Always store the window reference in an instance field on the `App` class.
+Publishing uses the per-architecture profiles, which make the output self-contained. The project file adds two more settings for every configuration except Debug. **ReadyToRun** precompiles the app's IL to native code, which shortens startup at the cost of a larger output. **Trimming** removes code the build can't see being used, which shrinks the output.
 
-### Missing Platform Targets
+| | Debug run (F5) | Published Release build |
+| --- | --- | --- |
+| .NET runtime | The one installed on the machine | Bundled with the app, one build per architecture |
+| Windows App SDK runtime | Installed with the SDK tooling | Still required on the target machine, unless the app bundles it |
+| ReadyToRun | Off | On |
+| Trimming | Off | On |
+| Hot Reload | Available with the debugger attached | Not available |
+| Code reached only through reflection | Works | May have been trimmed away |
 
-WinUI 3 applications must target a specific CPU architecture. Running a WinUI 3 application as `AnyCPU` is not supported and results in runtime failures. The project template configures this correctly by default, but if you copy a project file from a regular .NET application and modify it, this is an easy configuration to miss.
+The last row is why an app that works under F5 can fail after publishing. Reflection-based `{Binding}` expressions, which resolve property names at runtime, are a usual casualty, along with some serializers and plugin loading. Compiled `{x:Bind}` bindings are generated at build time and don't depend on reflection. Run the published build before shipping it. For a packaged app, the thing that ships is the MSIX package built from it, not the publish folder.
 
-### Confusing Window and AppWindow APIs
+### No Designer: Hot Reload and the Live Visual Tree
 
-The `Window` class has a `Title` property that sets the text displayed in the title bar. The `AppWindow` has a `Title` property as well. When you customize the title bar using `AppWindow.TitleBar`, the `Window.Title` property may not update the visual title bar anymore, depending on the customization applied. Understanding which level of the abstraction you are working with prevents confusing situations where setting a property appears to have no effect.
+Visual Studio has no drag-and-drop XAML designer for WinUI 3, which surprises developers coming from WPF or WinForms. The replacement is the running app itself, with the debugger attached:
 
-### XAML Compilation Errors Appearing Only at Runtime
+- **XAML Hot Reload** applies markup edits to the running app as you type them. It suits layout, spacing, styles, and colors.
+- **The Live Visual Tree** and **Live Property Explorer** show the running app's element tree, each element's current property values, and where each value came from.
+- **C# Hot Reload** applies many code edits while the debugger is attached. A change only shows when the edited code runs again, such as on the next click of a button.
 
-Type lookup in XAML can fail in ways that compile successfully but throw at runtime, particularly when using types from referenced assemblies that are not properly included in the XAML namespace declarations. The `XamlParseException` that results often points to a line in the XAML file, but the message can be opaque. Running the application in Debug mode and checking the Output window for XAML binding warnings is a habit worth developing early.
+All three need the debugger, so they're unavailable under Ctrl+F5. C# Hot Reload also requires the Debug configuration and doesn't work when trimming or ReadyToRun is enabled for the debug profile. Some edits, such as changing a class's base type, still need a restart, and Visual Studio offers to rebuild when it can't apply one.
+
+---
+
+## Common Setup Pitfalls
+
+### Building for AnyCPU
+
+A project copied from a general .NET template, or edited by hand, can end up targeting `AnyCPU` with no runtime identifier. The build can then fail to resolve a runtime identifier, or the app can't load the native Windows App SDK components. Keep the platform list and runtime identifier the template generated.
+
+### Confusing the Target Version with the Minimum Version
+
+Raising the version in the target framework moniker exposes newer Windows APIs to the compiler but doesn't raise `TargetPlatformMinVersion`. The app still installs on older Windows versions, and a call to an API those versions lack throws at runtime. Check for newer APIs with `ApiInformation.IsTypePresent` or `IsMethodPresent`, or raise the minimum version deliberately.
+
+### XAML Errors That Appear Only at Runtime
+
+A XAML file can compile and still fail when it loads. The usual causes are a type from a referenced assembly that the XAML namespace declarations don't resolve, or a `{StaticResource}` key that doesn't exist. The resulting `XamlParseException` names a line in the file, but its message is often vague. With the debugger attached, the Output window shows parse errors as they happen, and Visual Studio's **XAML Binding Failures** window lists bindings that couldn't resolve.

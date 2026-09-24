@@ -195,3 +195,89 @@ RichEditor.Document.Selection.CharacterFormat.Bold = Windows.UI.Text.FormatEffec
 ```
 
 The choice between `TextBox` and `RichEditBox` comes down to whether formatting is a feature the application needs to support. If users just need to enter and read text, use `TextBox`. If formatting is part of the value being captured, use `RichEditBox`.
+
+## CalendarDatePicker
+
+`CalendarDatePicker` provides a compact date selection experience. It displays as a text field showing the selected date, and when activated it opens a flyout containing a full month calendar. This makes it a good choice when date selection is one of several inputs on a form and the calendar should not dominate the layout.
+
+```xml
+<CalendarDatePicker
+    PlaceholderText="Select a date"
+    DateChanged="CalendarDatePicker_DateChanged" />
+```
+
+The selected date is available through the `Date` property, which is of type `DateTimeOffset?`. The null value indicates that no date has been chosen, which is useful for distinguishing an empty field from a chosen date. You can constrain the selectable range using `MinDate` and `MaxDate`.
+
+## CalendarView
+
+`CalendarView` displays the calendar directly in the page rather than in a flyout, making it appropriate when date selection is the primary activity on a screen or when you want users to see context around the date they are selecting. It supports single, multiple, and range selection modes through the `SelectionMode` property.
+
+```xml
+<CalendarView
+    SelectionMode="Single"
+    SelectedDatesChanged="CalendarView_SelectedDatesChanged" />
+```
+
+In `Multiple` mode, the user can tap individual dates to add or remove them from the selection, which suits scenarios like scheduling recurring events. In `Range` mode, the user selects a start and end date, useful for booking or date range filters.
+
+`CalendarView` exposes density indicators through the `CalendarViewDayItemChanging` event, letting you mark specific dates with visual cues to communicate that something is scheduled or notable on those days.
+
+## DatePicker and TimePicker
+
+`DatePicker` and `TimePicker` use spinner-style selectors rather than a calendar flyout, presenting separate columns for each component of the date or time. `DatePicker` shows day, month, and year columns, while `TimePicker` shows hour, minute, and AM/PM columns.
+
+```xml
+<DatePicker Header="Appointment date" />
+<TimePicker Header="Appointment time" />
+```
+
+The spinner format is familiar on touch-first or compact displays, where a full calendar flyout might feel heavyweight. On desktop, user preference varies, so choosing between `CalendarDatePicker` and `DatePicker` often comes down to whether the calendar context adds value for the task. Selecting a birthdate, for example, benefits from `DatePicker` because users typically know the date and do not need to navigate a calendar. Selecting a meeting date benefits from `CalendarDatePicker` because users may want to see the surrounding week.
+
+`DatePicker` and `TimePicker` are frequently used together. Placing them side by side under a shared header creates a coherent date-and-time entry experience without requiring a custom compound control.
+
+## SettingsCard and SettingsExpander (Community Toolkit)
+
+The `SettingsCard` and `SettingsExpander` controls address one of the most common patterns in Windows desktop applications: a settings page where options are presented in labeled cards that follow the Fluent Design style used by Windows itself and apps like Windows Settings.
+
+`SettingsCard` is a single-line item with a header, optional description, optional icon, and a content area on the right side for controls like toggles, dropdowns, or buttons:
+
+```xml
+<ctk:SettingsCard
+    Header="Dark Mode"
+    Description="Use dark theme across the application"
+    HeaderIcon="{ui:FontIcon Glyph=&#xE793;}">
+    <ToggleSwitch IsOn="{x:Bind ViewModel.IsDarkModeEnabled, Mode=TwoWay}" />
+</ctk:SettingsCard>
+```
+
+`SettingsExpander` wraps a header card that can collapse and expand to reveal a list of nested `SettingsCard` items. This pattern works well for grouping related settings that share a parent concept without cluttering the page when users do not need them:
+
+```xml
+<ctk:SettingsExpander
+    Header="Notifications"
+    Description="Configure how the application notifies you"
+    HeaderIcon="{ui:FontIcon Glyph=&#xEA8F;}">
+    <ctk:SettingsExpander.Items>
+        <ctk:SettingsCard Header="Show toast notifications">
+            <ToggleSwitch IsOn="{x:Bind ViewModel.ToastsEnabled, Mode=TwoWay}" />
+        </ctk:SettingsCard>
+        <ctk:SettingsCard Header="Play notification sounds">
+            <ToggleSwitch IsOn="{x:Bind ViewModel.SoundsEnabled, Mode=TwoWay}" />
+        </ctk:SettingsCard>
+    </ctk:SettingsExpander.Items>
+</ctk:SettingsExpander>
+```
+
+These controls save significant time over building equivalent layouts from `Grid` and `Border` by hand, and they stay visually consistent with Windows 11 system applications.
+
+## Segmented (Community Toolkit)
+
+`Segmented` provides a horizontal set of mutually exclusive options that behaves similarly to a `RadioButtons` group but renders as a connected pill-style button bar. It suits view mode switching, filter selection, and any scenario where the user picks one option from a small set and the current selection needs to be visually prominent:
+
+```xml
+<ctk:Segmented SelectedIndex="0">
+    <ctk:SegmentedItem Content="Grid" />
+    <ctk:SegmentedItem Content="List" />
+    <ctk:SegmentedItem Content="Details" />
+</ctk:Segmented>
+```

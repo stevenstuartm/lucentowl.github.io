@@ -3,7 +3,7 @@ title: "Text, Status, and Information Controls"
 layout: guide
 category: "WinUI 3"
 subcategory: "Controls & UI"
-description: "Displaying text, progress, status messages, and date/time selection in WinUI 3 using TextBlock, RichTextBlock, ProgressBar, InfoBar, and date/time picker controls."
+description: "Displaying text, progress, and status messages in WinUI 3 using TextBlock, RichTextBlock, ProgressBar, ProgressRing, InfoBar, and ToolTip."
 tags: [winui, winui-3, xaml, controls, ui-framework, desktop, practical]
 ---
 
@@ -15,9 +15,6 @@ tags: [winui, winui-3, xaml, controls, ui-framework, desktop, practical]
 - [ProgressRing](#progressring)
 - [InfoBar](#infobar)
 - [Tooltip](#tooltip)
-- [CalendarDatePicker](#calendardatepicker)
-- [CalendarView](#calendarview)
-- [DatePicker and TimePicker](#datepicker-and-timepicker)
 - [Choosing the Right Feedback Control](#choosing-the-right-feedback-control)
 
 ---
@@ -161,51 +158,6 @@ For a simple string, you can assign the tooltip directly to the attached propert
 Placement is controlled through `ToolTipService.Placement`, which accepts values like `Top`, `Bottom`, `Left`, and `Right`. The default placement is above the target element, which works well in most cases, but adjusting placement is useful when the tooltip would otherwise be clipped by the window edge.
 
 Rich content tooltips are possible by placing layout panels and controls inside the `ToolTip.Content`. A tooltip containing an image and a description, for instance, can provide a preview without opening a new panel. Keep tooltip content concise regardless; a tooltip that requires reading is a sign that the information belongs in the UI itself.
-
----
-
-## CalendarDatePicker
-
-`CalendarDatePicker` provides a compact date selection experience. It displays as a text field showing the selected date, and when activated it opens a flyout containing a full month calendar. This makes it a good choice when date selection is one of several inputs on a form and the calendar should not dominate the layout.
-
-```xml
-<CalendarDatePicker
-    PlaceholderText="Select a date"
-    DateChanged="CalendarDatePicker_DateChanged" />
-```
-
-The selected date is available through the `Date` property, which is of type `DateTimeOffset?`. The null value indicates that no date has been chosen, which is useful for distinguishing an empty field from a chosen date. You can constrain the selectable range using `MinDate` and `MaxDate`.
-
----
-
-## CalendarView
-
-`CalendarView` displays the calendar directly in the page rather than in a flyout, making it appropriate when date selection is the primary activity on a screen or when you want users to see context around the date they are selecting. It supports single, multiple, and range selection modes through the `SelectionMode` property.
-
-```xml
-<CalendarView
-    SelectionMode="Single"
-    SelectedDatesChanged="CalendarView_SelectedDatesChanged" />
-```
-
-In `Multiple` mode, the user can tap individual dates to add or remove them from the selection, which suits scenarios like scheduling recurring events. In `Range` mode, the user selects a start and end date, useful for booking or date range filters.
-
-`CalendarView` exposes density indicators through the `CalendarViewDayItemChanging` event, letting you mark specific dates with visual cues to communicate that something is scheduled or notable on those days.
-
----
-
-## DatePicker and TimePicker
-
-`DatePicker` and `TimePicker` use spinner-style selectors rather than a calendar flyout, presenting separate columns for each component of the date or time. `DatePicker` shows day, month, and year columns, while `TimePicker` shows hour, minute, and AM/PM columns.
-
-```xml
-<DatePicker Header="Appointment date" />
-<TimePicker Header="Appointment time" />
-```
-
-The spinner format is familiar on touch-first or compact displays, where a full calendar flyout might feel heavyweight. On desktop, user preference varies, so choosing between `CalendarDatePicker` and `DatePicker` often comes down to whether the calendar context adds value for the task. Selecting a birthdate, for example, benefits from `DatePicker` because users typically know the date and do not need to navigate a calendar. Selecting a meeting date benefits from `CalendarDatePicker` because users may want to see the surrounding week.
-
-`DatePicker` and `TimePicker` are frequently used together. Placing them side by side under a shared header creates a coherent date-and-time entry experience without requiring a custom compound control.
 
 ---
 

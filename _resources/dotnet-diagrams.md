@@ -30,6 +30,7 @@ figures:
   - dn-heap-sawtooth
 tags: [diagrams, async, linq, dependency-injection, httpclient, garbage-collection]
 related_guides:
+  - /study-guides/dotnet/asp/aspnet-core-fundamentals.html
   - /study-guides/dotnet/c-sharp/foundations/compilation-and-runtime.html
   - /study-guides/dotnet/c-sharp/foundations/assemblies-packages-and-targeting.html
   - /study-guides/dotnet/c-sharp/fundamentals/dates-times-and-numbers.html

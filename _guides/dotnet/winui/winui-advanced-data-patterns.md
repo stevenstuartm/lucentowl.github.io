@@ -242,6 +242,44 @@ public class LocalProduct
 
 The sync service queries for records where `SyncStatus != Synced`, applies them to the server API, and updates the local records to `Synced` on success. If the server returns a new `ServerId` for a newly created record, the local record is updated with that identifier so future updates can reference the correct server resource.
 
+### Connectivity Detection
+
+A desktop application running on a laptop faces intermittent connectivity as a normal operating condition, not an edge case. Users disconnect from Wi-Fi, switch between networks, and resume from sleep with the application still running. Designing for this requires both detecting connectivity changes and choosing how the application behaves when the network is unavailable.
+
+[NetworkInformation](https://learn.microsoft.com/en-us/dotnet/api/windows.networking.connectivity.networkinformation){:target="_blank" rel="noopener noreferrer"} is a Windows Runtime API available to WinUI 3 applications that reports the current connectivity state and fires events when it changes.
+
+```csharp
+public class ConnectivityService : IConnectivityService
+{
+    public bool IsConnected => GetIsConnected();
+
+    public ConnectivityService()
+    {
+        NetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
+    }
+
+    private static bool GetIsConnected()
+    {
+        var profile = NetworkInformation.GetInternetConnectionProfile();
+        return profile?.GetNetworkConnectivityLevel() == NetworkConnectivityLevel.InternetAccess;
+    }
+
+    private void OnNetworkStatusChanged(object sender)
+    {
+        var connected = GetIsConnected();
+        ConnectivityChanged?.Invoke(this, connected);
+    }
+
+    public event EventHandler<bool>? ConnectivityChanged;
+}
+```
+
+Note that `NetworkStatusChanged` fires on an arbitrary thread, so handlers that update the UI must dispatch to the UI thread through `DispatcherQueue`.
+
+Beyond detection, the design question is what the application should do when connectivity is lost. For applications with local data, continuing to display cached content while showing a subtle offline indicator is preferable to blocking the UI entirely. Queue writes and sync operations for when connectivity is restored, rather than surfacing errors that the user cannot act on. If the application makes a network call during an offline period, catching `HttpRequestException` or `SocketException` and returning a cached or empty result allows the UI to remain functional.
+
+Cancellation tokens connect the connectivity story to the request lifecycle. Passing a `CancellationToken` to every async network call and canceling that token when the application loses connectivity, or when the user navigates away, prevents background requests from continuing unnecessarily and avoids the complexity of racing callbacks that arrive after the relevant UI has been torn down.
+
 ---
 
 ## Batch Operations on ObservableCollection

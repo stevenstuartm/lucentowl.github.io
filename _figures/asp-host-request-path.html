@@ -1,0 +1,79 @@
+---
+title: "The Host and a Request's Path Through It"
+kind: component
+system: aspnet-core
+summary: "What the host holds, and a request passing from Kestrel to an endpoint."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 370" role="img" aria-labelledby="ahr-title ahr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ahr-title">The parts of an ASP.NET Core host and the path of one request</title>
+<desc id="ahr-desc">The host, built by WebApplicationBuilder, holds the dependency injection container, configuration, logging, and the Kestrel web server. A client's request reaches Kestrel, which turns it into an HttpContext and passes it through the request pipeline, a chain of middleware added with app.Use calls, to an endpoint such as a minimal API handler, controller action, or hub. The response travels back out through the same middleware in reverse order and leaves through Kestrel.</desc>
+<style>
+.ahr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ahr-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ahr-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.ahr-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; }
+.ahr-zone { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.ahr-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ahr-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.ahr-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ahr-k-inv { font-size: 10.5px; font-style: italic; fill: #FFFFFF; }
+.ahr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.ahr-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.ahr-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.ahr-back { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.75; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="ahr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ahr-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ahr-zone" x="160" y="16" width="784" height="304" rx="12"/>
+<text class="ahr-hd" x="180" y="40">HOST, BUILT BY WEBAPPLICATIONBUILDER</text>
+<rect class="ahr-box" x="185" y="56" width="230" height="64" rx="6"/>
+<text class="ahr-n" x="300" y="82" text-anchor="middle">DI container</text>
+<text class="ahr-k" x="300" y="100" text-anchor="middle">creates and disposes services</text>
+<rect class="ahr-box" x="435" y="56" width="230" height="64" rx="6"/>
+<text class="ahr-n" x="550" y="82" text-anchor="middle">Configuration</text>
+<text class="ahr-k" x="550" y="100" text-anchor="middle">files, environment, command line</text>
+<rect class="ahr-box" x="685" y="56" width="230" height="64" rx="6"/>
+<text class="ahr-n" x="800" y="82" text-anchor="middle">Logging</text>
+<text class="ahr-k" x="800" y="100" text-anchor="middle">providers already attached</text>
+<rect class="ahr-sys" x="185" y="170" width="150" height="120" rx="6"/>
+<text class="ahr-n-inv" x="260" y="200" text-anchor="middle">Kestrel</text>
+<text class="ahr-k-inv" x="260" y="218" text-anchor="middle">[Web server]</text>
+<text class="ahr-k-inv" x="260" y="234" text-anchor="middle">builds HttpContext</text>
+<rect class="ahr-band" x="360" y="140" width="400" height="164" rx="8"/>
+<text class="ahr-hd" x="380" y="160">REQUEST PIPELINE (APP.USE...)</text>
+<rect class="ahr-box" x="376" y="170" width="100" height="120" rx="6"/>
+<text class="ahr-n" x="426" y="200" text-anchor="middle">Middleware</text>
+<text class="ahr-k" x="426" y="218" text-anchor="middle">added first</text>
+<rect class="ahr-box" x="510" y="170" width="100" height="120" rx="6"/>
+<text class="ahr-n" x="560" y="200" text-anchor="middle">Middleware</text>
+<text class="ahr-k" x="560" y="218" text-anchor="middle">added second</text>
+<rect class="ahr-box" x="644" y="170" width="100" height="120" rx="6"/>
+<text class="ahr-n" x="694" y="200" text-anchor="middle">Middleware</text>
+<text class="ahr-k" x="694" y="218" text-anchor="middle">added third</text>
+<rect class="ahr-px" x="784" y="170" width="140" height="120" rx="6"/>
+<text class="ahr-n" x="854" y="200" text-anchor="middle">Endpoint</text>
+<text class="ahr-k" x="854" y="218" text-anchor="middle">handler, action,</text>
+<text class="ahr-k" x="854" y="234" text-anchor="middle">method, or hub</text>
+<rect class="ahr-box" x="16" y="170" width="120" height="120" rx="6"/>
+<text class="ahr-n" x="76" y="200" text-anchor="middle">Client</text>
+<text class="ahr-k" x="76" y="218" text-anchor="middle">browser, app,</text>
+<text class="ahr-k" x="76" y="234" text-anchor="middle">or service</text>
+<path class="ahr-flow" d="M136,246 L183,246" marker-end="url(#ahr-a)"/>
+<path class="ahr-flow" d="M335,246 L374,246" marker-end="url(#ahr-a)"/>
+<path class="ahr-flow" d="M476,246 L508,246" marker-end="url(#ahr-a)"/>
+<path class="ahr-flow" d="M610,246 L642,246" marker-end="url(#ahr-a)"/>
+<path class="ahr-flow" d="M744,246 L782,246" marker-end="url(#ahr-a)"/>
+<path class="ahr-back" d="M784,276 L746,276" marker-end="url(#ahr-ag)"/>
+<path class="ahr-back" d="M644,276 L612,276" marker-end="url(#ahr-ag)"/>
+<path class="ahr-back" d="M510,276 L478,276" marker-end="url(#ahr-ag)"/>
+<path class="ahr-back" d="M376,276 L337,276" marker-end="url(#ahr-ag)"/>
+<path class="ahr-back" d="M185,276 L138,276" marker-end="url(#ahr-ag)"/>
+<path class="ahr-flow" d="M24,346 L64,346" marker-end="url(#ahr-a)"/>
+<text class="ahr-lg" x="72" y="350">request, in registration order</text>
+<path class="ahr-back" d="M264,346 L304,346" marker-end="url(#ahr-ag)"/>
+<text class="ahr-lg" x="312" y="350">response, in reverse order</text>
+</g>
+</svg>

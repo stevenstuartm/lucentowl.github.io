@@ -2,7 +2,7 @@
 title: "gRPC Services in ASP.NET Core"
 layout: guide
 category: "ASP.NET Core"
-subcategory: "API Programming Models"
+subcategory: "Real-Time & RPC"
 description: "Building and consuming gRPC services in ASP.NET Core including client factory patterns, interceptors, streaming, testing strategies, gRPC-Web for Blazor, and JSON transcoding."
 tags: [asp-net-core, grpc, distributed-systems, performance, microservices, testing, real-time, practical]
 ---

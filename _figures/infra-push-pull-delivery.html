@@ -1,0 +1,65 @@
+---
+title: "Push vs. Pull Delivery"
+kind: flow
+system: infrastructure
+summary: "A pipeline pushes each merged change, while an agent pulls and reconciles."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" role="img" aria-labelledby="ipp-title ipp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ipp-title">Push-based pipeline delivery compared with pull-based GitOps delivery</title>
+<desc id="ipp-desc">In push delivery, an event in the Git repository, such as a merge or a pull-request comment, triggers a CI pipeline, which holds the cloud credentials and applies the change to the resources. Between runs nothing reconciles, and drift shows up only if a scheduled check is set up. In pull delivery, an agent pulls the desired state from the Git repository on its own schedule, applies it to the resources directly or through an operator, and keeps observing their actual state, comparing the two on every interval.</desc>
+<style>
+.ipp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ipp-act { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.ipp-h { font-size: 15px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.ipp-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ipp-n-inv { font-size: 13px; font-weight: 700; fill: #FFFFFF; }
+.ipp-d-inv { font-size: 11.5px; font-style: italic; fill: #FFFFFF; }
+.ipp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.ipp-lab { font-size: 11.5px; fill: var(--color-accent, #A5486E); font-weight: 700; }
+.ipp-note { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.ipp-key { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+</style>
+<defs>
+<marker id="ipp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Panel 1: push -->
+<text class="ipp-h" x="225" y="26" text-anchor="middle">Push: a pipeline applies</text>
+<rect class="ipp-box" x="115" y="48" width="220" height="50" rx="6"/>
+<text class="ipp-n" x="225" y="78" text-anchor="middle">Git repository</text>
+<rect class="ipp-act" x="115" y="165" width="220" height="56" rx="6"/>
+<text class="ipp-n-inv" x="225" y="188" text-anchor="middle">CI pipeline</text>
+<text class="ipp-d-inv" x="225" y="207" text-anchor="middle">runs when an event fires</text>
+<rect class="ipp-box" x="115" y="292" width="220" height="50" rx="6"/>
+<text class="ipp-n" x="225" y="322" text-anchor="middle">Cloud resources</text>
+<path class="ipp-flow" d="M 225,98 L 225,159" marker-end="url(#ipp-a)"/>
+<text class="ipp-lab" x="237" y="134">an event triggers a run</text>
+<path class="ipp-flow" d="M 225,221 L 225,286" marker-end="url(#ipp-a)"/>
+<text class="ipp-lab" x="237" y="248">applies the change</text>
+<text class="ipp-note" x="225" y="385" text-anchor="middle">Between runs, nothing reconciles</text>
+
+<!-- Panel 2: pull -->
+<text class="ipp-h" x="675" y="26" text-anchor="middle">Pull: an agent reconciles</text>
+<rect class="ipp-box" x="565" y="48" width="220" height="50" rx="6"/>
+<text class="ipp-n" x="675" y="78" text-anchor="middle">Git repository</text>
+<rect class="ipp-act" x="565" y="165" width="220" height="56" rx="6"/>
+<text class="ipp-n-inv" x="675" y="188" text-anchor="middle">GitOps agent</text>
+<text class="ipp-d-inv" x="675" y="207" text-anchor="middle">runs on a loop</text>
+<rect class="ipp-box" x="565" y="292" width="220" height="50" rx="6"/>
+<text class="ipp-n" x="675" y="322" text-anchor="middle">Cloud resources</text>
+<path class="ipp-flow" d="M 675,98 L 675,159" marker-end="url(#ipp-a)"/>
+<text class="ipp-lab" x="687" y="126">pulls desired state</text>
+<path class="ipp-flow" d="M 635,221 L 635,286" marker-end="url(#ipp-a)"/>
+<text class="ipp-lab" x="623" y="252" text-anchor="end">applies, or</text>
+<text class="ipp-lab" x="623" y="266" text-anchor="end">via an operator</text>
+<path class="ipp-flow" d="M 715,292 L 715,227" marker-end="url(#ipp-a)"/>
+<text class="ipp-lab" x="727" y="252">observes</text>
+<text class="ipp-lab" x="727" y="266">actual state</text>
+<text class="ipp-note" x="675" y="385" text-anchor="middle">Compares desired and actual state on every interval</text>
+
+<!-- Legend -->
+<rect class="ipp-act" x="60" y="404" width="40" height="16" rx="3"/>
+<text class="ipp-key" x="110" y="416">the component that applies changes</text>
+</g>
+</svg>

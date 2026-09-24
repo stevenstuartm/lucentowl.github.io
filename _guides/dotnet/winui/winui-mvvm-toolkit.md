@@ -207,6 +207,49 @@ Messaging is well-suited for navigation events, login state changes, and cross-c
 
 ---
 
+## XAML Behaviors
+
+XAML behaviors, provided through the [Microsoft.Xaml.Behaviors.WinUI.Managed](https://www.nuget.org/packages/Microsoft.Xaml.Behaviors.WinUI.Managed){:target="_blank" rel="noopener noreferrer"} package, allow you to attach interactive logic to XAML elements declaratively. Instead of wiring up event handlers in code-behind, you attach a behavior to a control in XAML and configure it there.
+
+After installing the package, you reference it with two namespaces in XAML:
+
+```xml
+xmlns:i="using:Microsoft.Xaml.Interactivity"
+xmlns:ia="using:Microsoft.Xaml.Interactions.Core"
+```
+
+The most common pattern is `EventTriggerBehavior` combined with `InvokeCommandAction`. This fires a ViewModel command in response to any control event without code-behind:
+
+```xml
+<TextBox>
+    <i:Interaction.Behaviors>
+        <i:BehaviorCollection>
+            <ia:EventTriggerBehavior EventName="LostFocus">
+                <ia:InvokeCommandAction Command="{x:Bind ViewModel.ValidateInputCommand}" />
+            </ia:EventTriggerBehavior>
+        </i:BehaviorCollection>
+    </i:Interaction.Behaviors>
+</TextBox>
+```
+
+`DataTriggerBehavior` watches a binding value and fires actions when it matches a condition. You can use this to invoke a command or call a method when a ViewModel property reaches a specific state:
+
+```xml
+<i:Interaction.Behaviors>
+    <i:BehaviorCollection>
+        <ia:DataTriggerBehavior Binding="{x:Bind ViewModel.IsComplete, Mode=OneWay}" Value="True">
+            <ia:InvokeCommandAction Command="{x:Bind ViewModel.NavigateNextCommand}" />
+        </ia:DataTriggerBehavior>
+    </i:BehaviorCollection>
+</i:Interaction.Behaviors>
+```
+
+You can also write custom behaviors by creating a class that inherits from `Behavior<T>`. The `OnAttached` method runs when the behavior is connected to its associated control, and `OnDetaching` runs when it is removed. Custom behaviors are a clean mechanism for encapsulating reusable interaction logic, such as auto-scrolling a list when new items arrive or focusing a control when a popup opens.
+
+Behaviors work well with MVVM because they allow the View to respond to events and property changes without code-behind methods, keeping UI logic either in the ViewModel or in the behavior class itself where it is testable and reusable.
+
+---
+
 ## Source Generators and AOT Compatibility
 
 The `[ObservableProperty]` and `[RelayCommand]` attributes work through C# source generators, which run as part of the build process and emit additional C# code before compilation. The generated code is ordinary C# that you can inspect in Visual Studio by expanding the "Analyzers" node in the project's dependencies. There is no runtime reflection involved.
