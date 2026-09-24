@@ -28,44 +28,12 @@
     - title: "Gas City: Orchestrating Fleets of Coding Agents"
       url: /study-guides/ai/gas-city.html
 
-- id: architecture-guides-revised-1
-  change: revised
-  type: guide
-  title: "Architecture guides revised"
-  url: /study-guides.html?category=architecture
-  cta: "Browse architecture guides"
-  note: "A full refinement pass over the architecture guides, including a new guide on architecture risk analysis."
-  links:
-    - title: "Architecture Risk Analysis"
-      url: /study-guides/architecture/architecture-risk-analysis.html
-
 - id: reads-should-not-design-writes
   change: new
   type: post
   title: "Your Reads Should Not Design Your Writes"
   url: /blog/2026/09/14/your-reads-should-not-design-your-writes.html
   note: "Why wide update bodies can't tell an omitted field from a cleared one, and how small, replaceable write resources avoid the problem."
-
-- id: ai-guides-revised-1
-  change: revised
-  type: guide
-  title: "AI & Machine Learning guides reorganized"
-  url: /study-guides.html?category=ai-machine-learning
-  cta: "Browse AI & ML guides"
-  note: "The AI guides were consolidated and rewritten, with new guides on MLOps and tool calling."
-  links:
-    - title: "MLOps"
-      url: /study-guides/ai/mlops.html
-    - title: "Tool Calling"
-      url: /study-guides/ai/tool-calling.html
-
-- id: azure-guides-revised-1
-  change: revised
-  type: guide
-  title: "Azure guides revised"
-  url: /study-guides.html?category=azure
-  cta: "Browse Azure guides"
-  note: "A refinement pass across the Azure guides."
 
 - id: plan-task-skill
   change: new

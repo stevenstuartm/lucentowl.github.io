@@ -1,0 +1,98 @@
+---
+title: "LCP Across One Page's Visits"
+kind: chart
+system: seo
+summary: "LCP across one page's visits, with the median and 75th percentile."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img" aria-labelledby="swl-title swl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="swl-title">Distribution of Largest Contentful Paint across one page's visits</title>
+<desc id="swl-desc">A histogram of LCP times for an illustrative page, in quarter-second bins from 0 to 7 seconds. 70 percent of visits are within the 2.5 second good threshold and 30 percent are slower. Visits peak just under 1 second, with half finishing by 1.6 seconds, and a long tail of slower visits stretches to the right, with about 4 percent beyond 7 seconds. The good threshold is 2.5 seconds. The 75th percentile falls at 2.8 seconds, past the threshold, so the page fails LCP even though most visits are fast.</desc>
+<style>
+.swl-good { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.85; }
+.swl-bad { fill: var(--color-accent, #A5486E); fill-opacity: 0.75; }
+.swl-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.swl-thr { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.swl-p75 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.swl-med { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.swl-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.swl-t { font-size: 11.5px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.swl-lab { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.swl-labr { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="swl-good" x="91.0" y="266.8" width="24.8" height="23.2"/>
+<rect class="swl-good" x="117.8" y="165.5" width="24.8" height="124.5"/>
+<rect class="swl-good" x="144.6" y="106.5" width="24.8" height="183.5"/>
+<rect class="swl-good" x="171.4" y="97.6" width="24.8" height="192.4"/>
+<rect class="swl-good" x="198.1" y="111.3" width="24.8" height="178.7"/>
+<rect class="swl-good" x="224.9" y="132.4" width="24.8" height="157.6"/>
+<rect class="swl-good" x="251.7" y="154.4" width="24.8" height="135.6"/>
+<rect class="swl-good" x="278.5" y="174.5" width="24.8" height="115.5"/>
+<rect class="swl-good" x="305.3" y="192.1" width="24.8" height="97.9"/>
+<rect class="swl-good" x="332.1" y="207.1" width="24.8" height="82.9"/>
+<rect class="swl-bad" x="358.9" y="219.7" width="24.8" height="70.3"/>
+<rect class="swl-bad" x="385.6" y="230.2" width="24.8" height="59.8"/>
+<rect class="swl-bad" x="412.4" y="239.0" width="24.8" height="51.0"/>
+<rect class="swl-bad" x="439.2" y="246.4" width="24.8" height="43.6"/>
+<rect class="swl-bad" x="466.0" y="252.6" width="24.8" height="37.4"/>
+<rect class="swl-bad" x="492.8" y="257.7" width="24.8" height="32.3"/>
+<rect class="swl-bad" x="519.6" y="262.1" width="24.8" height="27.9"/>
+<rect class="swl-bad" x="546.4" y="265.8" width="24.8" height="24.2"/>
+<rect class="swl-bad" x="573.1" y="269.0" width="24.8" height="21.0"/>
+<rect class="swl-bad" x="599.9" y="271.6" width="24.8" height="18.4"/>
+<rect class="swl-bad" x="626.7" y="273.9" width="24.8" height="16.1"/>
+<rect class="swl-bad" x="653.5" y="275.9" width="24.8" height="14.1"/>
+<rect class="swl-bad" x="680.3" y="277.6" width="24.8" height="12.4"/>
+<rect class="swl-bad" x="707.1" y="279.0" width="24.8" height="11.0"/>
+<rect class="swl-bad" x="733.9" y="280.3" width="24.8" height="9.7"/>
+<rect class="swl-bad" x="760.6" y="281.4" width="24.8" height="8.6"/>
+<rect class="swl-bad" x="787.4" y="282.3" width="24.8" height="7.7"/>
+<rect class="swl-bad" x="814.2" y="283.1" width="24.8" height="6.9"/>
+<path class="swl-axis" d="M 90,60 V 290 H 850"/>
+<path class="swl-axis" d="M 90.0,290 V 296"/>
+<text class="swl-ax" x="90.0" y="310" text-anchor="middle">0 s</text>
+<path class="swl-axis" d="M 197.1,290 V 296"/>
+<text class="swl-ax" x="197.1" y="310" text-anchor="middle">1 s</text>
+<path class="swl-axis" d="M 304.3,290 V 296"/>
+<text class="swl-ax" x="304.3" y="310" text-anchor="middle">2 s</text>
+<path class="swl-axis" d="M 411.4,290 V 296"/>
+<text class="swl-ax" x="411.4" y="310" text-anchor="middle">3 s</text>
+<path class="swl-axis" d="M 518.6,290 V 296"/>
+<text class="swl-ax" x="518.6" y="310" text-anchor="middle">4 s</text>
+<path class="swl-axis" d="M 625.7,290 V 296"/>
+<text class="swl-ax" x="625.7" y="310" text-anchor="middle">5 s</text>
+<path class="swl-axis" d="M 732.9,290 V 296"/>
+<text class="swl-ax" x="732.9" y="310" text-anchor="middle">6 s</text>
+<path class="swl-axis" d="M 840.0,290 V 296"/>
+<text class="swl-ax" x="840.0" y="310" text-anchor="middle">7 s</text>
+<path class="swl-axis" d="M 84,290.0 H 90"/>
+<text class="swl-ax" x="80" y="294.0" text-anchor="end">0%</text>
+<path class="swl-axis" d="M 84,253.3 H 90"/>
+<text class="swl-ax" x="80" y="257.3" text-anchor="end">2%</text>
+<path class="swl-axis" d="M 84,216.7 H 90"/>
+<text class="swl-ax" x="80" y="220.7" text-anchor="end">4%</text>
+<path class="swl-axis" d="M 84,180.0 H 90"/>
+<text class="swl-ax" x="80" y="184.0" text-anchor="end">6%</text>
+<path class="swl-axis" d="M 84,143.3 H 90"/>
+<text class="swl-ax" x="80" y="147.3" text-anchor="end">8%</text>
+<path class="swl-axis" d="M 84,106.7 H 90"/>
+<text class="swl-ax" x="80" y="110.7" text-anchor="end">10%</text>
+<path class="swl-axis" d="M 84,70.0 H 90"/>
+<text class="swl-ax" x="80" y="74.0" text-anchor="end">12%</text>
+<path class="swl-med" d="M 261.4,56 V 290"/>
+<text class="swl-lab" x="255.4" y="60" text-anchor="end">median 1.6 s</text>
+<path class="swl-thr" d="M 357.9,30 V 290"/>
+<text class="swl-t" x="351.9" y="34" text-anchor="end">good threshold 2.5 s</text>
+<path class="swl-p75" d="M 390.1,56 V 290"/>
+<text class="swl-labr" x="398.1" y="60">75th percentile 2.8 s: fails</text>
+<text class="swl-labr" x="398.1" y="78">slowest quarter of visits</text>
+<text class="swl-labr" x="398.1" y="94">lies to the right</text>
+<text class="swl-ax" x="840" y="246" text-anchor="end">4% of visits beyond 7 s</text>
+<rect class="swl-good" x="600" y="24" width="12" height="12"/>
+<text class="swl-ax" x="618" y="34">within 2.5 s (70% of visits)</text>
+<rect class="swl-bad" x="600" y="44" width="12" height="12"/>
+<text class="swl-ax" x="618" y="54">slower than 2.5 s (30% of visits)</text>
+<text class="swl-t" x="465" y="334" text-anchor="middle">LCP of each visit, in seconds (illustrative page)</text>
+<text class="swl-t" x="20" y="34">share of visits</text>
+</g>
+</svg>

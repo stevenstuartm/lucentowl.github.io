@@ -358,13 +358,15 @@ When writing about software architecture, use correct terminology:
 - Security guides: `_guides/security/`
 - SDLC guides: `_guides/sdlc/`
 - AI & ML guides: `_guides/ai/`
-- Databases guides: `_guides/data/`. `data-architecture.md` also lives there but belongs to the Data & Analytics category
+- Databases guides: `_guides/data/`. The Data & Analytics guides (`analytics-and-statistics.md`, `data-architecture.md`) also live there
 - IoT guides: `_guides/iot/` (vendor-neutral; Azure IoT product guides live under `_guides/infrastructure/azure/`)
 - Leadership guides: `_guides/leadership/` (including architecture decision-making, which is a leadership topic rather than an architecture one)
 - .NET & C# guides: `_guides/dotnet/c-sharp/` (by subcategory: `foundations/`, `fundamentals/`, `oop/`, `async/`, `collections/`, `libraries/`, `advanced/`, `tooling/`) plus `_guides/dotnet/iot/` for the IoT & Embedded subcategory. `_guides/dotnet/asp/`, `_guides/dotnet/aspire/`, and `_guides/dotnet/winui/` belong to the separate ASP.NET Core and WinUI 3 categories
 - Networking guides: `_guides/networking/`
+- Web Development guides: `_guides/web/`
 - Developer Tools guides: `_guides/developer-tools/` (Git and GitHub; the Azure-specific GitHub Actions guide lives under `_guides/infrastructure/azure/`)
-- Top-level guides (observability, etc.): `_guides/`
+- Observability guides: `_guides/observability/`
+- Top-level guides: `_guides/`
 
 **When to create new subcategories**:
 - Group related guides under a coherent theme

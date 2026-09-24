@@ -1,0 +1,96 @@
+---
+title: "Agent-to-Gateway Collectors"
+kind: deployment
+system: observability
+summary: "Agents route spans by trace ID so each trace reaches one gateway."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 356" role="img" aria-labelledby="oct-title oct-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="oct-title">Agent Collectors routing spans by trace ID to a pool of gateway Collectors</title>
+<desc id="oct-desc">Three hosts run the checkout, orders, and payments services, each with the OpenTelemetry SDK and an agent Collector running a load-balancing exporter. Spans of trace 4bf9…4736 come from all three hosts and are all routed to gateway Collector 1. Spans of trace 9e1c…77a0 also come from all three hosts and are all routed to gateway Collector 2. Each gateway runs tail sampling on complete traces and sends the traces it keeps to the tracing backend.</desc>
+<style>
+.oct-host { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.oct-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.oct-gw { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
+.oct-be { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.oct-hl { font-size: 10.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); letter-spacing: 0.05em; }
+.oct-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.oct-ni { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
+.oct-si { font-size: 11px; font-style: italic; fill: #FFFFFF; }
+.oct-nb { font-size: 12.5px; font-weight: 700; fill: var(--color-text, #2C3E50); }
+.oct-s { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.oct-ka { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.oct-kp { font-size: 11.5px; font-weight: 700; fill: var(--color-purple, #6B3FA0); }
+.oct-cap { font-size: 12px; fill: var(--color-text, #2C3E50); }
+.oct-fa { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; }
+.oct-fp { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.oct-fk { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.oct-in { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+</style>
+
+<defs>
+<marker id="oct-aa" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="oct-ap" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-purple, #6B3FA0)"/></marker>
+<marker id="oct-ak" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="oct-ai" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="oct-host" x="20" y="20" width="270" height="86" rx="6"/>
+<text class="oct-hl" x="30" y="36">HOST 1</text>
+<rect class="oct-box" x="30" y="44" width="110" height="52" rx="5"/>
+<text class="oct-n" x="40" y="64">checkout</text>
+<text class="oct-s" x="40" y="82">[OTel SDK]</text>
+<rect class="oct-box" x="170" y="44" width="110" height="52" rx="5"/>
+<text class="oct-n" x="180" y="64">agent</text>
+<text class="oct-s" x="180" y="82">[load balancing]</text>
+<path class="oct-in" d="M 140,70 L 164,70" marker-end="url(#oct-ai)"/>
+
+<rect class="oct-host" x="20" y="136" width="270" height="86" rx="6"/>
+<text class="oct-hl" x="30" y="152">HOST 2</text>
+<rect class="oct-box" x="30" y="160" width="110" height="52" rx="5"/>
+<text class="oct-n" x="40" y="180">orders</text>
+<text class="oct-s" x="40" y="198">[OTel SDK]</text>
+<rect class="oct-box" x="170" y="160" width="110" height="52" rx="5"/>
+<text class="oct-n" x="180" y="180">agent</text>
+<text class="oct-s" x="180" y="198">[load balancing]</text>
+<path class="oct-in" d="M 140,186 L 164,186" marker-end="url(#oct-ai)"/>
+
+<rect class="oct-host" x="20" y="252" width="270" height="86" rx="6"/>
+<text class="oct-hl" x="30" y="268">HOST 3</text>
+<rect class="oct-box" x="30" y="276" width="110" height="52" rx="5"/>
+<text class="oct-n" x="40" y="296">payments</text>
+<text class="oct-s" x="40" y="314">[OTel SDK]</text>
+<rect class="oct-box" x="170" y="276" width="110" height="52" rx="5"/>
+<text class="oct-n" x="180" y="296">agent</text>
+<text class="oct-s" x="180" y="314">[load balancing]</text>
+<path class="oct-in" d="M 140,302 L 164,302" marker-end="url(#oct-ai)"/>
+
+<rect class="oct-gw" x="460" y="60" width="180" height="64" rx="6"/>
+<text class="oct-ni" x="474" y="86">gateway Collector 1</text>
+<text class="oct-si" x="474" y="106">tail sampling</text>
+<rect class="oct-gw" x="460" y="220" width="180" height="64" rx="6"/>
+<text class="oct-ni" x="474" y="246">gateway Collector 2</text>
+<text class="oct-si" x="474" y="266">tail sampling</text>
+
+<path class="oct-fa" d="M 280,62 C 370,62 370,82 454,82" marker-end="url(#oct-aa)"/>
+<path class="oct-fa" d="M 280,178 C 370,178 370,92 454,92" marker-end="url(#oct-aa)"/>
+<path class="oct-fa" d="M 280,294 C 380,294 370,102 454,102" marker-end="url(#oct-aa)"/>
+<path class="oct-fp" d="M 280,78 C 380,78 370,238 454,238" marker-end="url(#oct-ap)"/>
+<path class="oct-fp" d="M 280,194 C 370,194 370,250 454,250" marker-end="url(#oct-ap)"/>
+<path class="oct-fp" d="M 280,310 C 370,310 370,262 454,262" marker-end="url(#oct-ap)"/>
+
+<rect class="oct-be" x="720" y="140" width="160" height="64" rx="6"/>
+<text class="oct-nb" x="734" y="166">tracing backend</text>
+<text class="oct-s" x="734" y="186">stores kept traces</text>
+<path class="oct-fk" d="M 640,92 C 690,92 680,164 714,164" marker-end="url(#oct-ak)"/>
+<path class="oct-fk" d="M 640,252 C 690,252 680,180 714,180" marker-end="url(#oct-ak)"/>
+
+<path class="oct-fa" d="M 680,28 H 710"/>
+<text class="oct-ka" x="718" y="32">spans of trace 4bf9…4736</text>
+<path class="oct-fp" d="M 680,50 H 710"/>
+<text class="oct-kp" x="718" y="54">spans of trace 9e1c…77a0</text>
+
+<text class="oct-cap" x="460" y="320">Agents hash each span's trace ID to pick a gateway,</text>
+<text class="oct-cap" x="460" y="338">so every span of a trace reaches the same one.</text>
+</g>
+</svg>

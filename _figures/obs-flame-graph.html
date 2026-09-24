@@ -1,0 +1,63 @@
+---
+title: "A CPU Flame Graph"
+kind: chart
+system: observability
+summary: "The checkout service's CPU samples, stacked by call path."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 246" role="img" aria-labelledby="ofg-title ofg-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ofg-title">CPU flame graph for the checkout service</title>
+<desc id="ofg-desc">Stacked boxes, each a function sitting on top of the function that called it, with width proportional to the share of CPU samples. At the bottom, all samples. Above it, garbage collection takes 8 percent and a thread pool worker 92 percent. The worker runs CheckoutController.Post at 88 percent. Post calls Cart.Validate at 12 percent, JsonSerializer.Serialize at 46 percent, and TaxCalculator.Compute at 22 percent. Above those, Regex.Match takes 9 percent under Cart.Validate, PropertyInfo.GetValue 16 percent and Utf8JsonWriter.WriteString 28 percent under JsonSerializer.Serialize, and TaxRateCache.Lookup 15 percent under TaxCalculator.Compute.</desc>
+<style>
+.ofg-app { fill: var(--color-primary, #1A5F8A); stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1.5; }
+.ofg-lib { fill: var(--color-gold, #C9A227); stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1.5; }
+.ofg-root { fill: var(--color-text-light, #4A5568); stroke: var(--color-card-bg, #FFFFFF); stroke-width: 1.5; }
+.ofg-ta { font-size: 11px; font-weight: 600; fill: #FFFFFF; }
+.ofg-tl { font-size: 11px; font-weight: 600; fill: #2C3E50; }
+.ofg-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.ofg-t { font-size: 11.5px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.ofg-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+</style>
+
+<defs>
+<marker id="ofg-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ofg-root" x="40" y="152" width="840" height="26"/>
+<text class="ofg-ta" x="460" y="169" text-anchor="middle">all samples (100%)</text>
+
+<rect class="ofg-lib" x="40" y="124" width="67.2" height="26"/>
+<text class="ofg-tl" x="73.6" y="141" text-anchor="middle">GC 8%</text>
+<rect class="ofg-lib" x="107.2" y="124" width="772.8" height="26"/>
+<text class="ofg-tl" x="493.6" y="141" text-anchor="middle">ThreadPool worker 92%</text>
+
+<rect class="ofg-app" x="107.2" y="96" width="739.2" height="26"/>
+<text class="ofg-ta" x="476.8" y="113" text-anchor="middle">CheckoutController.Post 88%</text>
+
+<rect class="ofg-app" x="107.2" y="68" width="100.8" height="26"/>
+<text class="ofg-ta" x="157.6" y="85" text-anchor="middle">Cart.Validate</text>
+<rect class="ofg-lib" x="208" y="68" width="386.4" height="26"/>
+<text class="ofg-tl" x="401.2" y="85" text-anchor="middle">JsonSerializer.Serialize 46%</text>
+<rect class="ofg-app" x="594.4" y="68" width="184.8" height="26"/>
+<text class="ofg-ta" x="686.8" y="85" text-anchor="middle">TaxCalculator.Compute 22%</text>
+
+<rect class="ofg-lib" x="107.2" y="40" width="75.6" height="26"/>
+<text class="ofg-tl" x="145" y="57" text-anchor="middle">Regex.Match</text>
+<rect class="ofg-lib" x="208" y="40" width="134.4" height="26"/>
+<text class="ofg-tl" x="275.2" y="57" text-anchor="middle">PropertyInfo.GetValue</text>
+<rect class="ofg-lib" x="342.4" y="40" width="235.2" height="26"/>
+<text class="ofg-tl" x="460" y="57" text-anchor="middle">Utf8JsonWriter.WriteString</text>
+<rect class="ofg-app" x="594.4" y="40" width="126" height="26"/>
+<text class="ofg-ta" x="657.4" y="57" text-anchor="middle">TaxRateCache.Lookup</text>
+
+<path class="ofg-axis" d="M 40,192 H 874" marker-end="url(#ofg-a)"/>
+<text class="ofg-t" x="40" y="210">width = share of CPU samples, sorted by name (not a timeline)</text>
+<path class="ofg-axis" d="M 22,178 V 20" marker-end="url(#ofg-a)"/>
+<text class="ofg-ax" x="30" y="16">caller below, callee above</text>
+
+<rect class="ofg-app" x="560" y="222" width="12" height="12" rx="2"/>
+<text class="ofg-ax" x="578" y="232">application code</text>
+<rect class="ofg-lib" x="700" y="222" width="12" height="12" rx="2"/>
+<text class="ofg-ax" x="718" y="232">framework and runtime</text>
+</g>
+</svg>

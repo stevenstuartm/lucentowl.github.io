@@ -1,0 +1,112 @@
+---
+title: "Repeated 95% Confidence Intervals"
+kind: chart
+system: statistics
+summary: "Intervals from 20 samples, and the one that misses."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 510" role="img" aria-labelledby="stci-title stci-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="stci-title">Twenty 95 percent confidence intervals around a true mean</title>
+<desc id="stci-desc">Twenty horizontal intervals, one per sample, are stacked beside a vertical dashed line at the true population mean. Each interval is centered on its own sample mean, so they shift left and right, and each sample's own spread sets its width. Nineteen of the twenty cross the true mean. One interval lies entirely to one side and misses it.</desc>
+<style>
+.stci-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.stci-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.stci-curve { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.stci-fill1 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.45; stroke: none; }
+.stci-fill2 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.25; stroke: none; }
+.stci-fill3 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.12; stroke: none; }
+.stci-tail { fill: var(--color-accent, #A5486E); fill-opacity: 0.55; stroke: none; }
+.stci-box { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.15; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.stci-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.stci-line-ok { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.stci-line-bad { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.stci-mark { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.75; stroke-dasharray: 5 4; }
+.stci-mark-acc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 5 4; }
+.stci-mark-pur { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 5 4; }
+.stci-fence { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.stci-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.stci-pt-bad { fill: var(--color-accent, #A5486E); stroke: none; }
+.stci-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.stci-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.stci-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.stci-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.stci-lab-p { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.stci-lab-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.stci-lab-pur { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.stci-c1 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.2; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.stci-c2 { fill: var(--color-purple, #6B3FA0); fill-opacity: 0.25; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; }
+.stci-c2l { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.stci-big { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="stci-band" x="20" y="20" width="860" height="470" rx="8"/>
+<text class="stci-n" x="36.0" y="46.0">20 samples from the same population</text>
+<text class="stci-s" x="36.0" y="64.0">each sample gives its own 95% interval</text>
+<path class="stci-mark" d="M 420.0,82 V 460"/>
+<text class="stci-lab" x="420.0" y="76.0" text-anchor="middle">true population mean</text>
+<path class="stci-line-ok" d="M 409.1,96 H 596.6"/>
+<circle class="stci-pt" cx="502.8" cy="96" r="3.5"/>
+<text class="stci-s" x="134.0" y="100.0" text-anchor="end">sample 1</text>
+<path class="stci-line-ok" d="M 399.7,114 H 626.7"/>
+<circle class="stci-pt" cx="513.2" cy="114" r="3.5"/>
+<text class="stci-s" x="134.0" y="118.0" text-anchor="end">sample 2</text>
+<path class="stci-line-ok" d="M 300.8,132 H 547.7"/>
+<circle class="stci-pt" cx="424.3" cy="132" r="3.5"/>
+<text class="stci-s" x="134.0" y="136.0" text-anchor="end">sample 3</text>
+<path class="stci-line-ok" d="M 256.5,150 H 485.2"/>
+<circle class="stci-pt" cx="370.9" cy="150" r="3.5"/>
+<text class="stci-s" x="134.0" y="154.0" text-anchor="end">sample 4</text>
+<path class="stci-line-ok" d="M 236.1,168 H 463.4"/>
+<circle class="stci-pt" cx="349.8" cy="168" r="3.5"/>
+<text class="stci-s" x="134.0" y="172.0" text-anchor="end">sample 5</text>
+<path class="stci-line-ok" d="M 304.9,186 H 539.2"/>
+<circle class="stci-pt" cx="422.0" cy="186" r="3.5"/>
+<text class="stci-s" x="134.0" y="190.0" text-anchor="end">sample 6</text>
+<path class="stci-line-ok" d="M 210.4,204 H 498.2"/>
+<circle class="stci-pt" cx="354.3" cy="204" r="3.5"/>
+<text class="stci-s" x="134.0" y="208.0" text-anchor="end">sample 7</text>
+<path class="stci-line-ok" d="M 195.5,222 H 459.8"/>
+<circle class="stci-pt" cx="327.6" cy="222" r="3.5"/>
+<text class="stci-s" x="134.0" y="226.0" text-anchor="end">sample 8</text>
+<path class="stci-line-ok" d="M 325.5,240 H 540.1"/>
+<circle class="stci-pt" cx="432.8" cy="240" r="3.5"/>
+<text class="stci-s" x="134.0" y="244.0" text-anchor="end">sample 9</text>
+<path class="stci-line-ok" d="M 292.5,258 H 564.7"/>
+<circle class="stci-pt" cx="428.6" cy="258" r="3.5"/>
+<text class="stci-s" x="134.0" y="262.0" text-anchor="end">sample 10</text>
+<path class="stci-line-ok" d="M 311.8,276 H 598.4"/>
+<circle class="stci-pt" cx="455.1" cy="276" r="3.5"/>
+<text class="stci-s" x="134.0" y="280.0" text-anchor="end">sample 11</text>
+<path class="stci-line-ok" d="M 243.5,294 H 479.0"/>
+<circle class="stci-pt" cx="361.2" cy="294" r="3.5"/>
+<text class="stci-s" x="134.0" y="298.0" text-anchor="end">sample 12</text>
+<path class="stci-line-ok" d="M 271.9,312 H 568.7"/>
+<circle class="stci-pt" cx="420.3" cy="312" r="3.5"/>
+<text class="stci-s" x="134.0" y="316.0" text-anchor="end">sample 13</text>
+<path class="stci-line-ok" d="M 289.6,330 H 542.1"/>
+<circle class="stci-pt" cx="415.8" cy="330" r="3.5"/>
+<text class="stci-s" x="134.0" y="334.0" text-anchor="end">sample 14</text>
+<path class="stci-line-ok" d="M 182.4,348 H 464.0"/>
+<circle class="stci-pt" cx="323.2" cy="348" r="3.5"/>
+<text class="stci-s" x="134.0" y="352.0" text-anchor="end">sample 15</text>
+<path class="stci-line-ok" d="M 343.6,366 H 565.6"/>
+<circle class="stci-pt" cx="454.6" cy="366" r="3.5"/>
+<text class="stci-s" x="134.0" y="370.0" text-anchor="end">sample 16</text>
+<path class="stci-line-ok" d="M 305.5,384 H 575.7"/>
+<circle class="stci-pt" cx="440.6" cy="384" r="3.5"/>
+<text class="stci-s" x="134.0" y="388.0" text-anchor="end">sample 17</text>
+<path class="stci-line-bad" d="M 452.7,402 H 694.5"/>
+<circle class="stci-pt-bad" cx="573.6" cy="402" r="3.5"/>
+<text class="stci-s" x="134.0" y="406.0" text-anchor="end">sample 18</text>
+<text class="stci-lab-bad" x="704.5" y="406.0" text-anchor="start">misses the true mean</text>
+<path class="stci-line-ok" d="M 306.7,420 H 559.4"/>
+<circle class="stci-pt" cx="433.0" cy="420" r="3.5"/>
+<text class="stci-s" x="134.0" y="424.0" text-anchor="end">sample 19</text>
+<path class="stci-line-ok" d="M 283.8,438 H 537.6"/>
+<circle class="stci-pt" cx="410.7" cy="438" r="3.5"/>
+<text class="stci-s" x="134.0" y="442.0" text-anchor="end">sample 20</text>
+<path class="stci-line-ok" d="M 170,482 H 200"/>
+<text class="stci-s" x="208.0" y="486.0">interval contains the true mean (19 of 20)</text>
+<path class="stci-line-bad" d="M 520,482 H 550"/>
+<text class="stci-s" x="558.0" y="486.0">interval misses it (1 of 20)</text>
+</g>
+</svg>

@@ -248,7 +248,7 @@ See [Security Testing](/study-guides/security/security-testing.html){:target="_b
 
 For detailed deployment guidance, see:
 - [Deployment Strategies](/study-guides/infrastructure/deployment-strategies.html){:target="_blank" rel="noopener noreferrer"}
-- [Observability Fundamentals](/study-guides/observability-fundamentals.html){:target="_blank" rel="noopener noreferrer"}
+- [Observability Fundamentals](/study-guides/observability/observability-fundamentals.html){:target="_blank" rel="noopener noreferrer"}
 
 **Key Principles**:
 - Automate everything: deployments, rollbacks, monitoring

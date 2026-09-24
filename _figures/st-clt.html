@@ -1,0 +1,87 @@
+---
+title: "Averages of Skewed Data Form a Bell Curve"
+kind: chart
+system: statistics
+summary: "Skewed orders, and averages of samples of 5 and 200."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 370" role="img" aria-labelledby="stcl-title stcl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="stcl-title">Individual order values next to the distribution of sample averages</title>
+<desc id="stcl-desc">On the left, individual order values rise steeply from zero and trail off in a long right tail. On the right, averages of many random samples of 5 orders are still somewhat skewed and spread widely around the true average. Averages of samples of 200 orders form a narrow, symmetric bell curve centered on the true average.</desc>
+<style>
+.stcl-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.stcl-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.stcl-curve { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.stcl-fill1 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.45; stroke: none; }
+.stcl-fill2 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.25; stroke: none; }
+.stcl-fill3 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.12; stroke: none; }
+.stcl-tail { fill: var(--color-accent, #A5486E); fill-opacity: 0.55; stroke: none; }
+.stcl-box { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.15; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.stcl-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.stcl-line-ok { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.stcl-line-bad { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.stcl-mark { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.75; stroke-dasharray: 5 4; }
+.stcl-mark-acc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 5 4; }
+.stcl-mark-pur { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 5 4; }
+.stcl-fence { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.stcl-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.stcl-pt-bad { fill: var(--color-accent, #A5486E); stroke: none; }
+.stcl-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.stcl-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.stcl-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.stcl-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.stcl-lab-p { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.stcl-lab-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.stcl-lab-pur { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.stcl-c1 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.2; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.stcl-c2 { fill: var(--color-purple, #6B3FA0); fill-opacity: 0.25; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; }
+.stcl-c2l { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.stcl-big { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="stcl-band" x="20" y="20" width="420" height="330" rx="8"/>
+<text class="stcl-n" x="34.0" y="46.0">Individual orders</text>
+<text class="stcl-s" x="34.0" y="64.0">a store's full order history, heavily right-skewed</text>
+<path class="stcl-c1" d="M 50.0,280 L 50.0,269.2 L 57.4,269.2 L 57.4,197.7 L 64.8,197.7 L 64.8,134.2 L 72.2,134.2 L 72.2,108.6 L 79.6,108.6 L 79.6,110.2 L 87.0,110.2 L 87.0,119.7 L 94.4,119.7 L 94.4,136.5 L 101.8,136.5 L 101.8,152.4 L 109.2,152.4 L 109.2,167.5 L 116.6,167.5 L 116.6,182.2 L 124.0,182.2 L 124.0,198.5 L 131.4,198.5 L 131.4,205.5 L 138.8,205.5 L 138.8,218.1 L 146.2,218.1 L 146.2,226.8 L 153.6,226.8 L 153.6,231.6 L 161.0,231.6 L 161.0,238.2 L 168.4,238.2 L 168.4,244.7 L 175.8,244.7 L 175.8,246.6 L 183.2,246.6 L 183.2,251.5 L 190.6,251.5 L 190.6,255.6 L 198.0,255.6 L 198.0,257.9 L 205.4,257.9 L 205.4,260.4 L 212.8,260.4 L 212.8,263.9 L 220.2,263.9 L 220.2,264.4 L 227.6,264.4 L 227.6,268.1 L 235.0,268.1 L 235.0,268.5 L 242.4,268.5 L 242.4,270.0 L 249.8,270.0 L 249.8,270.6 L 257.2,270.6 L 257.2,270.6 L 264.6,270.6 L 264.6,272.3 L 272.0,272.3 L 272.0,272.3 L 279.4,272.3 L 279.4,273.7 L 286.8,273.7 L 286.8,274.1 L 294.2,274.1 L 294.2,275.5 L 301.6,275.5 L 301.6,275.3 L 309.0,275.3 L 309.0,276.2 L 316.4,276.2 L 316.4,276.6 L 323.8,276.6 L 323.8,276.5 L 331.2,276.5 L 331.2,277.2 L 338.6,277.2 L 338.6,276.1 L 346.0,276.1 L 346.0,277.5 L 353.4,277.5 L 353.4,277.9 L 360.8,277.9 L 360.8,277.3 L 368.2,277.3 L 368.2,278.0 L 375.6,278.0 L 375.6,277.6 L 383.0,277.6 L 383.0,278.4 L 390.4,278.4 L 390.4,278.5 L 397.8,278.5 L 397.8,278.8 L 405.2,278.8 L 405.2,278.6 L 412.6,278.6 L 412.6,278.9 L 420.0,278.9 L 420.0,280"/>
+<path class="stcl-axis" d="M 50,280 H 420"/>
+<path class="stcl-axis" d="M 50.0,280 V 285"/>
+<text class="stcl-s" x="50.0" y="300.0" text-anchor="middle">$0</text>
+<path class="stcl-axis" d="M 124.0,280 V 285"/>
+<text class="stcl-s" x="124.0" y="300.0" text-anchor="middle">$40</text>
+<path class="stcl-axis" d="M 198.0,280 V 285"/>
+<text class="stcl-s" x="198.0" y="300.0" text-anchor="middle">$80</text>
+<path class="stcl-axis" d="M 272.0,280 V 285"/>
+<text class="stcl-s" x="272.0" y="300.0" text-anchor="middle">$120</text>
+<path class="stcl-axis" d="M 346.0,280 V 285"/>
+<text class="stcl-s" x="346.0" y="300.0" text-anchor="middle">$160</text>
+<path class="stcl-axis" d="M 420.0,280 V 285"/>
+<text class="stcl-s" x="420.0" y="300.0" text-anchor="middle">$200</text>
+<text class="stcl-k" x="235.0" y="318.0" text-anchor="middle">order value</text>
+<path class="stcl-mark" d="M 126.3,280 V 84"/>
+<text class="stcl-lab" x="132.3" y="94.0" text-anchor="start">true average</text>
+<rect class="stcl-band" x="460" y="20" width="420" height="330" rx="8"/>
+<text class="stcl-n" x="474.0" y="46.0">Averages of repeated samples</text>
+<text class="stcl-s" x="474.0" y="64.0">narrower and more symmetric as samples grow</text>
+<path class="stcl-c1" d="M 490.0,280 L 490.0,280.0 L 497.4,280.0 L 497.4,280.0 L 504.8,280.0 L 504.8,279.7 L 512.2,279.7 L 512.2,276.5 L 519.6,276.5 L 519.6,268.3 L 527.0,268.3 L 527.0,259.5 L 534.4,259.5 L 534.4,250.3 L 541.8,250.3 L 541.8,245.5 L 549.2,245.5 L 549.2,243.6 L 556.6,243.6 L 556.6,247.5 L 564.0,247.5 L 564.0,252.6 L 571.4,252.6 L 571.4,255.1 L 578.8,255.1 L 578.8,261.0 L 586.2,261.0 L 586.2,265.1 L 593.6,265.1 L 593.6,268.2 L 601.0,268.2 L 601.0,270.9 L 608.4,270.9 L 608.4,273.4 L 615.8,273.4 L 615.8,274.7 L 623.2,274.7 L 623.2,276.2 L 630.6,276.2 L 630.6,277.3 L 638.0,277.3 L 638.0,278.0 L 645.4,278.0 L 645.4,278.0 L 652.8,278.0 L 652.8,278.6 L 660.2,278.6 L 660.2,279.2 L 667.6,279.2 L 667.6,279.2 L 675.0,279.2 L 675.0,279.5 L 682.4,279.5 L 682.4,279.6 L 689.8,279.6 L 689.8,279.7 L 697.2,279.7 L 697.2,279.7 L 704.6,279.7 L 704.6,279.8 L 712.0,279.8 L 712.0,279.8 L 719.4,279.8 L 719.4,279.8 L 726.8,279.8 L 726.8,279.8 L 734.2,279.8 L 734.2,279.9 L 741.6,279.9 L 741.6,280.0 L 749.0,280.0 L 749.0,279.9 L 756.4,279.9 L 756.4,279.9 L 763.8,279.9 L 763.8,280.0 L 771.2,280.0 L 771.2,280.0 L 778.6,280.0 L 778.6,280.0 L 786.0,280.0 L 786.0,280.0 L 793.4,280.0 L 793.4,280.0 L 800.8,280.0 L 800.8,280.0 L 808.2,280.0 L 808.2,280.0 L 815.6,280.0 L 815.6,280.0 L 823.0,280.0 L 823.0,280.0 L 830.4,280.0 L 830.4,280.0 L 837.8,280.0 L 837.8,280.0 L 845.2,280.0 L 845.2,280.0 L 852.6,280.0 L 852.6,280.0 L 860.0,280.0 L 860.0,280"/>
+<path class="stcl-c2" d="M 490.0,280 L 490.0,280.0 L 493.7,280.0 L 493.7,280.0 L 497.4,280.0 L 497.4,280.0 L 501.1,280.0 L 501.1,280.0 L 504.8,280.0 L 504.8,280.0 L 508.5,280.0 L 508.5,280.0 L 512.2,280.0 L 512.2,280.0 L 515.9,280.0 L 515.9,280.0 L 519.6,280.0 L 519.6,280.0 L 523.3,280.0 L 523.3,280.0 L 527.0,280.0 L 527.0,280.0 L 530.7,280.0 L 530.7,280.0 L 534.4,280.0 L 534.4,280.0 L 538.1,280.0 L 538.1,280.0 L 541.8,280.0 L 541.8,280.0 L 545.5,280.0 L 545.5,280.0 L 549.2,280.0 L 549.2,278.6 L 552.9,278.6 L 552.9,271.1 L 556.6,271.1 L 556.6,218.8 L 560.3,218.8 L 560.3,145.0 L 564.0,145.0 L 564.0,108.6 L 567.7,108.6 L 567.7,145.5 L 571.4,145.5 L 571.4,214.4 L 575.1,214.4 L 575.1,258.1 L 578.8,258.1 L 578.8,273.0 L 582.5,273.0 L 582.5,278.7 L 586.2,278.7 L 586.2,279.8 L 589.9,279.8 L 589.9,279.9 L 593.6,279.9 L 593.6,280.0 L 597.3,280.0 L 597.3,280.0 L 601.0,280.0 L 601.0,280.0 L 604.7,280.0 L 604.7,280.0 L 608.4,280.0 L 608.4,280.0 L 612.1,280.0 L 612.1,280.0 L 615.8,280.0 L 615.8,280.0 L 619.5,280.0 L 619.5,280.0 L 623.2,280.0 L 623.2,280.0 L 626.9,280.0 L 626.9,280.0 L 630.6,280.0 L 630.6,280.0 L 634.3,280.0 L 634.3,280.0 L 638.0,280.0 L 638.0,280.0 L 641.7,280.0 L 641.7,280.0 L 645.4,280.0 L 645.4,280.0 L 649.1,280.0 L 649.1,280.0 L 652.8,280.0 L 652.8,280.0 L 656.5,280.0 L 656.5,280.0 L 660.2,280.0 L 660.2,280.0 L 663.9,280.0 L 663.9,280.0 L 667.6,280.0 L 667.6,280.0 L 671.3,280.0 L 671.3,280.0 L 675.0,280.0 L 675.0,280.0 L 678.7,280.0 L 678.7,280.0 L 682.4,280.0 L 682.4,280.0 L 686.1,280.0 L 686.1,280.0 L 689.8,280.0 L 689.8,280.0 L 693.5,280.0 L 693.5,280.0 L 697.2,280.0 L 697.2,280.0 L 700.9,280.0 L 700.9,280.0 L 704.6,280.0 L 704.6,280.0 L 708.3,280.0 L 708.3,280.0 L 712.0,280.0 L 712.0,280.0 L 715.7,280.0 L 715.7,280.0 L 719.4,280.0 L 719.4,280.0 L 723.1,280.0 L 723.1,280.0 L 726.8,280.0 L 726.8,280.0 L 730.5,280.0 L 730.5,280.0 L 734.2,280.0 L 734.2,280.0 L 737.9,280.0 L 737.9,280.0 L 741.6,280.0 L 741.6,280.0 L 745.3,280.0 L 745.3,280.0 L 749.0,280.0 L 749.0,280.0 L 752.7,280.0 L 752.7,280.0 L 756.4,280.0 L 756.4,280.0 L 760.1,280.0 L 760.1,280.0 L 763.8,280.0 L 763.8,280.0 L 767.5,280.0 L 767.5,280.0 L 771.2,280.0 L 771.2,280.0 L 774.9,280.0 L 774.9,280.0 L 778.6,280.0 L 778.6,280.0 L 782.3,280.0 L 782.3,280.0 L 786.0,280.0 L 786.0,280.0 L 789.7,280.0 L 789.7,280.0 L 793.4,280.0 L 793.4,280.0 L 797.1,280.0 L 797.1,280.0 L 800.8,280.0 L 800.8,280.0 L 804.5,280.0 L 804.5,280.0 L 808.2,280.0 L 808.2,280.0 L 811.9,280.0 L 811.9,280.0 L 815.6,280.0 L 815.6,280.0 L 819.3,280.0 L 819.3,280.0 L 823.0,280.0 L 823.0,280.0 L 826.7,280.0 L 826.7,280.0 L 830.4,280.0 L 830.4,280.0 L 834.1,280.0 L 834.1,280.0 L 837.8,280.0 L 837.8,280.0 L 841.5,280.0 L 841.5,280.0 L 845.2,280.0 L 845.2,280.0 L 848.9,280.0 L 848.9,280.0 L 852.6,280.0 L 852.6,280.0 L 856.3,280.0 L 856.3,280.0 L 860.0,280.0 L 860.0,280"/>
+<path class="stcl-axis" d="M 490,280 H 860"/>
+<path class="stcl-axis" d="M 490.0,280 V 285"/>
+<text class="stcl-s" x="490.0" y="300.0" text-anchor="middle">$0</text>
+<path class="stcl-axis" d="M 564.0,280 V 285"/>
+<text class="stcl-s" x="564.0" y="300.0" text-anchor="middle">$40</text>
+<path class="stcl-axis" d="M 638.0,280 V 285"/>
+<text class="stcl-s" x="638.0" y="300.0" text-anchor="middle">$80</text>
+<path class="stcl-axis" d="M 712.0,280 V 285"/>
+<text class="stcl-s" x="712.0" y="300.0" text-anchor="middle">$120</text>
+<path class="stcl-axis" d="M 786.0,280 V 285"/>
+<text class="stcl-s" x="786.0" y="300.0" text-anchor="middle">$160</text>
+<path class="stcl-axis" d="M 860.0,280 V 285"/>
+<text class="stcl-s" x="860.0" y="300.0" text-anchor="middle">$200</text>
+<text class="stcl-k" x="675.0" y="318.0" text-anchor="middle">average order value of a sample</text>
+<path class="stcl-mark" d="M 566.3,280 V 84"/>
+<text class="stcl-lab" x="572.3" y="94.0" text-anchor="start">true average</text>
+<text class="stcl-lab-p" x="665.8" y="200.0" text-anchor="start">samples of 5 orders:</text>
+<text class="stcl-lab-p" x="665.8" y="216.0" text-anchor="start">still skewed, wide</text>
+<text class="stcl-lab-pur" x="580.3" y="132.0" text-anchor="start">samples of 200 orders:</text>
+<text class="stcl-lab-pur" x="580.3" y="148.0" text-anchor="start">a narrow bell curve</text>
+</g>
+</svg>

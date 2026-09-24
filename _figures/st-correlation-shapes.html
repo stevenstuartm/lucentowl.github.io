@@ -1,0 +1,182 @@
+---
+title: "What Correlation Sees"
+kind: chart
+system: statistics
+summary: "Four scatter plots and the correlation coefficient of each."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="stcr-title stcr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="stcr-title">Four scatter plots with their correlation coefficients</title>
+<desc id="stcr-desc">Four scatter plots. Points along a rising straight line have a correlation near plus one. A shapeless cloud has a correlation near zero. Points along a strong arch also have a correlation near zero, because the coefficient only measures straight-line relationships. A tight cluster of unrelated points plus one far-off point has a strong positive correlation created by that single point.</desc>
+<style>
+.stcr-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #DDE3EB); stroke-width: 1; }
+.stcr-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.stcr-curve { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.stcr-fill1 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.45; stroke: none; }
+.stcr-fill2 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.25; stroke: none; }
+.stcr-fill3 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.12; stroke: none; }
+.stcr-tail { fill: var(--color-accent, #A5486E); fill-opacity: 0.55; stroke: none; }
+.stcr-box { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.15; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.stcr-line { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.stcr-line-ok { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.stcr-line-bad { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.stcr-mark { fill: none; stroke: var(--color-text, #2C3E50); stroke-width: 1.75; stroke-dasharray: 5 4; }
+.stcr-mark-acc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 5 4; }
+.stcr-mark-pur { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2; stroke-dasharray: 5 4; }
+.stcr-fence { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.stcr-pt { fill: var(--color-primary, #1A5F8A); stroke: none; }
+.stcr-pt-bad { fill: var(--color-accent, #A5486E); stroke: none; }
+.stcr-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.stcr-s { font-size: 11.5px; fill: var(--color-text-light, #4A5568); }
+.stcr-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.stcr-lab { font-size: 11.5px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.stcr-lab-p { font-size: 11.5px; font-weight: 600; fill: var(--color-primary, #1A5F8A); }
+.stcr-lab-bad { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
+.stcr-lab-pur { font-size: 11.5px; font-weight: 600; fill: var(--color-purple, #6B3FA0); }
+.stcr-c1 { fill: var(--color-primary, #1A5F8A); fill-opacity: 0.2; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.stcr-c2 { fill: var(--color-purple, #6B3FA0); fill-opacity: 0.25; stroke: var(--color-purple, #6B3FA0); stroke-width: 1.5; }
+.stcr-c2l { fill: none; stroke: var(--color-purple, #6B3FA0); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.stcr-big { font-size: 16px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="stcr-band" x="20" y="20" width="200" height="290" rx="8"/>
+<text class="stcr-n" x="32.0" y="44.0">Straight line</text>
+<text class="stcr-s" x="32.0" y="62.0">points hug a rising line</text>
+<path class="stcr-axis" d="M 42,78 V 248 H 202"/>
+<circle class="stcr-pt" cx="96.6" cy="193.2" r="3.5"/>
+<circle class="stcr-pt" cx="71.7" cy="215.4" r="3.5"/>
+<circle class="stcr-pt" cx="143.7" cy="150.9" r="3.5"/>
+<circle class="stcr-pt" cx="60.4" cy="219.6" r="3.5"/>
+<circle class="stcr-pt" cx="127.2" cy="156.6" r="3.5"/>
+<circle class="stcr-pt" cx="102.7" cy="180.7" r="3.5"/>
+<circle class="stcr-pt" cx="58.4" cy="224.3" r="3.5"/>
+<circle class="stcr-pt" cx="123.1" cy="173.6" r="3.5"/>
+<circle class="stcr-pt" cx="55.4" cy="227.4" r="3.5"/>
+<circle class="stcr-pt" cx="112.4" cy="164.1" r="3.5"/>
+<circle class="stcr-pt" cx="60.1" cy="225.9" r="3.5"/>
+<circle class="stcr-pt" cx="63.1" cy="214.4" r="3.5"/>
+<circle class="stcr-pt" cx="111.1" cy="172.0" r="3.5"/>
+<circle class="stcr-pt" cx="169.1" cy="139.1" r="3.5"/>
+<circle class="stcr-pt" cx="67.8" cy="212.0" r="3.5"/>
+<circle class="stcr-pt" cx="82.1" cy="189.2" r="3.5"/>
+<circle class="stcr-pt" cx="140.4" cy="167.9" r="3.5"/>
+<circle class="stcr-pt" cx="186.5" cy="114.3" r="3.5"/>
+<circle class="stcr-pt" cx="133.1" cy="157.9" r="3.5"/>
+<circle class="stcr-pt" cx="107.1" cy="186.0" r="3.5"/>
+<circle class="stcr-pt" cx="190.6" cy="103.9" r="3.5"/>
+<circle class="stcr-pt" cx="56.7" cy="222.4" r="3.5"/>
+<circle class="stcr-pt" cx="173.6" cy="135.0" r="3.5"/>
+<circle class="stcr-pt" cx="91.7" cy="185.1" r="3.5"/>
+<circle class="stcr-pt" cx="70.8" cy="204.3" r="3.5"/>
+<circle class="stcr-pt" cx="67.0" cy="205.1" r="3.5"/>
+<circle class="stcr-pt" cx="94.4" cy="177.6" r="3.5"/>
+<circle class="stcr-pt" cx="167.5" cy="124.6" r="3.5"/>
+<circle class="stcr-pt" cx="76.0" cy="204.5" r="3.5"/>
+<circle class="stcr-pt" cx="133.8" cy="167.5" r="3.5"/>
+<text class="stcr-big" x="120.0" y="290.0" text-anchor="middle">r = +0.98</text>
+<rect class="stcr-band" x="240" y="20" width="200" height="290" rx="8"/>
+<text class="stcr-n" x="252.0" y="44.0">No relationship</text>
+<text class="stcr-s" x="252.0" y="62.0">a shapeless cloud</text>
+<path class="stcr-axis" d="M 262,78 V 248 H 422"/>
+<circle class="stcr-pt" cx="336.0" cy="111.6" r="3.5"/>
+<circle class="stcr-pt" cx="274.6" cy="192.6" r="3.5"/>
+<circle class="stcr-pt" cx="408.5" cy="140.7" r="3.5"/>
+<circle class="stcr-pt" cx="288.5" cy="183.6" r="3.5"/>
+<circle class="stcr-pt" cx="396.7" cy="171.1" r="3.5"/>
+<circle class="stcr-pt" cx="274.1" cy="109.1" r="3.5"/>
+<circle class="stcr-pt" cx="288.7" cy="143.8" r="3.5"/>
+<circle class="stcr-pt" cx="359.2" cy="168.3" r="3.5"/>
+<circle class="stcr-pt" cx="408.5" cy="207.0" r="3.5"/>
+<circle class="stcr-pt" cx="357.1" cy="215.5" r="3.5"/>
+<circle class="stcr-pt" cx="409.0" cy="211.3" r="3.5"/>
+<circle class="stcr-pt" cx="343.9" cy="117.8" r="3.5"/>
+<circle class="stcr-pt" cx="397.2" cy="217.7" r="3.5"/>
+<circle class="stcr-pt" cx="396.3" cy="116.4" r="3.5"/>
+<circle class="stcr-pt" cx="315.5" cy="128.1" r="3.5"/>
+<circle class="stcr-pt" cx="302.7" cy="210.1" r="3.5"/>
+<circle class="stcr-pt" cx="293.4" cy="189.0" r="3.5"/>
+<circle class="stcr-pt" cx="389.0" cy="168.2" r="3.5"/>
+<circle class="stcr-pt" cx="412.4" cy="109.4" r="3.5"/>
+<circle class="stcr-pt" cx="300.3" cy="172.1" r="3.5"/>
+<circle class="stcr-pt" cx="279.3" cy="151.6" r="3.5"/>
+<circle class="stcr-pt" cx="357.7" cy="151.4" r="3.5"/>
+<circle class="stcr-pt" cx="282.8" cy="147.9" r="3.5"/>
+<circle class="stcr-pt" cx="286.2" cy="116.6" r="3.5"/>
+<circle class="stcr-pt" cx="336.4" cy="217.5" r="3.5"/>
+<circle class="stcr-pt" cx="410.9" cy="102.6" r="3.5"/>
+<circle class="stcr-pt" cx="317.8" cy="104.6" r="3.5"/>
+<circle class="stcr-pt" cx="311.0" cy="158.5" r="3.5"/>
+<circle class="stcr-pt" cx="352.5" cy="123.5" r="3.5"/>
+<circle class="stcr-pt" cx="280.1" cy="225.9" r="3.5"/>
+<text class="stcr-big" x="340.0" y="290.0" text-anchor="middle">r = +0.02</text>
+<rect class="stcr-band" x="460" y="20" width="200" height="290" rx="8"/>
+<text class="stcr-n" x="472.0" y="44.0">Strong curve</text>
+<text class="stcr-s" x="472.0" y="62.0">a clear arch, and r misses it</text>
+<path class="stcr-axis" d="M 482,78 V 248 H 642"/>
+<circle class="stcr-pt" cx="490.0" cy="202.5" r="3.5"/>
+<circle class="stcr-pt" cx="495.0" cy="193.1" r="3.5"/>
+<circle class="stcr-pt" cx="499.9" cy="178.8" r="3.5"/>
+<circle class="stcr-pt" cx="504.9" cy="169.7" r="3.5"/>
+<circle class="stcr-pt" cx="509.9" cy="156.9" r="3.5"/>
+<circle class="stcr-pt" cx="514.8" cy="144.5" r="3.5"/>
+<circle class="stcr-pt" cx="519.8" cy="127.4" r="3.5"/>
+<circle class="stcr-pt" cx="524.8" cy="133.1" r="3.5"/>
+<circle class="stcr-pt" cx="529.7" cy="123.3" r="3.5"/>
+<circle class="stcr-pt" cx="534.7" cy="109.8" r="3.5"/>
+<circle class="stcr-pt" cx="539.7" cy="99.5" r="3.5"/>
+<circle class="stcr-pt" cx="544.6" cy="99.0" r="3.5"/>
+<circle class="stcr-pt" cx="549.6" cy="106.3" r="3.5"/>
+<circle class="stcr-pt" cx="554.6" cy="106.9" r="3.5"/>
+<circle class="stcr-pt" cx="559.5" cy="93.6" r="3.5"/>
+<circle class="stcr-pt" cx="564.5" cy="98.3" r="3.5"/>
+<circle class="stcr-pt" cx="569.4" cy="100.9" r="3.5"/>
+<circle class="stcr-pt" cx="574.4" cy="94.1" r="3.5"/>
+<circle class="stcr-pt" cx="579.4" cy="96.7" r="3.5"/>
+<circle class="stcr-pt" cx="584.3" cy="104.9" r="3.5"/>
+<circle class="stcr-pt" cx="589.3" cy="109.8" r="3.5"/>
+<circle class="stcr-pt" cx="594.3" cy="115.3" r="3.5"/>
+<circle class="stcr-pt" cx="599.2" cy="117.7" r="3.5"/>
+<circle class="stcr-pt" cx="604.2" cy="130.2" r="3.5"/>
+<circle class="stcr-pt" cx="609.2" cy="140.1" r="3.5"/>
+<circle class="stcr-pt" cx="614.1" cy="150.4" r="3.5"/>
+<circle class="stcr-pt" cx="619.1" cy="171.0" r="3.5"/>
+<circle class="stcr-pt" cx="624.1" cy="171.4" r="3.5"/>
+<circle class="stcr-pt" cx="629.0" cy="186.4" r="3.5"/>
+<circle class="stcr-pt" cx="634.0" cy="202.9" r="3.5"/>
+<text class="stcr-big" x="560.0" y="290.0" text-anchor="middle">r = +0.05</text>
+<rect class="stcr-band" x="680" y="20" width="200" height="290" rx="8"/>
+<text class="stcr-n" x="692.0" y="44.0">One extreme point</text>
+<text class="stcr-s" x="692.0" y="62.0">no pattern except one point</text>
+<path class="stcr-axis" d="M 702,78 V 248 H 862"/>
+<circle class="stcr-pt" cx="721.4" cy="209.4" r="3.5"/>
+<circle class="stcr-pt" cx="727.8" cy="206.7" r="3.5"/>
+<circle class="stcr-pt" cx="740.0" cy="231.4" r="3.5"/>
+<circle class="stcr-pt" cx="710.6" cy="196.0" r="3.5"/>
+<circle class="stcr-pt" cx="722.4" cy="223.6" r="3.5"/>
+<circle class="stcr-pt" cx="757.8" cy="212.8" r="3.5"/>
+<circle class="stcr-pt" cx="750.2" cy="212.5" r="3.5"/>
+<circle class="stcr-pt" cx="740.7" cy="227.5" r="3.5"/>
+<circle class="stcr-pt" cx="740.5" cy="194.6" r="3.5"/>
+<circle class="stcr-pt" cx="735.1" cy="200.4" r="3.5"/>
+<circle class="stcr-pt" cx="742.2" cy="231.5" r="3.5"/>
+<circle class="stcr-pt" cx="746.4" cy="207.3" r="3.5"/>
+<circle class="stcr-pt" cx="724.5" cy="233.0" r="3.5"/>
+<circle class="stcr-pt" cx="751.5" cy="212.7" r="3.5"/>
+<circle class="stcr-pt" cx="744.5" cy="194.1" r="3.5"/>
+<circle class="stcr-pt" cx="744.3" cy="192.1" r="3.5"/>
+<circle class="stcr-pt" cx="729.0" cy="197.6" r="3.5"/>
+<circle class="stcr-pt" cx="731.3" cy="191.5" r="3.5"/>
+<circle class="stcr-pt" cx="752.2" cy="229.9" r="3.5"/>
+<circle class="stcr-pt" cx="716.5" cy="224.4" r="3.5"/>
+<circle class="stcr-pt" cx="756.3" cy="214.4" r="3.5"/>
+<circle class="stcr-pt" cx="740.1" cy="220.6" r="3.5"/>
+<circle class="stcr-pt" cx="734.3" cy="216.7" r="3.5"/>
+<circle class="stcr-pt" cx="726.8" cy="207.5" r="3.5"/>
+<circle class="stcr-pt" cx="738.0" cy="192.9" r="3.5"/>
+<circle class="stcr-pt" cx="742.7" cy="191.8" r="3.5"/>
+<circle class="stcr-pt" cx="751.1" cy="188.9" r="3.5"/>
+<circle class="stcr-pt" cx="742.2" cy="226.9" r="3.5"/>
+<circle class="stcr-pt" cx="751.3" cy="190.1" r="3.5"/>
+<circle class="stcr-pt-bad" cx="850.8" cy="91.6" r="3.5"/>
+<text class="stcr-big" x="780.0" y="290.0" text-anchor="middle">r = +0.73</text>
+</g>
+</svg>

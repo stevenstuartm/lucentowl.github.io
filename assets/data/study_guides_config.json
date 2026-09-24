@@ -265,10 +265,11 @@
       "subcategories": [
         {
           "name": "Monitoring & Observability",
-          "description": "System monitoring and observability fundamentals",
+          "description": "Telemetry signals, service level objectives and alerting, and the pipelines that collect and store telemetry at scale",
           "guides": [
-            "observability-fundamentals.md",
-            "architecture/observability-architecture.md"
+            "observability/observability-fundamentals.md",
+            "observability/slos-and-alerting.md",
+            "observability/observability-architecture.md"
           ]
         }
       ]
@@ -694,7 +695,7 @@
           "name": "SEO & Web",
           "description": "Search engine optimization and web best practices",
           "guides": [
-            "seo.md"
+            "web/seo.md"
           ]
         }
       ]
@@ -705,7 +706,7 @@
           "name": "Analytics",
           "description": "Statistics, data analysis, and analytical data platforms",
           "guides": [
-            "analytics-and-statistics.md",
+            "data/analytics-and-statistics.md",
             "data/data-architecture.md"
           ]
         }

@@ -1,0 +1,82 @@
+---
+title: "A Checkout Trace as a Waterfall"
+kind: chart
+system: observability
+summary: "One slow checkout request's spans on a shared timeline."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="otw-title otw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="otw-title">Waterfall view of one checkout trace across three services</title>
+<desc id="otw-desc">Seven spans on a timeline from 0 to 3.4 seconds, indented under their parents. POST /checkout in the checkout service takes 3,400 ms. Under it, SELECT cart takes 40 ms, POST /orders in the orders service takes 180 ms with an INSERT order child of 120 ms, and POST /payments in the payments service takes 3,100 ms. Under payments, the first POST /charge client span to the external payment gateway runs for 2,000 ms and ends in Error with a timeout, and a retried POST /charge succeeds in 1,000 ms.</desc>
+<style>
+.otw-grid { fill: none; stroke: var(--color-border, #DDE3EB); stroke-width: 1; stroke-dasharray: 3 4; }
+.otw-tree { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.otw-ax { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.otw-h { font-size: 11px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.otw-n { font-size: 12px; font-weight: 600; fill: var(--color-text, #2C3E50); }
+.otw-s { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.otw-d { font-size: 11px; fill: var(--color-text, #2C3E50); }
+.otw-in { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+.otw-co { fill: var(--color-primary, #1A5F8A); }
+.otw-or { fill: var(--color-purple, #6B3FA0); }
+.otw-pa { fill: var(--color-green, #3C8D53); }
+.otw-er { fill: var(--color-accent, #A5486E); }
+</style>
+
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="otw-h" x="20" y="36">SPAN</text>
+<text class="otw-h" x="214" y="36">SERVICE</text>
+<text class="otw-ax" x="320" y="36" text-anchor="middle">0</text>
+<text class="otw-ax" x="481.8" y="36" text-anchor="middle">1 s</text>
+<text class="otw-ax" x="643.6" y="36" text-anchor="middle">2 s</text>
+<text class="otw-ax" x="805.4" y="36" text-anchor="middle">3 s</text>
+<path class="otw-grid" d="M 320,46 V 282 M 481.8,46 V 282 M 643.6,46 V 282 M 805.4,46 V 282"/>
+
+<path class="otw-tree" d="M 26,78 V 198 M 26,102 H 32 M 26,134 H 32 M 26,198 H 32"/>
+<path class="otw-tree" d="M 42,142 V 166 H 48"/>
+<path class="otw-tree" d="M 42,206 V 262 M 42,230 H 48 M 42,262 H 48"/>
+
+<text class="otw-n" x="20" y="75">POST /checkout</text>
+<text class="otw-s" x="214" y="75">checkout</text>
+<rect class="otw-co" x="320" y="62" width="550" height="16" rx="2"/>
+<text class="otw-in" x="328" y="74.5">3,400 ms</text>
+
+<text class="otw-n" x="36" y="107">SELECT cart</text>
+<text class="otw-s" x="214" y="107">checkout, client</text>
+<rect class="otw-co" x="323.2" y="94" width="6.5" height="16" rx="1"/>
+<text class="otw-d" x="336" y="106.5">40 ms</text>
+
+<text class="otw-n" x="36" y="139">POST /orders</text>
+<text class="otw-s" x="214" y="139">orders</text>
+<rect class="otw-or" x="332.9" y="126" width="29.2" height="16" rx="2"/>
+<text class="otw-d" x="368" y="138.5">180 ms</text>
+
+<text class="otw-n" x="52" y="171">INSERT order</text>
+<text class="otw-s" x="214" y="171">orders</text>
+<rect class="otw-or" x="337.8" y="158" width="19.4" height="16" rx="2"/>
+<text class="otw-d" x="364" y="170.5">120 ms</text>
+
+<text class="otw-n" x="36" y="203">POST /payments</text>
+<text class="otw-s" x="214" y="203">payments</text>
+<rect class="otw-pa" x="365.3" y="190" width="501.6" height="16" rx="2"/>
+<text class="otw-in" x="373" y="202.5">3,100 ms</text>
+
+<text class="otw-n" x="52" y="235">POST /charge (1st)</text>
+<text class="otw-s" x="214" y="235">payments, client</text>
+<rect class="otw-er" x="368.5" y="222" width="323.6" height="16" rx="2"/>
+<text class="otw-in" x="376" y="234.5">2,000 ms · Error: timeout</text>
+
+<text class="otw-n" x="52" y="267">POST /charge (retry)</text>
+<text class="otw-s" x="214" y="267">payments, client</text>
+<rect class="otw-pa" x="698.6" y="254" width="161.8" height="16" rx="2"/>
+<text class="otw-in" x="706" y="266.5">1,000 ms · Ok</text>
+
+<rect class="otw-co" x="320" y="302" width="12" height="12" rx="2"/>
+<text class="otw-s" x="338" y="312">checkout</text>
+<rect class="otw-or" x="420" y="302" width="12" height="12" rx="2"/>
+<text class="otw-s" x="438" y="312">orders</text>
+<rect class="otw-pa" x="510" y="302" width="12" height="12" rx="2"/>
+<text class="otw-s" x="528" y="312">payments</text>
+<rect class="otw-er" x="610" y="302" width="12" height="12" rx="2"/>
+<text class="otw-s" x="628" y="312">span status Error</text>
+</g>
+</svg>

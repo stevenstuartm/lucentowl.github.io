@@ -12,6 +12,7 @@
     "http-methods-status-codes.md",
     "networking-quick-reference.md",
     "networking-diagrams.md",
+    "seo-diagrams.md",
     "design-patterns-quick-reference.md",
     "programming-patterns-diagrams.md",
     "architecture-style-comparison.md",
@@ -46,6 +47,8 @@
     "llm-systems-diagrams.md",
     "database-selection-matrix.md",
     "database-diagrams.md",
+    "statistics-diagrams.md",
+    "observability-diagrams.md",
     "git-quick-reference.md",
     "github-quick-reference.md"
   ]
