@@ -192,6 +192,7 @@ Verified during earlier rows; applies to every remaining guide that touches the 
 - **SAM (row 27 owns).** The `AWS::Serverless-2016-10-31` transform is an AWS-hosted macro; nested `AWS::Serverless::Application` stacks need `CAPABILITY_AUTO_EXPAND`. Connectors attach a managed policy to a role-bearing source, or a resource policy on the destination for role-less service sources; their `Read`/`Write` categories are coarse (DynamoDB Write includes deletes). `sam sync` is for personal dev stacks (drifts the stack). SAM CLI supports Finch on macOS/Linux (v1.145.0, October 2025). `AutoPublishAlias` + `DeploymentPreference` generate CodeDeploy resources (row 29 owns the behavior); first deployment needs an existing version. `cdk watch` is the CDK counterpart to `sam sync`; `CfnInclude` loads SAM templates.
 - **CodePipeline and CodeBuild (row 28 owns).** V2 is the default pipeline type: $0.002 per action-minute (100 free minutes shared; manual approval and custom actions free); V1 $1 per active pipeline (one free). V2-only: triggers (CodeConnections sources), pipeline variables, QUEUED/PARALLEL, stage conditions, rollback, auto-retry, Commands, ECRBuildAndPublish, EKS/Lambda/EC2 deploy actions. SUPERSEDED (default) supersedes only between stages. Cross-account needs a customer managed KMS key. CodeBuild: build timeout max 36 hours; Lambda compute (no Docker/VPC/cache, 15 min); reserved fleets bill from provisioning (60-min minimum, 24 h macOS); default concurrency quotas low, zero for 2XLARGE/GPU; PR comment approval on by default for new projects; local cache unavailable in VPC. The source action keeps the name `CodeStarSourceConnection` under CodeConnections.
 - **CodeDeploy (row 29 owns).** Free for EC2, Lambda, and ECS; $0.02 per on-premises instance update. `ApplicationStop`, `BeforeBlockTraffic`, and `AfterBlockTraffic` run the last successful revision's scripts. Built-in EC2 configs: `OneAtATime` default (last-instance failure still succeeds), `AllAtOnce` succeeds if one instance does. Zonal configs are in-place EC2 only. Up to ten alarms per deployment group; alarms are watched only during the deployment (including a blue/green termination wait, max two days). AWS recommends ECS's built-in blue/green, linear, and canary deployments over CodeDeploy for ECS; ECS linear/canary gained NLB support February 4, 2026 (the earlier "ALB or Service Connect only" restriction is stale). CodePipeline's V2 EC2 and Lambda deploy actions are alternatives to CodeDeploy.
+- **Cognito (row 30 owns).** Feature plans: Lite, Essentials (default, $0.015/MAU), Plus ($0.020/MAU, threat protection); 10,000 MAU free tier that doesn't expire (50,000 for Lite pools created before November 22, 2024); SAML/OIDC MAUs $0.015 after 50; M2M $0.00225 per token request; identity pools free. Managed login needs Essentials (Lite gets the classic hosted UI). API sign-in tokens carry only `aws.cognito.signin.user.admin`; custom scopes need OAuth endpoints or pre token generation v2+. Triggers have a fixed five-second limit. Multi-Region replication (Essentials/Plus, one replica, primary-only writes). Updated issuer `issuer-cognito-idp` isn't accepted by ALB `authenticate-cognito` or REST API Cognito authorizers. ALB also has a `jwt-validation` action for bearer tokens.
 
 ## Open pre-flags
 
@@ -199,7 +200,6 @@ Leads for rows not yet done. **A pre-flag is a lead, not a finding.** Re-verify 
 
 | Target row | Lead |
 |---|---|
-| 30 cognito | Empty seed: write the whole guide. Check the Cognito feature tiers (Lite, Essentials, Plus; late 2024) and managed login. OAuth/OIDC protocol flows are owned by `security/identity-access-management.md`. |
 | 31 kms-secrets | Replace "CMK" terminology. Owns Parameter Store vs Secrets Manager; row 37's version cuts. Re-verify KMS request quotas and rotation options (on-demand rotation, rotation period). |
 | 32 waf-shield | Re-verify Shield Advanced pricing and commitment. Check Bot Control and the targeted inspection levels. |
 | 33 cloudtrail-config | "One trail per Region (not per account)" reads backwards; check it against multi-Region and organization trails. Check CloudTrail Lake's current status and pricing. Integration pattern 4 (QuickSight dashboard) may cut. |
@@ -263,8 +263,8 @@ Claims on finished guides that could not be confirmed against a source. Each was
 | 27 | Infrastructure as Code | aws-sam.md | Complete |
 | 28 | Developer Tools & CI/CD | aws-codepipeline-codebuild.md | Complete |
 | 29 | Developer Tools & CI/CD | aws-codedeploy.md | Complete |
-| 30 | Security & Compliance | aws-cognito.md | In progress |
-| 31 | Security & Compliance | aws-kms-secrets-manager.md | Not started |
+| 30 | Security & Compliance | aws-cognito.md | Complete |
+| 31 | Security & Compliance | aws-kms-secrets-manager.md | In progress |
 | 32 | Security & Compliance | aws-waf-shield.md | Not started |
 | 33 | Security & Compliance | aws-cloudtrail-config.md | Not started |
 | 34 | Security & Compliance | aws-security-hub-guardduty.md | Not started |

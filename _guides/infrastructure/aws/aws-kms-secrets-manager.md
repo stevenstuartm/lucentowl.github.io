@@ -3,1215 +3,184 @@ title: "AWS KMS & Secrets Manager for System Architects"
 layout: guide
 category: AWS
 subcategory: Security & Compliance
-description: "Comprehensive guide to AWS KMS and Secrets Manager covering encryption key management, automatic secret rotation, envelope encryption, Parameter Store comparison, and cost optimization for data protection"
-tags: [aws, kms, secrets-manager, encryption, key-management, security, secrets-rotation, parameter-store, fundamentals]
+description: "How AWS KMS keys protect data through envelope encryption, key policies, grants, and rotation; how Secrets Manager stores, rotates, replicates, and shares secrets; and when Parameter Store is the better home for a value."
+tags: [kms, secrets-manager, parameter-store, key-policies, secrets-rotation, fundamentals]
 ---
 
-## What Problems KMS & Secrets Manager Solve
+## What KMS and Secrets Manager Do
 
-### Without Centralized Key and Secret Management
+**AWS Key Management Service (KMS)** creates and holds encryption keys and performs cryptographic operations with them, so the keys themselves never have to leave it. Most AWS services that encrypt data at rest, such as EBS, RDS, and DynamoDB, can do so with a KMS key, and S3 does when a bucket uses SSE-KMS, server-side encryption with a KMS key. Your own code can use the same keys.
 
-**Security Challenges:**
-- Database passwords hardcoded in application code (committed to Git)
-- Encryption keys stored in plaintext configuration files
-- No audit trail for who accessed which secrets when
-- Manual secret rotation requires deploying updated code
-- Secrets shared via email, Slack, sticky notes
-- No separation of duties (developers have production secrets)
-- Compliance violations (HIPAA, PCI-DSS require encrypted data at rest)
+**AWS Secrets Manager** stores secrets, such as database passwords, API keys, and OAuth client secrets, encrypts them with KMS, hands them to applications at runtime, and rotates them on a schedule. **Parameter Store**, part of Systems Manager, also stores values, including encrypted ones, and overlaps with Secrets Manager for secrets that don't rotate.
 
-**Real-World Impact:**
-- Hardcoded RDS password in GitHub repo; repo made public; database compromised within 3 hours
-- API keys for payment gateway stolen; $100K fraudulent charges before detection
-- No secret rotation for 3 years; ex-employee still has access to production database
-- Compliance audit failure: Customer data stored unencrypted in S3; $500K fine
-- Developer laptop stolen with plaintext AWS access keys; attacker launches EC2 instances for cryptocurrency mining
-- Manual secret rotation takes 6 hours; requires coordinated deployment across 50 services; done once per year due to complexity
-
-### With KMS & Secrets Manager
-
-**Automated Encryption and Secret Management:**
-
-**AWS KMS (Key Management Service):**
-- **Centralized key management**: Create, rotate, disable, audit encryption keys
-- **Envelope encryption**: Encrypt data keys with master keys without exposing master keys
-- **Integrated with AWS services**: S3, EBS, RDS, DynamoDB automatically use KMS
-- **Hardware security modules**: FIPS 140-2 Level 2 validated, Level 3 for CloudHSM
-- **Audit trail**: CloudTrail logs every key usage
-
-**AWS Secrets Manager:**
-- **Centralized secret storage**: Database passwords, API keys, OAuth tokens
-- **Automatic rotation**: Lambda function rotates secrets on schedule every 30, 60, or 90 days
-- **Versioning**: Track secret changes over time with rollback capability
-- **Fine-grained access control**: IAM policies control who can retrieve secrets
-- **Encrypted at rest**: All secrets encrypted with KMS keys
-
-**Problem-Solution Mapping:**
-
-| Problem | KMS Solution | Secrets Manager Solution |
-|---------|-------------|--------------------------|
-| Hardcoded passwords | N/A | Store secrets in Secrets Manager and retrieve at runtime |
-| Encryption keys in plaintext | Store keys in KMS where keys never leave HSM | N/A |
-| No audit trail for key/secret access | CloudTrail logs all KMS API calls | CloudTrail logs all secret retrievals |
-| Manual secret rotation | Automatic key rotation every 365 days | Automatic secret rotation every 30-365 days with Lambda |
-| Secrets shared insecurely | N/A | IAM-based access control where secrets never exposed |
-| Ex-employee retains access | Disable key making all encrypted data inaccessible | Rotate secret making old credentials invalid |
-| Unencrypted data causing compliance violation | Enable encryption with KMS for S3, RDS, EBS | N/A |
+The three answer different questions. KMS decides who can encrypt and decrypt with which key. Secrets Manager and Parameter Store decide where a secret lives, who can read it, and how it changes over time.
 
 ---
 
-## AWS KMS Fundamentals
+## KMS
 
-### What is AWS KMS?
+### KMS keys and who manages them
 
-**AWS Key Management Service (KMS)** is a managed service for creating and controlling encryption keys.
+A **KMS key** is a logical key: an ID, an Amazon Resource Name (ARN), optional aliases such as `alias/orders-data`, a key policy that says who may use it, and one or more versions of key material that KMS generates and keeps in hardware security modules. The key material never leaves KMS unencrypted. Older documentation calls these customer master keys, or CMKs, a term AWS has dropped. A key belongs to one Region, and a service encrypting a resource uses a key in that resource's Region.
 
-<div class="callout callout--note">
-<p class="callout__title">Core Concept</p>
-<p>KMS creates and stores Customer Master Keys (CMKs). You use CMKs to encrypt and decrypt data. CMKs never leave AWS HSMs unencrypted.</p>
-</div>
+KMS keys come in three kinds, by who manages them:
 
-### Key Types
+| Kind | Who controls it | Cost | Rotation |
+| --- | --- | --- | --- |
+| **AWS owned key** | An AWS service, invisibly, often shared across accounts | Free | Decided by the service |
+| **AWS managed key** | AWS, in your account, with an alias such as `aws/s3`, created when a service first needs one | No monthly fee, request charges apply | Every year, automatically |
+| **Customer managed key** | You: the key policy, grants, rotation, and deletion | $1 a month plus requests | Optional, on a schedule you choose |
 
-**1. AWS Managed Keys**
+Many services encrypt with an AWS owned key by default, and some let you choose an AWS managed or customer managed key instead. The customer managed key is the one to choose when you need control: a key policy that names who may use it, access from another account, an audit trail of every use under your own key, or the ability to disable the key so nothing more can be decrypted with it. Disabling doesn't reach data keys already decrypted, so an attached EBS volume, for example, keeps working until it next needs KMS. An AWS managed key's policy can't be edited, so it can't be shared with another account.
 
-- **Created automatically** by AWS services (S3, RDS, EBS)
-- **Key alias**: `aws/s3`, `aws/rds`, `aws/ebs`
-- **Free** (no monthly charge)
-- **Automatic rotation**: Every 3 years (1,095 days)
-- **Use case**: Default encryption for AWS services
+Most keys are **symmetric encryption keys**, a single AES-256 key that KMS uses internally. KMS also offers asymmetric keys, for signing or for encryption outside AWS with a downloadable public key, and HMAC keys for message authentication codes.
 
-**2. Customer Managed Keys (CMKs)**
+### Envelope encryption
 
-- **You create and manage**
-- **Full control**: Key policies, grants, rotation schedule, enable/disable
-- **Cost**: $1/month per key + $0.03 per 10,000 requests
-- **Rotation**: Optional automatic rotation (365 days) or manual
-- **Use case**: Custom encryption, cross-account access, compliance requirements
+KMS encrypts at most 4 KB directly, and every call is a network request, so bulk data isn't sent to KMS. Instead, services and SDKs use **envelope encryption**. KMS generates a fresh **data key**, returns it both in plaintext and encrypted under the KMS key, and the caller encrypts the data locally with the plaintext copy, discards it, and stores the encrypted copy next to the data. To read, the caller sends the encrypted data key to KMS's `Decrypt` operation, gets the plaintext data key back, and decrypts locally:
 
-**3. AWS Owned Keys**
+{% include figure.html id="aws-kms-envelope" %}
 
-- **Owned by AWS** (not in your account)
-- **No visibility or control**
-- **Free**
-- **Use case**: DynamoDB default encryption, S3 default encryption (SSE-S3)
+This is what S3, EBS, and other services do behind server-side encryption with a KMS key. The concept itself is covered in [Cryptography](/study-guides/security/cryptography.html). What matters on AWS is that every `GenerateDataKey` and `Decrypt` is a KMS request, recorded in CloudTrail, AWS's API audit log, checked against the key policy, and counted against the account's request quota. Two features exist to reduce those calls. **S3 Bucket Keys** make S3 generate a bucket-level key from KMS and derive object keys from it, cutting KMS requests for SSE-KMS buckets by up to 99%. The **AWS Encryption SDK** can cache data keys, so application code reuses one data key across several messages.
 
-**Key Type Comparison:**
+An **encryption context** is a set of non-secret key-value pairs, such as `{"tenant": "acme"}`, passed with an encrypt request. KMS binds it to the ciphertext, so decryption only succeeds with the same context, and it appears in CloudTrail entries. The key policy, described next, can require a particular context, which lets one key serve many tenants while each role can decrypt only its own tenant's data.
 
-| Feature | AWS Managed | Customer Managed | AWS Owned |
-|---------|-------------|------------------|-----------|
-| **Who creates** | AWS service | You | AWS |
-| **Visibility** | View in KMS console | Full control | No visibility |
-| **Cost** | Free | $1/month + usage | Free |
-| **Rotation** | Automatic (3 years) | Optional (1 year) | N/A |
-| **Key policy** | AWS-managed | You control | N/A |
-| **Cross-account** | No | Yes | No |
+### Key policies, IAM, and grants
 
-### CMK Components
-
-**Customer Master Key (CMK)** contains:
-1. **Key ID**: Unique identifier (e.g., `12345678-1234-1234-1234-123456789012`)
-2. **Key ARN**: `arn:aws:kms:us-east-1:123456789012:key/12345678-...`
-3. **Alias**: Human-friendly name (e.g., `alias/database-encryption-key`)
-4. **Key material**: Actual encryption key (stored in HSM, never exposed)
-5. **Key policy**: JSON document defining who can use the key
-6. **Key state**: Enabled, Disabled, PendingDeletion, PendingImport
-
-**Create CMK:**
-
-```bash
-aws kms create-key \
-  --description "Production database encryption key" \
-  --key-usage ENCRYPT_DECRYPT \
-  --origin AWS_KMS
-```
-
-**Create Alias:**
-
-```bash
-aws kms create-alias \
-  --alias-name alias/prod-db-key \
-  --target-key-id 12345678-1234-1234-1234-123456789012
-```
-
-### Key Rotation
-
-**Automatic Rotation (Customer Managed Keys):**
-- Enable via console or API
-- Rotates key material every 365 days
-- Old key material retained for decryption (transparent to applications)
-- Cost: No additional charge
-
-**Enable Rotation:**
-
-```bash
-aws kms enable-key-rotation \
-  --key-id 12345678-1234-1234-1234-123456789012
-```
-
-**How Rotation Works:**
-
-```
-Year 1: CMK uses key material version 1
-Year 2: CMK automatically generates key material version 2
-  - New encryptions use version 2
-  - Old encrypted data still decryptable with version 1
-  - Application code unchanged (KMS handles version selection)
-```
-
-**Manual Rotation:**
-- Create new CMK
-- Update application to use new key
-- Re-encrypt data with new key
-- Delete old key after retention period
-
----
-
-## AWS Secrets Manager Fundamentals
-
-### What is Secrets Manager?
-
-**AWS Secrets Manager** is a managed service for storing, retrieving, and rotating secrets (passwords, API keys, credentials).
-
-<div class="callout callout--tip">
-<p class="callout__title">Core Concept</p>
-<p>Store secrets in Secrets Manager. Applications retrieve secrets at runtime via API. Secrets automatically rotate on schedule.</p>
-</div>
-
-### Secret Types
-
-**1. Database Credentials**
-
-- RDS, Aurora, Redshift, DocumentDB
-- Automatic rotation with Lambda function
-- Secrets Manager updates database password and secret simultaneously
-
-**2. API Keys and Tokens**
-
-- Third-party API keys (Stripe, Twilio, SendGrid)
-- OAuth tokens
-- Manual rotation or custom Lambda function
-
-**3. SSH Keys**
-
-- Private SSH keys for EC2 access
-- Manual rotation
-
-**4. Custom Secrets**
-
-- Any JSON document (up to 65,536 bytes)
-- Custom rotation logic via Lambda
-
-### Secret Structure
-
-**Secret JSON:**
+Every KMS key has a **key policy**, a policy attached to the key itself that is the starting point for all access to it. Unlike most AWS resources, an IAM policy alone never grants a user or role, a **principal**, access to a KMS key. The key policy must either allow the principal directly or allow the account, which then lets IAM policies in that account grant access. The default key policy does the second:
 
 ```json
 {
-  "username": "admin",
-  "password": "SuperSecret123!",
-  "engine": "mysql",
-  "host": "mydb.us-east-1.rds.amazonaws.com",
-  "port": 3306,
-  "dbname": "production"
-}
-```
-
-**Create Secret:**
-
-```bash
-aws secretsmanager create-secret \
-  --name production/database/credentials \
-  --description "Production RDS MySQL credentials" \
-  --secret-string '{
-    "username":"admin",
-    "password":"SuperSecret123!",
-    "host":"mydb.us-east-1.rds.amazonaws.com"
-  }'
-```
-
-### Retrieving Secrets
-
-**Retrieve Secret (Application Code):**
-
-```python
-import boto3
-import json
-
-def get_secret():
-    client = boto3.client('secretsmanager', region_name='us-east-1')
-
-    response = client.get_secret_value(SecretId='production/database/credentials')
-    secret = json.loads(response['SecretString'])
-
-    return {
-        'username': secret['username'],
-        'password': secret['password'],
-        'host': secret['host']
-    }
-
-# Use in database connection
-secret = get_secret()
-conn = mysql.connector.connect(
-    host=secret['host'],
-    user=secret['username'],
-    password=secret['password']
-)
-```
-
-**Best Practice:** Retrieve secret once at startup and cache for application lifetime, not per-request.
-
-### Secret Versioning
-
-**Secrets Manager maintains versions:**
-- `AWSCURRENT`: Current active secret
-- `AWSPENDING`: New secret being rotated (not yet active)
-- `AWSPREVIOUS`: Previous secret (after rotation completes)
-
-**Version Stages:**
-
-```
-Day 0: Secret created
-  AWSCURRENT → Version 1
-
-Day 30: Rotation begins
-  AWSCURRENT → Version 1
-  AWSPENDING → Version 2 (rotation Lambda testing new password)
-
-Day 30 + 5 minutes: Rotation completes
-  AWSCURRENT → Version 2
-  AWSPREVIOUS → Version 1
-```
-
-**Retrieve Specific Version:**
-
-```python
-response = client.get_secret_value(
-    SecretId='production/database/credentials',
-    VersionStage='AWSPREVIOUS'  # Get previous version
-)
-```
-
----
-
-## Secrets Manager vs Parameter Store
-
-### Service Comparison
-
-| Feature | Secrets Manager | Parameter Store (Standard) | Parameter Store (Advanced) |
-|---------|----------------|---------------------------|---------------------------|
-| **Purpose** | Secrets storage + rotation | Configuration management | Configuration + secrets |
-| **Automatic Rotation** | Yes (built-in Lambda for RDS) | No | No |
-| **Pricing** | $0.40 per secret per month + $0.05 per 10K API calls | Free | $0.05 per advanced parameter per month |
-| **Secret Size** | Up to 65,536 bytes | Up to 4 KB | Up to 8 KB |
-| **Versioning** | Yes (AWSCURRENT, AWSPENDING, AWSPREVIOUS) | Yes (up to 100 versions) | Yes (up to 100 versions) |
-| **Cross-Account** | Yes (resource policy) | No (use cross-account IAM roles) | No |
-| **Encryption** | KMS (required) | KMS (optional) | KMS (optional) |
-| **Parameter Policies** | No | No | Yes (expiration, change notification) |
-
-### When to Use Secrets Manager
-
-✅ **Use Secrets Manager when:**
-- Need automatic secret rotation (RDS, Aurora, Redshift)
-- Storing database credentials
-- Require cross-account secret access
-- Compliance requires automatic rotation (PCI-DSS, HIPAA)
-- Need secret versioning with staging labels
-
-**Examples:**
-- RDS database password (automatic rotation every 30 days)
-- OAuth tokens requiring rotation
-- Shared secrets across multiple AWS accounts
-
-### When to Use Parameter Store
-
-✅ **Use Parameter Store when:**
-- Storing configuration (not secrets requiring rotation)
-- Cost-sensitive (free tier available)
-- Secrets don't need automatic rotation
-- Application configuration parameters (feature flags, environment variables)
-
-**Examples:**
-- Application configuration (API endpoint URLs, feature flags)
-- Static secrets (API keys changed manually)
-- Non-sensitive configuration data
-
-### Hybrid Approach
-
-**Store configuration in Parameter Store; secrets in Secrets Manager:**
-
-```python
-import boto3
-
-ssm = boto3.client('ssm')
-secrets = boto3.client('secretsmanager')
-
-# Configuration from Parameter Store (free)
-config = ssm.get_parameter(Name='/app/config/api_endpoint')
-api_url = config['Parameter']['Value']
-
-# Secret from Secrets Manager (automatic rotation)
-secret = secrets.get_secret_value(SecretId='production/api/key')
-api_key = json.loads(secret['SecretString'])['api_key']
-
-# Use both
-response = requests.get(api_url, headers={'Authorization': f'Bearer {api_key}'})
-```
-
----
-
-## Envelope Encryption
-
-### What is Envelope Encryption?
-
-**Envelope Encryption:** Encrypt data with a data key; encrypt the data key with a master key.
-
-**Why:** The master key never leaves KMS, only encrypted data keys are transmitted. This improves performance since you encrypt large data locally, not via network.
-
-**Architecture:**
-
-```
-1. Request data key from KMS (GenerateDataKey API)
-2. KMS returns:
-   - Plaintext data key (use to encrypt data)
-   - Encrypted data key (store with encrypted data)
-3. Encrypt data with plaintext data key
-4. Discard plaintext data key from memory
-5. Store encrypted data + encrypted data key
-
-Decryption:
-1. Send encrypted data key to KMS (Decrypt API)
-2. KMS returns plaintext data key
-3. Decrypt data with plaintext data key
-4. Discard plaintext data key from memory
-```
-
-### Example: Envelope Encryption
-
-**Encrypt File:**
-
-```python
-import boto3
-from cryptography.fernet import Fernet
-
-kms = boto3.client('kms')
-
-# 1. Generate data key from KMS
-response = kms.generate_data_key(
-    KeyId='alias/prod-encryption-key',
-    KeySpec='AES_256'
-)
-
-plaintext_data_key = response['Plaintext']
-encrypted_data_key = response['CiphertextBlob']
-
-# 2. Encrypt data with plaintext data key
-file_data = open('sensitive_data.txt', 'rb').read()
-cipher = Fernet(plaintext_data_key)
-encrypted_data = cipher.encrypt(file_data)
-
-# 3. Store encrypted data + encrypted data key
-with open('sensitive_data.txt.encrypted', 'wb') as f:
-    f.write(encrypted_data_key)  # First, store encrypted data key
-    f.write(encrypted_data)      # Then, store encrypted data
-
-# 4. Discard plaintext data key
-del plaintext_data_key
-```
-
-**Decrypt File:**
-
-```python
-# 1. Read encrypted data key and encrypted data
-with open('sensitive_data.txt.encrypted', 'rb') as f:
-    encrypted_data_key = f.read(512)  # Encrypted data key is fixed size
-    encrypted_data = f.read()
-
-# 2. Decrypt data key with KMS
-response = kms.decrypt(CiphertextBlob=encrypted_data_key)
-plaintext_data_key = response['Plaintext']
-
-# 3. Decrypt data with plaintext data key
-cipher = Fernet(plaintext_data_key)
-decrypted_data = cipher.decrypt(encrypted_data)
-
-# 4. Discard plaintext data key
-del plaintext_data_key
-```
-
-**Benefits:**
-- Master key never exposed
-- Encrypt/decrypt large files without network latency (only data key sent to KMS)
-- Performance: Local encryption with data key faster than KMS API calls
-
----
-
-## Key Policies and Grants
-
-### Key Policies
-
-**Key Policy:** JSON document controlling access to CMK.
-
-**Default Key Policy (Created by Root User):**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Sid": "Enable IAM policies",
-    "Effect": "Allow",
-    "Principal": {
-      "AWS": "arn:aws:iam::123456789012:root"
-    },
-    "Action": "kms:*",
-    "Resource": "*"
-  }]
-}
-```
-
-**Custom Key Policy (Principle of Least Privilege):**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "Allow administrators to manage key",
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::123456789012:role/KeyAdministrator"
-      },
-      "Action": [
-        "kms:Create*",
-        "kms:Describe*",
-        "kms:Enable*",
-        "kms:List*",
-        "kms:Put*",
-        "kms:Update*",
-        "kms:Revoke*",
-        "kms:Disable*",
-        "kms:Get*",
-        "kms:Delete*",
-        "kms:ScheduleKeyDeletion",
-        "kms:CancelKeyDeletion"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "Allow use of key for encryption",
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::123456789012:role/ApplicationRole"
-      },
-      "Action": [
-        "kms:Encrypt",
-        "kms:Decrypt",
-        "kms:ReEncrypt*",
-        "kms:GenerateDataKey*",
-        "kms:DescribeKey"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-**Key Policy vs IAM Policy:**
-
-- **Key Policy**: Attached to CMK; controls access to specific key
-- **IAM Policy**: Attached to IAM principal; controls what keys principal can use
-
-**Both Required:** Key policy must allow principal; IAM policy must allow action.
-
-### KMS Grants
-
-**Grant:** Programmatic, temporary permission to use CMK.
-
-**Use Case:** Allow AWS service (Lambda, S3) to use your CMK without modifying key policy.
-
-**Create Grant:**
-
-```bash
-aws kms create-grant \
-  --key-id 12345678-1234-1234-1234-123456789012 \
-  --grantee-principal arn:aws:iam::123456789012:role/LambdaExecutionRole \
-  --operations Encrypt Decrypt GenerateDataKey
-```
-
-**Grant vs Key Policy:**
-- **Grant**: Temporary, programmatic, can be revoked
-- **Key Policy**: Permanent (until changed), declarative
-
----
-
-## Automatic Secret Rotation
-
-### Rotation for RDS/Aurora
-
-**Secrets Manager Automatic Rotation:**
-
-**Setup:**
-
-```bash
-aws secretsmanager rotate-secret \
-  --secret-id production/database/credentials \
-  --rotation-lambda-arn arn:aws:lambda:us-east-1:123456789012:function:SecretsManagerRDSRotation \
-  --rotation-rules AutomaticallyAfterDays=30
-```
-
-**Rotation Lambda (AWS-Provided):**
-- `createSecret`: Generate new password
-- `setSecret`: Update RDS database password
-- `testSecret`: Test new password works
-- `finishSecret`: Mark secret as `AWSCURRENT`
-
-**Rotation Workflow:**
-
-```
-Day 0: Current password = "OldPassword123"
-  Version 1 (AWSCURRENT)
-
-Day 30: Rotation begins
-  1. Lambda creates new password: "NewPassword456" (Version 2, AWSPENDING)
-  2. Lambda updates RDS: ALTER USER admin IDENTIFIED BY 'NewPassword456'
-  3. Lambda tests connection with new password
-  4. Lambda marks Version 2 as AWSCURRENT
-  5. Version 1 becomes AWSPREVIOUS
-
-Application behavior:
-  - Applications always retrieve AWSCURRENT
-  - No downtime (new password tested before activation)
-  - Rollback possible (revert to AWSPREVIOUS if needed)
-```
-
-### Custom Rotation (API Keys)
-
-**Custom Lambda Function:**
-
-```python
-import boto3
-import requests
-
-def lambda_handler(event, context):
-    secret_id = event['SecretId']
-    token = event['ClientRequestToken']
-    step = event['Step']
-
-    secrets = boto3.client('secretsmanager')
-
-    if step == 'createSecret':
-        # Generate new API key from third-party service
-        response = requests.post('https://api.example.com/keys/rotate')
-        new_api_key = response.json()['api_key']
-
-        # Store new key as AWSPENDING
-        secrets.put_secret_value(
-            SecretId=secret_id,
-            ClientRequestToken=token,
-            SecretString=new_api_key,
-            VersionStages=['AWSPENDING']
-        )
-
-    elif step == 'setSecret':
-        # No action needed (API already updated)
-        pass
-
-    elif step == 'testSecret':
-        # Test new API key works
-        secret = secrets.get_secret_value(
-            SecretId=secret_id,
-            VersionStage='AWSPENDING'
-        )
-        api_key = secret['SecretString']
-
-        # Test API call
-        response = requests.get(
-            'https://api.example.com/test',
-            headers={'Authorization': f'Bearer {api_key}'}
-        )
-        if response.status_code != 200:
-            raise Exception('API key test failed')
-
-    elif step == 'finishSecret':
-        # Mark new version as AWSCURRENT
-        secrets.update_secret_version_stage(
-            SecretId=secret_id,
-            VersionStage='AWSCURRENT',
-            MoveToVersionId=token,
-            RemoveFromVersionId=<previous_version_id>
-        )
-```
-
-**Configure Rotation:**
-
-```bash
-aws secretsmanager rotate-secret \
-  --secret-id production/api/key \
-  --rotation-lambda-arn arn:aws:lambda:...:function:CustomAPIRotation \
-  --rotation-rules AutomaticallyAfterDays=60
-```
-
----
-
-## Cross-Account Access
-
-### Cross-Account Secret Access
-
-**Use Case:** Central security account stores secrets; application accounts retrieve them.
-
-**Setup:**
-
-**1. Secret in Account A (111111111111):**
-
-```bash
-aws secretsmanager put-resource-policy \
-  --secret-id production/database/credentials \
-  --resource-policy '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::222222222222:role/ApplicationRole"
-      },
-      "Action": "secretsmanager:GetSecretValue",
-      "Resource": "*"
-    }]
-  }'
-```
-
-**2. IAM Role in Account B (222222222222):**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": "secretsmanager:GetSecretValue",
-    "Resource": "arn:aws:secretsmanager:us-east-1:111111111111:secret:production/database/credentials-*"
-  }]
-}
-```
-
-**3. Retrieve Secret from Account B:**
-
-```python
-# Application in Account B
-secrets = boto3.client('secretsmanager')
-
-response = secrets.get_secret_value(
-    SecretId='arn:aws:secretsmanager:us-east-1:111111111111:secret:production/database/credentials-abc123'
-)
-```
-
-### Cross-Account KMS Access
-
-**CMK in Account A; used by Account B:**
-
-**1. Key Policy in Account A:**
-
-```json
-{
-  "Sid": "Allow Account B to use key",
+  "Sid": "Enable IAM User Permissions",
   "Effect": "Allow",
-  "Principal": {
-    "AWS": "arn:aws:iam::222222222222:root"
-  },
-  "Action": [
-    "kms:Decrypt",
-    "kms:DescribeKey"
-  ],
+  "Principal": { "AWS": "arn:aws:iam::111122223333:root" },
+  "Action": "kms:*",
   "Resource": "*"
 }
 ```
 
-**2. IAM Policy in Account B:**
+`root` here means the account, not the root user. Without such a statement, and without one naming an administrator, a key can become unmanageable, since no one has permission to change its policy. A tighter key policy keeps that account statement or names specific administrator roles, and gives the roles that use the key only the operations they need, such as `kms:Decrypt` and `kms:GenerateDataKey`. Conditions narrow it further:
 
-```json
+- `kms:ViaService` limits use to requests that come through a particular service, such as `s3.us-east-1.amazonaws.com`, so a role can decrypt S3 objects but can't call KMS directly with the same key.
+- `kms:EncryptionContext:<key>` requires a particular encryption context value.
+- `kms:CallerAccount` limits use to principals in named accounts.
+
+**Grants** are a second way to give access. A grant lets a principal use a key for specific operations, can be created and retired through the API without editing the policy, and is how AWS services such as EBS and RDS get temporary use of your key for the resources you create. Grants are eventually consistent, so a new grant usually takes effect within seconds but occasionally takes several minutes. A **grant token**, returned when the grant is created, lets the grantee use it immediately.
+
+Cross-account use of a key needs both sides. The key policy in the owning account must allow the other account or its role, and an IAM policy in the other account must allow the role to use that key's ARN. The key must be a customer managed key.
+
+### Rotation
+
+**Automatic rotation** creates new key material for a customer managed key on a schedule, by default every 365 days and configurable from 90 to 2,560 days. The key's ID, ARN, and policy don't change. New encryptions use the newest material, and KMS keeps every older version to decrypt data encrypted before the rotation, so nothing needs re-encrypting and no code changes. **On-demand rotation** rotates immediately, whether or not a schedule is set. AWS managed keys rotate every year and can't be changed.
+
+Automatic rotation works only for symmetric encryption keys with material that KMS generated. Asymmetric keys, HMAC keys, and keys in custom key stores rotate manually, by creating a new key and moving the alias. Keys with imported material can rotate on demand. The first two rotations of a key each add $1 a month to its price, and later rotations add nothing.
+
+Rotation replaces the key material, not the data keys. Data encrypted under a data key stays encrypted under that data key, and a leaked data key isn't made safe by rotating the KMS key.
+
+### Deleting keys
+
+Deleting a KMS key makes everything encrypted under it permanently unreadable, so KMS requires a waiting period of 7 to 30 days, 30 by default, during which the deletion can be canceled and the key can't be used. Disable a key first and watch for failed requests in CloudTrail before scheduling deletion. An alarm on attempts to use a key pending deletion catches forgotten dependencies before the data is lost.
+
+### Other key options
+
+- **Multi-Region keys** are sets of keys in different Regions that share key material and key ID, so data encrypted in one Region can be decrypted in another without re-encryption. They suit data encrypted client-side, with the AWS Encryption SDK or the AWS Database Encryption SDK, that moves between Regions, and active-active or disaster recovery designs built on it. Most AWS services re-encrypt under a key in the destination Region when they replicate, so they don't need multi-Region keys, and a few features, such as Cognito's multi-Region replication, require them. Single-Region keys remain the default choice, because they keep each Region's data isolated.
+- **Imported key material** lets you generate the material yourself and import it, for rules that require keys to originate outside AWS. You're responsible for keeping a copy, since KMS can't regenerate it.
+- **Custom key stores** keep the key material outside standard KMS, in an AWS CloudHSM cluster, dedicated hardware security modules that you control, or in an external key manager you run outside AWS. They suit strict regulatory requirements and cost more in money, latency, and availability risk.
+
+### Quotas and cost
+
+Cryptographic operations with symmetric keys share one request quota per account and Region: 10,000 requests per second by default, 20,000 in some Regions, and 100,000 in US East (N. Virginia), US West (Oregon), and Europe (Ireland). Requests that services make on your behalf, such as S3 calling `Decrypt` for every SSE-KMS object read, count against it too, and so does use of AWS managed keys. AWS owned keys don't count. The quotas are adjustable.
+
+A customer managed key costs $1 a month, and requests cost $0.03 per 10,000 for symmetric keys, with 20,000 free requests a month across all Regions. Requests with asymmetric keys cost more. For a busy application, the request charge and the quota matter more than the key count, which is why caching data keys and enabling S3 Bucket Keys pay off.
+
+---
+
+## Secrets Manager
+
+### Storing and retrieving secrets
+
+A **secret** holds a value of up to 64 KB, usually a JSON document such as a database's host, port, username, and password, encrypted with a KMS key of your choice or the `aws/secretsmanager` AWS managed key. Each change creates a new **version**, and **staging labels** mark which version is which: `AWSCURRENT` is the one applications read, `AWSPREVIOUS` is the one before it, and `AWSPENDING` is a new value during rotation.
+
+Applications read the secret at runtime with `GetSecretValue`, or several at once with `BatchGetSecretValue`, rather than keeping it in code, configuration files, or environment variables. Every call costs money and adds latency, so applications should cache secrets and refresh them periodically. AWS provides caching libraries for .NET, Java, Python, Go, and Rust, a Lambda extension, and the **AWS Workload Credentials Provider**, formerly the Secrets Manager Agent, a local HTTP service that caches secrets for any code on the host. In .NET:
+
+```csharp
+using Amazon.SecretsManager.Extensions.Caching;
+
+public class OrdersDatabase
 {
-  "Effect": "Allow",
-  "Action": [
-    "kms:Decrypt",
-    "kms:DescribeKey"
-  ],
-  "Resource": "arn:aws:kms:us-east-1:111111111111:key/12345678-1234-1234-1234-123456789012"
+    // Refreshes each cached secret every hour by default.
+    private static readonly SecretsManagerCache Cache = new();
+
+    public async Task<string> GetConnectionSecretAsync() =>
+        await Cache.GetSecretString("prod/orders/db");
 }
 ```
 
----
+Many services read secrets directly, which keeps them out of application code altogether. ECS injects secrets into containers as environment variables when a task starts, CloudFormation templates can reference them, and EKS mounts them into pods as files through the Secrets Store CSI driver. RDS and Aurora can create the database's administrative password, its master user password, and manage it in Secrets Manager themselves.
 
-## Integration with AWS Services
+### Rotation
 
-### S3 + KMS
+**Rotation** changes a secret's value in both Secrets Manager and the system that checks it, on a schedule as frequent as every four hours, at some point within a window of time you set. There are three ways it happens:
 
-**Server-Side Encryption with KMS (SSE-KMS):**
+- **Managed rotation**, for secrets that another AWS service manages, such as an RDS master user password. The service rotates the secret itself, with no function to write.
+- **Managed external secrets**, for secrets held with software vendors that partner with Secrets Manager, such as Salesforce. Secrets Manager calls the partner's system to rotate the credential.
+- **Rotation by Lambda function** for everything else. AWS provides template functions for RDS, Aurora, Redshift, and DocumentDB, and you write one for other systems.
 
-```bash
-# Enable default encryption with CMK
-aws s3api put-bucket-encryption \
-  --bucket my-bucket \
-  --server-side-encryption-configuration '{
-    "Rules": [{
-      "ApplyServerSideEncryptionByDefault": {
-        "SSEAlgorithm": "aws:kms",
-        "KMSMasterKeyID": "arn:aws:kms:us-east-1:123456789012:key/12345678-..."
-      }
-    }]
-  }'
+A rotation function runs four steps. `createSecret` generates the new value and stores it as `AWSPENDING`, `setSecret` changes the credential in the target system, `testSecret` checks that the new value works, and `finishSecret` moves `AWSCURRENT` to the new version. If a step fails, `AWSCURRENT` stays where it was. The function needs a network path to both the target system and the Secrets Manager endpoint, which for a database in a private subnet means a VPC endpoint or NAT gateway, and a missing path is the most common reason rotation fails.
 
-# Upload object (automatically encrypted)
-aws s3 cp sensitive_data.txt s3://my-bucket/
-```
+For databases, the rotation strategy decides what happens to clients that hold the old password:
 
-**Benefit:** All objects encrypted at rest; key managed by KMS; audit trail in CloudTrail.
+- **Single user** changes one user's password. Connections already open keep working, but a client that opens a new connection with a cached old password fails until it refreshes its cache. AWS recommends it for most cases.
+- **Alternating users** keeps two users with the same permissions and rotates whichever isn't current, so the previous credentials still work until the next rotation. It needs a separate secret with permission to change both users' passwords, and the two users' permissions have to be kept identical.
 
----
+Applications should connect as a least-privilege user of their own rather than the database's master user, even when RDS manages the master password.
 
-### RDS + KMS
+Clients should handle an authentication failure by refreshing the secret from Secrets Manager and retrying once, which covers both strategies and manual rotations.
 
-**Enable Encryption at Rest:**
+### Replication and cross-account access
 
-```bash
-aws rds create-db-instance \
-  --db-instance-identifier production-db \
-  --storage-encrypted \
-  --kms-key-id arn:aws:kms:us-east-1:123456789012:key/12345678-...
-```
+A secret belongs to one Region. It can be **replicated** to others, where each replica stays in sync with the primary, is encrypted with a KMS key in its own Region, and can be promoted to a standalone secret during a regional outage. Each replica is billed as a secret.
 
-**Encrypted Snapshots:**
-- Manual snapshots of encrypted DB encrypted with same key
-- Automated backups encrypted with same key
+Reading a secret from another account needs three permissions: a **resource policy** on the secret allowing the other account, a key policy allowing it to decrypt with the secret's KMS key, and an IAM policy in the other account allowing the role `secretsmanager:GetSecretValue` and `kms:Decrypt`. Because the AWS managed `aws/secretsmanager` key can't be shared, such a secret must use a customer managed key.
+
+### Cost
+
+A secret costs $0.40 a month, including each replica, and API calls cost $0.05 per 10,000. Rotation creates new versions at no extra charge, but a rotation function's Lambda and KMS usage is billed by those services. Caching keeps the call charge small, while uncached reads in a busy application can cost more than the secrets themselves.
 
 ---
 
-### Lambda + Secrets Manager
-
-**Retrieve Secret in Lambda:**
-
-```python
-import boto3
-import json
-import os
-
-secrets_client = boto3.client('secretsmanager')
-
-def lambda_handler(event, context):
-    # Retrieve secret
-    secret_arn = os.environ['DB_SECRET_ARN']
-    secret = secrets_client.get_secret_value(SecretId=secret_arn)
-    credentials = json.loads(secret['SecretString'])
-
-    # Use credentials
-    db_password = credentials['password']
-```
-
-**Best Practice:** Cache secret for Lambda container lifetime (not per-invocation):
-
-```python
-# Cache secret outside handler
-secret = None
-
-def get_secret():
-    global secret
-    if secret is None:
-        response = secrets_client.get_secret_value(SecretId=os.environ['DB_SECRET_ARN'])
-        secret = json.loads(response['SecretString'])
-    return secret
-
-def lambda_handler(event, context):
-    credentials = get_secret()  # Cached after first invocation
-```
-
----
-
-## Cost Optimization Strategies
-
-### KMS Pricing (us-east-1, 2025)
-
-**Customer Managed Keys:**
-- $1.00 per CMK per month
-- $0.03 per 10,000 requests (Encrypt, Decrypt, GenerateDataKey)
-
-**AWS Managed Keys:**
-- Free (no monthly charge)
-- $0.03 per 10,000 requests
-
-**Free Tier:**
-- 20,000 requests per month free (across all keys)
-
-### Secrets Manager Pricing
-
-- $0.40 per secret per month
-- $0.05 per 10,000 API calls
-
-### Parameter Store Pricing
-
-**Standard Parameters:**
-- Free (up to 10,000 parameters)
-- Free API calls
-
-**Advanced Parameters:**
-- $0.05 per parameter per month
-- Free API calls
-
-### 1. Use Parameter Store for Non-Rotated Secrets
-
-**Problem:** Storing 100 static API keys in Secrets Manager.
-
-**Cost (Secrets Manager):**
-
-```
-100 secrets × $0.40 = $40/month
-```
-
-**Cost (Parameter Store):**
-
-```
-100 standard parameters = $0/month
-```
-
-**Savings: $40/month (100%)**
-
-**When to Use Secrets Manager:** Only for secrets requiring automatic rotation.
-
----
-
-### 2. Reuse CMKs Across Services
-
-**Problem:** Creating separate CMK for each service.
-
-**Without Reuse:**
-
-```
-CMK for S3: $1/month
-CMK for RDS: $1/month
-CMK for EBS: $1/month
-
-Total: $3/month
-```
-
-**With Reuse (Single CMK):**
-
-```
-CMK for all services: $1/month
-
-Savings: $2/month (67%)
-```
-
-**Best Practice:** One CMK per environment (e.g., `prod-encryption-key`) used across all services.
-
----
-
-### 3. Cache Secrets in Application
-
-**Problem:** Application retrieves secret on every request.
-
-**Without Caching:**
-
-```
-1M requests/day
-1M Secrets Manager API calls/day = 30M/month
-Cost: 30M × $0.05/10K = $150/month
-```
-
-**With Caching (Retrieve Once per Hour):**
-
-```
-24 retrievals/day = 720/month
-Cost: 720 × $0.05/10K = $0.004/month
-
-Savings: $150/month (99.9%)
-```
-
-**Best Practice:** Cache secret for container/process lifetime; refresh every 1-24 hours.
-
----
-
-### 4. Use AWS Managed Keys for Default Encryption
-
-**Problem:** Creating CMK for S3 default encryption when AWS managed key sufficient.
-
-**Customer Managed Key:**
-
-```
-CMK cost: $1/month
-Use case: No cross-account access, no custom key policy needed
-```
-
-**AWS Managed Key (`aws/s3`):**
-
-```
-Cost: $0/month (free)
-Same functionality for single-account S3 encryption
-```
-
-**Savings: $1/month**
-
-**Use CMK Only When:** Need cross-account access, custom key policy, or compliance requires customer-managed keys.
-
----
-
-### Cost Example: Production Application
-
-**Scenario:**
-- 10 secrets in Secrets Manager (RDS passwords, API keys)
-- 1 CMK for encryption
-- 1M secret retrievals/month (cached)
-- 100K KMS requests/month
-
-**Secrets Manager:**
-
-```
-Secrets: 10 × $0.40 = $4.00/month
-API calls: (1M / 10K) × $0.05 = $5.00/month
-
-Total: $9.00/month
-```
-
-**KMS:**
-
-```
-CMK: $1.00/month
-Requests: (100K - 20K free) / 10K × $0.03 = $0.24/month
-
-Total: $1.24/month
-```
-
-**Total Cost: $10.24/month for secure secret management**
-
-**ROI:** Prevents hardcoded secrets, provides automatic rotation and compliance, and is far lower cost than a security breach.
-
----
-
-## Performance and Scalability
-
-### KMS Throughput
-
-**Request Limits:**
-- Shared quota: 5,500 requests/sec (us-east-1, us-west-2)
-- Other regions: 1,200 requests/sec
-- Request limit increase: Available via AWS Support
-
-**Latency:**
-- GenerateDataKey: 10-50 ms
-- Decrypt: 10-50 ms
-- Encrypt: 10-50 ms
-
-**Best Practice:** Use envelope encryption (encrypt locally with data key, not KMS API per-record).
-
-### Secrets Manager Throughput
-
-**No Hard Limits:**
-- Scales automatically
-- Typical latency: 50-200 ms
-
-**Best Practice:** Cache secrets; don't retrieve on every request.
-
----
-
-## Security Best Practices
-
-### 1. Enable Key Rotation
-
-```bash
-aws kms enable-key-rotation --key-id <key-id>
-```
-
-**Benefit:** Automatic annual rotation; reduces risk of key compromise.
-
----
-
-### 2. Use Separate Keys per Environment
-
-```
-Development: dev-encryption-key
-Staging: staging-encryption-key
-Production: prod-encryption-key
-```
-
-**Benefit:** Compromise of dev key doesn't affect production.
-
----
-
-### 3. Principle of Least Privilege
-
-**Key Policy:**
-
-```json
-{
-  "Sid": "Allow decrypt only",
-  "Effect": "Allow",
-  "Principal": {
-    "AWS": "arn:aws:iam::123456789012:role/ReadOnlyRole"
-  },
-  "Action": "kms:Decrypt",
-  "Resource": "*"
-}
-```
-
-**Deny Encrypt:** Read-only applications should only decrypt, not encrypt.
-
----
-
-### 4. Monitor Key Usage
-
-**CloudWatch Alarm (Unusual Key Usage):**
-
-```
-Metric: KMS API Calls (custom metric from CloudTrail)
-Threshold: >10,000 requests in 5 minutes
-Action: Alert security team
-```
-
----
-
-### 5. Use VPC Endpoints for KMS
-
-**Keep traffic private:**
-
-```
-Application in VPC → VPC Endpoint → KMS (private connection)
-```
-
-**Benefit:** No internet gateway; reduced attack surface.
-
----
-
-## Observability and Monitoring
-
-### CloudTrail Logging
-
-**All KMS API calls logged:**
-
-```json
-{
-  "eventName": "Decrypt",
-  "userIdentity": {
-    "arn": "arn:aws:iam::123456789012:role/ApplicationRole"
-  },
-  "requestParameters": {
-    "encryptionContext": {
-      "application": "payment-processor",
-      "environment": "production"
-    }
-  },
-  "responseElements": null,
-  "resources": [{
-    "ARN": "arn:aws:kms:us-east-1:123456789012:key/12345678-..."
-  }]
-}
-```
-
-**Audit Questions:**
-- Who decrypted production database encryption key?
-- How many times was API key retrieved today?
-- Which keys were deleted?
-
----
-
-### CloudWatch Metrics
-
-**Custom Metrics (from CloudTrail):**
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| KMS Decrypt Calls | Decrypt operations | Spike indicates unusual access |
-| Secrets Retrieved | GetSecretValue calls | Compare to baseline |
-| Key Disabled | DisableKey API calls | >0 (unauthorized key disable) |
+## Parameter Store or Secrets Manager
+
+Parameter Store holds configuration values as plain strings, lists, or **SecureStrings**, which it encrypts with a KMS key. Its two storage tiers differ in size and cost:
+
+| | Parameter Store standard | Parameter Store advanced | Secrets Manager |
+| --- | --- | --- | --- |
+| Maximum value | 4 KB | 8 KB | 64 KB |
+| Storage cost | Free, up to 10,000 parameters | $0.05 per parameter per month | $0.40 per secret per month |
+| API cost | Free at the default request rate, charged at higher throughput | $0.05 per 10,000 interactions | $0.05 per 10,000 calls |
+| Rotation | No | No, but parameter policies can expire a value or notify before it expires | Built in |
+| Cross-account | No | Sharing through AWS Resource Access Manager | Resource policies |
+| Cross-Region replication | No | No | Built in |
+
+Use Secrets Manager for credentials that should rotate, secrets shared across accounts or replicated across Regions, and anything that fits its integrations, such as database credentials managed by RDS. Use Parameter Store for configuration, such as endpoints, feature flags, and tuning values, and for secrets that don't rotate, where standard SecureString parameters cost nothing in Parameter Store itself, only KMS's request charges. Applications that read everything through Parameter Store can reach Secrets Manager secrets through it too, with names under `/aws/reference/secretsmanager/`.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Not Caching Secrets
-
-**Problem:** Retrieving secret on every request; 1M requests = $150/month API costs.
-
-**Solution:** Cache secret for application lifetime; refresh hourly.
-
-**Cost Impact:** 99.9% savings with caching.
-
----
-
-### Pitfall 2: Hardcoding Key IDs
-
-**Problem:** Application code contains `key-id=12345678-...`; key rotation breaks application.
-
-**Solution:** Use key alias (`alias/prod-key`); update alias to point to new key during rotation.
-
-**Cost Impact:** Application downtime during key rotation.
-
----
-
-### Pitfall 3: Not Enabling Key Rotation
-
-**Problem:** CMK used for 5 years without rotation; compliance violation.
-
-**Solution:** Enable automatic rotation for all customer managed keys.
-
-**Cost Impact:** Compliance audit failure; regulatory fines.
-
----
-
-### Pitfall 4: Using Secrets Manager for Static Configuration
-
-**Problem:** 100 feature flags stored in Secrets Manager; $40/month cost.
-
-**Solution:** Use Parameter Store (free) for non-secret configuration.
-
-**Cost Impact:** $40/month wasted on non-secret storage.
-
----
-
-### Pitfall 5: Over-Permissive Key Policy
-
-**Problem:** Key policy allows `kms:*` for all principals.
-
-**Solution:** Principle of least privilege; grant only required actions.
-
-**Cost Impact:** Unauthorized key usage; potential data breach.
-
----
-
-### Pitfall 6: No Cross-Account Key Policy for Shared CMK
-
-**Problem:** Application in Account B can't decrypt data encrypted in Account A.
-
-**Solution:** Update key policy to allow Account B principals.
-
-**Cost Impact:** Application failures; deployment delays.
+- **Throttling from services acting for you.** A job that reads millions of SSE-KMS objects makes millions of `Decrypt` calls against the account's quota, and every other application using KMS in that Region gets throttled with it. Turn on S3 Bucket Keys, and request a quota increase before large batch jobs.
+- **Secret values copied at deploy time.** A secret pasted into a Lambda environment variable or a configuration file when the application deploys is visible to anyone who can read that configuration, and goes stale at the first rotation. Read it at runtime, or through a service integration that fetches it when the task starts.
+- **Rotation turned on before clients can handle it.** Clients that read a secret once at startup and never refresh break at the first rotation. Make them refresh and retry on an authentication failure first.
+- **Cached secrets without invalidation.** Caching libraries and the Workload Credentials Provider refresh on a timer, not when the secret rotates, so a client can hold an old value for up to the cache's lifetime. The refresh-on-failure path covers that window.
 
 ---
 
 ## Key Takeaways
 
-1. **KMS manages encryption keys; Secrets Manager manages secrets.** KMS creates/rotates keys for encrypting data. Secrets Manager stores/rotates passwords and API keys.
-
-2. **Use Customer Managed Keys for cross-account access and custom policies.** AWS managed keys are free but limited. CMKs cost $1/month but provide full control.
-
-3. **Envelope encryption improves performance and security.** Encrypt data locally with data key; encrypt data key with master key. Master key never leaves HSM.
-
-4. **Secrets Manager provides automatic rotation for RDS/Aurora.** Built-in Lambda rotates database passwords every 30-365 days without downtime.
-
-5. **Parameter Store is free for standard parameters.** Use for configuration and static secrets. Use Secrets Manager only for secrets requiring rotation.
-
-6. **Cache secrets to reduce API costs 99%.** Retrieve secret once per hour instead of per-request. Reduces Secrets Manager costs from $150/month to $0.15/month.
-
-7. **Enable automatic key rotation for compliance.** CMKs rotate annually; old key material retained for decryption. Application code unchanged.
-
-8. **Key policies and IAM policies both required for access.** Key policy must allow principal; IAM policy must allow action. Both evaluated together.
-
-9. **All KMS and Secrets Manager API calls logged to CloudTrail.** Provides audit trail for compliance (who accessed which key/secret when).
-
-10. **Use separate keys per environment (dev, staging, prod).** Prevents compromise of dev key from affecting production data.
-
-11. **Secret versioning enables zero-downtime rotation.** AWSCURRENT, AWSPENDING, AWSPREVIOUS stages; applications always retrieve AWSCURRENT.
-
-12. **Cross-account access requires resource policy + IAM policy.** Secret/key policy allows Account B; IAM policy in Account B allows GetSecretValue/Decrypt.
-
-13. **KMS request limits: 5,500 req/sec (us-east-1).** Use envelope encryption to reduce KMS API calls. Encrypt locally with data key.
-
-14. **Reuse CMKs across services to reduce costs.** One CMK for S3, RDS, EBS saves $2/month per eliminated key.
-
-15. **Use VPC endpoints for KMS/Secrets Manager to keep traffic private.** Prevents secrets from traversing internet; reduces attack surface.
-
-**AWS KMS and Secrets Manager provide enterprise-grade encryption and secret management, enabling automatic rotation, fine-grained access control, and complete audit trails for compliance and security. KMS handles encryption keys while Secrets Manager handles passwords, API keys, and credentials. Both are essential for protecting sensitive data in production.**
+- KMS keys never leave KMS. Services and SDKs use envelope encryption, asking KMS for data keys, and every such request is logged, authorized by the key policy, and counted against a per-Region quota.
+- Use customer managed keys where you need control over the key policy, cross-account use, or the ability to cut off access. AWS managed keys rotate yearly but can't be shared.
+- A key policy must allow access before any IAM policy can. Narrow use with `kms:ViaService` and encryption context conditions.
+- Automatic rotation is transparent and free after the second rotation. It doesn't rotate data keys or re-encrypt data.
+- Store secrets in Secrets Manager, read them at runtime with caching, and let services such as ECS and RDS handle them where they can.
+- Rotate with managed rotation where available, choose alternating users for databases that can't tolerate failed logins, and make clients refresh on authentication failure.
+- Use Parameter Store for configuration and non-rotating secrets, and Secrets Manager for rotating, shared, or replicated secrets.

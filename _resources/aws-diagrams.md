@@ -52,6 +52,7 @@ figures:
   - aws-codepipeline-execution-modes
   - aws-codedeploy-inplace-hooks
   - aws-cognito-token-flow
+  - aws-kms-envelope
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -82,4 +83,5 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-codepipeline-codebuild.html
   - /study-guides/infrastructure/aws/aws-codedeploy.html
   - /study-guides/infrastructure/aws/aws-cognito.html
+  - /study-guides/infrastructure/aws/aws-kms-secrets-manager.html
 ---

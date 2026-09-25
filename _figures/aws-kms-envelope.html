@@ -1,0 +1,63 @@
+---
+title: "Envelope Encryption with a KMS Key"
+kind: dynamic
+system: aws
+summary: "KMS hands out a data key and its encrypted copy; the data is encrypted locally and stored with the encrypted key."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="awskms-title awskms-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awskms-title">How envelope encryption uses a KMS key</title>
+<desc id="awskms-desc">To encrypt, your application, or an AWS service such as S3 acting for you, calls GenerateDataKey on AWS KMS, naming a KMS key and an encryption context. KMS returns a new data key twice: in plaintext, and encrypted under the KMS key. The application encrypts the data locally with the plaintext data key, discards that key, and stores the encrypted data together with the encrypted data key. To read the data later, the application loads the encrypted data key, sends it to KMS in a Decrypt call with the same encryption context, gets the plaintext data key back, and decrypts the data locally. The KMS key itself never leaves KMS. Every GenerateDataKey and Decrypt call counts against the account's KMS request quota and is logged in CloudTrail.</desc>
+<style>
+.awskms-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awskms-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awskms-key { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awskms-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awskms-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awskms-kn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awskms-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awskms-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awskms-num { font-size: 11px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awskms-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awskms-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awskms-box" x="40" y="90" width="260" height="70" rx="6"/>
+<text class="awskms-n" x="170" y="118" text-anchor="middle">Your application</text>
+<text class="awskms-k" x="170" y="136" text-anchor="middle">[or an AWS service such as S3]</text>
+
+<rect class="awskms-pan" x="640" y="30" width="310" height="230" rx="8"/>
+<text class="awskms-h" x="655" y="52">AWS KMS</text>
+<rect class="awskms-key" x="670" y="90" width="250" height="70" rx="6"/>
+<text class="awskms-kn" x="795" y="118" text-anchor="middle">KMS key</text>
+<text class="awskms-k" x="795" y="136" text-anchor="middle">[never leaves KMS]</text>
+
+<path class="awskms-ln" d="M300,105 L668,105" marker-end="url(#awskms-a)"/>
+<text class="awskms-num" x="484" y="97" text-anchor="middle">1 GenerateDataKey, or Decrypt to read</text>
+
+<path class="awskms-ln" d="M668,145 L302,145" marker-end="url(#awskms-a)"/>
+<text class="awskms-num" x="484" y="163" text-anchor="middle">2 plaintext data key</text>
+<text class="awskms-lab" x="484" y="178" text-anchor="middle">(GenerateDataKey also returns an encrypted copy)</text>
+
+<rect class="awskms-pan" x="40" y="290" width="560" height="80" rx="8"/>
+<text class="awskms-h" x="55" y="310">Stored together</text>
+<rect class="awskms-box" x="60" y="320" width="240" height="38" rx="5"/>
+<text class="awskms-n" x="180" y="344" text-anchor="middle">Encrypted data</text>
+<rect class="awskms-key" x="330" y="320" width="250" height="38" rx="5"/>
+<text class="awskms-kn" x="455" y="344" text-anchor="middle">Encrypted data key</text>
+
+<path class="awskms-ln" d="M170,160 L170,318" marker-end="url(#awskms-a)"/>
+<text class="awskms-num" x="182" y="210">3 encrypt the data locally,</text>
+<text class="awskms-num" x="182" y="226">discard the plaintext key, store both</text>
+
+<path class="awskms-ln" d="M455,318 L455,190 L240,190 L240,162" marker-end="url(#awskms-a)"/>
+<text class="awskms-num" x="445" y="250" text-anchor="end">4 to read, load the encrypted data key,</text>
+<text class="awskms-num" x="445" y="266" text-anchor="end">send it to Decrypt (steps 1 and 2),</text>
+<text class="awskms-num" x="445" y="282" text-anchor="end">and decrypt the data locally</text>
+
+<text class="awskms-lab" x="40" y="394">Only data keys travel to and from KMS. Every GenerateDataKey and Decrypt call counts against the account's KMS request quota</text>
+<text class="awskms-lab" x="40" y="412">and appears in CloudTrail, which is why S3 Bucket Keys and data key caching exist to reduce them.</text>
+</g>
+</svg>

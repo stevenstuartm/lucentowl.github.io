@@ -153,11 +153,11 @@ Address underperformance early and specifically. Name what isn't meeting expecta
 
 ## Reading Team Health
 
-Some dysfunctions don't show up in delivery metrics until they've done damage. Three patterns from group psychology recur in software teams, and each has visible early symptoms.
+Some dysfunctions don't show up in delivery metrics until they've done damage. They show up first in how the team behaves, and the behaviors below each have a cause that social psychology named long before software teams existed.
 
-### Process Loss
+### Adding People Slows the Team Down
 
-Process loss is the gap between what a group could produce and what it does produce, because coordinating people consumes effort. Its best-known software form is Brooks's Law.
+Ivan Steiner called it process loss in *Group Process and Productivity* (1972): the gap between what a group could produce and what it does produce, because coordinating people consumes effort. Its best-known software form is Brooks's Law.
 
 > "Adding manpower to a late software project makes it later."
 >
@@ -167,17 +167,23 @@ Brooks's reasoning was that new people need time to ramp up, existing people spe
 
 The symptoms are frequent merge conflicts, several people changing the same code, and more time spent coordinating than building. The remedy is to split the work into streams that can proceed independently, and to add people only where such a stream exists for them.
 
-### Pluralistic Ignorance
+### Practices Nobody Defends Keep Going
 
-Pluralistic ignorance happens when most members of a group privately reject a norm but assume everyone else accepts it, so they all go along. A team might privately think the daily standup is a waste of time, yet nobody says so because each person assumes the others find it useful. The practice then continues indefinitely.
+A team might privately think the daily standup is a waste of time, yet nobody says so because each person assumes the others find it useful, and the practice continues indefinitely. Daniel Katz and Floyd Allport named this pluralistic ignorance in 1931: most members of a group privately reject a norm but assume everyone else accepts it, so they all go along.
 
 It shows up as practices that persist with no clear value, complaints voiced in private but never in the team setting, and meetings where nobody challenges anything. Counter it by asking directly ("Is this meeting useful? Should we change it?"), by discussing things in smaller groups where people speak more freely, and by using anonymous input when the topic is sensitive.
 
-### Diffusion of Responsibility
+### Shared Work Goes Undone
 
-When a task belongs to everyone, each person assumes someone else will handle it. A bug report posted in a channel with twenty people can sit untouched for exactly that reason.
+A bug report posted in a channel with twenty people can sit untouched precisely because twenty people saw it. When a task belongs to everyone, each person assumes someone else will handle it. John Darley and Bibb Latané demonstrated this diffusion of responsibility in 1968, showing that people were less likely to help someone in trouble the more bystanders they believed were present.
 
 Watch for work falling through the cracks, "I thought someone else had that," and finger-pointing after something goes wrong. The remedy is explicit ownership. Every task and every shared channel responsibility has a named owner, visible on the board or rotated on a schedule.
+
+### Problems Surface Late
+
+Risks, mistakes, and doubts reach the lead only when they can no longer be hidden: at the demo, in production, or in a postmortem where someone says they had suspected it for weeks. Amy Edmondson's research on team learning (1999) traced this to psychological safety, a shared belief that it is safe to take interpersonal risks such as admitting a mistake or questioning a plan. Teams without it stay quiet, not because nothing is wrong, but because speaking up feels more dangerous than waiting.
+
+The symptoms are bad news arriving all at once, retrospectives where nobody names a problem, and estimates that are never challenged. The lead sets the level more than anyone. Admit your own mistakes openly, thank the person who brings bad news before discussing the problem, and keep incident reviews focused on how the system allowed the failure rather than on who caused it.
 
 ## When Things Go Wrong
 
@@ -273,7 +279,7 @@ Departures reveal knowledge concentrated in one person, and they can overload th
 - **Listen before changing.** Use the first week of 1:1s and ceremonies to learn, then deliver a few quick wins drawn from what you heard.
 - **Facilitate the cycle.** The team owns planning, standup, and retros, while you remove blockers and make sure retro actions happen.
 - **Protect the 1:1 cadence.** It's where morale, conflict, and performance problems surface early enough to fix.
-- **Watch for invisible dysfunction.** Process loss, pluralistic ignorance, and diffusion of responsibility erode a team before metrics show it.
+- **Watch behavior before metrics.** Slowdowns as the team grows, practices nobody defends, shared work left undone, and problems that surface late all erode a team before delivery numbers show it.
 - **In a crisis, support rather than take over.** Communicate early, keep postmortems blameless, and follow corrective actions to completion.
 
 Success is measured by what the team delivers and how it grows, not by your personal output.
