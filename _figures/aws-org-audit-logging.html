@@ -1,0 +1,68 @@
+---
+title: "Audit Logging Across an Organization"
+kind: deployment
+system: aws
+summary: "An organization trail and Config recorders in every account feed one log archive bucket and one aggregator."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" role="img" aria-labelledby="awsorg-title awsorg-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsorg-title">Organization-wide CloudTrail and Config layout</title>
+<desc id="awsorg-desc">The management account, or a delegated administrator, owns an organization trail, which applies to every account and Region in the organization, including accounts added later. In every account and Region, CloudTrail records API activity and an AWS Config recorder records resource configurations. CloudTrail delivers log files, and Config delivers configuration history and snapshots, to one S3 bucket in a dedicated log archive account, encrypted with a KMS key and protected from deletion. A Config aggregator in a security account, registered as a delegated administrator, collects configuration and compliance data from every account and Region. The organization trail covers new accounts automatically, but Config recorders must be deployed to new accounts through Control Tower, StackSets, or Systems Manager Quick Setup.</desc>
+<style>
+.awsorg-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsorg-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsorg-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsorg-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsorg-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsorg-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsorg-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsorg-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsorg-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsorg-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsorg-acc" x="30" y="25" width="280" height="60" rx="6"/>
+<text class="awsorg-an" x="170" y="50" text-anchor="middle">Management account</text>
+<text class="awsorg-k" x="170" y="68" text-anchor="middle">[owns the organization trail]</text>
+
+<rect class="awsorg-pan" x="20" y="120" width="310" height="235" rx="8"/>
+<text class="awsorg-h" x="35" y="142">Every account and Region</text>
+<rect class="awsorg-box" x="40" y="160" width="270" height="60" rx="6"/>
+<text class="awsorg-n" x="175" y="185" text-anchor="middle">CloudTrail</text>
+<text class="awsorg-k" x="175" y="203" text-anchor="middle">[API activity, via the organization trail]</text>
+<rect class="awsorg-box" x="40" y="265" width="270" height="60" rx="6"/>
+<text class="awsorg-n" x="175" y="290" text-anchor="middle">AWS Config recorder</text>
+<text class="awsorg-k" x="175" y="308" text-anchor="middle">[resource configurations]</text>
+
+<path class="awsorg-ln" d="M260,85 L260,158" marker-end="url(#awsorg-a)"/>
+<text class="awsorg-lab" x="270" y="99">trail covers all accounts,</text>
+<text class="awsorg-lab" x="270" y="113">including new ones</text>
+
+<rect class="awsorg-pan" x="560" y="25" width="400" height="160" rx="8"/>
+<text class="awsorg-h" x="575" y="47">Log archive account</text>
+<rect class="awsorg-box" x="590" y="65" width="340" height="70" rx="6"/>
+<text class="awsorg-n" x="760" y="92" text-anchor="middle">S3 bucket</text>
+<text class="awsorg-k" x="760" y="110" text-anchor="middle">[trail logs and Config history,</text>
+<text class="awsorg-k" x="760" y="125" text-anchor="middle">KMS-encrypted, deletion blocked]</text>
+
+<rect class="awsorg-pan" x="560" y="220" width="400" height="135" rx="8"/>
+<text class="awsorg-h" x="575" y="242">Security account (delegated administrator)</text>
+<rect class="awsorg-box" x="590" y="260" width="340" height="70" rx="6"/>
+<text class="awsorg-n" x="760" y="287" text-anchor="middle">Config aggregator</text>
+<text class="awsorg-k" x="760" y="305" text-anchor="middle">[compliance across accounts and Regions]</text>
+
+<path class="awsorg-ln" d="M310,190 L470,190 L470,90 L588,90" marker-end="url(#awsorg-a)"/>
+<text class="awsorg-lab" x="345" y="182">log files</text>
+
+<path class="awsorg-ln" d="M310,280 L500,280 L500,120 L588,120" marker-end="url(#awsorg-a)"/>
+<text class="awsorg-lab" x="345" y="272">history and snapshots</text>
+
+<path class="awsorg-ln" d="M310,305 L588,305" marker-end="url(#awsorg-a)"/>
+<text class="awsorg-lab" x="345" y="322">configuration and compliance data</text>
+
+<text class="awsorg-lab" x="20" y="392">The organization trail reaches new accounts automatically. Config recorders don't, so they're deployed to each new account and Region</text>
+<text class="awsorg-lab" x="20" y="410">through Control Tower, CloudFormation StackSets, or Systems Manager Quick Setup.</text>
+</g>
+</svg>

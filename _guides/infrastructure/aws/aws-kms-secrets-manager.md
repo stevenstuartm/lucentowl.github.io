@@ -41,7 +41,7 @@ KMS encrypts at most 4 KB directly, and every call is a network request, so bulk
 
 {% include figure.html id="aws-kms-envelope" %}
 
-This is what S3, EBS, and other services do behind server-side encryption with a KMS key. The concept itself is covered in [Cryptography](/study-guides/security/cryptography.html). What matters on AWS is that every `GenerateDataKey` and `Decrypt` is a KMS request, recorded in CloudTrail, AWS's API audit log, checked against the key policy, and counted against the account's request quota. Two features exist to reduce those calls. **S3 Bucket Keys** make S3 generate a bucket-level key from KMS and derive object keys from it, cutting KMS requests for SSE-KMS buckets by up to 99%. The **AWS Encryption SDK** can cache data keys, so application code reuses one data key across several messages.
+This is what S3 does behind SSE-KMS, and what EBS and other services do behind their own KMS encryption options. The concept itself is covered in [Cryptography](/study-guides/security/cryptography.html). What matters on AWS is that every `GenerateDataKey` and `Decrypt` is a KMS request, recorded in CloudTrail, AWS's API audit log, checked against the key policy, and counted against the account's request quota. Two features exist to reduce those calls. **S3 Bucket Keys** make S3 generate a bucket-level key from KMS and derive object keys from it, cutting KMS requests for SSE-KMS buckets by up to 99%. The **AWS Encryption SDK** can cache data keys, so application code reuses one data key across several messages.
 
 An **encryption context** is a set of non-secret key-value pairs, such as `{"tenant": "acme"}`, passed with an encrypt request. KMS binds it to the ciphertext, so decryption only succeeds with the same context, and it appears in CloudTrail entries. The key policy, described next, can require a particular context, which lets one key serve many tenants while each role can decrypt only its own tenant's data.
 
@@ -126,11 +126,11 @@ Many services read secrets directly, which keeps them out of application code al
 - **Managed external secrets**, for secrets held with software vendors that partner with Secrets Manager, such as Salesforce. Secrets Manager calls the partner's system to rotate the credential.
 - **Rotation by Lambda function** for everything else. AWS provides template functions for RDS, Aurora, Redshift, and DocumentDB, and you write one for other systems.
 
-A rotation function runs four steps. `createSecret` generates the new value and stores it as `AWSPENDING`, `setSecret` changes the credential in the target system, `testSecret` checks that the new value works, and `finishSecret` moves `AWSCURRENT` to the new version. If a step fails, `AWSCURRENT` stays where it was. The function needs a network path to both the target system and the Secrets Manager endpoint, which for a database in a private subnet means a VPC endpoint or NAT gateway, and a missing path is the most common reason rotation fails.
+A rotation function runs four steps. `createSecret` generates the new value and stores it as `AWSPENDING`, `setSecret` changes the credential in the target system, `testSecret` checks that the new value works, and `finishSecret` moves `AWSCURRENT` to the new version. If a step fails, `AWSCURRENT` stays where it was. The function needs a network path to both the target system and the Secrets Manager endpoint, which for a database in a private subnet means a VPC endpoint or NAT gateway, and a missing path is a common reason rotation fails.
 
 For databases, the rotation strategy decides what happens to clients that hold the old password:
 
-- **Single user** changes one user's password. Connections already open keep working, but a client that opens a new connection with a cached old password fails until it refreshes its cache. AWS recommends it for most cases.
+- **Single user** changes one user's password. Connections already open keep working, but a client that opens a new connection with a cached old password fails until it refreshes its cache. AWS considers it appropriate for most cases.
 - **Alternating users** keeps two users with the same permissions and rotates whichever isn't current, so the previous credentials still work until the next rotation. It needs a separate secret with permission to change both users' passwords, and the two users' permissions have to be kept identical.
 
 Applications should connect as a least-privilege user of their own rather than the database's master user, even when RDS manages the master password.

@@ -35,10 +35,10 @@ summary: "KMS hands out a data key and its encrypted copy; the data is encrypted
 <text class="awskms-k" x="795" y="136" text-anchor="middle">[never leaves KMS]</text>
 
 <path class="awskms-ln" d="M300,105 L668,105" marker-end="url(#awskms-a)"/>
-<text class="awskms-num" x="484" y="97" text-anchor="middle">1 GenerateDataKey, or Decrypt to read</text>
+<text class="awskms-num" x="484" y="97" text-anchor="middle">1 GenerateDataKey, or 5 Decrypt to read</text>
 
 <path class="awskms-ln" d="M668,145 L302,145" marker-end="url(#awskms-a)"/>
-<text class="awskms-num" x="484" y="163" text-anchor="middle">2 plaintext data key</text>
+<text class="awskms-num" x="484" y="163" text-anchor="middle">2 or 6 plaintext data key</text>
 <text class="awskms-lab" x="484" y="178" text-anchor="middle">(GenerateDataKey also returns an encrypted copy)</text>
 
 <rect class="awskms-pan" x="40" y="290" width="560" height="80" rx="8"/>
@@ -54,8 +54,8 @@ summary: "KMS hands out a data key and its encrypted copy; the data is encrypted
 
 <path class="awskms-ln" d="M455,318 L455,190 L240,190 L240,162" marker-end="url(#awskms-a)"/>
 <text class="awskms-num" x="445" y="250" text-anchor="end">4 to read, load the encrypted data key,</text>
-<text class="awskms-num" x="445" y="266" text-anchor="end">send it to Decrypt (steps 1 and 2),</text>
-<text class="awskms-num" x="445" y="282" text-anchor="end">and decrypt the data locally</text>
+<text class="awskms-num" x="445" y="266" text-anchor="end">5 send it to Decrypt, 6 get the plaintext</text>
+<text class="awskms-num" x="445" y="282" text-anchor="end">data key back, and decrypt locally</text>
 
 <text class="awskms-lab" x="40" y="394">Only data keys travel to and from KMS. Every GenerateDataKey and Decrypt call counts against the account's KMS request quota</text>
 <text class="awskms-lab" x="40" y="412">and appears in CloudTrail, which is why S3 Bucket Keys and data key caching exist to reduce them.</text>

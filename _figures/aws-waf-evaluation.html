@@ -1,0 +1,81 @@
+---
+title: "How a Web ACL Evaluates a Request"
+kind: flow
+system: aws
+summary: "Rules run in priority order; the first Allow or Block ends evaluation, while Count lets it continue."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="awswaf-title awswaf-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awswaf-title">Rule evaluation order in an AWS WAF web ACL</title>
+<desc id="awswaf-desc">A request enters the web ACL and meets its rules in priority order, lowest number first. In this example, rule 0 is an IP allow list whose Allow action forwards matching requests immediately. Rule 1 is a rate-based rule that blocks sources over the limit. Rule 2 is a managed rule group with some rules set to Count, which records matches and adds labels but lets the request continue; its other rules can still block. Rule 3 blocks requests that carry a label added earlier. A request that no rule stops reaches the web ACL's default action, here Allow. Allow, Block, CAPTCHA, and Challenge end evaluation when they apply; Count never does.</desc>
+<style>
+.awswaf-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awswaf-def { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awswaf-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awswaf-dn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awswaf-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awswaf-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awswaf-out { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awswaf-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+.awswaf-cnt { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+</style>
+<defs>
+<marker id="awswaf-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awswaf-out" x="115" y="48">Request</text>
+<path class="awswaf-ln" d="M105,56 L105,118" marker-end="url(#awswaf-a)"/>
+
+<rect class="awswaf-box" x="30" y="120" width="150" height="70" rx="6"/>
+<text class="awswaf-n" x="105" y="146" text-anchor="middle">0 IP allow list</text>
+<text class="awswaf-k" x="105" y="164" text-anchor="middle">[action: Allow]</text>
+
+<rect class="awswaf-box" x="215" y="120" width="150" height="70" rx="6"/>
+<text class="awswaf-n" x="290" y="146" text-anchor="middle">1 Rate-based rule</text>
+<text class="awswaf-k" x="290" y="164" text-anchor="middle">[action: Block]</text>
+
+<rect class="awswaf-box" x="400" y="120" width="150" height="70" rx="6"/>
+<text class="awswaf-n" x="475" y="146" text-anchor="middle">2 Managed rules</text>
+<text class="awswaf-k" x="475" y="164" text-anchor="middle">[some set to Count]</text>
+
+<rect class="awswaf-box" x="585" y="120" width="150" height="70" rx="6"/>
+<text class="awswaf-n" x="660" y="146" text-anchor="middle">3 Label match</text>
+<text class="awswaf-k" x="660" y="164" text-anchor="middle">[action: Block]</text>
+
+<rect class="awswaf-def" x="770" y="120" width="160" height="70" rx="6"/>
+<text class="awswaf-dn" x="850" y="146" text-anchor="middle">Default action</text>
+<text class="awswaf-k" x="850" y="164" text-anchor="middle">[Allow]</text>
+
+<path class="awswaf-ln" d="M180,155 L213,155" marker-end="url(#awswaf-a)"/>
+<path class="awswaf-ln" d="M365,155 L398,155" marker-end="url(#awswaf-a)"/>
+<path class="awswaf-ln" d="M550,155 L583,155" marker-end="url(#awswaf-a)"/>
+<path class="awswaf-ln" d="M735,155 L768,155" marker-end="url(#awswaf-a)"/>
+<text class="awswaf-lab" x="475" y="108" text-anchor="middle">no match, or Count: continue to the next rule</text>
+
+<path class="awswaf-ln" d="M105,190 L105,248" marker-end="url(#awswaf-a)"/>
+<text class="awswaf-out" x="105" y="266" text-anchor="middle">Allow</text>
+<text class="awswaf-lab" x="105" y="282" text-anchor="middle">allowed through</text>
+
+<path class="awswaf-ln" d="M290,190 L290,248" marker-end="url(#awswaf-a)"/>
+<text class="awswaf-out" x="290" y="266" text-anchor="middle">Block</text>
+<text class="awswaf-lab" x="290" y="282" text-anchor="middle">403 or a custom response</text>
+
+<path class="awswaf-cnt" d="M435,190 L435,248"/>
+<text class="awswaf-out" x="435" y="266" text-anchor="middle">Count</text>
+<text class="awswaf-lab" x="435" y="282" text-anchor="middle">labels, continue</text>
+<path class="awswaf-ln" d="M520,190 L520,248" marker-end="url(#awswaf-a)"/>
+<text class="awswaf-out" x="520" y="266" text-anchor="middle">Block</text>
+<text class="awswaf-lab" x="520" y="282" text-anchor="middle">other rules</text>
+
+<path class="awswaf-ln" d="M660,190 L660,248" marker-end="url(#awswaf-a)"/>
+<text class="awswaf-out" x="660" y="266" text-anchor="middle">Block</text>
+<text class="awswaf-lab" x="660" y="282" text-anchor="middle">if an earlier rule labeled it</text>
+
+<path class="awswaf-ln" d="M850,190 L850,248" marker-end="url(#awswaf-a)"/>
+<text class="awswaf-out" x="850" y="266" text-anchor="middle">Allow</text>
+<text class="awswaf-lab" x="850" y="282" text-anchor="middle">nothing stopped it</text>
+
+<text class="awswaf-lab" x="30" y="324">Rules run in priority order, lowest number first. Allow, Block, CAPTCHA, and Challenge end evaluation when they apply.</text>
+<text class="awswaf-lab" x="30" y="342">Count records the match and lets the request move on. Any matching rule can add labels for later rules.</text>
+</g>
+</svg>

@@ -53,6 +53,8 @@ figures:
   - aws-codedeploy-inplace-hooks
   - aws-cognito-token-flow
   - aws-kms-envelope
+  - aws-waf-evaluation
+  - aws-org-audit-logging
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -84,4 +86,6 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-codedeploy.html
   - /study-guides/infrastructure/aws/aws-cognito.html
   - /study-guides/infrastructure/aws/aws-kms-secrets-manager.html
+  - /study-guides/infrastructure/aws/aws-waf-shield.html
+  - /study-guides/infrastructure/aws/aws-cloudtrail-config.html
 ---
