@@ -1,0 +1,70 @@
+---
+title: "Migrating a WPF App Screen by Screen"
+kind: structure
+system: winui
+summary: "A WPF window hosting a ported WinUI screen, with both UIs bound to one shared view model library."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" role="img" aria-labelledby="wim-title wim-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wim-title">A WPF shell hosting a WinUI 3 island during a gradual migration</title>
+<desc id="wim-desc">A WPF main window is the outer shell. Inside it, on the left, are WPF screens not yet ported, drawn in WPF controls. On the right is a DesktopWindowXamlSource, the XAML Island, hosting a WinUI 3 screen that has already been ported. Below the window sits a shared class library targeting plain .NET, holding view models and services. Arrows run from both the WPF screens and the WinUI screen down to the same view models, showing that both UIs bind to one set of view models, so the two screens stay in sync without referencing each other. A dashed arrow from a WPF screen to the island marks a screen being ported, which moves from the WPF side to the island side.</desc>
+<defs>
+<marker id="wim-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-primary, #1A5F8A)"/>
+</marker>
+<marker id="wim-arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.wim-win { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.wim-wpf { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wim-isl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 2; stroke-dasharray: 6 3; }
+.wim-scr { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 1.5; }
+.wim-lib { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.wim-bind { stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wim-bind-hot { stroke: var(--color-accent, #C0392B); stroke-width: 1.75; }
+.wim-move { stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wim-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wim-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wim-r { font-size: 13px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wim-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wim-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wim-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="wim-win" x="24" y="24" width="852" height="220" rx="6"/>
+<text class="wim-hd" x="40" y="48">WPF MAIN WINDOW (THE SHELL)</text>
+
+<rect class="wim-wpf" x="40" y="64" width="190" height="80" rx="4"/>
+<text class="wim-n" x="56" y="92">Orders screen</text>
+<text class="wim-k" x="56" y="112">WPF controls, not yet ported</text>
+
+<rect class="wim-wpf" x="248" y="64" width="190" height="80" rx="4"/>
+<text class="wim-n" x="264" y="92">Settings screen</text>
+<text class="wim-k" x="264" y="112">WPF controls, not yet ported</text>
+
+<rect class="wim-isl" x="480" y="60" width="380" height="164" rx="6"/>
+<text class="wim-r" x="496" y="84">DesktopWindowXamlSource</text>
+<text class="wim-k" x="496" y="102">the XAML Island, a region of the WPF window</text>
+<rect class="wim-scr" x="496" y="118" width="348" height="90" rx="4"/>
+<text class="wim-t" x="512" y="146">Customers screen</text>
+<text class="wim-k" x="512" y="166">WinUI 3 controls, already ported</text>
+
+<line class="wim-move" x1="438" y1="104" x2="494" y2="150" marker-end="url(#wim-arrow)"/>
+
+<rect class="wim-lib" x="190" y="318" width="520" height="70" rx="4"/>
+<text class="wim-t" x="210" y="344">Shared class library (plain .NET)</text>
+<text class="wim-k" x="210" y="364">view models and service interfaces, no WPF or WinUI references</text>
+
+<line class="wim-bind" x1="135" y1="144" x2="280" y2="316" marker-end="url(#wim-arrow)"/>
+<line class="wim-bind" x1="343" y1="144" x2="400" y2="316" marker-end="url(#wim-arrow)"/>
+<line class="wim-bind-hot" x1="670" y1="208" x2="600" y2="316" marker-end="url(#wim-arrow-hot)"/>
+
+<line class="wim-bind" x1="40" y1="420" x2="80" y2="420" marker-end="url(#wim-arrow)"/>
+<text class="wim-lg" x="90" y="424">WPF binding</text>
+<line class="wim-bind-hot" x1="220" y1="420" x2="260" y2="420" marker-end="url(#wim-arrow-hot)"/>
+<text class="wim-lg" x="270" y="424">WinUI binding</text>
+<line class="wim-move" x1="400" y1="420" x2="440" y2="420" marker-end="url(#wim-arrow)"/>
+<text class="wim-lg" x="450" y="424">a screen being ported</text>
+</g>
+</svg>

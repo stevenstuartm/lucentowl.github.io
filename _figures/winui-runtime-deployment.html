@@ -1,0 +1,88 @@
+---
+title: "Where the Windows App SDK Runtime Lives"
+kind: deployment
+system: winui
+summary: "Apps sharing one serviced runtime, beside an app that carries its own copy."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="wrd-title wrd-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wrd-title">Framework-dependent and self-contained deployment of the Windows App SDK runtime</title>
+<desc id="wrd-desc">The left panel shows framework-dependent deployment. Three apps sit at the top: packaged app A, packaged app B (each declaring the framework as a manifest dependency), and unpackaged app C, which finds the runtime through its bootstrapper. Arrows run from all three down to one shared Framework package, the Windows App SDK runtime installed once and shared by every app that uses it. Below the framework, the Main package updates it from the Store, shown by an arrow into the framework labeled servicing updates, and the DDLM (Dynamic Dependency Lifetime Manager) holds the framework version that unpackaged app C (or an app packaged with external location) is using, so it isn't updated while C runs. The right panel shows self-contained deployment: app D contains its own copy of the runtime inside the app, which changes only when the app ships a new version.</desc>
+<defs>
+<marker id="wrd-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-primary, #1A5F8A)"/>
+</marker>
+<marker id="wrd-arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.wrd-panel { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.wrd-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wrd-rt { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 2; }
+.wrd-svc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wrd-load { stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wrd-upd { stroke: var(--color-accent, #C0392B); stroke-width: 1.75; }
+.wrd-pin { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.wrd-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wrd-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wrd-r { font-size: 13px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wrd-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wrd-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wrd-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="wrd-panel" x="24" y="24" width="516" height="376" rx="6"/>
+<text class="wrd-hd" x="40" y="48">FRAMEWORK-DEPENDENT</text>
+
+<rect class="wrd-app" x="40" y="64" width="150" height="52" rx="4"/>
+<text class="wrd-n" x="54" y="86">Packaged app A</text>
+<text class="wrd-k" x="54" y="104">manifest dependency</text>
+
+<rect class="wrd-app" x="206" y="64" width="150" height="52" rx="4"/>
+<text class="wrd-n" x="220" y="86">Packaged app B</text>
+<text class="wrd-k" x="220" y="104">manifest dependency</text>
+
+<rect class="wrd-app" x="372" y="64" width="152" height="52" rx="4"/>
+<text class="wrd-n" x="386" y="86">Unpackaged app C</text>
+<text class="wrd-k" x="386" y="104">uses the bootstrapper</text>
+
+<line class="wrd-load" x1="115" y1="116" x2="200" y2="194" marker-end="url(#wrd-arrow)"/>
+<line class="wrd-load" x1="281" y1="116" x2="281" y2="194" marker-end="url(#wrd-arrow)"/>
+<line class="wrd-load" x1="448" y1="116" x2="362" y2="194" marker-end="url(#wrd-arrow)"/>
+
+<rect class="wrd-rt" x="110" y="196" width="344" height="60" rx="4"/>
+<text class="wrd-r" x="126" y="220">Framework package</text>
+<text class="wrd-k" x="126" y="240">the runtime, one shared copy for every app using it</text>
+
+<rect class="wrd-svc" x="40" y="316" width="220" height="60" rx="4"/>
+<text class="wrd-t" x="54" y="339">Main package</text>
+<text class="wrd-k" x="54" y="358">updates it from the Store</text>
+
+<rect class="wrd-svc" x="284" y="316" width="240" height="60" rx="4"/>
+<text class="wrd-t" x="298" y="339">DDLM</text>
+<text class="wrd-k" x="298" y="358">holds app C's version while C runs</text>
+
+<line class="wrd-upd" x1="150" y1="316" x2="190" y2="258" marker-end="url(#wrd-arrow-hot)"/>
+<text class="wrd-k" x="60" y="292">servicing updates</text>
+<line class="wrd-pin" x1="404" y1="316" x2="374" y2="258"/>
+
+<rect class="wrd-panel" x="564" y="24" width="312" height="376" rx="6"/>
+<text class="wrd-hd" x="580" y="48">SELF-CONTAINED</text>
+
+<rect class="wrd-app" x="580" y="64" width="280" height="192" rx="4"/>
+<text class="wrd-n" x="596" y="86">App D</text>
+<text class="wrd-k" x="596" y="104">its own files, packaged or not</text>
+<rect class="wrd-rt" x="596" y="160" width="248" height="60" rx="4"/>
+<text class="wrd-r" x="612" y="184">Runtime copy</text>
+<text class="wrd-k" x="612" y="204">inside the app, not shared</text>
+<text class="wrd-k" x="580" y="290">Changes only when App D</text>
+<text class="wrd-k" x="580" y="306">ships a new version</text>
+
+<line class="wrd-load" x1="40" y1="432" x2="80" y2="432" marker-end="url(#wrd-arrow)"/>
+<text class="wrd-lg" x="90" y="436">app loads the runtime</text>
+<line class="wrd-upd" x1="250" y1="432" x2="290" y2="432" marker-end="url(#wrd-arrow-hot)"/>
+<text class="wrd-lg" x="300" y="436">servicing update</text>
+<line class="wrd-pin" x1="430" y1="432" x2="470" y2="432"/>
+<text class="wrd-lg" x="480" y="436">keeps a version in use</text>
+</g>
+</svg>

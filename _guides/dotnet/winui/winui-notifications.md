@@ -3,294 +3,274 @@ title: "App Notifications in WinUI 3"
 layout: guide
 category: "WinUI 3"
 subcategory: "Platform Integration"
-description: "Implementing toast notifications, badge updates, and system tray integration in WinUI 3 using the Windows App SDK notification APIs and Win32 interop."
-tags: [winui, winui-3, notifications, platform-integration, win32-interop, desktop, practical]
+description: "Sending and handling app notifications from a WinUI 3 app with the Windows App SDK: registration, content, clicks, progress updates, scheduling, taskbar badges, and a system tray icon."
+tags: [practical, app-notifications, notification-activation, scheduled-notifications, badge-notifications, system-tray]
 ---
 
 ## Table of Contents
 
-- [How WinUI 3 Apps Participate in the Notification System](#how-winui-3-apps-participate-in-the-notification-system)
-- [Toast Notifications](#toast-notifications)
-- [Rich Toast Content](#rich-toast-content)
-- [Handling Notification Activation](#handling-notification-activation)
-- [Scheduled and Updated Notifications](#scheduled-and-updated-notifications)
-- [Badge Notifications](#badge-notifications)
-- [System Tray Integration](#system-tray-integration)
-- [When to Notify and When Not To](#when-to-notify-and-when-not-to)
+- [How an App Joins the Notification System](#how-an-app-joins-the-notification-system)
+- [Building a Notification](#building-a-notification)
+- [Handling a Click](#handling-a-click)
+- [Updating, Replacing, and Removing](#updating-replacing-and-removing)
+- [Scheduling a Notification](#scheduling-a-notification)
+- [Taskbar Badges](#taskbar-badges)
+- [A System Tray Icon](#a-system-tray-icon)
+- [When to Notify](#when-to-notify)
 
----
 
-## How WinUI 3 Apps Participate in the Notification System
+## How an App Joins the Notification System
 
-Windows Notification Center (Action Center) is the operating system's central hub for app notifications. When an app sends a toast, it appears as a pop-up in the lower-right corner of the screen and is also stored in Notification Center for the user to review later. Apps that participate in this system can deliver timely, actionable information without requiring the user to have the app window open.
+An app notification, often still called a toast, is a pop-up Windows shows outside the app's window. It then stays in Notification Center (Action Center on Windows 10) until the user dismisses it or it expires, after three days by default. A notification can be purely informational, open the app when clicked, or run an action from one of its buttons without showing the app at all.
 
-WinUI 3 apps built with the Windows App SDK gain access to the notification system through the `Microsoft.Windows.AppNotifications` namespace, introduced in Windows App SDK 1.2. This API replaces the older UWP `Windows.UI.Notifications` approach and is designed for packaged and unpackaged Win32 desktop apps alike. Unpackaged apps require a small amount of additional setup to register with the notification platform, since there is no package identity for the system to use as the app's notification channel identifier.
-
-For packaged apps, the system derives the app's notification identity from the package manifest. For unpackaged apps, you register a unique application user model ID (AUMID) and a display name so Windows knows which app owns incoming notifications. Either way, you call `AppNotificationManager.Default.Register()` early in the application lifecycle, before any notifications are sent or handled.
+The Windows App SDK's API for this lives in `Microsoft.Windows.AppNotifications`, with the content builder in `Microsoft.Windows.AppNotifications.Builder`. It works for packaged and unpackaged apps. Microsoft's pages disagree on whether it needs the Windows App SDK's Singleton package, a separately installed part of the runtime. The API reference notes that dependency on every `AppNotificationManager` member, while the self-contained deployment guide says only push notifications need it. A self-contained app, which doesn't install that package, should test notifications on a clean machine. Before an app shows its first notification, it calls `AppNotificationManager.Default.Register()`, and the order of that call matters:
 
 ```csharp
-// In App.xaml.cs, before creating the window
-AppNotificationManager notificationManager = AppNotificationManager.Default;
-notificationManager.NotificationInvoked += OnNotificationInvoked;
-notificationManager.Register();
+// In App.OnLaunched, or in a custom Main if the app has one,
+// before reading the activation arguments
+AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
+AppNotificationManager.Default.Register();
+
+var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
 ```
 
-The `NotificationInvoked` event fires when the user interacts with a notification while your app is already running. When the app is not running, Windows relaunches it and passes activation arguments through the normal app activation path, which you handle in `OnLaunched`.
+- **Subscribe to `NotificationInvoked` before calling `Register`.** Otherwise a click starts a new process to handle it instead of reaching the running app.
+- **Call `Register` before `GetActivatedEventArgs`**, so the activation arguments reflect a notification launch.
+- **Call `Unregister` before the app exits**, so a later click launches the app again. `UnregisterAll` removes the app's notification registration entirely, for an app that will never use notifications again.
 
----
+A click on a notification has to be able to start the app when it isn't running, so Windows launches it through COM activation. The app is registered as the COM server for a class ID, and Windows asks COM to create that class. What `Register` does depends on whether the app is packaged as MSIX:
 
-## Toast Notifications
+| | Packaged (MSIX) | Unpackaged |
+|---|---|---|
+| **How Windows launches the app for a click** | The manifest declares a `windows.toastNotificationActivation` extension and a `windows.comServer` entry with the same GUID, whose `Arguments` are `----AppNotificationActivated:` | `Register()` registers the calling process as the COM server itself |
+| **Display name and icon** | From the package | Read from the shell, or passed explicitly with `Register(displayName, iconUri)` |
 
-A toast notification in WinUI 3 is built from an XML payload that the system renders. You can construct this payload by hand using the `AppNotificationBuilder` class or by writing XML directly. `AppNotificationBuilder` is the recommended starting point because it covers the most common patterns without requiring you to memorise the toast XML schema.
+An app running elevated, as administrator, can't send or receive notifications. `Show` fails silently, which makes it easy to lose an afternoon wondering why nothing appears while testing from an elevated Visual Studio.
 
-The simplest notification has a title and a body:
+
+## Building a Notification
+
+A notification is an XML document that Windows renders. `AppNotificationBuilder` writes that XML for you and returns an `AppNotification`:
 
 ```csharp
-var builder = new AppNotificationBuilder()
+var notification = new AppNotificationBuilder()
+    .AddArgument("action", "openDownloads")
     .AddText("Download complete")
-    .AddText("your-file.zip is ready to open.");
+    .AddText("quarterly-report.pdf is ready to open.")
+    .BuildNotification();
 
-AppNotificationManager.Default.Show(builder.BuildNotification());
-```
-
-`AddText` appends a text element to the notification. The first call produces the title-weight line; subsequent calls produce body lines. The system handles layout, typography, and dark/light mode adaptation automatically.
-
-If you prefer to construct the XML payload directly, you use `AppNotification` with a raw XML string. This is useful when you need toast features that `AppNotificationBuilder` does not yet expose:
-
-```csharp
-string xml = @"<toast>
-    <visual>
-        <binding template=""ToastGeneric"">
-            <text>Download complete</text>
-            <text>your-file.zip is ready to open.</text>
-        </binding>
-    </visual>
-</toast>";
-
-var notification = new AppNotification(xml);
 AppNotificationManager.Default.Show(notification);
 ```
 
-Both approaches produce the same result. The `AppNotificationBuilder` API generates valid XML internally, so mixing the two is safe as long as you work with one style per notification.
+A notification takes at most three text elements, and a fourth `AddText` throws. The first is the title, shown on up to two lines, and the other two share up to four lines of body. `AddArgument` on the builder attaches key-value pairs to the notification's body, and they come back to the app when the user clicks it. The builder covers most of the content schema:
 
----
+| Content | Builder calls |
+|---|---|
+| Images | `SetAppLogoOverride` (the small image on the left, optionally cropped to a circle), `SetHeroImage` (full width across the top), `SetInlineImage` (full width after the text) |
+| Buttons | `AddButton(new AppNotificationButton("Reply").AddArgument("action", "reply"))`, each with its own arguments. Five at most, counting any placed in the notification's context menu with `SetContextMenuPlacement` |
+| Inputs | `AddTextBox(id, placeholder, title)` and `AddComboBox`, whose values come back with the click |
+| Progress | `AddProgressBar` (see [Updating, Replacing, and Removing](#updating-replacing-and-removing)) |
+| Sound and timing | `SetAudioUri`, `SetAudioEvent`, `MuteAudio`, `SetDuration`, `SetTimeStamp` |
+| Behavior | `SetScenario` with `Reminder`, `Alarm`, `IncomingCall`, or `Urgent`, which adjusts how Windows presents the notification. A reminder or alarm without a button falls back to a normal notification, and `Urgent` needs a check with `IsUrgentScenarioSupported` |
 
-## Rich Toast Content
-
-Beyond text, toasts can carry images, inline buttons, text inputs, combo boxes, and progress bars. Each of these elements is added through `AppNotificationBuilder` methods or the equivalent XML elements.
-
-An inline image appears below the text content. A hero image spans the full width of the toast and appears above everything else. An app logo override replaces the small app icon in the corner with a custom image:
-
-```csharp
-var builder = new AppNotificationBuilder()
-    .AddText("Photo upload complete")
-    .AddText("Your vacation album is live.")
-    .SetHeroImage(new Uri("ms-appx:///Assets/vacation-thumb.jpg"))
-    .SetAppLogoOverride(new Uri("ms-appx:///Assets/photos-icon.png"), AppNotificationImageCrop.Circle);
-```
-
-Buttons make notifications actionable. Each button carries an argument string that your activation handler receives when the user clicks it:
+A text box paired with a button makes an inline reply. The button names the input it submits:
 
 ```csharp
-var builder = new AppNotificationBuilder()
-    .AddText("New message from Alex")
+var notification = new AppNotificationBuilder()
+    .AddArgument("action", "openConversation")
+    .AddArgument("conversationId", "9813")
+    .AddText("Alex")
     .AddText("Are you free for lunch?")
-    .AddButton(new AppNotificationButton("Reply")
-        .AddArgument("action", "reply")
-        .AddArgument("conversationId", "12345"))
-    .AddButton(new AppNotificationButton("Dismiss")
-        .AddArgument("action", "dismiss"));
-```
-
-Text inputs paired with a reply button enable inline reply directly from the notification, so users can respond without switching to the app. You assign a matching `InputId` to connect the input field to the button:
-
-```csharp
-var builder = new AppNotificationBuilder()
-    .AddText("New message from Alex")
-    .AddTextBox("replyBox", "Type a reply...", "Reply")
+    .AddTextBox("replyBox", "Type a reply", "Reply")
     .AddButton(new AppNotificationButton("Send")
-        .AddArgument("action", "inlineReply")
-        .SetInputId("replyBox"));
+        .AddArgument("action", "sendReply")
+        .AddArgument("conversationId", "9813")
+        .SetInputId("replyBox"))
+    .BuildNotification();
 ```
 
-For richer construction patterns, the [CommunityToolkit.WinUI.Notifications](https://learn.microsoft.com/en-us/windows/apps/design/shell/tiles-and-notifications/adaptive-interactive-toasts){:target="_blank" rel="noopener noreferrer"} NuGet package provides a fluent builder that mirrors the full toast XML schema, including progress bars, which `AppNotificationBuilder` does not yet cover. Progress bars are especially useful for file transfers or background processing operations:
+The conversation ID appears twice because a click returns only the arguments of what was clicked. The builder's arguments go with the body, and a button's go with that button.
 
-```xml
-<toast>
-    <visual>
-        <binding template="ToastGeneric">
-            <text>Uploading files</text>
-            <progress value="{progressValue}"
-                      title="Upload progress"
-                      valueStringOverride="{progressString}"
-                      status="{progressStatus}" />
-        </binding>
-    </visual>
-</toast>
-```
+For a feature the builder doesn't expose, pass XML to the `AppNotification(string payload)` constructor instead. The two produce the same kind of object, and `Payload` returns the XML either way.
 
-The `{progressValue}` placeholders are bound to named data bindings you supply when creating or updating the notification.
 
----
+## Handling a Click
 
-## Handling Notification Activation
+A click on the notification's body or one of its buttons reaches the app as an `AppNotificationActivatedEventArgs`. Its `Arguments` holds the key-value pairs of the body or the button that was clicked, and its `UserInput` holds the values of any text boxes and combo boxes.
 
-When a user clicks a toast or one of its buttons, your app needs to respond appropriately. The response path depends on whether the app is running at the time of activation.
-
-If the app is running, `AppNotificationManager.NotificationInvoked` fires with an `AppNotificationActivatedEventArgs` object. The `Arguments` dictionary contains the key-value pairs you embedded in the notification's argument strings. User inputs from text boxes and combo boxes are available through the `UserInput` dictionary:
+When the app is already running, the click raises `NotificationInvoked` on the running process. The docs don't say which thread raises it, so dispatch to the UI thread before touching UI:
 
 ```csharp
 private void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
 {
-    string action = args.Arguments["action"];
+    args.Arguments.TryGetValue("action", out string? action);
 
-    if (action == "reply")
+    if (action == "sendReply")
     {
-        string conversationId = args.Arguments["conversationId"];
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            // Navigate to the conversation
-            MainFrame.Navigate(typeof(ConversationPage), conversationId);
-            MainWindow.Activate();
-        });
+        // A background action: do the work without showing the window
+        _ = _messages.SendAsync(args.Arguments["conversationId"], args.UserInput["replyBox"]);
+        return;
     }
-    else if (action == "inlineReply")
+
+    s_mainWindow.DispatcherQueue.TryEnqueue(() =>
     {
-        string replyText = args.UserInput["replyBox"].ToString();
-        // Send the reply
-    }
+        s_mainWindow.Activate();
+        s_navigation.RouteNotification(args.Arguments);
+    });
 }
 ```
 
-If the app is not running, Windows launches it and passes the notification arguments through `AppInstance.GetActivatedEventArgs()`. You inspect this in `OnLaunched`:
+When the app isn't running, Windows starts it through COM activation. Microsoft's quickstart is inconsistent about how that click then arrives. Its text says the activation kind is `Launch` and the arguments come through `NotificationInvoked`, while its sample checks the activation kind for `ExtendedActivationKind.AppNotification`. Handling both paths, as the sample does, covers either behavior:
 
 ```csharp
-protected override void OnLaunched(LaunchActivatedEventArgs args)
+protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
 {
-    var activationArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
+    s_mainWindow = new MainWindow(); // created, not yet shown
 
-    if (activationArgs.Kind == ExtendedActivationKind.AppNotification)
+    AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
+    AppNotificationManager.Default.Register();
+
+    var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
+    if (activation.Kind == ExtendedActivationKind.AppNotification)
     {
-        var notificationArgs = activationArgs.Data as AppNotificationActivatedEventArgs;
-        // Parse arguments and navigate to the appropriate content
+        // Launched by a click: route it like a click on a running app
+        OnNotificationInvoked(AppNotificationManager.Default,
+            (AppNotificationActivatedEventArgs)activation.Data);
     }
-
-    // Continue with normal window creation
+    else
+    {
+        s_mainWindow.Activate();
+    }
 }
 ```
 
-Centralising argument parsing in a helper keeps both paths consistent. A simple dictionary lookup based on the `action` key usually suffices, but apps with complex navigation may benefit from a small argument-router class that maps action strings to navigation targets.
+This follows Microsoft's quickstart sample. Both paths end in the same `OnNotificationInvoked`, so a click behaves the same whether or not the app was open. If a click on a closed app does arrive as `Launch`, as the quickstart's text says, this code shows the window before `NotificationInvoked` delivers the arguments, which is harmless for a click that opens content but defeats a background action.
 
----
+A button meant to act without opening the app, like the inline reply above, is the app's decision to make. For a Windows App SDK app, Windows always launches the app in the foreground, and setting `activationType="background"` in the XML is ignored. That is why the sample creates the window without activating it until it knows the click wants UI. If the window was never shown when a background action finishes, call `Application.Current.Exit()` to end the process.
 
-## Scheduled and Updated Notifications
 
-Not every notification is time-sensitive. Windows supports scheduling a notification to appear at a specific time, which is useful for reminders or calendar events. You attach a `DeliveryTime` to the notification before showing it:
+## Updating, Replacing, and Removing
+
+### Identifying a Notification
+
+`Tag` and `Group` together identify a notification, so the app can update, replace, or remove it later. Set them on the builder with `SetTag` and `SetGroup`, or on the `AppNotification` before calling `Show`.
+
+### Progress That Updates in Place
+
+A progress bar shows a long operation, such as a download, an export, or an install. Its fields are data-bound: the `Bind` calls write named placeholders into the XML instead of values, and the app fills them in from the notification's `Progress` data, first when it shows the notification and then with each update. Give the notification a tag and set its initial `Progress`:
 
 ```csharp
-var notification = builder.BuildNotification();
-notification.Expiration = DateTimeOffset.Now.AddHours(1); // Auto-remove after 1 hour
-// Scheduled delivery is set via AppNotificationScheduledToastNotification if using WinRT APIs
-```
+var notification = new AppNotificationBuilder()
+    .AddText("Exporting project")
+    .AddProgressBar(new AppNotificationProgressBar()
+        .BindTitle()
+        .BindValue()
+        .BindValueStringOverride()
+        .BindStatus())
+    .BuildNotification();
 
-For in-progress operations like uploads or downloads, you can update an existing notification rather than replacing it with a new one. The `Tag` and `Group` properties identify which notification to update. Setting the same `Tag` and `Group` on a new `Show()` call replaces the existing notification in place without generating a new pop-up:
-
-```csharp
-var notification = builder.BuildNotification();
-notification.Tag = "upload-progress";
-notification.Group = "file-operations";
+notification.Tag = "export";
+notification.Group = "jobs";
+notification.Progress = new AppNotificationProgressData(1)
+{
+    Title = "Q3 report",
+    Value = 0.0,
+    ValueStringOverride = "0 of 42 pages",
+    Status = "Exporting..."
+};
 AppNotificationManager.Default.Show(notification);
-
-// Later, to update progress:
-var updatedNotification = updatedBuilder.BuildNotification();
-updatedNotification.Tag = "upload-progress";
-updatedNotification.Group = "file-operations";
-AppNotificationManager.Default.Show(updatedNotification);
 ```
 
-To remove a specific notification programmatically, call `RemoveByTagAndGroupAsync`. To clear all of an app's notifications from Notification Center at once, use `RemoveAllAsync`. Removing notifications when the user completes the relevant action in-app keeps Notification Center tidy.
+Then push new values with `UpdateAsync`, incrementing the sequence number each time so Windows knows which update is newest. The initial data used 1, so `_sequence` starts at 1 and the first update is 2:
 
----
+```csharp
+var data = new AppNotificationProgressData(++_sequence)
+{
+    Value = pagesDone / 42.0,
+    ValueStringOverride = $"{pagesDone} of 42 pages"
+};
+AppNotificationProgressResult result =
+    await AppNotificationManager.Default.UpdateAsync(data, "export", "jobs");
+```
 
-## Badge Notifications
+An update changes only data-bound fields, meaning the progress bar's properties and the top-level text. It doesn't pop the notification up again, and it leaves it in place in Notification Center. If the user has dismissed the notification, the update fails, and the result reports that the notification wasn't found.
 
-Badge notifications are lightweight overlays on the taskbar button, used to communicate a quick numeric count or a status glyph without requiring a full toast. A numeric badge typically indicates unread messages or pending actions. A glyph badge uses one of a fixed set of Windows-defined icons such as `alert`, `busy`, `newMessage`, or `paused` to indicate application state.
+### Replacing Instead
 
-Badge updates use the `BadgeUpdateManager` API from the `Windows.UI.Notifications` namespace, which remains the current API for this feature even in Windows App SDK projects:
+Calling `Show` with a new notification that has the same `Tag` and `Group` replaces the old one. A replacement can change everything, moves to the top of Notification Center, and pops up again unless `SuppressDisplay` is `true`. It is also delivered even if the user dismissed the original. That makes it the right way to finish a progress sequence: when the export completes, replace the progress notification with an "Export finished" notification that has an Open button and no progress bar.
+
+### Removing and Expiring
+
+`RemoveByTagAsync`, `RemoveByTagAndGroupAsync`, `RemoveByGroupAsync`, `RemoveByIdAsync`, and `RemoveAllAsync` take the app's notifications out of Notification Center. Remove a notification once the user has dealt with its subject inside the app, so Notification Center doesn't keep offering stale news. For content that goes stale on its own, such as a meeting reminder after the meeting, set `Expiration` before calling `Show`, and Windows removes the notification at that time. Three days is both the default and the maximum, so `Expiration` can only shorten a notification's life. Setting `ExpiresOnReboot` removes it when the PC restarts, which suits something like "You're sharing your screen".
+
+
+## Scheduling a Notification
+
+The Windows App SDK's notification API has no scheduling of its own. `Show` displays immediately. To have Windows show a notification later, whether or not the app is running then, build the content with `AppNotificationBuilder` and hand its XML to the older `Windows.UI.Notifications` scheduler, which Microsoft documents for this use:
 
 ```csharp
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 
-// Numeric badge
-string badgeXml = "<badge value=\"5\"/>";
-var badgeDoc = new XmlDocument();
-badgeDoc.LoadXml(badgeXml);
-BadgeUpdateManager.CreateBadgeUpdaterForApplication().Update(new BadgeNotification(badgeDoc));
+string payload = new AppNotificationBuilder()
+    .AddArgument("action", "openTask")
+    .AddArgument("taskId", "311")
+    .AddText("Report due tomorrow")
+    .BuildNotification()
+    .Payload;
 
-// Glyph badge
-string glyphXml = "<badge value=\"newMessage\"/>";
-var glyphDoc = new XmlDocument();
-glyphDoc.LoadXml(glyphXml);
-BadgeUpdateManager.CreateBadgeUpdaterForApplication().Update(new BadgeNotification(glyphDoc));
+var xml = new XmlDocument();
+xml.LoadXml(payload);
 
-// Clear the badge
-BadgeUpdateManager.CreateBadgeUpdaterForApplication().Clear();
+var scheduled = new ScheduledToastNotification(xml, DateTimeOffset.Now.AddHours(20))
+{
+    Tag = "task-311",
+    Group = "reminders"
+};
+ToastNotificationManager.CreateToastNotifier().AddToSchedule(scheduled);
 ```
 
-Badges work well in combination with toasts. When a batch of messages arrives, a single toast with a summary plus a badge update communicates both the new content and the running total without flooding Notification Center with individual toasts for every message.
+Microsoft's scheduling page doesn't say whether this works for unpackaged apps, and the reference page for the parameterless `CreateToastNotifier()` tells desktop apps to use the overload that takes an AppUserModelID. An unpackaged app should test scheduling before depending on it. To cancel a scheduled notification, find it by tag in `GetScheduledToastNotifications()` and pass it to `RemoveFromSchedule`. A scheduled notification has a five-minute delivery window. If the PC is off at the scheduled time and stays off longer than that, Windows drops the notification. For a reminder that must arrive however long the machine was off, Microsoft recommends a background task with a time trigger instead.
 
----
 
-## System Tray Integration
+## Taskbar Badges
 
-WinUI 3 has no built-in system tray (notification area) API. Placing an icon in the notification area requires calling the Win32 `Shell_NotifyIcon` function via P/Invoke or through [CsWin32](https://github.com/microsoft/CsWin32){:target="_blank" rel="noopener noreferrer"}, the source-generated Windows API projection library.
-
-The general process involves creating a hidden Win32 message window to receive tray icon messages, then registering the icon with `Shell_NotifyIcon` using a `NOTIFYICONDATA` structure. The message window handles `WM_CONTEXTMENU` and custom callback messages to respond to right-click and double-click events.
-
-With CsWin32, you add the package and create a `NativeMethods.txt` file listing the APIs you need. CsWin32 then generates strongly typed P/Invoke signatures, eliminating the error-prone manual attribute declarations:
-
-```
-// NativeMethods.txt
-Shell_NotifyIcon
-WM_CONTEXTMENU
-NOTIFYICONDATA
-```
-
-A minimal tray icon setup registers the icon on startup and removes it on app exit:
+A badge is a small overlay on the app's taskbar button: a count of unread items, or a status glyph. Since Windows App SDK 1.7, `BadgeNotificationManager` in `Microsoft.Windows.BadgeNotifications` sets it:
 
 ```csharp
-// Create the icon (simplified illustration)
-var iconData = new NOTIFYICONDATA
-{
-    cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(),
-    hWnd = _messageWindowHandle,
-    uID = 1,
-    uFlags = NIF.ICON | NIF.MESSAGE | NIF.TIP,
-    uCallbackMessage = WM_TRAYICON,
-    hIcon = LoadAppIcon(),
-    szTip = "My Application"
-};
-Shell_NotifyIcon(NIM.ADD, ref iconData);
+BadgeNotificationManager.Current.SetBadgeAsCount(5);
+BadgeNotificationManager.Current.SetBadgeAsGlyph(BadgeNotificationGlyph.NewMessage);
+BadgeNotificationManager.Current.ClearBadge();
 ```
 
-Context menus for the tray icon are typically built using `CreatePopupMenu` and `AppendMenu` from Win32, then displayed with `TrackPopupMenu` in response to `WM_CONTEXTMENU`. The selected menu item ID comes back through `WM_COMMAND` on the message window.
+A count shows 1 to 99, and anything higher shows as "99+". The glyphs are a fixed set of system images, such as `Alert`, `Attention`, `Error`, `NewMessage`, `Available`, `Away`, `Busy`, `Paused`, and `Playing`. If the app is pinned to the taskbar, its badge shows even while the app isn't running, which makes a badge count the natural running total next to a summary notification.
 
-For apps that need a polished tray experience without writing all of this infrastructure from scratch, the [H.NotifyIcon.WinUI](https://github.com/HavenDV/H.NotifyIcon){:target="_blank" rel="noopener noreferrer"} community library wraps the Win32 plumbing and exposes a XAML-friendly `TaskbarIcon` control with support for popup menus, balloon tips, and left/right-click handling. It is a practical choice when system tray support is a core feature rather than a minor addition.
 
----
+## A System Tray Icon
 
-## When to Notify and When Not To
+WinUI 3 has no API for the notification area, the icons beside the clock. An app that needs a tray icon calls Win32 directly, through platform invoke (P/Invoke) declarations that [CsWin32](https://github.com/microsoft/CsWin32){:target="_blank" rel="noopener noreferrer"} can generate from a `NativeMethods.txt` file listing the APIs by name. The steps are these:
 
-The decision to notify versus showing feedback inside the app depends on whether the user is focused on your app at the time the event occurs.
+1. **Create a window to own the icon.** Windows sends the icon's events to a window procedure, so the app needs a native window: a hidden top-level window, or its main window's handle. It can't be a message-only window, because step 4 depends on a broadcast that message-only windows don't receive.
+2. **Add the icon** with `Shell_NotifyIcon(NIM_ADD, ...)`. Its `NOTIFYICONDATA` names the owning window, an icon ID, the icon, the tooltip, and a callback message, an app-chosen message ID that Windows sends for the icon's events.
+3. **Handle the callback message.** Its `lParam` says what happened, such as a click or a request for the context menu (`WM_CONTEXTMENU`), and the app shows its window or a menu in response.
+4. **Add the icon again when the taskbar is recreated.** When Explorer restarts, and on Windows 10 when the primary display's DPI changes, the taskbar broadcasts a `TaskbarCreated` message (from `RegisterWindowMessage`) to every top-level window. Any icons are gone at that point, and the app has to add them again.
+5. **Remove the icon** with `NIM_DELETE` when the app exits.
 
-If the user is actively using the app when something completes, an in-app [InfoBar](https://learn.microsoft.com/en-us/windows/apps/design/controls/infobar){:target="_blank" rel="noopener noreferrer"} or status message is almost always preferable. Popping a toast while the user is already staring at your app creates visual noise without adding value. Toasts serve users who have moved on to something else and need to be recalled to your app.
+Most apps don't write that plumbing. The community library [H.NotifyIcon.WinUI](https://github.com/HavenDV/H.NotifyIcon){:target="_blank" rel="noopener noreferrer"} wraps it in a XAML `TaskbarIcon` control with a context menu and click handling.
 
-A few additional considerations:
+A tray app usually keeps running with its window closed, which changes two things set up elsewhere in the app:
 
-- **Focus Assist awareness**: Windows allows users to suppress notifications when in do-not-disturb or game mode. Design your notifications so they are informative when seen but not critical to have seen immediately. Truly urgent information should be communicated through other channels.
-- **Notification grouping**: If your app can generate many notifications in a short time, use `Tag` and `Group` to consolidate them. A single summary notification like "12 new messages" is far less disruptive than 12 individual toasts.
-- **Actionable content**: Every toast should have a clear purpose. If clicking the notification does nothing useful, the notification probably should not exist. At minimum, clicking a notification should bring the app to the foreground and navigate to the relevant content.
-- **Expiration**: Set an `Expiration` time on notifications that become meaningless after a certain point. A notification about a time-sensitive calendar reminder should not linger in Notification Center for three days.
+- **The app mustn't exit with its last window.** By default it does, so set `Application.Current.DispatcherShutdownMode` to `DispatcherShutdownMode.OnExplicitShutdown`, and end the app with `Application.Current.Exit()` from the tray menu's Exit command.
+- **Closing the window should hide it.** Handle `AppWindow.Closing`, set `args.Cancel = true`, and call `AppWindow.Hide()`. The tray icon's click then shows the window again.
 
-The notification system works best when used conservatively. Each notification trains the user's attention; frequent or low-value notifications teach users to ignore them or, worse, to disable them entirely. Treating every notification as an interruption worth the user's attention produces a better experience than treating notifications as a convenient logging output.
+
+## When to Notify
+
+A notification is for a user who is somewhere else. If the user is looking at the app when something finishes, an in-app message such as an `InfoBar` tells them without the noise of a pop-up. Notifications are for calling them back after they have moved on.
+
+- **Respect do not disturb.** Users can silence notifications with Do Not Disturb (Focus Assist on Windows 10), and they then go straight to Notification Center. An `Urgent` notification can break through, but only where the Windows build supports it and the user has allowed it for the app, so anything that must be seen immediately needs a fallback. `AppNotificationManager.Default.Setting` reports whether the user has turned the app's notifications off.
+- **Consolidate bursts.** Twelve messages should produce one "12 new messages" notification, replaced as more arrive, not twelve pop-ups, with a badge carrying the count.
+- **Make every notification lead somewhere.** Clicking it should at least open the app on the content it mentions. A notification with nowhere to go probably shouldn't exist.
+- **Let stale notifications expire**, with `Expiration` as described above.
+
+Each notification spends some of the user's attention. An app that spends it on low-value news teaches the user to ignore it, or to turn its notifications off entirely.

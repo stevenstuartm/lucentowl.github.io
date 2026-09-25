@@ -3,7 +3,7 @@ title: "Data Structures and Algorithms Diagrams"
 layout: resource
 type: reference
 category: "Data Structures & Algorithms"
-description: "The diagrams behind the data structures and algorithms study guides: growth rates and asymptotic bounds, recursion, the call stack, and memoization, arrays and sliding windows, linked list reversal and cycle detection, queues and their growth, hash tables and the .NET dictionary layout, tree vocabulary, binary search tree shapes and deletion, heaps and sift-down, tries, AVL rotations, segment and Fenwick trees, graph representations and searches, directed cycle detection, Dijkstra's algorithm and A*, topological order, union-find, minimum spanning trees, maximum flow, and binary search, including on a rotated array, the comparison-sort lower bound, a dynamic programming table, a greedy schedule, and a backtracking search."
+description: "The diagrams behind the data structures and algorithms study guides: how each structure is laid out and how each algorithm moves through it."
 last_updated: 2026-09-23
 figures:
   - dsa-growth-rates

@@ -3,7 +3,7 @@ title: ".NET and C# Diagrams"
 layout: resource
 type: reference
 category: ".NET & C#"
-description: "The diagrams behind the .NET and C# study guides: build-time and run-time compilation, NuGet version resolution, plugin load contexts, instants and wall clocks, daylight saving gaps, await, the thread pool, channel pipelines, LINQ execution, EF Core change tracking, DI scopes, HttpClient and its handlers, layered caching, logging, PeriodicTimer, I2C and SPI wiring, xUnit parallelism, test platforms, the diagnostic port, and the shape of a memory leak."
+description: "The diagrams behind the .NET and C# study guides: how the runtime, the libraries, and the tooling behave as a program builds, runs, and is tested."
 last_updated: 2026-09-23
 figures:
   - dn-build-run-paths

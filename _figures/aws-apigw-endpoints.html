@@ -1,0 +1,73 @@
+---
+title: "API Gateway Endpoint Types and VPC Links"
+kind: deployment
+system: aws
+summary: "Three ways clients reach a REST API, and the VPC link out to private backends."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 410" role="img" aria-labelledby="awsa-title awsa-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsa-title">How clients reach edge-optimized, Regional, and private REST API endpoints, and how a VPC link reaches private backends</title>
+<desc id="awsa-desc">An edge-optimized endpoint is reached through a CloudFront distribution that API Gateway manages. A Regional endpoint is reached directly, optionally through a CloudFront distribution you own. A private endpoint is reached only from inside a VPC, through an interface VPC endpoint. On the other side, the API reaches a Network or Application Load Balancer in private subnets through a VPC link.</desc>
+<style>
+.awsa-vpc { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsa-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsa-opt { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.awsa-api { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsa-h { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsa-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsa-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsa-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsa-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsa-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awsa-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awsa-h" x="20" y="68">Edge-optimized</text>
+<rect class="awsa-box" x="20" y="80" width="150" height="40" rx="6"/>
+<text class="awsa-n" x="95" y="105" text-anchor="middle">Client</text>
+<rect class="awsa-box" x="250" y="76" width="190" height="48" rx="6"/>
+<text class="awsa-n" x="345" y="97" text-anchor="middle">CloudFront</text>
+<text class="awsa-k" x="345" y="113" text-anchor="middle">[managed by API Gateway]</text>
+
+<text class="awsa-h" x="20" y="168">Regional</text>
+<rect class="awsa-box" x="20" y="180" width="150" height="40" rx="6"/>
+<text class="awsa-n" x="95" y="205" text-anchor="middle">Client</text>
+<rect class="awsa-opt" x="250" y="176" width="190" height="48" rx="6"/>
+<text class="awsa-n" x="345" y="197" text-anchor="middle">Your CloudFront</text>
+<text class="awsa-k" x="345" y="213" text-anchor="middle">[optional]</text>
+
+<rect class="awsa-vpc" x="10" y="258" width="460" height="92" rx="10"/>
+<text class="awsa-vt" x="22" y="276">Private: from a VPC only</text>
+<rect class="awsa-box" x="20" y="290" width="150" height="40" rx="6"/>
+<text class="awsa-n" x="95" y="315" text-anchor="middle">Client in VPC</text>
+<rect class="awsa-box" x="250" y="286" width="190" height="48" rx="6"/>
+<text class="awsa-n" x="345" y="307" text-anchor="middle">Interface VPC</text>
+<text class="awsa-n" x="345" y="323" text-anchor="middle">endpoint</text>
+
+<rect class="awsa-api" x="520" y="60" width="140" height="290" rx="8"/>
+<text class="awsa-n" x="590" y="196" text-anchor="middle">API Gateway</text>
+<text class="awsa-k" x="590" y="213" text-anchor="middle">[REST API,</text>
+<text class="awsa-k" x="590" y="228" text-anchor="middle">one Region]</text>
+
+<rect class="awsa-box" x="690" y="176" width="90" height="48" rx="6"/>
+<text class="awsa-n" x="735" y="205" text-anchor="middle">VPC link</text>
+<rect class="awsa-box" x="800" y="170" width="110" height="60" rx="6"/>
+<text class="awsa-n" x="855" y="194" text-anchor="middle">NLB or ALB</text>
+<text class="awsa-k" x="855" y="211" text-anchor="middle">[private subnets]</text>
+<text class="awsa-h" x="800" y="158">Outbound</text>
+
+<path class="awsa-flow" d="M170,100 L248,100" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M440,100 L518,100" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M170,200 L248,200" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M440,200 L518,200" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M170,310 L248,310" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M440,310 L518,310" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M660,200 L688,200" marker-end="url(#awsa-a)"/>
+<path class="awsa-flow" d="M780,200 L798,200" marker-end="url(#awsa-a)"/>
+
+<text class="awsa-lab" x="10" y="380">Edge-optimized and Regional endpoints are reached over the internet, and a private endpoint only through an interface endpoint.</text>
+<text class="awsa-lab" x="10" y="398">A VPC link runs the other way, from the API out to backends with no public address.</text>
+</g>
+</svg>

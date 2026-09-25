@@ -3,112 +3,71 @@ title: "App Lifecycle and Activation"
 layout: guide
 category: "WinUI 3"
 subcategory: "Platform Integration"
-description: "Understanding application activation, instancing, background tasks, power management, and graceful shutdown in WinUI 3 desktop applications."
-tags: [winui, winui-3, app-lifecycle, activation, background-tasks, desktop, practical]
+description: "How a WinUI 3 desktop app learns why it was started and routes the activation, stays single-instance, registers background tasks, adapts to power state, and shuts down or restarts without losing work."
+tags: [practical, app-lifecycle, activation, single-instance, background-tasks, power-management, shutdown]
 ---
 
-## How WinUI 3 Applications Start
+## Table of Contents
 
-When Windows launches a WinUI 3 application, the process begins with activation. Activation is the mechanism through which the operating system delivers context to your app describing why it was launched and what it should do. The `Application.OnLaunched` override is where this process enters your code, but before you can make useful decisions there, you need to retrieve the activation arguments.
+- [Activation: Why the App Started](#activation-why-the-app-started)
+- [Instancing](#instancing)
+- [Background Tasks](#background-tasks)
+- [Adapting to Power State](#adapting-to-power-state)
+- [Restart and Recovery](#restart-and-recovery)
+- [Shutdown](#shutdown)
 
-`AppInstance.GetActivatedEventArgs()` returns an `AppActivationArguments` object that carries the activation kind along with the data specific to that kind. The `Kind` property is an `ExtendedActivationKind` enum value, and each value corresponds to a different reason the app was started. The most common kinds are `Launch` (the user opened the app directly), `Protocol` (a URI scheme was invoked), `File` (a file with a registered association was opened), and `ToastNotification` (the user clicked an interactive notification). Checking the kind at startup lets you route the user to the right place in your application immediately, rather than always landing on the default home screen.
+
+## Activation: Why the App Started
+
+Windows starts an app for a reason: the user clicked its tile, opened a file it handles, followed a link with its URI scheme, or signed in with the app set to run at startup. That reason, plus its data (the file, the URI), is the activation. UWP gave each reason its own override, such as `OnFileActivated` and `OnActivated`. A WinUI 3 app has only `Application.OnLaunched`, which runs for every activation, after the `App` constructor. The `LaunchActivatedEventArgs` passed to it reports `Launch` whatever actually happened, so read the real activation from the Windows App SDK's app lifecycle API:
 
 ```csharp
-protected override void OnLaunched(LaunchActivatedEventArgs args)
+using Microsoft.Windows.AppLifecycle;
+
+protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
 {
-    var activationArgs = AppInstance.GetActivatedEventArgs();
+    AppActivationArguments activation = AppInstance.GetCurrent().GetActivatedEventArgs();
 
-    switch (activationArgs.Kind)
-    {
-        case ExtendedActivationKind.Launch:
-            // Normal startup; navigate to home
-            break;
-        case ExtendedActivationKind.Protocol:
-            var protocolArgs = activationArgs.Data as ProtocolActivatedEventArgs;
-            // Navigate based on protocolArgs.Uri
-            break;
-        case ExtendedActivationKind.File:
-            var fileArgs = activationArgs.Data as FileActivatedEventArgs;
-            // Open the file from fileArgs.Files
-            break;
-    }
+    s_mainWindow = new MainWindow();
+    s_mainWindow.Activate();
+    s_navigation.Route(activation);
 
-    m_window = new MainWindow();
-    m_window.Activate();
+    // Activations redirected here during startup (see Instancing)
+    while (s_pendingActivations.TryDequeue(out AppActivationArguments? pending))
+        s_navigation.Route(pending);
 }
 ```
 
-Unlike UWP, WinUI 3 desktop applications are multi-instanced by default. When the user launches the app a second time, Windows starts a fresh process. This is the expected behavior for most desktop software, but there are scenarios where you want to prevent it.
+`AppInstance.GetCurrent()` returns the running process's instance, and `GetActivatedEventArgs()` on it returns an `AppActivationArguments`. Its `Kind` is an `ExtendedActivationKind`, and its `Data` is the matching event-args object from `Windows.ApplicationModel.Activation`, such as `IProtocolActivatedEventArgs`. The kinds most desktop apps meet are these:
 
+| Kind | Started by | `Data` gives you |
+|---|---|---|
+| `Launch` | The tile, the Start menu, a shortcut, or the command line | The command-line arguments |
+| `File` | Opening a file of a type the app registered | `Files`, a list of `IStorageItem` |
+| `Protocol` | A URI with the app's scheme, such as `myapp://article/42` | `Uri` |
+| `StartupTask` | The user signing in, with the app registered to start then | The startup task's ID |
 
-## Single-Instance Applications
+Notification clicks have their own delivery path through `AppNotificationManager`. An app that uses notifications has to call `AppNotificationManager.Default.Register()` before it reads its activation arguments.
 
-A single-instance application ensures that only one process runs at a time. If the user tries to launch a second copy, the new activation is redirected to the existing instance instead of starting fresh. This pattern suits applications where multiple windows would be confusing or where state is inherently singular, such as a music player, a system tray utility, or a document editor that manages a global recent-files list.
+### Registering for File and Protocol Activation
 
-The Windows App SDK provides `AppInstance` to handle this. You register a key at startup, and if another instance is already registered with that key, you redirect to it and exit.
+An app receives `File` or `Protocol` activations only after registering the file types or URI scheme with Windows, and how it registers depends on whether it is packaged.
 
-```csharp
-static async Task Main(string[] args)
-{
-    WinRT.ComWrappersSupport.InitializeComWrappers();
+| | Packaged (MSIX) | Unpackaged |
+|---|---|---|
+| **Where** | Extensions in `Package.appxmanifest` | Code, through `ActivationRegistrationManager` |
+| **When** | At install, removed at uninstall | Whenever the app calls it, usually at startup, per user |
+| **Kinds available** | All of UWP's activation kinds | `Launch`, `File`, `Protocol`, and `StartupTask` |
 
-    var instance = AppInstance.FindOrRegisterForKey("main");
-
-    if (!instance.IsCurrent)
-    {
-        // Another instance is already running; redirect activation and exit
-        var activationArgs = AppInstance.GetActivatedEventArgs();
-        await instance.RedirectActivationToAsync(activationArgs);
-        return;
-    }
-
-    // This is the first instance; register to receive redirected activations
-    instance.Activated += OnActivated;
-
-    Application.Start(p =>
-    {
-        var context = new DispatcherQueueSynchronizationContext(
-            DispatcherQueue.GetForCurrentThread());
-        SynchronizationContext.SetSynchronizationContext(context);
-        new App();
-    });
-}
-```
-
-The `instance.Activated` event fires on the existing process whenever a redirect occurs. Your handler receives the activation arguments from the new launch attempt, so you can bring the existing window to the foreground and navigate to the appropriate content. Be careful to marshal work onto the UI thread inside the handler, since the event can arrive on a background thread.
-
-Single-instance logic must run before `Application.Start`, which is why WinUI 3 apps that need this pattern often use a `Program.cs` entry point rather than relying entirely on the XAML-generated startup code.
-
-
-## Protocol Activation
-
-Protocol activation allows other applications or web pages to launch your app by navigating to a custom URI scheme. A link like `myapp://article/42` can open your application directly to a specific piece of content, which is a useful pattern for cross-application workflows, email links, and share integrations.
-
-Registering a URI scheme requires an entry in `Package.appxmanifest`. Under the `Extensions` element inside the `Application` node, you declare a `Protocol` extension with the scheme name.
+A packaged app declares the scheme and file types in its manifest:
 
 ```xml
 <Extensions>
   <uap:Extension Category="windows.protocol">
     <uap:Protocol Name="myapp">
-      <uap:DisplayName>My Application</uap:DisplayName>
+      <uap:DisplayName>My App</uap:DisplayName>
     </uap:Protocol>
   </uap:Extension>
-</Extensions>
-```
-
-At runtime, when your application is launched via `myapp://some/path?query=value`, `GetActivatedEventArgs()` returns `ExtendedActivationKind.Protocol` and the data casts to `ProtocolActivatedEventArgs`. The `Uri` property on that object gives you the full URI, which you can parse to determine where in the app to navigate.
-
-Deep linking works best when your navigation system can accept a destination from outside the normal startup flow. Passing the URI through to a navigation service during `OnLaunched` lets any part of the app become directly addressable from external callers.
-
-
-## File Activation
-
-File activation is how your application becomes the handler for specific file types. When a user double-clicks a `.myd` file in Explorer or selects your application from the "Open with" dialog, Windows launches your app and delivers the file paths through activation arguments.
-
-The manifest declaration registers the file type association.
-
-```xml
-<Extensions>
   <uap:Extension Category="windows.fileTypeAssociation">
     <uap:FileTypeAssociation Name="mydocument">
       <uap:SupportedFileTypes>
@@ -119,175 +78,286 @@ The manifest declaration registers the file type association.
 </Extensions>
 ```
 
-At runtime, activation delivers `ExtendedActivationKind.File` and the data casts to `FileActivatedEventArgs`. The `Files` property is a collection of `IStorageItem` objects representing everything the user selected. Iterating that collection and casting each item to `StorageFile` gives you the file objects your application can read.
+An unpackaged app has no manifest to hold these, so it calls `ActivationRegistrationManager.RegisterForProtocolActivation`, `RegisterForFileTypeActivation`, and `RegisterForStartupActivation` with its executable path, and the matching `Unregister` methods when the user turns a feature off. These registrations are per user. An app installed for several users registers for each of them.
 
-File activation can also arrive on an already-running instance if you configure single-instance behavior. In that case, the `instance.Activated` event on the existing process receives the file list, and you handle it the same way you would in `OnLaunched`.
+### Routing an Activation to a Page
+
+An activation that names a destination, such as a URI path or a file, is a deep link, and it's only useful if the app can go straight there. Keep that mapping in one place, the `Route` method in the sample above. It switches on `Kind`, casts `Data` (`Uri` for a protocol, `Files` for a file activation), and resolves the result to a page type and parameter, falling back to the home page. The activation code then stays a few lines long, and every entry point, including a startup launch, a redirected activation (below), and a notification click, goes through the same mapping. Parse the URI defensively, since any program on the machine can launch it with any path.
+
+There is no suspend or resume step to handle after this. `Microsoft.UI.Xaml.Application` has no `Suspending` or `Resuming` event, because Windows doesn't suspend a desktop app the way it suspended a UWP app. State is saved on the paths covered under [Shutdown](#shutdown).
+
+By default, each launch starts a new process. A running copy of the app hears nothing about the second launch, which reads its own arguments in its own `OnLaunched`. An already-running instance receives an activation only when the new process redirects it there, which is what single-instancing does.
 
 
-## Deep Linking and Activation-Based Navigation
+## Instancing
 
-Windows applications can be launched with arguments that specify an initial destination, such as through a protocol activation, a notification click, or a file association. WinUI 3 exposes this through activation events in `App.xaml.cs`.
+### Multi-Instance by Default
 
-The `OnLaunched` override receives a `LaunchActivatedEventArgs` with an `Arguments` string for command-line launches. For other activation kinds, subscribe to `AppInstance.GetCurrent().Activated`:
+WinUI 3 apps are multi-instanced. Every launch starts a new process with its own window, the way Notepad behaves. That suits many apps, but for a music player, a tray utility, or an editor that should open every file in one window, a second launch should activate the copy already running.
+
+### Making the App Single-Instance
+
+The Windows App SDK makes this a decision the new process takes as early as it can. The same API works for packaged and unpackaged apps. It registers a key with `AppInstance.FindOrRegisterForKey`. If no other instance holds the key, the process gets its own `AppInstance` back with `IsCurrent` set to `true`, and it carries on starting up. If another instance already registered the key, the call returns that instance instead, and the new process passes its activation to it with `RedirectActivationToAsync` and exits.
+
+{% include figure.html id="winui-activation-redirect" %}
+
+The decision should happen before the app does any work it would have to throw away, such as creating a window. Microsoft's migration guide shows a simpler version inside `OnLaunched`, but warns that `OnLaunched` can be too late for that reason, and recommends a custom `Main`. Define `DISABLE_XAML_GENERATED_MAIN` in the project file to stop the XAML compiler supplying its own. (Since Windows App SDK 2.3, the symbol renames the generated entry point to `XamlGeneratedProgram.XamlGeneratedMain()` rather than removing it, so a custom `Main` can call it.)
+
+```xml
+<PropertyGroup>
+  <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+</PropertyGroup>
+```
+
+`Main` must run on a single-threaded apartment (STA) thread, the COM threading mode a UI thread needs, where the thread's own message loop services calls to its objects. Blocking that thread stalls those calls, yet `RedirectActivationToAsync` has to finish before the process exits. Making `Main` `async` doesn't solve this. Before `Application.Start` there is no synchronization context to bring an `await` back to the same thread, so the code after the first `await` runs on a thread-pool thread and not the STA. Microsoft's pattern runs the redirect on a worker thread and waits for it with `CoWaitForMultipleObjects`, a wait that doesn't block the STA:
 
 ```csharp
-protected override void OnLaunched(Microsoft.UI.Xaml.Application.LaunchActivatedEventArgs args)
+public static class Program
 {
-    m_window = new MainWindow();
-    m_window.Activate();
-
-    AppInstance.GetCurrent().Activated += OnActivated;
-}
-
-private void OnActivated(object sender, AppActivationArguments args)
-{
-    if (args.Kind == ExtendedActivationKind.Protocol)
+    [STAThread]
+    static int Main(string[] args)
     {
-        var protocolArgs = args.Data as ProtocolActivatedEventArgs;
-        var uri = protocolArgs?.Uri;
-        DispatcherQueue.TryEnqueue(() => NavigateToUri(uri));
+        WinRT.ComWrappersSupport.InitializeComWrappers();
+
+        AppActivationArguments activation = AppInstance.GetCurrent().GetActivatedEventArgs();
+        AppInstance mainInstance = AppInstance.FindOrRegisterForKey("main");
+
+        if (!mainInstance.IsCurrent)
+        {
+            RedirectAndWait(mainInstance, activation);
+            return 0;
+        }
+
+        mainInstance.Activated += App.OnRedirectedActivation;
+
+        Application.Start(_ =>
+        {
+            var context = new DispatcherQueueSynchronizationContext(
+                DispatcherQueue.GetForCurrentThread());
+            SynchronizationContext.SetSynchronizationContext(context);
+            _ = new App();
+        });
+        return 0;
     }
+
+    private static void RedirectAndWait(AppInstance target, AppActivationArguments activation)
+    {
+        IntPtr done = CreateEvent(IntPtr.Zero, true, false, null);
+        Task.Run(() =>
+        {
+            target.RedirectActivationToAsync(activation).AsTask().Wait();
+            SetEvent(done);
+        });
+        CoWaitForMultipleObjects(0, 0xFFFFFFFF, 1, [done], out _);
+
+        // Bring the existing instance's window to the front
+        SetForegroundWindow(Process.GetProcessById((int)target.ProcessId).MainWindowHandle);
+    }
+
+    // P/Invoke declarations for CreateEvent, SetEvent, CoWaitForMultipleObjects,
+    // and SetForegroundWindow omitted
 }
 ```
 
-The `NavigateToUri` method parses the URI, resolves the destination page type, and calls `ContentFrame.Navigate()` with any relevant parameters extracted from the URI path or query string. Because the activation can arrive while the window is already running (if the app instance is shared), the navigation must be dispatched back to the UI thread via `DispatcherQueue`.
+An app that also uses notifications has to call `AppNotificationManager.Default.Register()` in `Main`, before the `GetActivatedEventArgs` call, since that ordering rule applies wherever the app first reads its activation.
 
-When launching from a notification, the `ToastNotificationActivatedEventArgs` carries a launch argument string you define when constructing the notification. Parse that string in the same `Activated` handler and navigate accordingly.
+The first instance receives each redirected activation through its `Activated` event, as the same `AppActivationArguments` the second process read. The docs don't say which thread raises it, so dispatch to the window's `DispatcherQueue` before touching UI, then route the activation through the same `Route` method as a startup launch. The handler is attached before `App` or its window exists, so an activation that arrives during startup has to wait for the window:
 
-A clean approach is to define a central navigation service or static helper that accepts a destination enum or string and maps it to a page type. This keeps the activation handler thin and puts the mapping logic in one place, which becomes more valuable as the number of navigable destinations grows.
+```csharp
+// In App, which keeps its main window and navigation service in static fields
+public static void OnRedirectedActivation(object? sender, AppActivationArguments args)
+{
+    if (s_mainWindow is null)
+    {
+        s_pendingActivations.Enqueue(args); // a ConcurrentQueue that OnLaunched drains
+        return;
+    }
+
+    s_mainWindow.DispatcherQueue.TryEnqueue(() =>
+    {
+        s_mainWindow.Activate();
+        s_navigation.Route(args);
+    });
+}
+```
+
+Some details differ from UWP and catch people out:
+
+- **Redirection doesn't end the process.** In UWP a redirect terminated the app. Here the process keeps running, so `Main` has to return after redirecting.
+- **Keys are app-defined, one per instance.** Registering a new key replaces the instance's old one. An editor that runs one file per instance can use the file's path as its key, so opening a file that is already open redirects to the instance that has it, while other files start new instances.
+- **Keys are released when the process exits.** A redirect can still race a closing instance, so an app can call `UnregisterKey` as it begins shutting down, and new launches stop finding it by that key.
+- **Debugging needs a deployed copy.** One debugger session can't launch the app twice, so test single-instancing by deploying the app and launching it from Start.
 
 
 ## Background Tasks
 
-Background tasks let your application execute code when the application is not in the foreground, or even when it is not running at all. For packaged WinUI 3 applications, background tasks use COM-based activation. Windows starts a lightweight COM server defined in your package, invokes the task entry point, and your code runs to completion without a UI.
+A background task runs code when a trigger fires, such as a time zone change, the network becoming available, or a push notification, even when the app isn't running. Work that only matters while the app is open doesn't need one. A timer or a hosted service inside the app is simpler.
 
-You implement a background task by creating a class that implements `IBackgroundTask` from the `Windows.ApplicationModel.Background` namespace.
+Since Windows App SDK 1.7, a WinUI 3 app registers a task with the Windows App SDK's own `BackgroundTaskBuilder` in `Microsoft.Windows.ApplicationModel.Background`. The task runs through COM activation. The app gives its task class a GUID, called a CLSID, and declares in its manifest which executable serves that CLSID. When the trigger fires, the system's background task host, `backgroundtaskhost.exe`, asks COM for an object of that CLSID, and COM gets it from the app's process through a class factory the app registered. The task is therefore an ordinary full-trust class inside the app, rather than the Windows Runtime component that UWP's out-of-process tasks used.
+
+This requires MSIX packaging. An unpackaged app gets the same effect from Windows Task Scheduler or a separately installed .NET worker service.
+
+The task is a class that implements `IBackgroundTask` and is exposed to COM under a fixed GUID:
 
 ```csharp
-public sealed class DataSyncTask : IBackgroundTask
+[ComVisible(true)]
+[ClassInterface(ClassInterfaceType.None)]
+[Guid("5B1E7F2A-9C3D-4E8B-A6F1-2D7C9E4B8A31")]
+[ComSourceInterfaces(typeof(IBackgroundTask))]
+public sealed class SyncTask : IBackgroundTask
 {
+    private BackgroundTaskDeferral? _deferral;
+    private volatile bool _canceled;
+
+    [MTAThread]
     public async void Run(IBackgroundTaskInstance taskInstance)
     {
-        var deferral = taskInstance.GetDeferral();
+        _deferral = taskInstance.GetDeferral();
+        taskInstance.Canceled += (_, _) => _canceled = true;
         try
         {
-            await SyncDataAsync();
+            await SyncChangesAsync(() => _canceled);
         }
         finally
         {
-            deferral.Complete();
+            _deferral.Complete();
         }
     }
 }
 ```
 
-Calling `taskInstance.GetDeferral()` is necessary for any async work. Without it, the Run method returns before the async operations complete and Windows terminates the task. The deferral keeps the process alive until you call `Complete()`.
+`Run` returns at its first `await`, and without a deferral the system would treat the task as finished and could end the host process. `GetDeferral` keeps it alive until `Complete`. The system can cancel a task, so the `Canceled` handler records the request and the work checks it and stops early. Keep tasks short, because long-running ones may be terminated.
 
-Registering a background task connects the task class to a trigger and requires a corresponding manifest declaration. Common triggers include `TimeTrigger` for periodic execution, `SystemTrigger` for system events like network availability changes, and `PushNotificationTrigger` for raw push payloads.
+Registration names the trigger and points at the class by its GUID. Call `RequestAccessAsync` first, and don't register the same task twice. Either check `BackgroundTaskRegistration.AllTasks` or unregister and re-register at startup:
 
 ```csharp
-var builder = new BackgroundTaskBuilder();
-builder.Name = "DataSyncTask";
-builder.TaskEntryPoint = "MyApp.BackgroundTasks.DataSyncTask";
-builder.SetTrigger(new TimeTrigger(15, false)); // every 15 minutes
 await BackgroundExecutionManager.RequestAccessAsync();
-var registration = builder.Register();
+
+var builder = new Microsoft.Windows.ApplicationModel.Background.BackgroundTaskBuilder
+{
+    Name = "SyncOnNetwork"
+};
+builder.SetTrigger(new SystemTrigger(SystemTriggerType.NetworkStateChange, false));
+builder.AddCondition(new SystemCondition(SystemConditionType.InternetAvailable));
+builder.SetTaskEntryPointClsid(typeof(SyncTask).GUID);
+builder.Register();
 ```
 
-The manifest must also declare the background task under `Extensions` to allow out-of-process activation. Packaged apps have stricter constraints than classic desktop apps, and the background task class must be in a separate WinRT component project or registered as an in-process task with the correct activation class ID.
+Two pieces of setup complete the wiring:
 
-Background task time is limited. Windows can cancel a task when system resources are constrained, so registering a cancellation handler with `taskInstance.Canceled` and saving partial progress lets the task resume cleanly if it is invoked again later.
+- **The manifest** declares a `windows.backgroundTasks` extension whose `EntryPoint` is `Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.Task`, and a `windows.comServer` extension that lists the task's GUID under the app's executable and grants `backgroundtaskhost.exe` permission to launch it.
+- **The app registers a class factory** for the task with `CoRegisterClassObject`, or COM activation fails. For a task that runs inside the app's own process, this happens in the `App` constructor. For one that runs in a separate copy of the executable, a custom `Main` checks for a command-line flag, registers the factory, and waits instead of starting the UI.
+
+The [background tasks article](https://learn.microsoft.com/windows/apps/windows-app-sdk/applifecycle/background-tasks){:target="_blank" rel="noopener noreferrer"} has the full manifest and class factory code.
 
 
-## Power and Energy Management
+## Adapting to Power State
 
-Desktop applications that run on laptops and tablets should respond to power state changes. An application doing heavy background processing on battery drains the user's charge faster than expected, which erodes trust. The Windows App SDK provides the `Microsoft.Windows.System.Power` namespace to monitor the device's energy situation.
+An app that keeps syncing, indexing, and animating at full rate on battery drains the charge faster than the user expects. `PowerManager` in `Microsoft.Windows.System.Power` reports the device's power state to packaged and unpackaged apps alike, through static properties, each with a matching `...Changed` event:
 
-`PowerManager` exposes static properties and events covering battery charge level, power source (AC or DC), display status, and energy saver mode. Subscribing to these events and adjusting behavior accordingly is straightforward.
+| Property | Tells you |
+|---|---|
+| `EffectivePowerMode` | The device's effective power mode. The property is an async operation, so read it with `await` |
+| `PowerSourceKind` | `AC` or `DC` (battery) |
+| `BatteryStatus` | `Charging`, `Discharging`, `Idle`, or `NotPresent` |
+| `RemainingChargePercent` | Battery charge, 0 to 100 |
+| `PowerSupplyStatus` | Whether the charger is adequate, for example `Inadequate` |
+| `EnergySaverStatus` | Whether battery saver is on |
+| `DisplayStatus` | `On`, `Dimmed`, or `Off` |
+| `UserPresenceStatus` | Whether the user is present |
+
+Each event reports only that something changed, and one reading rarely decides what to do. Unplugging can raise `PowerSupplyStatusChanged`, but whether to scale back depends on the battery status and charge as well. So point every event at one method that reads the current state and decides:
 
 ```csharp
-PowerManager.PowerSourceKindChanged += OnPowerSourceChanged;
-PowerManager.BatteryStatusChanged += OnBatteryStatusChanged;
-PowerManager.EnergySaverStatusChanged += OnEnergySaverChanged;
+PowerManager.PowerSourceKindChanged += (_, _) => AdjustWorkload();
+PowerManager.PowerSupplyStatusChanged += (_, _) => AdjustWorkload();
+PowerManager.BatteryStatusChanged += (_, _) => AdjustWorkload();
+PowerManager.RemainingChargePercentChanged += (_, _) => AdjustWorkload();
+PowerManager.EnergySaverStatusChanged += (_, _) => AdjustWorkload();
 
-private void OnPowerSourceChanged(object sender, object args)
+private void AdjustWorkload()
 {
-    if (PowerManager.PowerSourceKind == PowerSourceKind.DC)
-    {
-        // Running on battery; reduce sync frequency, pause heavy background work
-        _syncService.SetInterval(TimeSpan.FromMinutes(30));
-    }
-    else
-    {
-        _syncService.SetInterval(TimeSpan.FromMinutes(5));
-    }
+    bool lowBattery = PowerManager.PowerSourceKind == PowerSourceKind.DC
+        && PowerManager.BatteryStatus == BatteryStatus.Discharging
+        && PowerManager.RemainingChargePercent < 25;
+    bool weakCharger = PowerManager.PowerSourceKind == PowerSourceKind.AC
+        && PowerManager.PowerSupplyStatus == PowerSupplyStatus.Inadequate;
+    bool saver = PowerManager.EnergySaverStatus == EnergySaverStatus.On;
+
+    _syncService.Interval = lowBattery || weakCharger || saver
+        ? TimeSpan.FromMinutes(30)
+        : TimeSpan.FromMinutes(5);
+}
+```
+
+The events use a callback model like Win32's power notifications, and the docs don't say they arrive on the UI thread, so dispatch before touching UI from a handler. Watch `DisplayStatus` too. With the display off, the app can stop rendering and do deferred work instead.
+
+
+## Restart and Recovery
+
+### Restarting on Purpose
+
+`AppInstance.Restart(arguments)`, available to packaged and unpackaged apps, restarts the app immediately with a new command line, for example after the user changes a setting that only applies at startup or after a failed initialization that should retry in a safe mode. It returns an `AppRestartFailureReason` explaining why when the restart can't happen, such as another restart already pending.
+
+### Restarting After a Crash, Hang, or Update
+
+Windows can also offer to restart an app that crashed or stopped responding, and restart it automatically after an update, but only if the app registered for it. The Windows App SDK doesn't wrap this, so the app calls Win32's `RegisterApplicationRestart` directly through platform invoke (P/Invoke). `LibraryImport` needs the containing class to be `partial` and the project to set `AllowUnsafeBlocks` to `true`:
+
+```csharp
+internal static partial class NativeMethods
+{
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial int RegisterApplicationRestart(string? commandLine, int flags);
 }
 
-private void OnEnergySaverChanged(object sender, object args)
-{
-    if (PowerManager.EnergySaverStatus == EnergySaverStatus.On)
-    {
-        // Pause animations, reduce polling, defer non-critical work
-        _animationService.Pause();
-    }
-    else
-    {
-        _animationService.Resume();
-    }
-}
+// At startup
+NativeMethods.RegisterApplicationRestart("/restored", 0);
 ```
 
-Reading `PowerManager.RemainingChargePercent` gives the current battery level as an integer from 0 to 100. Combining this with the power source lets you make nuanced decisions, such as throttling a CPU-intensive export operation when the battery is below 20% and no charger is connected.
+The command line (without the executable name) is what the restarted instance receives, so the app can tell a restart from a fresh launch and reopen the user's work. The flags opt out of cases: `RESTART_NO_CRASH` (1), `RESTART_NO_HANG` (2), `RESTART_NO_PATCH` (4), and `RESTART_NO_REBOOT` (8).
 
-These are the kinds of adaptations users notice when they are absent. An application that ignores power state and pegs the CPU while the user is on an airplane is one that does not get opened again.
+Registration changes less than its name suggests. After a crash or hang, Windows offers the user a restart and doesn't restart the app on its own. Only an update restarts it automatically. To avoid a restart loop, Windows restarts only an app that had been running for at least 60 seconds. Register early, because the registration must exist before the crash or hang.
 
-
-## App Restart and Recovery
-
-Windows provides two related mechanisms for handling application termination gracefully. App restart allows the application to request that Windows restart it automatically after a crash or update. App recovery allows the application to save state during an unrecoverable failure before the process terminates.
-
-`RegisterApplicationRestart` from the Win32 API registers a command-line string that Windows will pass to the restarted instance. The Windows App SDK does not wrap this in a managed API, so you call it through P/Invoke.
-
-```csharp
-[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-static extern int RegisterApplicationRestart(string pwzCommandline, int dwFlags);
-
-// Call this early in startup
-RegisterApplicationRestart("/restored", 0);
-```
-
-When the app is restarted by Windows, the `/restored` argument arrives through the command line or activation args, and you can use it to reload the last saved state rather than starting fresh.
-
-For recovery, `RegisterApplicationRecoveryCallback` lets you provide a delegate that Windows calls when it detects the application is about to terminate due to an unhandled exception. Inside that delegate you have a brief window to save documents, flush logs, or write a crash dump. Calling `ApplicationRecoveryInProgress` periodically during the callback keeps Windows from canceling your recovery delegate prematurely, and calling `ApplicationRecoveryFinished` signals that you are done.
-
-These APIs are most relevant for document-centric applications where losing unsaved work would be a significant problem. Applications with ephemeral state, like a media player, may not need recovery registration, but restart registration is low-cost and worthwhile for almost any application.
+`RegisterApplicationRecoveryCallback` is the companion API. It gives Windows Error Reporting a function to call in a dying process so the app can save what it can, with the callback calling `ApplicationRecoveryInProgress` periodically so it isn't cut off and `ApplicationRecoveryFinished` when done. Code running in a process that has just failed can't rely on much of its own state, so treat recovery as a last attempt and not a substitute for saving as the user works.
 
 
-## Graceful Shutdown
+## Shutdown
 
-WinUI 3 applications terminate in one of several ways: the user closes the last window, code calls `Application.Current.Exit()`, Windows shuts down, or the process crashes. The predictable paths all provide opportunities to save state and clean up resources before the process ends.
+### What Ends the App
 
-The `Window.Closed` event fires when the user or code closes a specific window. For single-window applications, this is effectively the application shutdown event. You can subscribe to it from `App.xaml.cs` after creating the main window, or from within the window class itself.
+By default the app ends when its last window closes. `Application.Start` sets `Application.DispatcherShutdownMode` to `OnLastWindowClose`, so closing the last window ends the UI thread's event loop. Code can also end it with `Application.Current.Exit()`, and Windows ends it when the user signs out or the system shuts down.
+
+The last-window rule has a consequence that loses data. A `Window.Closed` handler that is `async` runs only until its first `await`, and then the event loop ends without waiting for the rest:
 
 ```csharp
-m_window = new MainWindow();
-m_window.Closed += OnMainWindowClosed;
-m_window.Activate();
-
+// The save can be cut off: nothing waits for it after the window closes
 private async void OnMainWindowClosed(object sender, WindowEventArgs args)
 {
-    // Save user preferences and application state
-    await _settingsService.SaveAsync();
-    await _documentService.SaveDirtyDocumentsAsync();
+    await _documents.SaveAllAsync();
 }
 ```
 
-If you need to prevent the window from closing, such as when there are unsaved changes and you want to prompt the user, you can set `args.Handled = true` inside the handler. This cancels the close operation and gives you control to display a confirmation dialog before deciding whether to proceed.
+Two fixes work. For a short save, do it synchronously in `Closed`. For anything that needs to await or ask the user, stop the close first. `AppWindow.Closing` fires before the window closes and its args have a `Cancel` property. Set it, finish the work, then close the window from code:
 
-`Application.Current.Exit()` triggers a clean shutdown of the application from code. It does not wait for async operations, so any work you need to do before exiting must happen before you call it.
+```csharp
+_window.AppWindow.Closing += async (sender, args) =>
+{
+    if (!_documents.HasUnsavedChanges) return;
 
-When Windows itself is shutting down, the sequence is less predictable. The OS sends `WM_QUERYENDSESSION` and `WM_ENDSESSION` messages to Win32 processes, but WinUI 3 does not surface these through managed events directly. If your application needs to handle system shutdown, you can process these messages through a `WndProc` subclass using `SetWindowLongPtr` and a custom message handler registered on the HWND. For most applications, reliable behavior during system shutdown comes from writing state frequently during normal operation rather than relying on a single save at the last moment.
+    args.Cancel = true;
+    if (await ConfirmSaveAsync())
+    {
+        await _documents.SaveAllAsync();
+        _documents.MarkClean();
+        _window.Close();
+    }
+};
+```
 
-A useful pattern is to treat state persistence as continuous rather than terminal. Writing updated settings and document state on each meaningful change means that a crash or forced shutdown loses only the most recent action, not everything since the last save. Applications that checkpoint aggressively are more resilient than those that rely on the shutdown path being clean.
+Clear the unsaved state before calling `Close()`, so that if `Closing` fires again the handler lets it through. An app that must outlive its windows, such as one that keeps a tray icon, sets `DispatcherShutdownMode` to `OnExplicitShutdown` and ends itself with `Application.Current.Exit()`. `Exit` doesn't wait for pending async work either, so finish that before calling it.
 
-Cleanup of unmanaged resources like COM objects, file handles, and native library handles belongs in the `Closed` handler or in `IDisposable` implementations on services. WinUI 3 runs as a standard Win32 process, and the garbage collector does not guarantee timely finalization for objects holding native handles. Explicit cleanup on shutdown prevents resource leaks from accumulating across the application's lifetime.
+### When Windows Shuts Down
+
+At sign-out or system shutdown, Windows sends each top-level window `WM_QUERYENDSESSION` and then `WM_ENDSESSION`. WinUI 3 doesn't surface these as events, so an app that has to respond intercepts them on its window's native handle (HWND) by installing its own window procedure, a technique called subclassing. The time is short. When an installer closes the app to update it, Microsoft gives five seconds to respond to these messages.
+
+The dependable answer to every shutdown path, including a crash or a pulled plug, is to save continuously. Write settings when they change and checkpoint documents as the user edits. Then a shutdown loses at most the last action, and the shutdown handlers become a final flush rather than the only save.

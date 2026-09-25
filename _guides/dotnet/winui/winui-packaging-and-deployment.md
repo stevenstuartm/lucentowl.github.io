@@ -3,74 +3,112 @@ title: "Packaging and Deployment"
 layout: guide
 category: "WinUI 3"
 subcategory: "Platform Integration"
-description: "Deploying WinUI 3 applications using MSIX packaging, unpackaged deployment, self-contained bundles, and distribution through the Microsoft Store or enterprise sideloading."
-tags: [winui, winui-3, msix, deployment, packaging, desktop, devops, practical]
+description: "Shipping a WinUI 3 app: packaged, unpackaged, or packaged with external location; framework-dependent or self-contained runtime; code signing and SmartScreen; and distribution through the Microsoft Store, App Installer, or enterprise tools."
+tags: [practical, msix, package-identity, self-contained-deployment, code-signing, app-installer, microsoft-store]
 ---
 {% raw %}
 
-## What MSIX Provides
+## Table of Contents
 
-WinUI 3 applications are Win32 processes at heart, which means you have real choices about how to package and deliver them. The default packaging model is MSIX, a container format that brings structured installation, clean uninstallation, automatic updates, and package identity to Windows desktop applications.
+- [Three Ways to Ship](#three-ways-to-ship)
+- [What MSIX Gives an App](#what-msix-gives-an-app)
+- [The Windows App SDK Runtime: Framework-Dependent or Self-Contained](#the-windows-app-sdk-runtime-framework-dependent-or-self-contained)
+- [Unpackaged Apps](#unpackaged-apps)
+- [Code Signing](#code-signing)
+- [Distribution](#distribution)
+- [Building Packages in CI](#building-packages-in-ci)
 
-MSIX solves several problems that traditional Win32 installers do not. Installation writes to a virtualized registry and file system, so uninstallation genuinely removes everything the package placed on the machine. Updates are differential, so only changed blocks are downloaded rather than the full package. Every installed MSIX package has a verified publisher identity, which Windows uses to enforce security policies and enables features like push notifications, background tasks registered through the app manifest, and access to certain WinRT APIs that require identity.
 
-The `Package.appxmanifest` file is the control surface for MSIX. It declares the application's identity, publisher, version, capabilities such as microphone or location access, extensions that integrate with Windows shell features like file type associations and context menus, and the entry point executable. Visual Studio surfaces this file through a visual editor, though the underlying format is XML and can be edited directly.
+## Three Ways to Ship
 
-Single-Project MSIX, available since Windows App SDK 1.0, removes the need for a separate Windows Application Packaging Project. In the older model, the solution contained a main application project and a distinct packaging project that referenced it; building and running required the packaging project as the startup project. With Single-Project MSIX, the packaging manifest lives directly inside the application project alongside the source code. This simplifies the solution structure, reduces the number of projects to manage, and makes the default F5 debug experience produce a properly packaged application automatically.
+A WinUI 3 app is a Win32 program, so unlike a UWP app it doesn't have to ship as a package. The first decision is how much of MSIX, Windows' app package format, to use. That decides whether the app has package identity: a name, publisher, and version that Windows knows the app by, verified by the package's signature.
 
----
+| | Packaged (MSIX) | Packaged with external location | Unpackaged |
+|---|---|---|---|
+| **What ships** | An `.msix` package containing the app | The app's own files and installer, plus a small identity-only MSIX package that points at them | The app's files, installed however you like |
+| **Package identity** | Yes | Yes | No |
+| **Install, update, uninstall** | Handled by Windows, including clean removal | Your installer, with identity registered alongside | Your installer, or simply copying the folder (xcopy deployment) |
+| **Typical use** | New apps, Store apps | Existing installers that need identity-only features | Enterprise tools, suites with a shared installer, portable apps |
 
-## Building MSIX Packages
+Identity is what many platform features key on. A packaged app declares file associations, protocols, startup tasks, background tasks, and COM servers in its manifest. It gets per-app storage through `ApplicationData`, can update through the Store or App Installer, and can call APIs that ask "which app is this?" An unpackaged app does many of the same things through Win32 means, such as registry entries its installer writes, but APIs that need identity, such as `Package.Current` or `Windows.Storage.ApplicationData.Current`, throw. Several guides in this series note which mode a feature needs, and those notes all trace back to this choice.
 
-Building an MSIX package in Visual Studio requires a code signing certificate. Windows will not install an unsigned MSIX package unless that policy is explicitly overridden, and it will not run one unless the package's publisher certificate is trusted on the target machine.
+Visual Studio's WinUI template is packaged, and MSIX is Microsoft's recommended default for most apps. The constraints that push some teams away from it come with that model. A packaged app's install folder is read-only, its writes to `AppData` and the registry are redirected into per-package storage, a single-project package holds only one executable, and integrations that reach deep into the system work only where the manifest has an extension for them. Apps that fight those constraints ship unpackaged or packaged with external location.
 
-During development, the standard approach is to generate a self-signed test certificate from within Visual Studio. Right-clicking the packaging manifest and selecting the signing options will walk you through creating a `.pfx` file. Visual Studio can install this certificate into the local machine's trusted root store automatically, so development builds install and run without certificate warnings.
 
-For release builds targeting end users, you need a certificate from a trusted certificate authority. Code signing certificates are available from providers like [DigiCert](https://www.digicert.com/code-signing/){:target="_blank" rel="noopener noreferrer"} and [Sectigo](https://sectigo.com/ssl-certificates-tls/code-signing){:target="_blank" rel="noopener noreferrer"}. The certificate's Subject must match the `Publisher` attribute declared in your `Package.appxmanifest` exactly. A mismatch between these two values is one of the most common causes of signing failures in build pipelines.
+## What MSIX Gives an App
 
-Signing an MSIX package is done through `signtool.exe`, which ships with the Windows SDK. In a typical project, MSBuild invokes signtool automatically during the packaging step when the signing properties are configured in the `.csproj` or through the Visual Studio signing UI.
+An MSIX package is a signed container of the app's files and a manifest. Windows stages a package's files once per machine in a protected location, then registers it for each user who installs it, and removes it cleanly on uninstall. For a packaged desktop app, new files it writes under `AppData` are redirected to a private per-package location, so uninstalling leaves nothing behind. Updates download only the changed blocks of the package.
+
+`Package.appxmanifest` declares what Windows needs to know:
+
+- **Identity**: the package name, the publisher (which must match the signing certificate's subject), and a four-part version.
+- **Dependencies**: framework packages the app needs, such as the Windows App SDK runtime, which Windows installs from the Store alongside a Store app.
+- **Capabilities**: protected resources the app uses, such as the microphone or location.
+- **Extensions**: how the app plugs into Windows, including file type associations, protocols, startup tasks, notification activation, and background tasks.
+
+Current WinUI projects use single-project MSIX. The manifest lives in the app project, and building the project with packaging enabled produces the `.msix`. A single-project package can hold only one executable, so an app that ships several executables in one package still needs a separate Windows Application Packaging Project that references them, as older solutions used. Settings such as self-contained deployment then have to be set in that packaging project too.
+
+### Packaged with External Location
+
+An app with its own installer can gain identity without moving into an MSIX. Since Windows 10 version 2004, its installer registers a small identity package, a signed MSIX whose manifest declares the app's identity and points at the folder where the installer put the app, and the app's executable carries a matching identity entry in its own manifest. The files stay where the installer put them, and the app gets the identity-keyed features. Visual Studio builds the identity package through a Windows Application Packaging Project with the Package with External Location extension. Tooling that isn't Visual Studio, or several executables sharing one identity, means building it by hand.
+
+
+## The Windows App SDK Runtime: Framework-Dependent or Self-Contained
+
+Every WinUI 3 app needs the Windows App SDK runtime, and it can get it one of two ways.
+
+### Framework-Dependent: Share the Installed Runtime
+
+By default an app is framework-dependent. The runtime is a set of MSIX packages installed once per machine and shared by every app that uses it:
+
+| Package | Role |
+|---|---|
+| **Framework** | The runtime binaries, WinUI included, loaded into each app's process |
+| **Main** | Keeps the framework updated from the Store and tracks which apps use it |
+| **Singleton** | A long-running shared process for features that can't live in the framework, chiefly push notifications for unpackaged apps |
+| **DDLM** (Dynamic Dependency Lifetime Manager) | Stops Windows updating the framework while an unpackaged app, or one packaged with external location, is using it |
+
+How the runtime reaches the machine depends on how the app ships:
+
+- **A packaged app** declares the framework as a dependency in its manifest, and a Store install brings it automatically. Microsoft requires Store apps, and recommends other packaged apps, to call the Windows App SDK's deployment API at startup to make sure the rest of the runtime is present.
+- **An unpackaged app** (or one packaged with external location) has to install the runtime itself, usually by running the redistributable installer, `WindowsAppRuntimeInstall.exe --quiet`, from its own setup. At startup the app then locates the installed runtime through the bootstrapper, which setting `WindowsPackageType` to `None` wires up automatically.
+
+The payoff is serviceability. When Microsoft ships a servicing update to the framework, a patch release with security and reliability fixes, every framework-dependent app picks it up on its next launch without a new release of its own, because the runtime keeps compatibility within a major version. The cost is a dependency the app doesn't control: another installer or a user can remove the shared runtime, and a servicing update can, rarely, change behavior.
+
+### Self-Contained: Carry the Runtime
+
+Setting `WindowsAppSDKSelfContained` copies the runtime into the app's own output. A .NET app also has to publish as self-contained .NET for the app as a whole to have no install prerequisites:
 
 ```xml
-<!-- In .csproj, configure signing for release builds -->
-<PropertyGroup Condition="'$(Configuration)' == 'Release'">
-  <PackageCertificateThumbprint>YOUR_CERTIFICATE_THUMBPRINT</PackageCertificateThumbprint>
-  <PackageCertificateKeyFile>signing.pfx</PackageCertificateKeyFile>
+<PropertyGroup>
+  <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+  <SelfContained>true</SelfContained>
 </PropertyGroup>
 ```
 
-The output of a successful MSIX build is a `.msix` or `.msixbundle` file. A bundle contains packages for multiple processor architectures (x64, x86, Arm64) in a single distributable artifact. Users receive only the package matching their device architecture, so the bundle size visible to end users is smaller than the combined total.
+A self-contained packaged app carries the runtime inside its MSIX. A self-contained unpackaged app puts it beside the `.exe`, so the output folder can be copied to a machine and run.
 
----
+{% endraw %}
+{% include figure.html id="winui-runtime-deployment" %}
+{% raw %}
 
-## Code Signing (moved from security)
+The trade-offs mirror the framework-dependent ones:
 
-Code signing serves two purposes. First, it establishes the identity of the publisher so Windows and users can verify who produced the executable. Second, it provides tamper detection: if the binary changes after signing, the signature becomes invalid and Windows will warn or block execution depending on the security policy.
+| | Framework-dependent | Self-contained |
+|---|---|---|
+| **Runtime version** | Whatever is installed, updated by Microsoft | Exactly the one you shipped |
+| **Security and bug fixes** | Arrive automatically | Arrive when you rebuild and release |
+| **Install prerequisites** | The runtime must be installed | None |
+| **Size and memory (unpackaged apps)** | Small, and apps using the same runtime share its loaded code in memory | Larger download, slower loading, and no memory shared with other apps |
 
-MSIX packages require signing before they can be installed. An unsigned MSIX is rejected by the Windows installer. During development, Visual Studio supports signing with a self-signed certificate for local testing, but production packages distributed outside the Microsoft Store must be signed with a certificate from a trusted Certificate Authority such as [DigiCert](https://www.digicert.com/signing/code-signing-certificates){:target="_blank" rel="noopener noreferrer"} or [Sectigo](https://sectigo.com/ssl-certificates-tls/code-signing){:target="_blank" rel="noopener noreferrer"}.
+Self-contained doesn't install the Singleton package. Push notifications depend on it, so a self-contained app should check `PushNotificationManager.IsSupported()` and treat push as optional, or install the Singleton package in its own setup. Self-contained deployment also belongs only in the app project, not in class libraries.
 
-For Store submissions, Microsoft signs the package on your behalf during the submission process, so you do not need a separate code-signing certificate for Store distribution.
+For a Store app, framework-dependent is the usual choice, because the Store installs and services the runtime. Self-contained suits apps that must run from a copied folder, and environments that validate an exact runtime and don't want it changing underneath them.
 
-To sign a package with `signtool.exe` during a CI/CD pipeline:
 
-```bash
-signtool sign \
-  /fd SHA256 \
-  /tr http://timestamp.digicert.com \
-  /td SHA256 \
-  /f MyApp.pfx \
-  /p $CERT_PASSWORD \
-  MyApp.msix
-```
+## Unpackaged Apps
 
-The `/tr` and `/td` flags specify a timestamp server and timestamp digest algorithm. Timestamping is not optional for production packages: without it, the package signature expires when the signing certificate expires, which would invalidate all previously distributed installers. With a timestamp, the signature remains valid as long as it was created while the certificate was valid, even after the certificate itself has expired.
-
-Extended Validation (EV) certificates provide a higher level of trust and bypass the SmartScreen reputation warning period that new publishers typically encounter. Standard OV (Organization Validation) certificates also work but may trigger SmartScreen warnings until the publisher accumulates reputation. For enterprise applications distributed internally, certificates from an internal CA trusted by the organization's machines work without these restrictions.
-
----
-
-## Unpackaged Deployment
-
-MSIX is the recommended path for most applications, but WinUI 3 also supports running without a package. This mode is called unpackaged deployment, and it is enabled by setting `WindowsPackageType` to `None` in the project file.
+Setting `WindowsPackageType` to `None` builds a plain folder of files instead of an MSIX:
 
 ```xml
 <PropertyGroup>
@@ -78,108 +116,129 @@ MSIX is the recommended path for most applications, but WinUI 3 also supports ru
 </PropertyGroup>
 ```
 
-With this setting, building the project produces a standard directory of executable and dependency files. You can run the application directly from that output directory without installing anything. This integrates naturally with existing enterprise deployment tools like SCCM or Intune that push executables and support custom installer scripts.
+In Visual Studio, run it with the *Unpackaged* launch profile, since the *Package* profile tries to deploy an MSIX. Unpackaged apps are distributed by an MSI or EXE installer, a deployment tool such as Intune or Configuration Manager, or simple xcopy. They also need the Visual C++ Redistributable on the machine, which a packaged app gets through its framework dependency instead.
 
-Unpackaged applications lose access to APIs that depend on package identity. Push notifications, background task registrations through the manifest, certain privacy-sensitive capability declarations, and the MSIX auto-update mechanism are all unavailable. Windows Runtime APIs that query package information, such as `Package.Current`, will throw if called from an unpackaged process.
+What an unpackaged app gives up is everything tied to identity: manifest-declared extensions (file associations, protocols, and startup tasks have to be registered by other means), background tasks through `BackgroundTaskBuilder`, automatic updates through the Store or App Installer, and the identity-keyed APIs mentioned above. An app that needs just one of those can be packaged with external location instead, keeping its installer and adding identity.
 
-The Windows App SDK handles many of these limitations gracefully. The SDK's bootstrapper library, which you reference through the `<WindowsAppSDKSelfContained>` and `<WindowsPackageType>` properties, initializes the SDK's runtime context even for unpackaged applications. The majority of WinUI 3 controls, layouts, and XAML features work identically in both modes.
-
-Unpackaged deployment makes sense for enterprise scenarios where IT departments require traditional MSI-based deployment, for applications that ship as part of a larger suite with a shared installer, or for developer tools and utilities that users run directly from a folder without formal installation.
-
----
-
-## Self-Contained Deployment
-
-By default, a WinUI 3 application depends on the Windows App SDK runtime being installed separately on the target machine. This is the framework-dependent deployment model. The application's binaries are small because the shared runtime handles a large portion of the code, and runtime updates apply to all applications using that version simultaneously.
-
-Self-contained deployment bundles the Windows App SDK runtime directly into the application's output. You opt into this by setting `WindowsAppSDKSelfContained` to `true`.
+An unpackaged, self-contained app can also publish as a single `.exe` (Windows App SDK 1.5 and later). It needs a specific set of properties. The Windows App SDK build reports an error if `WindowsPackageType`, `EnableMsixTooling`, or `IncludeAllContentForSelfExtract` is missing, and a warning for either self-contained property:
 
 ```xml
 <PropertyGroup>
+  <WindowsPackageType>None</WindowsPackageType>
   <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+  <SelfContained>true</SelfContained>
+  <EnableMsixTooling>true</EnableMsixTooling>
+  <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+  <PublishSingleFile>true</PublishSingleFile>
 </PropertyGroup>
 ```
 
-With this property set, the build output includes all necessary Windows App SDK assemblies. The application carries its runtime with it and can run on a machine that has never had the Windows App SDK installed separately. This eliminates a deployment prerequisite but increases the installation size, typically by 30 to 50 MB.
+The single file is a convenience for distribution rather than a true single binary. On first launch it extracts its contents to a temporary folder and runs from there. Packaged and framework-dependent apps can't use `PublishSingleFile`.
 
-`PublishSingleFile` can reduce the visible file count by packing most assemblies into a single executable, but it does not remove the need for native Windows App SDK binaries that cannot be merged. The effective output for a truly single-file WinUI 3 application remains a small set of files rather than a true single executable; the option is most useful when you want to simplify the file listing in the output directory for packaging scripts.
 
----
+## Code Signing
 
-## Framework-Dependent vs. Self-Contained Trade-offs
+A signature does two jobs. It proves who published the code, and it makes any change after signing detectable. Windows won't install an MSIX package from an untrusted publisher. The one exception is an unsigned package installed with `Add-AppxPackage -AllowUnsigned`, which for a package containing executable code needs an administrator. The certificate's subject must match the `Publisher` in the package manifest exactly, and a mismatch between the two is a common reason signing fails in a pipeline.
 
-The choice between framework-dependent and self-contained deployment comes down to three considerations: deployment size, update behavior, and installation prerequisites.
+### Which Certificate
 
-Framework-dependent applications are smaller to distribute. Shared runtimes are downloaded once per machine and reused by every application that targets the same version. When Microsoft ships a security patch to the Windows App SDK, all framework-dependent applications pick it up without a new release from you. The downside is that you cannot control exactly which runtime version end users have, and in rare cases a runtime update can introduce behavioral changes.
+Outside the Store, a signature also feeds SmartScreen, the Windows check that warns users about downloaded files it has little history for. It scores a file by the reputation of its hash and of its signing publisher. Where the app is distributed decides the signing option:
 
-Self-contained applications are larger but predictable. You ship a known runtime version, and that version does not change unless you explicitly update and reship the application. This is appealing in regulated or enterprise environments where you need complete control over what runs on a machine and where unexpected runtime updates could disrupt a validated software stack.
+| Option | Cost | SmartScreen | Use for |
+|---|---|---|---|
+| **Microsoft Store (MSIX)** | Free. The Store re-signs the package after certification | No warnings | Store apps |
+| **Azure Artifact Signing** (formerly Trusted Signing) | About $9.99 a month | Reputation builds over time | Outside the Store, for organizations in the US, Canada, EU, or UK and individuals in the US or Canada |
+| **OV (Organization Validation) certificate** from a certificate authority | About $150 to $300 a year, with the key on a hardware token or cloud hardware security module (HSM) | Reputation builds over time | Outside the Store, anywhere |
+| **EV (Extended Validation) certificate** | $400 or more a year | Same as OV since 2024 | Only where a customer requires EV |
+| **Self-signed** | Free | Treated like an unsigned file, and an MSIX won't install until the certificate is trusted on the machine | Development, and enterprise devices whose trust is managed |
 
-For consumer applications distributed through the Microsoft Store, framework-dependent deployment is the conventional choice. The Store manages runtime distribution, and users benefit from shared runtimes across all their installed applications. For enterprise line-of-business applications distributed through an MDM platform, self-contained deployment often simplifies the IT checklist by removing the Windows App SDK prerequisite from the deployment script.
+The EV row reverses long-standing advice. Until 2024, an EV certificate gave a new app instant SmartScreen reputation. Microsoft removed that, and now every signed app outside the Store builds reputation the same way: through downloads under a consistent signing identity, which then carries across releases. Paying for EV to avoid SmartScreen warnings no longer works. Apps submitted to the Store as MSI or EXE installers, rather than MSIX, aren't re-signed and must be signed by a certificate from a trusted certificate authority.
 
----
+For development, Visual Studio's **Package and Publish > Create App Packages** wizard creates a self-signed test certificate. Installing a package signed with it on another machine means installing that certificate as trusted there first. Enterprises do the same at scale, deploying an internal certificate through Group Policy or Intune so managed devices trust their line-of-business packages.
 
-## Microsoft Store Distribution
+### Timestamping
 
-Distributing through the Microsoft Store requires packaging your application as MSIX and submitting it through [Partner Center](https://partner.microsoft.com/en-us/dashboard){:target="_blank" rel="noopener noreferrer"}. The Store handles signing with Microsoft's certificate, automatic updates, and billing if your application is paid. You do not need your own code signing certificate for Store distribution because Microsoft re-signs packages during ingestion.
+Sign with a timestamp. Without one, the signature is valid only while the certificate is, and every package already distributed stops installing when the certificate expires. With a timestamp from a trusted server, the signature stays valid because it was made while the certificate was valid.
 
-The submission process involves uploading the `.msixbundle`, providing Store listing content such as descriptions, screenshots, and age ratings, configuring pricing and availability by market, and passing the Store certification process. Certification performs automated and manual checks against Store policies, including privacy requirements, content standards, and technical functionality. Applications that crash during the Store's test run, fail to launch without unexpected permissions, or contain prohibited content will be rejected.
+```powershell
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+    /f MyApp.pfx /p $env:CERT_PASSWORD MyApp.msix
+```
 
-Store-distributed applications receive automatic updates through the Store client. Users can configure when updates install, but the mechanism is managed by Windows rather than by your application code. If you need in-app update notifications or the ability to prompt users about a new release, you can use the Store's `StoreContext` API to check for updates and display messaging, though the actual installation still goes through the Store mechanism.
+Azure Artifact Signing and HSM-held keys plug into the same `signtool` step through their own signing clients, so the private key never sits in the pipeline as a file.
 
-One practical consideration for Store packaging is that the `Publisher` value in your manifest must match your Partner Center account's publisher identity exactly. Setting this up correctly the first time avoids rework during the certification process.
 
----
+## Distribution
 
-## Enterprise Sideloading
+### Microsoft Store
 
-For organizations that want to distribute WinUI 3 applications outside the Store, MSIX supports sideloading through direct installation of the package file. The target machine must either have developer mode enabled or have the sideloading policy configured through Group Policy or MDM. Modern versions of Windows 10 and Windows 11 permit sideloading by default without requiring developer mode, but older configurations may need the policy explicitly set.
+The Store is the recommended channel for most apps. It signs the package, installs and services the Windows App SDK runtime, delivers updates, and handles purchases. Submit through [Partner Center](https://partner.microsoft.com/dashboard){:target="_blank" rel="noopener noreferrer"}. The package identity in the manifest must match the identity Partner Center reserves for the app, and the fourth part of the version is reserved for the Store and must be 0. For more than one architecture, upload a bundle, one file holding a package per architecture, and the Store delivers the matching one to each device.
 
-The AppInstaller format extends sideloading with automatic update checking. An `.appinstaller` file is an XML document that points to the current MSIX package at a network or web location and defines an update check schedule. When the user opens the AppInstaller file, Windows installs the package and registers a background check that polls the specified location for newer versions.
+An app can check for and install its Store updates from inside itself with `StoreContext`, such as `GetAppAndOptionalStorePackageUpdatesAsync`. `StoreContext` is one of the classes that must be given an owner window before it shows UI in a desktop app. The Store also accepts unpackaged apps as MSI or EXE installers, through a separate submission path, but it doesn't push updates to those.
+
+### Sideloading with App Installer
+
+Outside the Store, a packaged app can be installed directly by opening its `.msix` or `.msixbundle`. Sideloading is enabled by default on Windows 10 version 2004 and later. For updates, publish an `.appinstaller` file next to the package on a web server or file share. The user installs by opening that file, and App Installer then checks it for newer versions:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
-<AppInstaller
-  xmlns="http://schemas.microsoft.com/appx/appinstaller/2017/2"
-  Version="1.0.0.0"
-  Uri="https://your-server.com/app/MyApp.appinstaller">
-  <MainBundle
-    Name="MyApp"
-    Version="1.0.0.0"
-    Publisher="CN=Your Publisher"
-    Uri="https://your-server.com/app/MyApp_1.0.0.0.msixbundle"/>
+<AppInstaller xmlns="http://schemas.microsoft.com/appx/appinstaller/2021"
+    Version="1.4.0.0"
+    Uri="https://apps.contoso.com/editor/Editor.appinstaller">
+  <MainBundle Name="Contoso.Editor" Version="1.4.0.0"
+      Publisher="CN=Contoso Ltd, O=Contoso Ltd, C=US"
+      Uri="https://apps.contoso.com/editor/Editor_1.4.0.0.msixbundle" />
   <UpdateSettings>
-    <OnLaunch HoursBetweenUpdateChecks="24"/>
+    <OnLaunch HoursBetweenUpdateChecks="12" ShowPrompt="true" UpdateBlocksActivation="false" />
+    <AutomaticBackgroundTask />
   </UpdateSettings>
 </AppInstaller>
 ```
 
-Hosting the `.appinstaller` and `.msixbundle` files on an HTTPS server or a network share gives you a distribution mechanism with automatic updates that does not require the Store. When you publish a new version, you update the files at those URIs and bump the version number. Users running the previous version receive the update silently on the next scheduled check or on the next application launch, depending on the `OnLaunch` setting.
+To release, publish the new package and update the versions and URIs in the `.appinstaller` file. Two current behaviors catch people out:
 
-The signing certificate used for enterprise sideloading must be trusted on the target machines. In an Active Directory environment, you can deploy the certificate to the trusted root store via Group Policy, which means users never see a certificate warning and installation proceeds without manual trust prompts.
+- **Visual Studio writes the old schema.** It generates `.appinstaller` files with the `2017/2` namespace, which silently ignores `HoursBetweenUpdateChecks`, `ShowPrompt`, and `UpdateBlocksActivation`. Change the namespace to `2021`, as above.
+- **One-click web installs are off.** The `ms-appinstaller:` link that let a web page start an install directly has been disabled by default since December 2023, after malware campaigns abused it. Link to the `.appinstaller` file itself instead, so users download and open it. Enterprises can turn the protocol back on by policy.
 
----
+ClickOnce, the auto-updating deployment that WPF and WinForms apps use, doesn't support WinUI 3 apps, so App Installer fills that role. An unpackaged app outside the Store updates itself however its installer or a third-party updater arranges.
 
-## CI/CD Considerations
+### WinGet
 
-Automating MSIX builds in a pipeline requires careful handling of signing certificates and version management. Storing a `.pfx` file directly in source control is a security risk; the standard practice is to store it as a base64-encoded secret in your pipeline environment and decode it to disk at build time.
+Submitting a manifest to the Windows Package Manager community repository, a free pull request to `microsoft/winget-pkgs`, makes the app installable with `winget install`. Developers and administrators who script their machines look there first.
 
-A GitHub Actions workflow that builds and signs an MSIX package follows this general shape:
+### Enterprise Deployment
+
+Managed environments push packages through Intune, Configuration Manager, or PowerShell, and can provision a package for every user of a machine rather than one at a time. The signing certificate has to be trusted on each device, which device management handles for an internal certificate. An unpackaged app goes out through the same tools as any other MSI or EXE, with the Windows App SDK runtime installer chained into its setup when it's framework-dependent.
+
+
+## Building Packages in CI
+
+Microsoft's CI guidance builds a single-project WinUI app's MSIX with MSBuild, where `GenerateAppxPackageOnBuild` is the switch that makes a build output a package. The GitHub Actions steps below follow it, with MSBuild on the path from `microsoft/setup-msbuild`, and add `PackageCertificatePassword` because a production certificate usually has a password, unlike the passwordless test certificate in Microsoft's example:
 
 ```yaml
-- name: Decode signing certificate
+- name: Decode the signing certificate
   run: |
-    echo "${{ secrets.SIGNING_CERTIFICATE_BASE64 }}" | base64 --decode > signing.pfx
+    $bytes = [Convert]::FromBase64String("${{ secrets.BASE64_ENCODED_PFX }}")
+    [IO.File]::WriteAllBytes("signing.pfx", $bytes)
 
-- name: Build MSIX
-  run: |
-    dotnet publish -c Release -p:RuntimeIdentifierOverride=win-x64 \
-      -p:PackageCertificateKeyFile=signing.pfx \
-      -p:PackageCertificatePassword="${{ secrets.CERT_PASSWORD }}"
+- name: Build the MSIX
+  run: >
+    msbuild MyApp.sln /restore /p:Configuration=Release /p:Platform=x64
+    /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never
+    /p:PackageCertificateKeyFile=signing.pfx
+    /p:PackageCertificatePassword="${{ secrets.PFX_PASSWORD }}"
+    /p:AppxPackageDir=Packages\ /p:GenerateAppxPackageOnBuild=true
+
+- name: Remove the certificate
+  run: Remove-Item signing.pfx
 ```
 
-Version numbers in MSIX packages must follow a four-part format such as `1.2.3.0`. A common approach is to derive the version from the build number or a tag, then pass it to MSBuild through the `Version` property. Keeping the version in the manifest synchronized with the assembly version prevents confusion when debugging installed applications.
+For a Store submission, Microsoft's CI page builds every architecture in one invocation, with `Platform=x86` to select the configuration that runs packaging, `AppxBundle=Always`, `AppxBundlePlatforms="x86|x64"`, and `UapAppxPackageBuildMode=StoreUpload`. That produces an `.msixupload` file, and package signing can be turned off (`AppxPackageSigningEnabled=false`) because the Store signs it. The single-project MSIX page says the opposite, that single-project MSIX can't produce bundles and that separate packages can be combined with the MSIX Bundler action, so check the output of a bundle build. An unpackaged app builds with `msbuild /t:Publish` instead.
 
-For Azure DevOps, the [Windows Application Packaging task](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/store-publish-v0){:target="_blank" rel="noopener noreferrer"} provides structured support for building, signing, and publishing MSIX packages. The task handles the MSBuild arguments and signtool invocation, and it integrates with Azure Key Vault for certificate retrieval. Storing the signing certificate in Key Vault rather than as a pipeline secret provides better access control, rotation support, and an audit trail.
+A few practices keep the pipeline trustworthy:
 
-A robust pipeline should include a smoke-test step that installs the produced MSIX on a clean virtual machine and verifies that the application launches without errors. WinUI 3 applications can fail to start for reasons like missing visual C++ redistributables, incorrect manifest declarations, or side-by-side assembly conflicts that only appear in a properly isolated environment. Running installation validation in the pipeline catches these problems before they reach users.
+- **Keep keys out of the repository.** Store a `.pfx` as a pipeline secret and delete it after the build, or better, sign through Azure Artifact Signing or a cloud HSM so there is no key file at all.
+- **Set the version from the build.** Derive the first three parts of the four-part version from a tag or build number, leaving the fourth at 0 for Store packages.
+- **Prefer plain MSBuild in Azure Pipelines.** Microsoft notes that the `MsixPackaging@1` task uses outdated dependencies that can break modern builds.
+- **Install the result on a clean machine.** A smoke test that installs the package on a fresh virtual machine and launches the app catches a missing runtime, a missing Visual C++ Redistributable for an unpackaged app, or a manifest error before users do.
 {% endraw %}

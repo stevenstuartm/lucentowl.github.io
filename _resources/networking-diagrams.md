@@ -3,7 +3,7 @@ title: "Networking Diagrams"
 layout: resource
 type: reference
 category: "Networking"
-description: "The diagrams behind the networking study guides: encapsulation down the protocol stack, a packet crossing routers, port address translation, public and private cloud subnets, the round trips a new HTTPS connection costs, TCP's congestion window, DNS resolution from stub resolver to authoritative server, cache lifetimes around a TTL cutover, DNS forwarding in a hybrid network, head-of-line blocking in each HTTP version, HTTP/3 discovery, and the protocol split at a load balancer."
+description: "The diagrams behind the networking study guides: how packets, connections, name resolution, and HTTP move data between machines."
 last_updated: 2026-09-23
 figures:
   - net-encapsulation

@@ -1,916 +1,178 @@
 ---
-title: "AWS PrivateLink & Transit Gateway for System Architects"
+title: "AWS PrivateLink, Transit Gateway & VPC Lattice for System Architects"
 layout: guide
 category: AWS
 subcategory: Networking & Content Delivery
-description: "Comprehensive guide to AWS PrivateLink and Transit Gateway covering private service connectivity, multi-VPC architectures, hub-and-spoke patterns, cost comparison with VPC peering, and scaling strategies"
-tags: [aws, privatelink, transit-gateway, vpc, multi-vpc, networking, cost-optimization, fundamentals]
+description: "How to connect VPCs and services across accounts: VPC endpoints for AWS services, PrivateLink endpoint services and resource endpoints, VPC peering, Transit Gateway routing and segmentation, VPC Lattice service networks, and how to choose between them."
+tags: [privatelink, vpc-endpoints, transit-gateway, vpc-peering, vpc-lattice, multi-vpc, practical]
 ---
 
-## What Problems PrivateLink & Transit Gateway Solve
+## Four Ways to Connect
 
-AWS PrivateLink and Transit Gateway solve connectivity challenges in complex, multi-VPC and multi-account architectures.
+Once an organization has more than one VPC, usually one per account and environment, workloads need to reach each other and reach AWS services without crossing the internet. AWS offers four mechanisms, and they answer different questions:
 
-**VPC Peering Complexity Problems**:
-- Full mesh peering scales poorly (N VPCs require N×(N-1)/2 peering connections)
-- 10 VPCs = 45 peering connections, 20 VPCs = 190 connections (unmanageable)
-- Each VPC requires separate route table entries for every other VPC
-- Transitive routing not supported (VPC A → VPC B → VPC C requires A ↔ C peering)
-- No centralized management or visibility
+| Mechanism | Connects | Direction | Overlapping CIDRs |
+|---|---|---|---|
+| **VPC peering** | Two whole VPCs, as one network | Both ways | Not allowed |
+| **Transit Gateway** | Many VPCs, VPNs, and Direct Connect through a Regional hub | Whatever the route tables allow | Not allowed between networks that route to each other |
+| **PrivateLink** | A consumer to one specific service or resource | Consumer to provider only | Allowed |
+| **VPC Lattice** | Services to services across VPCs and accounts, by name | Caller to service, governed by policy | Allowed |
 
-**Service Exposure Problems**:
-- Exposing services to partners/customers requires public internet or VPN
-- VPC peering grants access to entire CIDR range (not just specific services)
-- No fine-grained access control per service
-- Scaling to hundreds of consumer VPCs is impractical with peering
+A CIDR block is the address range a VPC uses, typically a private range such as `10.0.0.0/16`. The first two mechanisms are network-level: once connected, any address in one network can reach any address in the other, subject to security groups and routes. The last two are service-level: a caller reaches a named service and nothing else. That difference decides more designs than cost does.
 
-**Multi-Region and Hybrid Problems**:
-- Connecting on-premises to multiple VPCs requires separate VPN/Direct Connect per VPC
-- Multi-region architectures require complex routing and peering
-- No centralized egress/ingress control for security inspection
-
-**AWS Solutions**:
-
-**AWS PrivateLink**:
-- **Private service connectivity** without VPC peering or internet
-- Expose services to thousands of consumer VPCs via **VPC endpoints**
-- Traffic never leaves AWS network (no public IPs, no IGW)
-- **Fine-grained access control** per service (not entire VPC)
-- **Scales to thousands of consumers** without complexity
-- **Pricing**: $0.01 per endpoint-hour + $0.01 per GB processed
-
-**AWS Transit Gateway (TGW)**:
-- **Hub-and-spoke architecture** connecting thousands of VPCs and on-premises networks
-- Centralized routing with **route tables** and **route propagation**
-- Reduces connections from N² to N (10 VPCs: 45 connections → 10 attachments)
-- **Transitive routing** (VPC A → TGW → VPC B → TGW → VPC C works)
-- **Multi-region peering** for global connectivity
-- **Centralized network inspection** (firewall, IDS/IPS)
-- **Pricing**: $0.05 per attachment-hour + $0.02 per GB processed
-
-Both integrate with VPN, Direct Connect, VPC, and each other for comprehensive network architectures.
-
-## AWS PrivateLink
-
-### What PrivateLink Provides
-
-**Private Service Access**:
-- Consumer VPC accesses services in provider VPC via **private IP addresses**
-- Service traffic stays on AWS network (never traverses internet)
-- Consumer doesn't need VPC peering, IGW, NAT Gateway, or VPN
-- Provider's VPC remains completely isolated (consumer can't access other resources)
-
-**Use Cases**:
-- **SaaS providers**: Expose services to customer VPCs without VPC peering
-- **Shared services**: Centralized services (DNS, AD, monitoring) accessible from all VPCs
-- **Partner integration**: Grant partners access to specific APIs without exposing entire VPC
-- **Compliance**: Keep data within AWS network (HIPAA, PCI DSS requirements)
-
-### PrivateLink Architecture
-
-**Components**:
-
-**1. VPC Endpoint Service** (Provider Side):
-- Created by service provider in their VPC
-- Backed by Network Load Balancer (NLB) with targets (EC2, ECS, Lambda via ALB)
-- Service name: `com.amazonaws.vpce.region.vpce-svc-abc123`
-- Supports **manual approval** or **auto-accept** for consumer connections
-
-**2. VPC Endpoint** (Consumer Side):
-- Interface endpoint (ENI with private IP) created in consumer VPC
-- DNS name resolves to endpoint's private IP
-- Routes traffic to VPC Endpoint Service via AWS PrivateLink
-
-**Architecture Example**:
-```
-Provider VPC:
-  Application Servers (EC2, ECS)
-       ↓
-  Network Load Balancer (NLB)
-       ↓
-  VPC Endpoint Service (vpce-svc-abc123)
-
-Consumer VPC:
-  Application
-       ↓
-  VPC Endpoint (vpce-xyz789) → Private IP: 10.0.1.50
-       ↓
-  PrivateLink (AWS Network)
-       ↓
-  VPC Endpoint Service
-       ↓
-  NLB → Provider Application
-```
-
-**Traffic Flow**:
-1. Consumer application resolves service DNS to VPC endpoint private IP (10.0.1.50)
-2. Traffic sent to VPC endpoint (stays in consumer VPC subnet)
-3. PrivateLink routes traffic through AWS network to provider's VPC Endpoint Service
-4. VPC Endpoint Service forwards to NLB → backend targets
-5. Response returns via same path
-
-### VPC Endpoint Types
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Interface Endpoint (ENI-based)</h4>
-<ul>
-<li>Elastic Network Interface with private IP</li>
-<li>Supports most AWS services and custom services</li>
-<li>Required for CloudWatch, KMS, Secrets Manager, etc.</li>
-<li>Cost: $0.01/hour + $0.01/GB (~$7.30/month + data)</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Gateway Endpoint (Route table-based)</h4>
-<ul>
-<li>Routes via route table entry (no ENI)</li>
-<li>Only supports S3 and DynamoDB</li>
-<li>Same functionality as Interface Endpoint</li>
-<li>Cost: Free (no hourly charge, no data processing fee)</li>
-</ul>
-</div>
-</div>
-
-<div class="callout callout--tip">
-<p class="callout__title">Cost Optimization</p>
-<p>Always use Gateway Endpoints for S3 and DynamoDB. They're free and provide the same functionality as Interface Endpoints, which cost $7.30/month per endpoint.</p>
-</div>
-
-**Recommendation**: Use Gateway Endpoints for S3 and DynamoDB (free). Use Interface Endpoints for all other services.
-
-### PrivateLink Access Control
-
-**Service Provider Controls**:
-- **Allowlist principals**: Restrict which AWS accounts/IAM principals can create endpoints
-- **Manual approval**: Review and approve each endpoint connection request
-- **Auto-accept**: Automatically accept connections from trusted principals
-
-**Consumer Controls**:
-- **Security groups**: Control which resources can access endpoint (by source IP, security group)
-- **Endpoint policies**: IAM policy attached to endpoint restricting actions
-
-**Example Endpoint Policy**:
-```json
-{
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": "*",
-      "Action": "execute-api:Invoke",
-      "Resource": "arn:aws:execute-api:us-east-1:123456789012:api-id/*"
-    }
-  ]
-}
-```
-
-### PrivateLink Pricing (January 2025)
-
-| Component | Price (US East) |
-|-----------|-----------------|
-| **VPC Endpoint (Interface)** | $0.01 per hour (~$7.30/month) |
-| **Data Processing** | $0.01 per GB |
-| **Gateway Endpoint (S3, DynamoDB)** | Free |
-
-**Cost Example**:
-- 10 VPC endpoints: $73/month
-- 100 TB data transfer: 100,000 GB × $0.01 = $1,000/month
-- **Total: $1,073/month**
-
-**Comparison to VPC Peering**:
-- VPC Peering: Free hourly, $0.01 per GB same-region
-- PrivateLink: $7.30/month per endpoint + $0.01 per GB
-- **Trade-off**: Pay $7.30/month per endpoint for fine-grained service access vs. full VPC access with peering
-
-## AWS Transit Gateway
-
-### What Transit Gateway Provides
-
-**Hub-and-Spoke Connectivity**:
-- Single TGW connects thousands of VPCs, VPNs, Direct Connect
-- Centralized routing eliminates complex mesh peering
-- **Transitive routing**: VPC A can reach VPC C via TGW (A → TGW → C)
-- Scales from 10 to 5,000 attachments
-
-**Use Cases**:
-- **Multi-VPC connectivity**: 50+ VPCs in same region
-- **Multi-region architectures**: TGW peering across regions
-- **Hybrid connectivity**: Single VPN/Direct Connect to TGW reaches all VPCs
-- **Centralized egress**: All internet traffic routes through centralized egress VPC
-- **Network inspection**: All traffic routes through firewall VPC (with Gateway Load Balancer)
-
-### Transit Gateway Architecture
-
-**Components**:
-
-**1. Transit Gateway**:
-- Regional resource (one per region)
-- Supports up to 5,000 attachments (VPCs, VPNs, Direct Connect, peering)
-- Default or custom route tables
-- Automatically scaled by AWS (no capacity planning)
-
-**2. Attachments**:
-- **VPC attachment**: Connects VPC to TGW via ENIs in each AZ
-- **VPN attachment**: Site-to-Site VPN connection
-- **Direct Connect Gateway attachment**: Direct Connect connection
-- **Peering attachment**: Inter-region TGW-to-TGW connection
-- **Connect attachment**: Third-party SD-WAN appliances
-
-**3. Route Tables**:
-- **Default route table**: Auto-created, propagates all routes
-- **Custom route tables**: Isolate traffic between groups of VPCs
-- **Route propagation**: Automatically add routes from attachments
-
-**Architecture Example** (Hub-and-Spoke):
-```
-                  Transit Gateway
-                        |
-        ┌───────────────┼───────────────┐
-        |               |               |
-    VPC-Prod        VPC-Dev        VPC-Shared
-     (10.1)         (10.2)          (10.3)
-        |               |               |
-    App Tier        Test Env      DNS, AD, Tools
-```
-
-**With VPN and Direct Connect**:
-```
-                  Transit Gateway
-                        |
-        ┌───────┬───────┼───────┬───────┐
-        |       |       |       |       |
-    VPC-Prod  VPC-Dev  VPN  Direct   VPC-Shared
-                           Connect
-                              |
-                        On-Premises
-```
-
-### Transit Gateway vs. VPC Peering
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Transit Gateway</h4>
-<ul>
-<li>Scalability: Up to 5,000 attachments</li>
-<li>Management: Centralized (single TGW)</li>
-<li>Transitive Routing: Yes (A → TGW → B → TGW → C)</li>
-<li>Cost: $0.05/hour per attachment + $0.02/GB</li>
-<li>Bandwidth: 50 Gbps per AZ (bursts to 100 Gbps)</li>
-<li>Hybrid: Single attachment to all VPCs</li>
-<li>Network Inspection: Centralized firewall VPC</li>
-</ul>
-<p><strong>When to Use</strong>: &gt;10 VPCs, transitive routing, hybrid connectivity, centralized inspection</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>VPC Peering</h4>
-<ul>
-<li>Scalability: 125 peering connections per VPC</li>
-<li>Management: Distributed (N² connections)</li>
-<li>Transitive Routing: No (requires A ↔ C peering)</li>
-<li>Cost: Free hourly + $0.01/GB (same region)</li>
-<li>Bandwidth: No limit (within VPC throughput)</li>
-<li>Hybrid: Separate attachment per VPC</li>
-<li>Network Inspection: Distributed (per VPC)</li>
-</ul>
-<p><strong>When to Use</strong>: &lt;5 VPCs, simple connectivity, cost-sensitive, maximum bandwidth</p>
-</div>
-</div>
-
-### Transit Gateway Routing
-
-**Route Propagation**:
-- Automatically add routes from attachments to route table
-- VPC attachment: Propagates VPC CIDR blocks
-- VPN attachment: Propagates BGP routes from on-premises
-- Direct Connect: Propagates BGP routes
-
-**Static Routes**:
-- Manually add routes to route table
-- **Use case**: Override propagated routes, blackhole routes, default routes
-
-**Example Route Table**:
-```
-Destination         Target              Type
-10.1.0.0/16        VPC-Prod           Propagated
-10.2.0.0/16        VPC-Dev            Propagated
-10.3.0.0/16        VPC-Shared         Propagated
-192.168.0.0/16     VPN                Propagated
-0.0.0.0/0          VPC-Egress         Static
-```
-
-**Blackhole Routes**:
-- Drop traffic to specific destinations
-- **Use case**: Block traffic to specific CIDR ranges
-
-### Transit Gateway Peering (Multi-Region)
-
-**What It Provides**:
-- Connect Transit Gateways across regions
-- Encrypted over AWS global network
-- Supports static routes (no BGP route propagation)
-
-**Architecture**:
-```
-Region US-East-1                Region EU-West-1
-  Transit Gateway  ←─ Peering ─→  Transit Gateway
-       |                               |
-  ┌────┴────┐                     ┌────┴────┐
-VPC-Prod  VPC-Dev               VPC-EU-Prod VPC-EU-Dev
-```
-
-**Cost**:
-- Peering attachment: $0.05 per hour (each side)
-- Data transfer: Inter-region rates ($0.02 per GB US-East to US-West)
-
-**Use case**: Multi-region applications, disaster recovery, global services.
-
-### Transit Gateway Network Isolation
-
-<div class="callout callout--warning">
-<p class="callout__title">Security Isolation</p>
-<p>The default TGW route table allows all attached VPCs to communicate. Always use custom route tables to isolate production from dev/test environments to prevent unauthorized access and meet compliance requirements.</p>
-</div>
-
-**Problem**: Default route table allows all VPCs to communicate. Need to isolate prod from dev.
-
-**Solution**: Custom Route Tables
-
-**Example**: Isolate Production from Dev/Test
-
-**Route Table 1 (Production)**:
-```
-Attachments: VPC-Prod, VPC-Shared, VPN
-Routes:
-  10.1.0.0/16 → VPC-Prod (propagated)
-  10.3.0.0/16 → VPC-Shared (propagated)
-  192.168.0.0/16 → VPN (propagated)
-```
-
-**Route Table 2 (Dev/Test)**:
-```
-Attachments: VPC-Dev, VPC-Test, VPC-Shared
-Routes:
-  10.2.0.0/16 → VPC-Dev (propagated)
-  10.4.0.0/16 → VPC-Test (propagated)
-  10.3.0.0/16 → VPC-Shared (propagated)
-```
-
-**Result**:
-- Production VPCs can reach shared services and on-premises
-- Dev/Test VPCs can reach shared services but NOT production
-- Shared services VPC accessible from both (DNS, AD, monitoring)
-
-### Transit Gateway Pricing (January 2025)
-
-| Component | Price (US East) |
-|-----------|-----------------|
-| **TGW Attachment** | $0.05 per hour (~$36.50/month) |
-| **Data Processing** | $0.02 per GB |
-
-**Cost Example**:
-- 10 VPC attachments: $365/month
-- 1 VPN attachment: $36.50/month
-- Total attachments: $401.50/month
-- Data processing: 50 TB/month = 50,000 GB × $0.02 = $1,000/month
-- **Total: $1,401.50/month**
-
-**VPC Peering Alternative**:
-- 10 VPCs full mesh = 45 peering connections
-- Peering cost: Free hourly
-- Data transfer: 50 TB × $0.01/GB = $500/month
-- **Total: $500/month**
-
-**Analysis**: TGW costs $901.50/month more BUT provides centralized management, transitive routing, and hybrid connectivity. Worth it for complex architectures.
-
-## PrivateLink + Transit Gateway Integration
-
-<div class="callout callout--note">
-<p class="callout__title">Integration Pattern</p>
-<p>PrivateLink and Transit Gateway solve different problems and can be used together. Use TGW for full VPC connectivity and PrivateLink for exposing specific services to hundreds of consumers without granting full VPC access.</p>
-</div>
-
-### Use Case: Shared Services Architecture
-
-**Problem**: 50 VPCs need access to centralized services (DNS, Active Directory, monitoring, logging).
-
-**Solution 1: VPC Peering**:
-- 50 VPCs × 1 shared VPC = 50 peering connections
-- Each VPC route table needs entry for shared VPC CIDR
-- Shared services accessible via private IPs
-
-**Solution 2: Transit Gateway**:
-- 50 VPCs + 1 shared VPC = 51 attachments to TGW
-- Route propagation automatically distributes routes
-- **Cost**: 51 attachments × $36.50/month = $1,861.50/month
-
-**Solution 3: PrivateLink**:
-- Shared VPC exposes services via VPC Endpoint Services
-- Each of 50 VPCs creates VPC Endpoints
-- **Cost**: 50 endpoints × $7.30/month = $365/month
-
-**Cost Comparison**:
-- VPC Peering: Free (+ $0.01/GB data transfer)
-- Transit Gateway: $1,861.50/month (+ $0.02/GB)
-- PrivateLink: $365/month (+ $0.01/GB)
-
-**Best Solution**: **PrivateLink** for specific services (DNS, monitoring APIs), VPC Peering for full VPC access if needed.
-
-### Use Case: SaaS Service Delivery
-
-**Problem**: SaaS provider needs to expose service to 1,000 customer VPCs.
-
-**VPC Peering**: Impossible (125 peering limit per VPC)
-
-**Transit Gateway**: Not suitable (customer VPCs in different AWS accounts, don't want transitive routing)
-
-**PrivateLink**: Perfect
-- Provider creates VPC Endpoint Service backed by NLB
-- Each customer creates VPC Endpoint in their VPC
-- Provider manually approves each endpoint (security)
-- Customers access service via private IP (no internet exposure)
-
-**Cost** (Provider):
-- VPC Endpoint Service: Free
-- NLB: $0.0225/hour (~$16.20/month) + LCU costs
-- **Total**: $16.20/month + NLB LCU costs (shared across all customers)
-
-**Cost** (Each Customer):
-- VPC Endpoint: $7.30/month
-- Data transfer: $0.01/GB
-
-**Scalability**: Supports thousands of customers, provider infrastructure doesn't scale linearly.
-
-## Private Connectivity: PrivateLink and VPC Endpoints
-
-**AWS PrivateLink** enables private connectivity between VPCs, AWS services, and on-premises networks without exposing traffic to the public internet. It uses VPC endpoints to keep traffic within the AWS network.
-
-**Key Benefit:** Traffic never traverses the public internet, reducing exposure to threats, improving security posture, and often reducing costs.
-
-### VPC Endpoint Types
-
-AWS provides three types of VPC endpoints:
-
-| Endpoint Type | Services | Technology | Charges | Use When |
-|---------------|----------|------------|---------|----------|
-| **Gateway Endpoint** | S3, DynamoDB only | Route table entries | No hourly charge (data transfer only) | Always for S3/DynamoDB access from within VPC |
-| **Interface Endpoint** | 130+ AWS services + SaaS | PrivateLink (ENIs with private IPs) | Hourly + data processing | Accessing AWS services from private subnets without NAT/IGW |
-| **Gateway Load Balancer Endpoint** | Third-party security appliances | PrivateLink | Hourly + data processing | Traffic inspection with third-party appliances |
-
-### Gateway Endpoints (S3 and DynamoDB)
-
-Gateway endpoints add routes to your route tables directing traffic destined for S3 or DynamoDB through the endpoint instead of an internet gateway or NAT gateway.
-
-**Key Characteristics:**
-- No ENIs in your subnets (just route table entries)
-- No hourly charges (only standard data transfer charges apply)
-- Highly available by default (regional service)
-- Can attach endpoint policies to control access
-
-**Cost Impact:**
-- Without gateway endpoint: $0.045/GB through NAT gateway + data transfer
-- With gateway endpoint: Data transfer charges only
-- For workloads transferring large amounts of S3/DynamoDB data, this saves significant cost
-
-**When to Use:**
-- ✅ Always for S3 and DynamoDB access from within the VPC
-- ✅ Cost optimization (eliminates NAT gateway data processing charges)
-- ✅ Security (traffic stays within AWS network)
-
-### Interface Endpoints (AWS Services and SaaS)
-
-Interface endpoints create ENIs with private IP addresses in your subnets, serving as entry points for traffic destined for 130+ AWS services and third-party SaaS providers.
-
-**How They Work:**
-1. Create interface endpoint for specific service (e.g., `com.amazonaws.us-east-1.ssm`)
-2. AWS creates ENI in specified subnets with private IPs
-3. Private DNS resolves service endpoints to ENI private IPs automatically
-4. Applications use standard service endpoints with no code changes
-
-**Key Characteristics:**
-- ENIs deployed in your subnets (one per AZ for high availability)
-- Charged hourly per endpoint + data processing ($0.01/GB in most regions)
-- Can attach security groups to control access
-- Support endpoint policies for fine-grained control
-
-**Cost Comparison:**
-
-| Approach | Cost per AZ | Data Processing | Security |
-|----------|-------------|-----------------|----------|
-| NAT Gateway | $0.045/hour + $0.045/GB | Higher cost | Traffic routes through internet gateway |
-| Interface Endpoints | $0.01/hour per endpoint + $0.01/GB | Lower cost | Traffic stays private |
-
-For workloads making frequent AWS API calls, interface endpoints are often cheaper and more secure than NAT gateway.
-
-**When to Use:**
-- ✅ Private subnets need AWS service access without NAT/IGW
-- ✅ Cost optimization (eliminate NAT gateway charges for AWS API calls)
-- ✅ Security compliance requires no internet routing
-- ✅ On-premises systems need private access to AWS services (via Direct Connect or VPN)
-
-### PrivateLink Best Practices
-
-1. **High Availability:** Deploy interface endpoints in at least two Availability Zones for production workloads
-2. **Cost Optimization for S3:** Use gateway endpoints for VPC access (free), interface endpoints for on-premises access only
-3. **Security Controls:** Attach security groups and endpoint policies to restrict access
-4. **Private DNS:** Enable DNS hostnames and resolution in VPC settings for automatic DNS resolution
-5. **Centralized Endpoints:** Share endpoints across accounts using AWS Resource Access Manager (RAM)
-
-### When to Use PrivateLink vs. VPC Peering
-
-| Use PrivateLink When | Use VPC Peering When |
-|---------------------|----------------------|
-| Exposing specific services to many consumers (SaaS model) | Full VPC-to-VPC connectivity needed |
-| Provider-consumer relationship | Peer-to-peer trust relationship |
-| Need to scale to thousands of consumers | Small number of VPC connections (2-10) |
-| Accessing AWS services privately | Connecting trusted partner VPCs |
-
-**Key Principle:** PrivateLink is one-way (provider → consumer); VPC peering is bidirectional.
-
-**For detailed PrivateLink architecture patterns, Transit Gateway integration, cost optimization strategies, and multi-VPC connectivity, see [AWS PrivateLink & Transit Gateway](aws-privatelink-transit-gateway.md){:target="_blank" rel="noopener noreferrer"}.**
+A fifth option, **AWS Cloud WAN**, builds a global network of Transit Gateway-like hubs across Regions from a central policy. It suits organizations with many Regions and on-premises sites, and it is beyond the scope of this guide.
 
 ---
 
-## Multi-VPC Strategies
+## VPC Endpoints for AWS Services
 
-### When to Use Multiple VPCs
+A workload in a private subnet reaches AWS service APIs, such as S3, SQS, or Secrets Manager, through a NAT gateway by default, over the service's public endpoint. A **VPC endpoint** gives it a private path instead. There are two kinds:
 
-**Reasons to Create Multiple VPCs:**
-- **Environment isolation:** Separate VPCs for dev, test, production
-- **Security boundaries:** Different compliance requirements (PCI, HIPAA)
-- **Organizational boundaries:** Different departments or teams
-- **Resource limits:** VPC has limits (200 subnets, 200 route tables)
+| | Gateway endpoint | Interface endpoint |
+|---|---|---|
+| **Services** | S3 and DynamoDB only | Most AWS services, plus services offered by other accounts |
+| **How it works** | A route in chosen route tables sends the service's address ranges to the endpoint | Network interfaces with private addresses in your subnets, one per AZ you choose |
+| **Price** | No charge | About $0.01 per hour per AZ, plus $0.01 per GB processed |
+| **Reachable from** | Only the VPC it belongs to, in the same Region | The VPC, and networks connected to it by peering, Transit Gateway, VPN, or Direct Connect |
+| **Controls** | Endpoint policy | Endpoint policy and security groups |
 
-**Trade-Offs:**
-- More complex networking (VPC peering or Transit Gateway required)
-- More overhead to manage
-- Potential for IP address conflicts if not planned properly
+Gateway endpoints are free and remove NAT gateway processing charges, so a VPC that uses S3 or DynamoDB should have them. Their limitation is reach. Traffic from on-premises or from another VPC can't use a gateway endpoint, and both S3 and DynamoDB also offer interface endpoints for those cases. DynamoDB's interface endpoints have no private DNS option, so clients must use the endpoint-specific hostname.
 
-### VPC Peering
-
-**VPC Peering:** Direct network connection between two VPCs using AWS backbone (not over internet).
-
-**Characteristics:**
-- One-to-one relationship (VPC A peers with VPC B)
-- Non-transitive (if A peers with B, and B peers with C, A cannot reach C)
-- Can peer VPCs across regions (inter-region VPC peering)
-- Can peer VPCs across accounts
-- No single point of failure, no bandwidth bottleneck
-
-**When to Use:**
-- Small number of VPCs need to communicate
-- Specific VPC-to-VPC connections
-
-**Limitations:**
-- Must manually create peering connection for each pair
-- With N VPCs, you need N*(N-1)/2 peering connections (3 VPCs = 3 connections; 10 VPCs = 45 connections)
-- Becomes unmanageable at scale
-
-### Transit Gateway
-
-**Transit Gateway:** Central hub that routes traffic between VPCs, VPNs, and Direct Connect.
-
-**Characteristics:**
-- Acts as a regional router
-- Supports up to 5,000 attachments
-- Transitive routing (if A and C attach to transit gateway, they can communicate)
-- Simplifies multi-VPC networking
-
-**When to Use:**
-- Many VPCs need to communicate (more than 3-4 VPCs)
-- Hub-and-spoke network topology
-- Centralized egress to internet (all VPCs route through shared egress VPC)
-
-**Trade-Offs:**
-- ✅ Simplifies complex multi-VPC networking
-- ✅ Centralized route management
-- ⚠️ Additional cost (charged per attachment + data processed)
-- ⚠️ More complex to set up initially
-
-**Example: 10 VPCs**
-- **Without Transit Gateway:** 45 VPC peering connections
-- **With Transit Gateway:** 10 attachments to transit gateway (dramatically simpler)
-
-**For detailed Transit Gateway routing, isolation patterns, multi-region connectivity, and cost analysis, see [AWS PrivateLink & Transit Gateway](aws-privatelink-transit-gateway.md){:target="_blank" rel="noopener noreferrer"}.**
+With **private DNS** turned on, an interface endpoint makes the service's normal hostname, such as `secretsmanager.us-east-1.amazonaws.com`, resolve to the endpoint's private addresses inside the VPC, so applications need no changes. An **endpoint policy** is an IAM resource policy on the endpoint that limits which actions and resources can be reached through it, for example only the organization's own buckets.
 
 ---
 
-## VPC Lattice for Service-to-Service Communication
+## PrivateLink for Your Own Services
 
-### What is VPC Lattice?
+### Endpoint Services
 
-**Amazon VPC Lattice** (launched March 2023) is a fully managed application networking service that consistently connects, monitors, and secures communications between services across VPCs and AWS accounts. It operates at the **application layer (Layer 7)** rather than the network layer.
+**AWS PrivateLink** is the technology under interface endpoints, and it can also carry your own services. A **provider** puts a Network Load Balancer in front of the service and creates an **endpoint service** from it. (A Gateway Load Balancer can front an endpoint service too, which is how firewall appliances are offered to other VPCs.) A **consumer** in another VPC or account creates an interface endpoint to that service and reaches it at an address from its own subnet:
 
-**Key Innovation:** VPC Lattice abstracts away traditional networking complexity (route tables, CIDR blocks, peering connections) and provides service-level connectivity with built-in security and observability.
+{% include figure.html id="aws-privatelink-service" %}
 
-### What Problems Does VPC Lattice Solve?
+Three properties follow from that shape and make PrivateLink the usual way to offer a service across trust boundaries:
 
-**Traditional VPC Networking Limitations:**
-- VPC peering and Transit Gateway solve network-layer connectivity but don't provide application-level routing
-- Service mesh solutions (App Mesh, Istio) require managing sidecar proxies in every pod/container
-- Complex route table management for multi-VPC architectures
-- No built-in service-level authorization (must implement in application code)
-- CIDR overlap prevents connectivity between VPCs with overlapping IP ranges
-- Difficult to implement canary deployments, weighted routing, blue/green at network level
+- **It is one-way.** The consumer opens connections to the service. The provider can't open connections back into the consumer's VPC.
+- **It exposes one service, not a network.** The consumer reaches the load balancer's listeners and nothing else in the provider's VPC.
+- **Address ranges don't matter.** Each side only addresses things in its own VPC, so the two VPCs can use identical CIDR blocks. That is often the only workable option between organizations that never coordinated their address plans.
 
-**VPC Lattice Solutions:**
-- **Eliminates sidecar proxies:** Managed control plane and data plane (no Envoy sidecars needed)
-- **Service-level abstraction:** Connect services across VPCs without managing routes or IP addresses
-- **Works with overlapping CIDRs:** Services can communicate even with conflicting IP ranges
-- **Built-in IAM authentication:** Fine-grained authorization at the API level without custom code
-- **Unified observability:** CloudWatch metrics provided automatically
-- **Simplified multi-account connectivity:** Native AWS Resource Access Manager (RAM) integration
-- **Application-layer routing:** Weighted targets, health checks, HTTP/gRPC routing rules
+The provider controls who may connect. An **allowed principals** list names the accounts, users, or roles that may create endpoints, and **acceptance** can be required so each connection request is approved. Since November 2024, an endpoint service can also accept consumers in other Regions, with inter-Region data transfer charges on top of PrivateLink's.
 
-### How VPC Lattice Works
+Traffic arrives at the provider from the load balancer's addresses, not the consumer's. A service that needs to know which consumer is calling can turn on Proxy Protocol v2 on the NLB, which adds a header carrying the consumer's endpoint ID to each connection.
 
-**Core Concepts:**
+PrivateLink has costs that make it a poor fit for some jobs. Every consumer pays per AZ per hour for its endpoint, the provider pays for the load balancer, and the consumer reaches only that load balancer's listeners. For a few VPCs owned by one team that need broad access to each other, peering or a transit gateway is simpler.
 
-1. **Service:** Logical unit of application functionality (e.g., "payments-api", "user-service")
-2. **Service Network:** Collection of services that can communicate with each other
-3. **Target Groups:** Compute resources (EC2, ECS, Lambda, Fargate) that handle requests
-4. **Auth Policies:** IAM-based policies defining which principals can access services
-5. **Access Policies:** Service-level policies controlling access to service network or individual services
+### Resource Endpoints
 
-**Architecture:**
-
-```
-Service Network: production-services
-├── Service: payments-api
-│   ├── Target Group: payments-ec2-targets
-│   ├── Auth Policy: Allow accounts 111111111111, 222222222222
-│   └── Listener: HTTPS:443 → Target Group
-├── Service: user-service
-│   ├── Target Group: user-lambda-targets
-│   └── Auth Policy: Allow specific IAM roles
-└── VPC Associations: VPC-A, VPC-B, VPC-C
-```
-
-Services in associated VPCs can discover and communicate with each other using service DNS names (e.g., `payments-api.service-network-id.vpc-lattice-svcs.amazonaws.com`).
-
-### When to Use VPC Lattice
-
-**Use VPC Lattice when:**
-- ✅ You need service-to-service communication across VPCs/accounts
-- ✅ Your traffic is HTTP, HTTPS, gRPC, or TCP (TCP support added December 2024)
-- ✅ You want zero-trust security with IAM-based authorization
-- ✅ You have overlapping CIDR blocks between VPCs
-- ✅ You need application-layer routing (weighted routing, blue/green, canary deployments)
-- ✅ You want simplified service discovery across multiple VPCs
-- ✅ Your workloads are on EC2, ECS, EKS, Lambda, or Fargate
-- ✅ You're replacing service mesh and want managed solution
-
-**Do NOT use VPC Lattice when:**
-- ❌ You need network-layer connectivity for all protocols and ports (use Transit Gateway)
-- ❌ You're moving large volumes of data between VPCs (use Transit Gateway for higher throughput)
-- ❌ You need lowest possible latency (use VPC peering; no intermediate hops)
-- ❌ You need extremely complex service mesh capabilities (use Istio; though VPC Lattice covers most use cases)
-
-### VPC Lattice vs. Service Mesh Comparison
-
-| Aspect | VPC Lattice | App Mesh / Istio |
-|--------|-------------|------------------|
-| **Architecture** | Managed control + data plane, no sidecars | Sidecar proxy (Envoy) in each pod |
-| **Deployment Complexity** | Simpler (no pod modifications) | More complex (inject sidecars everywhere) |
-| **Scope** | Cross-VPC, cross-account by design | Primarily within clusters |
-| **Protocol Support** | HTTP, HTTPS, gRPC, TCP (2024) | All protocols |
-| **Security** | IAM-based authorization, AWS-native | mTLS by default (Istio) |
-| **Observability** | Built-in CloudWatch metrics | Requires Prometheus/CloudWatch Agent |
-| **Load Balancing** | Built-in | Requires separate load balancers |
-| **Cost Model** | Pay per service + data + requests | Pay for compute resources for proxies |
-| **Traffic Management** | Policy-based, weighted targets | Advanced routing with Virtual Services |
-| **Overlapping IPs** | Handles overlapping CIDRs | Requires non-overlapping ranges |
-| **Flexibility** | Less flexible, AWS-specific | Highly flexible, open-source, multi-cloud |
-
-**Critical Context:** AWS announced App Mesh deprecation effective September 30, 2026. AWS recommends migrating ECS customers to ECS Service Connect and EKS customers to VPC Lattice.
-
-### VPC Lattice Use Case Example
-
-**Scenario:** Microservices architecture with services in multiple VPCs across dev, staging, and prod accounts.
-
-**Traditional Approach:**
-- Create VPC peering or Transit Gateway connections
-- Manage security groups in each VPC
-- Implement service discovery (DNS, Consul, etc.)
-- Build authorization logic into each service
-- Set up ALBs for each service
-- Configure complex routing for canary deployments
-
-**With VPC Lattice:**
-
-1. **Create service network:** `production-services`
-2. **Associate VPCs:** Attach VPCs from different accounts
-3. **Create services:**
-   - `payments-api` backed by ECS tasks
-   - `user-service` backed by Lambda functions
-   - `inventory-service` backed by EC2 instances
-4. **Set auth policies:** Define which services can call which other services using IAM policies
-5. **Services discover each other** using service DNS names automatically
-
-**Benefits:**
-- No route table management
-- Built-in authorization (IAM policies)
-- Automatic service discovery
-- Observability included (CloudWatch metrics)
-- Works despite CIDR overlaps
-
-### Recent 2024 Updates to VPC Lattice
-
-- **November 18, 2024:** Native Amazon ECS integration (eliminates need for intermediate ALB)
-- **December 2024:** TCP support with VPC Resources (access RDS databases, custom DNS, IP endpoints)
-
-### VPC Lattice Best Practices
-
-1. **Use auth policies for zero-trust security:**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::111111111111:role/payments-service-role"
-      },
-      "Action": "vpc-lattice-svcs:Invoke",
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-This ensures only the payments service role can invoke the service.
-
-2. **Deploy target groups in multiple AZs** for high availability
-
-3. **Use CloudWatch metrics** to monitor service health, request counts, and latency
-
-4. **Implement weighted routing** for canary deployments (send 5% traffic to new version, 95% to stable)
+An endpoint service needs a load balancer in front of it. Since December 2024, a **resource endpoint** can reach a single resource, such as an RDS database or a server by IP address or DNS name, without one. The provider shares a **resource configuration** describing the resource through AWS Resource Access Manager, and a **resource gateway** in the provider's VPC carries the traffic. It suits sharing one database with another account, where standing up an NLB only to front it was the old workaround.
 
 ---
 
-### Multi-VPC Connectivity Comparison
+## VPC Peering
 
-| Criteria | VPC Peering | Transit Gateway | VPC Lattice |
-|----------|-------------|-----------------|-------------|
-| **Primary Use Case** | Simple VPC-to-VPC connectivity | Complex multi-VPC hub-and-spoke | Service-to-service application networking |
-| **Protocol Support** | All (network layer) | All (network layer) | HTTP, HTTPS, gRPC, TCP (application layer) |
-| **Scaling** | N*(N-1)/2 connections; max 125 per VPC | Up to 5,000 attachments | Service-centric (not VPC-centric) |
-| **Transitive Routing** | No | Yes | Yes (at service level) |
-| **Bandwidth** | No limit, lowest latency | 50 Gbps per attachment (burst) | 10 Gbps per AZ / 10k RPS per AZ |
-| **Overlapping CIDRs** | Not supported | Not supported | Supported |
-| **Cost Model** | Data transfer only | Hourly per attachment + data | Hourly per service + data + requests |
-| **Management Complexity** | High at scale (many connections) | Medium (central hub) | Low (service abstraction) |
-| **On-Premises Support** | No | Yes (VPN/Direct Connect) | Limited (requires Transit Gateway) |
-| **Authorization** | Network-level (security groups) | Network-level | IAM-based service-level |
-| **When to Use** | 2-3 VPCs, lowest latency | 5+ VPCs, hybrid connectivity, large data | Microservices across VPCs, HTTP/gRPC traffic |
+A **peering connection** joins two VPCs so that each routes to the other's CIDR block as if they were one network, across accounts and across Regions. There is no gateway in the path and no bandwidth bottleneck of its own. Data that stays within an Availability Zone costs nothing, and data crossing AZs or Regions is billed at the usual transfer rates.
 
-**Recommendation:** For new microservices architectures in AWS, consider VPC Lattice as the default for service-to-service communication. Use Transit Gateway for network-level connectivity when needed.
+Its constraints shape where it fits:
+
+- **The CIDR blocks can't overlap.**
+- **It isn't transitive.** If A peers with B and B with C, A still can't reach C through B. Full connectivity among *n* VPCs needs *n*(*n*−1)/2 connections, so ten VPCs need 45.
+- **Each VPC can have 50 active peering connections** by default, raisable to 125.
+- **Both sides must add routes** for the other's CIDR, in every route table that needs them.
+- **Gateways aren't shared.** A VPC can't use its peer's internet gateway, NAT gateway, VPN, or gateway endpoints.
+
+Within a Region, security groups can reference groups in the peer VPC, which keeps rules readable. Peering suits a few VPCs that need full, high-volume, low-latency connectivity, such as an application VPC and a shared data VPC. As the count grows, the mesh of connections and routes becomes the problem Transit Gateway exists to solve.
+
+---
+
+## Transit Gateway
+
+### A Regional Hub
+
+A **transit gateway** is a Regional router that VPCs and on-premises networks attach to. Each **attachment** connects one network or function. The common kinds are a VPC (through a network interface in each AZ you choose), a Site-to-Site VPN, a Direct Connect gateway, and a peering connection to another transit gateway. Others connect SD-WAN appliances, which run their own routing over the gateway, and AWS Network Firewall. A gateway supports 5,000 attachments by default, and a VPC attachment carries up to 100 Gbps in each direction per AZ. Unlike peering, it is transitive: every attachment can reach every other one that its routes allow.
+
+A transit gateway is created in one account and shared with the rest of the organization through AWS Resource Access Manager, so a central network team owns it and workload accounts attach their VPCs.
+
+### Route Tables Make Segments
+
+A transit gateway has its own **route tables**, separate from the VPCs'. Two settings connect them to attachments:
+
+- **Association.** Each attachment is associated with exactly one route table, which decides where traffic *arriving from* that attachment can go.
+- **Propagation.** An attachment can propagate its routes, such as its VPC CIDR or the routes a VPN learns from the on-premises router over BGP (the routing protocol networks use to advertise address ranges), into any number of route tables, which decides who can reach *it*.
+
+By default, every attachment associates with and propagates to one default route table, so everything can reach everything, including dev to prod. Turning off default association and propagation when the gateway is created, and designing the route tables before the first attachment, avoids that. Separate route tables turn one gateway into isolated **segments**. In the layout below, prod reaches shared services and on-premises, dev reaches only shared services, and prod and dev never reach each other:
+
+{% include figure.html id="aws-tgw-segmentation" %}
+
+Static routes fill in what propagation doesn't, such as a default route sending internet-bound traffic to a central egress VPC. A **blackhole** route drops traffic for a prefix outright. The VPCs' own route tables still need routes pointing at the transit gateway for the prefixes they should reach through it.
+
+### Inspection, Peering, and Security Groups
+
+Sending traffic between segments through a firewall is a common requirement. Since July 2025, AWS Network Firewall can attach to a transit gateway directly, as its own attachment, so route tables send traffic to it with no dedicated inspection VPC to build. Third-party firewalls still sit in an inspection VPC behind a Gateway Load Balancer. Either way, a stateful firewall tracks each connection, so it must see both directions of a flow (the packets of one connection) on the same appliance. The VPC attachment's **appliance mode** guarantees that by keeping a flow in one AZ.
+
+Transit gateways connect to each other, in the same Region or across Regions, through **peering attachments**, which use static routes only and carry traffic over the AWS backbone. Since 2024, security groups in VPCs attached to the same transit gateway can reference each other in inbound rules, once referencing is turned on for both the gateway and the attachment. Referencing doesn't work when the traffic passes through a firewall on the way.
+
+### What It Costs
+
+In US East, a transit gateway charges $0.05 per attachment per hour (about $36 a month) and $0.02 per GB sent into it. The data charge usually dominates, and it applies each time traffic enters the gateway, so traffic sent from a spoke to an inspection VPC and back out to another spoke is charged twice. Estimate traffic per path before choosing. For two or three VPCs exchanging heavy traffic, peering is far cheaper. For dozens of VPCs, hybrid connectivity, or centralized inspection, the transit gateway's manageability is what you are paying for.
+
+### Centralizing Interface Endpoints
+
+Interface endpoints are billed per AZ, so twenty services in three AZs across fifty VPCs adds up. A common design places the endpoints once, in a shared services VPC that every spoke reaches through the transit gateway. DNS and data then take different paths. Private DNS on an endpoint only works inside its own VPC, so the central endpoints are created with private DNS turned off, and the shared account creates a Route 53 private hosted zone (a DNS zone visible only to associated VPCs) for each service name, pointing at the central endpoint. Those zones are associated with every spoke VPC, which then resolves the service's normal name to the central endpoint and sends the traffic through the transit gateway.
+
+Without the private hosted zones, spokes keep calling the public endpoints through their NAT gateways and pay twice without any error to show for it. The design's costs are transit gateway processing charges on all AWS API traffic and one shared dependency for every VPC. It also gives up per-VPC endpoint policies. A single policy on each central endpoint governs every spoke's access, which gets harder to keep least-privilege as spokes are added, and IAM caps its size at 20,480 characters.
+
+---
+
+## VPC Lattice
+
+**Amazon VPC Lattice** connects services rather than networks. It works at the application layer for HTTP, HTTPS, and gRPC, and at the connection layer for TCP through TLS listeners and resource configurations. Its pieces are:
+
+- A **service network**, a logical group of services and the VPCs or accounts allowed to use them.
+- **Services**, each with a DNS name, listeners, and routing rules that send requests to **target groups** of instances, IP addresses, Lambda functions, Kubernetes pods, or ECS tasks.
+- **Auth policies**, IAM policies on the service network or a service that decide which principals may call what. Callers sign requests with their AWS credentials, so authorization happens per request without application code.
+- **Associations** that connect VPCs and services to the service network. Service networks, services, and resource configurations are shared with other accounts through Resource Access Manager, and the receiving account creates its own associations.
+
+Because callers address services by name and Lattice handles the path, VPCs with overlapping CIDRs can still call each other's services, and no route tables or peering connections are involved. Routing rules can split traffic by weight for canary releases, and Lattice publishes per-service metrics and access logs.
+
+A few constraints shape Lattice designs. Service networks are Regional. A VPC can associate with only one service network, and reaching others takes a service network endpoint, which is also how clients arriving over peering or a transit gateway get in. A connection to a Lattice service lasts at most ten minutes, which matters for long gRPC streams and WebSockets, and each service gets 10 Gbps per AZ by default. IAM request signing works only for HTTP, HTTPS, and gRPC. TLS listeners pass encrypted TCP through untouched, so their auth policies can only allow anonymous callers, and plain TCP resources such as databases are reached through resource configurations rather than services.
+
+Lattice charges per service per hour ($0.025 in US East), per GB processed ($0.025), and per request beyond the first 300,000 each hour. It fits HTTP and gRPC calls between services across many VPCs and accounts, especially where teams want IAM-based authorization between services. It doesn't fit bulk data movement, long-lived connections, protocols outside HTTP and TCP, or traffic that needs a network path rather than a service endpoint, all of which stay with Transit Gateway or peering.
+
+---
+
+## Choosing
+
+```
+Do the two sides need to reach each other's whole network?
+├── Yes → How many VPCs, and is on-premises involved?
+│         ├── A few VPCs, no hybrid, heavy traffic → VPC peering
+│         └── Many VPCs, hybrid, or central inspection → Transit Gateway
+└── No, one side calls specific services or resources. Who are the callers?
+          ├── Your own services, over HTTP or gRPC, across many VPCs → VPC Lattice
+          └── Other accounts or customers, or a single resource to share → PrivateLink
+```
+
+Most organizations end up with more than one. A transit gateway provides the network backbone between accounts and on-premises, gateway and interface endpoints handle AWS service traffic, PrivateLink offers specific services to partners or across trust boundaries, and Lattice may connect microservices owned by different teams.
 
 ---
 
 ## Common Pitfalls
 
-<div class="callout callout--warning">
-<p class="callout__title">Common Pitfalls</p>
-<p>The most expensive mistakes: forgetting TGW data processing costs, using Interface Endpoints for S3/DynamoDB instead of free Gateway Endpoints, and scaling VPC Peering beyond 10 VPCs.</p>
-</div>
+### Address Space That Rules Out Routing
 
-### 1. Using VPC Peering for >10 VPCs
+Overlapping CIDRs block both peering and Transit Gateway routing between the overlapping networks. PrivateLink and Lattice work around it, but only for service calls, so an organization that later needs network-level connectivity has to renumber. Allocate non-overlapping ranges across the organization before connectivity needs force the issue.
 
-**Problem**: Full mesh peering becomes unmanageable. 20 VPCs = 190 peering connections.
+### Lattice for Long-Lived Connections
 
-**Impact**: Route table explosion, manual management, no transitive routing.
+A gRPC stream or WebSocket through Lattice is cut after ten minutes whatever the application does. Clients must reconnect cleanly, or those connections belong on a network path instead.
 
-**Solution**: Use Transit Gateway for >10 VPCs.
-
-**Cost Impact**: TGW costs $730/month (20 attachments) but saves hundreds of hours in management.
-
-### 2. Not Using Gateway Endpoints for S3/DynamoDB
-
-**Problem**: Using Interface Endpoints for S3/DynamoDB costs $7.30/month per endpoint.
-
-**Solution**: Use Gateway Endpoints (free for S3/DynamoDB).
-
-**Cost Impact**: 10 Interface Endpoints for S3 = $73/month. Gateway Endpoints = Free. **Savings: $73/month.**
-
-### 3. Forgetting TGW Data Processing Costs
-
-**Problem**: Focus on attachment costs ($36.50/month) but ignore data processing ($0.02/GB).
-
-**Example**: 100 TB/month data transfer via TGW = 100,000 GB × $0.02 = $2,000/month (5x higher than attachment costs).
-
-**Solution**: Calculate data transfer costs before choosing TGW. For high-traffic, consider VPC Peering ($0.01/GB) or optimize data flows.
-
-**Cost Impact**: Unexpected $2,000/month bill.
-
-### 4. Not Isolating Production with TGW Route Tables
-
-**Problem**: Using default TGW route table allows all VPCs to communicate (including dev → prod).
-
-**Impact**: Security risk, compliance violations, potential data leakage.
-
-**Solution**: Create custom route tables to isolate production from dev/test.
-
-**Cost Impact**: Free (no additional cost for custom route tables). Prevents data breaches worth millions.
-
-### 5. Using PrivateLink When VPC Peering Would Suffice
-
-**Problem**: Creating VPC Endpoint for every service when VPC Peering grants access to all services.
-
-**Example**: 20 services × $7.30/month = $146/month for PrivateLink vs. $0/month for VPC Peering.
-
-**Solution**: Use PrivateLink only when you need fine-grained service access or scaling to hundreds of consumers.
-
-**Cost Impact**: Wasted $146/month.
-
-### 6. Not Enabling TGW Route Propagation
-
-**Problem**: Manually adding routes to TGW route table instead of enabling propagation.
-
-**Impact**: Route table becomes out-of-sync when VPC CIDRs change, manual management burden.
-
-**Solution**: Enable route propagation for VPC and VPN attachments.
-
-**Cost Impact**: Free. Saves hours of manual route management.
-
-### 7. Exposing Services Publicly Instead of Using PrivateLink
-
-**Problem**: Exposing internal services via public ALB/NLB for partner access.
-
-**Impact**: Security risk (services accessible from internet), requires VPN or IP whitelisting.
-
-**Solution**: Use PrivateLink to expose services privately to partner VPCs.
-
-**Cost Impact**: VPC Endpoint costs $7.30/month but eliminates security risk and VPN overhead.
-
-### 8. Not Monitoring TGW Bandwidth Utilization
-
-**Problem**: TGW has 50 Gbps per AZ limit (bursts to 100 Gbps). Saturation causes packet drops.
-
-**Impact**: Degraded performance, packet loss, application errors.
-
-**Solution**: Monitor `BytesIn` and `BytesOut` in CloudWatch, set alarms for >40 Gbps per AZ.
-
-**Cost Impact**: Packet loss during saturation degrades user experience.
-
-### 9. Using TGW for Simple 2-VPC Connectivity
-
-**Problem**: Using TGW when simple VPC Peering would work.
-
-**Cost**:
-- TGW: 2 attachments × $36.50/month = $73/month + $0.02/GB
-- VPC Peering: Free + $0.01/GB
-
-**Solution**: Use VPC Peering for <5 VPCs with simple connectivity.
-
-**Cost Impact**: Wasted $73/month.
-
-### 10. Not Using TGW Network Manager for Visibility
-
-**Problem**: Managing TGW manually without centralized visibility into global network.
-
-**Solution**: Enable TGW Network Manager for topology visualization, CloudWatch metrics, and monitoring.
-
-**Cost**: Free (included with TGW).
-
-**Benefit**: Centralized visibility, faster troubleshooting, network insights.
+---
 
 ## Key Takeaways
 
-**AWS PrivateLink**:
-- Use for private service exposure to hundreds/thousands of consumer VPCs
-- Scales better than VPC Peering (no 125 peering limit)
-- Fine-grained access control per service (not entire VPC)
-- $0.01 per endpoint-hour + $0.01 per GB processed
-- Perfect for SaaS providers, shared services, partner integration
-
-**AWS Transit Gateway**:
-- Use for >10 VPCs requiring full mesh connectivity
-- Hub-and-spoke reduces connections from N² to N
-- Supports transitive routing (VPC A → TGW → VPC B → TGW → VPC C)
-- Centralized routing and network inspection
-- $0.05 per attachment-hour + $0.02 per GB processed
-
-**Cost Optimization**:
-- Use Gateway Endpoints for S3/DynamoDB (free vs. $7.30/month for Interface Endpoints)
-- VPC Peering cheaper for <5 VPCs with low data transfer
-- PrivateLink cheaper than TGW for specific service access (not full VPC connectivity)
-- Monitor data processing costs (often exceed attachment costs)
-
-**Architecture Patterns**:
-- **Shared Services**: PrivateLink for specific services, TGW for full VPC access
-- **Multi-VPC (>10)**: Transit Gateway with custom route tables for isolation
-- **SaaS Delivery**: PrivateLink (scales to thousands of customers)
-- **Multi-Region**: TGW Peering for inter-region connectivity
-
-**Best Practices**:
-- Enable TGW route propagation (automatic route management)
-- Use custom TGW route tables to isolate production from dev/test
-- Use Gateway Endpoints for S3/DynamoDB (free)
-- Monitor TGW bandwidth utilization (50 Gbps per AZ limit)
-- Use PrivateLink for services exposed to many consumers
-
-**When NOT to Use**:
-- **PrivateLink**: Simple 2-VPC connectivity (use VPC Peering instead)
-- **Transit Gateway**: <5 VPCs with simple requirements (use VPC Peering)
-- **VPC Peering**: >10 VPCs full mesh, need transitive routing (use TGW)
+1. **Peering and Transit Gateway connect networks, and PrivateLink and Lattice connect services.** Decide which kind of connection is needed before comparing costs.
+2. **Give every VPC gateway endpoints for S3 and DynamoDB.** They are free and take that traffic off the NAT gateway.
+3. **PrivateLink is one-way, exposes one service, and tolerates overlapping CIDRs,** which makes it the default for offering services to other accounts and customers.
+4. **Transit Gateway segments come from route table association and propagation.** Turn off the defaults and design segments before attaching anything.
+5. **Transit Gateway's per-GB charge applies on every pass.** Peering stays cheaper for a few VPCs with heavy traffic between them.
+6. **VPC Lattice gives service-to-service calls names, routing, and IAM authorization across accounts,** without any routes between the networks.

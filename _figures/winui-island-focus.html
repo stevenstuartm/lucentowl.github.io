@@ -1,0 +1,69 @@
+---
+title: "Focus Crossing a XAML Island"
+kind: flow
+system: winui
+summary: "Where an island sits inside a host window, and how Tab crosses its edge."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="wif-title wif-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wif-title">How keyboard focus crosses the boundary of a WinUI XAML island</title>
+<desc id="wif-desc">A large box is the host window, built with WPF, WinForms, or Win32. On its left are two host controls, a name text box above and a Save button below. On its right, a dashed box is the island: a DesktopWindowXamlSource whose DesktopChildSiteBridge child window sits inside the host window, positioned by MoveAndResize. Inside the island is the WinUI content, a SettingsPanel with a first WinUI control at the top and a last WinUI control at the bottom. An arrow runs from the name text box to the first WinUI control, labeled Tab into the island, where the host calls NavigateFocus with First. A second arrow runs from the last WinUI control back to the Save button, labeled Tab past the island's last control, where the island raises TakeFocusRequested and the host moves focus on. A note says Shift+Tab reverses both paths, with NavigateFocus using Last.</desc>
+<defs>
+<marker id="wif-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.wif-host { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.wif-isl { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; stroke-dasharray: 6 4; }
+.wif-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wif-wui { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wif-flow { stroke: var(--color-accent, #C0392B); stroke-width: 2; fill: none; }
+.wif-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wif-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wif-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wif-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wif-a { font-size: 11px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wif-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="wif-host" x="24" y="24" width="852" height="370" rx="6"/>
+<text class="wif-hd" x="44" y="50">HOST WINDOW: WPF, WINFORMS, OR WIN32</text>
+
+<rect class="wif-box" x="44" y="100" width="200" height="48" rx="4"/>
+<text class="wif-t" x="60" y="121">Name text box</text>
+<text class="wif-k" x="60" y="138">host control</text>
+
+<rect class="wif-box" x="44" y="290" width="200" height="48" rx="4"/>
+<text class="wif-t" x="60" y="311">Save button</text>
+<text class="wif-k" x="60" y="328">host control</text>
+
+<rect class="wif-isl" x="470" y="72" width="386" height="296" rx="6"/>
+<text class="wif-n" x="490" y="96">DesktopWindowXamlSource</text>
+<text class="wif-k" x="490" y="113">the island: a DesktopChildSiteBridge child window,</text>
+<text class="wif-k" x="490" y="128">placed with SiteBridge.MoveAndResize</text>
+
+<rect class="wif-wui" x="490" y="146" width="346" height="204" rx="4"/>
+<text class="wif-k" x="506" y="168">WinUI content (SettingsPanel)</text>
+
+<rect class="wif-box" x="506" y="180" width="314" height="44" rx="3"/>
+<text class="wif-t" x="522" y="207">First WinUI control</text>
+
+<rect class="wif-box" x="506" y="290" width="314" height="44" rx="3"/>
+<text class="wif-t" x="522" y="317">Last WinUI control</text>
+
+<text class="wif-k" x="522" y="262">… other controls</text>
+
+<path class="wif-flow" d="M244,124 L380,124 L380,202 L504,202" marker-end="url(#wif-arrow)"/>
+<text class="wif-a" x="262" y="112">Tab in</text>
+<text class="wif-k" x="262" y="176">host calls</text>
+<text class="wif-k" x="262" y="190">NavigateFocus(First)</text>
+
+<line class="wif-flow" x1="506" y1="312" x2="246" y2="312" marker-end="url(#wif-arrow)"/>
+<text class="wif-a" x="262" y="248">Tab out</text>
+<text class="wif-k" x="262" y="266">island raises TakeFocusRequested,</text>
+<text class="wif-k" x="262" y="280">host focuses its next control</text>
+
+<line class="wif-flow" x1="44" y1="430" x2="84" y2="430" marker-end="url(#wif-arrow)"/>
+<text class="wif-lg" x="94" y="434">keyboard focus crossing the island's edge. Shift+Tab reverses both paths, with NavigateFocus(Last)</text>
+</g>
+</svg>

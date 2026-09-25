@@ -1,0 +1,87 @@
+---
+title: "Load Balancer Nodes and Target Groups in Two Tiers"
+kind: deployment
+system: aws
+summary: "An internet-facing and an internal load balancer, with nodes and targets per AZ."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" role="img" aria-labelledby="awse-title awse-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awse-title">An internet-facing load balancer and an internal load balancer, each with a node in two Availability Zones</title>
+<desc id="awse-desc">Clients resolve the internet-facing load balancer's DNS name and receive the IP addresses of its two nodes, one in a public subnet in each of two Availability Zones. Each node's listener applies its rules and forwards to the web target group, whose instances sit in private subnets in both zones. The web instances call an internal load balancer, whose nodes have private addresses in each zone, and it forwards to the service target group in private subnets in both zones.</desc>
+<style>
+.awse-vpc { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awse-az { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awse-grp { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.awse-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awse-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awse-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awse-g { font-size: 11px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.awse-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awse-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awse-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awse-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awse-box" x="290" y="12" width="140" height="36" rx="6"/>
+<text class="awse-n" x="360" y="35" text-anchor="middle">Clients</text>
+<text class="awse-lab" x="446" y="34">DNS name resolves to both nodes</text>
+
+<rect class="awse-vpc" x="20" y="84" width="680" height="404" rx="10"/>
+<text class="awse-vt" x="34" y="104">VPC</text>
+
+<rect class="awse-az" x="40" y="112" width="310" height="364" rx="8"/>
+<text class="awse-t" x="54" y="130">Availability Zone a</text>
+<rect class="awse-az" x="370" y="112" width="310" height="364" rx="8"/>
+<text class="awse-t" x="384" y="130">Availability Zone b</text>
+
+<rect class="awse-grp" x="56" y="140" width="608" height="66" rx="6"/>
+<text class="awse-g" x="66" y="156">Internet-facing load balancer</text>
+<rect class="awse-box" x="130" y="164" width="140" height="34" rx="6"/>
+<text class="awse-n" x="200" y="186" text-anchor="middle">Node</text>
+<rect class="awse-box" x="460" y="164" width="140" height="34" rx="6"/>
+<text class="awse-n" x="530" y="186" text-anchor="middle">Node</text>
+
+<rect class="awse-grp" x="56" y="236" width="608" height="66" rx="6"/>
+<text class="awse-g" x="66" y="252">Web target group</text>
+<rect class="awse-box" x="130" y="260" width="140" height="34" rx="6"/>
+<text class="awse-n" x="200" y="282" text-anchor="middle">Web instance</text>
+<rect class="awse-box" x="460" y="260" width="140" height="34" rx="6"/>
+<text class="awse-n" x="530" y="282" text-anchor="middle">Web instance</text>
+
+<rect class="awse-grp" x="56" y="322" width="608" height="66" rx="6"/>
+<text class="awse-g" x="66" y="338">Internal load balancer</text>
+<rect class="awse-box" x="130" y="346" width="140" height="34" rx="6"/>
+<text class="awse-n" x="200" y="368" text-anchor="middle">Node</text>
+<rect class="awse-box" x="460" y="346" width="140" height="34" rx="6"/>
+<text class="awse-n" x="530" y="368" text-anchor="middle">Node</text>
+
+<rect class="awse-grp" x="56" y="400" width="608" height="66" rx="6"/>
+<text class="awse-g" x="66" y="416">Service target group</text>
+<rect class="awse-box" x="130" y="424" width="140" height="34" rx="6"/>
+<text class="awse-n" x="200" y="446" text-anchor="middle">Service instance</text>
+<rect class="awse-box" x="460" y="424" width="140" height="34" rx="6"/>
+<text class="awse-n" x="530" y="446" text-anchor="middle">Service instance</text>
+
+<path class="awse-flow" d="M330,48 L230,162" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M390,48 L500,162" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M200,198 L200,258" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M530,198 L530,258" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M200,294 L200,344" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M530,294 L530,344" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M200,380 L200,422" marker-end="url(#awse-a)"/>
+<path class="awse-flow" d="M530,380 L530,422" marker-end="url(#awse-a)"/>
+
+<text class="awse-t" x="716" y="168">Public subnets</text>
+<text class="awse-lab" x="716" y="184">public node addresses;</text>
+<text class="awse-lab" x="716" y="198">listener rules choose</text>
+<text class="awse-lab" x="716" y="212">the target group</text>
+<text class="awse-t" x="716" y="274">Private subnets</text>
+<text class="awse-lab" x="716" y="290">reached by private IP</text>
+<text class="awse-t" x="716" y="360">Private subnets</text>
+<text class="awse-lab" x="716" y="376">private node addresses</text>
+<text class="awse-t" x="716" y="438">Private subnets</text>
+<text class="awse-lab" x="716" y="454">reached by private IP</text>
+</g>
+</svg>

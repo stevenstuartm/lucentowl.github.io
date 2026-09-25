@@ -1,0 +1,104 @@
+---
+title: "How One Key Press Is Processed"
+kind: flow
+system: winui
+summary: "The steps a key press passes through, from PreviewKeyDown up the tree."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="wkr-title wkr-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wkr-title">The order in which WinUI processes a key press</title>
+<desc id="wkr-desc">A column of rows shows the steps a key press passes through, top to bottom. First, PreviewKeyDown is raised, starting at the focused element. Next comes the focused element, a TextBox, where three steps run left to right: its keyboard accelerators, its OnKeyDown override, then its KeyDown event. The key then bubbles to the parent, a Grid, which runs the same three steps, and then to the root, a Page, which runs them again. A branch to the right of the root row shows that if the key is still unhandled, WinUI looks for unscoped accelerators elsewhere in the window, meaning accelerators with no ScopeOwner. Below the root, CharacterReceived delivers the typed character for text input. A panel on the right says that setting Handled to true at any step stops everything below it, and that an accelerator that fires marks KeyDown handled.</desc>
+<defs>
+<marker id="wkr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-primary, #1A5F8A)"/>
+</marker>
+</defs>
+<style>
+.wkr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wkr-lvl { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wkr-stepbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wkr-panel { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #C0392B); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wkr-step { stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wkr-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wkr-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wkr-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wkr-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wkr-a { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wkr-p { font-size: 12px; fill: var(--color-text, #1A202C); }
+.wkr-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wkr-hd" x="40" y="36">ONE KEY PRESS, TOP TO BOTTOM</text>
+
+<rect class="wkr-box" x="40" y="56" width="560" height="48" rx="4"/>
+<text class="wkr-n" x="56" y="77">PreviewKeyDown</text>
+<text class="wkr-k" x="56" y="94">raised first, starting at the focused element</text>
+
+<line class="wkr-step" x1="320" y1="104" x2="320" y2="128" marker-end="url(#wkr-arrow)"/>
+
+<rect class="wkr-lvl" x="40" y="130" width="560" height="64" rx="4"/>
+<text class="wkr-n" x="56" y="158">TextBox</text>
+<text class="wkr-k" x="56" y="175">has focus</text>
+<rect class="wkr-stepbox" x="210" y="142" width="116" height="40" rx="3"/>
+<text class="wkr-t" x="224" y="167">Accelerators</text>
+<line class="wkr-step" x1="326" y1="162" x2="344" y2="162" marker-end="url(#wkr-arrow)"/>
+<rect class="wkr-stepbox" x="346" y="142" width="116" height="40" rx="3"/>
+<text class="wkr-t" x="360" y="167">OnKeyDown</text>
+<line class="wkr-step" x1="462" y1="162" x2="480" y2="162" marker-end="url(#wkr-arrow)"/>
+<rect class="wkr-stepbox" x="482" y="142" width="104" height="40" rx="3"/>
+<text class="wkr-t" x="496" y="167">KeyDown</text>
+
+<line class="wkr-step" x1="320" y1="194" x2="320" y2="218" marker-end="url(#wkr-arrow)"/>
+<text class="wkr-k" x="332" y="211">bubbles to the parent</text>
+
+<rect class="wkr-lvl" x="40" y="220" width="560" height="64" rx="4"/>
+<text class="wkr-n" x="56" y="248">Grid</text>
+<text class="wkr-k" x="56" y="265">its parent</text>
+<rect class="wkr-stepbox" x="210" y="232" width="116" height="40" rx="3"/>
+<text class="wkr-t" x="224" y="257">Accelerators</text>
+<line class="wkr-step" x1="326" y1="252" x2="344" y2="252" marker-end="url(#wkr-arrow)"/>
+<rect class="wkr-stepbox" x="346" y="232" width="116" height="40" rx="3"/>
+<text class="wkr-t" x="360" y="257">OnKeyDown</text>
+<line class="wkr-step" x1="462" y1="252" x2="480" y2="252" marker-end="url(#wkr-arrow)"/>
+<rect class="wkr-stepbox" x="482" y="232" width="104" height="40" rx="3"/>
+<text class="wkr-t" x="496" y="257">KeyDown</text>
+
+<line class="wkr-step" x1="320" y1="284" x2="320" y2="308" marker-end="url(#wkr-arrow)"/>
+<text class="wkr-k" x="332" y="301">bubbles to the root</text>
+
+<rect class="wkr-lvl" x="40" y="310" width="560" height="64" rx="4"/>
+<text class="wkr-n" x="56" y="338">Page</text>
+<text class="wkr-k" x="56" y="355">the root</text>
+<rect class="wkr-stepbox" x="210" y="322" width="116" height="40" rx="3"/>
+<text class="wkr-t" x="224" y="347">Accelerators</text>
+<line class="wkr-step" x1="326" y1="342" x2="344" y2="342" marker-end="url(#wkr-arrow)"/>
+<rect class="wkr-stepbox" x="346" y="322" width="116" height="40" rx="3"/>
+<text class="wkr-t" x="360" y="347">OnKeyDown</text>
+<line class="wkr-step" x1="462" y1="342" x2="480" y2="342" marker-end="url(#wkr-arrow)"/>
+<rect class="wkr-stepbox" x="482" y="322" width="104" height="40" rx="3"/>
+<text class="wkr-t" x="496" y="347">KeyDown</text>
+
+<line class="wkr-step" x1="600" y1="342" x2="638" y2="342" marker-end="url(#wkr-arrow)"/>
+
+<rect class="wkr-box" x="640" y="310" width="230" height="64" rx="4"/>
+<text class="wkr-n" x="656" y="333">Unscoped accelerators</text>
+<text class="wkr-k" x="656" y="350">elsewhere in the window,</text>
+<text class="wkr-k" x="656" y="365">any with no ScopeOwner</text>
+
+<line class="wkr-step" x1="320" y1="374" x2="320" y2="398" marker-end="url(#wkr-arrow)"/>
+
+<rect class="wkr-box" x="40" y="400" width="560" height="48" rx="4"/>
+<text class="wkr-n" x="56" y="421">CharacterReceived</text>
+<text class="wkr-k" x="56" y="438">the typed character, for text input</text>
+
+<rect class="wkr-panel" x="640" y="130" width="230" height="154" rx="6"/>
+<text class="wkr-a" x="658" y="158">Handled = true</text>
+<text class="wkr-p" x="658" y="182">at any step stops</text>
+<text class="wkr-p" x="658" y="200">everything below it.</text>
+<text class="wkr-p" x="658" y="232">An accelerator that fires</text>
+<text class="wkr-p" x="658" y="250">marks KeyDown handled,</text>
+<text class="wkr-p" x="658" y="268">so no KeyDown runs after it.</text>
+
+<line class="wkr-step" x1="40" y1="492" x2="80" y2="492" marker-end="url(#wkr-arrow)"/>
+<text class="wkr-lg" x="90" y="496">next step, reached only while the key is still unhandled</text>
+</g>
+</svg>

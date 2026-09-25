@@ -3,182 +3,195 @@ title: "Authentication and Authorization"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Security & Resilience"
-description: "Comprehensive guide to authentication schemes, authorization policies, and securing ASP.NET Core API endpoints using JWT, OAuth, Identity, and custom handlers."
-tags: [asp-net-core, authentication, authorization, jwt, oauth, security, identity]
+description: "How ASP.NET Core authenticates API callers and authorizes them: schemes and handlers, where 401 and 403 come from, JWT bearer validation and claim mapping, Identity and its API endpoints, API keys, client certificates, combining schemes, authorization policies and handlers, resource-based authorization, the fallback policy, and refresh and revocation for tokens you issue."
+tags: [practical, authentication, authorization, jwt-bearer, authorization-policies, claims, api-keys]
 ---
 
-## Securing API Endpoints
+Authentication establishes who is calling. Authorization decides what that caller may do. ASP.NET Core keeps the two in separate middleware with a clear handoff, and most confusion about the security pipeline, including the classic "why am I getting 401 instead of 403," comes from not knowing where one stops and the other starts.
 
-ASP.NET Core provides a flexible authentication and authorization pipeline that works seamlessly with APIs. Understanding how authentication schemes, handlers, claims, and authorization policies interact enables you to build secure APIs that support multiple authentication methods, from JWT bearer tokens to API keys to passkeys. This guide covers the full spectrum from fundamental concepts to advanced patterns like resource-based authorization and token refresh strategies.
-
-## Authentication Fundamentals
-
-Authentication in ASP.NET Core revolves around three core concepts: schemes, handlers, and the claims-based identity model. When a request arrives at your API, the authentication middleware determines which handler should process it, the handler validates credentials and constructs a ClaimsPrincipal representing the authenticated user, and subsequent authorization middleware uses that ClaimsPrincipal to enforce access policies.
+## How Authentication Works
 
 ### Schemes and Handlers
 
-An authentication scheme is a named configuration that tells ASP.NET Core how to authenticate requests. Common schemes include "Bearer" for JWT tokens, "Cookies" for cookie-based authentication, and custom schemes like "ApiKey" for API key validation. Each scheme is backed by an authentication handler that implements the actual validation logic.
+An *authentication scheme* is a named registration of an *authentication handler*, the code that reads a credential from the request and validates it. `AddJwtBearer` registers a handler for bearer tokens under the scheme name `Bearer`, `AddCookie` one for cookies under `Cookies`, and a custom handler can be registered under any name, such as `ApiKey`.
 
-When you register an authentication handler, you assign it a scheme name. The authentication middleware uses that name to select the appropriate handler based on the request context. For example, if a request contains an Authorization header with a Bearer token, the JWT bearer handler processes it. If the request contains an API key header, a custom handler validates that key.
+```csharp
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options => { /* ... */ });
+```
 
-Multiple schemes can coexist in a single application. This is common in APIs that support both user authentication via JWT and service-to-service authentication via API keys. The authentication middleware can be configured to try multiple schemes in sequence or select a scheme based on request characteristics.
+The name passed to `AddAuthentication` is the *default scheme*, the one the authentication middleware runs on every request. Since .NET 7, an app that registers exactly one scheme gets it as the default without naming it. Other schemes run only when something asks for them, such as an authorization *policy*, a named set of rules an endpoint must satisfy, covered under Authorization below.
 
-### ClaimsPrincipal and ClaimsIdentity
+### The Middleware Never Rejects
 
-When authentication succeeds, the handler constructs a ClaimsPrincipal object representing the authenticated user or service. The ClaimsPrincipal contains one or more ClaimsIdentity objects, each containing a collection of claims. Claims are key-value pairs that describe attributes of the identity, such as the user's name, email, role, or permissions.
+The authentication middleware runs the default scheme's handler and sets `HttpContext.User` to the resulting *principal*, the object that represents the caller and their claims. A request with no credential, or with an invalid one, isn't rejected. It continues with an anonymous user. Rejection belongs to authorization, which runs after routing has selected an endpoint and evaluates that endpoint's policies.
 
-The structure separates identity from attributes. The ClaimsIdentity represents who the user is and how they authenticated (the authentication scheme). The individual claims represent what the application knows about that user. This separation enables flexible authorization logic that queries claims rather than relying on fixed identity properties.
+- **Policies satisfied.** The endpoint runs.
+- **The user isn't authenticated.** Authorization calls *Challenge* on the scheme. A bearer handler answers with `401 Unauthorized` and a `WWW-Authenticate` header, and a cookie handler redirects to its login page.
+- **The user is authenticated, but a policy fails.** Authorization calls *Forbid*. A bearer handler answers `403 Forbidden`, and a cookie handler redirects to its access-denied page.
 
-A typical ClaimsPrincipal for a JWT bearer token might include claims like subject (sub), email, roles, and custom application claims such as tenant ID or feature flags. Authorization policies can query these claims to make fine-grained access decisions without coupling authorization logic to specific authentication schemes.
+{% include figure.html id="asp-auth-challenge-forbid" %}
+
+An expired token therefore produces a 401 in two steps. The authentication handler records the failure and leaves the user anonymous, and authorization, finding an anonymous user on a protected endpoint, issues the challenge. A valid token without the right role produces a 403. A client can fix a 401 by getting new credentials, and can't fix a 403 by re-authenticating. Since .NET 10, cookie authentication returns 401 and 403 status codes instead of redirects for requests to known API endpoints, which include `[ApiController]` actions, minimal APIs that read or write JSON, `TypedResults` endpoints, and SignalR hubs. An API that shares an app with Razor Pages no longer answers its callers with an HTML login page.
+
+`WebApplication` adds the authentication and authorization middleware automatically when their services are registered. Calling `UseAuthentication` and `UseAuthorization` explicitly is needed only to control their position, such as placing them after CORS.
+
+### Claims and the Principal
+
+A successful handler produces a `ClaimsPrincipal`, which holds one or more `ClaimsIdentity` objects, each a set of *claims*: typed name-value pairs such as a subject ID, an email, a role, or a tenant. Authorization reads claims, so it never depends on which scheme produced them.
+
+The JWT bearer handler renames some claims on the way in. With `MapInboundClaims` at its default of `true`, a token's `sub` claim appears as `ClaimTypes.NameIdentifier` (`http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier`), and `role` as `ClaimTypes.Role`. Code that looks for `"sub"` then finds nothing. Setting `MapInboundClaims = false` keeps the token's own claim names, which is usually the clearer choice for new APIs, and `TokenValidationParameters.RoleClaimType` then tells role checks which claim to read.
 
 ### Claims Transformation
 
-Sometimes the claims provided by an authentication handler don't match the claims your authorization logic expects. Claims transformation allows you to modify or augment the ClaimsPrincipal after authentication but before authorization. This is useful for adding claims based on database lookups, mapping external claims to internal roles, or enriching the identity with application-specific data.
+`IClaimsTransformation` adjusts the principal after authentication, for example to add permissions loaded from a database or to map an identity provider's groups to application roles. It runs every time the principal is authenticated, which can be more than once per request, so it has to be idempotent: check whether its claims are already present before adding them, and cache any lookup it makes.
 
-Implementing claims transformation involves creating a class that implements IClaimsTransformation and registering it with dependency injection. The framework invokes the transformation after authentication completes, giving you an opportunity to add, remove, or modify claims before authorization policies evaluate them.
+```csharp
+public class PermissionClaims(IPermissionStore store) : IClaimsTransformation
+{
+    public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+    {
+        if (principal.HasClaim(c => c.Type == "permission") ||
+            principal.FindFirst("sub")?.Value is not { } userId)   // with MapInboundClaims = false
+        {
+            return principal;
+        }
 
-Common scenarios for claims transformation include loading user permissions from a database and adding them as claims, mapping external identity provider roles to application-specific roles, and adding tenant or organization context claims based on the authenticated user.
+        var identity = new ClaimsIdentity();
+        foreach (var permission in await store.GetPermissionsAsync(userId))
+        {
+            identity.AddClaim(new Claim("permission", permission));
+        }
+        principal.AddIdentity(identity);
+        return principal;
+    }
+}
+```
+
+It is registered like any service, `builder.Services.AddTransient<IClaimsTransformation, PermissionClaims>()`.
 
 ## JWT Bearer Authentication
 
-JWT bearer authentication is the most common authentication mechanism for modern APIs. The client includes a JSON Web Token in the Authorization header, the API validates the token's signature and claims, and the handler constructs a ClaimsPrincipal from the token's payload.
+Most APIs receive access tokens issued by an identity provider, as JSON Web Tokens (JWTs) in the `Authorization: Bearer` header. How the client obtained the token, through the authorization code flow with PKCE (a one-time secret that stops an intercepted sign-in code from being redeemed by anyone else), a client-credentials grant, or another OAuth 2.0 flow, is the provider's and the client's business. The API's job is to validate the token and read its claims.
 
-### Token Validation
-
-Token validation ensures that the JWT was issued by a trusted authority, hasn't been tampered with, and is still valid. ASP.NET Core's JWT bearer handler validates the signature, issuer, audience, and expiration claims automatically when properly configured.
-
-The handler requires several configuration values to validate tokens correctly. The issuer identifies the authority that issued the token, typically your identity provider's URL. The audience identifies the intended recipient of the token, usually your API's identifier. The signing key or public key allows the handler to verify the token's signature and confirm its integrity.
-
-Signature validation is critical for security. With symmetric keys, both the token issuer and the API share the same secret key, and the API uses that key to verify the signature. With asymmetric keys, the issuer signs tokens with a private key and publishes the corresponding public key, and the API retrieves the public key from the issuer's well-known endpoint and uses it to verify signatures. Asymmetric keys are strongly preferred for production scenarios because the API never possesses the private signing key, eliminating the risk of key compromise.
-
-The handler validates several standard JWT claims automatically. The expiration claim (exp) ensures the token hasn't expired. The not-before claim (nbf) ensures the token isn't used before its designated start time. The issuer claim (iss) ensures the token came from the expected authority. The audience claim (aud) ensures the token was intended for your API. If any of these validations fail, the handler rejects the request with a 401 Unauthorized response.
-
-### Configuring JWT Authentication
-
-Registering JWT bearer authentication involves configuring the TokenValidationParameters that control how tokens are validated. These parameters specify the issuer, audience, signing key, and validation options.
+The simplest correct configuration names the provider and the API's identifier:
 
 ```csharp
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
-        };
+        options.Authority = "https://login.example.com/tenant-id/v2.0";
+        options.Audience = "api://orders";
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters.NameClaimType = "name";
+        options.TokenValidationParameters.RoleClaimType = "role";
     });
 ```
 
-This configuration validates all critical aspects of the token. In production, consider using asymmetric keys and retrieving the signing key from an OpenID Connect metadata endpoint rather than storing it in configuration.
+With claim mapping off, the last two lines tell ASP.NET Core which claims hold the user's name and roles. Without them, `User.Identity.Name` is null and every `[Authorize(Roles = ...)]` check fails.
 
-### Error Handling
+`Authority` points the handler at the provider's OpenID Connect discovery document, from which it downloads the issuer name and the provider's public signing keys, and refreshes them when the provider rotates its keys. The handler then validates, by default:
 
-When token validation fails, the JWT bearer handler returns a 401 Unauthorized response. The response includes a WWW-Authenticate header describing why authentication failed. Common failure reasons include missing tokens, expired tokens, invalid signatures, and incorrect issuer or audience claims.
+- **The signature**, against the provider's public keys, so the token wasn't forged or altered.
+- **The issuer (`iss`)**, so the token came from this provider.
+- **The audience (`aud`)**, so the token was issued for this API and not for another one that happens to trust the same provider.
+- **The lifetime (`exp`, `nbf`)**, with a default clock skew of five minutes.
 
-Distinguishing between authentication failures and authorization failures helps clients understand why their requests were rejected. A 401 response means the client didn't provide valid credentials or the credentials were invalid. A 403 response means the client authenticated successfully but lacks permission to access the requested resource. Returning the correct status code improves the API's usability and helps clients diagnose issues.
+An API validates *access tokens*. The *ID token* that OpenID Connect also issues describes the sign-in to the client app, and an API that accepts ID tokens as credentials accepts tokens that were never meant for it.
 
-## OAuth 2.0 and OpenID Connect
+Setting `TokenValidationParameters` with a `SymmetricSecurityKey` instead of an `Authority` is for the case where the app issues its own tokens. Every service that validates such a token then holds the key that can also sign one, which is why tokens from a provider, signed with a private key the API never sees, are the usual choice.
 
-OAuth 2.0 is an authorization framework that enables third-party applications to obtain limited access to protected resources. OpenID Connect builds on OAuth 2.0 to add an authentication layer, allowing clients to verify the identity of the user and obtain basic profile information.
+An API that calls another API on the user's behalf needs a token issued for that downstream API, obtained from the provider through a delegation grant. Forwarding the incoming token instead fails the downstream audience check, as it should.
 
-### Understanding the Protocols
+## Where Users and Tokens Come From
 
-OAuth 2.0 defines several grant types that describe how clients obtain access tokens. The authorization code flow is the most secure option for web applications with a backend. The client redirects the user to the authorization server, the user authenticates and grants consent, the authorization server redirects back to the client with an authorization code, and the client exchanges the code for an access token. This flow keeps the access token server-side and never exposes it to the browser.
+### An External Identity Provider
 
-OpenID Connect extends OAuth 2.0 by adding an ID token alongside the access token. The ID token is a JWT that contains claims about the authenticated user, such as their subject identifier, name, and email. The API can validate the ID token to verify the user's identity without calling the authorization server.
+An API with users usually delegates sign-in to an identity provider, whether a hosted one such as Microsoft Entra ID or a self-hosted OpenID Connect server such as Duende IdentityServer or OpenIddict. The provider handles passwords, multi-factor authentication, account recovery, and token issuance, and the API only validates tokens as above. A server-rendered web app that signs users in through the provider uses the OpenID Connect handler (`AddOpenIdConnect`). Its `ResponseType` defaults to an ID-token-only response, so the app sets `ResponseType = "code"` to use the authorization code flow, and PKCE then applies by default.
 
-Proof Key for Code Exchange (PKCE) is a security extension that protects the authorization code flow from interception attacks. The client generates a random code verifier, hashes it to create a code challenge, and sends the challenge with the authorization request. When exchanging the authorization code for tokens, the client proves possession of the original verifier. This prevents attackers from using stolen authorization codes. ASP.NET Core's OpenID Connect handler supports PKCE and enables it by default.
+### ASP.NET Core Identity
 
-### Integration Patterns
+ASP.NET Core Identity is a user store and sign-in library for apps that manage their own accounts. It stores users through Entity Framework Core by default, hashes passwords with PBKDF2 using HMAC-SHA512 and 100,000 iterations (the defaults since .NET 7), and supports two-factor authentication through authenticator apps and email or SMS codes. It can lock out an account after repeated failures, but only for sign-in calls that pass `lockoutOnFailure: true`. `MapIdentityApi`'s login does, and the Blazor template's login page doesn't.
 
-Integrating OAuth 2.0 and OpenID Connect with your API depends on your architecture. For APIs that authenticate users directly, the API acts as a client to the authorization server and validates access tokens on incoming requests. For APIs that delegate authentication to a frontend application, the frontend handles the OAuth flow and sends access tokens to the API, which validates them using JWT bearer authentication.
+`AddIdentityApiEndpoints<TUser>()` registers Identity with a cookie scheme and a bearer-token scheme, and `MapIdentityApi<TUser>()` exposes it as API endpoints for registration, login, refresh, two-factor setup, and account management, for single-page apps and mobile clients that belong to the same app. Login can issue either a cookie or a bearer token.
 
-When your API needs to call other protected APIs on behalf of the user, it must obtain access tokens for those APIs. This typically involves the on-behalf-of flow, where your API exchanges the user's access token for a new token scoped to the downstream API. The authorization server validates the original token and issues a new one with the appropriate audience.
+- **Browser clients should use the cookie.** The browser sends it automatically and never exposes it to JavaScript.
+- **The tokens aren't JWTs.** They are an opaque format specific to Identity, meant for first-party clients that can't use cookies. Identity's endpoints are deliberately not a token server for other APIs or third-party clients. An app that needs one needs an OpenID Connect server.
 
-### Identity Providers
+.NET 10 adds passkeys (WebAuthn) to Identity. A passkey is a key pair created by the user's device or security key, with the public half stored by the app, and it replaces the password as a primary sign-in method rather than acting as a second factor. The implementation doesn't validate attestation, the authenticator's proof of which device model created the key, by default. Only the Blazor Web App template includes passkeys, so another kind of app wires them up through `SignInManager`, Identity's sign-in service, following the template's pages.
 
-Several identity providers support OAuth 2.0 and OpenID Connect and integrate well with ASP.NET Core. Microsoft Entra ID (formerly Azure Active Directory) provides enterprise identity management with support for organizational accounts and guest users. Auth0 offers a developer-friendly identity platform with extensive customization options. Duende IdentityServer and OpenIddict are open-source solutions you can host yourself, giving you complete control over the authentication experience.
+## Other Credentials
 
-Each provider has different capabilities and configuration requirements. Microsoft Entra ID excels at enterprise scenarios with Active Directory integration and conditional access policies. Auth0 provides a hosted solution with extensive social login options and flexible user management. Duende IdentityServer and OpenIddict offer maximum flexibility and control but require more operational effort. Choosing a provider depends on your security requirements, operational preferences, and whether you need features like multi-tenancy or federated identity.
+### API Keys
 
-## ASP.NET Core Identity
-
-ASP.NET Core Identity is a membership system that provides user management, password hashing, role management, and authentication services. While Identity includes UI components for login and registration, this guide focuses on its role in API authentication.
-
-### User Management
-
-Identity manages users, passwords, and profile data using a store abstraction. The default implementation uses Entity Framework Core to persist data in a relational database, but you can implement custom stores for other data systems. The UserManager class provides methods for creating users, validating passwords, and managing user properties.
-
-Password security is built into Identity. Passwords are hashed using PBKDF2 with HMAC-SHA256 by default, and the hashing configuration can be customized to adjust iteration counts or switch algorithms. Identity enforces password complexity requirements and supports features like account lockout after failed login attempts.
-
-Two-factor authentication is supported through pluggable token providers. Users can enable two-factor authentication using authenticator apps, email codes, or SMS codes. When two-factor authentication is enabled, the login flow requires both the password and a second factor to complete authentication.
-
-### API Authentication with Identity
-
-Using Identity for API authentication typically involves generating JWT tokens after successful login. The API exposes endpoints for registration and login, validates credentials using Identity's UserManager, and issues JWT tokens to authenticated clients. The client includes the token in subsequent requests, and the API validates it using JWT bearer authentication.
-
-Identity's API endpoints provide a streamlined way to expose authentication functionality without building custom controllers. These endpoints support registration, login, two-factor authentication, and account management. They return tokens that clients can use for authenticated requests.
-
-The relationship between Identity and authentication schemes is complementary. Identity manages user accounts and validates credentials. Authentication schemes validate tokens or other credentials on incoming requests. After Identity authenticates a user, you issue a token and the client uses that token with the JWT bearer scheme for subsequent requests.
-
-### Passkey Support
-
-Starting with .NET 10, ASP.NET Core Identity includes built-in support for passkey authentication using WebAuthn and FIDO2 standards. Passkeys allow users to authenticate using biometrics, security keys, or device-based credentials without passwords. This improves security by eliminating password-related vulnerabilities like phishing and credential stuffing.
-
-Passkey support integrates seamlessly with Identity's user management. Users can register passkeys as an authentication method on their accounts, and they can create new accounts without passwords by registering a passkey during account creation. The implementation supports common WebAuthn scenarios but is deliberately scoped to authentication rather than providing a general-purpose WebAuthn library.
-
-The passkey implementation currently appears only in the Blazor Web App template. For APIs that need passkey authentication, you can reference the template's implementation or use community libraries like fido2-net-lib or WebAuthn.Net that provide comprehensive WebAuthn protocol support.
-
-## API Key Authentication
-
-API keys provide a simple authentication mechanism for service-to-service communication or developer access to APIs. An API key is a secret token that identifies the calling application or service. The client includes the key in a header, query parameter, or other agreed-upon location, and the API validates the key against a trusted store.
-
-### Implementation Patterns
-
-Implementing API key authentication involves creating a custom authentication handler that extracts the key from the request, validates it against a store of valid keys, and constructs a ClaimsPrincipal if validation succeeds. The handler extends AuthenticationHandler and overrides the HandleAuthenticateAsync method to perform validation logic.
-
-API keys can be transmitted in several ways. Headers are the most secure option and are commonly used for production APIs. The client includes the key in a custom header like X-API-Key. Query parameters are less secure because URLs are often logged, but they are convenient for testing and development. Authorization headers using a custom scheme like ApiKey provide a standards-based alternative to custom headers.
-
-Storing and validating keys securely is critical. Keys should be hashed in the database using the same approach as passwords, so that compromised database backups don't expose valid keys. When a request arrives, the API hashes the provided key and compares it to stored hashes. This prevents key exposure even if the database is compromised.
-
-### Multiple Authentication Schemes
-
-APIs often need to support multiple authentication methods simultaneously. A public API might accept both JWT bearer tokens for user requests and API keys for service requests. ASP.NET Core supports multiple authentication schemes by registering multiple handlers and selecting the appropriate handler based on request characteristics.
-
-The authentication middleware can be configured with a default scheme and additional named schemes. When an endpoint requires authentication but doesn't specify a scheme, the default scheme is used. Endpoints can specify a specific scheme using authorization attributes or RequireAuthorization with a policy that specifies the scheme.
-
-Composite authentication is another pattern where multiple schemes are evaluated in sequence until one succeeds. This allows fallback behavior, such as trying JWT bearer authentication first and falling back to API key authentication if no bearer token is present. Implementing this requires a custom handler that delegates to other handlers based on request content.
-
-## Certificate-Based Authentication
-
-Certificate-based authentication uses client certificates to verify identity, providing stronger assurance than password-based authentication. The client presents a certificate during TLS handshake, and the server validates the certificate against trusted issuers.
-
-ASP.NET Core certificate authentication middleware processes client certificates forwarded from the TLS layer or reverse proxy. The middleware validates certificates and creates an authenticated principal based on certificate properties.
+An API key identifies a calling application, not a user, and suits service-to-service calls and developer access to a public API. A custom handler, deriving from `AuthenticationHandler<TOptions>`, reads the key from a header, looks it up, and builds a principal for the caller:
 
 ```csharp
-builder.Services.AddAuthentication(
-    CertificateAuthenticationDefaults.AuthenticationScheme)
+public class ApiKeyHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder,
+    IApiKeyStore keys) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if (!Request.Headers.TryGetValue("X-Api-Key", out var provided))
+        {
+            return AuthenticateResult.NoResult();   // no key: let other schemes try
+        }
+
+        var client = await keys.FindByKeyHashAsync(Hash(provided.ToString()));
+        if (client is null)
+        {
+            return AuthenticateResult.Fail("Invalid API key");
+        }
+
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, client.Id), new Claim("client_name", client.Name)],
+            Scheme.Name);
+        return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
+    }
+
+    private static string Hash(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+}
+```
+
+```csharp
+builder.Services.AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyHandler>("ApiKey", null);
+```
+
+The store keeps a hash of each key rather than the key, so a leaked database doesn't leak working keys. A key is long and random, unlike a password, so a fast hash such as SHA-256 is enough. Keys belong in a header, not the query string, which servers and proxies log.
+
+### Client Certificates
+
+Certificate authentication identifies the caller by the client certificate presented during the TLS handshake, and is common between services, often as mutual TLS. Kestrel has to ask for the certificate, and the `Microsoft.AspNetCore.Authentication.Certificate` handler validates it and turns it into a principal:
+
+```csharp
+builder.WebHost.ConfigureKestrel(kestrel =>
+    kestrel.ConfigureHttpsDefaults(https =>
+    {
+        https.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+        https.AllowAnyClientCertificate();   // let the handler below make the decision
+    }));
+
+builder.Services.AddAuthentication(CertificateAuthenticationDefaults.AuthenticationScheme)
     .AddCertificate(options =>
     {
-        options.AllowedCertificateTypes = CertificateTypes.All;
         options.Events = new CertificateAuthenticationEvents
         {
             OnCertificateValidated = context =>
             {
-                var claims = new[]
+                var allowed = context.HttpContext.RequestServices.GetRequiredService<IAllowedClients>();
+                if (!allowed.Contains(context.ClientCertificate.Thumbprint))
                 {
-                    new Claim(ClaimTypes.Name,
-                        context.ClientCertificate.Subject,
-                        ClaimValueTypes.String)
-                };
-                context.Principal = new ClaimsPrincipal(
-                    new ClaimsIdentity(claims, context.Scheme.Name));
+                    context.Fail("Unknown client certificate");
+                    return Task.CompletedTask;
+                }
+
+                context.Principal = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, context.ClientCertificate.Subject)],
+                    context.Scheme.Name));
                 context.Success();
                 return Task.CompletedTask;
             }
@@ -186,155 +199,139 @@ builder.Services.AddAuthentication(
     });
 ```
 
-Certificate validation includes checking the certificate chain, verifying it was issued by a trusted authority, and confirming it has not expired or been revoked. Custom validation logic can enforce additional requirements like checking certificate thumbprints or subject names against an allowlist.
+Without `AllowAnyClientCertificate`, Kestrel itself rejects any certificate the machine doesn't trust during the TLS handshake, so a certificate from a private certificate authority never reaches the handler.
 
-Mutual TLS (mTLS) requires both client and server to present certificates, providing bidirectional authentication. Service-to-service communication often uses mTLS to ensure both parties are authenticated and communication is encrypted.
+The handler's defaults are strict. It accepts only *chained* certificates (`AllowedCertificateTypes = Chained`), ones signed by a certificate authority, requires that chain to end at a root the machine trusts, and checks revocation online. `ChainTrustValidationMode = CustomRootTrust` with a `CustomTrustStore` trusts a private authority instead. Setting `CertificateTypes.All` also admits self-signed certificates, which anyone can create, so it is safe only with a check like the one above that pins the specific certificates allowed. A valid chain proves only that some trusted authority issued the certificate, which is why `OnCertificateValidated` should still check which client it is.
 
-When running behind a reverse proxy like IIS or Azure App Service, certificates are validated at the proxy layer and forwarded to the application. The application must trust the forwarded certificate header and configure middleware to accept certificates from the proxy.
+Behind a proxy that terminates TLS, the certificate arrives in a request header instead. `AddCertificateForwarding` and `UseCertificateForwarding` read it from that header before authentication runs. Azure App Service forwards the certificate but doesn't validate it, so the app's handler is still the only check. Validation is expensive, and `AddCertificateCache` caches results, as long as the validation logic depends only on the certificate.
 
-## Authorization Fundamentals
+### Combining Schemes
 
-Authorization determines what an authenticated user is allowed to do. ASP.NET Core provides several authorization models ranging from simple role checks to complex policy-based authorization with custom handlers.
-
-### Role-Based Authorization
-
-Role-based authorization is the simplest model. Users are assigned to roles like Admin, User, or Manager, and endpoints require membership in specific roles. The Authorize attribute and RequireAuthorization method accept role parameters that specify which roles are allowed.
-
-Roles are represented as claims with the claim type Role. When a user authenticates, the authentication handler includes role claims in the ClaimsPrincipal, and the authorization middleware checks whether the user has the required role claims. Multiple roles can be specified, and the user must have at least one of the specified roles to access the resource.
-
-Role-based authorization works well for coarse-grained access control where permissions align with organizational roles. It breaks down when you need fine-grained permissions that don't map cleanly to roles or when permissions are dynamic and configured at runtime rather than compile time.
-
-### Claims-Based Authorization
-
-Claims-based authorization makes access decisions based on arbitrary claims rather than predefined roles. Any claim can serve as the basis for authorization, such as email domain, subscription level, or account status. This provides more flexibility than role-based authorization and enables dynamic permission models.
-
-Policies define the requirements that a user's claims must satisfy. A policy might require a specific claim type, a claim with a specific value, or multiple claims that satisfy complex logic. Policies are registered during application startup and referenced by name in authorization attributes or RequireAuthorization calls.
-
-A common pattern is to map roles to permissions and store permissions as claims. When a user authenticates, claims transformation loads their permissions from a database and adds them as claims. Authorization policies check for the presence of permission claims rather than role claims. This decouples authorization logic from role definitions and allows permissions to change without code changes.
-
-### Policy-Based Authorization
-
-Policy-based authorization generalizes claims-based authorization to support arbitrary requirements. A policy consists of one or more requirements, and each requirement has one or more handlers that evaluate whether the user satisfies the requirement. If all requirements are satisfied, authorization succeeds.
-
-Requirements are classes that implement IAuthorizationRequirement, which is a marker interface with no methods. Requirements define what must be true for authorization to succeed, but they don't implement the logic. Handlers implement IAuthorizationHandler and contain the actual authorization logic. This separation allows multiple handlers to evaluate the same requirement in different ways or for different contexts.
-
-Registering policies involves configuring the authorization options during application startup. Each policy has a name and a set of requirements. Authorization attributes and RequireAuthorization calls reference policies by name, and the authorization middleware evaluates the policy's requirements when a request targets a protected endpoint.
+An API can accept several credentials. An authorization policy or attribute that names schemes runs those schemes for its endpoints *instead of* the default. The principal from the default scheme is discarded for that endpoint, and `User` holds only what the named schemes produced:
 
 ```csharp
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy("ServiceOrUser", policy => policy
+        .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, "ApiKey")
+        .RequireAuthenticatedUser());
+});
+```
+
+Naming schemes in a policy suits endpoints that accept a fixed set of credentials. When the choice depends on the request itself, a *policy scheme* forwards to another scheme based on the request, and serves as the default:
+
+```csharp
+builder.Services.AddAuthentication("Smart")
+    .AddPolicyScheme("Smart", "Bearer or API key", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+            context.Request.Headers.ContainsKey("X-Api-Key") ? "ApiKey" : JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options => { /* ... */ })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyHandler>("ApiKey", null);
+```
+
+## Authorization
+
+### Roles, Claims, and Policies
+
+The simplest check is a role, and roles are claims of the role claim type.
+
+- `[Authorize(Roles = "Admin,Support")]` passes users in *either* role.
+- Two `[Authorize]` attributes on the same endpoint must *both* pass.
+
+Roles fit coarse, organizational access. Finer checks go in named policies, which combine requirements:
+
+```csharp
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("OrdersWrite", policy => policy
+        .RequireAuthenticatedUser()
+        .RequireClaim("permission", "orders:write"));
+
     options.AddPolicy("AtLeast21", policy =>
         policy.Requirements.Add(new MinimumAgeRequirement(21)));
 });
 ```
 
-This policy defines a requirement that the user must be at least 21 years old. The corresponding handler extracts the user's birthdate from their claims and calculates their age to determine if the requirement is satisfied.
+`RequireClaim`, `RequireRole`, and `RequireAssertion` cover checks that only read the principal. Anything that needs logic or services, such as a database lookup, becomes a *requirement* with a *handler*. The permission-claim style above, filled in by claims transformation, lets an API change who may do what without changing role definitions in code.
 
-## Custom Authorization Handlers
+### Requirements and Handlers
 
-Custom authorization handlers enable complex authorization logic that goes beyond simple claim checks. Handlers can query databases, call external services, or implement business logic to determine whether access should be granted.
-
-### Implementing IAuthorizationHandler
-
-An authorization handler implements IAuthorizationHandler or extends AuthorizationHandler with a generic requirement type. The handler's HandleAsync method receives an AuthorizationHandlerContext containing the user's ClaimsPrincipal, the resource being accessed, and the requirements being evaluated. The handler evaluates the requirement and calls context.Succeed if the user satisfies it.
-
-Multiple handlers can evaluate the same requirement. If any handler calls Succeed, the requirement is satisfied. If any handler calls Fail, authorization fails immediately regardless of other handlers. If no handler calls Succeed or Fail, the requirement is not satisfied and authorization fails by default.
-
-Handlers are registered with dependency injection using any service lifetime. Transient handlers are created for each authorization check, scoped handlers are created per request, and singleton handlers are shared across the application. The choice depends on whether the handler needs to access request-scoped services like database contexts.
+A requirement is a class implementing the marker interface `IAuthorizationRequirement`, holding the policy's parameters. A handler evaluates it:
 
 ```csharp
-public class MinimumAgeHandler : AuthorizationHandler<MinimumAgeRequirement>
+public record MinimumAgeRequirement(int MinimumAge) : IAuthorizationRequirement;
+
+public class MinimumAgeHandler(TimeProvider clock) : AuthorizationHandler<MinimumAgeRequirement>
 {
     protected override Task HandleRequirementAsync(
-        AuthorizationHandlerContext context,
-        MinimumAgeRequirement requirement)
+        AuthorizationHandlerContext context, MinimumAgeRequirement requirement)
     {
-        var birthDateClaim = context.User.FindFirst(c => c.Type == "birthdate");
-        if (birthDateClaim == null)
-            return Task.CompletedTask;
-
-        var birthDate = DateTime.Parse(birthDateClaim.Value);
-        var age = DateTime.Today.Year - birthDate.Year;
-        if (birthDate.Date > DateTime.Today.AddYears(-age)) age--;
-
-        if (age >= requirement.MinimumAge)
-            context.Succeed(requirement);
-
+        if (context.User.FindFirst("birthdate")?.Value is { } value &&
+            DateOnly.TryParse(value, CultureInfo.InvariantCulture, out var birthDate))
+        {
+            var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+            var age = today.Year - birthDate.Year - (today < birthDate.AddYears(today.Year - birthDate.Year) ? 1 : 0);
+            if (age >= requirement.MinimumAge)
+            {
+                context.Succeed(requirement);
+            }
+        }
         return Task.CompletedTask;
     }
 }
+
+builder.Services.AddSingleton<IAuthorizationHandler, MinimumAgeHandler>();
 ```
 
-This handler extracts the birthdate claim, calculates the user's age, and succeeds if the age meets the requirement. Handlers that don't call Succeed implicitly fail the requirement.
+The evaluation rules are easy to get wrong.
+
+- **A requirement passes when at least one handler calls `Succeed` for it, and a policy passes when all its requirements pass.** A handler that does nothing leaves the requirement unmet rather than failing it, so several handlers can offer alternative ways to satisfy one requirement.
+- **`Fail` vetoes.** Once any handler calls `context.Fail()`, the policy fails, whatever the others do. The remaining handlers still run by default (`InvokeHandlersAfterFailure` is `true`), so a handler can't assume an earlier one has already decided.
+- **Handlers are ordinary services.** A handler that needs a `DbContext` is registered as scoped, and one without dependencies on request state can be a singleton.
 
 ### Resource-Based Authorization
 
-Resource-based authorization makes decisions based on the specific resource being accessed, not just the user's identity and claims. This is necessary when authorization depends on resource ownership, state, or other properties that vary per resource.
-
-The pattern involves deferring authorization until the resource is loaded. Instead of applying authorization at the endpoint level, the handler loads the resource, then invokes the authorization service programmatically, passing both the user and the resource. The authorization handler receives the resource through the context and uses its properties to make the authorization decision.
+Some decisions depend on the resource: a user may edit only their own documents, or only documents in a draft state. The resource isn't known when the endpoint's attributes are evaluated, so the endpoint loads it and calls `IAuthorizationService` itself, passing the resource to the policy's handlers:
 
 ```csharp
-public async Task<IActionResult> Edit(int documentId)
+app.MapPut("/documents/{id:int}", async (
+    int id, DocumentUpdate update, ClaimsPrincipal user,
+    IDocumentStore store, IAuthorizationService authorization) =>
 {
-    var document = await _repository.GetDocumentAsync(documentId);
-    if (document == null)
-        return NotFound();
+    var document = await store.FindAsync(id);
+    if (document is null) return Results.NotFound();
 
-    var authResult = await _authorizationService.AuthorizeAsync(
-        User, document, "EditPolicy");
+    var result = await authorization.AuthorizeAsync(user, document, "DocumentEdit");
+    if (!result.Succeeded)
+    {
+        return user.Identity?.IsAuthenticated == true ? Results.Forbid() : Results.Challenge();
+    }
 
-    if (!authResult.Succeeded)
-        return Forbid();
-
-    // Process the edit
-}
+    await store.UpdateAsync(document, update);
+    return Results.NoContent();
+}).RequireAuthorization();
 ```
 
-The authorization handler for the EditPolicy requirement receives the document object and checks whether the current user owns it or has elevated permissions to edit any document. This enables per-resource authorization rules that aren't possible with endpoint-level authorization.
+The handler derives from `AuthorizationHandler<TRequirement, TResource>` and receives the document, so it can compare the owner to the user's ID or check the document's state. Returning `Forbid` for a signed-in user and `Challenge` for an anonymous one keeps the 401 and 403 meanings intact. Some APIs return `404` instead of `403` for resources the caller may not see, so the response doesn't confirm that the resource exists.
 
-Resource-based authorization is common in multi-tenant applications, where users can only access resources within their tenant, in document management systems, where users can only modify their own documents or documents they've been granted access to, and in approval workflows, where authorization depends on the document's current state and the user's role in the workflow.
+### Applying Authorization to Endpoints
 
-## Authorization in Controllers and Minimal APIs
-
-Protecting endpoints requires applying authorization either through attributes in controller-based APIs or through extension methods in minimal APIs.
-
-### Controller-Based APIs
-
-In controller-based APIs, the Authorize attribute controls access to controllers and actions. Applying the attribute at the controller level requires authorization for all actions in that controller. Applying it at the action level requires authorization only for that action. The AllowAnonymous attribute overrides controller-level authorization to permit unauthenticated access to specific actions.
-
-The Authorize attribute accepts parameters that specify required roles, policies, or authentication schemes. Multiple attributes can be combined to require multiple conditions, such as requiring both a specific role and a specific policy. All specified requirements must be satisfied for authorization to succeed.
+Controllers and actions take `[Authorize]`, with a policy, roles, or schemes. Minimal API endpoints and route groups take `.RequireAuthorization(...)`, and applying it to a group covers every endpoint in it. `[AllowAnonymous]` or `.AllowAnonymous()` exempts an endpoint and overrides every requirement above it.
 
 ```csharp
-[Authorize(Policy = "AtLeast21")]
-public class ProductsController : ControllerBase
-{
-    [AllowAnonymous]
-    public IActionResult Get() { }
-
-    [Authorize(Roles = "Admin")]
-    public IActionResult Delete(int id) { }
-}
+var orders = app.MapGroup("/orders").RequireAuthorization();
+orders.MapGet("/", ListOrders);
+orders.MapPost("/", CreateOrder).RequireAuthorization("OrdersWrite");   // group requirement AND this policy
 ```
 
-The Get action allows anonymous access despite the controller-level policy requirement. The Delete action requires both the AtLeast21 policy and the Admin role.
+Two policies decide what happens when an endpoint doesn't name one.
 
-### Minimal APIs
+- **The default policy** applies to `[Authorize]` or `.RequireAuthorization()` with no arguments. Out of the box it requires an authenticated user.
+- **The fallback policy** applies to endpoints with no authorization metadata at all. It is `null` by default, which leaves such endpoints open.
 
-Minimal APIs use the RequireAuthorization extension method to apply authorization to route handlers. The method accepts the same parameters as the Authorize attribute, including policy names, roles, and authentication schemes.
-
-```csharp
-app.MapGet("/products", GetProducts).RequireAuthorization();
-app.MapDelete("/products/{id}", DeleteProduct)
-    .RequireAuthorization("AdminPolicy");
-```
-
-The first endpoint requires authentication but no specific policy. The second endpoint requires the AdminPolicy policy. The AllowAnonymous method permits unauthenticated access to specific endpoints, overriding global authorization requirements.
-
-### Global Authorization
-
-Requiring authentication by default for all endpoints and explicitly marking public endpoints as anonymous is a secure-by-default approach. This is achieved using a fallback authorization policy.
-
-The fallback policy applies when an endpoint has no explicit authorization metadata, meaning no Authorize attribute, no RequireAuthorization call, and no AllowAnonymous marker. By setting a fallback policy that requires authenticated users, all endpoints are protected by default unless explicitly marked as anonymous.
+Setting the fallback policy makes the app secure by default. An endpoint someone forgot to protect then requires authentication rather than being public, and public endpoints opt out explicitly:
 
 ```csharp
 builder.Services.AddAuthorization(options =>
@@ -343,62 +340,27 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+
+app.MapGet("/health", () => "ok").AllowAnonymous();
 ```
 
-With this configuration, forgetting to add authorization to an endpoint results in requiring authentication rather than accidentally exposing the endpoint publicly. This reduces the risk of authorization bugs.
+The fallback policy also covers static files served as endpoints by `MapStaticAssets`, so an app that serves public assets that way marks them anonymous too.
 
-The DefaultPolicy serves a different purpose. It defines the policy used when an endpoint specifies authorization without naming a specific policy. For example, RequireAuthorization() without parameters uses the DefaultPolicy. The FallbackPolicy is used when no authorization is specified at all.
+## Refresh and Revocation for Tokens You Issue
 
-## Handling 401 and 403 Responses
+An API that validates tokens from an external provider leaves refresh and revocation to the provider. The provider issues short-lived access tokens with refresh tokens, and the API only has to reject expired tokens, which it does by default. The rest of this section applies to an app that issues its own tokens.
 
-Distinguishing between 401 Unauthorized and 403 Forbidden responses helps clients understand why their requests were rejected and how to fix them.
+Access tokens stay short-lived, minutes rather than hours, because a JWT is valid until it expires and anyone holding it can use it. A refresh token lasts longer and is exchanged at a refresh endpoint for a new access token. Refresh tokens are stored server-side as hashes, like API keys, and *rotated*: each use issues a new refresh token and invalidates the old one. A second use of an already-rotated refresh token means one copy was stolen, and the issuer should then revoke every token in that session.
 
-A 401 response indicates an authentication failure. The client either didn't provide credentials, provided invalid credentials, or the credentials have expired. The response should include a WWW-Authenticate header describing the expected authentication scheme and any additional information about why authentication failed. Clients should respond by obtaining new credentials, such as refreshing an expired token or prompting the user to log in again.
+Revoking an access token before it expires needs state the token itself doesn't carry. The usual approach is a denylist of token IDs (the `jti` claim), checked on each request, whose entries can be dropped once the token would have expired anyway. That check costs a lookup per request, so many APIs accept the short lifetime as their revocation window and revoke only refresh tokens, which ends a session within minutes.
 
-A 403 response indicates an authorization failure. The client authenticated successfully, and the API knows who they are, but they don't have permission to access the requested resource. This might mean they lack a required role, don't satisfy a policy requirement, or aren't the owner of the resource. Clients cannot fix this by re-authenticating because the problem is insufficient permissions, not invalid credentials.
+## Key Takeaways
 
-The order of middleware in the pipeline determines which status code is returned. The authentication middleware runs first and returns 401 if authentication fails. If authentication succeeds but authorization fails, the authorization middleware returns 403. This ensures that unauthenticated requests receive 401 and authenticated but unauthorized requests receive 403.
-
-Custom error handling middleware can intercept these responses to add detailed error messages or transform the response format. Be cautious about revealing too much information in error responses, particularly for 403 responses, because describing why authorization failed might expose information about the system's authorization model or the existence of resources that the user shouldn't know about.
-
-## Token Refresh and Revocation
-
-Access tokens should be short-lived to limit the damage if they're stolen. Refresh tokens allow clients to obtain new access tokens without requiring the user to authenticate again. This balances security and usability by keeping access tokens short-lived while avoiding frequent authentication prompts.
-
-### Refresh Token Patterns
-
-The typical flow involves the client authenticating and receiving both an access token and a refresh token. The access token is short-lived, often 5 to 15 minutes, while the refresh token is long-lived, lasting days or weeks. When the access token expires, the client sends the refresh token to a refresh endpoint, which validates the refresh token and issues a new access token and optionally a new refresh token.
-
-Refresh tokens must be stored securely because they grant long-term access. They should be stored server-side in a database, hashed similar to passwords. When a client presents a refresh token, the API hashes it and checks for a matching hash in the database. This prevents stolen database backups from revealing valid refresh tokens.
-
-Token rotation improves security by issuing a new refresh token each time the old one is used and immediately revoking the old token. This limits the window of opportunity for an attacker who steals a refresh token. If a revoked refresh token is used, it indicates potential token theft, and the API can revoke all tokens for that user and require re-authentication.
-
-### Revocation Strategies
-
-Revocation allows the API to invalidate tokens before their expiration time. This is necessary when a user logs out, when a user's account is disabled or deleted, when suspicious activity is detected, or when a token is known to be compromised.
-
-Since access tokens are self-contained JWTs validated without contacting a central authority, revocation requires maintaining a blacklist of invalidated tokens or using a token introspection endpoint. The blacklist stores token identifiers (jti claims) for revoked tokens. On each request, the API checks whether the token's jti is on the blacklist and rejects the request if it is. Tokens automatically fall off the blacklist when they expire naturally.
-
-Refresh tokens are easier to revoke because they're stored server-side. Revoking a refresh token involves deleting its database entry. When a client tries to use a revoked refresh token, the API finds no matching entry and rejects the request. This prevents the client from obtaining new access tokens, and existing access tokens expire quickly due to their short lifetime.
-
-The trade-off with blacklists is the added latency and complexity of checking the blacklist on every request. For high-security scenarios, this is acceptable. For performance-sensitive scenarios, consider shorter access token lifetimes and rely on natural expiration rather than revocation.
-
-## Red Flags and Common Pitfalls
-
-Several mistakes undermine API security or create maintenance burdens. Watch for these patterns.
-
-Long-lived access tokens reduce security. If an access token is valid for hours or days, an attacker who steals it has a long window to exploit it. Keep access tokens short-lived, ideally 5 to 15 minutes, and use refresh tokens for long-term access.
-
-Storing secrets in code or configuration files creates security risks. Use environment variables, secret management services, or configuration providers that retrieve secrets at runtime rather than embedding them in source code or configuration files that might be committed to version control.
-
-Ignoring token validation parameters allows invalid tokens to pass through. Always validate the issuer, audience, signature, and expiration claims. Disabling validation to fix issues during development often leads to accidentally deploying insecure configurations to production.
-
-Using symmetric keys for JWT signing in distributed systems is problematic because every instance of the API must possess the signing key, increasing the risk of key compromise. Use asymmetric keys where the API validates tokens using the public key and only the token issuer possesses the private key.
-
-Failing to distinguish between authentication and authorization leads to confused error handling and unclear authorization logic. Always authenticate first to establish identity, then authorize to enforce access control. Return 401 for authentication failures and 403 for authorization failures.
-
-Implementing custom authentication or cryptography is risky. Use the framework's built-in authentication handlers and token validation whenever possible. When custom logic is necessary, extend the framework's abstractions rather than replacing them entirely. Never implement your own password hashing, token signing, or encryption algorithms.
-
-Exposing detailed error messages in production reveals information about the system's internal workings and authorization model. Log detailed errors for debugging but return generic error messages to clients. For example, return "Access denied" rather than "User lacks Admin role required for this endpoint."
-
-Not protecting against token replay attacks in high-security scenarios creates vulnerabilities. For APIs that require replay protection, use short-lived tokens, implement one-time token usage (revoking tokens after first use), or use additional security mechanisms like signed requests or proof-of-possession tokens.
+- Authentication sets `HttpContext.User` and never rejects. Authorization challenges anonymous callers (401 for bearer) and forbids authenticated ones that fail a policy (403).
+- Configure JWT bearer with `Authority` and `Audience` so signing keys come from the provider's metadata, and set `MapInboundClaims = false` to keep claim names such as `sub` intact.
+- APIs validate access tokens, never ID tokens.
+- Identity's API endpoints issue cookies or proprietary tokens for first-party clients, not JWTs for other APIs. Passkeys ship in .NET 10 through the Blazor Web App template.
+- Store API keys and refresh tokens hashed, and pin allowed client certificates rather than trusting any valid chain.
+- Put permission checks in named policies, and resource checks in handlers invoked through `IAuthorizationService`.
+- `Fail` vetoes a policy, but the other handlers still run.
+- Set a fallback policy so endpoints are protected unless they explicitly opt out.

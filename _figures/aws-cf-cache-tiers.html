@@ -1,0 +1,73 @@
+---
+title: "CloudFront Cache Tiers on a Miss"
+kind: flow
+system: aws
+summary: "Edge locations, regional edge caches, and Origin Shield collapsing misses toward one origin."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 400" role="img" aria-labelledby="awsc-title awsc-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsc-title">How CloudFront's cache tiers funnel cache misses toward the origin</title>
+<desc id="awsc-desc">Viewers in three places each reach their nearest edge location. On a miss, two of the edge locations ask the same regional edge cache and the third asks another. On a miss there, both regional edge caches ask Origin Shield, an optional cache layer in one Region near the origin, so as few as one request per object reaches the origin. CloudFront Functions run at the edge locations, and Lambda@Edge functions run at the regional edge caches, with origin triggers moving to the Origin Shield Region when it is on. Writes and dynamic requests skip the cache tiers and go from the edge location straight to the origin.</desc>
+<style>
+.awsc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsc-opt { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.awsc-col { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.awsc-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsc-h { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsc-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsc-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsc-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awsc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsc-col" x="170" y="20" width="170" height="300" rx="8"/>
+<rect class="awsc-col" x="390" y="20" width="180" height="300" rx="8"/>
+
+<text class="awsc-h" x="75" y="42" text-anchor="middle">Viewers</text>
+<text class="awsc-h" x="255" y="42" text-anchor="middle">Edge locations</text>
+<text class="awsc-h" x="480" y="42" text-anchor="middle">Regional edge caches</text>
+<text class="awsc-h" x="690" y="42" text-anchor="middle">Origin Shield</text>
+<text class="awsc-h" x="850" y="42" text-anchor="middle">Origin</text>
+
+<rect class="awsc-box" x="20" y="64" width="110" height="44" rx="6"/><text class="awsc-n" x="75" y="91" text-anchor="middle">Viewer</text>
+<rect class="awsc-box" x="20" y="154" width="110" height="44" rx="6"/><text class="awsc-n" x="75" y="181" text-anchor="middle">Viewer</text>
+<rect class="awsc-box" x="20" y="244" width="110" height="44" rx="6"/><text class="awsc-n" x="75" y="271" text-anchor="middle">Viewer</text>
+
+<rect class="awsc-box" x="185" y="64" width="140" height="44" rx="6"/><text class="awsc-n" x="255" y="91" text-anchor="middle">Edge location</text>
+<rect class="awsc-box" x="185" y="154" width="140" height="44" rx="6"/><text class="awsc-n" x="255" y="181" text-anchor="middle">Edge location</text>
+<rect class="awsc-box" x="185" y="244" width="140" height="44" rx="6"/><text class="awsc-n" x="255" y="271" text-anchor="middle">Edge location</text>
+
+<rect class="awsc-box" x="405" y="104" width="150" height="44" rx="6"/><text class="awsc-n" x="480" y="131" text-anchor="middle">Regional cache</text>
+<rect class="awsc-box" x="405" y="244" width="150" height="44" rx="6"/><text class="awsc-n" x="480" y="271" text-anchor="middle">Regional cache</text>
+
+<rect class="awsc-opt" x="620" y="170" width="140" height="50" rx="6"/>
+<text class="awsc-n" x="690" y="192" text-anchor="middle">Origin Shield</text>
+<text class="awsc-k" x="690" y="209" text-anchor="middle">[optional, one Region]</text>
+
+<rect class="awsc-box" x="800" y="170" width="100" height="50" rx="6"/>
+<text class="awsc-n" x="850" y="192" text-anchor="middle">Origin</text>
+<text class="awsc-k" x="850" y="209" text-anchor="middle">[S3, ALB, API]</text>
+
+<path class="awsc-flow" d="M130,86 L183,86" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M130,176 L183,176" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M130,266 L183,266" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M325,86 L403,120" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M325,176 L403,134" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M325,266 L403,266" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M555,126 L618,184" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M555,266 L618,208" marker-end="url(#awsc-a)"/>
+<path class="awsc-flow" d="M760,195 L798,195" marker-end="url(#awsc-a)"/>
+
+<text class="awsc-lab" x="255" y="308" text-anchor="middle">CloudFront Functions run here</text>
+<text class="awsc-lab" x="480" y="308" text-anchor="middle">Lambda@Edge runs here</text>
+<text class="awsc-lab" x="850" y="240" text-anchor="middle">As few as one</text>
+<text class="awsc-lab" x="850" y="256" text-anchor="middle">request per object</text>
+<text class="awsc-lab" x="690" y="240" text-anchor="middle">Lambda@Edge origin</text>
+<text class="awsc-lab" x="690" y="256" text-anchor="middle">triggers run here when on</text>
+
+<text class="awsc-lab" x="20" y="352">Arrows show a cacheable request missing and moving inward. Each tier answers from its own cache when it can, and only a miss goes further.</text>
+<text class="awsc-lab" x="20" y="370">Writes such as POST and PUT, and requests CloudFront treats as dynamic, go from the edge location straight to the origin.</text>
+</g>
+</svg>

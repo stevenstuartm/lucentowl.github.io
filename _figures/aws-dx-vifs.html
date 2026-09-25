@@ -1,0 +1,72 @@
+---
+title: "Direct Connect Virtual Interfaces"
+kind: deployment
+system: aws
+summary: "One Direct Connect connection carrying public, private, and transit virtual interfaces."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 420" role="img" aria-labelledby="awsx2-title awsx2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsx2-title">How one Direct Connect connection carries public, private, and transit virtual interfaces to different AWS destinations</title>
+<desc id="awsx2-desc">A customer router in a data center connects to an AWS router at a Direct Connect location over a cross-connect. That one connection carries several virtual interfaces. A public virtual interface reaches AWS public endpoints such as S3. A private virtual interface reaches a Direct Connect gateway, which connects to virtual private gateways on VPCs in any Region, or attaches directly to a single virtual private gateway. A transit virtual interface reaches a Direct Connect gateway associated with transit gateways, which connect many VPCs.</desc>
+<style>
+.awsx2-site { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsx2-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsx2-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsx2-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsx2-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsx2-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsx2-vif { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsx2-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsx2-fiber { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 4; }
+</style>
+<defs>
+<marker id="awsx2-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsx2-site" x="20" y="60" width="160" height="300" rx="10"/>
+<text class="awsx2-vt" x="34" y="82">Data center</text>
+<rect class="awsx2-box" x="35" y="180" width="130" height="60" rx="6"/>
+<text class="awsx2-n" x="100" y="206" text-anchor="middle">Customer</text>
+<text class="awsx2-n" x="100" y="222" text-anchor="middle">router</text>
+
+<rect class="awsx2-site" x="220" y="60" width="170" height="300" rx="10"/>
+<text class="awsx2-vt" x="234" y="82">Direct Connect</text>
+<text class="awsx2-vt" x="234" y="98">location</text>
+<rect class="awsx2-box" x="245" y="180" width="120" height="60" rx="6"/>
+<text class="awsx2-n" x="305" y="206" text-anchor="middle">AWS</text>
+<text class="awsx2-n" x="305" y="222" text-anchor="middle">router</text>
+
+<path class="awsx2-fiber" d="M165,210 L243,210"/>
+<text class="awsx2-lab" x="205" y="378" text-anchor="middle">thick line: provider circuit, then a cross-connect inside the facility</text>
+
+<rect class="awsx2-box" x="700" y="76" width="200" height="50" rx="6"/>
+<text class="awsx2-n" x="800" y="98" text-anchor="middle">AWS public endpoints</text>
+<text class="awsx2-k" x="800" y="115" text-anchor="middle">[S3, public service IPs]</text>
+
+<rect class="awsx2-box" x="470" y="186" width="160" height="50" rx="6"/>
+<text class="awsx2-n" x="550" y="208" text-anchor="middle">Direct Connect</text>
+<text class="awsx2-n" x="550" y="224" text-anchor="middle">gateway</text>
+<rect class="awsx2-box" x="700" y="186" width="200" height="50" rx="6"/>
+<text class="awsx2-n" x="800" y="208" text-anchor="middle">Virtual private gateways</text>
+<text class="awsx2-k" x="800" y="225" text-anchor="middle">[one VPC each, any Region]</text>
+<text class="awsx2-lab" x="470" y="258">A private VIF can also attach directly to one gateway.</text>
+
+<rect class="awsx2-box" x="470" y="296" width="160" height="50" rx="6"/>
+<text class="awsx2-n" x="550" y="318" text-anchor="middle">Direct Connect</text>
+<text class="awsx2-n" x="550" y="334" text-anchor="middle">gateway</text>
+<rect class="awsx2-box" x="700" y="296" width="200" height="50" rx="6"/>
+<text class="awsx2-n" x="800" y="318" text-anchor="middle">Transit gateways</text>
+<text class="awsx2-k" x="800" y="335" text-anchor="middle">[many VPCs each]</text>
+
+<path class="awsx2-flow" d="M365,195 L420,101 L698,101" marker-end="url(#awsx2-a)"/>
+<text class="awsx2-vif" x="440" y="92">public VIF</text>
+<path class="awsx2-flow" d="M365,211 L468,211" marker-end="url(#awsx2-a)"/>
+<text class="awsx2-vif" x="400" y="202">private VIF</text>
+<path class="awsx2-flow" d="M365,226 L420,321 L468,321" marker-end="url(#awsx2-a)"/>
+<text class="awsx2-vif" x="400" y="345">transit VIF</text>
+<path class="awsx2-flow" d="M630,211 L698,211" marker-end="url(#awsx2-a)"/>
+<path class="awsx2-flow" d="M630,321 L698,321" marker-end="url(#awsx2-a)"/>
+
+<text class="awsx2-lab" x="20" y="404">One physical connection carries many virtual interfaces. Each is a VLAN with its own BGP session, and each reaches a different kind of destination.</text>
+</g>
+</svg>

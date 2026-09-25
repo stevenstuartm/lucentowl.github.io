@@ -3,490 +3,202 @@ title: "AWS Route 53 for System Architects"
 layout: guide
 category: AWS
 subcategory: Networking & Content Delivery
-description: "Comprehensive guide to AWS Route 53 covering DNS routing policies, health checks, traffic management, failover strategies, cost optimization, and global traffic distribution"
-tags: [aws, route53, dns, routing-policies, health-checks, traffic-management, cost-optimization, fundamentals]
+description: "How Route 53 answers DNS queries for AWS workloads: public and private hosted zones, alias records, the eight routing policies, health checks and DNS failover, hybrid DNS through the VPC Resolver, and what drives the bill."
+tags: [route53, dns, routing-policies, health-checks, private-hosted-zones, hybrid-dns, fundamentals]
 ---
 
-## What Is Amazon Route 53?
+## What Route 53 Does
 
-Amazon Route 53 is a highly available and scalable Domain Name System (DNS) web service that translates domain names into IP addresses and routes end users to applications.
+Amazon Route 53 is AWS's DNS service. It does three separate jobs. It **registers domain names**, it serves as the **authoritative DNS** for domains whose records you keep in it, and it **checks the health** of endpoints so that its DNS answers can steer around failures. A domain can use any one of these without the others. A domain registered elsewhere can still host its DNS in Route 53, for example.
 
-**What Problems Route 53 Solves**:
-- **DNS reliability**: Traditional DNS vulnerable to outages; Route 53 provides 100% uptime SLA
-- **Global traffic distribution**: Manual traffic routing complex; Route 53 automates based on latency, geography, health
-- **Failover complexity**: Detecting and routing around failures requires monitoring; Route 53 health checks automate failover
-- **Multi-region applications**: Directing users to nearest region manually is impractical; Route 53 latency-based routing automates
-- **Traffic testing**: A/B testing and blue/green deployments require traffic splitting; Route 53 weighted routing enables controlled rollouts
+Two design facts shape everything else:
 
-**When to use Route 53**:
-- You need highly available DNS with 100% uptime SLA
-- You require automated failover for multi-region applications
-- You want to route users to the lowest-latency endpoint
-- You need geolocation-based content delivery
-- You want to implement blue/green deployments or A/B testing
+- **Route 53 is global.** Hosted zones and health checks aren't tied to a Region. Its DNS answers come from more than 200 points of presence (AWS edge sites around the world), and AWS offers a 100% availability SLA for its authoritative DNS in commercial Regions.
+- **Its control plane lives in us-east-1.** Creating or changing records and health checks goes through APIs hosted there, while answering queries and running health checks (the data plane) is distributed worldwide. The data plane is built to keep working when the control plane can't. A failover plan that depends on editing records during a Regional outage leans on the part designed to be less available. A plan built on health checks that are already configured only needs the data plane. Two features narrow the gap. **Accelerated recovery** (since November 2025, opt-in, no charge) targets restoring the ability to change public hosted zone records within 60 minutes if us-east-1 is impaired. Amazon Application Recovery Controller offers routing controls, switches that flip health checks on its own highly available data plane, for teams that need a manual failover lever.
+
+This guide assumes the DNS basics of record types, resolvers, and TTL caching, and covers what Route 53 adds on top.
+
+---
+
+## Hosted Zones and Records
+
+A **hosted zone** holds the records for one domain and its subdomains. There are two kinds:
+
+| | Public hosted zone | Private hosted zone |
+|---|---|---|
+| **Answers** | Queries from anywhere on the internet | Queries from VPCs associated with the zone |
+| **Typical use** | Websites, public APIs, mail | Internal service names such as `orders.internal.example.com` |
+| **Query charges** | Per million queries | None |
+| **Zone charge** | $0.50 a month each for the first 25, then $0.10 | Same |
+
+A private hosted zone can be associated with many VPCs, including VPCs in other accounts, and the VPCs need DNS resolution and DNS hostnames turned on. A private hosted zone is a global resource, so one zone can serve VPCs in any Region.
+
+When a private and a public zone have the same name, VPCs associated with the private zone see its records and everyone else sees the public ones. This **split-horizon** arrangement lets `api.example.com` resolve to a private address inside the VPC and a public one outside. There is no fallback between the two. A query from the VPC for a name the private zone lacks gets NXDOMAIN (no such name), even if the public zone has it, so a split-horizon private zone must repeat every public record the VPC also needs.
+
+### Alias Records
+
+An **alias record** is Route 53's extension to DNS for pointing a name at an AWS resource. It looks like an ordinary A or AAAA record to the client, but Route 53 fills in the resource's current addresses itself. Alias records can target load balancers, CloudFront distributions, API Gateway APIs, S3 website endpoints, Global Accelerator accelerators, VPC interface endpoints, and other records in the same hosted zone.
+
+Alias records solve three problems a CNAME can't:
+
+- **They work at the zone apex.** DNS forbids a CNAME on `example.com` itself, but an alias record there can point at a load balancer.
+- **Queries to AWS resources are free.** A CNAME query is billed, and a CNAME that points at another Route 53 record is billed as two queries.
+- **They follow the resource.** When a load balancer's addresses change as it scales, the alias record's answers change with it. The TTL comes from the resource and can't be set.
+
+An alias record can also **evaluate target health**. With that on, Route 53 treats the record as unhealthy when the target is, for example when a load balancer has no healthy targets, without a separate health check.
+
+### TTL and Failover
+
+Resolvers keep serving a cached answer until its TTL expires, however unhealthy the target has become, so the TTL on any record that fails over sets a floor on how fast clients move. Keep those records around 60 seconds, and let stable ones such as mail and verification entries use long TTLs, which cost fewer queries. Alias records to AWS resources take their TTL from the resource, which is short for load balancers.
+
+---
 
 ## Routing Policies
 
-Route 53 offers seven routing policies for different traffic management scenarios.
+A routing policy decides which answer Route 53 gives when a name has several records. Each record in the set carries the policy and, for most policies, an optional health check (covered below), and Route 53 leaves out records whose health check is failing.
 
-### Simple Routing
+| Policy | Chooses the answer by | Typical use |
+|---|---|---|
+| **Simple** | Always the same record, with all its values | One resource, no health checks |
+| **Weighted** | Weights from 0 to 255, in proportion | Shifting a share of traffic to a new stack, or to a Region with more capacity |
+| **Latency** | The AWS Region with the lowest measured latency from the user's network | Serving a multi-Region application from the fastest Region |
+| **Failover** | The primary record while its health check passes, otherwise the secondary | Active-passive disaster recovery |
+| **Geolocation** | The user's continent, country, or US state | Localized content, or keeping users in a jurisdiction |
+| **Geoproximity** | Distance between the user and each resource, adjusted by a bias | Nearest-resource routing, with traffic shifted between locations |
+| **IP-based** | The CIDR range the query's source falls in | Routing specific ISPs or networks, when their address ranges are known |
+| **Multivalue answer** | Up to eight healthy records, chosen at random | Spreading clients across servers, with unhealthy ones dropped |
 
-One-to-one mapping between domain and single resource.
+Every policy except IP-based is available in private hosted zones.
 
-**How It Works**:
-- Returns single resource (IP address, load balancer, CloudFront distribution)
-- No health checks
-- If multiple values specified, returns all values in random order (client chooses)
+### How Route 53 Knows Where a User Is
 
-**Use Cases**:
-- Single web server
-- Static websites
-- Applications without redundancy
+Latency, geolocation, and geoproximity routing all need the user's location, and Route 53 never sees the user. It sees the DNS resolver that queries on the user's behalf. When that resolver supports the EDNS0 client subnet extension, it passes along a truncated form of the user's address, and Route 53 uses that. Otherwise, Route 53 uses the resolver's address. A user whose resolver is far away, such as a public resolver in another country or a corporate resolver at headquarters, can be routed for the resolver's location rather than their own.
 
-**Example**:
-- `example.com` → `203.0.113.5`
+Latency routing chooses by measured latency between networks and AWS Regions, which AWS gathers over time, not by distance. The Region closest on a map isn't always the one chosen.
 
-### Weighted Routing
+### Geolocation Versus Geoproximity
 
-Distribute traffic across multiple resources in specified proportions.
+Both route by location, but they answer different questions. **Geolocation** maps where the user is to a record: users in Germany get the Frankfurt endpoint, for example. It routes by borders, which suits content licensing and data residency. A query from a location with no matching record gets no answer unless there is a **default** record, so always create one.
 
-**How It Works**:
-- Assign weight to each record (0-255)
-- Traffic percentage = Record weight / Sum of all weights
-- Can associate health checks (skip unhealthy resources)
+**Geoproximity** maps where the user is relative to your resources: each user goes to the nearest one. Each resource has a **bias** from -99 to 99 that grows or shrinks the area it serves, which shifts traffic between locations without redrawing a map. Since January 2024, geoproximity is available on ordinary records in public and private hosted zones. Before that, it required Traffic Flow, Route 53's visual policy editor, which charges $50 a month per policy record.
 
-**Use Cases**:
-- **A/B testing**: 90% production, 10% new version
-- **Blue/green deployments**: Gradually shift traffic from blue to green
-- **Load distribution**: Unequal capacity across regions (70% us-east-1, 30% eu-west-1)
+### Combining Policies
 
-**Example**:
-- Record A (weight 7): 70% traffic → us-east-1 load balancer
-- Record B (weight 3): 30% traffic → eu-west-1 load balancer
+Policies nest through alias records that point at other records in the same zone. A common layout uses latency routing at the top, with one record per Region, each an alias to a failover pair or to a weighted set inside that Region. With **evaluate target health** turned on at each alias, health passes upward. A failing endpoint drops out of its set, and a set with nothing healthy left makes the record above it unhealthy, so Route 53 answers from the next best branch.
 
-**Cost**: No additional charge beyond standard query fees.
+{% include figure.html id="aws-r53-policy-tree" %}
 
-### Latency-Based Routing
+---
 
-Route users to lowest-latency AWS Region.
+## Health Checks and DNS Failover
 
-**How It Works**:
-- Route 53 measures latency from user's location to each AWS Region
-- Returns resource in Region with lowest latency
-- Based on actual latency measurements, not geographic proximity
+### How a Health Check Decides
 
-**Use Cases**:
-- Multi-region applications prioritizing performance
-- Global user base with uneven distribution
-- Applications where speed matters more than data residency
+A Route 53 **endpoint health check** sends requests to an IP address or domain name every 30 seconds, or every 10 seconds for a fast check, from health checkers in locations around the world. Each checker applies its own pass rules:
 
-**Example**:
-- User in Tokyo → Routes to ap-northeast-1 (lowest latency)
-- User in London → Routes to eu-west-2 (lowest latency)
-- User in New York → Routes to us-east-1 (lowest latency)
+| Protocol | Passes when |
+|---|---|
+| **HTTP or HTTPS** | A TCP connection opens within four seconds, and a 2xx or 3xx status arrives within two seconds after that. HTTPS checks don't validate the certificate |
+| **HTTP or HTTPS with string matching** | As above, and the string appears in the first 5,120 bytes of the body |
+| **TCP** | A TCP connection opens within ten seconds |
 
-**Performance**: Typically reduces latency by 50-70% vs single-region deployment.
+A checker marks the endpoint unhealthy after a number of consecutive failures (the failure threshold, 3 by default). Route 53 then combines the checkers' views. The endpoint is healthy if **more than 18%** of checkers report it healthy. The low bar is deliberate. It keeps a network problem between the endpoint and a few checker locations from failing it, so a health check detects an endpoint that is down for nearly everyone, not one that is unreachable from some places.
 
-### Failover Routing
+Two other kinds of health check watch something other than an endpoint:
 
-Active-passive failover for high availability.
+- A **calculated health check** combines up to 255 child health checks and is healthy when a set number of them are, which expresses rules like "healthy if at least two of three Regions are."
+- A **CloudWatch alarm health check** follows an alarm's data, which is how to health-check a resource the checkers can't reach, such as anything in a private subnet or an internal load balancer. Route 53 health checkers run on the internet, so endpoint checks need public addresses.
 
-**How It Works**:
-- Define primary and secondary resources
-- Health check monitors primary resource
-- If primary fails, Route 53 automatically returns secondary
-- Failback when primary recovers
+### Failover Timing
 
-**Use Cases**:
-- **Disaster recovery**: Primary region (us-east-1) fails → Secondary region (us-west-2)
-- **Maintenance windows**: Direct traffic to secondary during primary maintenance
-- **Active-passive architecture**: Database read replicas, standby servers
+Failover takes longer than the health check interval alone suggests. The endpoint has to fail enough consecutive checks, then resolvers have to let the old answer expire:
 
-**Example**:
-- Primary: us-east-1 load balancer (health check: HTTPS on /health)
-- Secondary: us-west-2 load balancer (no health check)
-- Primary fails → Traffic routes to us-west-2
+| Health check | Time to mark unhealthy (threshold 3) | Plus |
+|---|---|---|
+| Standard (30 seconds) | About 90 seconds | The record's TTL |
+| Fast (10 seconds) | About 30 seconds | The record's TTL |
 
-**Failover Time**: 30-60 seconds (health check frequency + TTL)
+With a 60-second TTL, a fast health check moves most clients within one to two minutes. Some clients and resolvers cache longer than the TTL allows, so a small share of traffic can keep arriving at the failed endpoint after that.
 
-### Geolocation Routing
+### Active-Passive and Active-Active
 
-Route based on user's geographic location.
+With **failover routing**, the primary record carries a health check and the secondary serves only while the primary is unhealthy. That is **active-passive**. A secondary without a health check of its own is served whenever the primary fails, even if the secondary is down too, so give it one. The secondary sits idle until needed, so it must be tested regularly, or its first failover in production is also its first test.
 
-**How It Works**:
-- Route 53 identifies user's location (continent, country, state)
-- Returns resource mapped to that location
-- Can define default location (catch-all)
+With **weighted**, **latency**, or **multivalue** records that each carry a health check, every healthy record serves traffic and unhealthy ones drop out. That is **active-active**. Every endpoint is exercised all the time, but each one must have the capacity to absorb traffic when the others fail.
 
-**Use Cases**:
-- **Content localization**: Serve region-specific content (language, currency, pricing)
-- **Data residency**: Keep EU users' data in EU regions (GDPR compliance)
-- **License restrictions**: Block access from specific countries
-- **Load distribution**: Regional load balancers
+When every record in a set is unhealthy, Route 53 answers as if all of them were healthy rather than returning nothing, on the reasoning that an answer that might work beats one that certainly won't. A failover pair with both records unhealthy returns the primary. Records with no health check always count as healthy. A health check that fails everywhere at once, for example because a firewall started blocking the checkers, therefore degrades to answering as if nothing had failed, rather than to an outage. That fallback applies to the name being queried. A set nested under an alias with evaluate target health on reports itself unhealthy instead, so the branch above it can fail over, which is what the policy tree above relies on.
 
-**Example**:
-- Users in EU → eu-west-1 load balancer (GDPR compliance)
-- Users in US → us-east-1 load balancer
-- Users in Asia → ap-southeast-1 load balancer
-- Default → us-east-1 load balancer
+---
 
-**Granularity**: Continent → Country → State (US only)
+## DNS Inside the VPC
 
-### Geoproximity Routing (2024 Enhancement)
+Every VPC has a built-in DNS resolver, the **Route 53 VPC Resolver**, at the VPC's base address plus two (`10.0.0.2` in a `10.0.0.0/16` VPC). Instances use it by default. It answers from private hosted zones associated with the VPC, from AWS's own internal names, and from public DNS. Unlike Route 53's authoritative DNS, the VPC Resolver is Regional, and so are its endpoints, forwarding rules, and Profiles. A multi-Region organization builds them in each Region it uses.
 
-Route based on geographic location with bias adjustments.
+### Hybrid DNS With Resolver Endpoints
 
-**How It Works**:
-- Routes to nearest resource by default
-- Apply bias (+/-99) to expand or shrink geographic region
-- Positive bias: Attract more traffic from farther away
-- Negative bias: Reduce traffic from nearby areas
+A VPC connected to a data center by VPN or Direct Connect usually needs names to resolve in both directions. The VPC Resolver provides two kinds of endpoint for it, each a set of at least two network interfaces in the VPC, spread across Availability Zones (AZs) for resilience:
 
-**Use Cases**:
-- **Cost optimization**: Shift traffic to cheaper regions
-- **Capacity management**: Reduce load on constrained resources
-- **Testing**: Gradually expand new region's coverage
-- **Data residency with flexibility**: Prefer local resources but allow overflow
+- An **inbound endpoint** gives on-premises DNS servers an address in the VPC to forward queries to, so data center clients can resolve the private hosted zones associated with that VPC.
+- An **outbound endpoint**, with **forwarding rules** for chosen domains, sends queries for those domains from the VPC to the data center's DNS servers. A forwarding rule wins over a private hosted zone for the same domain, so a rule for `example.com` hides a private zone named `example.com` from the VPC.
 
-**Example**:
-- us-east-1 (bias +50): Expanded coverage, attracts traffic from wider area
-- eu-west-1 (bias 0): Standard coverage
-- ap-southeast-1 (bias -25): Reduced coverage, only serves nearby users
+{% include figure.html id="aws-r53-resolver-endpoints" %}
 
-**2024 Update**: Expanded availability from Traffic Flow to all DNS records (public and private hosted zones).
+Endpoints are billed per network interface per hour ($0.125 in US East), so an endpoint with interfaces in two AZs runs about $180 a month before queries. In a multi-account organization, a common design places each Region's endpoints in one shared networking account and shares the forwarding rules with other accounts through AWS Resource Access Manager. The VPCs that receive the rules then send matching queries through the central outbound endpoint, so other accounts in that Region don't need endpoints of their own.
 
-### Multivalue Answer Routing
+For clients that aren't in a VPC at all, such as remote laptops, **Route 53 Global Resolver** (generally available since March 2026) is an internet-reachable resolver that authorized clients can use from anywhere. It resolves public names and private hosted zones, with filtering, and needs no VPN or inbound endpoint.
 
-Return multiple IP addresses with health checks.
+### Profiles and DNS Firewall
 
-**How It Works**:
-- Returns up to 8 healthy records randomly selected
-- Each record has own health check
-- Client chooses from returned values
-- Unhealthy records excluded
+**Route 53 Profiles** bundle a VPC's DNS configuration, including private hosted zone associations, forwarding rules, and DNS Firewall rule groups, so it can be applied to many VPCs across accounts in a Region at once instead of VPC by VPC. A VPC can have one Profile. Profiles are billed hourly, at $0.75 an hour for up to 100 VPC associations, so they pay off across many VPCs rather than a few.
 
-**Use Cases**:
-- **Simple load distribution**: Multiple web servers without load balancer
-- **Cost optimization**: Avoid load balancer costs for small applications
-- **DNS-based availability**: Client-side failover
+**Route 53 Resolver DNS Firewall** filters the queries that VPC resources send through the VPC Resolver, blocking or allowing domains by list. Blocking lookups of known-malicious domains stops a common way compromised software reaches its command servers or sends data out, and it works even when network rules allow outbound HTTPS.
 
-**Example**:
-- 10 web server IP addresses with health checks
-- Route 53 returns 8 healthy IPs
-- Client connects to one randomly
+---
 
-**vs Weighted Routing**: Multivalue is simpler (equal distribution, no weight configuration).
+## Securing a Domain
 
-## Health Checks
+- **Registrar lock and contacts.** For a domain registered through Route 53, keep transfer lock on and the registrant contact current, since losing control of a domain is harder to recover from than any outage.
+- **DNSSEC signing.** Route 53 can sign a public hosted zone with DNSSEC, so resolvers that validate can detect forged answers. Signing uses a key-signing key backed by an AWS KMS key in us-east-1. It adds operational steps, because the parent zone needs a DS (delegation signer) record that vouches for your key, and a key problem can make the whole domain fail validation. Turn it on when the domain's risk justifies that care.
+- **Dangling records.** A record that still points at a deleted resource, such as a released Elastic IP or a deleted S3 website bucket, lets someone who later claims that resource serve content under your domain. An alias to an S3 website endpoint is exposed the same way, since anyone can create a bucket with the deleted name. Delete the record first, wait for its TTL to pass, and only then delete the resource.
 
-Health checks monitor resource availability and enable automated failover.
+---
 
-### Types of Health Checks
+## What Route 53 Costs
 
-**1. Endpoint Health Checks**:
-- Monitor HTTP/HTTPS/TCP endpoints
-- Specified by IP address or domain name
-- Check interval: 10 seconds (fast) or 30 seconds (standard)
-- Failure threshold: 3 consecutive failures = unhealthy
+| Item | Price |
+|---|---|
+| Hosted zone | $0.50 a month each for the first 25, $0.10 after |
+| Standard queries | $0.40 per million for the first billion a month, $0.20 after |
+| Latency, geolocation or geoproximity, and IP-based queries | $0.60, $0.70, and $0.80 per million |
+| Alias queries to AWS resources, and all private hosted zone queries | No charge |
+| Health check on an AWS endpoint | $0.50 a month (the first 50 are free), $0.75 for a non-AWS endpoint, plus a fee for each optional feature such as HTTPS, string matching, or the fast interval |
+| Resolver endpoint | $0.125 per network interface per hour |
+| Profiles | $0.75 an hour for up to 100 VPC associations |
 
-**2. Calculated Health Checks**:
-- Monitor status of other health checks
-- Use Boolean logic (AND, OR, NOT)
-- Example: Require 2 of 3 child health checks healthy
+For most workloads, the query and zone charges are small. The hourly items, Resolver endpoints and Profiles, are the ones that grow with the number of Regions and VPCs. Use alias records for anything pointing at AWS, and keep TTLs no shorter than failover requires.
 
-**3. CloudWatch Alarm Health Checks**:
-- Monitor CloudWatch alarms
-- Use any CloudWatch metric
-- Example: Lambda error rate, DynamoDB throttles
-
-### Health Check Configuration
-
-**Endpoint Health Check Parameters**:
-- **Protocol**: HTTP, HTTPS, TCP
-- **Port**: Default 80 (HTTP), 443 (HTTPS), or custom
-- **Path**: `/health` or custom health check endpoint
-- **Interval**: 30 seconds (standard, $0.50/month) or 10 seconds (fast, $1/month)
-- **Failure threshold**: Default 3 (1-10 allowed)
-- **String matching**: Optional HTTP response body check
-
-**Health Check Regions**:
-- Route 53 checks from multiple global locations (15+ regions)
-- Majority consensus determines health status
-- Prevents false positives from single location issues
-
-### Failover Scenarios
-
-**Active-Passive Failover**:
-- Primary resource with health check
-- Secondary resource (no health check, always considered healthy)
-- Primary unhealthy → Traffic routes to secondary
-
-**Active-Active Failover**:
-- Multiple resources, each with health check
-- Traffic distributed across healthy resources
-- Unhealthy resources automatically excluded
-
-**Combination Failover**:
-- Mix routing policies (latency + failover, weighted + health checks)
-- Complex multi-region architectures
-- Example: Latency-based routing with failover per region
-
-### Health Check Pricing (2024)
-
-- **Standard health checks** (30s interval): $0.50/month per health check
-- **Fast health checks** (10s interval): $1.00/month per health check
-- **Calculated health checks**: $0.50/month per health check
-- **CloudWatch alarm health checks**: $0.50/month per health check
-
-**Example Cost**:
-- 10 endpoints × $0.50 = $5/month
-- High availability across 3 regions (6 endpoints + 3 calculated) = $4.50/month
-
-## DNS Fundamentals
-
-### Record Types
-
-**A Record**: IPv4 address
-- `example.com` → `203.0.113.5`
-
-**AAAA Record**: IPv6 address
-- `example.com` → `2001:0db8:85a3::8a2e:0370:7334`
-
-**CNAME Record**: Alias to another domain
-- `www.example.com` → `example.com`
-- Cannot be used for zone apex (example.com)
-
-**Alias Record** (AWS-specific):
-- Points to AWS resources (CloudFront, ALB, S3, API Gateway)
-- Can be used for zone apex
-- **Free queries** (no charge for Alias record queries to AWS resources)
-
-**MX Record**: Mail exchange
-- Priority + mail server
-- `10 mail.example.com`
-
-**TXT Record**: Text information
-- SPF, DKIM, domain verification
-
-### TTL (Time to Live)
-
-Controls how long DNS resolvers cache the record.
-
-**Short TTL** (60-300 seconds):
-- Faster propagation of changes
-- Higher query costs (more queries to Route 53)
-- Use for: Frequently changing IPs, testing, deployments
-
-**Long TTL** (3600-86400 seconds):
-- Lower query costs (fewer queries)
-- Slower propagation of changes
-- Use for: Stable resources, cost optimization
-
-**Alias Records**: TTL managed by Route 53 (cannot be changed).
-
-**Best Practice**: Start with short TTL (60s) during testing, increase to long TTL (3600s+) for production stability.
-
-## Hosted Zones
-
-Container for DNS records for a domain.
-
-### Public Hosted Zones
-
-DNS records accessible from the internet.
-
-**Pricing**:
-- **$0.50/month** per hosted zone
-- **$0.40 per million queries** (first 1 billion/month)
-- **$0.20 per million queries** (after 1 billion/month)
-
-**Use Cases**:
-- Public-facing websites
-- APIs accessible from internet
-- Email servers
-
-### Private Hosted Zones
-
-DNS records accessible only within VPCs.
-
-**Pricing**:
-- **$0.50/month** per hosted zone
-- **Queries are FREE** (no per-query charges)
-
-**Use Cases**:
-- Internal services (databases, microservices)
-- Private APIs
-- Service discovery within VPC
-
-**Configuration**:
-- Associate with one or more VPCs
-- Can span multiple AWS accounts (VPC sharing)
-
-**Best Practice**: Use private hosted zones for internal services to avoid exposing internal DNS and save on query costs.
-
-## Cost Optimization
-
-### Strategies to Reduce Route 53 Costs
-
-<div class="callout callout--tip">
-<p class="callout__title">Cost Optimization: Use Alias Records</p>
-<p><strong>Queries to Alias records pointing to AWS resources are FREE.</strong> This is the single biggest cost optimization for Route 53.</p>
-<p>Example: 100 million queries/month to CloudFront:</p>
-<ul>
-<li>Via A record: $40/month</li>
-<li>Via Alias record: $0/month</li>
-<li><strong>Savings: 100%</strong></li>
-</ul>
-</div>
-
-**1. Use Alias Records for AWS Resources**:
-- **Queries to Alias records pointing to AWS resources are FREE**
-- Standard A/AAAA records: $0.40 per million queries
-- Savings: 100% on queries to CloudFront, ALB, S3, API Gateway
-
-**2. Increase TTL Values**:
-- Higher TTL = fewer queries = lower costs
-- 60s TTL: ~1.4 billion queries/month for 1,000 req/s traffic
-- 3600s TTL: ~24 million queries/month for same traffic
-- **Savings**: 98% query reduction
-
-**3. Use Private Hosted Zones for Internal Services**:
-- Public hosted zone: $0.50/month + $0.40 per million queries
-- Private hosted zone: $0.50/month + **FREE queries**
-- Internal services with 1 billion queries: **$400/month savings**
-
-**4. Consolidate Hosted Zones**:
-- Multiple subdomains: Use single hosted zone with multiple records
-- Example: api.example.com, www.example.com, cdn.example.com → One hosted zone
-- Savings: $0.50/month per consolidated domain
-
-**5. Delete Unused Hosted Zones**:
-- Audit monthly billing for unused zones
-- Each unused zone: $0.50/month wasted
-
-**6. Share Resolver Endpoints Across Accounts**:
-- Resolver endpoint: $0.125/hour per ENI = $91/month per endpoint
-- Share single endpoint across multiple VPCs/accounts (same region)
-- Savings: $91/month per avoided endpoint
-
-### Cost Example
-
-**Scenario**: Website with 100 million requests/month, CloudFront + ALB
-
-**Before Optimization**:
-- Hosted zone: $0.50
-- A record to CloudFront: 100M queries × $0.40/M = $40
-- A record to ALB: 20M queries × $0.40/M = $8
-- **Total**: $48.50/month
-
-**After Optimization**:
-- Hosted zone: $0.50
-- Alias to CloudFront: FREE
-- Alias to ALB: FREE
-- Increased TTL (300s → 3600s): 80% fewer queries
-- **Total**: $0.50/month
-
-**Savings**: $48/month (99%)
+---
 
 ## Common Pitfalls
 
-| Pitfall | Impact | Solution |
-|---------|--------|----------|
-| **1. Using A records instead of Alias for AWS resources** | $40/100M queries wasted | Use Alias records (free queries to AWS resources) |
-| **2. Low TTL on stable resources** | 10-60x higher query costs | Increase TTL to 3600s+ for production (98% cost reduction) |
-| **3. No health checks for failover** | Manual failover, downtime during outages | Configure health checks ($0.50/month, automated failover) |
-| **4. Public hosted zone for internal services** | $0.40/M queries + security risk | Use private hosted zones (free queries, VPC-only access) |
-| **5. No default geolocation record** | Users in unmapped locations get NXDOMAIN | Always define default location (catch-all) |
-| **6. Single-region deployment** | Users far from region experience high latency | Use latency-based routing across multiple regions |
-| **7. Not testing health checks** | False positives/negatives, improper failover | Test health checks with intentional failures |
-| **8. Unused hosted zones** | $0.50/month wasted per zone | Audit and delete unused zones monthly |
-| **9. Equal weighted routing for unequal capacity** | Overloading smaller instances | Adjust weights based on capacity (70/30 vs 50/50) |
-| **10. No bias in geoproximity routing** | Traffic distribution doesn't match needs | Use bias to shift traffic to preferred regions |
-| **11. Missing secondary for failover** | Failover incomplete (no fallback) | Always define secondary resource |
-| **12. Health check interval too slow** | 30s+ detection delay | Use fast health checks (10s) for critical apps ($1/month) |
-| **13. Not using private hosted zones** | Exposing internal DNS, higher costs | Create private hosted zones for internal services |
-| **14. Complex routing without testing** | Unexpected traffic patterns | Test routing policies in dev/staging first |
-| **15. No CloudWatch alarms for health checks** | Unnoticed health check failures | Create alarms for HealthCheckStatus metric |
+### A Failover Plan That Needs the Control Plane
 
-**Cost Impact Examples**:
-- **Pitfall #1** (A vs Alias): 100M queries = **$40/month wasted**
-- **Pitfall #2** (Low TTL): 60s → 3600s TTL = **98% query reduction**
-- **Pitfall #4** (Public vs Private): 1B internal queries = **$400/month wasted**
+Scripts that swap records during an outage depend on the Route 53 API in us-east-1. Pre-configure failover with health checks, which run on the data plane, and use the API for planned changes.
 
-## Integration Patterns
+### Users Who Get No Answer
 
-### Route 53 + CloudFront
+Users in a place no geolocation record covers get no answer at all, and they are hard to see in monitoring because their requests never arrive. The same silence hits a VPC querying a split-horizon private zone for a name only the public zone has. Both show up only when someone reports them.
 
-**Global Content Delivery**:
-- Route 53 Alias record → CloudFront distribution (free queries)
-- Latency-based routing to multiple CloudFront distributions (multi-region)
-- Geolocation routing for compliance (serve EU content from EU distribution)
+### Firewalls That Block the Checkers
 
-### Route 53 + Application Load Balancer
+A security group or firewall that blocks Route 53's health checker ranges fails a healthy public endpoint. Allow the published checker address ranges, and use CloudWatch alarm health checks for anything private.
 
-**Multi-Region Load Balancing**:
-- Latency-based routing → ALB in each region
-- Health checks on ALB targets
-- Automatic failover if region becomes unhealthy
-
-**Blue/Green Deployments**:
-- Weighted routing: 90% blue ALB, 10% green ALB
-- Gradually shift weights: 70/30, 50/50, 30/70, 0/100
-- Rollback: Shift weight back to blue
-
-### Route 53 + API Gateway
-
-**API Traffic Management**:
-- Alias record → API Gateway (free queries)
-- Weighted routing for API version testing (v1: 95%, v2: 5%)
-- Geolocation routing for regional APIs (GDPR compliance)
-
-### Route 53 + Multi-Region Databases
-
-**Read Replica Routing**:
-- Latency-based routing to RDS read replicas in each region
-- Health checks on each replica
-- Lowest-latency reads for global applications
-
-**Failover to Secondary Region**:
-- Primary record → us-east-1 Aurora cluster (health check)
-- Secondary record → us-west-2 Aurora cluster
-- Automatic failover if primary cluster fails
+---
 
 ## Key Takeaways
 
-**Routing Policies**:
-- **Simple**: Single resource, no health checks
-- **Weighted**: A/B testing, blue/green (10% new version, 90% old)
-- **Latency-Based**: Route to lowest-latency region (50-70% latency reduction)
-- **Failover**: Active-passive disaster recovery (30-60s failover)
-- **Geolocation**: Content localization, data residency (GDPR)
-- **Geoproximity**: Location-based with bias (2024: available for all records)
-- **Multivalue**: Simple load distribution (up to 8 healthy IPs)
-
-**Health Checks**:
-- Monitor HTTP/HTTPS/TCP endpoints ($0.50/month standard, $1/month fast)
-- Enable automated failover (no manual intervention)
-- Check from 15+ global locations (majority consensus)
-- Calculated health checks combine multiple checks (Boolean logic)
-
-**Cost Optimization**:
-- Use Alias records for AWS resources (100% query cost savings)
-- Increase TTL for stable resources (98% query reduction: 60s → 3600s)
-- Private hosted zones for internal services (free queries vs $0.40/M)
-- Consolidate hosted zones ($0.50/month per zone)
-
-**High Availability**:
-- Failover routing with health checks (30-60s automated failover)
-- Multi-region latency-based routing (50-70% latency improvement)
-- Active-active with weighted routing + health checks
-
-**100% Uptime SLA**:
-- Route 53 is the only AWS service with 100% availability SLA
-- Globally distributed infrastructure (multiple edge locations)
-- No single point of failure
-
-**Pricing**:
-- Hosted zones: $0.50/month
-- Queries: $0.40 per million (first 1B), $0.20 per million (after 1B)
-- **Alias queries to AWS resources: FREE**
-- Health checks: $0.50-$1/month each
+1. **Route 53 registers domains, serves DNS, and checks health, globally.** Its data plane is built to stay up when its us-east-1 control plane can't, so design failover around health checks, not API calls, and turn on accelerated recovery for public zones.
+2. **Use alias records for AWS resources.** They work at the zone apex, cost nothing to query, and follow the resource's changing addresses.
+3. **Pick a routing policy for the question being asked.** Latency for speed, geolocation for borders, geoproximity for nearest with a bias, weighted for proportions, failover for a standby, and multivalue for simple spreading.
+4. **Health checks judge from many locations and call an endpoint healthy if more than 18% of them can reach it.** Failover time is the detection time plus the TTL, so keep TTLs short on records that fail over.
+5. **Private hosted zones and the VPC Resolver handle DNS inside AWS.** Private zones have no fallback to public ones, Resolver endpoints connect the VPC Resolver to a data center in both directions, and sharing their rules from one account per Region avoids paying for endpoints in every VPC.

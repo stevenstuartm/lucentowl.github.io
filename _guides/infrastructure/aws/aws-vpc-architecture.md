@@ -3,654 +3,219 @@ title: "AWS VPC: Network Architecture"
 layout: guide
 category: AWS
 subcategory: Networking & Content Delivery
-description: "VPC fundamentals for architects including subnets, routing, security groups, NACLs, and multi-AZ and multi-VPC patterns for building secure and scalable network architectures."
-tags: [infrastructure, aws, networking, vpc, security, practical]
+description: "How a single Amazon VPC is built: CIDR planning, subnets across Availability Zones, route tables, internet and NAT gateways, security groups versus network ACLs, Block Public Access, and the cost of public IPv4 against IPv6."
+tags: [vpc, route-tables, nat-gateway, security-groups, network-acls, ipv6, fundamentals]
 ---
 
-## What is a VPC
+## What a VPC Is
 
-**Amazon Virtual Private Cloud (VPC)** is a logically isolated network within AWS where you launch and connect AWS resources. Think of it as your own private data center network in the cloud.
+An **Amazon Virtual Private Cloud (VPC)** is a private network that you define inside an AWS Region. You choose its IP address range, divide it into subnets, decide how traffic is routed, and decide what traffic is allowed in and out. EC2 instances, containers, databases, load balancers, and Lambda functions that need network access all get their IP addresses from a VPC.
 
-### What Problems VPC Solves
+Scope shapes almost every design decision, so it helps to fix it early:
 
-**Without VPC:**
-- No network isolation between different applications or customers
-- No control over IP addressing
-- No ability to implement network-level security
-- No way to connect to on-premises networks securely
+- **A VPC belongs to one account and one Region**, and spans every Availability Zone (AZ) in that Region. An AZ is one or more data centers with independent power and networking, so spreading resources across AZs protects against a single site failing.
+- **A subnet lives in exactly one AZ** and can't span zones. High availability comes from placing subnets, and the resources in them, in at least two AZs.
+- **Security groups attach to network interfaces**, and network ACLs attach to subnets. A network interface (ENI) is the virtual network card a resource uses to join a subnet, and each one takes an address from that subnet.
+- **Quotas are per account per Region.** The default is 5 VPCs per Region, which is adjustable into the hundreds.
 
-**With VPC:**
-- Network isolation for security and compliance
-- Full control over IP address ranges (CIDR blocks)
-- Multiple layers of security (security groups, NACLs)
-- Connectivity to on-premises networks (VPN, Direct Connect)
-- Segmentation of resources across availability zones for high availability
-
-### How VPC Works
-
-When you create a VPC, you define:
-1. **IP address range** (CIDR block) for the entire VPC
-2. **Subnets** within the VPC (carved from the VPC CIDR block)
-3. **Route tables** that control traffic between subnets and outside the VPC
-4. **Gateways** for connectivity to the internet or other networks
-5. **Security controls** (security groups, NACLs) that filter traffic
+Every account starts with a **default VPC** in each Region, using `172.31.0.0/16` with a public subnet in every AZ. It exists so that a first instance can launch without any network design. Production workloads normally get a VPC designed for them instead.
 
 ---
 
-## Core VPC Components
+## Planning the Address Space
 
-### VPC CIDR Block
+### The VPC CIDR Block
 
-Every VPC has a primary CIDR block that defines the IP address range for the entire VPC.
+A VPC starts with one IPv4 CIDR block between `/16` (65,536 addresses) and `/28` (16 addresses). AWS recommends the private ranges from RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`. Avoid `172.17.0.0/16`, which some AWS services use internally.
 
-**CIDR Block Constraints:**
-- Minimum size: /28 (16 IP addresses)
-- Maximum size: /16 (65,536 IP addresses)
-- Cannot overlap with other VPCs if you plan to peer them
-- Cannot be changed after creation (but you can add secondary CIDR blocks)
+The primary block can't be resized or removed later. You can associate secondary IPv4 blocks, up to 5 per VPC by default and 50 with a quota increase. The secondary blocks are restricted, too. A VPC with a block from `10.0.0.0/8` can't add a block from the other RFC 1918 ranges.
 
-**Common Choices:**
+Address planning matters beyond the single VPC. Two networks with overlapping ranges can't route to each other directly, which rules out connecting them later through peering, a transit gateway, or a VPN to the data center. Plan ranges across every VPC and on-premises network the organization might ever connect. Amazon VPC IP Address Manager (IPAM) can allocate non-overlapping ranges from a central pool across an organization.
 
-| CIDR Block | Usable IPs | Use Case |
-|------------|-----------|----------|
-| `10.0.0.0/16` | 65,536 | Large production environments with many subnets and resources |
-| `10.0.0.0/20` | 4,096 | Medium-sized applications |
-| `10.0.0.0/24` | 256 | Small development/test environments |
-| `172.31.0.0/16` | 65,536 | Default VPC (AWS provides this automatically) |
+### Subnet Sizing and Reserved Addresses
 
-**Best Practice:** Use RFC 1918 private address space:
-- `10.0.0.0/8` (10.0.0.0 – 10.255.255.255)
-- `172.16.0.0/12` (172.16.0.0 – 172.31.255.255)
-- `192.168.0.0/16` (192.168.0.0 – 192.168.255.255)
+Each subnet takes a slice of the VPC's range, between `/16` and `/28`, and subnets in the same VPC can't overlap. AWS reserves five addresses in every subnet. In `10.0.1.0/24`, they are:
 
-<div class="callout callout--tip">
-<p class="callout__title">Planning Tip</p>
-<p>Choose a CIDR block large enough for growth but not so large that it wastes address space or conflicts with on-premises networks.</p>
-</div>
+| Address | Reserved for |
+|---|---|
+| `10.0.1.0` | Network address |
+| `10.0.1.1` | VPC router |
+| `10.0.1.2` | Reserved by AWS. The Amazon-provided DNS server (the Route 53 Resolver) sits at this offset in the VPC's primary range, `10.0.0.2` in a `10.0.0.0/16` VPC |
+| `10.0.1.3` | Future use |
+| `10.0.1.255` | Broadcast address, which VPCs don't support but still reserve |
+
+A `/24` therefore offers 251 usable addresses, and a `/28` only 11. Size subnets for their largest expected load, including services that take an address per unit of scale, such as ECS tasks in `awsvpc` mode, which each get their own network interface.
 
 ---
 
-## Subnets and Availability Zones
+## Subnets and Route Tables
 
-### Subnets
+### Routing Decides What a Subnet Is
 
-**Subnet:** A subdivision of the VPC's IP address range. Subnets reside in a single Availability Zone and cannot span multiple AZs.
+Every subnet is associated with exactly one **route table**, which decides where traffic leaving the subnet goes next. A new subnet uses the VPC's **main route table** until you associate it with another. Every route table contains a `local` route for the VPC's own range, so resources inside the VPC can always reach each other. When several routes match a destination, the most specific one (the longest prefix) wins.
 
-**Subnet Types:**
+A subnet has no type setting. Its route table makes it one of four kinds:
 
-1. **Public Subnet:** Has a route to an internet gateway; resources can have public IPs and communicate with the internet
-2. **Private Subnet:** No route to an internet gateway; resources cannot be directly accessed from the internet
-3. **VPN-Only Subnet:** Routes traffic to a virtual private gateway (VPN or Direct Connect); no internet access
+| Subnet type | Route table has | Reaches |
+|---|---|---|
+| **Public** | A route to an internet gateway | The internet directly, for resources with a public IP address |
+| **Private** | No internet gateway route, usually a route to a NAT gateway | The internet outbound only, through the NAT gateway |
+| **VPN-only** | A route to a virtual private gateway (the AWS end of a VPN), and no internet gateway route | The on-premises network over a VPN |
+| **Isolated** | Only the `local` route | Nothing outside the VPC |
 
-**Subnet CIDR Blocks:**
-- Must be carved from the VPC CIDR block
-- Cannot overlap with other subnets in the same VPC
-- AWS reserves 5 IPs in each subnet (first 4 and last 1)
+### A Typical Two-AZ Layout
 
-**Example VPC Breakdown:**
+Most production VPCs repeat the same set of subnets in each AZ they use. Internet-facing load balancers and NAT gateways sit in public subnets. Application servers and containers sit in private subnets, reachable only through the load balancer. Databases sit in their own subnets, often isolated, so that nothing in them can open a connection to the internet even if compromised.
 
-VPC: `10.0.0.0/16` (65,536 IPs)
+{% include figure.html id="aws-vpc-subnet-routing" %}
 
-| Subnet | CIDR | AZ | Type | Purpose |
-|--------|------|-------|------|---------|
-| Public Subnet 1 | `10.0.1.0/24` | us-east-1a | Public | Load balancers, NAT gateways |
-| Public Subnet 2 | `10.0.2.0/24` | us-east-1b | Public | Load balancers, NAT gateways |
-| Private Subnet 1 | `10.0.11.0/24` | us-east-1a | Private | Application servers |
-| Private Subnet 2 | `10.0.12.0/24` | us-east-1b | Private | Application servers |
-| Private Subnet 3 | `10.0.21.0/24` | us-east-1a | Private | Database servers |
-| Private Subnet 4 | `10.0.22.0/24` | us-east-1b | Private | Database servers |
+Each private app subnet routes to the NAT gateway in its own AZ, which is why the two app subnets need separate route tables. The public subnets can share one route table, and so can the data subnets. If zone a fails, zone b's subnets keep their own path out.
 
-**Why This Design:**
-- Public subnets for internet-facing resources (ALB, NAT gateways)
-- Private subnets for application logic (EC2, ECS)
-- Separate private subnets for databases (additional isolation)
-- Deployed across 2 AZs for high availability
-
-### Reserved IPs
-
-AWS reserves 5 IP addresses in every subnet:
-
-| IP Address | Purpose |
-|------------|---------|
-| First IP (e.g., `10.0.1.0`) | Network address |
-| Second IP (e.g., `10.0.1.1`) | VPC router |
-| Third IP (e.g., `10.0.1.2`) | DNS server (Amazon-provided) |
-| Fourth IP (e.g., `10.0.1.3`) | Reserved for future use |
-| Last IP (e.g., `10.0.1.255`) | Broadcast address (not used in VPC but reserved) |
-
-**Practical Impact:** A `/24` subnet has 256 total IPs, but only 251 are usable (`256 − 5` reserved).
-
-**Note:** The Amazon-provided DNS server integrates with Route 53 for private hosted zones. For DNS routing strategies, health checks, and traffic management, see [AWS Route 53](aws-route53.md){:target="_blank" rel="noopener noreferrer"}.
+The same layout scales down. A development VPC might use one AZ and skip the isolated tier, and a static site might need only public subnets. Those layouts trade away availability and isolation for lower cost, so they suit workloads where an AZ outage or an exposed server is an acceptable risk.
 
 ---
 
-## Routing and Gateways
+## Getting Traffic In and Out
 
-### Route Tables
+### Internet Gateway
 
-**Route Table:** A set of rules (routes) that determine where network traffic is directed.
-
-**How Routing Works:**
-
-Each subnet is associated with a route table. When traffic leaves a resource in the subnet, the route table determines the next hop.
-
-**Route Priority:** Most specific route (longest prefix match) wins.
-
-**Example Route Table for Public Subnet:**
-
-| Destination | Target | Meaning |
-|-------------|--------|---------|
-| `10.0.0.0/16` | local | Traffic within VPC stays local |
-| `0.0.0.0/0` | igw-12345 | All other traffic goes to internet gateway |
-
-**Example Route Table for Private Subnet:**
-
-| Destination | Target | Meaning |
-|-------------|--------|---------|
-| `10.0.0.0/16` | local | Traffic within VPC stays local |
-| `0.0.0.0/0` | nat-12345 | All other traffic goes to NAT gateway |
-
-<div class="callout callout--note">
-<p class="callout__title">Key Concept</p>
-<p>The route table association determines whether a subnet is public or private. A public subnet has a route to an internet gateway; a private subnet does not.</p>
-</div>
-
-### Internet Gateway (IGW)
-
-**Internet Gateway:** Allows resources with public IPs in the VPC to communicate with the internet.
-
-**Characteristics:**
-- Horizontally scaled, redundant, highly available (AWS-managed)
-- No bandwidth constraints
-- Performs network address translation (NAT) for instances with public IPs
-- One IGW per VPC
-
-**When to Use:**
-- Public subnets with internet-facing resources (load balancers, bastion hosts)
-
-**How It Works:**
-1. Instance in public subnet sends traffic to the internet
-2. Route table directs traffic to IGW
-3. IGW performs NAT (translates private IP to public IP)
-4. Traffic reaches internet
-5. Response returns through IGW (translates public IP back to private IP)
+An **internet gateway** connects a VPC to the internet. It is horizontally scaled and redundant, with no bandwidth limit of its own, and a VPC can have only one attached. For IPv4, it performs one-to-one address translation between an instance's private address and its public IPv4 address, so an instance reaches the internet directly only if it is in a public subnet **and** has a public IPv4 address. That address comes from one of two places. A subnet's **auto-assign public IPv4** setting gives each new instance an address that is released when the instance stops. An **Elastic IP** is an address allocated to the account, which stays the same until you release it and can be moved between resources.
 
 ### NAT Gateway
 
-**NAT Gateway:** Allows resources in private subnets to initiate outbound connections to the internet (but not inbound).
+A **NAT gateway** lets resources in private subnets open connections to the internet, for updates or third-party APIs, while nothing on the internet can open a connection to them. It translates many private addresses to its own address, and it keeps track of connections so responses find their way back.
 
-**Characteristics:**
-- Managed by AWS (automatically scaled, highly available within a single AZ)
-- Must be deployed in a public subnet (requires public IP)
-- Charged per hour + data processed
-- Supports 5 Gbps bandwidth (can scale to 100 Gbps)
+NAT gateways come in two availability modes:
 
-**When to Use:**
-- Private subnets that need to download software updates, access APIs, etc.
+| Mode | How it's placed | Routing |
+|---|---|---|
+| **Zonal** | Created in one public subnet in one AZ, with an Elastic IP | Each AZ's private route table points at the NAT gateway in the same AZ. One gateway per AZ is needed for resilience, because a zonal NAT gateway fails with its AZ |
+| **Regional** (since November 2025) | Created for the VPC with no subnet. It expands into an AZ when resources appear there, which can take up to 60 minutes, and contracts when they leave | Every private route table points at one NAT gateway ID |
 
-**Why Not Just Use an Internet Gateway?**
-- Resources in private subnets don't have public IPs
-- Internet gateway only works with public IPs
-- NAT gateway allows outbound traffic without exposing resources to inbound internet traffic
+Regional mode removes the public subnets and per-AZ routes that zonal NAT gateways need, but not the internet gateway. AWS gives the regional NAT gateway its own route table with a route to the VPC's internet gateway. AWS recommends regional mode for every case except **private NAT**, and it isn't available in a few constrained AZs. A private NAT gateway translates addresses for traffic to other VPCs or on-premises networks rather than to the internet, and it is available only in zonal mode.
 
-**High Availability Pattern:**
+A few characteristics shape capacity and cost:
 
-Deploy one NAT gateway per availability zone. If an AZ fails, resources in other AZs still have internet access.
+- **Throughput.** A zonal NAT gateway starts at 5 Gbps and scales automatically to 100 Gbps, and from 1 million to 10 million packets per second.
+- **Connections.** Each IP address on a NAT gateway supports 55,000 simultaneous connections to a single destination IP, port, and protocol. Heavy traffic to one API endpoint can exhaust that, which is fixed by adding addresses, up to 8 on a zonal NAT gateway and 32 per AZ on a regional one.
+- **No security group.** Filtering happens on the instances behind it and on the subnet's network ACL.
+- **Price.** There is an hourly charge (per AZ for regional mode) and a per-GB charge on every byte processed. The per-GB charge is the one that surprises teams, since it applies to traffic bound for AWS services such as S3 as well.
 
-```
-Public Subnet 1a → NAT Gateway 1a → Private Subnet 1a
-Public Subnet 1b → NAT Gateway 1b → Private Subnet 1b
-```
+A gateway VPC endpoint gives private subnets a route to S3 and DynamoDB that bypasses the NAT gateway and has no charge, so it is usually the first fix for a large NAT bill.
 
-### NAT Instance (Legacy)
+Before NAT gateways existed, the same job was done by a **NAT instance**, an EC2 instance configured to forward traffic. It is cheaper for small workloads, but it's a single instance to patch, scale, and make highly available yourself. AWS's managed NAT gateway replaces it for most designs.
 
-**NAT Instance:** EC2 instance running NAT software (Amazon Linux NAT AMI).
+### Virtual Private Gateway
 
-**Why It Exists:** Before NAT Gateway was introduced, this was the only option.
-
-**When to Use NAT Instance Today:**
-- Cost optimization (NAT instance can be smaller than NAT gateway's baseline cost)
-- Need to use a specific NAT configuration not supported by NAT Gateway
-
-**Trade-Offs:**
-- Must manage and patch the instance yourself
-- Single point of failure (unless you implement failover)
-- Bandwidth limited by instance type
-
-**Recommendation:** Use NAT Gateway unless you have specific requirements that only NAT Instance can meet.
-
-### Virtual Private Gateway (VGW)
-
-**Virtual Private Gateway:** AWS-side endpoint for VPN connections or Direct Connect.
-
-**When to Use:**
-- Site-to-site VPN from on-premises to AWS
-- AWS Direct Connect for dedicated network connection
-
-**How It Works:**
-- Attach VGW to VPC
-- Create VPN connection or Direct Connect connection to VGW
-- Update route tables to route traffic destined for on-premises through VGW
-
-**For detailed hybrid connectivity architecture, resiliency patterns, and cost analysis, see [AWS Direct Connect & VPN](aws-direct-connect-vpn.md){:target="_blank" rel="noopener noreferrer"}.**
+A **virtual private gateway** is the AWS end of a Site-to-Site VPN or a Direct Connect connection to a single VPC. Attaching one and adding routes for the on-premises ranges makes a subnet VPN-only or gives a private subnet a second path. Designs that connect many VPCs to a data center usually use a transit gateway instead.
 
 ---
 
-## Security Layers
+## Security Groups and Network ACLs
 
-VPC provides two security layers: **Security Groups** (stateful, instance-level) and **NACLs** (stateless, subnet-level).
+A VPC filters traffic at two points. A **network ACL** sits at the edge of a subnet and checks packets that cross into or out of it. A **security group** sits on each network interface and checks traffic to and from that one resource. A request from the internet to an instance crosses both, and its response crosses both again on the way out:
+
+{% include figure.html id="aws-vpc-sg-nacl" %}
+
+The two differ in one property that explains most of their behavior. A security group is **stateful**. It tracks each connection it allowed, so the response goes back out without matching any rule. A network ACL is **stateless**. It judges every packet on its own, so it needs an inbound rule for the request and a separate outbound rule for the response.
 
 ### Security Groups
 
-**Security Group:** Virtual firewall that controls inbound and outbound traffic for EC2 instances, RDS databases, and other AWS resources.
+A security group holds **allow rules only**. Anything no rule allows is dropped, and all of a group's rules are evaluated together, so their order doesn't matter. A newly created security group allows no inbound traffic and all outbound traffic. A resource can have several security groups, and the rules of all of them combine.
 
-**Characteristics:**
-- **Stateful:** If you allow inbound traffic, the response is automatically allowed (regardless of outbound rules)
-- **Operates at instance/resource level** (each resource can have multiple security groups)
-- **Default deny:** All inbound traffic is denied by default; all outbound traffic is allowed by default
-- **Rules specify allow only** (no deny rules; if it's not explicitly allowed, it's denied)
+A rule's source can be a CIDR range or **another security group**. That is the most useful feature they have, because it expresses intent without tracking IP addresses:
 
-**Example Security Group for Web Server:**
+| Security group | Inbound rule | Source |
+|---|---|---|
+| Load balancer | TCP 443 | `0.0.0.0/0` |
+| Application | TCP 8080 | the load balancer's security group |
+| Database | TCP 5432 | the application's security group |
 
-| Type | Protocol | Port | Source | Purpose |
-|------|----------|------|--------|---------|
-| Inbound | HTTP | 80 | `0.0.0.0/0` | Allow all internet traffic on HTTP |
-| Inbound | HTTPS | 443 | `0.0.0.0/0` | Allow all internet traffic on HTTPS |
-| Inbound | SSH | 22 | `10.0.0.0/16` | Allow SSH from within VPC only |
-| Outbound | All | All | `0.0.0.0/0` | Allow all outbound traffic (default) |
+When the application tier scales out, new instances join the application security group and can reach the database immediately, with no rule change.
 
-**Example Security Group for Database:**
+Quotas are generous but not unlimited. The default is 60 inbound and 60 outbound rules per security group, and 5 security groups per network interface, adjustable to 16. The product of the two can't exceed 1,000.
 
-| Type | Protocol | Port | Source | Purpose |
-|------|----------|------|--------|---------|
-| Inbound | PostgreSQL | 5432 | `sg-webserver` | Allow traffic only from web server security group |
-| Outbound | All | All | `0.0.0.0/0` | Allow all outbound traffic (default) |
+### Network ACLs
 
-**Key Pattern:** Reference other security groups as sources. This creates logical dependencies: database accepts traffic from anything with the web server security group, without needing to know specific IP addresses.
+A network ACL holds numbered rules that can **allow or deny**. They are evaluated from the lowest number up, and the first match decides. The default quota is 20 rules in each direction, adjustable to 40, which suits a few broad rules rather than per-application detail. Each subnet is associated with exactly one network ACL, and one network ACL can serve many subnets. The VPC's default network ACL allows all traffic in both directions, while a newly created custom network ACL denies everything until rules are added.
 
-**Why Stateful Matters:**
+Statelessness is what makes network ACLs error-prone. A response is addressed to the client's **ephemeral port**, a temporary port the client's operating system picked for the connection, so an outbound rule must allow that range. Clients use different ranges, so AWS suggests allowing 1024-65535 for responses. A network ACL that allows inbound HTTPS but not outbound ephemeral ports lets requests in and silently drops every response.
 
-If you allow inbound HTTP (port 80), the response traffic on ephemeral ports (1024-65535) is automatically allowed, even though you didn't explicitly create an outbound rule for those ports.
+Network ACLs also can't filter everything. Traffic to the Amazon-provided DNS, the instance metadata service, and Amazon Time Sync never passes through them.
 
-### Network ACLs (NACLs)
+### Choosing Between Them
 
-**Network ACL:** Stateless firewall that controls inbound and outbound traffic at the subnet level.
-
-**Characteristics:**
-- **Stateless:** Inbound and outbound rules are evaluated independently (you must explicitly allow both directions)
-- **Operates at subnet level** (affects all resources in the subnet)
-- **Rules evaluated in order** (lowest rule number first)
-- **Default allow:** The default NACL allows all inbound and outbound traffic
-- **Supports allow and deny rules** (unlike security groups)
-
-**When to Use NACLs:**
-- Additional layer of defense (defense in depth)
-- Explicitly deny traffic from specific IP ranges (security groups can't deny)
-- Compliance requirements for subnet-level controls
-
-**Example NACL for Public Subnet:**
-
-| Rule # | Type | Protocol | Port | Source/Destination | Allow/Deny |
-|--------|------|----------|------|-------------------|------------|
-| 100 | Inbound | TCP | 80 | `0.0.0.0/0` | ALLOW |
-| 110 | Inbound | TCP | 443 | `0.0.0.0/0` | ALLOW |
-| 120 | Inbound | TCP | 1024-65535 | `0.0.0.0/0` | ALLOW (ephemeral ports for responses) |
-| 200 | Inbound | TCP | 22 | `203.0.113.0/24` | DENY (block SSH from specific IP range) |
-| * | Inbound | All | All | `0.0.0.0/0` | DENY (default rule) |
-| 100 | Outbound | TCP | 80 | `0.0.0.0/0` | ALLOW |
-| 110 | Outbound | TCP | 443 | `0.0.0.0/0` | ALLOW |
-| 120 | Outbound | TCP | 1024-65535 | `0.0.0.0/0` | ALLOW (ephemeral ports for responses) |
-| * | Outbound | All | All | `0.0.0.0/0` | DENY (default rule) |
-
-**Why Stateless Matters:**
-
-You must explicitly allow both inbound traffic (port 80) AND outbound response traffic (ephemeral ports 1024-65535). If you forget the ephemeral port rule, connections will fail.
-
-### Security Groups vs. NACLs
-
-| Aspect | Security Groups | NACLs |
-|--------|----------------|-------|
-| **Scope** | Instance/resource level | Subnet level |
-| **State** | Stateful (response allowed automatically) | Stateless (must allow both directions) |
+| | Security group | Network ACL |
+|---|---|---|
+| **Attaches to** | Network interface | Subnet |
+| **State** | Stateful: responses allowed automatically | Stateless: each direction needs its own rule |
 | **Rules** | Allow only | Allow and deny |
-| **Rule Evaluation** | All rules evaluated | Rules evaluated in order until match |
-| **Default** | Deny all inbound, allow all outbound | Default NACL allows all traffic |
-| **Use Case** | Primary security control | Secondary defense layer or explicit denies |
+| **Evaluation** | All rules together | Lowest number first, first match wins |
+| **Default** | New group: no inbound, all outbound | Default ACL: all traffic. New custom ACL: nothing |
 
-**Best Practice:** Use security groups as the primary security control (more intuitive, stateful). Use NACLs for additional defense or explicit deny rules.
-
----
-
-## Architectural Patterns
-
-### Pattern 1: Single-Tier Public Architecture
-
-**Use Case:** Simple static website or public-facing application with no backend.
-
-**Architecture:**
-- Public subnet with internet gateway
-- Web servers with public IPs
-- Security group allows HTTP/HTTPS from internet
-
-**Trade-Offs:**
-- ✅ Simplest architecture
-- ✅ Lowest cost (no NAT gateway)
-- ⚠️ All resources exposed to internet
-- ⚠️ No defense in depth
-
-**When to Use:** Static websites, development/test environments, very simple applications
+Security groups are the primary control in almost every design, because they are stateful, scoped to one resource, and can reference each other. Network ACLs earn their place for a coarse subnet-wide guardrail, such as denying a known-bad address range or keeping a data tier from talking to anything but the app tier, where a single deny rule does what security groups can't express.
 
 ---
 
-### Pattern 2: Multi-Tier Architecture (Public + Private Subnets)
+## Blocking Public Access Account-Wide
 
-**Use Case:** Web application with application servers and databases requiring isolation.
+Security groups and route tables are set per resource, so one mistake can expose one resource. **VPC Block Public Access** is an account-level setting per Region that overrides them. In **bidirectional** mode, it blocks all traffic through internet gateways and egress-only internet gateways (the IPv6 outbound gateway covered below) in the Region. In **ingress-only** mode, it blocks inbound internet traffic but still allows outbound connections through NAT gateways and egress-only internet gateways.
 
-**Architecture:**
-
-```
-Internet
-   ↓
-Internet Gateway
-   ↓
-Public Subnet (ALB)
-   ↓
-Private Subnet (Application Servers)
-   ↓
-Private Subnet (Database)
-```
-
-**Components:**
-- **Public subnet:** Application Load Balancer with public IP
-- **Private subnet 1:** EC2 instances running application (no public IPs)
-- **Private subnet 2:** RDS database (no public IPs)
-- **NAT gateway:** In public subnet, allows private resources to reach internet for updates
-
-**Security:**
-- ALB security group: Allow 80/443 from `0.0.0.0/0`
-- Application security group: Allow traffic only from ALB security group
-- Database security group: Allow traffic only from application security group
-
-**For detailed load balancing strategies, target group configuration, and health check patterns, see [AWS Elastic Load Balancing](aws-elastic-load-balancing.md){:target="_blank" rel="noopener noreferrer"}.**
-
-**Trade-Offs:**
-- ✅ Defense in depth (multiple security layers)
-- ✅ Database not exposed to internet
-- ✅ Can scale application tier independently
-- ⚠️ Higher cost (NAT gateway)
-- ⚠️ More complex to configure
-
-**When to Use:** Production applications requiring security and scalability
+Exclusions exempt specific VPCs or subnets that legitimately face the internet, such as the public subnets holding a load balancer. That inverts the default, so internet access becomes an exception someone had to create. In a multi-account organization, an EC2 declarative policy, an AWS Organizations policy that holds service settings in place, can enforce it across every account.
 
 ---
 
-### Pattern 3: Multi-AZ High Availability
+## Public IPv4 Costs and IPv6
 
-**Use Case:** Production application requiring resilience to availability zone failures.
+### Every Public IPv4 Address Is Billed
 
-**Architecture:**
+Since February 1, 2024, AWS has charged $0.005 per hour, about $3.60 a month, for every public IPv4 address, whether it is attached to a resource or sitting idle. Addresses you bring to AWS from your own registered ranges (BYOIP) aren't charged. Public addresses hide in more places than instances. Every public NAT gateway, zonal or regional, holds at least one in each AZ it serves, an internet-facing load balancer holds addresses in each AZ it serves, and a subnet with auto-assign enabled gives one to every instance launched there.
 
-```
-Region
-├── AZ 1
-│   ├── Public Subnet 1a (ALB, NAT Gateway)
-│   ├── Private Subnet 1a (Application)
-│   └── Private Subnet 1a (Database Primary)
-└── AZ 2
-    ├── Public Subnet 1b (ALB, NAT Gateway)
-    ├── Private Subnet 1b (Application)
-    └── Private Subnet 1b (Database Standby)
-```
+Three habits keep the count down. Keep workloads in private subnets behind a load balancer, turn off auto-assign on subnets that don't need it, and release Elastic IPs that no longer point at anything.
 
-**Components:**
-- ALB spans both AZs (automatically distributes traffic)
-- Application servers in both AZs (Auto Scaling across AZs)
-- RDS Multi-AZ (automatic failover to standby)
-- NAT gateway in each AZ (prevents single point of failure)
+### IPv6 in a VPC
 
-**Why This Works:**
-- If AZ 1 fails, ALB routes traffic to AZ 2
-- Auto Scaling launches new instances in healthy AZ
-- RDS fails over to standby in AZ 2
-- NAT gateway in AZ 2 continues to function
+A VPC can also have IPv6 blocks, usually an Amazon-provided block from which each subnet takes a `/64`. IPv6 addresses carry no hourly charge. A subnet can be **IPv4-only**, **dual-stack** (both), or **IPv6-only**.
 
-**Trade-Offs:**
-- ✅ Survives entire AZ failure
-- ✅ Higher availability (99.99% instead of 99.9%)
-- ⚠️ Higher cost (duplicate resources across AZs)
-- ⚠️ Cross-AZ data transfer charges
+IPv6 addresses are globally unique and publicly routable, which changes how private subnets are built. A subnet whose route table sends `::/0` to the internet gateway is reachable from the internet over IPv6, with no address translation involved. For a private subnet, the route table sends `::/0` to an **egress-only internet gateway** instead, which lets instances open IPv6 connections outward while blocking inbound ones. It has no charge of its own, though data transfer is still billed.
 
-**When to Use:** Production applications with availability SLAs
+| Subnet | IPv4 default route | IPv6 default route |
+|---|---|---|
+| Public, dual-stack | `0.0.0.0/0` to the internet gateway | `::/0` to the internet gateway |
+| Private, dual-stack | `0.0.0.0/0` to a NAT gateway | `::/0` to an egress-only internet gateway |
 
----
+An IPv6-only subnet can still reach IPv4-only destinations through **DNS64 and NAT64**. With DNS64 enabled on the subnet, the Route 53 Resolver returns a synthesized address in `64:ff9b::/96` for an IPv4-only name. A route sending `64:ff9b::/96` to a NAT gateway then lets the NAT gateway translate the traffic to IPv4. DNS64 is off by default and is enabled per subnet. NAT64 has no setting, since every NAT gateway performs it once that route exists. That means an IPv6-only design removes NAT gateway costs only for traffic whose destinations speak IPv6. Support also varies by AWS service, so check each service a workload depends on before moving it to IPv6-only.
 
-### Pattern 4: Hybrid Cloud (VPN Connection)
-
-**Use Case:** Connect on-premises data center to AWS VPC securely.
-
-**Architecture:**
-
-```
-On-Premises
-   ↓
-Customer Gateway
-   ↓
-VPN Connection (encrypted tunnel over internet)
-   ↓
-Virtual Private Gateway (attached to VPC)
-   ↓
-Private Subnets
-```
-
-**Components:**
-- Virtual Private Gateway attached to VPC
-- Customer Gateway (on-premises VPN device)
-- VPN connection with IPsec tunnels
-- Route table entries for on-premises CIDR blocks
-
-**Use Cases:**
-- Hybrid cloud (some workloads on-premises, some in AWS)
-- Gradual migration to AWS
-- Accessing on-premises databases from AWS applications
-
-**Trade-Offs:**
-- ✅ Secure encrypted connection
-- ✅ Lower cost than Direct Connect
-- ⚠️ Limited bandwidth (typically 1.25 Gbps per tunnel)
-- ⚠️ Latency depends on internet connection quality
-
-**When to Use:** Small to medium data transfer needs, non-latency-sensitive workloads
-
----
-
-## IPv4 Cost Optimization and IPv6
-
-### Public IPv4 Charges (February 2024)
-
-**Major Change:** AWS now charges $0.005/hour ($3.60/month, $43.20/year) for ALL public IPv4 addresses, including previously free addresses on EC2, RDS, ELB, NAT Gateway, and other services.
-
-**Cost Impact:**
-
-| Resource | Previous Cost | Current Cost |
-|----------|--------------|-------------|
-| t2.nano EC2 instance | $4.94/month | $8.74/month (+77%) |
-| NAT Gateway in single AZ | $32.85/month | $36.45/month (+11%) |
-| NAT Gateway in 3 AZs | $98.55/month | $109.35/month (+11%) |
-| ALB with 2 AZs (2 public IPs) | $16.20/month (base) | $23.40/month (+44%) |
-
-**For cost-sensitive workloads, this has significant architectural implications.**
-
-### IPv6 Adoption Strategy
-
-**IPv6 Advantages:**
-- **Free:** No per-address charges for IPv6 addresses
-- **Abundant:** No address exhaustion concerns
-- **AWS Support:** Fully supported across VPC, EC2, ALB, CloudFront, Route 53
-
-**Dual-Stack VPCs:**
-
-```
-VPC: 10.0.0.0/16 (IPv4) + 2600:1f1c:1234:5678::/56 (IPv6)
-├── Public Subnet 1a: 10.0.1.0/24 + 2600:1f1c:1234:5678:0::/64
-│   - ALB: IPv4 + IPv6 (dual-stack)
-│   - Egress-Only Internet Gateway (IPv6 outbound-only)
-├── Private Subnet 1a: 10.0.11.0/24 + 2600:1f1c:1234:5678:1::/64
-│   - EC2 instances: IPv4 + IPv6 (dual-stack)
-└── Private Subnet 1b: 10.0.12.0/24 + 2600:1f1c:1234:5678:2::/64
-    - RDS database: IPv4 only (IPv6 support varies by service)
-```
-
-**Egress-Only Internet Gateway (EIGW):**
-
-For IPv6, the equivalent of NAT Gateway is Egress-Only Internet Gateway:
-- Allows outbound IPv6 traffic from private subnets
-- Blocks inbound IPv6 traffic
-- **No hourly or data processing charges** (unlike NAT Gateway)
-
-**Cost Savings:**
-
-| Scenario | IPv4 Cost (NAT Gateway) | IPv6 Cost (EIGW) | Savings |
-|----------|------------------------|------------------|---------|
-| 3 AZs with 100GB/month | $109.35/month + $13.50/month = $122.85/month | $0/month | $122.85/month (100%) |
-
-### IPv6 Migration Patterns
-
-**Pattern 1: Dual-Stack for Internet-Facing Resources**
-
-1. Associate IPv6 CIDR block with VPC
-2. Assign IPv6 CIDR to public subnets
-3. Update ALB/CloudFront to dual-stack
-4. Update Route 53 with AAAA records
-5. Client applications use IPv6 when available (happy eyeballs algorithm)
-
-**Pattern 2: IPv6-Only for Internal Communication**
-
-1. Create IPv6-only private subnets
-2. Use Egress-Only Internet Gateway for outbound traffic
-3. Enable DNS64 for accessing IPv4 endpoints from IPv6-only instances
-4. Eliminates NAT Gateway costs entirely for those subnets
-
-### IPv4 Cost Optimization Strategies
-
-**1. Minimize Public IP Addresses:**
-- Use private subnets wherever possible
-- Share NAT Gateways across multiple subnets
-- Use PrivateLink for AWS service access instead of NAT Gateway
-
-**2. Use VPC Endpoints:**
-- Gateway endpoints for S3 and DynamoDB (free)
-- Interface endpoints for other AWS services (cheaper than NAT Gateway for API-heavy workloads)
-
-**3. Adopt IPv6 for Internet-Facing Workloads:**
-- Dual-stack ALBs and CloudFront distributions
-- Egress-Only Internet Gateway for outbound (free vs. $32.85/month per NAT Gateway)
-
-**4. Consolidate Resources:**
-- Use fewer, larger EC2 instances instead of many small instances
-- Reduce number of public-facing resources
-
-**5. VPC Sharing:**
-- Share NAT Gateways and VPC endpoints across accounts using AWS RAM
-- Deploy once, use across multiple accounts
-
-### Best Practices (2024)
-
-1. **New architectures:** Start with dual-stack VPCs
-2. **Existing architectures:** Gradually enable IPv6 where possible
-3. **Public-facing services:** Use dual-stack ALB/CloudFront
-4. **Private subnets:** Consider IPv6-only with DNS64 for cost savings
-5. **Monitor IPv4 usage:** Use Cost Explorer to identify high IPv4 costs
-
-**Critical Decision:** For every public IP address you use, ask: "Is this worth $43.20/year?" The answer increasingly drives IPv6 adoption.
+For most teams, dual-stack is the practical step. Serve clients over IPv6 from a dual-stack load balancer, give private subnets an egress-only internet gateway for IPv6 traffic, and keep IPv4 for the destinations that need it.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Forgetting to Update Route Tables
+### A Gateway Without a Route
 
-**Problem:** Creating a NAT gateway or internet gateway but forgetting to add routes to route tables.
+Creating an internet gateway or NAT gateway does nothing until a route table points at it, and a dual-stack subnet needs a separate `::/0` route for IPv6. When resources can't reach the internet, check the route table associated with their subnet before anything else. VPC Reachability Analyzer traces the path between two resources and names the route table, security group, or network ACL that blocks it. VPC Flow Logs record the traffic each network interface accepted and rejected, which shows whether packets arrived at all.
 
-**Result:** Resources can't reach the internet even though the gateway exists.
+### Network ACLs Without Ephemeral Ports
 
-**Solution:** After creating gateways, always update the appropriate route tables with routes pointing to the gateway.
+A missing ephemeral-port rule looks like a security group problem, because requests arrive and responses vanish. Check the network ACL's outbound rules before rewriting security groups, or leave the default network ACL in place and rely on security groups.
 
----
+### Overlapping or Undersized Ranges
 
-### Pitfall 2: NACL Ephemeral Port Rules
+Overlapping and undersized ranges are both expensive to fix after the fact. An overlap is usually found only when two networks need to connect, and an undersized VPC fills up as services that take one address per task grow. Allocate ranges centrally, and size the VPC for the subnets it will need across every AZ.
 
-**Problem:** Creating NACL rules for inbound traffic but forgetting to allow outbound ephemeral ports (1024-65535).
+### One Zonal NAT Gateway for Several AZs
 
-**Result:** Connections fail because response traffic is blocked.
-
-**Solution:** Remember NACLs are stateless. Always allow ephemeral ports for response traffic.
-
----
-
-### Pitfall 3: Overlapping CIDR Blocks
-
-**Problem:** Creating VPCs with overlapping IP ranges (e.g., both VPCs use `10.0.0.0/16`).
-
-**Result:** Cannot peer VPCs or establish connectivity.
-
-**Solution:** Plan IP address allocation upfront. Use non-overlapping RFC 1918 ranges for each VPC.
-
----
-
-### Pitfall 4: Not Planning for Growth
-
-**Problem:** Choosing a small CIDR block (e.g., `/24`) for a VPC that will grow.
-
-**Result:** Running out of IP addresses and needing to migrate to a new VPC.
-
-**Solution:** Choose a CIDR block large enough for expected growth. Use `/16` for production VPCs unless you have specific constraints.
-
----
-
-### Pitfall 5: Single NAT Gateway for High Availability
-
-**Problem:** Using a single NAT gateway for a multi-AZ deployment.
-
-**Result:** If the AZ with the NAT gateway fails, all private subnets lose internet access.
-
-**Solution:** Deploy one NAT gateway per AZ for high availability.
-
----
-
-### Pitfall 6: Security Group Self-Reference Loops
-
-**Problem:** Creating circular security group rules (e.g., SG-A allows traffic from SG-B, and SG-B allows traffic from SG-A) without understanding the implications.
-
-**Result:** Unintended access patterns or complex debugging when traffic doesn't flow as expected.
-
-**Solution:** Document security group relationships clearly. Use explicit source CIDRs when possible for clarity.
+Pointing every private subnet at a single zonal NAT gateway saves the hourly charge, but it ties every zone's internet access to one AZ. It also adds cross-AZ data transfer charges for traffic from the other zones. Use one zonal NAT gateway per AZ, or a regional NAT gateway.
 
 ---
 
 ## Key Takeaways
 
-1. **VPC is the network foundation for all AWS resources.** Without understanding VPC, you cannot design secure, scalable, and resilient architectures.
-
-2. **Public vs. private subnets are determined by route tables.** A subnet with a route to an internet gateway is public; without that route, it's private.
-
-3. **Use PrivateLink (VPC endpoints) to eliminate NAT Gateway costs and improve security.** Gateway endpoints for S3/DynamoDB are free. Interface endpoints for other AWS services cost less than NAT Gateway for API-heavy workloads and keep traffic private.
-
-4. **Public IPv4 addresses now cost $43.20/year each (as of February 2024).** Minimize public IPs, adopt dual-stack IPv6 where possible, and use Egress-Only Internet Gateway (free) instead of NAT Gateway for IPv6 workloads.
-
-5. **VPC Lattice is AWS's modern approach to service-to-service communication.** For microservices across VPCs, use VPC Lattice instead of complex route table management. It provides IAM-based authorization, service discovery, and works with overlapping CIDR blocks.
-
-6. **Use multiple availability zones for high availability.** Deploy resources across at least two AZs with load balancing to survive AZ failures.
-
-7. **Security groups are stateful and operate at the instance level.** They are your primary security control. NACLs are stateless and operate at the subnet level, providing an additional defense layer.
-
-8. **Plan IP address ranges carefully.** Choose non-overlapping CIDR blocks across VPCs to enable future connectivity. Use `/16` for production VPCs unless you have specific constraints. If overlapping CIDRs are unavoidable, VPC Lattice can still connect services.
-
-9. **Multi-VPC connectivity strategy:** VPC Peering for 2-3 VPCs (lowest latency), Transit Gateway for 5+ VPCs or hybrid connectivity, VPC Lattice for HTTP/gRPC service-to-service communication across VPCs.
-
-10. **Defense in depth: use multiple security layers.** Combine security groups, NACLs, IAM policies, VPC endpoints, and encryption to create comprehensive security.
-
-11. **Document your network design.** Future teams need to understand subnet purposes, CIDR allocations, routing decisions, security group relationships, and why you chose VPC Lattice vs. Transit Gateway. Without documentation, they'll make incorrect assumptions that lead to security vulnerabilities or outages.
-
-12. **Test failover scenarios.** Design for high availability, but also test that failover works as expected. Simulate AZ failures to verify that your architecture is truly resilient.
-
-**VPC is not just networking.** It's the security boundary, availability foundation, connectivity layer, and increasingly the cost optimization target (IPv4 charges) for your entire AWS architecture.
+1. **A VPC is Regional and a subnet is zonal.** High availability comes from repeating subnets across at least two AZs.
+2. **Routing, not a setting, makes a subnet public, private, VPN-only, or isolated.** A subnet is public only because its route table points at an internet gateway.
+3. **Plan address space across every network you might connect.** The primary CIDR block can't change, and overlapping ranges can't route to each other.
+4. **Give each AZ its own path out, or use a regional NAT gateway.** Route S3 and DynamoDB traffic through gateway endpoints to keep it off the NAT gateway's per-GB charge.
+5. **Security groups are stateful and per resource, network ACLs are stateless and per subnet.** Use security groups that reference each other as the main control, and network ACLs for coarse denies.
+6. **Block Public Access makes internet exposure an exception.** Turn it on per Region and exclude only the subnets that must face the internet.
+7. **Every public IPv4 address costs money.** Keep workloads private, and move client-facing traffic to dual-stack where the services support it.

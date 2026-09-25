@@ -3,7 +3,7 @@ title: "Gas City Architecture Diagrams"
 layout: resource
 type: reference
 category: "AI"
-description: "C4-style diagrams of Gas City: the system context, the containers on one machine, one controller tick, how routed work finds a session, health patrol and crash recovery, the v1 and v2 formula contracts, pack layering, agent coordination, and trust boundaries."
+description: "C4-style diagrams of Gas City, from its place on one machine down to the loops, contracts, and boundaries inside its controller."
 last_updated: 2026-09-19
 figures:
   - gc-context

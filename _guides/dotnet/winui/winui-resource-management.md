@@ -3,218 +3,153 @@ title: "Resource Management in WinUI 3"
 layout: guide
 category: "WinUI 3"
 subcategory: "Styling & Resources"
-description: "Organizing and managing XAML resources in WinUI 3 using ResourceDictionary, merged dictionaries, resource scoping, and the differences between StaticResource and ThemeResource lookups."
-tags: [winui, winui-3, xaml, resources, styling, architecture, desktop, fundamentals]
+description: "How WinUI 3 finds and applies XAML resources: ResourceDictionary keys, the lookup from an element up to the app and the framework, merged dictionaries and their order, StaticResource versus ThemeResource, theme dictionaries for light, dark, and high contrast, changing resources from code, and where resources should live for startup performance."
+tags: [resourcedictionary, merged-dictionaries, themeresource, theme-dictionaries, high-contrast, fundamentals]
 ---
 
-## Table of Contents
+## What Resources Are For
 
-- [What XAML Resources Are](#what-xaml-resources-are)
-- [ResourceDictionary](#resourcedictionary)
-- [Resource Scoping and Lookup](#resource-scoping-and-lookup)
-- [Merged Dictionaries](#merged-dictionaries)
-- [StaticResource vs ThemeResource](#staticresource-vs-themeresource)
-- [ThemeDictionaries](#themedictionaries)
-- [Resource Organization Strategies](#resource-organization-strategies)
-- [Common Pitfalls](#common-pitfalls)
+A XAML resource is an object defined once under a key and referenced by that key wherever it's needed. A brand color used on forty controls lives in one `SolidColorBrush` resource, and changing the brand color means editing one line. Brushes, colors, styles, control and data templates, storyboards, value converters, and plain values such as a `Thickness` or an `x:Double` all work as resources.
+
+A resource has to be shareable, because one resource can be referenced from many places in the element tree while an element can sit at only one place in it. That rules out controls, panels, shapes, and anything else derived from `UIElement`. A custom class can be a resource if it has a parameterless constructor and doesn't derive from `UIElement`, which is how a value converter gets created from markup.
 
 ---
 
-## What XAML Resources Are
+## ResourceDictionary and Keys
 
-XAML resources are reusable objects defined once and referenced throughout the application. Rather than repeating the same brush color, font size, or control template on every element that needs it, you define the object in one place, give it a key, and reference it by that key wherever it is needed. When you need to change the value later, you change it in one location and every reference updates automatically.
-
-The range of objects that work well as resources is broad. Color brushes and gradients are the most common, since color consistency across an application demands centralized definitions. Styles, which group multiple property setters into a named unit, are nearly as common. Data templates define how a specific data type renders inside a collection control, and those templates typically live as resources so that multiple lists sharing the same item type can share the same presentation logic. Converters, which are objects implementing `IValueConverter` and used in bindings, must be instantiated before they can be referenced in markup; resources are how that instantiation happens at the XAML level without requiring code-behind.
-
-Other candidate resource types include geometry objects for vector paths, font families, numeric constants expressed as doubles or thicknesses, and string values for labels or format strings. Any object that would otherwise be duplicated across multiple XAML files is a resource candidate.
-
----
-
-## ResourceDictionary
-
-A `ResourceDictionary` is the container that holds XAML resources. It behaves like a dictionary where each entry has a string key and an object value. The key is specified using the `x:Key` attribute on the resource element, and this key is what markup extensions like `{StaticResource}` and `{ThemeResource}` use to retrieve the value.
-
-Every XAML element that derives from `FrameworkElement` exposes a `Resources` property of type `ResourceDictionary`. You add resources to this dictionary using property-element syntax directly in the markup file.
+Resources live in a `ResourceDictionary`. Every `FrameworkElement` has a `Resources` property that holds one, and so does `Application`. A WinUI `Window` isn't a `FrameworkElement` and has no `Resources`, so the `<Window.Resources>` familiar from WPF doesn't exist. Resources for one window go on its root element, such as the top-level `Grid`, or in `Application.Resources`. Each resource takes a key through `x:Key`, and markup references it with `{StaticResource key}` or `{ThemeResource key}`:
 
 ```xml
 <Page.Resources>
     <SolidColorBrush x:Key="PrimaryBrush" Color="#0078D4" />
-    <x:Double x:Key="CardCornerRadius">8</x:Double>
     <Thickness x:Key="CardPadding">16,12,16,12</Thickness>
 </Page.Resources>
+
+<Border Padding="{StaticResource CardPadding}" Background="{StaticResource PrimaryBrush}" />
 ```
 
-Every resource must have an `x:Key`. Without it, the XAML parser will throw an error at load time because there is no way to address an unnamed resource in a dictionary. The only exception is implicit styles, which are styles without an `x:Key` but with a `TargetType` set; these apply automatically to all elements of that type within scope, so the type itself serves as the lookup key.
+Every resource needs a key. A `Style`, `ControlTemplate`, or `DataTemplate` that sets `TargetType` and has no `x:Key` is keyed by that type instead. The framework applies such an implicit style or template to every matching element in scope that doesn't set its own, and markup can't reference it by name, since `{StaticResource}` takes only string keys. Give resources an `x:Key`, not an `x:Name`. An `x:Name` on a resource generates a code-behind field and makes the resource get created as soon as its dictionary is, and Microsoft's pages disagree on whether markup can look it up by that name at all.
 
-When the XAML parser encounters `{StaticResource PrimaryBrush}`, it needs to find an entry with that key in a `ResourceDictionary`. The parser searches the resource dictionaries attached to elements in the visual tree, starting from the element that contains the reference and walking up toward the root. This lookup process is described in more detail in the next section.
-
-The `ResourceDictionary` class also supports loading resources lazily by wrapping them in a `ResourceDictionary.ThemeDictionaries` or by using the deferred loading capability, though most applications rely on standard eager loading where all resources in a dictionary are parsed and instantiated when the dictionary is loaded.
+Keys must be unique within one dictionary. The same key can appear in dictionaries at different levels, and the lookup order below decides which one a reference gets.
 
 ---
 
-## Resource Scoping and Lookup
+## How a Reference Is Resolved
 
-Resource dictionaries can be attached at different levels of the element tree, and where you attach a dictionary determines which elements can use the resources it contains. The three primary attachment points are the application, individual pages or windows, and individual controls.
+When XAML loads and meets `{StaticResource CardPadding}`, the framework searches in this order and stops at the first match:
 
-Resources defined in `App.xaml` are globally available. Every element in the application can reference them because `App.xaml` represents the top of the resource lookup hierarchy. This makes it the right home for resources shared across the entire application, such as the primary brand colors, the base button style, or a commonly used converter instance.
+1. The `Resources` of the element that makes the reference, then of each parent up to the root of that XAML, usually the page.
+2. `Application.Resources`, including every dictionary it merges. In an app built from the project template, that includes `XamlControlsResources`, which supplies the WinUI control styles and theme brushes such as `TextFillColorPrimaryBrush`.
+3. The system resources that Windows supplies, such as `SystemColorWindowTextColor` and `SystemAccentColor`.
 
-```xml
-<!-- App.xaml -->
-<Application.Resources>
-    <SolidColorBrush x:Key="BrandBrush" Color="#0078D4" />
-    <local:BoolToVisibilityConverter x:Key="BoolToVisibility" />
-</Application.Resources>
-```
+{% include figure.html id="winui-resource-lookup" %}
 
-Page-level resources are defined in the `Resources` section of a page or window. They are available to any element within that page but are not visible to other pages. This is appropriate for resources that are specific to a particular view, such as a data template for an item type that only one page renders, or a style variant that only one screen uses.
+If no level has the key, loading throws a XAML parse exception. That holds for `{ThemeResource}` as much as `{StaticResource}`, and the markup compiler doesn't always catch it, so a misspelled key can surface only when the page loads.
 
-Control-level resources, defined in the `Resources` section of a specific control, are the most tightly scoped. Only elements within that control's subtree can reference them. This is rarely the right choice for styles or brushes, but it can be useful for small converters or templates that are genuinely local to a self-contained control.
+Because the search stops at the first match, a key defined on a page shadows the same key in `Application.Resources`, and a key on a `Border` shadows the page's key for the elements inside that `Border`. A section of the UI can override an app-wide value this way on purpose. The same mechanism produces confusing results when two unrelated resources share a name by accident, and prefixing keys by area, such as `Card` or `Nav`, keeps that rare.
 
-When the runtime resolves a resource reference, it starts at the element where the reference appears and walks up the element tree, checking each element's `Resources` dictionary. If it reaches the root of the tree without finding the key, it falls back to `Application.Resources`. If the key is still not found, a runtime exception occurs for `{StaticResource}` references, while `{ThemeResource}` references may fail silently depending on context.
-
-This lookup order means that a resource defined at the page level will shadow a resource with the same key defined at the application level. Pages can intentionally override global resources this way, though accidental shadowing through naming collisions is a common source of confusing behavior.
+Within one dictionary, a resource can reference only resources defined above it in the file, because forward references aren't supported. A brush goes before the style that uses it. The same rule applies across levels. App resources load before any page, so a page can reference them freely, but an app resource can't reference a page's.
 
 ---
 
 ## Merged Dictionaries
 
-As an application grows, placing all resources directly in `App.xaml` or page files becomes unwieldy. Merged dictionaries solve this by letting you split resources across separate XAML files while still making them available as a unified lookup namespace.
-
-A `ResourceDictionary` has a `MergedDictionaries` collection that can contain other `ResourceDictionary` instances, each loaded from a separate file via its `Source` attribute. When the runtime performs a resource lookup, it searches the merged dictionaries as if their contents were part of the parent dictionary.
+A dictionary can pull in other dictionaries through its `MergedDictionaries` collection, which is how resources get split across files. Each file has a `<ResourceDictionary>` root and contains only resources. A dictionary file usually has no code-behind. The exception is one whose templates use `{x:Bind}`, which needs an `x:Class` and a code-behind class, and is merged by instantiating that class rather than through `Source`. `MergedDictionaries` is a property of `ResourceDictionary`, so using it means writing the dictionary element out explicitly instead of letting `Resources` create one implicitly. This is `App.xaml` as the project template creates it, with app files added:
 
 ```xml
 <Application.Resources>
     <ResourceDictionary>
         <ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary Source="/Assets/Styles/Colors.xaml" />
-            <ResourceDictionary Source="/Assets/Styles/Typography.xaml" />
-            <ResourceDictionary Source="/Assets/Styles/Controls.xaml" />
+            <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            <ResourceDictionary Source="Styles/Colors.xaml" />
+            <ResourceDictionary Source="Styles/Typography.xaml" />
+            <ResourceDictionary Source="Styles/Controls.xaml" />
         </ResourceDictionary.MergedDictionaries>
+
+        <SolidColorBrush x:Key="BrandBrush" Color="#0078D4" />
     </ResourceDictionary>
 </Application.Resources>
 ```
 
-Notice that when you use `MergedDictionaries`, you must wrap `Application.Resources` in an explicit `<ResourceDictionary>` element. This is a common stumbling block: the merged dictionaries syntax requires the outer dictionary to be declared as an explicit element rather than relying on the implicit dictionary that the `Resources` property provides. Forgetting this wrapper results in a parse error.
+`XamlControlsResources` holds the WinUI control styles and theme resources, and it defines a large number of keys. A dictionary later in the list wins over an earlier one, so Microsoft says to list `XamlControlsResources` first, where it can't override the app's own styles and resources.
 
-Each file referenced via `Source` is a standalone XAML file whose root element is `<ResourceDictionary>`. These files contain only resources; they have no code-behind and no `x:Class` attribute. They are pure data files that the resource system loads and merges.
+Order matters because of how lookup searches a dictionary. It checks the dictionary's own keys first, then the merged dictionaries in the reverse of their declared order. `BrandBrush` above beats any `BrandBrush` in the merged files, and a key defined in both `Colors.xaml` and `Controls.xaml` resolves to the one in `Controls.xaml`. Key uniqueness is enforced only inside one dictionary, so that collision raises no error, and reordering the list can silently change which value the app uses. The same rule works on purpose as a fallback chain: a default in an early file and a user preference in a later one, as long as the key isn't also defined in the dictionary that does the merging.
 
-Merged dictionaries can themselves contain further `MergedDictionaries`, allowing for hierarchical organization. A top-level `AllStyles.xaml` might merge `Colors.xaml`, `Brushes.xaml`, and `Typography.xaml`, and then `App.xaml` merges only `AllStyles.xaml`. This keeps `App.xaml` readable while allowing fine-grained organization of the resource files themselves.
+Merged files can merge further files, so a `Styles/All.xaml` can gather the others and `App.xaml` merge only that one.
 
 ---
 
 ## StaticResource vs ThemeResource
 
-The difference between `{StaticResource}` and `{ThemeResource}` comes down to when the lookup happens and whether it can repeat.
+`{StaticResource}` resolves once, when the XAML loads, and the property keeps that value. Microsoft compares it to a find-and-replace done at load time.
 
-`{StaticResource}` performs a one-time lookup when the element is loaded. The resource is found, the property value is set, and no further connection between the property and the dictionary entry exists. If the dictionary entry changes after load, or if the application theme changes, the property value is unaffected. This makes `{StaticResource}` slightly more efficient and appropriate for values that are genuinely constant, such as a fixed icon size, a converter instance, or a data template.
+`{ThemeResource}` resolves the same way at load and again each time the theme changes, whether the user switched Windows between light and dark, turned on a contrast theme, or the app set `RequestedTheme` to force a theme on part of the tree. Each time, the property gets the resource from the new theme's dictionary, one of the per-theme dictionaries described in the next section.
 
-`{ThemeResource}` performs an initial lookup at load time like `{StaticResource}`, but it also registers a listener on the property. When the application theme changes between light, dark, and high-contrast modes, the runtime performs a new lookup and updates the property with the resolved value from the new theme's resource dictionary. Any visual element whose appearance should respond to theme changes must use `{ThemeResource}`.
+A value that differs between themes therefore takes `{ThemeResource}` wherever it's used, which mostly means brushes and colors and occasionally sizes and fonts. A `{StaticResource}` reference to a theme-dependent brush shows the right color at launch and keeps it after the user switches themes, a bug that testing in one theme never shows. A value that's the same in every theme, such as a converter or a fixed padding, takes `{StaticResource}`, since Microsoft recommends `{ThemeResource}` only for values that can change between themes.
 
-The WinUI 3 control library uses `{ThemeResource}` pervasively in its default control templates for exactly this reason. Brushes like `ApplicationPageBackgroundThemeBrush`, `TextFillColorPrimaryBrush`, and `SystemFillColorSuccessBrush` are all theme resources that automatically flip between light and dark variants when the user changes their system theme.
-
-For your own resources, the rule of thumb is straightforward: if the value has light and dark variants (or any theme variants at all), use `{ThemeResource}`. If the value is the same regardless of theme, use `{StaticResource}`. Applying `{ThemeResource}` to a resource that has no theme variants wastes the overhead of registering a listener that will never update anything, but it will still work correctly. Applying `{StaticResource}` to a brush that should respond to theme changes will leave that brush stuck on whatever theme was active when the page loaded, which is a subtle bug that only manifests when users switch themes while the application is running.
+The framework's own brushes, such as `TextFillColorPrimaryBrush`, `CardBackgroundFillColorDefaultBrush`, and `SystemFillColorCriticalBrush`, all vary by theme, and the built-in control templates reference them with `{ThemeResource}`. App markup that uses them should do the same.
 
 ---
 
-## ThemeDictionaries
+## Theme Dictionaries
 
-`ThemeDictionaries` is how you define the per-theme variants of your resources within a single `ResourceDictionary`. Rather than creating entirely separate files for light and dark themes, you nest dictionaries within the `ThemeDictionaries` collection, each keyed to a theme name.
-
-The recognized theme keys are `Light`, `Dark`, and `HighContrast`. The runtime inspects the application's current theme and selects the matching dictionary when resolving `{ThemeResource}` references.
+A dictionary's `ThemeDictionaries` collection holds one dictionary per theme, keyed `Light`, `Dark`, and `HighContrast`, each defining the same keys with different values. A `{ThemeResource}` reference picks the dictionary that matches the theme in effect:
 
 ```xml
-<ResourceDictionary>
+<!-- Styles/Colors.xaml -->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="CardBorderBrush" Color="#E0E0E0" />
+            <SolidColorBrush x:Key="CardSurfaceBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CardAccentBrush" Color="#0063B1" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
-            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#2B2B2B" />
-            <SolidColorBrush x:Key="CardBorderBrush" Color="#404040" />
+            <SolidColorBrush x:Key="CardSurfaceBrush" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="CardAccentBrush" Color="#60CDFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
-            <SolidColorBrush x:Key="CardBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="CardBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="CardSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>
 ```
 
-Each theme dictionary must define the same set of keys. If `CardBackgroundBrush` exists in the `Light` dictionary but not in the `Dark` dictionary, a `{ThemeResource CardBackgroundBrush}` reference will fail to resolve in dark mode. The runtime does not fall back across theme dictionaries; if the key is absent from the active theme's dictionary, the lookup fails entirely.
+Each theme's dictionary should define every key. When one is missing a key, lookup can fail after the user switches to that theme, and the app won't look right.
 
-The `HighContrast` dictionary deserves particular attention. High-contrast mode uses a small, fixed set of system colors, and those colors are themselves theme resources provided by the system. Referencing them via `{ThemeResource SystemColorWindowColor}` inside your `HighContrast` dictionary ensures that the values remain correct regardless of which specific high-contrast theme the user has selected. Hardcoding hex colors in the `HighContrast` dictionary undermines the purpose of high-contrast support.
+The `HighContrast` dictionary maps to the `SystemColor...Color` resources rather than to fixed colors. A contrast theme lets the user choose the exact colors, and those resources carry the user's choices, so hardcoded hex values there override the setting the user relies on. They're referenced with `{ThemeResource}` so they update when the user changes those colors.
 
-`ThemeDictionaries` can appear in any `ResourceDictionary`, including the per-file dictionaries referenced through `MergedDictionaries`. A common pattern is to have a dedicated `BrandThemes.xaml` file that contains only `ThemeDictionaries`, keeping all theme-aware color definitions in one place while keeping the file focused and readable.
+That is the one exception to a rule for definitions inside theme dictionaries. They reference other resources with `{StaticResource}`, not `{ThemeResource}`. Only values that don't depend on the app's theme, the `SystemColor...` colors and `SystemAccentColor`, take `{ThemeResource}` there. The rule exists because brushes, unlike most XAML objects, are shared by every element that references them. When part of the tree sets a different `RequestedTheme`, re-evaluating a `{ThemeResource}` inside a shared brush for one subtree changes it for the other too, and a dark page can pick up light colors after a light-themed flyout opens.
+
+For the same reason, define `Light` and `Dark` separately rather than a single `Default` dictionary. `Default` is accepted as a key, but a `Default` plus `HighContrast` pair breaks the same way once parts of the app run in different themes.
 
 ---
 
-## Custom Theme Resources (moved from styling)
+## Changing Resources from Code
 
-Defining your own resources that respond to theme changes follows the same pattern WinUI uses internally. You create a `ResourceDictionary` with a `ThemeDictionaries` section containing three child dictionaries keyed as `Light`, `Dark`, and `HighContrast`.
+Code reaches a dictionary through an element's `Resources` property or `Application.Current.Resources`, and reads it like any other dictionary:
 
-```xml
-<ResourceDictionary>
-    <ResourceDictionary.ThemeDictionaries>
-        <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#F5F5F5" />
-            <SolidColorBrush x:Key="AppAccentBrush" Color="#0063B1" />
-        </ResourceDictionary>
-        <ResourceDictionary x:Key="Dark">
-            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#1C1C1C" />
-            <SolidColorBrush x:Key="AppAccentBrush" Color="#60CDFF" />
-        </ResourceDictionary>
-        <ResourceDictionary x:Key="HighContrast">
-            <SolidColorBrush x:Key="AppSurfaceBrush"
-                             Color="{ThemeResource SystemColorWindowColor}" />
-            <SolidColorBrush x:Key="AppAccentBrush"
-                             Color="{ThemeResource SystemColorHighlightColor}" />
-        </ResourceDictionary>
-    </ResourceDictionary.ThemeDictionaries>
-</ResourceDictionary>
+```csharp
+if (Application.Current.Resources.TryGetValue("BrandBrush", out object value))
+{
+    var brandBrush = (SolidColorBrush)value;
+}
 ```
 
-Any resource defined inside `ThemeDictionaries` and referenced with `ThemeResource` will automatically serve the correct variant for the active theme. Resources defined outside `ThemeDictionaries` in the same dictionary are theme-neutral and behave like `StaticResource` values regardless of the markup extension used to reference them.
+Lookup from code is narrower than lookup from markup. It searches that one dictionary and its merged dictionaries, where the last declared still wins, but it never moves up to a parent element or on to `Application.Resources`. A page's `Resources` won't find a brush defined at the app level.
 
-For the High Contrast dictionary, prefer mapping to the Windows system color resources like `SystemColorWindowColor` and `SystemColorButtonTextColor` rather than hard-coding specific colors. Windows surfaces these system colors correctly for each High Contrast theme variant, so deferring to them keeps your application compatible with all the contrast modes a user might have configured.
+Adding or replacing an entry at run time doesn't reach markup that has already loaded, because each reference resolved when its XAML was parsed. Pages loaded afterward do see the new entry. An app that adds resources in code does it in `OnLaunched`, before the first page loads, and not in the `App` constructor, where Microsoft says it can't be done.
 
-Organizing themed resource dictionaries in separate files keeps `App.xaml` from becoming unwieldy. A common pattern places the theme dictionaries in a `Themes/` folder and merges them into `App.xaml` through `ResourceDictionary.MergedDictionaries`.
-
-```xml
-<Application.Resources>
-    <ResourceDictionary>
-        <ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary Source="Themes/BrandBrushes.xaml" />
-            <ResourceDictionary Source="Themes/Typography.xaml" />
-        </ResourceDictionary.MergedDictionaries>
-    </ResourceDictionary>
-</Application.Resources>
-```
+Changing a property on a resource object is different from replacing the entry. Because brushes are shared, setting `Color` on a brush resource changes it for every element that uses the brush.
 
 ---
 
-## Resource Organization Strategies
+## Where Resources Should Live
 
-There is no single correct way to organize resources, but several approaches have proven effective in practice. The choice depends on the size of the application, the team structure, and how much the design system is expected to evolve.
+Placement decides which elements can reach a resource, and it also affects startup time. `App.xaml` and every file it merges are parsed when the app starts, whether or not the first page uses them. A resource that only one page references belongs in that page's `Resources`, unless it's the page the app opens on, and app-level resources are for what several pages share. Merging a file parses the whole file even when the page uses one resource from it, so a file merged into the first page should hold only what startup needs.
 
-Organizing by type is the simplest approach and works well for small-to-medium applications. You create separate files for colors and brushes, typography, spacing and geometry, and control styles. Each file has a clear, focused purpose and stays manageable in size. Developers looking for a specific brush know to check `Colors.xaml` without hunting through unrelated style definitions.
+Unused resources cost little otherwise, since a dictionary creates each resource the first time something requests it, apart from those declared with `x:Name`. A `UserControl` is the exception to watch. A dictionary declared inside one is copied for every instance, so a `UserControl` repeated many times, such as in a list, should take its resources from the page or the app.
 
-Organizing by feature area works better when a large application has sections with distinct visual treatments. A dashboard section might have its own `DashboardStyles.xaml` merged at the page or region level, while an onboarding flow has its own `OnboardingStyles.xaml`. Global shared resources still live in `App.xaml`, but feature-specific styles stay close to the feature code rather than contributing to an ever-growing global file.
-
-Organizing by control type is a middle path where you create one file per major control type, such as `ButtonStyles.xaml`, `CardStyles.xaml`, and `NavigationStyles.xaml`. This mirrors how WinUI 3 itself structures its default styles in the generic theme resources, which can make it easier to compare your overrides against the originals.
-
-Regardless of the organizational strategy, keeping the depth of `MergedDictionaries` chains shallow improves lookup performance. Every level of dictionary nesting adds a traversal step during resource resolution. Two or three levels of nesting is reasonable; more than that is a signal that the organization strategy may be creating unnecessary complexity.
-
----
-
-## Common Pitfalls
-
-Resource key collisions in merged dictionaries are among the most common resource management bugs. When two merged dictionaries define the same key, the one that appears last in the `MergedDictionaries` collection wins. The parser does not warn you about this; it silently uses the last definition. This means the order in which you list dictionaries in `MergedDictionaries` is semantically meaningful, and changing that order can change which resource gets applied. Keeping a consistent naming convention that makes collisions obvious, such as prefixing keys with a file or feature abbreviation, helps prevent this.
-
-Referencing a resource before it is defined causes a runtime exception with `{StaticResource}`. XAML is parsed in document order, and a resource dictionary entry must appear before the first reference to it in the same file. Resources in `App.xaml` are safe to reference from any page because the application resources are loaded before any page is instantiated. But within a single XAML file, if you place a resource reference above the `Resources` section that defines it, the lookup will fail. Merged dictionaries declared before any resource references in the same dictionary load first, so the ordering constraint applies across the merge chain as well.
-
-Circular references, where dictionary A merges dictionary B and dictionary B merges dictionary A, will cause a stack overflow at load time. The parser follows merge references recursively without cycle detection, so the chain loops until the stack exhausts. This is rare in practice but can emerge through indirect dependencies when multiple feature-area files each merge a shared foundation file, and one of those feature files is then merged back into the foundation.
-
-Deep merge chains have a real but often overlooked performance cost. When the runtime resolves a resource key, it searches the current dictionary, then each merged dictionary in reverse order, and then recursively searches within each merged dictionary's own merge chain. An application with a very deep merge hierarchy can cause measurable lookup latency during initial load, especially for pages that reference many distinct resource keys during initialization. Flattening the hierarchy, where possible by consolidating related resources into fewer files, keeps lookup paths short and load times predictable.
-
-Finally, instantiation behavior is worth understanding. Each `ResourceDictionary` instantiates its resources once when the dictionary is loaded. If multiple pages use the same merged dictionary, they share the same resource instances. For brushes and styles this is fine and expected, but for objects with mutable state, a shared instance can produce surprising cross-page side effects. Converters and geometry objects are generally safe to share; controls and view models should never be placed in a resource dictionary, as they will be shared across every consumer and only one instance will exist regardless of how many pages reference them.
+Split the app-level files the way people search for things. Files by kind, such as colors and brushes, typography, spacing, and control styles, suit most apps, since someone looking for a brush opens `Colors.xaml`. A large app whose sections look different adds per-feature files merged by the pages that use them, leaving `App.xaml` for what the whole app shares. Theme dictionaries fit in the colors file, which puts every theme-dependent value in one place.

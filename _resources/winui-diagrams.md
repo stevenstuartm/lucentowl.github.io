@@ -3,7 +3,7 @@ title: "WinUI 3 Diagrams"
 layout: resource
 type: reference
 category: "WinUI 3"
-description: "The diagrams behind the WinUI 3 study guides, starting with how a page's XAML file becomes a class and a tree of objects, how layout measures, arranges, and places each element, how a virtualized list reuses item containers, how a Frame's back and forward stacks change as the user navigates, the parts of a CommandBar, and how a templated control's class finds its parts and states by name in whichever template is applied, where x:Bind and Binding each find their source, how one search moves between view, view model, and model, and how work from other threads reaches the UI thread through its queue, and how each window gets its own service scope."
+description: "The diagrams behind the WinUI 3 study guides: how a desktop app's markup, layout, controls, data, and threads fit together at run time."
 last_updated: 2026-09-24
 figures:
   - winui-markup-to-objects
@@ -18,7 +18,15 @@ figures:
   - winui-mvvm-command-loop
   - winui-ui-thread-queue
   - winui-di-window-scopes
-tags: [diagrams, xaml-syntax, code-behind, xaml-layout, measure-arrange, ui-virtualization, frame-navigation, templated-controls, data-binding, mvvm, dispatcherqueue, dependency-injection]
+  - winui-resource-lookup
+  - winui-fluent-easing
+  - winui-title-bar-regions
+  - winui-key-routing
+  - winui-activation-redirect
+  - winui-island-focus
+  - winui-runtime-deployment
+  - winui-island-migration
+tags: [diagrams, xaml-layout, data-binding, mvvm, templated-controls, dispatcherqueue]
 related_guides:
   - /study-guides/dotnet/winui/winui-xaml-fundamentals.html
   - /study-guides/dotnet/winui/winui-layout-system.html
@@ -30,4 +38,12 @@ related_guides:
   - /study-guides/dotnet/winui/winui-mvvm-toolkit.html
   - /study-guides/dotnet/winui/winui-threading-and-dispatching.html
   - /study-guides/dotnet/winui/winui-dependency-injection.html
+  - /study-guides/dotnet/winui/winui-resource-management.html
+  - /study-guides/dotnet/winui/winui-animations-and-motion.html
+  - /study-guides/dotnet/winui/winui-window-management.html
+  - /study-guides/dotnet/winui/winui-input-handling.html
+  - /study-guides/dotnet/winui/winui-app-lifecycle.html
+  - /study-guides/dotnet/winui/winui-win32-interop.html
+  - /study-guides/dotnet/winui/winui-packaging-and-deployment.html
+  - /study-guides/dotnet/winui/winui-migration-wpf-uwp.html
 ---

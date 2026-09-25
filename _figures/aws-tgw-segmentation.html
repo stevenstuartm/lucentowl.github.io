@@ -1,0 +1,68 @@
+---
+title: "Transit Gateway Route Tables as Segments"
+kind: boundary
+system: aws
+summary: "One transit gateway whose route tables keep dev and prod apart."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" role="img" aria-labelledby="awsw-title awsw-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsw-title">A transit gateway whose route tables let prod and dev reach shared services but not each other</title>
+<desc id="awsw-desc">Four attachments connect to one transit gateway: a prod VPC, a dev VPC, a shared services VPC, and a VPN to the on-premises network. The prod VPC and the VPN are associated with the prod route table, which has routes to prod, shared services, and on-premises. The dev VPC is associated with the dev route table, which has routes to dev and shared services only. The shared services VPC is associated with a shared route table with routes to every attachment. Because neither the prod nor the dev route table has a route to the other, prod and dev can't reach each other, even though both are attached to the same transit gateway.</desc>
+<style>
+.awsw-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsw-hub { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsw-rt { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1; }
+.awsw-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsw-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsw-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsw-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsw-no { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsw-att { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsw-block { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsw-box" x="40" y="60" width="190" height="54" rx="6"/>
+<text class="awsw-n" x="135" y="83" text-anchor="middle">Prod VPC</text>
+<text class="awsw-k" x="135" y="100" text-anchor="middle">[prod route table]</text>
+
+<rect class="awsw-box" x="40" y="300" width="190" height="54" rx="6"/>
+<text class="awsw-n" x="135" y="323" text-anchor="middle">Dev VPC</text>
+<text class="awsw-k" x="135" y="340" text-anchor="middle">[dev route table]</text>
+
+<rect class="awsw-box" x="690" y="60" width="190" height="54" rx="6"/>
+<text class="awsw-n" x="785" y="83" text-anchor="middle">Shared services VPC</text>
+<text class="awsw-k" x="785" y="100" text-anchor="middle">[shared route table]</text>
+
+<rect class="awsw-box" x="690" y="300" width="190" height="54" rx="6"/>
+<text class="awsw-n" x="785" y="323" text-anchor="middle">VPN to on-premises</text>
+<text class="awsw-k" x="785" y="340" text-anchor="middle">[prod route table]</text>
+
+<rect class="awsw-hub" x="380" y="170" width="160" height="70" rx="8"/>
+<text class="awsw-n" x="460" y="200" text-anchor="middle">Transit gateway</text>
+<text class="awsw-k" x="460" y="217" text-anchor="middle">[one Region]</text>
+
+<path class="awsw-att" d="M230,100 L380,185"/>
+<path class="awsw-att" d="M230,315 L380,225"/>
+<path class="awsw-att" d="M690,100 L540,185"/>
+<path class="awsw-att" d="M690,315 L540,225"/>
+
+<path class="awsw-block" d="M135,114 L135,300"/>
+<text class="awsw-no" x="147" y="200">no route</text>
+<text class="awsw-no" x="147" y="216">either way</text>
+
+<text class="awsw-lab" x="460" y="276" text-anchor="middle">Each line is an attachment. The bracket names the</text>
+<text class="awsw-lab" x="460" y="292" text-anchor="middle">route table it is associated with.</text>
+
+<text class="awsw-t" x="40" y="396">Route tables</text>
+<rect class="awsw-rt" x="40" y="406" width="260" height="70" rx="6"/>
+<text class="awsw-t" x="52" y="426">Prod route table</text>
+<text class="awsw-lab" x="52" y="446">routes to prod, shared services,</text>
+<text class="awsw-lab" x="52" y="462">and on-premises</text>
+<rect class="awsw-rt" x="330" y="406" width="260" height="70" rx="6"/>
+<text class="awsw-t" x="342" y="426">Dev route table</text>
+<text class="awsw-lab" x="342" y="446">routes to dev and shared services</text>
+<rect class="awsw-rt" x="620" y="406" width="260" height="70" rx="6"/>
+<text class="awsw-t" x="632" y="426">Shared route table</text>
+<text class="awsw-lab" x="632" y="446">routes to every attachment</text>
+</g>
+</svg>

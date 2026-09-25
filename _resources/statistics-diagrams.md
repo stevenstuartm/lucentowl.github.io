@@ -3,7 +3,7 @@ title: "Statistics Diagrams"
 layout: resource
 type: reference
 category: "Data & Analytics"
-description: "The charts behind the analytics and statistics study guide: a box plot with its outlier fence, the 68-95-99.7 rule, where the mean and median fall in skewed and two-peaked data, what the correlation coefficient sees, how sample averages form a bell curve, repeated confidence intervals, the p-value of an A/B test, and the power of that test."
+description: "The charts behind the analytics and statistics study guide: how data is summarized, how it is distributed, and how tests and intervals turn samples into conclusions."
 last_updated: 2026-09-24
 figures:
   - st-box-plot

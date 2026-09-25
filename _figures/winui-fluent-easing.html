@@ -1,0 +1,47 @@
+---
+title: "Fluent Easing Curves"
+kind: chart
+system: winui
+summary: "Progress over time for the Fluent entrance and exit curves."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="fe-title fe-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="fe-title">The Fluent entrance and exit easing curves</title>
+<desc id="fe-desc">Two charts of animation progress, from start to end, against time. The left chart shows the entrance curve, fast out, slow in, cubic-bezier(0, 0, 0, 1): progress shoots up almost immediately and then flattens, so an entering element covers most of its distance early and eases into place. The right chart shows the exit curve, slow out, fast in, cubic-bezier(1, 0, 1, 1): progress stays near the start for most of the duration and then rises steeply, so a leaving element starts slowly and accelerates away. Each chart has a dashed diagonal line for comparison, showing constant-speed linear motion.</desc>
+<style>
+.fe-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.fe-lin { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.fe-c { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.75; }
+.fe-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.fe-n { font-size: 14px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.fe-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.fe-s { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.fe-a { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.fe-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="fe-hd" x="90" y="50">ENTERING</text>
+<text class="fe-n" x="90" y="72">Fast out, slow in</text>
+<text class="fe-k" x="90" y="89">cubic-bezier(0, 0, 0, 1)</text>
+<path class="fe-axis" d="M90,94 L90,320 L396,320"/>
+<line class="fe-lin" x1="90" y1="320" x2="390" y2="100"/>
+<path class="fe-c" d="M90.0,320.0 L90.0,319.8 L90.0,319.3 L90.0,318.4 L90.1,317.2 L90.2,315.7 L90.3,313.8 L90.5,311.7 L90.7,309.3 L91.0,306.6 L91.4,303.7 L91.8,300.5 L92.4,297.1 L93.1,293.5 L93.8,289.7 L94.7,285.6 L95.7,281.4 L96.8,277.0 L98.1,272.5 L99.5,267.8 L101.1,263.0 L102.9,258.0 L104.8,253.0 L106.9,247.8 L109.2,242.6 L111.7,237.2 L114.4,231.9 L117.3,226.4 L120.5,221.0 L123.9,215.5 L127.5,210.0 L131.4,204.5 L135.5,199.0 L139.9,193.6 L144.6,188.1 L149.5,182.8 L154.8,177.4 L160.4,172.2 L166.2,167.0 L172.4,162.0 L178.9,157.0 L185.7,152.2 L192.9,147.5 L200.4,143.0 L208.3,138.6 L216.6,134.4 L225.2,130.3 L234.2,126.5 L243.6,122.9 L253.4,119.5 L263.6,116.3 L274.2,113.4 L285.3,110.7 L296.8,108.3 L308.7,106.2 L321.1,104.3 L333.9,102.8 L347.2,101.6 L361.0,100.7 L375.2,100.2 L390.0,100.0"/>
+<text class="fe-s" x="82" y="104" text-anchor="end">end</text>
+<text class="fe-s" x="82" y="324" text-anchor="end">start</text>
+<text class="fe-s" x="240.0" y="340" text-anchor="middle">time</text>
+<text class="fe-a" x="90" y="364">arrives fast, eases into place</text>
+<text class="fe-hd" x="520" y="50">EXITING</text>
+<text class="fe-n" x="520" y="72">Slow out, fast in</text>
+<text class="fe-k" x="520" y="89">cubic-bezier(1, 0, 1, 1)</text>
+<path class="fe-axis" d="M520,94 L520,320 L826,320"/>
+<line class="fe-lin" x1="520" y1="320" x2="820" y2="100"/>
+<path class="fe-c" d="M520.0,320.0 L534.8,319.8 L549.0,319.3 L562.8,318.4 L576.1,317.2 L588.9,315.7 L601.3,313.8 L613.2,311.7 L624.7,309.3 L635.8,306.6 L646.4,303.7 L656.6,300.5 L666.4,297.1 L675.8,293.5 L684.8,289.7 L693.4,285.6 L701.7,281.4 L709.6,277.0 L717.1,272.5 L724.3,267.8 L731.1,263.0 L737.6,258.0 L743.8,253.0 L749.6,247.8 L755.2,242.6 L760.5,237.2 L765.4,231.9 L770.1,226.4 L774.5,221.0 L778.6,215.5 L782.5,210.0 L786.1,204.5 L789.5,199.0 L792.7,193.6 L795.6,188.1 L798.3,182.8 L800.8,177.4 L803.1,172.2 L805.2,167.0 L807.1,162.0 L808.9,157.0 L810.5,152.2 L811.9,147.5 L813.2,143.0 L814.3,138.6 L815.3,134.4 L816.2,130.3 L816.9,126.5 L817.6,122.9 L818.2,119.5 L818.6,116.3 L819.0,113.4 L819.3,110.7 L819.5,108.3 L819.7,106.2 L819.8,104.3 L819.9,102.8 L820.0,101.6 L820.0,100.7 L820.0,100.2 L820.0,100.0"/>
+<text class="fe-s" x="512" y="104" text-anchor="end">end</text>
+<text class="fe-s" x="512" y="324" text-anchor="end">start</text>
+<text class="fe-s" x="670.0" y="340" text-anchor="middle">time</text>
+<text class="fe-a" x="520" y="364">starts slowly, accelerates away</text>
+<line class="fe-c" x1="90" y1="400" x2="130" y2="400"/>
+<text class="fe-lg" x="140" y="404">Fluent curve</text>
+<line class="fe-lin" x1="260" y1="400" x2="300" y2="400"/>
+<text class="fe-lg" x="310" y="404">linear, for comparison</text>
+</g>
+</svg>

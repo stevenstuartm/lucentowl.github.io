@@ -1,0 +1,59 @@
+---
+title: "IMDSv2 Tokens and the Hop Limit"
+kind: flow
+system: aws
+summary: "Why containers need a metadata hop limit of 2 to receive an IMDSv2 token."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 320" role="img" aria-labelledby="awsh-title awsh-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsh-title">How the IMDSv2 token response reaches an application on the instance but not one in a container unless the hop limit is 2</title>
+<desc id="awsh-desc">An application on the instance requests an IMDSv2 session token from the instance metadata service with a PUT request, and the token comes back one network hop away. An application in a container on the same instance sends the same request through the container network bridge, so the response has to travel two hops. The token response is sent with an IP time-to-live equal to the hop limit, so with a hop limit of 1 it expires at the bridge and never reaches the container. A hop limit of 2 lets it through.</desc>
+<style>
+.awsh-inst { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsh-ctr { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsh-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsh-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsh-t { font-size: 11px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsh-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsh-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsh-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsh-no { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsh-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awsh-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsh-inst" x="20" y="20" width="560" height="250" rx="10"/>
+<text class="awsh-vt" x="36" y="42">EC2 instance</text>
+
+<rect class="awsh-box" x="50" y="60" width="200" height="50" rx="6"/>
+<text class="awsh-n" x="150" y="82" text-anchor="middle">Application</text>
+<text class="awsh-k" x="150" y="99" text-anchor="middle">[on the instance]</text>
+
+<rect class="awsh-ctr" x="40" y="150" width="230" height="100" rx="8"/>
+<text class="awsh-t" x="52" y="168">Container</text>
+<rect class="awsh-box" x="60" y="180" width="190" height="50" rx="6"/>
+<text class="awsh-n" x="155" y="202" text-anchor="middle">Application</text>
+<text class="awsh-k" x="155" y="219" text-anchor="middle">[in a container]</text>
+
+<rect class="awsh-box" x="330" y="180" width="200" height="50" rx="6"/>
+<text class="awsh-n" x="430" y="202" text-anchor="middle">Container network</text>
+<text class="awsh-n" x="430" y="218" text-anchor="middle">bridge</text>
+
+<rect class="awsh-box" x="660" y="110" width="240" height="70" rx="6"/>
+<text class="awsh-n" x="780" y="136" text-anchor="middle">Instance metadata service</text>
+<text class="awsh-k" x="780" y="154" text-anchor="middle">[169.254.169.254]</text>
+
+<path class="awsh-flow" d="M250,85 L658,130" marker-end="url(#awsh-a)"/>
+<text class="awsh-lab" x="330" y="86">PUT for a token, reply 1 hop away</text>
+
+<path class="awsh-flow" d="M250,205 L328,205" marker-end="url(#awsh-a)"/>
+<path class="awsh-flow" d="M530,205 L658,160" marker-end="url(#awsh-a)"/>
+<text class="awsh-lab" x="596" y="216">reply 2 hops away</text>
+
+<text class="awsh-no" x="290" y="260">hop limit 1: the reply expires at the bridge</text>
+
+<text class="awsh-lab" x="20" y="296">The token reply leaves with an IP time-to-live equal to the hop limit. Every later metadata GET must carry the token.</text>
+</g>
+</svg>

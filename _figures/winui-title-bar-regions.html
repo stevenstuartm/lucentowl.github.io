@@ -1,0 +1,78 @@
+---
+title: "Regions of a Custom Title Bar"
+kind: structure
+system: winui
+summary: "Which parts of an extended title bar drag the window and which take clicks."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="wtb-title wtb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wtb-title">The regions of a custom title bar in a WinUI window</title>
+<desc id="wtb-desc">A horizontal strip across the top of a window, 48 pixels tall, divided from left to right. At the far left is a padding column the width of LeftInset. Next come the app icon and title, then an empty stretch, then a search box, then another empty stretch, and at the far right a padding column the width of RightInset under the system caption buttons: minimize, maximize, and close. The icon, title, and both empty stretches are caption regions, where pressing and dragging moves the window. The search box is a passthrough region, registered with InputNonClientPointerSource, so clicks reach the control. The caption buttons are drawn by the system, not by the app's XAML. Below the strip, a note says passthrough rectangles are in physical pixels measured from the window's client-area origin at the top left, and are recomputed when the title bar element changes size.</desc>
+<defs>
+<pattern id="wtb-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+<line x1="0" y1="0" x2="0" y2="8" stroke="var(--color-border, #DDE3EB)" stroke-width="3"/>
+</pattern>
+<marker id="wtb-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-text-light, #4A5568)"/>
+</marker>
+</defs>
+<style>
+.wtb-frame { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wtb-drag { fill: url(#wtb-hatch); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wtb-pass { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 2; stroke-dasharray: 6 4; }
+.wtb-inset { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 3 3; }
+.wtb-sys { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wtb-content { fill: var(--color-bg, #F7F9FC); stroke: none; }
+.wtb-guide { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wtb-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wtb-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wtb-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wtb-a { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wtb-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wtb-g { font-size: 13px; fill: var(--color-text, #1A202C); }
+.wtb-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wtb-hd" x="40" y="36">TOP OF THE WINDOW, CONTENT EXTENDED INTO THE TITLE BAR</text>
+
+<rect class="wtb-frame" x="40" y="60" width="820" height="130" rx="4"/>
+<rect class="wtb-content" x="41" y="109" width="818" height="80"/>
+<text class="wtb-k" x="330" y="156" text-anchor="middle">page content</text>
+
+<rect class="wtb-inset" x="40" y="60" width="16" height="48"/>
+<rect class="wtb-drag" x="56" y="60" width="304" height="48"/>
+<text class="wtb-t" x="70" y="89">▣  Order Desk</text>
+<rect class="wtb-pass" x="360" y="66" width="200" height="36" rx="4"/>
+<text class="wtb-k" x="376" y="89">Search orders</text>
+<rect class="wtb-drag" x="560" y="60" width="162" height="48"/>
+<rect class="wtb-sys" x="722" y="60" width="138" height="48"/>
+<text class="wtb-g" x="745" y="89">–</text>
+<text class="wtb-g" x="790" y="89">□</text>
+<text class="wtb-g" x="836" y="89">✕</text>
+<line class="wtb-guide" x1="40" y1="108" x2="860" y2="108"/>
+
+<line class="wtb-guide" x1="48" y1="200" x2="48" y2="116" marker-end="url(#wtb-arrow)"/>
+<text class="wtb-k" x="40" y="216">LeftInset</text>
+
+<line class="wtb-guide" x1="200" y1="200" x2="200" y2="116" marker-end="url(#wtb-arrow)"/>
+<text class="wtb-n" x="160" y="216">Caption</text>
+<text class="wtb-k" x="160" y="231">drags the window</text>
+
+<line class="wtb-guide" x1="460" y1="200" x2="460" y2="108" marker-end="url(#wtb-arrow)"/>
+<text class="wtb-a" x="410" y="216">Passthrough</text>
+<text class="wtb-k" x="410" y="231">clicks reach the control</text>
+
+<line class="wtb-guide" x1="640" y1="200" x2="640" y2="116" marker-end="url(#wtb-arrow)"/>
+<text class="wtb-n" x="600" y="216">Caption</text>
+
+<line class="wtb-guide" x1="791" y1="200" x2="791" y2="116" marker-end="url(#wtb-arrow)"/>
+<text class="wtb-t" x="730" y="216">Caption buttons</text>
+<text class="wtb-k" x="730" y="231">drawn by the system,</text>
+<text class="wtb-k" x="730" y="245">RightInset wide</text>
+
+<rect class="wtb-drag" x="40" y="280" width="30" height="16"/>
+<text class="wtb-lg" x="80" y="292">caption region, the drag area</text>
+<rect class="wtb-pass" x="290" y="280" width="30" height="16" rx="2"/>
+<text class="wtb-lg" x="330" y="292">passthrough rectangle, in physical pixels from the client-area origin</text>
+<text class="wtb-lg" x="40" y="318">Recompute the passthrough rectangles when the title bar element changes size.</text>
+</g>
+</svg>

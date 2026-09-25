@@ -1,0 +1,97 @@
+---
+title: "Cross-Zone Load Balancing On and Off"
+kind: rules
+system: aws
+summary: "How 2 and 8 targets in two zones split traffic with cross-zone on and off."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 350" role="img" aria-labelledby="awsx-title awsx-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsx-title">How cross-zone load balancing changes each target's share of traffic</title>
+<desc id="awsx-desc">Two Availability Zones each hold one load balancer node, and each node receives 50 percent of client traffic. Zone a has 2 targets and zone b has 8. With cross-zone load balancing on, each node spreads its traffic across all 10 targets, so every target receives 10 percent. With it off, each node sends traffic only to targets in its own zone, so the 2 targets in zone a receive 25 percent each and the 8 targets in zone b receive 6.25 percent each.</desc>
+<style>
+.awsx-az { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsx-grp { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsx-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsx-hot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsx-h { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsx-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsx-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsx-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsx-p { font-size: 10px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsx-ph { font-size: 10px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsx-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsx-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsx-cross { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="awsx-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsx-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awsx-h" x="225" y="30" text-anchor="middle">Cross-zone on (ALB default)</text>
+
+<rect class="awsx-az" x="10" y="48" width="200" height="252" rx="8"/>
+<text class="awsx-t" x="22" y="68">Availability Zone a</text>
+<rect class="awsx-box" x="40" y="80" width="140" height="44" rx="6"/>
+<text class="awsx-n" x="110" y="99" text-anchor="middle">Load balancer node</text>
+<text class="awsx-k" x="110" y="115" text-anchor="middle">receives 50%</text>
+<rect class="awsx-grp" x="30" y="176" width="160" height="60" rx="6"/>
+<rect class="awsx-box" x="50" y="191" width="50" height="30" rx="4"/>
+<text class="awsx-p" x="75" y="210" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="120" y="191" width="50" height="30" rx="4"/>
+<text class="awsx-p" x="145" y="210" text-anchor="middle">10%</text>
+
+<rect class="awsx-az" x="220" y="48" width="210" height="252" rx="8"/>
+<text class="awsx-t" x="232" y="68">Availability Zone b</text>
+<rect class="awsx-box" x="255" y="80" width="140" height="44" rx="6"/>
+<text class="awsx-n" x="325" y="99" text-anchor="middle">Load balancer node</text>
+<text class="awsx-k" x="325" y="115" text-anchor="middle">receives 50%</text>
+<rect class="awsx-grp" x="230" y="176" width="190" height="106" rx="6"/>
+<rect class="awsx-box" x="238" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="258" y="205" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="284" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="304" y="205" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="330" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="350" y="205" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="376" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="396" y="205" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="238" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="258" y="261" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="284" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="304" y="261" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="330" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="350" y="261" text-anchor="middle">10%</text>
+<rect class="awsx-box" x="376" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="396" y="261" text-anchor="middle">10%</text>
+
+<path class="awsx-flow" d="M90,124 L90,174" marker-end="url(#awsx-a)"/>
+<path class="awsx-flow" d="M345,124 L345,174" marker-end="url(#awsx-a)"/>
+<path class="awsx-cross" d="M130,124 L290,174" marker-end="url(#awsx-b)"/>
+<path class="awsx-cross" d="M300,124 L150,174" marker-end="url(#awsx-b)"/>
+
+<text class="awsx-h" x="685" y="30" text-anchor="middle">Cross-zone off (NLB and GWLB default)</text>
+
+<rect class="awsx-az" x="470" y="48" width="200" height="252" rx="8"/>
+<text class="awsx-t" x="482" y="68">Availability Zone a</text>
+<rect class="awsx-box" x="500" y="80" width="140" height="44" rx="6"/>
+<text class="awsx-n" x="570" y="99" text-anchor="middle">Load balancer node</text>
+<text class="awsx-k" x="570" y="115" text-anchor="middle">receives 50%</text>
+<rect class="awsx-grp" x="490" y="176" width="160" height="60" rx="6"/>
+<rect class="awsx-hot" x="510" y="191" width="50" height="30" rx="4"/>
+<text class="awsx-ph" x="535" y="210" text-anchor="middle">25%</text>
+<rect class="awsx-hot" x="580" y="191" width="50" height="30" rx="4"/>
+<text class="awsx-ph" x="605" y="210" text-anchor="middle">25%</text>
+
+<rect class="awsx-az" x="680" y="48" width="210" height="252" rx="8"/>
+<text class="awsx-t" x="692" y="68">Availability Zone b</text>
+<rect class="awsx-box" x="715" y="80" width="140" height="44" rx="6"/>
+<text class="awsx-n" x="785" y="99" text-anchor="middle">Load balancer node</text>
+<text class="awsx-k" x="785" y="115" text-anchor="middle">receives 50%</text>
+<rect class="awsx-grp" x="690" y="176" width="190" height="106" rx="6"/>
+<rect class="awsx-box" x="698" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="718" y="205" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="744" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="764" y="205" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="790" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="810" y="205" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="836" y="186" width="40" height="30" rx="4"/><text class="awsx-p" x="856" y="205" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="698" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="718" y="261" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="744" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="764" y="261" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="790" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="810" y="261" text-anchor="middle">6.25%</text>
+<rect class="awsx-box" x="836" y="242" width="40" height="30" rx="4"/><text class="awsx-p" x="856" y="261" text-anchor="middle">6.25%</text>
+
+<path class="awsx-flow" d="M570,124 L570,174" marker-end="url(#awsx-a)"/>
+<path class="awsx-flow" d="M785,124 L785,174" marker-end="url(#awsx-a)"/>
+
+<text class="awsx-lab" x="10" y="330">Each box is one target and its share of all client traffic. Dashed arrows are traffic crossing between zones.</text>
+</g>
+</svg>

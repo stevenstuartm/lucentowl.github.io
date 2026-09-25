@@ -3,7 +3,7 @@ title: "Security Diagrams"
 layout: resource
 type: reference
 category: "Security"
-description: "The diagrams behind the security study guides: envelope encryption with a key management service, the OIDC authorization code flow with PKCE, an order API's trust boundaries and the threats on them, and zero trust policy decision and enforcement."
+description: "The diagrams behind the security study guides: how keys, identities, trust boundaries, and access decisions protect a system."
 last_updated: 2026-09-22
 figures:
   - sec-envelope-encryption

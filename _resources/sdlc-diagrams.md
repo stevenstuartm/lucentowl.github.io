@@ -3,7 +3,7 @@ title: "SDLC Diagrams"
 layout: resource
 type: reference
 category: "SDLC"
-description: "The diagrams behind the software development lifecycle study guides: how sequential, iterative and continuous delivery traverse the same activities, the spiral model, one Scrum Sprint, burndown and cumulative flow charts, a value stream map, pipeline patterns, Team Topologies, and the Shape Up cycle."
+description: "The diagrams behind the software development lifecycle study guides: how delivery models, team structures, and flow metrics shape the way work moves."
 last_updated: 2026-09-23
 figures:
   - sdlc-traversal
@@ -15,7 +15,7 @@ figures:
   - sdlc-value-stream-map
   - sdlc-shape-up-cycle
   - sdlc-pipeline-patterns
-tags: [diagrams, scrum, kanban, value-stream-mapping, cicd, team-topologies, shape-up]
+tags: [diagrams, scrum, kanban, value-stream-mapping, cicd, team-topologies]
 related_guides:
   - /study-guides/sdlc/sdlc.html
   - /study-guides/sdlc/sdlc-methodologies.html

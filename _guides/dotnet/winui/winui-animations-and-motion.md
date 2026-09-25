@@ -3,314 +3,291 @@ title: "Animations and Motion"
 layout: guide
 category: "WinUI 3"
 subcategory: "Styling & Resources"
-description: "Implementing animations in WinUI 3 using storyboards, visual state transitions, connected animations, implicit animations, and the composition visual layer for high-performance motion."
-tags: [winui, winui-3, xaml, animations, fluent-design, composition, desktop, practical]
+description: "Choosing and building motion in WinUI 3: the theme and page transitions controls already provide, implicit property transitions, storyboards and which of them run off the UI thread, visual state transitions, connected animations, composition animations, the Community Toolkit's AnimationBuilder, Lottie and AnimatedIcon, and Fluent timing and easing."
+tags: [storyboards, theme-transitions, connected-animations, composition-animations, easing, lottie, practical]
 ---
 
-## Table of Contents
+## Choosing a Mechanism
 
-- [Why Motion Matters](#why-motion-matters)
-- [Storyboarded Animations](#storyboarded-animations)
-- [Visual States and Transitions](#visual-states-and-transitions)
-- [Connected Animations](#connected-animations)
-- [Implicit Animations via the Community Toolkit](#implicit-animations-via-the-community-toolkit)
-- [Composition Animations and the Visual Layer](#composition-animations-and-the-visual-layer)
-- [Easing Functions](#easing-functions)
-- [Performance Considerations](#performance-considerations)
+WinUI has several ways to animate, each suited to a different job. Earlier rows in this table cost less code and give up less control:
+
+| Need | Reach for |
+| --- | --- |
+| Standard motion for content appearing, moving, or navigating | Theme transitions and page transitions |
+| One property that should change smoothly whenever it's set | An implicit property transition, such as `OpacityTransition` |
+| A specific sequence of property changes started from code or a visual state | A storyboard |
+| One element traveling from one page to the next | A connected animation |
+| Physics, input-driven, or scroll-driven motion that must never stall | A composition animation |
+| Show and hide animations declared in XAML, or short fluent code | The Community Toolkit's animations |
+| Motion drawn by a designer | Lottie, through `AnimatedVisualPlayer` or `AnimatedIcon` |
 
 ---
 
-## Why Motion Matters
+## Start with the Motion WinUI Already Has
 
-Motion in a UI is not decoration. When used with purpose, it guides a user's attention toward what changed, provides feedback that an action was received, and creates a sense of continuity that ties separate views together into a coherent experience. Fluent Design treats motion as one of its five building blocks alongside material, light, depth, and scale, and WinUI 3 reflects that philosophy throughout its control library.
+Motion tells the user what changed: an item sliding into a list shows where it went, and a page that slides in from the right reads as a step forward. WinUI's controls already do most of this. `ListView` and `GridView` animate items being added, removed, and reordered, flyouts and menus animate open and closed, and buttons react to the pointer. An app that replaces those templates loses the built-in motion along with them.
 
-The guiding principle behind Fluent motion is that animations should feel physically grounded. Objects entering the screen should accelerate from rest; objects leaving should decelerate before disappearing. This mirrors how things behave in the physical world and reduces the cognitive overhead of processing sudden visual changes. When a panel slides in from the side with a gentle ease-out curve, the brain interprets it as arriving from somewhere rather than materializing from nothing. That interpretation, however brief, keeps the interface readable.
+The next layer is the animation library, which applies Windows' standard motion to app elements without any timing code. There are two kinds, and they differ in what triggers them.
 
-Well-designed motion also signals system state. A button that briefly scales down on press confirms the tap was registered even before any data returns from a server. A progress ring spinning in a defined area tells the user where to look for results. These signals reduce uncertainty and make the interface feel responsive even during inherently slow operations.
+**Theme transitions** run automatically when something happens to an element, such as its first appearance or a change of position. They're added to an element's `Transitions` collection, or to a container's `ChildrenTransitions` or `ItemContainerTransitions` so every child takes part, one after another:
+
+```xml
+<ItemsControl ItemsSource="{x:Bind ViewModel.Cards}">
+    <ItemsControl.ItemContainerTransitions>
+        <TransitionCollection>
+            <EntranceThemeTransition />
+            <RepositionThemeTransition />
+        </TransitionCollection>
+    </ItemsControl.ItemContainerTransitions>
+</ItemsControl>
+```
+
+| Transition | Runs when |
+| --- | --- |
+| `EntranceThemeTransition` | An element or a container's children first appear |
+| `RepositionThemeTransition` | An element moves to a new position, such as when a sibling is removed |
+| `AddDeleteThemeTransition` | Items are added to or removed from a container |
+| `ReorderThemeTransition` | Items change order, typically by drag and drop |
+| `ContentThemeTransition` | An element's content changes |
+| `PaneThemeTransition`, `EdgeUIThemeTransition` | A large pane or a small bar slides in from an edge |
+| `PopupThemeTransition` | A popup appears |
+
+**Theme animations**, such as `FadeInThemeAnimation`, `FadeOutThemeAnimation`, `PopInThemeAnimation`, and `DrillInThemeAnimation`, have no trigger of their own. They go inside a storyboard, described below, and run when it starts or when a visual state uses it.
+
+**Page transitions** come from the `Frame`. `Frame.Navigate` takes a `NavigationTransitionInfo` that picks the motion for that navigation:
+
+```csharp
+// A forward step into detail
+ContentFrame.Navigate(typeof(OrderDetailPage), orderId, new DrillInNavigationTransitionInfo());
+
+// A move between peer sections, such as tabs
+ContentFrame.Navigate(typeof(ReportsPage), null,
+    new SlideNavigationTransitionInfo { Effect = SlideNavigationTransitionEffect.FromRight });
+```
+
+`EntranceNavigationTransitionInfo` gives the default page entrance, and `SuppressNavigationTransitionInfo` turns the transition off for one navigation.
+
+---
+
+## Implicit Transitions on a Property
+
+Sometimes a property just needs to change smoothly instead of jumping, with nothing to trigger by hand. Several `UIElement` properties take a transition object that animates every change to them:
+
+```xml
+<Border x:Name="DetailsPanel" Opacity="{x:Bind ViewModel.DetailsOpacity, Mode=OneWay}">
+    <Border.OpacityTransition>
+        <ScalarTransition Duration="0:0:0.25" />
+    </Border.OpacityTransition>
+</Border>
+```
+
+`OpacityTransition` and `RotationTransition` take a `ScalarTransition`, and `TranslationTransition` and `ScaleTransition` take a `Vector3Transition`. `Panel`, `Border`, and `ContentPresenter` have a `BackgroundTransition` that takes a `BrushTransition`, which only animates between solid color brushes. Setting the property from code or through a binding then animates instead of snapping, so a view model can change a value without knowing it's animated.
 
 ---
 
 ## Storyboarded Animations
 
-The most explicit way to animate in WinUI 3 is through a `Storyboard`, which is a timeline-based container that applies one or more animations to dependency properties over a defined duration. Each animation targets a specific property on a specific named element, and the storyboard coordinates them all.
-
-A `DoubleAnimation` transitions a numeric property from one value to another. Because most layout and visual properties, such as `Opacity`, `Width`, and `RenderTransform` sub-properties, are represented as doubles, this is by far the most common animation type.
+A `Storyboard` animates dependency properties over time, and it's what an app writes when the library doesn't have the motion it needs. Each animation inside names a target element with `Storyboard.TargetName` and a property with `Storyboard.TargetProperty`. `DoubleAnimation` animates numbers, `ColorAnimation` colors, and `PointAnimation` points:
 
 ```xml
-<Storyboard x:Name="FadeInStoryboard">
-    <DoubleAnimation
-        Storyboard.TargetName="MyPanel"
-        Storyboard.TargetProperty="Opacity"
-        From="0" To="1"
-        Duration="0:0:0.3" />
-</Storyboard>
+<Page.Resources>
+    <Storyboard x:Name="ShowPanelStoryboard">
+        <DoubleAnimation Storyboard.TargetName="Panel"
+                         Storyboard.TargetProperty="Opacity"
+                         From="0" To="1" Duration="0:0:0.25" />
+        <DoubleAnimation Storyboard.TargetName="Panel"
+                         Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                         From="24" To="0" Duration="0:0:0.25" />
+    </Storyboard>
+</Page.Resources>
 ```
-
-For color transitions, `ColorAnimation` works the same way but interpolates between two `Color` values. This is useful for hover effects on custom-drawn elements or for animating brush colors defined in a control template.
-
-```xml
-<Storyboard x:Name="HighlightStoryboard">
-    <ColorAnimation
-        Storyboard.TargetName="BackgroundBrush"
-        Storyboard.TargetProperty="Color"
-        To="#FF0078D4"
-        Duration="0:0:0.2" />
-</Storyboard>
-```
-
-When you need fine-grained control over the path of an animation rather than simple interpolation from one value to another, keyframe animations let you define intermediate values at specific time offsets. `DoubleAnimationUsingKeyFrames` holds a collection of `LinearDoubleKeyFrame`, `SplineDoubleKeyFrame`, or `EasingDoubleKeyFrame` entries, each specifying a value and a `KeyTime`.
-
-```xml
-<DoubleAnimationUsingKeyFrames
-    Storyboard.TargetName="MyElement"
-    Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)">
-    <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
-    <EasingDoubleKeyFrame KeyTime="0:0:0.15" Value="-12">
-        <EasingDoubleKeyFrame.EasingFunction>
-            <CubicEase EasingMode="EaseOut" />
-        </EasingDoubleKeyFrame.EasingFunction>
-    </EasingDoubleKeyFrame>
-    <EasingDoubleKeyFrame KeyTime="0:0:0.3" Value="0">
-        <EasingDoubleKeyFrame.EasingFunction>
-            <CubicEase EasingMode="EaseIn" />
-        </EasingDoubleKeyFrame.EasingFunction>
-    </EasingDoubleKeyFrame>
-</DoubleAnimationUsingKeyFrames>
-```
-
-To start a storyboard from code, call `Begin()` on it. For storyboards defined in a `Page.Resources` or `Control.Resources`, retrieve them by key and call `Begin` with the owning object as the argument. For storyboards defined directly inside a trigger or event handler in XAML, the name is sufficient.
 
 ```csharp
-FadeInStoryboard.Begin();
+ShowPanelStoryboard.Begin();
 ```
 
-The `Storyboard.TargetProperty` syntax supports property paths for nested properties. To animate the X component of a `TranslateTransform` that is set as the `RenderTransform` of an element, the path is `(UIElement.RenderTransform).(TranslateTransform.X)`. The parentheses indicate type qualification, which the parser needs when walking a property chain through a non-concrete type like `Transform`.
+A storyboard declared with `x:Name` in the page's resources is a field in code-behind, so `Begin()` starts it with no arguments, and `Stop`, `Pause`, and `Resume` control it afterward. The `Completed` event fires when it finishes. Starting one in the page's `Loaded` handler, rather than earlier, keeps it from being cut off while the rest of the page loads. A property path such as `(UIElement.RenderTransform).(TranslateTransform.Y)` steps into a sub-property, and it only works if the element already has a `TranslateTransform` as its `RenderTransform`.
+
+Key-frame animations such as `DoubleAnimationUsingKeyFrames` pass through several values in turn. Their key frames interpolate linearly (`LinearDoubleKeyFrame`), jump (`DiscreteDoubleKeyFrame`), follow a Bezier curve (`SplineDoubleKeyFrame`), or use an easing function (`EasingDoubleKeyFrame`). `ObjectAnimationUsingKeyFrames` with `DiscreteObjectKeyFrame` is the only way to animate a value that isn't a number, color, or point, such as `Visibility` or a brush resource, and control templates use it for exactly that.
+
+### Dependent and Independent Animations
+
+Where a storyboard runs depends on what it animates. Besides the UI thread, every WinUI app has a composition thread that prepares what reaches the screen, and animations it can run by itself keep going while the UI thread is busy. An animation of `Opacity`, of a sub-property of `RenderTransform`, `Projection`, or `Clip`, of `Canvas.Left` or `Canvas.Top`, or of a `SolidColorBrush`'s `Color` is independent in this sense, and the composition thread runs it. Almost anything else, such as `Width`, `Height`, or `Margin`, is dependent, because every frame changes layout on the UI thread.
+
+A dependent animation doesn't run at all by default, and nothing reports it except a warning in the debug output. It runs only when the animation sets `EnableDependentAnimation="True"`. The default is deliberate, to make the UI-thread cost a conscious choice. Moving an element with `TranslateTransform` instead of `Margin`, or growing it with `ScaleTransform` instead of `Width`, gives the same look as an independent animation.
 
 ---
 
-## Visual States and Transitions
+## Visual State Transitions
 
-Most controls in WinUI 3 manage their appearance through `VisualStateManager`, which defines a set of named states and the property values or animations that apply in each state. Rather than writing imperative code to update the UI in response to every user interaction, you declare the desired appearance for each state and let the framework handle transitions.
-
-States are grouped into `VisualStateGroup` elements, where only one state in a group is active at a time. A `Button`, for example, has a group containing states like `Normal`, `PointerOver`, `Pressed`, and `Disabled`. When the user moves the pointer over the button, the framework transitions from `Normal` to `PointerOver`, applying any setters or storyboards defined for that state.
+Controls change appearance through visual states, and a change of state is instant by default. A `VisualTransition` in the state group animates it, generating an animation from the old and new values. It only works for properties the states animate with a storyboard, and only for number, color, and point values. A state that uses `VisualState.Setters` still snaps, so states meant to transition smoothly hold a zero-length animation instead of a setter:
 
 ```xml
-<VisualStateManager.VisualStateGroups>
-    <VisualStateGroup x:Name="CommonStates">
-        <VisualState x:Name="Normal" />
-        <VisualState x:Name="PointerOver">
-            <VisualState.Setters>
-                <Setter Target="RootBorder.Background"
-                        Value="{ThemeResource ButtonBackgroundPointerOver}" />
-            </VisualState.Setters>
-        </VisualState>
-        <VisualState x:Name="Pressed">
-            <VisualState.Storyboard>
-                <Storyboard>
-                    <DoubleAnimation
-                        Storyboard.TargetName="RootBorder"
-                        Storyboard.TargetProperty="Opacity"
-                        To="0.8" Duration="0:0:0.05" />
-                </Storyboard>
-            </VisualState.Storyboard>
-        </VisualState>
-    </VisualStateGroup>
-</VisualStateManager.VisualStateGroups>
+<VisualStateGroup x:Name="CommonStates">
+    <VisualStateGroup.Transitions>
+        <VisualTransition From="PointerOver" To="Normal" GeneratedDuration="0:0:0.2" />
+        <VisualTransition To="Pressed" GeneratedDuration="0:0:0.05" />
+    </VisualStateGroup.Transitions>
+    <VisualState x:Name="Normal" />
+    <VisualState x:Name="PointerOver">
+        <Storyboard>
+            <DoubleAnimation Storyboard.TargetName="RootBorder" Storyboard.TargetProperty="Opacity"
+                             To="0.9" Duration="0" />
+        </Storyboard>
+    </VisualState>
+    <VisualState x:Name="Pressed">
+        <Storyboard>
+            <DoubleAnimation Storyboard.TargetName="RootBorder" Storyboard.TargetProperty="Opacity"
+                             To="0.8" Duration="0" />
+        </Storyboard>
+    </VisualState>
+</VisualStateGroup>
 ```
 
-`VisualTransition` elements let you specify how the framework animates between two states automatically without embedding a storyboard in each state definition. A transition from `PointerOver` to `Normal` with a duration of 200 milliseconds means any property change made by the `PointerOver` state will reverse smoothly over that duration when the user moves the pointer away.
-
-```xml
-<VisualStateGroup.Transitions>
-    <VisualTransition From="PointerOver" To="Normal" GeneratedDuration="0:0:0.2" />
-    <VisualTransition To="Pressed" GeneratedDuration="0:0:0.05" />
-</VisualStateGroup.Transitions>
-```
-
-To trigger a state change from code, call `VisualStateManager.GoToState(control, "StateName", useTransitions: true)`. Passing `true` for `useTransitions` tells the framework to play any applicable `VisualTransition`; passing `false` snaps immediately to the new state.
+For a state that uses setters, an `OpacityTransition` on the element gives the same smoothing. A transition with only `To` applies from any state, and `GeneratedEasingFunction` sets its curve. `VisualStateManager.GoToState(control, "Pressed", useTransitions: true)` plays the matching transition, and `false` jumps straight to the state.
 
 ---
 
 ## Connected Animations
 
-Connected animations create the illusion that a single element travels from one page to another during a navigation. The element appears to lift off from its position on the source page, scale or transform as needed, and settle into its position on the destination page. This continuity makes navigation feel spatial rather than abrupt.
-
-The mechanism is coordinated through [ConnectedAnimationService](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.media.animation.connectedanimationservice){:target="_blank" rel="noopener noreferrer"}, which acts as a shared store between pages. On the source page, before navigation occurs, you call `PrepareToAnimate` with a key and the element that should appear to travel.
+A connected animation makes one element appear to travel from one page to the next during navigation, such as a thumbnail growing into the detail page's hero image. `ConnectedAnimationService` holds the animation between the two pages under a key:
 
 ```csharp
-// On the source page, before navigating
-var service = ConnectedAnimationService.GetForCurrentView();
-service.PrepareToAnimate("thumbnailAnimation", ThumbnailImage);
-Frame.Navigate(typeof(DetailPage), item);
+// Source page, just before navigating
+ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("productImage", ThumbnailImage);
+Frame.Navigate(typeof(ProductDetailPage), product.Id, new SuppressNavigationTransitionInfo());
 ```
 
-On the destination page, in `OnNavigatedTo` or after the page has loaded, you retrieve the animation by key and call `TryStart` with the element where the animation should land.
-
 ```csharp
-// On the destination page
+// Destination page
 protected override void OnNavigatedTo(NavigationEventArgs e)
 {
     base.OnNavigatedTo(e);
-    var service = ConnectedAnimationService.GetForCurrentView();
-    var animation = service.GetAnimation("thumbnailAnimation");
-    animation?.TryStart(HeroImage);
+    ConnectedAnimationService.GetForCurrentView()
+        .GetAnimation("productImage")
+        ?.TryStart(HeroImage);
 }
 ```
 
-If the destination element is inside a `ListView` or `GridView`, use the overload of `TryStart` that accepts the list control and the data item, which lets the framework scroll the item into view before starting the animation.
+`GetAnimation` returns `null` when nothing was prepared under that key, such as when the page was reached another way, hence the `?.`. The page transition is suppressed so the traveling element isn't competing with a whole-page slide.
 
-Connected animations work best for elements that have a meaningful visual relationship across the two pages, such as a product thumbnail that expands into a full hero image on a detail page. When the element's size or shape changes significantly between source and destination, the `Configuration` property on the animation controls how the transition handles the geometry change, with options like `BasicConnectedAnimationConfiguration` for scaling and `DirectConnectedAnimationConfiguration` for straight-line travel.
+Timing is what makes connected animations fail. Microsoft advises starting the animation within about 250 milliseconds of preparing it, and one not started within three seconds is discarded, so `TryStart` fails. The destination page can't wait for a network call before starting it, and the hero image should start its animation with whatever placeholder it has.
+
+When one end is an item in a `ListView` or `GridView`, the list has its own methods. `PrepareConnectedAnimation` takes the item and the name of the element in its template, and `TryStartConnectedAnimationAsync` starts an animation that lands on that item, waiting until its container exists. The list doesn't scroll by itself, so the page going back calls `ScrollIntoView` for the item first.
+
+An animation's `Configuration` chooses the style of motion. `GravityConnectedAnimationConfiguration`, the default, suits a forward navigation, and `DirectConnectedAnimationConfiguration` suits going back.
 
 ---
 
-## Implicit Animations via the Community Toolkit
+## Composition Animations
 
-The [Windows Community Toolkit](https://github.com/CommunityToolkit/WindowsCommunityToolkit){:target="_blank" rel="noopener noreferrer"} provides a higher-level animation system built on top of the composition layer. Implicit animations in this system fire automatically when a property changes, without requiring manual storyboard management. You configure the animation behavior once, attach it to an element, and then normal property updates trigger smooth transitions.
+XAML draws through the composition layer, `Microsoft.UI.Composition`, and animating it directly gives motion that runs entirely on the composition thread, with physics such as springs and values computed every frame from other values.
 
-The `AnimationSet` class defines a collection of animations that play together, and attached properties like `Explicit.Animations` and `Implicit.ShowAnimations` control when they trigger.
+The cost is that composition animations are code only, name their target properties as strings, and can't be declared in XAML, so they're worth it for motion the other mechanisms can't produce smoothly.
+
+The simplest route uses the composition-backed properties on `UIElement`: `Translation`, `Scale`, `Rotation`, `RotationAxis`, `CenterPoint`, `TransformMatrix`, and `Opacity`. They move an element without changing layout, and `UIElement.StartAnimation` runs a composition animation on them:
+
+```csharp
+Compositor compositor = CompositionTarget.GetCompositorForCurrentThread();
+
+var spring = compositor.CreateSpringVector3Animation();
+spring.Target = "Scale";
+spring.FinalValue = new Vector3(1.1f, 1.1f, 1f);
+spring.DampingRatio = 0.4f;
+spring.Period = TimeSpan.FromMilliseconds(50);
+
+CardBorder.CenterPoint = new Vector3((float)CardBorder.ActualWidth / 2, (float)CardBorder.ActualHeight / 2, 0);
+CardBorder.StartAnimation(spring);
+```
+
+A spring animation has no duration. It moves toward `FinalValue` like a spring, and a lower `DampingRatio` makes it overshoot and bounce more before it settles. `CenterPoint` makes the scale grow from the middle rather than the top-left corner.
+
+Apart from `Opacity`, these properties can't be mixed with the older `RenderTransform`, `RenderTransformOrigin`, `Projection`, and `Transform3D` on the same element, and setting one kind after the other fails with an error. Each XAML element is drawn by a composition `Visual`, and an app can also take that object over through `ElementCompositionPreview.GetElementVisual` to animate it directly. An element handled that way can't use these properties either.
+
+An expression animation recomputes a value every frame from other values, such as a scroll position. For the common case of a background that scrolls more slowly than the content in front of it, WinUI's `ParallaxView` control does it without any code. A hand-built version reads the scroll position on the composition thread and drives the background's `Translation`, here at 30% of the content's speed:
+
+```csharp
+var scrollProperties = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(ContentScroller);
+Compositor compositor = CompositionTarget.GetCompositorForCurrentThread();
+
+var parallax = compositor.CreateExpressionAnimation("Vector3(0, scroll.Translation.Y * 0.3, 0)");
+parallax.SetReferenceParameter("scroll", scrollProperties);
+parallax.Target = "Translation";
+BackgroundImage.StartAnimation(parallax);
+```
+
+The UI thread never sees a scroll event, so the effect stays locked to the finger or wheel even while the app is busy.
+
+---
+
+## The Community Toolkit's Animations
+
+Composition animations take several objects and string property names for a simple effect. The `CommunityToolkit.WinUI.Animations` package wraps them in a fluent `AnimationBuilder`:
 
 ```csharp
 using CommunityToolkit.WinUI.Animations;
 
-// Animate Opacity and Translation when the element appears
-AnimationBuilder.Create()
-    .Opacity(from: 0, to: 1, duration: TimeSpan.FromMilliseconds(300))
-    .Translation(axis: Axis.Y, from: 20, to: 0, duration: TimeSpan.FromMilliseconds(300))
-    .Start(MyElement);
-```
-
-For layout-driven animations, where moving an element from one grid position to another should animate rather than snap, the Community Toolkit's implicit animation infrastructure can intercept the `Offset` property change on the underlying visual and animate it. This makes reordering items in a dynamic layout feel fluid without any per-item animation code.
-
-The advantage of this pattern is that it decouples animation logic from application logic. A view model raises a property changed notification, the layout updates, and the implicit animation system handles the motion. Animation behavior becomes a UI concern configured in the view rather than business logic embedded in a view model.
-
----
-
-## Animation Helpers
-
-The `CommunityToolkit.WinUI.Animations` package provides a fluent API called `AnimationBuilder` for constructing composition animations without directly manipulating the Windows Composition API. Composition animations are more performant than storyboard animations because they run on the compositor thread rather than the UI thread, but the raw API has significant ceremony. `AnimationBuilder` reduces that ceremony considerably.
-
-A simple entrance animation that fades a control in while translating it upward looks like this:
-
-```csharp
 await AnimationBuilder.Create()
-    .Opacity(to: 1, from: 0, duration: TimeSpan.FromMilliseconds(300))
-    .Translation(axis: Axis.Y, to: 0, from: 24, duration: TimeSpan.FromMilliseconds(300))
-    .StartAsync(MyControl);
+    .Opacity(to: 1, from: 0, duration: TimeSpan.FromMilliseconds(250))
+    .Translation(Axis.Y, to: 0, from: 24, duration: TimeSpan.FromMilliseconds(250))
+    .StartAsync(DetailsPanel);
 ```
 
-The `StartAsync` method applies the animation to the target element and returns a task that completes when the animation finishes. You can use `Start` for fire-and-forget scenarios or `StartAsync` when subsequent operations depend on the animation completing.
+`Opacity` and `Translation` animate on the composition layer by default, and a `layer: FrameworkLayer.Xaml` argument switches them to a XAML storyboard. The helpers are a package dependency, which is the main cost. `StartAsync` finishes when the animation does, so code that should run afterward can await it, and `Start` doesn't wait.
 
-`AnimationBuilder` also supports implicit animations, which trigger automatically when an element's properties change rather than being started explicitly. Attaching an implicit animation means that whenever the element's opacity or offset changes for any reason, including data binding updates, the change happens through the configured animation rather than instantly:
+The toolkit's implicit animations are declared in XAML through attached properties. `Implicit.ShowAnimations` plays when an element becomes visible, `Implicit.HideAnimations` when it's hidden, and `Implicit.Animations` when composition properties such as its offset change, which animates an element moving to a new place in the layout:
 
-```csharp
-AnimationBuilder.Create()
-    .Opacity(duration: TimeSpan.FromMilliseconds(200))
-    .Translation(duration: TimeSpan.FromMilliseconds(200))
-    .AttachImplicit(MyControl);
+```xml
+<Border xmlns:animations="using:CommunityToolkit.WinUI.Animations"
+        Visibility="{x:Bind ViewModel.IsDetailsVisible, Mode=OneWay}">
+    <animations:Implicit.ShowAnimations>
+        <animations:OpacityAnimation From="0" To="1" Duration="0:0:0.25" />
+        <animations:TranslationAnimation From="0,24,0" To="0,0,0" Duration="0:0:0.25" />
+    </animations:Implicit.ShowAnimations>
+    <animations:Implicit.HideAnimations>
+        <animations:OpacityAnimation To="0" Duration="0:0:0.15" />
+    </animations:Implicit.HideAnimations>
+</Border>
 ```
 
-For more advanced scenarios, the toolkit exposes typed wrappers around the underlying Windows Composition APIs, including helpers for `ExpressionAnimation` and `KeyFrameAnimation` that reduce boilerplate while preserving the full flexibility of the composition layer.
+Setting `Visibility` to `Collapsed` removes an element at once, so an exit animation in plain XAML means a storyboard that fades the element and sets `Visibility` with a discrete key frame at the end, started from code. With the toolkit's hide animation, the view model only flips a Boolean and the element still animates out.
 
 ---
 
-## Lottie Animations
+## Lottie and AnimatedIcon
 
-[Lottie-Windows](https://learn.microsoft.com/en-us/windows/communitytoolkit/animations/lottie){:target="_blank" rel="noopener noreferrer"} integrates After Effects animations exported in the [Lottie JSON format](https://airbnb.io/lottie/){:target="_blank" rel="noopener noreferrer"} into WinUI 3 applications. Designers export animations from After Effects using the [Bodymovin plugin](https://aescripts.com/bodymovin/){:target="_blank" rel="noopener noreferrer"} and developers play them using `AnimatedVisualPlayer` and `LottieVisualSource`.
-
-Install the package and reference the Lottie namespace:
+Designed animations such as an illustrated empty state or a loading character come from After Effects, exported as Lottie JSON. `AnimatedVisualPlayer` is the WinUI control that plays them, and the `CommunityToolkit.WinUI.Lottie` package supplies `LottieVisualSource`, which reads the JSON:
 
 ```xml
-xmlns:lottie="using:CommunityToolkit.WinUI.Lottie"
-```
-
-Then play a bundled animation file:
-
-```xml
-<AnimatedVisualPlayer x:Name="Player" AutoPlay="True">
-    <lottie:LottieVisualSource UriSource="ms-appx:///Assets/Animations/loading.json" />
+<AnimatedVisualPlayer xmlns:lottie="using:CommunityToolkit.WinUI.Lottie" AutoPlay="True">
+    <lottie:LottieVisualSource UriSource="ms-appx:///Assets/Animations/empty-inbox.json" />
 </AnimatedVisualPlayer>
 ```
 
-For the best performance, Microsoft provides the [LottieGen tool](https://learn.microsoft.com/en-us/windows/communitytoolkit/animations/lottie-scenarios/getting_started_codegen){:target="_blank" rel="noopener noreferrer"} that converts Lottie JSON files into C# or C++ code at build time. The generated code runs entirely in the composition layer without any JSON parsing at runtime, eliminating startup latency for complex animations. LottieGen-generated classes implement `IAnimatedVisualSource2`, which `AnimatedVisualPlayer` accepts directly.
+The animation renders as composition vectors, so it scales without blurring. Reading JSON at run time costs startup time. LottieGen, a command-line tool run ahead of time with `-WinUIVersion 3.0` for WinUI 3, converts the file into a C# class instead, and the player takes an instance of that class directly as its `Source`.
 
-WinUI 3's `AnimatedIcon` control integrates Lottie animations into interactive controls like buttons and navigation items. An `AnimatedIcon` plays different segments of a Lottie animation based on the control's visual state, so a button can transition smoothly between its normal, hover, pressed, and disabled states with a single coordinated animation rather than separate assets.
+`AnimatedIcon` is an icon that animates between states, like the settings gear turning in `NavigationView`. The animation file marks each segment with a named marker, such as `NormalToPointerOver`, and the icon plays the segment that matches its current state. Some controls, including `NavigationViewItem` and `AutoSuggestBox`, set that state for it. Elsewhere, such as in a `Button`, the app calls `AnimatedIcon.SetState` from its own pointer handlers. WinUI includes ready-made sources in the `Microsoft.UI.Xaml.Controls.AnimatedVisuals` namespace, and custom ones come from LottieGen output with the markers in place. `FallbackIconSource` supplies a static icon for when animation can't play.
 
-Lottie is well-suited for onboarding flows, empty state illustrations, loading indicators, and any scenario where flat animation is preferable to video. The animations scale to any resolution without quality loss, respect the user's animation preference settings, and compose naturally with other WinUI controls.
-
----
-
-## Composition Animations and the Visual Layer
-
-Below the XAML layer sits [Microsoft.UI.Composition](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.composition){:target="_blank" rel="noopener noreferrer"}, the visual layer that XAML itself is built on. Composition animations run on the compositor thread, which is separate from the UI thread. Because they bypass the XAML rendering pipeline, they can maintain smooth 60 fps motion even when the UI thread is processing data or handling events.
-
-To access the visual layer for a XAML element, use `ElementCompositionPreview.GetElementVisual(element)`, which returns the `Visual` object backing that element. From there, you can attach composition animations directly.
-
-```csharp
-using Microsoft.UI.Composition;
-using Microsoft.UI.Xaml.Hosting;
-
-var compositor = this.Compositor;
-var visual = ElementCompositionPreview.GetElementVisual(MyElement);
-
-// Create a spring animation for the scale property
-var springAnimation = compositor.CreateSpringVector3Animation();
-springAnimation.Target = "Scale";
-springAnimation.FinalValue = new Vector3(1.1f, 1.1f, 1.0f);
-springAnimation.Period = TimeSpan.FromMilliseconds(50);
-springAnimation.DampingRatio = 0.4f;
-
-visual.StartAnimation("Scale", springAnimation);
-```
-
-`SpringVector3NaturalMotionAnimation` produces physically simulated motion that overshoots and oscillates before settling, which is the characteristic spring feel seen throughout Fluent Design. The `DampingRatio` controls how quickly oscillation dies out: a ratio below 1.0 produces underdamped spring behavior with visible bounce, while a ratio at or above 1.0 critically damps the spring so it settles without bouncing.
-
-`ExpressionAnimation` is a different kind of composition animation. Rather than specifying a keyframe or a target value, you write a mathematical expression as a string that the compositor evaluates every frame. This enables animations that are driven by a scroll position, a pointer position, or any other changing value without round-tripping to the UI thread.
-
-```csharp
-var scrollViewer = MyScrollViewer;
-var scrollProperties = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(scrollViewer);
-
-var parallaxAnimation = compositor.CreateExpressionAnimation(
-    "ScrollProperties.Translation.Y * -0.3");
-parallaxAnimation.SetReferenceParameter("ScrollProperties", scrollProperties);
-
-var backgroundVisual = ElementCompositionPreview.GetElementVisual(BackgroundImage);
-backgroundVisual.StartAnimation("Offset.Y", parallaxAnimation);
-```
-
-Composition animations are the right choice when frame-rate consistency matters more than XAML convenience, particularly for particle effects, parallax scrolling, gesture-driven interactions, or any animation that needs to respond to real-time input without latency.
+The choice between the two follows how the animation is driven. `AnimatedIcon` is for an icon that reacts to state changes, and `AnimatedVisualPlayer` is for an animation that loops, plays once, or is paused and resumed by the app.
 
 ---
 
-## Easing Functions
+## Timing and Easing
 
-Easing functions control the rate of change over an animation's duration. A linear easing advances the property value at a constant rate, which looks mechanical and unnatural for most motion. Almost all polished animations use a non-linear curve that starts slowly, accelerates through the middle, and decelerates toward the end, or some asymmetric variation of that shape.
+Fluent motion is fast. WinUI's own controls use three standard durations, available as theme resources for custom animations: `ControlFasterAnimationDuration` (83 ms), `ControlFastAnimationDuration` (167 ms), and `ControlNormalAnimationDuration` (250 ms).
 
-WinUI 3 provides built-in easing types including `CubicEase`, `QuarticEase`, `QuinticEase`, `SineEase`, `CircleEase`, `BackEase`, `ElasticEase`, and `BounceEase`. Each has an `EasingMode` property that switches between `EaseIn` (slow start), `EaseOut` (slow end), and `EaseInOut` (slow start and end). For most enter and exit animations, `EaseOut` feels most natural because it decelerates into the final position, mimicking the way physical objects slow before stopping.
+Easing controls speed over the course of an animation, and Fluent uses two curves. Elements entering the scene use "fast out, slow in", `cubic-bezier(0, 0, 0, 1)`, so they arrive quickly and decelerate hard into place. Elements leaving use "slow out, fast in", `cubic-bezier(1, 0, 1, 1)`, so they start slowly and accelerate out of the way.
 
-`CubicBezierEase` provides the most control, accepting two control points that define the curve shape. This matches the easing curve format used in CSS animations and design tools like Figma, making it easy to transfer timing curves directly from a designer's specification.
+{% include figure.html id="winui-fluent-easing" %}
+
+XAML has no class that takes a cubic-bezier directly. A storyboard gets one through a spline key frame, whose `KeySpline` holds the curve's two control points:
 
 ```xml
-<DoubleAnimation Duration="0:0:0.35">
-    <DoubleAnimation.EasingFunction>
-        <CubicBezierEase ControlPoint1="0.17,0.17"
-                         ControlPoint2="0.0,1.0" />
-    </DoubleAnimation.EasingFunction>
-</DoubleAnimation>
+<DoubleAnimationUsingKeyFrames Storyboard.TargetName="Panel" Storyboard.TargetProperty="Opacity">
+    <SplineDoubleKeyFrame KeyTime="0:0:0.25" Value="1" KeySpline="0,0 0,1" />
+</DoubleAnimationUsingKeyFrames>
 ```
 
-The choice of easing function has an outsized effect on perceived quality. Two animations with identical duration and distance will feel completely different depending on their curves. A `BounceEase` applied to a settings panel sliding in from the edge feels playful and out of place; the same panel with a `CubicEase EaseOut` feels grounded and professional. Fluent Design's motion guidelines recommend ease-in curves for elements exiting the screen, ease-out curves for elements entering, and ease-in-out for elements moving between two points within the same view.
+Composition animations take a curve from `Compositor.CreateCubicBezierEasingFunction`. XAML also has named easing functions, `CubicEase`, `QuadraticEase`, `ExponentialEase`, `SineEase`, `CircleEase`, `BackEase`, `BounceEase`, and `ElasticEase` among them, each with an `EasingMode` of `EaseIn`, `EaseOut`, or `EaseInOut`. `EaseOut` is the one closest to the Fluent entrance curve. Bounces and elastic overshoot rarely fit a work app, where they read as playful. Custom easing classes aren't supported.
 
----
-
-## Performance Considerations
-
-The most important distinction for animation performance is whether the animation runs on the UI thread or the compositor thread. Storyboard animations targeting XAML dependency properties run on the UI thread. If the UI thread is busy processing data, handling events, or running layout, those animations will stutter or drop frames. The compositor thread, by contrast, renders independently and is not affected by UI thread activity.
-
-The safest properties to animate without UI thread involvement are those managed by the composition layer: `Opacity`, `Translation` (not `Canvas.Left` or `Margin`), `Scale`, and `Rotation`. WinUI 3 exposes `UIElement.Translation`, `UIElement.Scale`, and `UIElement.Rotation` as composition-backed properties, meaning storyboard animations targeting them can run on the compositor thread even though they are set from XAML.
-
-Animating layout properties like `Width`, `Height`, `Margin`, or `Canvas.Left` forces a layout pass on every frame, which is expensive and UI-thread-bound. Use `TranslateTransform` or `UIElement.Translation` for positional motion and `ScaleTransform` or `UIElement.Scale` for size illusions. If you genuinely need to animate layout dimensions, limit the scope of the layout pass by containing the animated element inside a `Canvas`, which excludes its children from the normal measure-and-arrange cycle.
-
-For list controls with large item counts, avoid triggering animations from within item templates where possible. Each item animation multiplies the cost, and composition-layer animations are far more appropriate in those scenarios. The Community Toolkit's implicit animations are implemented on the composition layer, which is part of why they remain performant even when animating many elements simultaneously.
-
-Profiling animation performance is straightforward with the [WinUI 3 Gallery](https://github.com/microsoft/WinUI-Gallery){:target="_blank" rel="noopener noreferrer"} as a reference, and Visual Studio's GPU Usage and Frame Analysis tools can confirm whether animations are staying on the compositor thread. A frame rate that drops when the UI thread is busy is a reliable indicator that the animation is UI-thread-bound and should be migrated to a composition animation.
+Some users turn off animation effects in Windows settings, and `UISettings.AnimationsEnabled` reports that choice. `AnimatedIcon` handles it by showing the final frame of each state change. For the app's own storyboards, composition animations, and toolkit animations, the app checks the setting itself and applies the final value directly when animations are off, at least for motion that is decoration rather than information.

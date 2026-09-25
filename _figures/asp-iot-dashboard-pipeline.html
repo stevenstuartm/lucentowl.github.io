@@ -1,0 +1,83 @@
+---
+title: "IoT Dashboard Pipelines"
+kind: flow
+system: aspnet-core
+summary: "Device telemetry to the browser, through an app server or through Functions."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 450" role="img" aria-labelledby="aid-title aid-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aid-title">Two pipelines that carry IoT telemetry from a device to a dashboard</title>
+<desc id="aid-desc">In the ASP.NET Core backend pipeline, a device sends telemetry to IoT Hub, a background service reads the hub's built-in Event Hubs endpoint and throttles the readings, and it pushes them through IHubContext to the SignalR hub's device groups, which deliver them to subscribed browsers. The browser subscribes to a device by calling a hub method over the same connection. In the serverless pipeline, IoT Hub triggers an Azure Function with an Event Hub trigger, the function's SignalR output binding sends the messages to Azure SignalR Service in Serverless mode, and the service delivers them to browsers. The browser gets its connection details from a negotiate function and subscribes by calling a subscribe function over HTTP, which adds its connection to a group in the service.</desc>
+<style>
+.aid-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aid-px { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+.aid-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aid-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aid-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.aid-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.aid-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.aid-sub { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.8; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="aid-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="aid-s" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="aid-hd" x="20" y="30">ASP.NET CORE BACKEND</text>
+<rect class="aid-box" x="20" y="45" width="150" height="80" rx="6"/>
+<text class="aid-n" x="95" y="80" text-anchor="middle">Device</text>
+<text class="aid-k" x="95" y="97" text-anchor="middle">sends readings</text>
+<rect class="aid-px" x="215" y="45" width="150" height="80" rx="6"/>
+<text class="aid-n" x="290" y="75" text-anchor="middle">IoT Hub</text>
+<text class="aid-k" x="290" y="92" text-anchor="middle">built-in Event Hubs</text>
+<text class="aid-k" x="290" y="106" text-anchor="middle">endpoint</text>
+<rect class="aid-box" x="410" y="45" width="150" height="80" rx="6"/>
+<text class="aid-n" x="485" y="75" text-anchor="middle">Background service</text>
+<text class="aid-k" x="485" y="92" text-anchor="middle">reads events,</text>
+<text class="aid-k" x="485" y="106" text-anchor="middle">throttles per device</text>
+<rect class="aid-box" x="605" y="45" width="150" height="80" rx="6"/>
+<text class="aid-n" x="680" y="75" text-anchor="middle">SignalR hub</text>
+<text class="aid-k" x="680" y="92" text-anchor="middle">IHubContext sends</text>
+<text class="aid-k" x="680" y="106" text-anchor="middle">to device groups</text>
+<rect class="aid-box" x="800" y="45" width="140" height="80" rx="6"/>
+<text class="aid-n" x="870" y="80" text-anchor="middle">Browser</text>
+<text class="aid-k" x="870" y="97" text-anchor="middle">subscribed viewers</text>
+<path class="aid-flow" d="M170,85 L213,85" marker-end="url(#aid-a)"/>
+<path class="aid-flow" d="M365,85 L408,85" marker-end="url(#aid-a)"/>
+<path class="aid-flow" d="M560,85 L603,85" marker-end="url(#aid-a)"/>
+<path class="aid-flow" d="M755,85 L798,85" marker-end="url(#aid-a)"/>
+<path class="aid-sub" d="M870,125 L870,150 L680,150 L680,127" marker-end="url(#aid-s)"/>
+<text class="aid-lg" x="775" y="167" text-anchor="middle">subscribe through a hub method</text>
+<text class="aid-hd" x="20" y="215">AZURE FUNCTIONS, SERVERLESS</text>
+<rect class="aid-box" x="20" y="230" width="150" height="80" rx="6"/>
+<text class="aid-n" x="95" y="265" text-anchor="middle">Device</text>
+<text class="aid-k" x="95" y="282" text-anchor="middle">sends readings</text>
+<rect class="aid-px" x="215" y="230" width="150" height="80" rx="6"/>
+<text class="aid-n" x="290" y="260" text-anchor="middle">IoT Hub</text>
+<text class="aid-k" x="290" y="277" text-anchor="middle">built-in Event Hubs</text>
+<text class="aid-k" x="290" y="291" text-anchor="middle">endpoint</text>
+<rect class="aid-box" x="410" y="230" width="150" height="80" rx="6"/>
+<text class="aid-n" x="485" y="260" text-anchor="middle">Azure Function</text>
+<text class="aid-k" x="485" y="277" text-anchor="middle">Event Hub trigger,</text>
+<text class="aid-k" x="485" y="291" text-anchor="middle">SignalR output</text>
+<rect class="aid-px" x="605" y="230" width="150" height="80" rx="6"/>
+<text class="aid-n" x="680" y="260" text-anchor="middle">Azure SignalR</text>
+<text class="aid-n" x="680" y="276" text-anchor="middle">Service</text>
+<text class="aid-k" x="680" y="293" text-anchor="middle">Serverless mode</text>
+<rect class="aid-box" x="800" y="230" width="140" height="80" rx="6"/>
+<text class="aid-n" x="870" y="265" text-anchor="middle">Browser</text>
+<text class="aid-k" x="870" y="282" text-anchor="middle">subscribed viewers</text>
+<path class="aid-flow" d="M170,270 L213,270" marker-end="url(#aid-a)"/>
+<path class="aid-flow" d="M365,270 L408,270" marker-end="url(#aid-a)"/>
+<path class="aid-flow" d="M560,270 L603,270" marker-end="url(#aid-a)"/>
+<path class="aid-flow" d="M755,270 L798,270" marker-end="url(#aid-a)"/>
+<rect class="aid-box" x="605" y="350" width="335" height="50" rx="6"/>
+<text class="aid-n" x="772" y="371" text-anchor="middle">Negotiate and subscribe functions</text>
+<text class="aid-k" x="772" y="388" text-anchor="middle">HTTP triggers with SignalR bindings</text>
+<path class="aid-sub" d="M870,310 L870,348" marker-end="url(#aid-s)"/>
+<path class="aid-sub" d="M680,350 L680,312" marker-end="url(#aid-s)"/>
+<line class="aid-flow" x1="20" y1="428" x2="60" y2="428"/>
+<text class="aid-lg" x="68" y="432">telemetry</text>
+<line class="aid-sub" x1="160" y1="428" x2="200" y2="428"/>
+<text class="aid-lg" x="208" y="432">connection setup and subscriptions</text>
+</g>
+</svg>

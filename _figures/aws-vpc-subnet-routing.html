@@ -1,0 +1,106 @@
+---
+title: "Subnets, Route Tables, and the Path Out"
+kind: deployment
+system: aws
+summary: "A two-AZ VPC whose route tables make each subnet public, private, or isolated."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 540" role="img" aria-labelledby="awsv-title awsv-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsv-title">A two-Availability-Zone VPC with public, private, and isolated subnets and the route tables that define them</title>
+<desc id="awsv-desc">A VPC with CIDR 10.0.0.0/16 spans two Availability Zones. Each zone has a public subnet holding a load balancer node and a NAT gateway, a private app subnet, and an isolated data subnet. An internet gateway is attached to the VPC. The public route table sends 0.0.0.0/0 to the internet gateway. Each app subnet's route table sends 0.0.0.0/0 to the NAT gateway in its own zone, and the NAT gateway reaches the internet through the internet gateway. The data route table has only the local route, so data subnets have no path out of the VPC.</desc>
+<style>
+.awsv-vpc { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsv-az { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsv-sub { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsv-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsv-rt { fill: var(--color-bg, #F7F9FC); stroke: var(--color-secondary, #2D5A85); stroke-width: 1; }
+.awsv-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsv-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsv-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsv-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsv-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsv-row { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #2D3748); }
+.awsv-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awsv-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsv-box" x="390" y="8" width="140" height="38" rx="6"/>
+<text class="awsv-n" x="460" y="32" text-anchor="middle">Internet</text>
+
+<rect class="awsv-vpc" x="20" y="110" width="620" height="400" rx="10"/>
+<text class="awsv-vt" x="36" y="132">VPC 10.0.0.0/16</text>
+
+<rect class="awsv-box" x="390" y="62" width="140" height="40" rx="6"/>
+<text class="awsv-n" x="460" y="87" text-anchor="middle">Internet gateway</text>
+
+<rect class="awsv-az" x="40" y="148" width="280" height="344" rx="8"/>
+<text class="awsv-t" x="56" y="168">Availability Zone a</text>
+<rect class="awsv-az" x="340" y="148" width="280" height="344" rx="8"/>
+<text class="awsv-t" x="356" y="168">Availability Zone b</text>
+
+<rect class="awsv-sub" x="56" y="196" width="248" height="74" rx="6"/>
+<text class="awsv-t" x="68" y="216">Public subnet</text>
+<text class="awsv-k" x="68" y="232">10.0.1.0/24</text>
+<text class="awsv-lab" x="68" y="252">load balancer node</text>
+<rect class="awsv-box" x="190" y="214" width="104" height="42" rx="6"/>
+<text class="awsv-n" x="242" y="240" text-anchor="middle">NAT gateway</text>
+
+<rect class="awsv-sub" x="356" y="196" width="248" height="74" rx="6"/>
+<text class="awsv-t" x="368" y="216">Public subnet</text>
+<text class="awsv-k" x="368" y="232">10.0.2.0/24</text>
+<text class="awsv-lab" x="368" y="252">load balancer node</text>
+<rect class="awsv-box" x="490" y="214" width="104" height="42" rx="6"/>
+<text class="awsv-n" x="542" y="240" text-anchor="middle">NAT gateway</text>
+
+<rect class="awsv-sub" x="56" y="306" width="248" height="74" rx="6"/>
+<text class="awsv-t" x="68" y="326">Private subnet (app)</text>
+<text class="awsv-k" x="68" y="342">10.0.11.0/24</text>
+<text class="awsv-lab" x="68" y="362">instances, containers</text>
+
+<rect class="awsv-sub" x="356" y="306" width="248" height="74" rx="6"/>
+<text class="awsv-t" x="368" y="326">Private subnet (app)</text>
+<text class="awsv-k" x="368" y="342">10.0.12.0/24</text>
+<text class="awsv-lab" x="368" y="362">instances, containers</text>
+
+<rect class="awsv-sub" x="56" y="402" width="248" height="74" rx="6"/>
+<text class="awsv-t" x="68" y="422">Isolated subnet (data)</text>
+<text class="awsv-k" x="68" y="438">10.0.21.0/24</text>
+<text class="awsv-lab" x="68" y="458">no path out of the VPC</text>
+
+<rect class="awsv-sub" x="356" y="402" width="248" height="74" rx="6"/>
+<text class="awsv-t" x="368" y="422">Isolated subnet (data)</text>
+<text class="awsv-k" x="368" y="438">10.0.22.0/24</text>
+<text class="awsv-lab" x="368" y="458">no path out of the VPC</text>
+
+<path class="awsv-flow" d="M242,306 L242,258" marker-end="url(#awsv-a)"/>
+<path class="awsv-flow" d="M542,306 L542,258" marker-end="url(#awsv-a)"/>
+<path class="awsv-flow" d="M242,214 L242,140 L430,140 L430,104" marker-end="url(#awsv-a)"/>
+<path class="awsv-flow" d="M542,214 L542,140 L510,140 L510,104" marker-end="url(#awsv-a)"/>
+<path class="awsv-flow" d="M460,62 L460,48" marker-end="url(#awsv-a)"/>
+
+<text class="awsv-t" x="670" y="140">Route tables</text>
+
+<rect class="awsv-rt" x="670" y="150" width="230" height="70" rx="6"/>
+<text class="awsv-t" x="682" y="170">Public (both public subnets)</text>
+<text class="awsv-row" x="682" y="190">10.0.0.0/16  local</text>
+<text class="awsv-row" x="682" y="208">0.0.0.0/0    igw</text>
+
+<rect class="awsv-rt" x="670" y="232" width="230" height="70" rx="6"/>
+<text class="awsv-t" x="682" y="252">App, zone a</text>
+<text class="awsv-row" x="682" y="272">10.0.0.0/16  local</text>
+<text class="awsv-row" x="682" y="290">0.0.0.0/0    nat (zone a)</text>
+
+<rect class="awsv-rt" x="670" y="314" width="230" height="70" rx="6"/>
+<text class="awsv-t" x="682" y="334">App, zone b</text>
+<text class="awsv-row" x="682" y="354">10.0.0.0/16  local</text>
+<text class="awsv-row" x="682" y="372">0.0.0.0/0    nat (zone b)</text>
+
+<rect class="awsv-rt" x="670" y="396" width="230" height="52" rx="6"/>
+<text class="awsv-t" x="682" y="416">Data (both data subnets)</text>
+<text class="awsv-row" x="682" y="436">10.0.0.0/16  local</text>
+
+<text class="awsv-lab" x="20" y="530">Arrows show outbound internet traffic from each app subnet, through the NAT gateway in its own zone.</text>
+</g>
+</svg>

@@ -24,7 +24,9 @@ Moved sections landed wholesale and unpolished. The seams each row must reconcil
 
 | Concept | Owner | Non-owners treat it as |
 |---|---|---|
-| Well-Architected pillars, reviews, lenses, pillar trade-offs | IAM principals, policy types, policy evaluation logic, roles and trust policies, Access Analyzer, Identity Center, root user | IAM concepts in general (RBAC/ABAC, federation, OAuth/OIDC) | `security/identity-access-management.md` (out of scope) | Row 2 states only the AWS mapping |
+| Well-Architected pillars, reviews, lenses, pillar trade-offs | 1 well-architected | Clause |
+| IAM principals, policy types, policy evaluation logic, roles and trust policies, Access Analyzer, Identity Center, root user | 2 iam | Clause |
+| IAM concepts in general (RBAC/ABAC, federation, OAuth/OIDC) | `security/identity-access-management.md` (out of scope) | Row 2 states only the AWS mapping |
 | Organizations, OUs, SCPs, RCPs, declarative policies, Control Tower, landing zones, account strategy, delegated administrator | 3 organizations | Row 2 and rows 33/34: clause |
 | Guardrail placement (preventive/detective/corrective), tagging strategy, drift response | `infrastructure/iac-governance.md` (out of scope) | Rows 3 and 33 keep only AWS mechanics |
 | Single-VPC anatomy: CIDR, subnets, route tables, IGW, NAT, security groups vs NACLs, IPv4 charges and IPv6 | 4 vpc | Row 11 security groups: clause |
@@ -146,6 +148,8 @@ Then confirm no concept is re-taught against the ownership map, and add one What
 - **"Real-world impact," "Industry Insights," and "Real-World Results" blocks** carry precise percentages with no source. Treat each figure as unverified until a primary source turns up. Most will be cut.
 - **Spelling.** The site uses American spelling ("favor", "behavior"); the old guides mix in British forms. Normalize during the presentation pass.
 - **Scripted section moves can create setext headings.** A `---` rule placed directly after a text line (no blank line between) makes kramdown render that line as an H2. Keep a blank line before every `---`; the lint script checks for it.
+- **Scripted pre-flag deletion.** Ownership-map rows contain the same `| N name |` text as pre-flag rows, so an unanchored pattern deletes half a map row and joins it to the next. Anchor any scripted deletion to the start of the line. This corrupted the map twice before it was caught.
+- **Figure class prefixes already used by `aws-` figures:** awsi, awsr, awsv, awsn, awse, awsx, awsx2, awsg, awsg2, awsd, awst, awsc, awsa, awsw, awsp, awsf, awsl, awsh. Pick a new tag for each new figure, and add every figure to `_resources/aws-diagrams.md` (and the embedding guide to its `related_guides`).
 - **Liquid.** CloudFormation dynamic references (`{{resolve:...}}`), SSM document parameters (`{{ InstanceId }}`), and GitHub Actions expressions evaluate as Liquid. Four guides are raw-wrapped today, so any row that gains such a sample needs the wrap.
 
 ## Cross-guide facts in force
@@ -160,6 +164,17 @@ Verified during earlier rows; applies to every remaining guide that touches the 
 - **CodeCommit.** Closed to new customers in July 2024, returned to full general availability on 2025-11-24 (AWS DevOps blog, "The Future of AWS CodeCommit"). Present it as a current, available service.
 - **External IDs** are for third-party access only; roles shared between your own accounts don't need them (row 2).
 - **Well-Architected vocabulary.** Workload, lens, HRI/MRI, milestone, and improvement status are defined in row 1. Later rows use them in a clause without re-teaching.
+- **Control Tower (row 3 owns).** Landing zone 4.0 made every service integration optional and dropped the enforced OU structure. The shared accounts are now the **CloudTrail administrator account** (formerly log archive) and the **Config aggregator account** (formerly audit). In 4.0 the log archive bucket holds only CloudTrail logs; Config data goes to a bucket in the Config aggregator account. The Config integration records only in the integration accounts, and workload-account recording comes from the per-OU Config baseline. Drift notifications go to EventBridge in the management account. Preventive controls use SCPs, RCPs, and declarative policies. A Controls Dedicated experience (November 2025) applies managed controls without a landing zone.
+- **Organization policies (row 3 owns).** Two categories: authorization (SCPs, RCPs) and declarative (EC2, tag, backup, AI opt-out, chat, Security Hub, Inspector, Bedrock, S3, upgrade rollout). Declarative policies affect the management account; authorization policies don't. Tag policies' required tag keys validate IaC deployments (November 2025); other callers need an SCP on `aws:RequestTag`.
+- **NAT gateways (row 4 owns).** Two availability modes since November 2025: zonal (one public subnet and Elastic IP per AZ, one per AZ for resilience) and regional (no subnet, one ID in every route table, expands into an AZ within up to 60 minutes, priced per AZ-hour, not for private NAT). Both charge per GB processed, including traffic to AWS services, so a gateway endpoint for S3 and DynamoDB is the usual fix. NAT64 is automatic on every NAT gateway; DNS64 is a per-subnet setting, off by default.
+- **Public IPv4 (row 4 owns).** $0.005 per hour per public IPv4 address, in use or idle, since February 1, 2024 (about $3.60 a month). BYOIP ranges aren't charged. IPv6 addresses and egress-only internet gateways have no charge of their own. Never cite pre-2024 "free public IP" cost figures.
+- **Load balancers (row 5 owns).** ALB, NLB, GWLB are the current types; Classic is legacy. NLB security groups can only be attached at creation. NLB weighted target groups since November 2025; ALB regex matching and URL/host rewrite since October 2025; ALB JWT verification and NLB QUIC passthrough since November 2025. PrivateLink endpoint services need an NLB or GWLB, but resource endpoints (December 2024) don't. The ELB API/CLI/CloudFormation/CDK default TLS policy is still `ELBSecurityPolicy-2016-08` (accepts TLS 1.0). Cross-zone is always on at the ALB (off per target group possible) and off by default on NLB/GWLB, where it incurs inter-AZ data charges. Target group health thresholds give DNS failover and routing failover (fail-open); zonal shift belongs to ARC (row 53).
+- **Route 53 (row 6 owns).** Eight routing policies (IP-based added 2022; all but IP-based work in private zones). Control plane in us-east-1, data plane global; accelerated recovery (November 2025) targets a 60-minute RTO for public zone changes during a us-east-1 impairment. The VPC's resolver is now named the Route 53 VPC Resolver; Route 53 Global Resolver (GA March 2026) is a separate internet-reachable resolver. Private hosted zone queries and alias queries to AWS resources are free. Health checks can't reach private addresses; use CloudWatch alarm health checks. Dangling records: delete the record, wait out the TTL, then delete the resource.
+- **CloudFront (row 7 owns).** Flat-rate plans (November 2025) attach per distribution: Free $0, Pro $15, Business $200, Premium $1,000 a month, bundling WAF, DDoS protection, Route 53, logs, and S3 credits, with no overages; several features (continuous deployment, Anycast IPs, real-time logs, OAI, dedicated IP) aren't allowed on a plan. A cache policy with minimum TTL above 0 caches even `no-store`/`private` responses. OAC replaces OAI for S3 and covers Lambda function URLs; VPC origins (November 2024) put ALB/NLB/EC2 origins in private subnets. Data transfer from AWS origins to CloudFront is free.
+- **API Gateway (row 8 owns).** HTTP API $1.00/M (512 KB metering), REST $3.50/M. REST-only: WAF, private endpoints, usage plans/API keys, caching, request validation, canary, X-Ray, response streaming. REST integration timeout 29 s by default, raisable for Regional and private APIs only; HTTP API 30 s maximum. Account throttle 10,000 rps / 5,000 burst per Region, shared by all APIs; all throttles are best-effort. API keys aren't credentials.
+- **Multi-VPC connectivity (row 9 owns).** VPC peering: 50 connections per VPC by default (up to 125), non-transitive, no overlapping CIDRs. Transit Gateway: 5,000 attachments, up to 100 Gbps per VPC attachment per AZ each direction, $0.05/attachment-hour + $0.02/GB on every pass; Network Firewall attaches natively since July 2025; SG referencing across a TGW since 2024. PrivateLink: interface endpoints ~$0.01/hour per AZ + $0.01/GB; cross-Region endpoint services since November 2024; resource endpoints (no NLB) since December 2024; DynamoDB has interface endpoints (no private DNS). VPC Lattice: one service network per VPC, 10-minute connection cap, IAM auth only on HTTP/HTTPS/gRPC. App Mesh is gone; don't mention it.
+- **Hybrid connectivity (row 10 owns).** Site-to-Site VPN: 1.25 Gbps standard tunnels ($0.05/hr), 5 Gbps large tunnels since November 2025 ($0.60/hr, transit gateway or Cloud WAN only). Direct Connect: dedicated 1/10/100/400 Gbps, hosted 50 Mbps to 25 Gbps; flat-rate pricing for 10 and 100 Gbps dedicated since September 2026 (no DTO within tier, port-pair included). SLA: 99.99% needs four connections across two locations plus Enterprise Support and a Well-Architected review; single connection 95%; hosted connections have no SLA. MACsec only on 10 Gbps and faster dedicated connections. Direct Connect is unencrypted by default.
+- **EC2 (row 11 owns).** Graviton5 GA June 2026 (M9g); Graviton runs Linux and some BSDs, not Windows. Launch configurations can't be created by accounts made on or after October 1, 2024; use launch templates. IMDSv2 can be defaulted or enforced per account and Region, or by an EC2 declarative policy; container hosts need hop limit 2. Placement groups: cluster is single-AZ; partition and spread span AZs; precision time placement groups since June 2026. Default instance warmup is off until set. Spot is not covered by Savings Plans.
 
 ## Open pre-flags
 
@@ -167,15 +182,6 @@ Leads for rows not yet done. **A pre-flag is a lead, not a finding.** Re-verify 
 
 | Target row | Lead |
 |---|---|
-| 3 organizations | Check resource control policies (RCPs) and declarative policies as gaps. Control Tower uses "controls" now, not "guardrails". Check Account Factory for Terraform status. |
-| 4 vpc | Multi-VPC, endpoint, and Lattice sections have moved to row 9; check the remaining sections and pitfalls for references to them. The "Hybrid Cloud (VPN)" pattern cuts to a clause. Verify the public IPv4 charge and its start date. Check VPC Block Public Access as a gap. Remove the App Mesh comparison, since App Mesh reaches end of support around 2026-09-30 (verify the date). |
-| 5 elb | The "QUIC Protocol Support (2024)" heading needs a source: check which load balancer and which launch. "TLS Termination (2019+)" dated heading. |
-| 6 route53 | DNS fundamentals section cuts to a clause (`networking/dns.md` owns). The geoproximity "2024 enhancement" needs a source. Check whether Route 53 ARC material belongs to row 53. |
-| 7 cloudfront | Check for flat-rate pricing plans (late 2025 lead). Check that origin access control, not OAI, is the recommended S3 origin pattern. Field-level encryption status. |
-| 8 api-gateway | Check the REST API integration timeout increase beyond 29 s (2024 lead). If row 30 is approved, the Cognito material stays at authorizer level. |
-| 9 privatelink-tgw | Seam: row 4's "Private Connectivity: PrivateLink and VPC Endpoints", "Multi-VPC Strategies", and "VPC Lattice" sections sit before Common Pitfalls. The first duplicates the AWS PrivateLink section's endpoint types, the second duplicates Transit Gateway vs VPC Peering. Retitle to add VPC Lattice. Check Lattice resource gateways and configurations, and PrivateLink access to VPC resources (late-2024 leads). Cloud WAN is absent (clause-level gap). |
-| 10 direct-connect-vpn | Seam: row 51's "Hybrid Cloud Connectivity Options" sits before Common Pitfalls and duplicates the comparison and Hybrid Architectures sections. Check VPN tunnel bandwidth options (a 2025 lead for higher-bandwidth tunnels). Re-verify all pricing. |
-| 11 ec2 | The storage-options section cuts to a clause (row 15 owns) and the compute-selection section cuts to a clause (row 13 owns). Compute Optimizer cuts to a clause (row 38). "Real-World Results" and "Industry Insights" need sources or cutting. |
 | 12 lambda | Seams: "Core Serverless Principles" sits before Development Best Practices; "Anti-Patterns to Avoid" sits after Common Pitfalls and overlaps it (synchronous chaining, VPC without endpoints). Python samples came with them. Check SnapStart runtime coverage (.NET and Python, late-2024 lead). Check Lambda Managed Instances and durable functions (late-2025 leads). "Graviton2" is likely stale. Remove the "(2024 Solutions)" and "(2024/2025)" headings. Check the CodeCommit event mention. |
 | 13 container-services | Owns compute selection: absorb the useful framing from rows 11 and 12 as those rows cut it. Remove the App Mesh mention. Check EKS Auto Mode (late 2024) and ECS Managed Instances (2025 lead) as gaps. Check ECS native blue/green deployments (2025 lead) against row 29. |
 | 14 s3 | Largest guide (10.6k words). Data lake, multi-Region, and backup sections cut to clauses (rows 45, 52, 53 own); "S3 vs EBS/EFS" cuts (row 15 owns). S3 Select and Glacier Select are likely closed to new customers (2024 lead). Check conditional writes, S3 Tables, S3 Metadata, and S3 Vectors as gaps. Re-verify Express One Zone pricing. |
@@ -231,15 +237,15 @@ Claims on finished guides that could not be confirmed against a source. Each was
 |---|---|---|---|
 | 1 | Foundations | aws-well-architected-framework.md | Complete |
 | 2 | Foundations | aws-iam-fundamentals.md | Complete |
-| 3 | Foundations | aws-organizations-control-tower.md | Not started |
-| 4 | Networking & Content Delivery | aws-vpc-architecture.md | Not started |
-| 5 | Networking & Content Delivery | aws-elastic-load-balancing.md | Not started |
-| 6 | Networking & Content Delivery | aws-route53.md | Not started |
-| 7 | Networking & Content Delivery | aws-cloudfront.md | Not started |
-| 8 | Networking & Content Delivery | aws-api-gateway.md | Not started |
-| 9 | Networking & Content Delivery | aws-privatelink-transit-gateway.md | Not started |
-| 10 | Networking & Content Delivery | aws-direct-connect-vpn.md | Not started |
-| 11 | Compute Services | aws-ec2-fundamentals.md | Not started |
+| 3 | Foundations | aws-organizations-control-tower.md | Complete |
+| 4 | Networking & Content Delivery | aws-vpc-architecture.md | Complete |
+| 5 | Networking & Content Delivery | aws-elastic-load-balancing.md | Complete |
+| 6 | Networking & Content Delivery | aws-route53.md | Complete |
+| 7 | Networking & Content Delivery | aws-cloudfront.md | Complete |
+| 8 | Networking & Content Delivery | aws-api-gateway.md | Complete |
+| 9 | Networking & Content Delivery | aws-privatelink-transit-gateway.md | Complete |
+| 10 | Networking & Content Delivery | aws-direct-connect-vpn.md | Complete |
+| 11 | Compute Services | aws-ec2-fundamentals.md | Complete |
 | 12 | Compute Services | aws-lambda-fundamentals.md | Not started |
 | 13 | Compute Services | aws-container-services.md | Not started |
 | 14 | Storage Services | aws-s3-fundamentals.md | Not started |

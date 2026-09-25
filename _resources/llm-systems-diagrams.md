@@ -3,7 +3,7 @@ title: "LLM Systems Diagrams"
 layout: resource
 type: reference
 category: "AI & Machine Learning"
-description: "The diagrams behind the LLM study guides: the shapes of chain-of-thought, self-consistency, and Tree of Thoughts, MCP hosts, clients, and servers, the MCP authorization flow, the two pipelines of a RAG system, bi-encoders versus cross-encoders, fine-tuning loss curves, one agent cycle across the network, the single context window behind prompt injection, and batch cost growth."
+description: "The diagrams behind the LLM study guides: how prompting, retrieval, tool protocols, agents, and fine-tuning are wired into a working system."
 last_updated: 2026-09-23
 figures:
   - llm-reasoning-structures

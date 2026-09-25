@@ -3,19 +3,21 @@ title: "SignalR and Real-Time APIs"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Real-Time & RPC"
-description: "Real-time communication patterns in ASP.NET Core using SignalR, Server-Sent Events, and raw WebSockets, including authentication, scaling, and Native AOT support."
-tags: [asp-net-core, signalr, real-time, websockets, server-sent-events, distributed-systems, performance]
+description: "Real-time communication in ASP.NET Core with SignalR hubs, groups, and IHubContext, connection lifetime and reconnection, hub authentication, scaling with sticky sessions, a Redis backplane, or Azure SignalR Service, Native AOT limits, Server-Sent Events, and raw WebSockets."
+tags: [practical, signalr, websockets, server-sent-events, redis, real-time]
 ---
 
-## Real-Time Communication in ASP.NET Core
-
-ASP.NET Core provides three distinct approaches for real-time communication between servers and clients. SignalR offers high-level abstractions for bidirectional messaging with automatic transport fallback and built-in scaling patterns. Server-Sent Events provide native unidirectional streaming from server to client with automatic browser reconnection. Raw WebSockets give complete control over the connection for custom protocols or performance-critical scenarios. Understanding when each approach fits determines whether you build maintainable real-time features or fight against your chosen abstraction.
+ASP.NET Core offers three ways to push data to clients without waiting for them to ask. SignalR is a messaging library with a protocol of its own, client libraries, transport fallback, groups, and scale-out support. Server-Sent Events (SSE) stream events from server to client over an ordinary HTTP response. Raw WebSockets hand the application a bidirectional socket and nothing else. Microsoft recommends SignalR over raw WebSockets for most applications. SSE fits one-way feeds, and the choice between all three is covered at the end.
 
 ## SignalR Hubs
 
-SignalR organizes real-time communication around hubs, which are classes that serve as high-level pipelines between clients and servers. Clients invoke methods on the hub, and hubs invoke methods on clients. This bidirectional communication model abstracts away the transport layer, allowing SignalR to fall back from WebSockets to Server-Sent Events or long polling based on client and server capabilities.
+A *hub* is a class whose public methods clients can call, and through which the server calls methods on clients. SignalR picks the best transport the client and server share, trying WebSockets first, then Server-Sent Events, then long polling (repeated HTTP requests that the server holds open until it has a message), and the hub code is the same on all three. Messages travel in a *hub protocol* on top of the transport, JSON by default, or binary MessagePack from the `Microsoft.AspNetCore.SignalR.Protocols.MessagePack` package, which produces smaller messages.
 
-A hub inherits from the Hub base class and defines methods that clients can invoke. These methods can accept parameters and return values, which SignalR serializes and deserializes automatically.
+```csharp
+builder.Services.AddSignalR();
+
+app.MapHub<ChatHub>("/hubs/chat");
+```
 
 ```csharp
 public class ChatHub : Hub
@@ -27,75 +29,21 @@ public class ChatHub : Hub
 }
 ```
 
-The Hub class exposes a Clients property that provides access to all connected clients, specific clients, groups, and the calling client. This property returns an IHubCallerClients instance with methods for targeting different subsets of connections.
+`Clients` selects who receives a message: `All`, `Caller`, `Others`, a specific connection with `Client(connectionId)`, a user with `User(userId)`, or a group with `Group(name)`. `SendAsync` names the client-side method as a string, and the arguments are serialized as JSON by default.
 
-Hubs are transient. You cannot store state in a property on the hub class. Each hub method invocation executes on a new hub instance. This means constructor injection works as expected, but storing per-connection state requires external storage or using connection-scoped services.
+Hubs are transient. SignalR creates a new hub instance for every method call, so a field set in one call is gone in the next. Constructor injection works as usual. State that belongs to one connection goes in `Context.Items`, which lives as long as the connection, and anything shared goes in an injected service or external store.
 
-## Managing Connections and Groups
+A hub method that throws sends the client a generic "An unexpected error occurred" message, so exception details don't leak. Throwing `HubException` sends its message to the client deliberately, and `EnableDetailedErrors` in the `AddSignalR` options sends every exception's message, which is for development only. Incoming messages are limited to 32 KB by default (`MaximumReceiveMessageSize`). These hub options apply to every hub when set in `AddSignalR`, or to one hub through `AddHubOptions<THub>`. Options that belong to a hub's endpoint, such as stateful reconnect and token expiry below, go in the `MapHub` call instead.
 
-SignalR assigns each connection a unique connection ID accessible via Context.ConnectionId. This identifier remains stable for the lifetime of the connection and allows targeting specific clients.
+### Strongly Typed Hubs
 
-Groups provide a way to broadcast messages to arbitrary subsets of connected clients without manually tracking connection IDs. A connection can be a member of multiple groups, and groups are not persisted. When a connection reconnects, it must rejoin its groups.
-
-```csharp
-public class ChatHub : Hub
-{
-    public async Task JoinRoom(string roomName)
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, roomName);
-        await Clients.Group(roomName).SendAsync("UserJoined", Context.User.Identity.Name);
-    }
-
-    public async Task SendToRoom(string roomName, string message)
-    {
-        await Clients.Group(roomName).SendAsync("ReceiveMessage", message);
-    }
-}
-```
-
-Groups are managed through the Groups property on the Hub base class. Adding and removing connections from groups are asynchronous operations that complete immediately in memory. SignalR does not persist group membership, so applications must rejoin groups after reconnection.
-
-The OnConnectedAsync and OnDisconnectedAsync methods provide lifecycle hooks for managing connection state. OnConnectedAsync executes when a client connects, allowing the hub to perform initialization like joining default groups. OnDisconnectedAsync executes when a client disconnects, whether gracefully or due to network failure, allowing cleanup of any per-connection resources.
-
-## Hub Context Outside Hubs
-
-To push telemetry from non-hub code, such as a background service processing IoT Hub events, you inject `IHubContext<THub, TClient>`. This gives you access to the same Groups and Clients APIs without requiring an active hub method call.
-
-```csharp
-public class TelemetryProcessor
-{
-    private readonly IHubContext<TelemetryHub, ITelemetryClient> _hubContext;
-
-    public TelemetryProcessor(IHubContext<TelemetryHub, ITelemetryClient> hubContext)
-    {
-        _hubContext = hubContext;
-    }
-
-    public async Task BroadcastAsync(DeviceTelemetry telemetry)
-    {
-        await _hubContext.Clients
-            .Group($"device:{telemetry.DeviceId}")
-            .ReceiveTelemetry(telemetry);
-    }
-}
-```
-
-This pattern is what connects the IoT event pipeline to the browser. The hub handles client subscriptions; a background service processes incoming telemetry and calls back into the hub context to push updates.
-
----
-
-## Strongly-Typed Hub Contracts
-
-Defining client methods as strings creates brittle coupling between server and client code. Changes to method names or parameter types at runtime produce errors that only surface during testing or in production. Strongly-typed hubs eliminate this fragility by defining client methods in an interface that both server and client can reference.
-
-Instead of inheriting from Hub, inherit from Hub<T> where T is an interface defining all methods that clients implement. This provides compile-time checking of client method calls and enables IDE features like refactoring and IntelliSense.
+A string method name breaks silently when the client renames its handler. Deriving from `Hub<T>`, where `T` is an interface of client methods, turns those calls into compile-checked method calls:
 
 ```csharp
 public interface IChatClient
 {
     Task ReceiveMessage(string user, string message);
     Task UserJoined(string user);
-    Task UserLeft(string user);
 }
 
 public class ChatHub : Hub<IChatClient>
@@ -107,36 +55,94 @@ public class ChatHub : Hub<IChatClient>
 }
 ```
 
-The strongly-typed approach replaces the stringly-typed SendAsync method with direct method calls on the Clients property. The return type of client methods must be Task or ValueTask to represent the asynchronous nature of network communication.
+`Hub<T>` removes `SendAsync`, so every client call must appear in the interface. The client still registers handlers by name, so the interface is a server-side contract rather than one the client compiles against.
 
-When using strongly-typed hubs, the client implementation must match the server interface exactly. SignalR serializes method parameters and deserializes them on the client side, which means parameter types must be serializable and match between server and client.
+Hub method parameters can be a base type annotated for polymorphic serialization (`[JsonPolymorphic]` and `[JsonDerivedType]`) since .NET 9, and the method receives the derived type the client sent.
 
-Using Hub<T> disables the SendAsync method entirely. This trade-off ensures that all client invocations are type-safe and discoverable through the interface definition. Applications that need to invoke methods not known at compile time cannot use strongly-typed hubs.
+### Streaming
+
+A hub method can stream in either direction. A method that returns `IAsyncEnumerable<T>` or `ChannelReader<T>` streams items to the caller as they are produced, and a method that takes one as a parameter receives a stream the client uploads. A streaming call ends when the enumeration completes or the client cancels.
+
+```csharp
+public class PriceHub(IPriceFeed feed) : Hub
+{
+    public async IAsyncEnumerable<StockPrice> WatchPrices(
+        string symbol, [EnumeratorCancellation] CancellationToken ct)
+    {
+        await foreach (var price in feed.ReadAsync(symbol, ct))
+        {
+            yield return price;
+        }
+    }
+}
+```
+
+## Connections, Users, and Groups
+
+Each connection has an ID, `Context.ConnectionId`, that lasts until the connection closes. Targeting by connection ID is rarely what an application wants, and two higher-level targets cover most cases.
+
+- **Users.** `Clients.User(userId)` reaches every connection belonging to one authenticated user, across tabs and devices. By default the user ID comes from the `ClaimTypes.NameIdentifier` claim, and a custom `IUserIdProvider` can choose another.
+- **Groups.** A group is a named set of connections that the application manages. A connection can join any number of groups, and SignalR removes it from all of them when it disconnects.
+
+```csharp
+public class ChatHub : Hub<IChatClient>
+{
+    public async Task JoinRoom(string room)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, room);
+        await Clients.Group(room).UserJoined(Context.User?.Identity?.Name ?? "anonymous");
+    }
+}
+```
+
+Group membership isn't persisted, so it doesn't survive a reconnect, as Connection Lifetime and Reconnection below explains. `OnConnectedAsync` and `OnDisconnectedAsync` are the hub's lifecycle hooks, and `OnDisconnectedAsync` runs whether the client closed cleanly or the connection timed out.
+
+### Sending from Outside a Hub
+
+Code that isn't a hub, such as a controller or a background service, sends messages through `IHubContext<THub>`, or `IHubContext<THub, TClient>` for a strongly typed hub:
+
+```csharp
+public class AnnouncementService(IHubContext<ChatHub, IChatClient> hub)
+{
+    public Task AnnounceAsync(string room, string text) =>
+        hub.Clients.Group(room).ReceiveMessage("system", text);
+}
+```
+
+A hub context has `Clients` and `Groups` but no `Caller` or `Context`, since there's no current connection to refer to.
+
+The server can also call a client method and wait for its answer. `Clients.Client(connectionId).InvokeAsync<T>(...)`, or a `Task<T>`-returning method on a strongly typed hub's client interface, returns the value the client's handler produces. The `InvokeAsync` overloads require a `CancellationToken`, and passing one with a timeout matters, since the call waits on a client that may never answer.
+
+## Connection Lifetime and Reconnection
+
+The server sends a keep-alive ping every 15 seconds (`KeepAliveInterval`) and treats a client as gone after 30 seconds without hearing from it (`ClientTimeoutInterval`), both set in the hub options. The client applies the mirror-image settings to the server. Microsoft's guidance is to keep each timeout at least double the other side's keep-alive interval.
+
+Clients don't reconnect by default. `withAutomaticReconnect()` in the JavaScript client, or `WithAutomaticReconnect()` in .NET, enables it. With no arguments it retries after 0, 2, 10, and 30 seconds and then gives up, and it never retries a connection whose initial `start()` failed, which the application has to handle itself.
+
+A reconnected connection starts fresh, with a new connection ID, no groups, and any messages sent during the gap lost. The client rejoins its groups from its reconnected handler (`onreconnected` in JavaScript, `Reconnected` in .NET) by calling a hub method, or the server rejoins them in `OnConnectedAsync` from state it stores itself.
+
+*Stateful reconnect*, added in .NET 8, closes that gap for brief disconnects. Both sides buffer and acknowledge messages, and after a reconnect the unacknowledged ones are replayed on the same logical connection. It is enabled on the server with `AllowStatefulReconnects = true` in the `MapHub` options, and on the client with `withStatefulReconnect()` or `WithStatefulReconnect()`.
 
 ## Authentication and Authorization
 
-SignalR integrates with ASP.NET Core authentication and authorization mechanisms. The Authorize attribute works on hub classes and hub methods just as it does on controllers, allowing role-based, policy-based, and claim-based authorization.
+`[Authorize]` works on hub classes and hub methods as it does on controllers, and `Context.User` holds the connection's `ClaimsPrincipal`.
 
 ```csharp
 [Authorize]
 public class ChatHub : Hub<IChatClient>
 {
-    [Authorize(Policy = "AdminOnly")]
-    public async Task BanUser(string userId)
-    {
-        // Only admins can ban users
-    }
+    [Authorize(Policy = "Moderator")]
+    public async Task RemoveMessage(string messageId) { /* ... */ }
 }
 ```
 
-The authenticated user's identity is available through Context.User within hub methods. This ClaimsPrincipal instance contains the same claims available in HTTP requests, allowing hubs to make authorization decisions based on user identity.
+How the credential arrives depends on the client.
 
-SignalR authentication differs from standard HTTP API authentication because persistent connections require passing credentials during the initial handshake rather than on each message. Browser clients using WebSockets or Server-Sent Events cannot set custom headers, so SignalR accepts access tokens via query string parameters during connection establishment.
-
-Bearer token authentication is the recommended approach when using clients other than browsers. The server configures JWT bearer token authentication to read access tokens from the query string by hooking the OnMessageReceived event. This allows the JWT authentication handler to extract the token from the query string when a WebSocket or Server-Sent Events request arrives.
+- **Browser apps with cookie authentication** need no extra configuration. The signed-in user's cookie flows to the SignalR connection. A browser client served from a different origin also needs a CORS policy on the hub path that allows credentials.
+- **Bearer tokens** come from the client's `accessTokenFactory`, which the JavaScript client calls when it negotiates a connection, and again after a `401`. Non-browser clients send the token in the `Authorization` header. Browsers can't set headers on WebSocket or EventSource requests, so the browser client sends the token as an `access_token` query string parameter on those transports, and the JWT handler has to be told to read it there:
 
 ```csharp
-services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.Events = new JwtBearerEvents
@@ -144,9 +150,8 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
                 if (!string.IsNullOrEmpty(accessToken) &&
-                    path.StartsWithSegments("/hubs"))
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                 {
                     context.Token = accessToken;
                 }
@@ -156,193 +161,143 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 ```
 
-When using HTTPS, query string values are secured by the TLS connection. However, tokens in query strings may appear in server logs or browser history, so applications should use short-lived tokens and implement token refresh patterns.
+TLS protects the query string in transit, but many servers and proxies log query strings, which is a reason to keep these tokens short-lived.
 
-Non-browser clients can set custom headers and should prefer the standard Authorization header over query string parameters. The SignalR JavaScript client supports setting headers through the accessTokenFactory option, which allows dynamically generating tokens when connections are established or reconnected.
+SignalR authenticates the user when the connection is established and caches that principal for the connection's lifetime. It doesn't revalidate it. A role removed after the connection opens isn't seen on any transport, and the user keeps whatever access the connection started with. An expired token doesn't close a WebSocket connection. On long polling and SSE, which send new HTTP requests, the next request fails unless the client sends a fresh token. Setting `CloseOnAuthenticationExpiration` in the `MapHub` options closes a connection when its token expires, forcing the client to reconnect and authenticate again.
 
-## Scaling SignalR Across Multiple Servers
+## Scaling Across Servers
 
-A single SignalR server maintains all connection state in memory. When a client connects to server A and another client connects to server B, messages sent to a group or all clients only reach connections on the server that sent the message. Scaling horizontally requires a backplane that coordinates message distribution across all servers.
+Each SignalR server knows only its own connections. With two servers, a message sent to a group or to all clients from server A never reaches the clients connected to server B. Scaling out also raises two routing requirements.
 
-The Redis backplane uses Redis pub/sub to forward messages between servers. When a client makes a connection, the connection information is passed to the backplane. When a server wants to send a message to all clients, it publishes to Redis. Redis knows all connected clients and which servers they are on, then forwards the message to the appropriate servers.
+**Sticky sessions.** Establishing a SignalR connection takes more than one HTTP request (a negotiate request, in which client and server agree on a transport, then the transport connection itself), and long polling keeps making requests afterward. All of them must reach the same server process. A server farm needs session affinity at the load balancer, with two exceptions. The first is Azure SignalR Service. The second is when every client uses WebSockets only and sets `SkipNegotiation`, so the connection is a single request.
+
+**Cross-server delivery.** Messages need a way to reach connections on other servers. Microsoft offers two options, and third-party backplanes exist for other stores.
+
+- **Azure SignalR Service** takes over the client connections. Clients negotiate with the app, then connect to the service, and each app server holds a small, fixed number of connections to the service. The app no longer needs sticky sessions, and it scales on message volume rather than connection count. Microsoft recommends it for any SignalR app hosted on Azure.
+- **A Redis backplane**, from the `Microsoft.AspNetCore.SignalR.StackExchangeRedis` package, relays messages between servers through Redis publish/subscribe, in which a message published to a named channel goes to every subscriber of that channel. Each server subscribes to channels for its own connections, users, and groups, so a message published for a group reaches every server holding a member of that group. It is the recommended option on your own infrastructure. The app still needs sticky sessions, and each server still holds its share of the connections.
+
+{% include figure.html id="asp-signalr-scaleout" %}
 
 ```csharp
-services.AddSignalR()
+builder.Services.AddSignalR()
     .AddStackExchangeRedis(connectionString, options =>
     {
-        options.Configuration.ChannelPrefix = "MyApp";
+        options.Configuration.ChannelPrefix = RedisChannel.Literal("ChatApp");
     });
 ```
 
-Redis backplanes work well when the Redis instance runs in the same datacenter as the SignalR application. Network latency between the application and Redis directly impacts message delivery latency. For production deployments, running Redis close to the application servers minimizes this impact.
+The channel prefix keeps apps that share a Redis instance from receiving each other's messages. Redis latency adds directly to message latency, so Redis belongs close to the app servers. Group operations become network calls to Redis once a backplane is configured.
 
-Sticky sessions are required with a Redis backplane unless all clients are configured to use only WebSockets. Once a connection is initiated on a server, subsequent requests for that connection must route to the same server. Load balancers typically implement sticky sessions through cookies or consistent hashing based on connection identifiers.
-
-Azure SignalR Service provides an alternative scaling approach that eliminates the need for a backplane. Instead of coordinating messages through Redis, Azure SignalR Service manages all connections and message routing. Client connections are redirected to Azure SignalR Service during the initial handshake, while the application server only handles hub method invocations.
-
-Azure SignalR Service has significant advantages over Redis backplanes when hosting on Azure. Sticky sessions are not required because clients connect directly to the service rather than to application servers. The application can scale independently of connection count since Azure SignalR Service manages the connections. This separation allows applications to scale based on CPU or memory usage rather than connection count.
-
-The service handles connection management, protocol negotiation, and message routing, which simplifies application architecture and reduces operational complexity. However, it introduces a dependency on an external service and requires network communication between application servers and Azure SignalR Service for hub method invocations.
+Persistent connections also hold server resources while idle. A SignalR server can run out of TCP connections under load and starve other apps on the same machine, which is why Microsoft advises running SignalR apps on servers of their own when traffic is high.
 
 ## SignalR with Native AOT
 
-Starting with .NET 9, SignalR supports Native AOT compilation for both client and server scenarios. This enables applications to use SignalR while benefiting from the startup time and memory footprint improvements of Native AOT.
+Since .NET 9, SignalR clients and servers can be trimmed and compiled with Native AOT. The .NET 9 release notes list the limits, which still leave SignalR "partial" in the AOT compatibility table.
 
-Applications using SignalR with Native AOT must use the System.Text.Json source generator for JSON serialization. The source generator produces ahead-of-time serialization code, which eliminates the reflection-based serialization that is incompatible with Native AOT.
-
-Several SignalR features are not compatible with Native AOT. Strongly-typed hubs using Hub<T> are not supported and will produce build warnings and runtime exceptions. Hub methods cannot accept IAsyncEnumerable<T> or ChannelReader<T> parameters where T is a value type, as these types require reflection-based serialization code generation.
-
-Hub method return types are limited to Task, Task<T>, ValueTask, or ValueTask<T>. The generic parameter T must be a reference type or a value type annotated for polymorphic serialization if derived types are involved.
-
-```csharp
-[JsonPolymorphic]
-[JsonDerivedType(typeof(DerivedMessage), "derived")]
-public abstract class BaseMessage
-{
-    public string Content { get; set; }
-}
-
-public class DerivedMessage : BaseMessage
-{
-    public DateTime Timestamp { get; set; }
-}
-```
-
-Hub methods can now accept base classes and return derived types when the base type is annotated with JsonPolymorphicAttribute. This enables polymorphic scenarios while maintaining Native AOT compatibility. The System.Text.Json serializer uses the type discriminator defined in the JsonDerivedType attribute to determine which concrete type to instantiate during deserialization.
-
-Native AOT imposes these restrictions because it cannot generate serialization code at runtime. Applications must provide serialization metadata at compile time through source generators and attributes. This trade-off delivers significantly faster startup times and smaller deployment sizes at the cost of some dynamic features.
+- Only the JSON hub protocol works, not MessagePack, and it needs the System.Text.Json source generator, as minimal APIs do.
+- Strongly typed hubs (`Hub<T>`) aren't supported under `PublishAot`. They produce build warnings and fail at runtime, so AOT hubs use `SendAsync`. They work with trimming alone.
+- Hub methods can't take streaming parameters (`IAsyncEnumerable<T>` or `ChannelReader<T>`) where `T` is a value type. They fail at startup.
+- Async hub methods must return `Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>`.
 
 ## Server-Sent Events
 
-Server-Sent Events provide native unidirectional streaming from server to client over standard HTTP connections. Unlike WebSockets, SSE works over HTTP/1.1 and HTTP/2 without requiring a protocol upgrade, which simplifies firewall and proxy configuration. Browsers automatically handle reconnection through the EventSource API when connections drop.
-
-Starting with .NET 10, ASP.NET Core provides built-in support for Server-Sent Events through the TypedResults.ServerSentEvents API. This method accepts an IAsyncEnumerable<SseItem<T>> representing the stream of events to send to the client.
+Server-Sent Events stream text events over a normal HTTP response with the `text/event-stream` content type. There is no protocol upgrade, and the browser's `EventSource` API reconnects on its own when the connection drops. .NET 10 adds `TypedResults.ServerSentEvents`, which takes an `IAsyncEnumerable` of events:
 
 ```csharp
-app.MapGet("/events", async (CancellationToken token) =>
-{
-    var events = GetEventStream(token);
-    return TypedResults.ServerSentEvents(events, eventType: "notification");
-});
+app.MapGet("/orders/events", (
+    [FromHeader(Name = "Last-Event-ID")] string? lastEventId,
+    IOrderFeed orderFeed,
+    CancellationToken ct) =>
+    TypedResults.ServerSentEvents(StreamOrderEvents(orderFeed, lastEventId, ct)));
 
-async IAsyncEnumerable<SseItem<string>> GetEventStream(
-    [EnumeratorCancellation] CancellationToken token)
+static async IAsyncEnumerable<SseItem<OrderEvent>> StreamOrderEvents(
+    IOrderFeed orderFeed, string? lastEventId, [EnumeratorCancellation] CancellationToken ct)
 {
-    while (!token.IsCancellationRequested)
+    await foreach (var evt in orderFeed.ReadSinceAsync(lastEventId, ct))
     {
-        await Task.Delay(1000, token);
-        yield return new SseItem<string>
+        yield return new SseItem<OrderEvent>(evt, eventType: "order-updated")
         {
-            Data = $"Event at {DateTime.UtcNow}",
-            Id = Guid.NewGuid().ToString()
+            EventId = evt.Sequence.ToString()
         };
     }
 }
 ```
 
-The SseItem<T> type represents a single event message with optional fields for event type, ID, and data payload. The framework handles Content-Type headers, keeps connections alive, and formats messages according to the HTML specification.
+Each `SseItem<T>` carries a payload, an optional event type, an optional ID, and an optional `ReconnectionInterval`, which tells the browser how long to wait before reconnecting. Payloads other than strings and byte arrays are serialized as JSON. When a browser reconnects, it sends the last ID it received in the `Last-Event-ID` header. Resuming from that point is the server's job, which is why the sample reads the header and passes it to the feed. Events without IDs are simply lost across a reconnect.
 
-Server-Sent Events support automatic reconnection with resumption. When a connection drops, browsers automatically attempt to reconnect and send the Last-Event-ID header containing the ID of the last successfully received event. Servers can use this ID to resume the stream from where the client left off rather than restarting from the beginning.
+Two deployment details catch SSE endpoints.
 
-This reconnection behavior happens automatically in browsers without application code. The EventSource API manages the connection lifecycle, including exponential backoff for failed reconnection attempts. Applications only need to provide event IDs in their SseItem instances to enable resumption.
+- **Proxy buffering.** A reverse proxy that buffers responses holds events back until its buffer fills. Nginx needs `proxy_buffering off` for SSE routes, for example.
+- **Connection limits over HTTP/1.1.** Browsers allow about six HTTP/1.1 connections per origin, and every open `EventSource` holds one. Several tabs with streams open can exhaust them. HTTP/2 multiplexes streams over one connection and raises the limit to a negotiated stream count, 100 by default.
 
-Server-Sent Events are text-based and typically use JSON for structured data. This makes them heavier than binary protocols for high-throughput scenarios but simpler to debug and monitor. The text/event-stream content type is well understood by proxies and CDNs, which generally handle SSE connections correctly without special configuration.
+## Raw WebSockets
 
-## Raw WebSocket Connections
-
-Raw WebSocket connections provide full control over the protocol for applications that need custom message formats, binary protocols, or maximum performance. Unlike SignalR, raw WebSockets do not include automatic reconnection, protocol negotiation, or message framing beyond the WebSocket specification.
-
-The WebSocket middleware in ASP.NET Core handles the protocol upgrade handshake and provides access to the WebSocket instance. Applications must explicitly check whether a request is a WebSocket request before accepting the connection.
+Raw WebSockets give the application the socket and leave everything else to it. There is no reconnection, no message protocol beyond WebSocket frames, and no groups. The WebSockets middleware must be added, and the endpoint accepts the upgrade:
 
 ```csharp
-app.Use(async (context, next) =>
+app.UseWebSockets(new WebSocketOptions
 {
-    if (context.WebSockets.IsWebSocketRequest)
-    {
-        var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-        await HandleWebSocketConnection(webSocket);
-    }
-    else
-    {
-        await next();
-    }
+    KeepAliveInterval = TimeSpan.FromMinutes(2),
+    KeepAliveTimeout = TimeSpan.FromSeconds(15)
 });
 
-async Task HandleWebSocketConnection(WebSocket webSocket)
+app.Map("/ws", async context =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    await EchoAsync(socket, context.RequestAborted);
+});
+
+static async Task EchoAsync(WebSocket socket, CancellationToken ct)
 {
     var buffer = new byte[4096];
-    var result = await webSocket.ReceiveAsync(
-        new ArraySegment<byte>(buffer),
-        CancellationToken.None);
+    var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
 
     while (!result.CloseStatus.HasValue)
     {
-        await webSocket.SendAsync(
-            new ArraySegment<byte>(buffer, 0, result.Count),
-            result.MessageType,
-            result.EndOfMessage,
-            CancellationToken.None);
-
-        result = await webSocket.ReceiveAsync(
-            new ArraySegment<byte>(buffer),
-            CancellationToken.None);
+        await socket.SendAsync(buffer.AsMemory(0, result.Count), result.MessageType, result.EndOfMessage, ct);
+        result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
     }
 
-    await webSocket.CloseAsync(
-        result.CloseStatus.Value,
-        result.CloseStatusDescription,
-        CancellationToken.None);
+    await socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, ct);
 }
 ```
 
-When using raw WebSockets, the middleware pipeline must remain running for the duration of the connection. Returning from the request handler closes the connection. This differs from standard request processing where the pipeline completes and the framework closes the connection automatically.
+The endpoint uses `Map` rather than `MapGet` because WebSockets over HTTP/2, supported since .NET 7 and on by default in Chrome, Edge, and Firefox 128 and later, arrive as `CONNECT` requests rather than `GET`. A controller action has the same issue and needs `[Route]` instead of `[HttpGet]`.
 
-The server is not automatically informed when clients disconnect due to network failures. The server receives a close message only if the client sends it explicitly, which cannot happen if internet connectivity is lost. Applications must implement heartbeat mechanisms or timeouts to detect failed connections.
+A few behaviors differ from ordinary request handling.
 
-WebSocket messages can be text or binary and can span multiple frames. The EndOfMessage property on WebSocketReceiveResult indicates whether the current frame is the final frame of a message. Applications that expect large messages must buffer frames until a complete message is received.
+- **The request must stay open.** The socket lives only as long as the middleware pipeline for that request. Returning from the handler ends the connection. A background service that writes to the socket needs the request to wait, for example on a `TaskCompletionSource` that the service completes when it's done.
+- **Dead clients go unnoticed.** A client that loses its network never sends a close frame. The server sends a ping every `KeepAliveInterval` (two minutes by default), but it closes an unresponsive connection only if `KeepAliveTimeout` is set, and that timeout is disabled by default.
+- **Messages can span frames.** `EndOfMessage` is `false` until the last frame of a message arrives, so code expecting large messages has to accumulate frames.
+- **CORS doesn't apply.** Browsers don't enforce CORS on WebSocket connections, so any site can open a socket to the server and ride on the user's cookies. `AllowedOrigins` in `WebSocketOptions` restricts which `Origin` headers are accepted.
 
-Chrome, Edge, and Firefox (version 128 and later) support HTTP/2 WebSockets by default, which allows multiplexing multiple WebSocket connections over a single TCP connection. This reduces connection overhead when establishing many concurrent WebSocket connections to the same server.
+## Choosing an Approach
 
-## Choosing Between SignalR, SSE, and WebSockets
+| | SignalR | Server-Sent Events | Raw WebSockets |
+|---|---|---|---|
+| Direction | Both ways | Server to client | Both ways |
+| Reconnection | Opt-in on the client, with optional message replay | Automatic in browsers, which send the last event ID for the server to resume from | Application's job |
+| Client requirement | SignalR client library | Any HTTP client, `EventSource` in browsers | Any WebSocket client |
+| Built-in groups and scale-out | Yes | No | No |
 
-The choice between SignalR, Server-Sent Events, and raw WebSockets depends on communication patterns, client capabilities, and operational requirements. Each approach makes different trade-offs between abstraction, control, and complexity.
+SignalR fits interactive features where both sides talk, such as chat, collaboration, and live dashboards that also take user actions. Its groups, user targeting, reconnection, and backplanes are the parts that are expensive to rebuild.
 
-SignalR is appropriate when you need bidirectional communication with automatic transport fallback and connection management. Applications like chat systems, collaborative editing, and real-time dashboards that push updates to clients and receive user actions benefit from SignalR's high-level abstractions. The built-in support for groups, automatic reconnection, and scaling patterns reduces development time compared to implementing these features with raw WebSockets.
+Server-Sent Events fit one-way feeds, such as notifications, progress updates, and price tickers, especially for clients that shouldn't need a SignalR library. Client-to-server traffic goes through ordinary HTTP requests.
 
-However, SignalR introduces overhead from its protocol layer and requires clients to use the SignalR client library. Applications that need custom message formats or integration with existing WebSocket clients may find SignalR's abstractions limiting.
+Raw WebSockets fit a protocol the application doesn't control, such as a device protocol or a proxy for another WebSocket service, or a custom binary format that neither of SignalR's hub protocols can carry. Choosing them means building connection tracking, heartbeats, reconnection, and scale-out yourself.
 
-Server-Sent Events fit scenarios where the server pushes updates to clients without requiring bidirectional communication. Stock tickers, live sports scores, and notification streams are natural fits for SSE. The browser's EventSource API handles reconnection automatically, and the protocol works over standard HTTP without requiring WebSocket support from proxies or firewalls.
+## Key Takeaways
 
-The unidirectional nature of SSE means clients must use standard HTTP requests for sending data to the server. This separation between push and pull can simplify architecture by using established REST or RPC patterns for client-to-server communication while using SSE for server-to-client updates.
-
-Raw WebSockets are appropriate when you need full control over the protocol or maximum performance. Applications implementing custom binary protocols, proxying other WebSocket protocols, or optimizing for minimal latency benefit from direct WebSocket access. However, this control comes at the cost of implementing connection management, heartbeats, and reconnection logic manually.
-
-| Approach | Direction | Reconnection | Browser Support | Proxy Friendly | Overhead |
-|----------|-----------|--------------|-----------------|----------------|----------|
-| SignalR | Bidirectional | Automatic | Universal (fallback) | High | Medium |
-| Server-Sent Events | Server to Client | Automatic | Modern browsers | High | Low |
-| Raw WebSockets | Bidirectional | Manual | Modern browsers | Medium | Minimal |
-
-The distinction between these approaches is not always clear-cut. Applications can combine multiple patterns, using SSE for server-to-client updates while handling client-to-server communication through standard HTTP requests. This hybrid approach can be simpler than implementing bidirectional WebSocket communication when the bidirectional requirement is not frequent.
-
-For applications already using SignalR, Server-Sent Events or raw WebSockets may not provide sufficient benefit to justify replacing working code. For new applications, starting with the highest-level abstraction that meets requirements reduces complexity. Begin with SignalR or SSE unless specific constraints require raw WebSocket control.
-
-## Red Flags
-
-Watch for these patterns that indicate potential issues with real-time communication implementations.
-
-**Storing connection state in hub instances**. Hubs are transient, and storing state in hub properties leads to lost state between method invocations. Use external storage, connection-scoped services, or groups for managing per-connection state.
-
-**Not handling reconnection in clients**. Network failures are common, and clients that do not implement reconnection logic leave users with broken experiences. SignalR clients provide automatic reconnection, but applications must handle reconnection for raw WebSockets.
-
-**Scaling without a backplane**. Deploying multiple SignalR servers without a backplane or Azure SignalR Service breaks group messaging and client targeting. Messages sent to groups only reach clients connected to the same server.
-
-**Using strongly-typed hubs with Native AOT**. Strongly-typed hubs are not supported in Native AOT and will produce runtime exceptions. Use standard Hub base class and SendAsync when targeting Native AOT.
-
-**Exposing access tokens in query strings without considering logging**. While query string authentication is necessary for browser WebSocket connections, tokens may appear in server logs. Use short-lived tokens and implement token refresh patterns to limit exposure.
-
-**Not implementing heartbeats with raw WebSockets**. The server does not automatically detect client disconnection due to network failure. Applications using raw WebSockets must implement heartbeat mechanisms to detect and clean up dead connections.
-
-**Choosing raw WebSockets without understanding the cost**. Raw WebSockets provide control at the cost of implementing connection management, message framing, reconnection, and heartbeats. SignalR or SSE may provide sufficient control while eliminating this complexity.
-
-**Using Server-Sent Events for bidirectional communication**. SSE only supports server-to-client messages. Applications that attempt to use SSE for bidirectional communication must implement client-to-server communication separately, which may indicate SignalR is a better fit.
+- Hubs are transient. Per-connection state goes in `Context.Items` or external storage, never in hub fields.
+- Target users and groups rather than connection IDs, and rejoin groups after a reconnect, since a reconnected client is a new connection unless stateful reconnect bridges the gap.
+- Browser clients send bearer tokens in the query string for WebSockets and SSE, so the JWT handler must read `access_token`. SignalR caches the principal for the connection's life, and `CloseOnAuthenticationExpiration` bounds that.
+- More than one server needs sticky sessions plus a Redis backplane, or Azure SignalR Service, which removes both needs.
+- Native AOT supports SignalR with the JSON protocol only and without strongly typed hubs.
+- .NET 10's `TypedResults.ServerSentEvents` streams `SseItem<T>` events. Resumption after reconnect depends on the server reading `Last-Event-ID`.
+- Raw WebSockets need `UseWebSockets`, a request that stays open, `KeepAliveTimeout` to detect dead clients, and `AllowedOrigins` in place of CORS.

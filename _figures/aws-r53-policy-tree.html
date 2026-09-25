@@ -1,0 +1,65 @@
+---
+title: "Nested Routing Policies With Health Checks"
+kind: graph
+system: aws
+summary: "Latency records over failover and weighted sets, with one failing endpoint dropped."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 390" role="img" aria-labelledby="awst-title awst-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awst-title">A latency routing tree whose branches are a failover set and a weighted set</title>
+<desc id="awst-desc">The name app.example.com has two latency records, one for us-east-1 and one for eu-west-1. The us-east-1 record is an alias to a failover set whose primary is an application load balancer and whose secondary is a standby load balancer. The eu-west-1 record is an alias to a weighted set sending 90 percent to a blue load balancer and 10 percent to a green one. Evaluate target health is on for the aliases. The us-east-1 primary's health check is failing, so the failover set answers with the secondary, and the us-east-1 latency record stays in service.</desc>
+<style>
+.awst-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awst-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 5 3; }
+.awst-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awst-nb { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awst-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awst-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awst-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awst-dead { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="awst-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awst-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awst-box" x="330" y="20" width="260" height="50" rx="6"/>
+<text class="awst-n" x="460" y="42" text-anchor="middle">app.example.com</text>
+<text class="awst-k" x="460" y="59" text-anchor="middle">[latency records]</text>
+
+<rect class="awst-box" x="110" y="130" width="260" height="50" rx="6"/>
+<text class="awst-n" x="240" y="152" text-anchor="middle">us-east-1 record</text>
+<text class="awst-k" x="240" y="169" text-anchor="middle">[alias to a failover set]</text>
+
+<rect class="awst-box" x="550" y="130" width="260" height="50" rx="6"/>
+<text class="awst-n" x="680" y="152" text-anchor="middle">eu-west-1 record</text>
+<text class="awst-k" x="680" y="169" text-anchor="middle">[alias to a weighted set]</text>
+
+<rect class="awst-bad" x="30" y="250" width="180" height="50" rx="6"/>
+<text class="awst-nb" x="120" y="272" text-anchor="middle">Primary ALB</text>
+<text class="awst-k" x="120" y="289" text-anchor="middle">health check failing</text>
+
+<rect class="awst-box" x="250" y="250" width="180" height="50" rx="6"/>
+<text class="awst-n" x="340" y="272" text-anchor="middle">Standby ALB</text>
+<text class="awst-k" x="340" y="289" text-anchor="middle">[secondary]</text>
+
+<rect class="awst-box" x="490" y="250" width="180" height="50" rx="6"/>
+<text class="awst-n" x="580" y="272" text-anchor="middle">Blue ALB</text>
+<text class="awst-k" x="580" y="289" text-anchor="middle">[weight 90]</text>
+
+<rect class="awst-box" x="710" y="250" width="180" height="50" rx="6"/>
+<text class="awst-n" x="800" y="272" text-anchor="middle">Green ALB</text>
+<text class="awst-k" x="800" y="289" text-anchor="middle">[weight 10]</text>
+
+<path class="awst-flow" d="M400,70 L270,128" marker-end="url(#awst-a)"/>
+<path class="awst-flow" d="M520,70 L650,128" marker-end="url(#awst-a)"/>
+<path class="awst-dead" d="M200,180 L140,248" marker-end="url(#awst-b)"/>
+<path class="awst-flow" d="M280,180 L330,248" marker-end="url(#awst-a)"/>
+<path class="awst-flow" d="M640,180 L590,248" marker-end="url(#awst-a)"/>
+<path class="awst-flow" d="M720,180 L790,248" marker-end="url(#awst-a)"/>
+
+<text class="awst-lab" x="20" y="336">Evaluate target health is on at each alias. The failing primary drops out, so the failover set answers with the standby,</text>
+<text class="awst-lab" x="20" y="354">and the us-east-1 latency record stays in service. If both of its load balancers failed, that record would drop out too,</text>
+<text class="awst-lab" x="20" y="372">and every user would get eu-west-1.</text>
+</g>
+</svg>

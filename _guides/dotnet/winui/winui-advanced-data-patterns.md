@@ -62,7 +62,7 @@ public partial class CatalogViewModel : ObservableObject
 
 The collection derives from `ObservableCollection<T>` and exposes `IsLoading` and `HasMoreItems` as bindable properties. `pageIndex` starts at zero, and every call asks for `itemsPerPage` items whatever count the list requested, so the list's settings change how many fetches happen rather than their size. The collection stops asking for more once a page comes back empty.
 
-Errors need a plan. When a page fetch throws, the collection calls the `onError` callback and sets `HasMoreItems` to `false`, so the list stops at whatever it has and won't try that page again by itself. The exception arrives wrapped in an `AggregateException`, which is why the sample reads `GetBaseException()`. Without a callback, the exception propagates into the list's own load request, where nothing is waiting to handle it, so always pass one. Surfacing the error, as `LoadError` does here, and offering a retry that calls `RefreshAsync`, which clears the collection and loads from the first page, keeps a network blip from ending the list for the rest of the session.
+Errors need a plan. When a page fetch throws, the collection calls the `onError` callback and sets `HasMoreItems` to `false`, so the list stops at whatever it has and won't try that page again by itself. The exception arrives wrapped in an `AggregateException`, which is why the sample reads `GetBaseException()`. Without a callback, the exception propagates into the list's own load request, where nothing is waiting to handle it, so always pass one. Surfacing the error, as `LoadError` does here, and offering a retry keeps a network blip from ending the list for the rest of the session. `RefreshAsync` clears the collection and resets it to the first page with `HasMoreItems` set to `true`. If the collection was already empty, it loads that page itself. Otherwise the bound list sees the emptied collection and asks for it.
 
 ---
 
@@ -176,11 +176,43 @@ public partial class RegistrationViewModel : ObservableValidator
 
 The constructor assigns `Email` and `Password`, which runs validation on the empty values and so reports "is required" before the user has typed. Forms that shouldn't show errors until the user interacts call `ClearErrors()` at the end of the constructor, which clears every property's errors, and `Submit` validates everything with `ValidateAllProperties` anyway.
 
-The attributes are read by reflection, and the toolkit marks its validation methods as requiring code the trimmer can't see. A release publish with trimming or Native AOT, which current WinUI templates enable, reports trimming warnings for them, and properties the trimmer removes metadata for can go unvalidated.
+The attributes are read by reflection, and the toolkit marks its validation methods as requiring code the trimmer can't see. A release publish with trimming, which current WinUI templates turn on, reports trimming warnings for them, and so does an opt-in Native AOT publish. Properties the trimmer removes metadata for can go unvalidated.
 
 ### Rules the Attributes Don't Cover
 
-A rule that needs a service goes in a static method named by `[CustomValidation(typeof(RegistrationViewModel), nameof(ValidateUserName))]`. The method receives the value and a `ValidationContext` whose `ObjectInstance` is the view model, which gives it access to injected services. Validation is synchronous, though, so a rule that needs a network call, such as checking that a username isn't taken, runs as an async check on submit or after the input pauses and records its result in a field that the custom rule then reads. A reusable rule becomes a class derived from `ValidationAttribute`. A rule that compares two properties has to be re-run when either changes, so the generated `OnPasswordChanged` partial method of one property calls `ValidateProperty` for the other.
+A rule that needs a service goes in a static method named by `[CustomValidation(typeof(RegistrationViewModel), nameof(ValidateUserName))]`. The method receives the value and a `ValidationContext` whose `ObjectInstance` is the view model, which gives it access to injected services. Validation is synchronous, though, so a rule that needs a network call, such as checking that a username isn't taken, runs as an async check on submit or after the input pauses. The check records its result in a field, and the custom rule reads that field:
+
+```csharp
+// Added to RegistrationViewModel, with an IAccountService injected as accounts
+private string? takenUserName;
+
+[ObservableProperty]
+[NotifyDataErrorInfo]
+[Required(ErrorMessage = "Username is required.")]
+[CustomValidation(typeof(RegistrationViewModel), nameof(ValidateUserName))]
+public partial string UserName { get; set; }
+
+public static ValidationResult? ValidateUserName(string userName, ValidationContext context)
+{
+    var form = (RegistrationViewModel)context.ObjectInstance;
+    return userName == form.takenUserName
+        ? new ValidationResult("That username is taken.")
+        : ValidationResult.Success;
+}
+
+// Called on submit, or after the username input pauses
+private async Task CheckUserNameAsync(CancellationToken cancellationToken)
+{
+    string candidate = UserName;
+    if (await accounts.IsUserNameTakenAsync(candidate, cancellationToken))
+    {
+        takenUserName = candidate;
+        ValidateProperty(UserName, nameof(UserName));
+    }
+}
+```
+
+`ValidateProperty` re-runs a property's rules without changing its value, so the "taken" error appears as soon as the check finishes. A reusable rule becomes a class derived from `ValidationAttribute`. A rule that compares two properties has to be re-run when either changes, so the generated `OnPasswordChanged` partial method of one property calls `ValidateProperty` for the other.
 
 ---
 
@@ -241,7 +273,9 @@ public class LocalProduct
 
 The sync service queries for records whose status isn't `Synced`, sends each to the server, and on success stores the `ServerId` the server returns for a new record. It marks the record `Synced` only if `UpdatedAt` hasn't changed since it was sent, because the user may have edited it again while the upload was in flight. A deleted record stays in the local store as `PendingDelete` until the server confirms, so it isn't resurrected by the next download.
 
-When the same record changed both locally and on the server since the last sync, the app needs a rule:
+A conflict means the same record changed both locally and on the server since the last sync. A version number that the server increments on every change detects one. The client sends the version its edit was based on, and a mismatch means someone else changed the record in between. Timestamps are weaker, because clocks on different machines disagree, and a timestamp the server assigns records when an edit was uploaded rather than when it was made, which turns last-write-wins into last-upload-wins.
+
+Once the app detects a conflict, it needs a rule to resolve it:
 
 | Strategy | What happens | Suits |
 | --- | --- | --- |
@@ -249,8 +283,6 @@ When the same record changed both locally and on the server since the last sync,
 | Server wins | Local changes to a record the server has changed are discarded | Reference data the user rarely edits |
 | Field-level merge | Changed fields from both sides are combined | Records where losing either side's edit is costly, at the price of tracking changes per field |
 | Ask the user | Both versions are shown and the user picks or combines them | Documents and other records where only the user can judge which edit is right |
-
-Detecting the conflict comes first. A version number that the server increments on every change does that. The client sends the version its edit was based on, and a mismatch means someone else changed the record in between. Timestamps are weaker, because clocks on different machines disagree, and a timestamp the server assigns records when an edit was uploaded rather than when it was made, which turns last-write-wins into last-upload-wins.
 
 ### Detecting Connectivity
 

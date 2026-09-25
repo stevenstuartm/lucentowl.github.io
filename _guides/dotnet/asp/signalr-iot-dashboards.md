@@ -3,235 +3,154 @@ title: "Real-Time IoT Dashboards with SignalR"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Real-Time & RPC"
-description: "Building real-time IoT dashboards with ASP.NET Core SignalR and Azure SignalR Service, covering the telemetry pipeline from device to browser, Blazor integration, and scaling patterns."
-tags: [iot, dotnet, real-time, telemetry, azure, practical, architecture]
+description: "Building live IoT dashboards on SignalR: the telemetry pipeline from IoT Hub to the browser through an ASP.NET Core backend or Azure Functions, throttling high-frequency readings, per-device subscriptions and their authorization, Blazor and JavaScript clients, dashboard patterns, and what drives Azure SignalR Service cost."
+tags: [practical, iot, telemetry, signalr, azure-functions, event-hubs]
 ---
 
-## Why SignalR for IoT Dashboards
+A dashboard that polls asks the server for new readings every few seconds and shows data that is up to one polling interval old. For a sensor that reports every 500 milliseconds, most of what it reports never appears. Pushing readings to the browser as they arrive fixes that, and SignalR is the ASP.NET Core way to push. This guide assumes SignalR's hubs, groups, `IHubContext`, and scale-out options, and covers what an IoT dashboard adds on top of them: a telemetry pipeline, throttling, per-device subscriptions, and the cost of fan-out. A dashboard that only needs to refresh every 30 seconds or so doesn't need any of it, and a timer that calls an API is simpler.
 
-Traditional web dashboards request data by polling: the browser sends an HTTP request every few seconds and waits for a response. For IoT telemetry, this approach wastes bandwidth, adds latency, and makes the dashboard feel sluggish. A temperature sensor reporting every 500 milliseconds deserves a dashboard that responds just as quickly, not one that checks every 5 seconds and misses most readings.
+## The Telemetry Pipeline
 
-[ASP.NET Core SignalR](https://learn.microsoft.com/en-us/aspnet/core/signalr/introduction){:target="_blank" rel="noopener noreferrer"} inverts this pattern. Instead of the browser asking "do you have new data?", the server pushes updates to the browser the moment new telemetry arrives. The transport layer is WebSocket when the browser and network support it, with Server-Sent Events and long polling as fallbacks. For most modern deployments, WebSocket is what runs.
+Devices send telemetry to Azure IoT Hub. IoT Hub exposes the stream on a built-in endpoint that speaks the Event Hubs protocol: a durable, ordered log split into *partitions*, which readers pull from at their own pace. Something has to read that endpoint and push each reading to the browsers watching that device.
 
-The fit with IoT is natural. Devices generate continuous streams of readings, and dashboards exist to make those streams visible in real time. SignalR provides a managed abstraction over the persistent connection, handles reconnection, and lets server code send to individual clients or groups of clients without tracking raw WebSocket handles.
+Azure SignalR Service, the managed option for holding client connections, runs in one of two modes that decide which design is possible. In *Default* mode, an ASP.NET Core app still hosts the hubs, and the service proxies the client connections to it. In *Serverless* mode, no hub server exists, and the application talks to the service through its REST API or Azure Functions bindings.
 
-[Azure SignalR Service](https://learn.microsoft.com/en-us/azure/azure-signalr/signalr-overview){:target="_blank" rel="noopener noreferrer"} extends this further by offloading connection management to a managed service. Instead of your ASP.NET Core server holding thousands of open WebSocket connections, Azure SignalR Service holds them and your server just sends messages. This matters at IoT scale, where a single deployment might serve hundreds of simultaneous dashboard viewers across many device streams.
+- **An ASP.NET Core backend.** A background service in the same app as the SignalR hub reads IoT Hub's endpoint, throttles the readings, and sends them to device groups through `IHubContext`. The app holds the client connections itself, or hands them to Azure SignalR Service in Default mode.
+- **Azure Functions.** A function receives batches of IoT Hub events, and sends them through Azure SignalR Service in Serverless mode. No application server holds connections or runs continuously.
 
----
+{% include figure.html id="asp-iot-dashboard-pipeline" %}
 
-## SignalR Fundamentals
+| Factor | ASP.NET Core backend | Azure Functions |
+|--------|---------------------|---------------------------|
+| **Azure SignalR Service mode** | Default, or none when self-hosted | Serverless |
+| **Local development** | Runs locally with no Azure dependency for SignalR | Needs the Azure SignalR local emulator, which supports Serverless mode, or a live service |
+| **Traffic pattern** | Steady, continuous telemetry | Spiky or intermittent telemetry |
+| **Cold starts** | None, since the app is always running | Possible on the Consumption plan, which runs instances only while there is work |
+| **Throttling and in-memory state** | In process, such as the latest reading per device | Needs an external store, since function instances don't share memory |
+| **Subscriptions** | Hub methods over the SignalR connection | Separate HTTP functions |
 
-### Hubs
+The backend design keeps throttling, subscription checks, and device state in one process, which is why it is the easier one to reason about. The serverless design suits bursty fleets and teams that don't want to run a server, and pays for that with more moving parts per feature.
 
-A hub is the server-side class that acts as the communication endpoint for connected clients. When a browser connects to a SignalR hub, the server can call methods on that client, and the client can call methods on the server. The connection is bidirectional by default, though IoT dashboards primarily use the server-to-client direction.
+One IoT Hub setting silently breaks both designs. Once any message route is added to an IoT Hub, telemetry stops flowing to the built-in endpoint unless a route to that endpoint is also added. A dashboard that suddenly receives nothing after someone configured routing to storage has usually hit this.
 
-Hubs are defined by inheriting from `Hub` or `Hub<T>`. The strongly-typed `Hub<T>` variant is preferable for IoT work because it makes the interface between server and client explicit at compile time.
+## The ASP.NET Core Backend
+
+### The Telemetry Hub
+
+The hub's job in a dashboard is subscriptions. Each device, location, or tenant the UI can show becomes a group, and a browser joins the groups for what it is displaying. A viewer watching a floor map and one sensor's detail panel is in `location:floor-3` and `device:sensor-42` at once.
+
+Subscription is also where authorization belongs. `[Authorize]` on the hub proves who the user is, but a signed-in user still shouldn't be able to join the group for a device they aren't allowed to see, so the hub checks before adding the connection:
 
 ```csharp
+public record DeviceTelemetry(string DeviceId, long Sequence, DateTimeOffset Timestamp, double Temperature);
+
 public interface ITelemetryClient
 {
     Task ReceiveTelemetry(DeviceTelemetry telemetry);
-    Task DeviceStatusChanged(string deviceId, bool isOnline);
     Task ThresholdAlert(string deviceId, string metric, double value);
+    Task ThresholdCleared(string deviceId, string metric);
 }
 
-public class TelemetryHub : Hub<ITelemetryClient>
+[Authorize]
+public class TelemetryHub(IDeviceAuthorizationService deviceAuth) : Hub<ITelemetryClient>
 {
     public async Task SubscribeToDevice(string deviceId)
     {
+        if (!await deviceAuth.CanViewDeviceAsync(Context.UserIdentifier, deviceId))
+        {
+            throw new HubException($"Access denied to device {deviceId}");
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, $"device:{deviceId}");
     }
 
-    public async Task UnsubscribeFromDevice(string deviceId)
-    {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"device:{deviceId}");
-    }
-
-    public async Task SubscribeToLocation(string locationId)
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"location:{locationId}");
-    }
+    public Task UnsubscribeFromDevice(string deviceId) =>
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, $"device:{deviceId}");
 }
 ```
 
-The client receives telemetry by registering handlers for the methods declared in the interface. The interface enforces that server and client agree on method names and parameter types.
+`HubException` sends its message to the client, while any other exception reaches the client only as a generic error. Because group membership doesn't survive a reconnect, the client repeats its subscriptions after reconnecting, and each one passes through the same check. A dashboard served from another origin also needs the usual SignalR CORS policy on the hub, with credentials allowed.
 
-### Groups
+### Reading from IoT Hub
 
-Groups organize connections so you can target messages without broadcasting to everyone. For IoT dashboards, groups map naturally to device IDs, physical locations, customer tenants, or any other dimension your UI navigates by.
-
-A connection can belong to multiple groups simultaneously. A user viewing a floor-level map and a specific sensor detail panel at the same time can be in both `location:floor-3` and `device:sensor-42` groups. When the server sends to `location:floor-3`, that user receives the update; when a reading arrives for sensor-42, they also receive that targeted update.
-
-Groups are ephemeral by design. Membership does not survive a disconnection. When a client reconnects, it must rejoin the groups it needs. Plan for this in your client-side reconnection logic.
-
-## The IoT Dashboard Pipeline
-
-Two pipeline architectures are common in production, and the right choice depends on your scale and infrastructure preferences.
-
-### ASP.NET Core Backend Pattern
-
-An ASP.NET Core application hosts the SignalR hub and runs a background service that subscribes to IoT Hub events. This is the simpler option to reason about and easier to debug locally.
-
-```
-IoT Device → Azure IoT Hub → ASP.NET Core Background Service → SignalR Hub → Browser
-```
-
-The background service uses the Azure Event Hubs SDK to consume events from the IoT Hub's built-in event hub endpoint. As events arrive, the service deserializes the telemetry payload and calls the hub context to push the data to subscribed clients.
-
-### Azure Functions Serverless Pattern
-
-An Azure Function with an Event Hub trigger processes IoT Hub events, and a SignalR output binding delivers the message to connected clients. Your server holds no persistent state; Azure SignalR Service manages all connections.
-
-```
-IoT Device → Azure IoT Hub → Azure Function (Event Hub trigger) → Azure SignalR Service → Browser
-```
-
-The serverless pattern shines when traffic is spiky. Functions scale to zero when no telemetry arrives and scale out automatically under load. You pay per execution rather than for always-on compute. The tradeoff is that cold starts can introduce brief latency on the first messages after an idle period.
-
-### Choosing Between the Patterns
-
-| Factor | ASP.NET Core Backend | Azure Functions Serverless |
-|--------|---------------------|---------------------------|
-| **Local development** | Easy (no Azure dependency) | Requires Azure SignalR emulator or live service |
-| **Traffic pattern** | Steady continuous telemetry | Spiky or intermittent telemetry |
-| **Cold start sensitivity** | None | Milliseconds to seconds on cold start |
-| **Stateful logic** | Easy (in-process caching, device registry) | Harder (requires external state store) |
-| **Ops overhead** | App Service or AKS to manage | Near zero managed infrastructure |
-| **Scale ceiling** | Limited by App Service tier | Effectively unlimited (Azure SignalR Service tiers) |
-
----
-
-## Building the ASP.NET Core Server
-
-### Project Setup
-
-Start with a standard ASP.NET Core web API project and add the SignalR package.
-
-```bash
-dotnet add package Microsoft.AspNetCore.SignalR
-```
-
-Register the hub and configure CORS to allow browser connections. IoT dashboards are often served from a different origin than the API, so CORS requires explicit configuration.
+The background service reads IoT Hub's built-in endpoint with `EventProcessorClient`, from the `Azure.Messaging.EventHubs.Processor` package. Readers belong to a *consumer group*, a named, independent read position on the stream. Within one consumer group, the processors on all of the app's instances share the partitions between them, each partition read by exactly one instance at a time. Each processor records how far it has read in each partition, a *checkpoint*, in blob storage, so a restarted instance resumes where it left off.
 
 ```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddSignalR();
-builder.Services.AddCors(options =>
+public class IoTHubListenerService(
+    TelemetryThrottle throttle,
+    IConfiguration config,
+    ILogger<IoTHubListenerService> logger) : BackgroundService
 {
-    options.AddPolicy("DashboardPolicy", policy =>
-    {
-        policy.WithOrigins("https://dashboard.example.com")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Required for SignalR
-    });
-});
-
-builder.Services.AddHostedService<IoTHubListenerService>();
-builder.Services.AddSingleton<TelemetryProcessor>();
-
-var app = builder.Build();
-
-app.UseCors("DashboardPolicy");
-app.MapHub<TelemetryHub>("/hubs/telemetry");
-
-app.Run();
-```
-
-### The IoT Hub Listener Background Service
-
-The background service opens a connection to the IoT Hub event endpoint and processes telemetry continuously. The [Azure.Messaging.EventHubs](https://www.nuget.org/packages/Azure.Messaging.EventHubs.Processor){:target="_blank" rel="noopener noreferrer"} package provides the `EventProcessorClient` that handles partition management, checkpointing, and reconnection.
-
-```csharp
-public class IoTHubListenerService : BackgroundService
-{
-    private readonly EventProcessorClient _processor;
-    private readonly TelemetryProcessor _telemetryProcessor;
-    private readonly ILogger<IoTHubListenerService> _logger;
-
-    public IoTHubListenerService(
-        TelemetryProcessor telemetryProcessor,
-        IConfiguration config,
-        ILogger<IoTHubListenerService> logger)
-    {
-        _telemetryProcessor = telemetryProcessor;
-        _logger = logger;
-
-        var storageClient = new BlobContainerClient(
-            config["CheckpointStorage:ConnectionString"],
-            config["CheckpointStorage:Container"]);
-
-        _processor = new EventProcessorClient(
-            storageClient,
-            EventHubConsumerClient.DefaultConsumerGroupName,
-            config["IoTHub:ConnectionString"],
-            config["IoTHub:EventHubName"]);
-    }
+    private readonly ConcurrentDictionary<string, int> _eventsSinceCheckpoint = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _processor.ProcessEventAsync += HandleEventAsync;
-        _processor.ProcessErrorAsync += HandleErrorAsync;
+        var checkpoints = new BlobContainerClient(
+            config["CheckpointStorage:ConnectionString"],
+            config["CheckpointStorage:Container"]);
 
-        await _processor.StartProcessingAsync(stoppingToken);
+        var processor = new EventProcessorClient(
+            checkpoints,
+            "dashboard",                             // a consumer group of its own
+            config["IoTHub:EventHubsCompatibleConnectionString"]);
 
+        processor.ProcessEventAsync += HandleEventAsync;
+        processor.ProcessErrorAsync += args =>
+        {
+            logger.LogError(args.Exception, "Error on partition {Partition}", args.PartitionId);
+            return Task.CompletedTask;
+        };
+
+        await processor.StartProcessingAsync(stoppingToken);
         try
         {
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
+        catch (OperationCanceledException) { }
         finally
         {
-            await _processor.StopProcessingAsync();
+            await processor.StopProcessingAsync();
         }
     }
 
     private async Task HandleEventAsync(ProcessEventArgs args)
     {
-        if (args.HasEvent)
+        if (!args.HasEvent) return;
+
+        // IoT Hub stamps the authenticated sender; don't trust an ID in the payload
+        var deviceId = (string)args.Data.SystemProperties["iothub-connection-device-id"];
+        var reading = args.Data.EventBody.ToObjectFromJson<DeviceTelemetry>(JsonSerializerOptions.Web);
+        throttle.Update(reading with { DeviceId = deviceId });
+
+        // Checkpoint every 100 events per partition rather than every event
+        var count = _eventsSinceCheckpoint.AddOrUpdate(args.Partition.PartitionId, 1, (_, n) => n + 1);
+        if (count >= 100)
         {
-            var json = Encoding.UTF8.GetString(args.Data.Body.ToArray());
-            var telemetry = JsonSerializer.Deserialize<DeviceTelemetry>(json);
-
-            if (telemetry is not null)
-            {
-                await _telemetryProcessor.BroadcastAsync(telemetry);
-            }
-
             await args.UpdateCheckpointAsync();
+            _eventsSinceCheckpoint[args.Partition.PartitionId] = 0;
         }
-    }
-
-    private Task HandleErrorAsync(ProcessErrorEventArgs args)
-    {
-        _logger.LogError(args.Exception,
-            "Error on partition {Partition}", args.PartitionId);
-        return Task.CompletedTask;
     }
 }
 ```
 
+Three choices in that code matter in production.
+
+- **The device ID comes from IoT Hub, not the payload.** IoT Hub adds the authenticated sender's ID to every message as the `iothub-connection-device-id` system property. A device that writes another device's ID into its payload could otherwise publish readings under that ID.
+- **A consumer group of its own.** A dashboard that shares the default consumer group with storage archiving or analytics competes with them for the same partitions.
+- **Checkpoint periodically.** Each checkpoint is a blob storage write, and writing one per event limits throughput. A dashboard can tolerate re-sending a few readings after a restart, so checkpointing every hundred events, or every few seconds, is a reasonable trade.
+
 ### Throttling High-Frequency Telemetry
 
-Devices can report faster than browsers can render. A temperature sensor sending every 100 milliseconds generates 10 updates per second per device, and if the dashboard shows 50 devices simultaneously, the browser receives 500 DOM updates per second. That is too much.
+Devices can report faster than a browser can render or a person can read. A sensor sending every 100 milliseconds is 10 updates per second, and a dashboard showing 50 such devices would receive 500 messages per second. A few updates per second per device is a reasonable starting point, tuned to what the charts can draw.
 
-The solution is to aggregate or sample in the background service before pushing to SignalR. A simple approach holds the latest value for each device and flushes on a timer.
+The throttle keeps only the latest reading per device and flushes on a timer, sending each device's reading at most once per interval, and only if a new one arrived:
 
 ```csharp
-public class TelemetryAggregator : BackgroundService
+public class TelemetryThrottle(IHubContext<TelemetryHub, ITelemetryClient> hub) : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, DeviceTelemetry> _latestByDevice = new();
-    private readonly IHubContext<TelemetryHub, ITelemetryClient> _hubContext;
+    private readonly ConcurrentDictionary<string, DeviceTelemetry> _pending = new();
 
-    public TelemetryAggregator(IHubContext<TelemetryHub, ITelemetryClient> hubContext)
-    {
-        _hubContext = hubContext;
-    }
-
-    public void Update(DeviceTelemetry telemetry)
-    {
-        _latestByDevice[telemetry.DeviceId] = telemetry;
-    }
+    public void Update(DeviceTelemetry telemetry) => _pending[telemetry.DeviceId] = telemetry;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -239,149 +158,161 @@ public class TelemetryAggregator : BackgroundService
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            foreach (var (deviceId, telemetry) in _latestByDevice)
+            var sends = new List<Task>();
+            foreach (var deviceId in _pending.Keys)
             {
-                await _hubContext.Clients
-                    .Group($"device:{deviceId}")
-                    .ReceiveTelemetry(telemetry);
+                if (_pending.TryRemove(deviceId, out var latest))
+                {
+                    sends.Add(hub.Clients.Group($"device:{deviceId}").ReceiveTelemetry(latest));
+                }
             }
+            await Task.WhenAll(sends);   // one slow group doesn't hold up the others
         }
     }
 }
 ```
 
-This sends at most 2 updates per second per device regardless of how frequently IoT Hub delivers events. Adjust the timer interval to match what your charts and gauges can meaningfully render.
+The listener and the throttle must share one instance, so the throttle is registered as a singleton and the hosted service resolves that same instance:
 
----
+```csharp
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<TelemetryThrottle>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TelemetryThrottle>());
+builder.Services.AddHostedService<IoTHubListenerService>();
 
-## Azure Functions and Azure SignalR Service
+app.MapHub<TelemetryHub>("/hubs/telemetry");
+```
 
-### Setting Up the Negotiate Endpoint
+Throttling also protects the server from slow viewers. SignalR buffers outgoing data per connection, and once a client falls behind, a send to a group waits until every member's write completes. Sending the groups concurrently, as the flush loop does, stops one slow viewer from delaying other devices' updates. Keeping the message rate at what a dashboard can render keeps those buffers small.
 
-Browsers cannot connect directly to Azure SignalR Service without first obtaining a connection token. A negotiate endpoint provides this token. You expose it through an Azure Function with an HTTP trigger and a SignalR connection info input binding.
+On several instances, each instance's listener reads only the partitions it owns, so each throttle sees only some devices. The hub design still reaches every viewer, because `IHubContext` sends travel through the backplane or Azure SignalR Service to whichever instance holds each connection.
+
+## The Azure Functions Pipeline
+
+The serverless design runs on the Functions *isolated worker model*, in which functions are a separate .NET process, with the `Microsoft.Azure.Functions.Worker.Extensions.SignalRService` and `Microsoft.Azure.Functions.Worker.Extensions.EventHubs` packages. A function starts from a *trigger*, such as an HTTP request or a batch of events, and *bindings* connect it to other services declaratively, as inputs it receives or outputs it returns. The service runs in Serverless mode, so no hub class exists. Client calls can reach functions through the service's upstream endpoints and SignalR triggers, but plain HTTP functions are the simpler route, and the three below cover the basics.
+
+A browser can't connect to the service without connection details, so the first function is a negotiate endpoint. Its input binding produces the service URL and an access token. The `UserId` expression ties the connection to the signed-in user from App Service authentication, the platform's built-in sign-in, which puts the user's ID in the `x-ms-client-principal-id` header. That header is trustworthy only when App Service authentication is enabled and requires sign-in, since otherwise a caller can set it.
 
 ```csharp
 [Function("negotiate")]
-public static SignalRConnectionInfo Negotiate(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req,
-    [SignalRConnectionInfoInput(HubName = "telemetry")] SignalRConnectionInfo connectionInfo)
-{
-    return connectionInfo;
-}
+public static string Negotiate(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequestData req,
+    [SignalRConnectionInfoInput(HubName = "telemetry", UserId = "{headers.x-ms-client-principal-id}")]
+    string connectionInfo) => connectionInfo;
 ```
 
-The JavaScript client calls this endpoint first, receives the service URL and access token, then connects directly to Azure SignalR Service. Your Functions app never holds WebSocket connections.
-
-### Processing IoT Hub Events in a Function
-
-The Event Hub trigger fires when IoT Hub delivers events, and the SignalR output binding sends messages to connected clients. The binding configuration specifies the hub name and target method.
+The second receives IoT Hub events in batches and produces one message per reading, each addressed to its device's group. Binding to `EventData` rather than strings keeps the system properties, so the device ID again comes from IoT Hub. Several messages go out through an output property on a return type:
 
 ```csharp
-[Function("ProcessTelemetry")]
-[SignalROutput(HubName = "telemetry")]
-public static SignalRMessageAction[] ProcessTelemetry(
-    [EventHubTrigger("messages/events",
-        Connection = "IoTHubConnection",
-        ConsumerGroup = "signalr-dashboard")]
-    string[] messages,
-    FunctionContext context)
+public class TelemetryMessages
 {
-    var logger = context.GetLogger("ProcessTelemetry");
-    var actions = new List<SignalRMessageAction>();
+    [SignalROutput(HubName = "telemetry")]
+    public List<SignalRMessageAction> Messages { get; } = [];
+}
 
-    foreach (var message in messages)
+[Function("ProcessTelemetry")]
+public static TelemetryMessages ProcessTelemetry(
+    [EventHubTrigger("messages/events", Connection = "IoTHubConnection", ConsumerGroup = "dashboard")]
+    EventData[] events)
+{
+    var output = new TelemetryMessages();
+    foreach (var evt in events)
     {
-        var telemetry = JsonSerializer.Deserialize<DeviceTelemetry>(message);
-        if (telemetry is null) continue;
+        var deviceId = (string)evt.SystemProperties["iothub-connection-device-id"];
+        var reading = evt.EventBody.ToObjectFromJson<DeviceTelemetry>(JsonSerializerOptions.Web)
+            with { DeviceId = deviceId };
 
-        actions.Add(new SignalRMessageAction("ReceiveTelemetry")
+        output.Messages.Add(new SignalRMessageAction("ReceiveTelemetry")
         {
-            GroupName = $"device:{telemetry.DeviceId}",
-            Arguments = new object[] { telemetry }
+            GroupName = $"device:{deviceId}",
+            Arguments = [reading]
         });
     }
-
-    return actions.ToArray();
+    return output;
 }
 ```
 
-Using a dedicated consumer group for the SignalR Function (rather than `$Default`) means other consumers of IoT Hub events, such as stream analytics jobs or storage archiving, read independently without competing for the same checkpoint position.
+Function instances share no memory, so the in-process throttle from the backend design doesn't carry over. Throttling here means reducing the rate before events reach the function, for example by having devices report less often, or keeping the latest reading per device in an external store and sending from a timer trigger.
 
-### Group Management in the Serverless Pattern
-
-In the ASP.NET Core pattern, hub methods handle group subscriptions. In the serverless pattern, group management goes through its own Functions.
+The third handles subscriptions. It performs the same authorization check as the hub method, then adds the caller's connection to the device's group. It adds the connection rather than the user on purpose. A user added to a group stays in it, across page loads and devices, until removed or until the membership expires after as long as a year, so viewers would keep receiving, and the app keep paying for, devices no longer on screen. Connection membership ends when the connection does, like the hub design's. The function returns both an HTTP response and the group action:
 
 ```csharp
-[Function("SubscribeToDevice")]
-[SignalROutput(HubName = "telemetry")]
-public static SignalRGroupAction Subscribe(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "subscribe/{deviceId}")] HttpRequest req,
-    string deviceId)
+public class SubscribeResult
 {
-    var connectionId = req.Headers["x-signalr-connection-id"];
+    [SignalROutput(HubName = "telemetry")]
+    public SignalRGroupAction? GroupAction { get; set; }
 
-    return new SignalRGroupAction(SignalRGroupActionType.Add)
+    public required HttpResponseData Response { get; set; }
+}
+
+// In a functions class that receives IDeviceAuthorizationService as _deviceAuth
+[Function("SubscribeToDevice")]
+public async Task<SubscribeResult> Subscribe(
+    [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "subscribe/{deviceId}/{connectionId}")]
+    HttpRequestData req,
+    string deviceId,
+    string connectionId)
+{
+    var userId = req.Headers.TryGetValues("x-ms-client-principal-id", out var ids) ? ids.Single() : null;
+    if (userId is null || !await _deviceAuth.CanViewDeviceAsync(userId, deviceId))
     {
-        GroupName = $"device:{deviceId}",
-        ConnectionId = connectionId
+        return new SubscribeResult { Response = req.CreateResponse(HttpStatusCode.Forbidden) };
+    }
+
+    return new SubscribeResult
+    {
+        Response = req.CreateResponse(HttpStatusCode.OK),
+        GroupAction = new SignalRGroupAction(SignalRGroupActionType.Add)
+        {
+            GroupName = $"device:{deviceId}",
+            ConnectionId = connectionId
+        }
     };
 }
 ```
 
-The client includes its connection ID in the request header after completing negotiation. This approach works but is more complex than the hub method approach; the ASP.NET Core pattern handles subscriptions more naturally when stateful group management is important.
+On the denial path `GroupAction` stays unset. Functions output bindings treat an unset output property as nothing to send, so no group action reaches the service. Test that behavior with the SignalR extension version in use, since the denial path is the security boundary.
 
----
+The function trusts the connection ID the client sends, which is safe here because the authorization check is about the device, not the connection. A caller who passes someone else's connection ID can only send that connection telemetry the caller is already allowed to see.
 
-## Building the Client Side
+## Building the Client
 
-### JavaScript Client
+### JavaScript
 
-Install the SignalR client package from npm or reference it via CDN.
-
-```html
-<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-```
-
-Build the connection, register handlers for the server methods, and start.
+The JavaScript client comes from the `@microsoft/signalr` npm package. Against the ASP.NET Core backend, the dashboard registers a handler per client method, reconnects automatically, and rejoins its device groups after every reconnect:
 
 ```javascript
 const connection = new signalR.HubConnectionBuilder()
     .withUrl("/hubs/telemetry")
     .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-    .configureLogging(signalR.LogLevel.Warning)
     .build();
 
-connection.on("ReceiveTelemetry", (telemetry) => {
+connection.on("ReceiveTelemetry", telemetry => {
+    if (loadingDevices.has(telemetry.deviceId)) return;   // see History and the Live Stream
     updateGauge(telemetry.deviceId, telemetry.temperature);
     updateChart(telemetry.deviceId, telemetry.timestamp, telemetry.temperature);
 });
 
-connection.on("DeviceStatusChanged", (deviceId, isOnline) => {
-    updateStatusIndicator(deviceId, isOnline);
-});
+connection.on("ThresholdAlert", (deviceId, metric, value) => showAlert(deviceId, metric, value));
 
-connection.on("ThresholdAlert", (deviceId, metric, value) => {
-    showAlert(deviceId, metric, value);
-});
-
-connection.onreconnecting(() => {
-    showBanner("Connection lost. Reconnecting...");
-});
+connection.onreconnecting(() => showBanner("Connection lost. Reconnecting..."));
 
 connection.onreconnected(async () => {
     hideBanner();
-    // Rejoin groups after reconnect because group membership does not persist
     for (const deviceId of subscribedDevices) {
         await connection.invoke("SubscribeToDevice", deviceId);
     }
 });
 
+connection.onclose(() => setTimeout(start, 5000));   // start over once retries run out
+
 async function start() {
     try {
         await connection.start();
-        await connection.invoke("SubscribeToDevice", "sensor-42");
+        for (const deviceId of subscribedDevices) {
+            await connection.invoke("SubscribeToDevice", deviceId);
+        }
     } catch (err) {
-        console.error(err);
         setTimeout(start, 5000);
     }
 }
@@ -389,14 +320,19 @@ async function start() {
 start();
 ```
 
-`withAutomaticReconnect` accepts an array of retry delays in milliseconds. The example above retries immediately, then at 2, 5, 10, and 30 second intervals. After the last value, the client stops retrying automatically, which is why the `onreconnecting` / `onreconnected` handlers exist alongside a manual fallback in the catch block.
+The `onclose` handler matters for dashboards left open on a wall display, which otherwise go silently stale after an outage longer than the last retry delay. Browsers also put inactive tabs to sleep, which closes their SignalR connections. Microsoft's JavaScript client docs suggest holding a Web Lock while connected to keep a background tab awake.
 
-### Updating Charts in Real Time
-
-[Chart.js](https://www.chartjs.org){:target="_blank" rel="noopener noreferrer"} and [Apache ECharts](https://echarts.apache.org){:target="_blank" rel="noopener noreferrer"} both support dynamic data updates without re-rendering the full chart. The pattern is to maintain a sliding window of data points and push new values onto the array while shifting old ones off.
+Against the serverless design, `withUrl` points at the Function app's base URL, such as `https://telemetry-func.azurewebsites.net/api`, and the client appends `/negotiate` itself. Subscribing is an HTTP call to the subscribe function with the connection's ID, and the Function app needs a CORS policy for the dashboard's origin with credentials allowed:
 
 ```javascript
-const MAX_POINTS = 60; // show the last 60 readings
+await fetch(`${apiBase}/subscribe/${deviceId}/${connection.connectionId}`,
+    { method: "POST", credentials: "include" });
+```
+
+Chart libraries such as [Chart.js](https://www.chartjs.org){:target="_blank" rel="noopener noreferrer"} and [Apache ECharts](https://echarts.apache.org){:target="_blank" rel="noopener noreferrer"} update in place. The dashboard keeps a sliding window of points and redraws without animation, which keeps frequent updates smooth:
+
+```javascript
+const MAX_POINTS = 60;
 
 function updateChart(deviceId, timestamp, value) {
     const chart = deviceCharts[deviceId];
@@ -410,33 +346,26 @@ function updateChart(deviceId, timestamp, value) {
         chart.data.datasets[0].data.shift();
     }
 
-    chart.update("none"); // "none" disables animation for smoother real-time feel
+    chart.update("none");   // skip the animation on each update
 }
 ```
 
-Disabling animation on each update keeps the chart responsive under frequent data arrival. Reserve animations for the initial chart render.
+### Blazor Server
 
-### Blazor Server Integration
-
-Blazor Server already runs on SignalR, where every component render is a SignalR message. Injecting `IHubContext<TelemetryHub, ITelemetryClient>` from server code and calling into your Blazor circuits is not the standard pattern. Instead, use a state service that components subscribe to.
+A Blazor Server app already keeps each user's UI state on the server, in a *circuit*, and sends UI updates over its own SignalR connection, so its components don't need a telemetry hub. The background service publishes readings to a singleton state service, and components subscribe to it:
 
 ```csharp
-public class TelemetryStateService
+public class TelemetryState
 {
     public event Action<DeviceTelemetry>? TelemetryReceived;
 
-    public void Publish(DeviceTelemetry telemetry)
-    {
-        TelemetryReceived?.Invoke(telemetry);
-    }
+    public void Publish(DeviceTelemetry telemetry) => TelemetryReceived?.Invoke(telemetry);
 }
 ```
 
-Register it as a singleton, inject it into your background service (which calls `Publish` when telemetry arrives), and inject it into Blazor components. Components subscribe to `TelemetryReceived` in `OnInitializedAsync` and call `StateHasChanged` wrapped in `InvokeAsync` to marshal back to the component's render context.
-
-```csharp
+```razor
 @implements IDisposable
-@inject TelemetryStateService TelemetryState
+@inject TelemetryState Telemetry
 
 <p>Temperature: @_temperature °C</p>
 
@@ -444,305 +373,129 @@ Register it as a singleton, inject it into your background service (which calls 
     [Parameter] public string DeviceId { get; set; } = "";
     private double _temperature;
 
-    protected override void OnInitialized()
+    protected override void OnInitialized() => Telemetry.TelemetryReceived += OnTelemetry;
+
+    private void OnTelemetry(DeviceTelemetry reading)
     {
-        TelemetryState.TelemetryReceived += OnTelemetryReceived;
+        if (reading.DeviceId != DeviceId) return;
+        _temperature = reading.Temperature;
+        InvokeAsync(StateHasChanged);   // the event fires on a background thread
     }
 
-    private void OnTelemetryReceived(DeviceTelemetry telemetry)
-    {
-        if (telemetry.DeviceId != DeviceId) return;
+    public void Dispose() => Telemetry.TelemetryReceived -= OnTelemetry;
+}
+```
 
-        _temperature = telemetry.Temperature;
-        InvokeAsync(StateHasChanged);
+`InvokeAsync` moves the re-render onto the component's synchronization context, since the event fires on the background service's thread. Unsubscribing in `Dispose` matters because the singleton's event would otherwise hold every component that ever subscribed, and keep it in memory.
+
+This design has a scale-out trap the hub design doesn't. The state service is in-process, and on several instances each listener reads only its own partitions, so a user's circuit on one instance never sees devices whose partitions another instance owns. Giving each instance its own consumer group, so every instance reads the whole stream, fixes it for a few instances, since IoT Hub allows only 20 consumer groups per hub on the Standard tier. Beyond that, readings have to be relayed between instances, for example through a backplane.
+
+### Blazor WebAssembly
+
+Blazor WebAssembly runs .NET in the browser and uses the .NET SignalR client, from the `Microsoft.AspNetCore.SignalR.Client` package, compiled to WebAssembly. The component owns its connection and disposes it when the user navigates away:
+
+```razor
+@implements IAsyncDisposable
+@inject NavigationManager Navigation
+
+@code {
+    [Parameter] public string DeviceId { get; set; } = "";
+    private HubConnection? _connection;
+    private DeviceTelemetry? _latest;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _connection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/telemetry"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _connection.On<DeviceTelemetry>("ReceiveTelemetry", reading =>
+        {
+            _latest = reading;
+            InvokeAsync(StateHasChanged);
+        });
+
+        _connection.Reconnected += _ => _connection.InvokeAsync("SubscribeToDevice", DeviceId);
+
+        await _connection.StartAsync();
+        await _connection.InvokeAsync("SubscribeToDevice", DeviceId);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        TelemetryState.TelemetryReceived -= OnTelemetryReceived;
+        if (_connection is not null) await _connection.DisposeAsync();
     }
 }
 ```
 
-Always unsubscribe in `Dispose`. Components are disposed when the user navigates away, and a dangling event subscription to a singleton service keeps the component in memory indefinitely.
+## Dashboard Patterns
 
-### Blazor WebAssembly Integration
+### Sliding Windows and Point Budgets
 
-Blazor WebAssembly runs entirely in the browser, so it uses the JavaScript SignalR client under the covers through the [Microsoft.AspNetCore.SignalR.Client](https://www.nuget.org/packages/Microsoft.AspNetCore.SignalR.Client){:target="_blank" rel="noopener noreferrer"} NuGet package.
+A gauge showing one current value is cheap to update. A time-series chart grows with its window and its resolution, so the budget to watch is total points on screen. A 5-minute window at one point per second is 300 points per chart, 15,000 across 50 charts, and 60,000 for 100 devices over 10 minutes. Where redraw cost starts to show depends on the chart library and whether it draws to a canvas or to SVG, so the threshold has to be measured with the dashboard's real chart count. Keeping the latest value per device separate from each chart's window lets gauges and charts update independently.
 
-```csharp
-var connection = new HubConnectionBuilder()
-    .WithUrl(Navigation.ToAbsoluteUri("/hubs/telemetry"))
-    .WithAutomaticReconnect()
-    .Build();
+### History and the Live Stream Together
 
-connection.On<DeviceTelemetry>("ReceiveTelemetry", telemetry =>
-{
-    _latestReadings[telemetry.DeviceId] = telemetry;
-    StateHasChanged();
-});
+A dashboard that opens with an empty chart and waits for readings shows no trend for minutes. Production dashboards load recent history from an API, then append live readings. The two sources have to meet without a gap or duplicates, and the order of operations decides that:
 
-await connection.StartAsync();
-await connection.InvokeAsync("SubscribeToDevice", DeviceId);
-```
+1. Mark the device as loading, so the main handler ignores it, and subscribe to the live stream, buffering what arrives.
+2. Fetch history up to a cursor, the sequence number of the last reading it includes.
+3. Draw the history, then apply the buffered readings after the cursor, drop the ones at or before it, and clear the loading mark.
 
-Blazor WebAssembly has the same reconnection considerations as the JavaScript client. The `HubConnection` object should be scoped to the component's lifetime and disposed with the component so the WebSocket closes cleanly when navigation occurs.
-
----
-
-## Dashboard Design Patterns
-
-### Live Gauges and Sliding Windows
-
-The most common IoT dashboard element is a gauge or sparkline that updates continuously. The effective implementation separates data management from rendering. Maintain a device state dictionary keyed by device ID; SignalR updates overwrite the latest value and trigger a re-render. Charts maintain their own rolling window of history independently.
-
-For gauges showing a single current value, the update is simple and cheap. For time-series charts, cap the number of displayed points to control memory. A 5-minute window at 1-second resolution is 300 points per chart, so rendering 50 charts puts 15,000 data points in the browser. That is manageable. Extending to 30-second resolution at 600 points per chart across 100 devices starts to matter.
-
-### Historical Data and Live Stream Together
-
-Most production dashboards show both historical data (loaded on page open from an API) and a live stream arriving via SignalR. Load the last N hours of data on component initialization, then append real-time readings as they arrive. This gives the user context without waiting for the live stream to accumulate enough data to see trends.
+Subscribing first means nothing that arrives during the history fetch is lost, and the cursor removes the overlap.
 
 ```javascript
-async function initializeDashboard(deviceId) {
-    // Load historical data from REST API
-    const history = await fetch(`/api/telemetry/${deviceId}/history?hours=4`)
-        .then(r => r.json());
+async function openDevice(deviceId) {
+    const buffered = [];
+    const onReading = t => { if (t.deviceId === deviceId) buffered.push(t); };
 
-    history.forEach(point => appendToChart(deviceId, point.timestamp, point.value));
-
-    // Subscribe to live updates
+    loadingDevices.add(deviceId);
+    connection.on("ReceiveTelemetry", onReading);
     await connection.invoke("SubscribeToDevice", deviceId);
+
+    const { points, cursor } = await fetch(`/api/telemetry/${deviceId}/history?hours=4`).then(r => r.json());
+    points.forEach(p => appendToChart(deviceId, p.timestamp, p.temperature));
+
+    connection.off("ReceiveTelemetry", onReading);
+    buffered.filter(t => t.sequence > cursor)
+            .forEach(t => appendToChart(deviceId, t.timestamp, t.temperature));
+    loadingDevices.delete(deviceId);
 }
 ```
-
-Avoid duplicating data points. If the historical query returns data up to "now" and SignalR starts delivering events from "now", there is a gap. If the historical query returns data up to a timestamp in the past, SignalR may deliver points that overlap with history. Design the historical endpoint to return data up to a specific cursor time and start the SignalR subscription before fetching history, so no events are missed during the fetch.
 
 ### Threshold Alerts
 
-Threshold checking can live on the server or the client. Server-side checking is preferable because it fires regardless of whether any browser is open, and the server can write alert history to a database. Push alert events through SignalR using a dedicated method (`ThresholdAlert`) so clients can display notifications separately from the telemetry stream.
+Threshold checks belong on the server. They run whether or not anyone has a dashboard open, the server can record alert history, and every viewer sees the same alert at the same time. The server sends a dedicated `ThresholdAlert` message, separate from the telemetry stream, and a `ThresholdCleared` message when a later reading returns to the normal range. The client toggles a CSS class on the affected gauge rather than restyling it inline, which keeps theming in the stylesheet.
 
-On the client, highlight gauges and charts when a threshold is exceeded. Use CSS classes toggled by the component state rather than inline styles for easier theming.
+### Device Online Status
 
-```javascript
-connection.on("ThresholdAlert", (deviceId, metric, value) => {
-    const element = document.getElementById(`gauge-${deviceId}`);
-    element.classList.add("gauge--alert");
-    showToast(`${deviceId}: ${metric} exceeded threshold (${value})`);
-});
-```
+A dashboard's SignalR connections belong to viewers, not devices, so they say nothing about whether a device is online. IoT Hub knows, and publishes `Microsoft.Devices.DeviceConnected` and `Microsoft.Devices.DeviceDisconnected` events through Event Grid, Azure's service for delivering events to subscribers such as a function or webhook, which can forward them to the dashboard's groups. Two limits apply. The events cover only devices that connect over MQTT or AMQP, not devices that only make HTTPS requests. IoT Hub also reports state changes at least 60 seconds apart and can miss some, so a quick disconnect and reconnect may show up as two connect events in a row.
 
-Clear the alert state when a subsequent reading returns within the normal range. Send a `ThresholdCleared` event from the server using the same pattern.
+A second signal covers what those events miss. The server records each device's last telemetry time, and the dashboard marks a device stale when it has been silent for a few reporting intervals. That catches a device that is connected but not reporting, which connection events can't. Last-seen state belongs in a shared store such as Redis when the backend runs on more than one instance, since each instance's listener sees only its own partitions.
 
-### Device Status Boards
+### Maps
 
-Tracking online and offline status requires presence detection, which SignalR supports through hub connection events. Override `OnConnectedAsync` and `OnDisconnectedAsync` in the hub to track which devices have active management connections, or use a heartbeat pattern where devices periodically invoke a hub method.
+A map view loads device positions once from an API, renders them with a library such as [Leaflet](https://leafletjs.com){:target="_blank" rel="noopener noreferrer"}, and updates marker colors or tooltips as readings arrive. Positions rarely change, asset tracking aside, so telemetry messages carry the device ID and readings, and the client looks the position up in its local cache rather than receiving coordinates with every reading.
 
-For large deployments, device presence is better tracked in a persistent store like Redis rather than in-memory. An in-memory dictionary is lost on server restart, and with multiple server instances, each instance only sees its own connections.
+## What Drives Azure SignalR Service Cost
 
-```csharp
-public override async Task OnConnectedAsync()
-{
-    var deviceId = Context.GetHttpContext()?.Request.Query["deviceId"];
-    if (!string.IsNullOrEmpty(deviceId))
-    {
-        await _deviceRegistry.SetOnlineAsync(deviceId, true);
-        await Clients.All.DeviceStatusChanged(deviceId, true);
-    }
+Azure SignalR Service is sold in units, and connections decide how many are needed. A Standard or Premium unit holds 1,000 concurrent connections and includes 1,000,000 messages per day. Messages beyond that are billed per million rather than refused, while the Free tier allows 20 connections and 20,000 messages with no overage. For IoT dashboards, message volume usually drives the bill well past the unit price, because of how messages are counted.
 
-    await base.OnConnectedAsync();
-}
+- **Only outbound messages count.** A message the app sends to the service is free, and each copy the service delivers to a client is billed. A broadcast to a group of 100 viewers is 100 messages.
+- **Large messages count several times.** Each 2 KB of a message counts as one message.
 
-public override async Task OnDisconnectedAsync(Exception? exception)
-{
-    var deviceId = Context.GetHttpContext()?.Request.Query["deviceId"];
-    if (!string.IsNullOrEmpty(deviceId))
-    {
-        await _deviceRegistry.SetOnlineAsync(deviceId, false);
-        await Clients.All.DeviceStatusChanged(deviceId, false);
-    }
+A single device group with 100 viewers, updated twice a second, is 200 billed messages per second, about 17 million a day. The 100 connections fit in one unit, whose included million messages leave about 16 million a day billed as overage. Throttling, keeping payloads under 2 KB, and sending viewers only the devices on their screen all reduce that directly.
 
-    await base.OnDisconnectedAsync(exception);
-}
-```
+Self-hosting avoids the per-message charge, and scaling out then needs sticky sessions plus a backplane such as Redis, with each server holding its share of the viewers' persistent connections.
 
-### Map-Based Dashboards
+## Key Takeaways
 
-Displaying device locations on a map with live telemetry overlays combines static position data with real-time readings. Load device positions from a REST endpoint on page open, render them on a map using a library like [Leaflet](https://leafletjs.com){:target="_blank" rel="noopener noreferrer"}, and update the marker tooltips or colors as telemetry arrives through SignalR.
-
-The device position is typically static or changes slowly (asset tracking being the exception). Separate the position data from the telemetry data to avoid sending coordinates with every reading. The SignalR message contains device ID and sensor values; the client looks up the position from its local cache.
-
----
-
-## Scaling Considerations
-
-### Self-Hosted Connection Limits
-
-A single ASP.NET Core server running on a standard VM can maintain roughly 5,000 to 20,000 concurrent WebSocket connections, depending on memory and the payload size per message. IoT dashboards with many simultaneous viewers hit this ceiling faster than you might expect, especially if each viewer subscribes to many device streams.
-
-The first scaling option is to add a Redis backplane using [Microsoft.AspNetCore.SignalR.StackExchangeRedis](https://www.nuget.org/packages/Microsoft.AspNetCore.SignalR.StackExchangeRedis){:target="_blank" rel="noopener noreferrer"}. With a Redis backplane, messages sent on one server instance are relayed to all other instances, so connections are distributed across servers while group broadcasts still reach all relevant clients.
-
-```csharp
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis(config["Redis:ConnectionString"], options =>
-    {
-        options.Configuration.ChannelPrefix = RedisChannel.Literal("iot-dashboard");
-    });
-```
-
-The Redis backplane adds latency (a round trip to Redis for every broadcast) and cost, and it requires a highly available Redis deployment. For most IoT dashboard workloads, the simpler alternative is Azure SignalR Service.
-
-### Azure SignalR Service Tiers
-
-Azure SignalR Service removes connection limits from your application servers entirely. Your server sends a message to the service, and the service delivers it to all relevant connections. The service handles the WebSocket state.
-
-| Tier | Connections | Messages/day | Use case |
-|------|-------------|-------------|----------|
-| **Free** | 20 | 20,000 | Development and testing |
-| **Standard (1 unit)** | 1,000 | 1,000,000 | Small production workloads |
-| **Standard (N units)** | 1,000 x N | 1,000,000 x N | Scale by adding units |
-| **Premium** | Same as Standard | Same + SLA guarantees | Production with SLA requirements |
-
-Add the Azure SignalR Service SDK and change one line in startup.
-
-```csharp
-builder.Services.AddSignalR()
-    .AddAzureSignalR(config["AzureSignalR:ConnectionString"]);
-```
-
-No other application code changes. The hub, groups, and hub context all behave identically. The managed service handles connections; your server handles business logic.
-
-### Backpressure
-
-When the server sends faster than a client can process, SignalR buffers messages in the client's send queue. If the queue fills, the connection is dropped. This is backpressure, and IoT workloads are particularly susceptible to it because telemetry can spike suddenly.
-
-Configure per-client buffer limits in the hub options to control how aggressively this happens.
-
-```csharp
-builder.Services.AddSignalR(options =>
-{
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-    options.MaximumReceiveMessageSize = 32 * 1024; // 32 KB
-});
-```
-
-The more effective mitigation is rate limiting before the message reaches SignalR, using the aggregator pattern shown earlier. Clients should never receive more messages per second than they can render. A 60 Hz monitor can render at most 60 frames per second, and most dashboards need far fewer updates than that to feel real-time; 2 to 4 updates per second is usually sufficient.
-
-### Sticky Sessions
-
-Self-hosted SignalR without a backplane requires sticky sessions (session affinity) at the load balancer so each client always routes to the same server. Without sticky sessions, hub method calls may reach a different server than the one holding the connection, causing failures.
-
-Azure SignalR Service and the Redis backplane both eliminate the need for sticky sessions because they decouple connection state from application server state.
-
----
-
-## Security
-
-### Authenticating SignalR Connections
-
-SignalR connections authenticate the same way as standard HTTP endpoints: JWT bearer tokens. The SignalR JavaScript client sends the token as a query parameter during negotiation because browsers do not support custom headers on WebSocket upgrade requests.
-
-```javascript
-const connection = new signalR.HubConnectionBuilder()
-    .withUrl("/hubs/telemetry", {
-        accessTokenFactory: () => getAccessToken() // returns the JWT string
-    })
-    .build();
-```
-
-On the server, configure JWT authentication and apply the `[Authorize]` attribute to the hub.
-
-```csharp
-[Authorize]
-public class TelemetryHub : Hub<ITelemetryClient>
-{
-    // Hub methods are now protected by authentication
-}
-```
-
-The SignalR middleware reads the token from the `access_token` query parameter automatically when the `OnMessageReceived` event is wired up during JWT configuration.
-
-```csharp
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                var token = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-
-                if (!string.IsNullOrEmpty(token) &&
-                    path.StartsWithSegments("/hubs/telemetry"))
-                {
-                    context.Token = token;
-                }
-
-                return Task.CompletedTask;
-            }
-        };
-    });
-```
-
-### Authorizing Group Subscriptions
-
-Authentication confirms who the user is; authorization controls which device groups they can subscribe to. A user should only receive telemetry for devices they have permission to view.
-
-```csharp
-public class TelemetryHub : Hub<ITelemetryClient>
-{
-    private readonly IDeviceAuthorizationService _authService;
-
-    public TelemetryHub(IDeviceAuthorizationService authService)
-    {
-        _authService = authService;
-    }
-
-    public async Task SubscribeToDevice(string deviceId)
-    {
-        var userId = Context.UserIdentifier;
-
-        if (!await _authService.CanViewDeviceAsync(userId, deviceId))
-        {
-            throw new HubException($"Access denied to device {deviceId}");
-        }
-
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"device:{deviceId}");
-    }
-}
-```
-
-Throwing `HubException` sends the error message back to the client without revealing server internals. Other exception types result in a generic error response.
-
-### CORS Configuration
-
-SignalR connections from a browser require CORS to be configured correctly. The most common mistake is forgetting `AllowCredentials()`, which SignalR requires because it uses cookies or authentication headers. `AllowCredentials()` cannot be combined with wildcard origins (`AllowAnyOrigin()`); you must list origins explicitly.
-
-```csharp
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("DashboardPolicy", policy =>
-    {
-        policy
-            .WithOrigins(
-                "https://dashboard.example.com",
-                "https://staging-dashboard.example.com")
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
-});
-```
-
-For development, add `https://localhost:3000` (or whatever port your dashboard dev server uses) to the allowed origins. Avoid `AllowAnyOrigin()` in production; it prevents `AllowCredentials()` and opens the endpoint to cross-site request forgery.
-
----
-
-## Putting It Together
-
-A production IoT dashboard using SignalR combines several of the patterns above. Azure SignalR Service manages connections at scale, a dedicated consumer group on IoT Hub isolates the dashboard's event processing from other consumers, the aggregator pattern limits browser update rates to what charts can render, and JWT authentication restricts each user to their authorized device groups.
-
-The complete data flow from device to browser: a device reports a temperature reading to IoT Hub, an Azure Function or background service picks it up from the event stream, deserializes the payload, optionally aggregates with recent readings, then pushes the value via `IHubContext` (or SignalR output binding) to the `device:{id}` group. Browsers subscribed to that group receive the update through their persistent WebSocket connection, update the chart's data array, and render the new point without any polling, page refresh, or user interaction.
-
-The dashboard feels live because it is live. The connection stays open, updates arrive as they happen, and the browser renders them immediately. For IoT workloads where the value of a reading depends on its freshness, this pipeline is the difference between a useful monitoring tool and a slow report.
+- Read IoT Hub's built-in endpoint with `EventProcessorClient` in a consumer group of its own, take the device ID from the `iothub-connection-device-id` system property, and checkpoint periodically rather than per event.
+- Adding any IoT Hub message route stops the built-in endpoint's feed unless a route to it is added too.
+- Throttle per device before sending to SignalR, keeping only the latest reading and flushing on a timer, and send groups concurrently so one slow viewer doesn't delay the rest.
+- Authorize every device subscription, in the hub method or the subscribe function. In Serverless mode, add connections to groups rather than users, whose membership outlives the page.
+- Rejoin device groups after every reconnect, and restart a connection that gave up, especially on unattended displays.
+- Subscribe before fetching history, and merge the two on a cursor so the chart has no gap and no duplicates.
+- Device online status comes from IoT Hub's connection events plus a last-seen timeout, not from SignalR connections.
+- On Azure SignalR Service, units follow connections, and fan-out drives the message bill.

@@ -1,0 +1,101 @@
+---
+title: "How a Resource Reference Is Resolved"
+kind: flow
+system: winui
+summary: "The search from the referencing element up to system resources, stopping at the first match."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="wrl-title wrl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wrl-title">The order in which WinUI searches for a XAML resource key</title>
+<desc id="wrl-desc">On the left, a column of five boxes shows the search order for a StaticResource reference made by a Button. The search starts at the Button's own resources, then moves up to each parent such as a Border, then the page at the root of the XAML, then Application.Resources, and finally the system resources such as the SystemColor colors and SystemAccentColor. Arrows run downward between the boxes, and the search stops at the first box that has the key. Below the last box, a note says that a key found nowhere throws a XAML parse exception. On the right, Application.Resources is expanded to show the order inside one dictionary: first its own keys, then its merged dictionaries in reverse of the order they are declared, so Styles/Controls.xaml, then Styles/Typography.xaml, then Styles/Colors.xaml, and last XamlControlsResources, which is declared first.</desc>
+<defs>
+<marker id="wrl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-primary, #1A5F8A)"/>
+</marker>
+</defs>
+<style>
+.wrl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wrl-hot { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #C0392B); stroke-width: 2; }
+.wrl-panel { fill: var(--color-bg, #F7F9FC); stroke: var(--color-accent, #C0392B); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wrl-row { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.wrl-step { stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wrl-zoom { stroke: var(--color-accent, #C0392B); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.wrl-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wrl-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wrl-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wrl-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wrl-num { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wrl-a { font-size: 12px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wrl-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wrl-hd" x="40" y="40">SEARCH ORDER FOR ONE REFERENCE</text>
+<text class="wrl-hd" x="480" y="40">INSIDE ONE DICTIONARY</text>
+
+<rect class="wrl-box" x="40" y="70" width="340" height="48" rx="4"/>
+<text class="wrl-n" x="56" y="91">Button</text>
+<text class="wrl-k" x="56" y="108">the element that makes the reference</text>
+
+<line class="wrl-step" x1="210" y1="118" x2="210" y2="142" marker-end="url(#wrl-arrow)"/>
+
+<rect class="wrl-box" x="40" y="144" width="340" height="48" rx="4"/>
+<text class="wrl-n" x="56" y="165">Border.Resources</text>
+<text class="wrl-k" x="56" y="182">each parent in turn, walking up the tree</text>
+
+<line class="wrl-step" x1="210" y1="192" x2="210" y2="216" marker-end="url(#wrl-arrow)"/>
+
+<rect class="wrl-box" x="40" y="218" width="340" height="48" rx="4"/>
+<text class="wrl-n" x="56" y="239">Page.Resources</text>
+<text class="wrl-k" x="56" y="256">the root of this XAML file</text>
+
+<line class="wrl-step" x1="210" y1="266" x2="210" y2="290" marker-end="url(#wrl-arrow)"/>
+
+<rect class="wrl-hot" x="40" y="292" width="340" height="48" rx="4"/>
+<text class="wrl-n" x="56" y="313">Application.Resources</text>
+<text class="wrl-k" x="56" y="330">including everything App.xaml merges</text>
+
+<line class="wrl-step" x1="210" y1="340" x2="210" y2="364" marker-end="url(#wrl-arrow)"/>
+
+<rect class="wrl-box" x="40" y="366" width="340" height="48" rx="4"/>
+<text class="wrl-n" x="56" y="387">System resources</text>
+<text class="wrl-k" x="56" y="404">SystemColor... colors, SystemAccentColor</text>
+
+<text class="wrl-a" x="40" y="444">Key found nowhere: XAML parse exception</text>
+
+<line class="wrl-zoom" x1="380" y1="292" x2="480" y2="70"/>
+<line class="wrl-zoom" x1="380" y1="340" x2="480" y2="360"/>
+
+<rect class="wrl-panel" x="480" y="70" width="380" height="290" rx="6"/>
+<text class="wrl-k" x="500" y="94">Application.Resources, searched top to bottom</text>
+
+<rect class="wrl-row" x="500" y="108" width="340" height="40" rx="3"/>
+<text class="wrl-num" x="514" y="133">1</text>
+<text class="wrl-t" x="536" y="126">Its own keys</text>
+<text class="wrl-k" x="536" y="141">BrandBrush</text>
+
+<rect class="wrl-row" x="500" y="156" width="340" height="40" rx="3"/>
+<text class="wrl-num" x="514" y="181">2</text>
+<text class="wrl-t" x="536" y="174">Styles/Controls.xaml</text>
+<text class="wrl-k" x="536" y="189">merged, declared last</text>
+
+<rect class="wrl-row" x="500" y="204" width="340" height="40" rx="3"/>
+<text class="wrl-num" x="514" y="229">3</text>
+<text class="wrl-t" x="536" y="222">Styles/Typography.xaml</text>
+<text class="wrl-k" x="536" y="237">merged</text>
+
+<rect class="wrl-row" x="500" y="252" width="340" height="40" rx="3"/>
+<text class="wrl-num" x="514" y="277">4</text>
+<text class="wrl-t" x="536" y="270">Styles/Colors.xaml</text>
+<text class="wrl-k" x="536" y="285">merged</text>
+
+<rect class="wrl-row" x="500" y="300" width="340" height="40" rx="3"/>
+<text class="wrl-num" x="514" y="325">5</text>
+<text class="wrl-t" x="536" y="318">XamlControlsResources</text>
+<text class="wrl-k" x="536" y="333">merged, declared first: WinUI styles, brushes</text>
+
+<line class="wrl-step" x1="40" y1="492" x2="80" y2="492" marker-end="url(#wrl-arrow)"/>
+<text class="wrl-lg" x="90" y="496">next place searched when the key isn't found</text>
+<line class="wrl-zoom" x1="480" y1="492" x2="520" y2="492"/>
+<text class="wrl-lg" x="530" y="496">one step expanded</text>
+<text class="wrl-lg" x="40" y="520">The search stops at the first match.</text>
+</g>
+</svg>

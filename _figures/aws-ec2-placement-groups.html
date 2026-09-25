@@ -1,0 +1,77 @@
+---
+title: "Placement Group Strategies"
+kind: structure
+system: aws
+summary: "Cluster packs instances close; partition and spread keep them on separate racks."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" role="img" aria-labelledby="awsg2-title awsg2-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsg2-title">How cluster, partition, and spread placement groups arrange instances on racks in one Availability Zone</title>
+<desc id="awsg2-desc">A cluster placement group places instances close together in one Availability Zone, on a high-bandwidth network segment, which lowers latency but leaves them more exposed to a shared hardware failure. A partition placement group divides instances into up to seven partitions per zone, and no two partitions share a rack, so a rack failure affects only one partition. A spread placement group puts each instance on its own rack, with at most seven running instances per zone.</desc>
+<style>
+.awsg2-rack { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsg2-seg { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsg2-part { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.awsg2-inst { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsg2-h { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsg2-n { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsg2-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awsg2-h" x="150" y="28" text-anchor="middle">Cluster</text>
+<rect class="awsg2-seg" x="30" y="44" width="240" height="190" rx="8"/>
+<text class="awsg2-n" x="42" y="62">high-bandwidth segment</text>
+<rect class="awsg2-rack" x="50" y="74" width="60" height="150" rx="3"/>
+<rect class="awsg2-rack" x="120" y="74" width="60" height="150" rx="3"/>
+<rect class="awsg2-rack" x="190" y="74" width="60" height="150" rx="3"/>
+<rect class="awsg2-inst" x="58" y="84" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="58" y="114" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="58" y="144" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="128" y="84" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="128" y="114" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="128" y="144" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="198" y="84" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="198" y="114" width="44" height="22" rx="2"/>
+<text class="awsg2-lab" x="150" y="256" text-anchor="middle">Lowest latency between instances.</text>
+<text class="awsg2-lab" x="150" y="272" text-anchor="middle">More exposed to shared hardware failure.</text>
+
+<text class="awsg2-h" x="460" y="28" text-anchor="middle">Partition</text>
+<rect class="awsg2-part" x="320" y="44" width="86" height="190" rx="6"/>
+<text class="awsg2-n" x="363" y="62" text-anchor="middle">P1</text>
+<rect class="awsg2-part" x="417" y="44" width="86" height="190" rx="6"/>
+<text class="awsg2-n" x="460" y="62" text-anchor="middle">P2</text>
+<rect class="awsg2-part" x="514" y="44" width="86" height="190" rx="6"/>
+<text class="awsg2-n" x="557" y="62" text-anchor="middle">P3</text>
+<rect class="awsg2-rack" x="333" y="74" width="60" height="150" rx="3"/>
+<rect class="awsg2-rack" x="430" y="74" width="60" height="150" rx="3"/>
+<rect class="awsg2-rack" x="527" y="74" width="60" height="150" rx="3"/>
+<rect class="awsg2-inst" x="341" y="84" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="341" y="114" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="341" y="144" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="438" y="84" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="438" y="114" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="438" y="144" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="535" y="84" width="44" height="22" rx="2"/>
+<rect class="awsg2-inst" x="535" y="114" width="44" height="22" rx="2"/>
+<text class="awsg2-lab" x="460" y="256" text-anchor="middle">Partitions never share racks.</text>
+<text class="awsg2-lab" x="460" y="272" text-anchor="middle">Up to 7 per AZ, any number of instances.</text>
+
+<text class="awsg2-h" x="770" y="28" text-anchor="middle">Spread</text>
+<rect class="awsg2-rack" x="640" y="74" width="34" height="150" rx="3"/>
+<rect class="awsg2-rack" x="683" y="74" width="34" height="150" rx="3"/>
+<rect class="awsg2-rack" x="726" y="74" width="34" height="150" rx="3"/>
+<rect class="awsg2-rack" x="769" y="74" width="34" height="150" rx="3"/>
+<rect class="awsg2-rack" x="812" y="74" width="34" height="150" rx="3"/>
+<rect class="awsg2-rack" x="855" y="74" width="34" height="150" rx="3"/>
+<rect class="awsg2-inst" x="645" y="84" width="24" height="22" rx="2"/>
+<rect class="awsg2-inst" x="688" y="84" width="24" height="22" rx="2"/>
+<rect class="awsg2-inst" x="731" y="84" width="24" height="22" rx="2"/>
+<rect class="awsg2-inst" x="774" y="84" width="24" height="22" rx="2"/>
+<rect class="awsg2-inst" x="817" y="84" width="24" height="22" rx="2"/>
+<rect class="awsg2-inst" x="860" y="84" width="24" height="22" rx="2"/>
+<text class="awsg2-lab" x="765" y="256" text-anchor="middle">One instance per rack.</text>
+<text class="awsg2-lab" x="765" y="272" text-anchor="middle">At most 7 running per AZ.</text>
+
+<text class="awsg2-lab" x="30" y="312">Grey columns are racks, each with its own power and network. Boxes on them are instances. All three panels show one Availability Zone.</text>
+</g>
+</svg>

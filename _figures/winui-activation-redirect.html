@@ -1,0 +1,89 @@
+---
+title: "Redirecting a Second Launch to the Running Instance"
+kind: dynamic
+system: winui
+summary: "A second launch finds the running instance by key, hands over its activation, and exits."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 460" role="img" aria-labelledby="war-title war-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="war-title">How a single-instance WinUI app redirects a second launch</title>
+<desc id="war-desc">Two columns show two processes of the same app. On the right, the running instance called FindOrRegisterForKey with the key main at its own startup, got IsCurrent true, and kept the key. On the left, a second launch starts a new process. Its custom Main reads its activation with GetActivatedEventArgs, then calls FindOrRegisterForKey with the same key. A dashed line shows that this call finds the running instance by key, so it returns that instance with IsCurrent false. The new process then calls RedirectActivationToAsync with its activation arguments and brings the running instance's window forward, and an arrow carries the activation across to the running instance, where the Activated event receives the same AppActivationArguments. The running instance then activates its window and routes the activation on the UI thread. The second process returns from Main and exits without creating a window.</desc>
+<defs>
+<marker id="war-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-primary, #1A5F8A)"/>
+</marker>
+<marker id="war-arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.war-proc { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.war-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.war-end { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.war-step { stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.war-hand { stroke: var(--color-accent, #C0392B); stroke-width: 2.25; }
+.war-find { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.war-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.war-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.war-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.war-a { font-size: 11px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.war-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="war-proc" x="24" y="22" width="384" height="360" rx="6"/>
+<text class="war-hd" x="40" y="44">SECOND LAUNCH: NEW PROCESS</text>
+<rect class="war-proc" x="492" y="22" width="384" height="360" rx="6"/>
+<text class="war-hd" x="500" y="44">RUNNING INSTANCE</text>
+
+<rect class="war-box" x="40" y="60" width="360" height="52" rx="4"/>
+<text class="war-n" x="56" y="82">GetActivatedEventArgs()</text>
+<text class="war-k" x="56" y="100">in the custom Main: why this launch happened</text>
+
+<line class="war-step" x1="220" y1="112" x2="220" y2="138" marker-end="url(#war-arrow)"/>
+
+<rect class="war-box" x="40" y="140" width="360" height="52" rx="4"/>
+<text class="war-n" x="56" y="162">FindOrRegisterForKey("main")</text>
+<text class="war-k" x="56" y="180">returns the running instance, IsCurrent = false</text>
+
+<line class="war-step" x1="220" y1="192" x2="220" y2="218" marker-end="url(#war-arrow)"/>
+
+<rect class="war-box" x="40" y="220" width="360" height="52" rx="4"/>
+<text class="war-n" x="56" y="242">RedirectActivationToAsync(args)</text>
+<text class="war-k" x="56" y="260">hands the activation over, then brings that window forward</text>
+
+<line class="war-step" x1="220" y1="272" x2="220" y2="298" marker-end="url(#war-arrow)"/>
+
+<rect class="war-end" x="40" y="300" width="360" height="52" rx="4"/>
+<text class="war-n" x="56" y="322">Return from Main</text>
+<text class="war-k" x="56" y="340">the process exits without creating a window</text>
+
+<rect class="war-box" x="500" y="60" width="360" height="52" rx="4"/>
+<text class="war-n" x="516" y="82">FindOrRegisterForKey("main")</text>
+<text class="war-k" x="516" y="100">at its own startup: IsCurrent = true, keeps the key</text>
+
+<line class="war-step" x1="680" y1="112" x2="680" y2="218" marker-end="url(#war-arrow)"/>
+<text class="war-k" x="690" y="170">later</text>
+
+<rect class="war-box" x="500" y="220" width="360" height="52" rx="4"/>
+<text class="war-n" x="516" y="242">Activated event</text>
+<text class="war-k" x="516" y="260">receives the same AppActivationArguments</text>
+
+<line class="war-step" x1="680" y1="272" x2="680" y2="298" marker-end="url(#war-arrow)"/>
+
+<rect class="war-box" x="500" y="300" width="360" height="52" rx="4"/>
+<text class="war-n" x="516" y="322">Activate window, route</text>
+<text class="war-k" x="516" y="340">on the UI thread, through the navigation service</text>
+
+<line class="war-find" x1="400" y1="166" x2="498" y2="92" marker-end="url(#war-arrow)"/>
+<text class="war-k" x="414" y="186">finds by key</text>
+
+<line class="war-hand" x1="400" y1="246" x2="498" y2="246" marker-end="url(#war-arrow-hot)"/>
+<text class="war-a" x="418" y="236">activation</text>
+
+<line class="war-step" x1="40" y1="414" x2="80" y2="414" marker-end="url(#war-arrow)"/>
+<text class="war-lg" x="90" y="418">next step in the same process</text>
+<line class="war-hand" x1="300" y1="414" x2="340" y2="414" marker-end="url(#war-arrow-hot)"/>
+<text class="war-lg" x="350" y="418">activation handed across processes</text>
+<line class="war-find" x1="590" y1="414" x2="630" y2="414"/>
+<text class="war-lg" x="640" y="418">lookup by key</text>
+</g>
+</svg>

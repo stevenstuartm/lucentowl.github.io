@@ -1,0 +1,58 @@
+---
+title: "A Service Offered Through PrivateLink"
+kind: boundary
+system: aws
+summary: "A consumer reaches one provider service through an endpoint, one direction only."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" role="img" aria-labelledby="awsp-title awsp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsp-title">A consumer VPC reaching a provider's service through an interface endpoint and AWS PrivateLink</title>
+<desc id="awsp-desc">A consumer VPC and a provider VPC both use the CIDR 10.0.0.0/16. In the consumer VPC, an application sends requests to an interface endpoint, a network interface with an address from the consumer's own subnet. AWS PrivateLink carries the traffic to the provider's endpoint service, which is fronted by a Network Load Balancer that forwards to the service's targets. Connections can be opened only from the consumer side, and the consumer reaches only that service, never the rest of the provider's network.</desc>
+<style>
+.awsp-vpc { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsp-dim { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsp-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsp-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsp-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsp-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsp-h { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awsp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsp-vpc" x="20" y="30" width="370" height="230" rx="10"/>
+<text class="awsp-vt" x="36" y="52">Consumer VPC 10.0.0.0/16</text>
+<rect class="awsp-box" x="40" y="110" width="140" height="56" rx="6"/>
+<text class="awsp-n" x="110" y="134" text-anchor="middle">Application</text>
+<text class="awsp-k" x="110" y="151" text-anchor="middle">[consumer]</text>
+<rect class="awsp-box" x="220" y="104" width="150" height="68" rx="6"/>
+<text class="awsp-n" x="295" y="128" text-anchor="middle">Interface</text>
+<text class="awsp-n" x="295" y="144" text-anchor="middle">endpoint</text>
+<text class="awsp-k" x="295" y="161" text-anchor="middle">[10.0.1.50]</text>
+
+<text class="awsp-h" x="455" y="126" text-anchor="middle">AWS</text>
+<text class="awsp-h" x="455" y="142" text-anchor="middle">PrivateLink</text>
+
+<rect class="awsp-vpc" x="520" y="30" width="380" height="230" rx="10"/>
+<text class="awsp-vt" x="536" y="52">Provider VPC 10.0.0.0/16</text>
+<rect class="awsp-box" x="540" y="104" width="160" height="68" rx="6"/>
+<text class="awsp-n" x="620" y="128" text-anchor="middle">Network Load</text>
+<text class="awsp-n" x="620" y="144" text-anchor="middle">Balancer</text>
+<text class="awsp-k" x="620" y="161" text-anchor="middle">[endpoint service]</text>
+<rect class="awsp-box" x="740" y="110" width="140" height="56" rx="6"/>
+<text class="awsp-n" x="810" y="134" text-anchor="middle">Service</text>
+<text class="awsp-k" x="810" y="151" text-anchor="middle">[targets]</text>
+<rect class="awsp-dim" x="540" y="196" width="340" height="46" rx="6"/>
+<text class="awsp-lab" x="710" y="223" text-anchor="middle">Rest of the provider network: not reachable</text>
+
+<path class="awsp-flow" d="M180,138 L218,138" marker-end="url(#awsp-a)"/>
+<path class="awsp-flow" d="M370,160 L538,160" marker-end="url(#awsp-a)"/>
+<path class="awsp-flow" d="M700,138 L738,138" marker-end="url(#awsp-a)"/>
+
+<text class="awsp-lab" x="20" y="292">Connections open only from the consumer side. Both VPCs can use the same CIDR, because the consumer only ever</text>
+<text class="awsp-lab" x="20" y="310">addresses its own endpoint, and the provider sees traffic arriving from its load balancer.</text>
+</g>
+</svg>

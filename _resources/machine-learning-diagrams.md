@@ -3,7 +3,7 @@ title: "Machine Learning Diagrams"
 layout: resource
 type: reference
 category: "AI & Machine Learning"
-description: "The diagrams behind the machine learning and MLOps study guides: rules versus learned models, loss and gradient descent on a house-price line, the training loop, a decision tree, a neural network unit and layers, the three kinds of learning, state values in reinforcement learning, data splits, underfitting and overfitting, the confusion matrix, how deployment patterns route live traffic, and data drift versus concept drift."
+description: "The diagrams behind the machine learning and MLOps study guides: how models learn from data, how they are evaluated, and how they behave once deployed."
 last_updated: 2026-09-23
 figures:
   - ml-rules-vs-examples

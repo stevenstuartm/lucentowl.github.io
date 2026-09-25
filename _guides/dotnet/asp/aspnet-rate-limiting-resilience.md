@@ -1,517 +1,234 @@
 ---
-title: "Rate Limiting and Resilience"
+title: "Rate Limiting and Request Timeouts"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Security & Resilience"
-description: "Rate limiting middleware, algorithms, and resilience patterns for protecting and stabilizing ASP.NET Core APIs under load and failure scenarios."
-tags: [asp-net-core, rate-limiting, resilience, polly, circuit-breaker, cors, security, performance]
+description: "Protecting an ASP.NET Core API from overload: the rate limiting middleware and its four algorithms, partitioning by client, global and per-endpoint policies, chained limiters, 429 responses and Retry-After, limits across multiple instances, the request timeouts middleware, and honoring request cancellation."
+tags: [practical, rate-limiting, request-timeouts, cancellation, partitioning]
 ---
 
-## Protecting APIs Under Load
+An API has to protect itself from more work than it can do, whether the excess comes from one misbehaving client, an attacker, or plain popularity. ASP.NET Core gives it three tools for inbound traffic. The rate limiting middleware caps how many requests each client may make, the request timeouts middleware caps how long a request may run, and request cancellation stops work nobody is waiting for any more. Resilience for the API's own outbound calls, such as retries, circuit breakers, and hedging for `HttpClient` through `Microsoft.Extensions.Http.Resilience`, is a separate topic that belongs with `HttpClient`.
 
-APIs face two distinct challenges. First, they must protect themselves from excessive requests that could overwhelm resources or signal abuse. Second, they must remain functional when downstream dependencies experience transient failures. ASP.NET Core addresses the first challenge with built-in rate limiting middleware and CORS policies, and the second with resilience patterns provided through Polly and Microsoft.Extensions.Http.Resilience.
+## The Rate Limiting Middleware
 
-This guide covers rate limiting algorithms, per-endpoint policy configuration, CORS middleware, and resilience strategies including retry, circuit breaker, timeout, and bulkhead patterns.
-
-## Built-In Rate Limiting
-
-ASP.NET Core 7 introduced Microsoft.AspNetCore.RateLimiting middleware as a first-class feature. This middleware evaluates incoming requests against configured policies and rejects requests that exceed defined limits with HTTP 429 Too Many Requests responses.
-
-Rate limiting prevents several problems. It protects resources from being overwhelmed by excessive requests, ensures fair usage across multiple consumers, and mitigates abuse scenarios where attackers attempt to exhaust resources or perform reconnaissance.
-
-The middleware works by registering rate limiting services, defining policies that specify limits and algorithms, and then attaching those policies to endpoints. When a request arrives, the middleware checks whether the endpoint has an associated policy and evaluates the request against that policy's limits.
+`Microsoft.AspNetCore.RateLimiting`, built in since .NET 7, checks each request against limiters and rejects the ones over the limit. A request has to acquire a *permit* from a limiter to proceed. Acquiring one returns a *lease*, which carries whether it succeeded, and a concurrency limiter gets the permit back when the lease is disposed at the end of the request. Setting it up takes services, the middleware, and policies attached to endpoints. The samples use the `System.Threading.RateLimiting` and `Microsoft.AspNetCore.RateLimiting` namespaces, which aren't implicit usings:
 
 ```csharp
-var builder = WebApplication.CreateBuilder(args);
-
 builder.Services.AddRateLimiter(options =>
 {
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-        context => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Request.Headers.Host.ToString(),
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("fixed", limiter =>
+    {
+        limiter.PermitLimit = 100;
+        limiter.Window = TimeSpan.FromMinutes(1);
+    });
 });
 
 var app = builder.Build();
 
-app.UseRateLimiter();
+app.UseRateLimiter();   // after UseRouting when endpoint policies are used
+
+app.MapGet("/orders", ListOrders).RequireRateLimiting("fixed");
 ```
 
-The middleware requires explicit registration with AddRateLimiter before calling UseRateLimiter in the pipeline. Without AddRateLimiter, the middleware throws an exception at runtime. This ensures developers consciously opt into rate limiting rather than accidentally enabling it.
+Three details in that sample catch most first attempts.
 
-## Rate Limiting Algorithms
+- **The default rejection status is 503.** `RejectionStatusCode` defaults to `503 Service Unavailable`, which tells clients and monitoring that the server is down rather than that the client is going too fast. Setting it to `429 Too Many Requests` is almost always right.
+- **`AddFixedWindowLimiter` creates one shared limiter.** The `Add...Limiter` helpers build a single limiter per policy, shared by every caller, so the sample allows 100 requests per minute to all clients together, not to each. Per-client limits need partitioning, covered below.
+- **The middleware runs after routing.** Endpoint policies are endpoint metadata, so the middleware has to run after routing has chosen the endpoint. `WebApplication` routes before the app's own middleware, so calling `UseRateLimiter` in the usual place works. An app that calls `UseRouting` explicitly must call `UseRateLimiter` after it.
 
-ASP.NET Core provides four rate limiting algorithms: fixed window, sliding window, token bucket, and concurrency. Each algorithm addresses different use cases and offers distinct trade-offs between simplicity, fairness, and resource control.
+The limiters are in memory, so each instance of the app counts separately. Three instances behind a load balancer let a client make three times the configured rate, split unevenly depending on routing. A limit that must hold across instances has to be enforced where all traffic passes, such as an API gateway, or through a custom or third-party `RateLimiter` backed by a shared store such as Redis, since ASP.NET Core doesn't include one. The containment runs instance, then policy, then partition: each instance has its own copy of each policy, and each policy keeps a counter per partition key.
+
+Rate limiting also isn't DDoS protection. A distributed attack comes from too many sources to partition, and it has to be absorbed before it reaches the app, by the hosting platform, a web application firewall, or a CDN.
+
+## Algorithms
+
+The middleware offers four limiters. Three count requests over time, and one counts requests in flight. The three time-based ones treat the same burst very differently, shown here with matching limits of 100 requests per minute rather than the values in the samples below.
+
+{% include figure.html id="asp-rate-limiter-burst" %}
 
 ### Fixed Window
 
-The fixed window limiter divides time into discrete intervals. Each window allows a fixed number of requests. When the window expires, the counter resets regardless of when requests arrived within that window.
-
-```csharp
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddFixedWindowLimiter("fixed", config =>
-    {
-        config.PermitLimit = 10;
-        config.Window = TimeSpan.FromSeconds(30);
-        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 5;
-    });
-});
-```
-
-This algorithm works well when you need simple, predictable limits and can accept that clients might spike requests at window boundaries. A client could send 10 requests at the end of one window and 10 more immediately when the next window starts, effectively doubling the rate briefly.
+A fixed window allows `PermitLimit` requests per `Window`, then resets. It is the simplest to reason about, with one known weakness: a client can use its whole allowance at the end of one window and again at the start of the next, briefly sending twice the intended rate.
 
 ### Sliding Window
 
-The sliding window limiter improves on fixed windows by dividing each window into segments. The window slides forward one segment at a time. Expired segments release their permits, which become available in the current window.
+A sliding window splits each window into `SegmentsPerWindow` segments. Permits used in a segment come back when that segment falls out of the window, one segment at a time, rather than all at once at a boundary. With a 30-second window and three segments, permits return every 10 seconds, which spreads out the boundary burst at the cost of tracking each segment.
 
 ```csharp
-builder.Services.AddRateLimiter(options =>
+options.AddSlidingWindowLimiter("sliding", limiter =>
 {
-    options.AddSlidingWindowLimiter("sliding", config =>
-    {
-        config.PermitLimit = 10;
-        config.Window = TimeSpan.FromSeconds(30);
-        config.SegmentsPerWindow = 3;
-        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 5;
-    });
+    limiter.PermitLimit = 100;
+    limiter.Window = TimeSpan.FromSeconds(30);
+    limiter.SegmentsPerWindow = 3;
 });
 ```
-
-With three segments per 30-second window, each segment represents 10 seconds. As time advances, the oldest segment expires and its permits return to the pool. This creates smoother rate enforcement compared to fixed windows, since the boundary reset effect is distributed across segments rather than happening all at once.
-
-Use sliding windows when you need more accurate rate enforcement and can accept the slight increase in memory and computation compared to fixed windows.
 
 ### Token Bucket
 
-The token bucket algorithm models rate limiting as a bucket containing tokens. Each request consumes a token. The bucket refills at a steady rate up to its capacity. When the bucket is empty, requests are rejected or queued.
+A token bucket holds up to `TokenLimit` tokens, each request spends one, and `TokensPerPeriod` tokens are added every `ReplenishmentPeriod`. A full bucket allows a burst up to the limit, and after that the refill rate sets the sustained rate:
 
 ```csharp
-builder.Services.AddRateLimiter(options =>
+options.AddTokenBucketLimiter("bursty", limiter =>
 {
-    options.AddTokenBucketLimiter("token", config =>
-    {
-        config.TokenLimit = 10;
-        config.TokensPerPeriod = 2;
-        config.ReplenishmentPeriod = TimeSpan.FromSeconds(5);
-        config.AutoReplenishment = true;
-        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 5;
-    });
+    limiter.TokenLimit = 20;                          // burst of up to 20
+    limiter.TokensPerPeriod = 5;                      // then 5 per second sustained
+    limiter.ReplenishmentPeriod = TimeSpan.FromSeconds(1);
 });
 ```
 
-This configuration starts with 10 tokens and adds 2 tokens every 5 seconds. Token buckets allow brief bursts of traffic up to the token limit while enforcing a steady average rate determined by the replenishment period. A client could consume all 10 tokens immediately, then wait 25 seconds for 10 more tokens to accumulate.
-
-Token buckets shine when you want to allow occasional bursts while maintaining strict average throughput. They model scenarios where resources can handle short spikes but would fail under sustained high rates.
+It suits clients that are idle most of the time and then need a handful of requests at once, such as a page load that fires several calls together.
 
 ### Concurrency
 
-The concurrency limiter controls how many requests can execute simultaneously rather than limiting requests per time period. When a request completes, a permit becomes available for the next queued request.
+A concurrency limiter caps how many requests are in progress at once, with no time period at all. A permit comes back when a request finishes. It protects a resource with fixed capacity, such as an expensive report generator or a downstream system that can handle only a few calls at a time, and it doesn't cap how many requests a client makes per minute.
+
+## Queuing
+
+Every limiter can queue requests over the limit instead of rejecting them. `QueueLimit` sets how many may wait, and `QueueProcessingOrder` decides what happens when the queue is full. With `OldestFirst`, the new request is rejected. With `NewestFirst`, the oldest waiting requests are evicted and fail, and the new one takes their place. A queued request also leaves the queue if its client disconnects. Queuing smooths short bursts, but each waiting request holds a connection, and the client sees latency rather than an error, so queues stay short.
+
+## Partitioning
+
+A limiter without partitions shares one allowance among every caller, so one busy client uses up the capacity for all of them. A *partitioned* limiter keeps a separate counter per key, such as a user, an API key, or a client IP:
 
 ```csharp
-builder.Services.AddRateLimiter(options =>
+options.AddPolicy("per-caller", context =>
 {
-    options.AddConcurrencyLimiter("concurrency", config =>
+    var key = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? context.Connection.RemoteIpAddress?.ToString()
+              ?? "unknown";
+
+    // The factory runs once per new key, and the limiter it creates is cached for that key
+    return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
     {
-        config.PermitLimit = 5;
-        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 10;
+        TokenLimit = 50,
+        TokensPerPeriod = 10,
+        ReplenishmentPeriod = TimeSpan.FromSeconds(1)
     });
 });
 ```
 
-If the limit is 5, then 5 requests execute concurrently. The 6th request waits in the queue. Once any of the 5 completes, the 6th begins processing. This algorithm differs from the time-based limiters because it measures resource occupancy rather than request frequency.
+The key has to identify the client, and choosing it is where most rate limiting mistakes happen.
 
-Concurrency limiters protect resources with limited capacity such as database connections, worker threads, or external API quotas that count simultaneous requests rather than total requests.
+- **Authenticated identity is the best key.** A user ID or an API key's client ID can't be changed by the caller without new credentials. The limiter has to run after authentication, or `User` is empty and every caller falls through to the next key. `WebApplication` inserts authentication ahead of the app's own middleware only when the app doesn't call `UseAuthentication` itself. An app that does, for example to place it after CORS, must call `UseRateLimiter` after it.
+- **The client IP is a fallback for anonymous traffic, with caveats.** Behind a reverse proxy, `RemoteIpAddress` is the proxy's address until the forwarded headers middleware, trusting only that proxy, replaces it. Otherwise every caller shares one partition. Many users behind one corporate NAT also share an IP, and Microsoft's docs warn that partitioning by IP invites denial of service through spoofed source addresses.
+- **Never key on something the caller chooses freely.** The `Host` header, a user agent, or an arbitrary header value can be changed on every request, which gives an attacker a fresh allowance each time. Each new key also creates and caches a new limiter, so unbounded caller-controlled keys can exhaust memory.
 
-### Algorithm Comparison
+A raw API key read from a header has the same problem until it's validated. Keying on the key before authentication lets a caller invent keys to get new partitions, so tiered limits by key read the client identity that the authentication handler established.
 
-| Algorithm | Controls | Best For | Allows Bursts | Retry-After Header |
-|-----------|----------|----------|---------------|-------------------|
-| Fixed Window | Requests per time window | Simple rate limits | At window boundaries | Yes |
-| Sliding Window | Requests per sliding window | Smooth rate enforcement | Minimal | Yes |
-| Token Bucket | Average rate with burst capacity | Burst tolerance with steady average | Up to token limit | Yes |
-| Concurrency | Simultaneous requests | Resource capacity control | No | No |
+## Global Limiters and Named Policies
 
-The Retry-After header informs clients when permits will become available. Fixed window, sliding window, and token bucket limiters can calculate this value because they know when windows reset or tokens replenish. Concurrency limiters cannot predict when permits become available since that depends on when in-flight requests complete.
+Limits come from two places, and both can apply to one request.
 
-## Rate Limiting Policies
+- **The global limiter**, set as `options.GlobalLimiter`, runs on every request. It is the safety net that applies even to endpoints nobody remembered to protect.
+- **Named policies**, added with `AddPolicy` or the `Add...Limiter` helpers, apply to the endpoints that name them, through `RequireRateLimiting(...)` on endpoints and route groups or `[EnableRateLimiting(...)]` on controllers and actions.
 
-Policies define rate limiting behavior and associate it with endpoints. ASP.NET Core supports global policies that apply to all endpoints and named policies that apply selectively.
-
-### Global Limiters
-
-A global limiter applies to every request unless an endpoint explicitly disables rate limiting. This provides baseline protection across the entire API.
+When an endpoint has a policy, the request must get a permit from the global limiter and from the policy. An action's `[EnableRateLimiting]` replaces its controller's, but a policy applied with `RequireRateLimiting` on the route mapping, such as `MapControllers().RequireRateLimiting(...)`, takes precedence over the attributes. `[DisableRateLimiting]` or `.DisableRateLimiting()` exempts an endpoint from every limiter, the global one included, which suits health probes that must never be throttled.
 
 ```csharp
 builder.Services.AddRateLimiter(options =>
 {
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-        context => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.User?.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-});
-```
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-The partitionKey determines how requests are grouped for rate limiting. Partitioning by authenticated user identity ensures each user gets their own permit pool. Partitioning by IP address provides coarse protection against unauthenticated abuse. Partitioning by API key works when clients authenticate with keys rather than user credentials.
-
-Global limiters serve as a safety net. Even if specific endpoints forget to apply their own policies, the global limiter prevents runaway request rates.
-
-### Named Policies
-
-Named policies allow different endpoints to enforce different limits based on their resource costs and sensitivity.
-
-```csharp
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddPolicy("strict", context =>
+    // Everyone: 300 requests per minute per caller
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.User?.Identity?.Name ?? "anonymous",
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1)
-            }));
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1) }));
 
-    options.AddPolicy("relaxed", context =>
-        RateLimitPartition.GetTokenBucketLimiter(
-            partitionKey: context.User?.Identity?.Name ?? "anonymous",
-            factory: partition => new TokenBucketRateLimiterOptions
-            {
-                TokenLimit = 50,
-                TokensPerPeriod = 10,
-                ReplenishmentPeriod = TimeSpan.FromSeconds(10)
-            }));
+    // Expensive endpoints, which require sign-in: at most 2 at a time per user, on top of the global limit
+    options.AddPolicy("reports", context =>
+        RateLimitPartition.GetConcurrencyLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+            _ => new ConcurrencyLimiterOptions { PermitLimit = 2 }));
 });
+
+app.MapPost("/reports", GenerateReport).RequireRateLimiting("reports");
+app.MapHealthChecks("/healthz").DisableRateLimiting();
 ```
 
-Expensive operations like report generation or search might use strict policies, while lightweight operations like health checks or metadata queries use relaxed policies. This differentiation protects expensive resources without unnecessarily constraining cheap operations.
+`PartitionedRateLimiter.CreateChained` combines several global limiters, such as a per-second burst limit and a per-hour quota, so a request needs a permit from each. Inside a named policy, `RateLimiter.CreateChained`, new in .NET 10, does the same for one endpoint's partition. When a later limiter in a chain rejects a request, time-based limiters earlier in the chain don't give back the permit they already granted, so the order of the chain decides which allowances a rejected request still uses up.
 
-### Per-Endpoint Configuration
+A custom policy class implementing `IRateLimiterPolicy<TPartitionKey>` does the same job as the `AddPolicy` delegate, with constructor injection for services it needs, such as a subscription-tier lookup, and its own `OnRejected` callback.
 
-Apply named policies to endpoints using the RequireRateLimiting extension method on minimal APIs or the EnableRateLimiting attribute on controllers.
+## Rejected Requests
+
+A rejected request gets the configured status code and an empty body unless an `OnRejected` callback writes more. The middleware doesn't add a `Retry-After` header on its own. The fixed window and token bucket limiters attach an estimate of when to retry to a failed lease, as `RetryAfter` metadata, and the callback copies it into the header. The estimate is a whole window or replenishment period, not the exact time left:
 
 ```csharp
-app.MapGet("/expensive-operation", async () =>
+options.OnRejected = async (context, ct) =>
 {
-    await Task.Delay(100);
-    return Results.Ok("Operation complete");
-})
-.RequireRateLimiting("strict");
+    var response = context.HttpContext.Response;
+    response.StatusCode = StatusCodes.Status429TooManyRequests;
 
-app.MapGet("/lightweight-operation", () => Results.Ok("Fast"))
-    .RequireRateLimiting("relaxed");
-```
-
-For controllers, apply the attribute at the controller or action level.
-
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-[EnableRateLimiting("relaxed")]
-public class ProductsController : ControllerBase
-{
-    [HttpGet]
-    public IActionResult GetAll() => Ok(products);
-
-    [HttpPost]
-    [EnableRateLimiting("strict")]
-    public IActionResult Create(Product product) => Created("", product);
-}
-```
-
-The controller-level attribute provides a default policy for all actions. Individual actions override the controller policy when they specify their own EnableRateLimiting attribute. This allows most operations to share a common policy while expensive operations enforce stricter limits.
-
-Endpoints can disable rate limiting entirely using the DisableRateLimiting attribute or DisableRateLimiting extension method. This suits public endpoints like health checks that should never be throttled.
-
-## Custom Rate Limit Policies
-
-Custom policies provide control over partition keys and dynamic policy selection based on request context. Implement IRateLimiterPolicy<TPartitionKey> to define custom logic.
-
-```csharp
-public class ApiKeyRateLimitPolicy : IRateLimiterPolicy<string>
-{
-    public Func<OnRejectedContext, CancellationToken, ValueTask>? OnRejected { get; } =
-        (context, token) =>
-        {
-            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            return ValueTask.CompletedTask;
-        };
-
-    public RateLimitPartition<string> GetPartition(HttpContext httpContext)
+    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
     {
-        var apiKey = httpContext.Request.Headers["X-API-Key"].FirstOrDefault() ?? "anonymous";
-
-        var tierLimits = apiKey switch
-        {
-            "premium-key" => (PermitLimit: 1000, Window: TimeSpan.FromMinutes(1)),
-            "standard-key" => (PermitLimit: 100, Window: TimeSpan.FromMinutes(1)),
-            _ => (PermitLimit: 10, Window: TimeSpan.FromMinutes(1))
-        };
-
-        return RateLimitPartition.GetFixedWindowLimiter(apiKey, _ =>
-            new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = tierLimits.PermitLimit,
-                Window = tierLimits.Window
-            });
-    }
-}
-
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddPolicy<string, ApiKeyRateLimitPolicy>("api-key-policy");
-});
-```
-
-This policy extracts an API key from headers and selects permit limits based on the key's tier. Premium keys get higher limits than standard keys, which get higher limits than anonymous requests. The partition key is the API key itself, ensuring each key has its own permit pool.
-
-Custom policies enable sophisticated scenarios like tiered service levels, dynamic limits based on user roles or subscriptions, or composite partition keys that combine multiple request attributes.
-
-## Handling 429 Responses
-
-When rate limits are exceeded, the middleware returns HTTP 429 Too Many Requests. Clients should respect this status and implement backoff strategies rather than retrying immediately.
-
-The middleware can include a Retry-After header that tells clients when to retry. The value depends on the algorithm. Fixed window limiters return when the current window expires. Token bucket limiters return when enough tokens will be available for the request.
-
-```csharp
-builder.Services.AddRateLimiter(options =>
-{
-    options.OnRejected = async (context, token) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-
-        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-        {
-            context.HttpContext.Response.Headers.RetryAfter = retryAfter.TotalSeconds.ToString();
-        }
-
-        await context.HttpContext.Response.WriteAsJsonAsync(new
-        {
-            error = "Rate limit exceeded",
-            retryAfter = retryAfter?.TotalSeconds
-        }, cancellationToken: token);
-    };
-});
-```
-
-The OnRejected callback provides an opportunity to customize the response. You might log rate limit violations, include additional context in the response body, or adjust retry hints based on request context.
-
-Clients should implement exponential backoff when receiving 429 responses. Rather than retrying immediately or even respecting Retry-After exactly, clients should add jitter to avoid thundering herd problems where many clients retry simultaneously when the limit resets.
-
-## Resilience with Polly
-
-Transient failures are inevitable when calling external services. Network issues, temporary service outages, and rate limits on downstream APIs all cause requests to fail intermittently. Resilience patterns handle these failures gracefully without propagating errors to clients.
-
-Polly is a .NET library that provides resilience and transient fault handling through policies like retry, circuit breaker, timeout, and bulkhead. ASP.NET Core integrates Polly through Microsoft.Extensions.Http.Resilience, which adds resilience pipelines to HttpClient instances.
-
-### Retry Pattern
-
-Retry policies attempt failed requests again after a delay. This handles transient failures that resolve quickly, such as momentary network blips or services recovering from brief overload.
-
-```csharp
-builder.Services.AddHttpClient("RetryClient")
-    .AddResilienceHandler("retry-pipeline", builder =>
-    {
-        builder.AddRetry(new HttpRetryStrategyOptions
-        {
-            MaxRetryAttempts = 3,
-            Delay = TimeSpan.FromSeconds(1),
-            BackoffType = DelayBackoffType.Exponential,
-            UseJitter = true
-        });
-    });
-```
-
-This configuration retries up to 3 times with exponential backoff starting at 1 second. Exponential backoff means each retry waits longer than the previous one, typically doubling the delay. Jitter adds randomness to delays, preventing many clients from retrying simultaneously after a failure.
-
-Retries work well for idempotent operations that can be safely repeated without side effects. GET requests are naturally idempotent. POST, PUT, and DELETE requests require careful design to ensure retries don't create duplicate resources or apply changes multiple times.
-
-### Circuit Breaker Pattern
-
-Circuit breakers prevent cascading failures by stopping requests to failing services. When a service fails repeatedly, the circuit breaker opens, rejecting requests immediately without attempting the call. After a timeout, the circuit breaker allows a test request through. If it succeeds, the circuit closes and normal operation resumes.
-
-```csharp
-builder.Services.AddHttpClient("CircuitBreakerClient")
-    .AddResilienceHandler("circuit-breaker-pipeline", builder =>
-    {
-        builder.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
-        {
-            FailureRatio = 0.5,
-            SamplingDuration = TimeSpan.FromSeconds(30),
-            MinimumThroughput = 10,
-            BreakDuration = TimeSpan.FromSeconds(30)
-        });
-    });
-```
-
-The circuit breaker opens when the failure ratio exceeds 0.5 during the sampling duration. At least 10 requests must occur within the sampling window before the circuit can open, which prevents opening due to a single failure. Once open, the circuit remains open for the break duration before transitioning to half-open and allowing test requests.
-
-Circuit breakers protect downstream services from being overwhelmed with requests when they're already struggling. They also protect your API from wasting resources on requests that will likely fail. Clients receive fast failures rather than waiting for timeouts.
-
-### Timeout Pattern
-
-Timeout policies limit how long a request can take before being cancelled. This prevents resources from being tied up indefinitely waiting for slow or unresponsive services.
-
-```csharp
-builder.Services.AddHttpClient("TimeoutClient")
-    .AddResilienceHandler("timeout-pipeline", builder =>
-    {
-        builder.AddTimeout(TimeSpan.FromSeconds(5));
-    });
-```
-
-When a request exceeds the timeout, Polly cancels it and throws a TimeoutRejectedException. The application can catch this exception and return an appropriate error response to the client.
-
-Timeouts complement retries by ensuring each retry attempt doesn't wait indefinitely. Without timeouts, a retry policy might wait for the full request timeout on each attempt, leading to extremely long delays before giving up.
-
-### Bulkhead Pattern
-
-Bulkhead policies limit the number of concurrent requests to a resource. This isolates failures by preventing one slow or failing dependency from consuming all available connections or threads.
-
-```csharp
-builder.Services.AddHttpClient("BulkheadClient")
-    .AddResilienceHandler("bulkhead-pipeline", builder =>
-    {
-        builder.AddConcurrencyLimiter(new HttpConcurrencyLimiterStrategyOptions
-        {
-            PermitLimit = 10,
-            QueueLimit = 5
-        });
-    });
-```
-
-This configuration allows 10 concurrent requests. Additional requests queue up to a limit of 5. When both the active and queue limits are reached, new requests are rejected immediately.
-
-Bulkheads prevent resource exhaustion. If a downstream service becomes slow, the bulkhead prevents all connections from being tied up waiting for that service, leaving capacity for other operations.
-
-### Combining Resilience Strategies
-
-Real-world scenarios often require multiple strategies working together. A comprehensive resilience pipeline might include timeout, retry, and circuit breaker policies.
-
-```csharp
-builder.Services.AddHttpClient("ResilientClient")
-    .AddResilienceHandler("comprehensive-pipeline", builder =>
-    {
-        builder
-            .AddTimeout(TimeSpan.FromSeconds(5))
-            .AddRetry(new HttpRetryStrategyOptions
-            {
-                MaxRetryAttempts = 3,
-                Delay = TimeSpan.FromSeconds(1),
-                BackoffType = DelayBackoffType.Exponential,
-                UseJitter = true
-            })
-            .AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
-            {
-                FailureRatio = 0.5,
-                SamplingDuration = TimeSpan.FromSeconds(30),
-                MinimumThroughput = 10,
-                BreakDuration = TimeSpan.FromSeconds(30)
-            });
-    });
-```
-
-The order matters. Timeout applies to each individual request attempt. Retry wraps the timeout, so each retry attempt gets the full timeout duration. Circuit breaker wraps the retry policy, tracking failures across all retry attempts. If retries continue failing, the circuit breaker eventually opens and short-circuits future requests.
-
-## Standard Resilience Pipeline
-
-Microsoft.Extensions.Http.Resilience provides a standard resilience pipeline that combines multiple strategies with sensible defaults. This pipeline suits most scenarios without requiring detailed configuration.
-
-```csharp
-builder.Services.AddHttpClient("StandardResilientClient")
-    .AddStandardResilienceHandler();
-```
-
-The standard pipeline includes rate limiting to prevent overwhelming dependencies, total request timeout covering all retry attempts, retry with exponential backoff, circuit breaker to prevent cascading failures, and attempt timeout for individual requests.
-
-You can customize the standard pipeline by providing options.
-
-```csharp
-builder.Services.AddHttpClient("CustomStandardClient")
-    .AddStandardResilienceHandler(options =>
-    {
-        options.Retry.MaxRetryAttempts = 5;
-        options.Retry.Delay = TimeSpan.FromMilliseconds(500);
-        options.CircuitBreaker.FailureRatio = 0.3;
-        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
-        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(30);
-    });
-```
-
-The standard pipeline provides a quick path to robust resilience without requiring deep understanding of each strategy. Start with the standard pipeline and customize only when specific requirements demand it.
-
-## Hedging Strategy
-
-Hedging sends multiple requests for the same operation and uses the first successful response. This reduces tail latency by not waiting for slow instances to respond.
-
-```csharp
-builder.Services.AddHttpClient("HedgingClient")
-    .AddStandardHedgingHandler();
-```
-
-When a request takes longer than the hedge delay, the pipeline sends another request. If the first request completes successfully before the second finishes, the second is cancelled. If the first fails, the second continues. This provides the latency benefits of speculative execution without doubling resource consumption in the common case.
-
-Hedging works best for read operations against replicated data where multiple instances can serve the same request. It assumes the downstream service can handle the increased load from concurrent requests. Use hedging when latency variance is high and reducing worst-case latency justifies the extra resource cost.
-
-## Request Abort Handling
-
-ASP.NET Core APIs should respect cancellation tokens to release resources when clients disconnect or requests are aborted. Long-running operations must check cancellation tokens periodically and stop processing when cancellation is requested.
-
-```csharp
-app.MapGet("/long-operation", async (CancellationToken cancellationToken) =>
-{
-    for (int i = 0; i < 100; i++)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        await Task.Delay(100, cancellationToken);
+        response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds))
+            .ToString(NumberFormatInfo.InvariantInfo);
     }
 
-    return Results.Ok("Completed");
-});
+    await Results.Problem(
+        statusCode: StatusCodes.Status429TooManyRequests,
+        title: "Too many requests").ExecuteAsync(context.HttpContext);
+};
 ```
 
-When a client cancels the request, ASP.NET Core signals the cancellation token. Operations that check the token can stop immediately rather than wasting resources on work that will never be returned to the client.
+`Retry-After` takes whole seconds, which is why the sample rounds up and formats with the invariant culture. The sliding window limiter provides no `RetryAfter`, and neither does a concurrency limiter, which can't predict when an in-flight request will finish, so the callback has to handle its absence. Clients that receive a 429 should wait at least as long as `Retry-After` says and add random jitter, so that the clients rejected together don't all retry at the same instant.
 
-HttpClient respects cancellation tokens when passed to request methods. If the API cancels an outbound request, HttpClient stops waiting for the response and releases the connection.
+The middleware also publishes metrics under the `Microsoft.AspNetCore.RateLimiting` meter, including leases acquired, rejected, and queued, which is how to tell whether limits are protecting the app or just rejecting normal traffic. Limits need load testing before release for the same reason.
+
+## Request Timeouts
+
+Kestrel doesn't limit how long an app spends on a request, because the right limit differs so much between endpoints: a WebSocket may stay open for hours while a lookup should finish in milliseconds. The request timeouts middleware, added in .NET 8, sets per-endpoint and default limits:
 
 ```csharp
-app.MapGet("/proxy-operation", async (HttpClient client, CancellationToken cancellationToken) =>
+builder.Services.AddRequestTimeouts(options =>
 {
-    var response = await client.GetAsync("https://api.example.com/data", cancellationToken);
-    return Results.Ok(await response.Content.ReadAsStringAsync(cancellationToken));
+    options.DefaultPolicy = new RequestTimeoutPolicy { Timeout = TimeSpan.FromSeconds(10) };
+    options.AddPolicy("reports", TimeSpan.FromSeconds(60));
+});
+
+app.UseRequestTimeouts();   // after UseRouting when it's called explicitly
+
+app.MapGet("/orders/{id:int}", GetOrder);                                   // default: 10 s
+app.MapPost("/reports", GenerateReport).WithRequestTimeout("reports");      // 60 s
+app.MapGet("/events", StreamEvents).DisableRequestTimeout();                // long-lived
+```
+
+A timeout doesn't stop the request. It cancels `HttpContext.RequestAborted`, and the handler stops only if it passes that token to the work it does. If the handler lets the resulting `OperationCanceledException` escape without writing a response, the middleware returns `504 Gateway Timeout`, or the policy's `TimeoutStatusCode`. A handler that ignores the token keeps running to completion. Timeouts also don't fire while a debugger is attached, so they have to be tested without one.
+
+`[RequestTimeout]` does the same for controllers, and `[DisableRequestTimeout]` exempts an action. Timeouts complement concurrency limits. A concurrency limiter caps how many expensive requests run at once, and a timeout, if the handler honors the token, caps how long each one holds its permit. A timeout that has started can also be cancelled from inside the request, through `IHttpRequestTimeoutFeature.DisableTimeout()`, for example when an endpoint switches to streaming.
+
+## Honoring Cancellation
+
+Every request has a cancellation token, `HttpContext.RequestAborted`, which fires when the client disconnects or a request timeout expires. A handler receives it by taking a `CancellationToken` parameter, in both minimal APIs and controller actions, and passes it to everything asynchronous it does:
+
+```csharp
+app.MapGet("/orders/{id:int}/summary", async (
+    int id, AppDbContext db, HttpClient pricing, CancellationToken ct) =>
+{
+    var order = await db.Orders.FindAsync([id], ct);
+    if (order is null) return Results.NotFound();
+
+    var quote = await pricing.GetFromJsonAsync<Quote>($"/quotes/{order.QuoteId}", ct);   // BaseAddress set at registration
+    return Results.Ok(new OrderSummary(order, quote));
 });
 ```
 
-Cancellation tokens chain through async operations. When the client cancels the inbound request to your API, the cancellation token passed to HttpClient causes the outbound request to be cancelled as well. This propagates cancellation through the entire call chain, ensuring no resources are wasted on abandoned work.
+Passing the token means an abandoned request stops its database query and its outbound HTTP call, releasing their connections, instead of finishing work whose result has nowhere to go. That matters most under load, when clients time out and retry, since without cancellation each retry adds new work while the abandoned requests keep running.
 
-## Red Flags
+Reads are safe to cancel at any point. Writes need more thought, because a disconnect halfway through a sequence of changes, or an outbound payment call, can leave a partial side effect. A write that must finish once started either runs in a transaction that cancellation rolls back cleanly, or deliberately passes `CancellationToken.None` to the steps that must complete.
 
-**Applying rate limits without partition keys**: Limiting the entire API to a fixed number of requests allows a single client to exhaust capacity for everyone. Always partition by user, IP address, API key, or another client identifier.
+Cancellation arrives as an `OperationCanceledException` (or `TaskCanceledException`) thrown from the awaited call, and a handler doesn't need to catch it. Since .NET 8, the exception handler middleware recognizes an exception thrown while `RequestAborted` is cancelled, skips the app's exception handlers, logs it at Debug level rather than as an error, and sets status 499 if the response hasn't started. The exception handler therefore belongs outside `UseRequestTimeouts` in the pipeline, so that the timeout middleware handles the cancellation and writes its 504. With the order reversed, the exception handler catches it first and answers 499.
 
-**Using AllowAnyOrigin with AllowCredentials**: Browsers reject this combination because it's unsafe. If credentials are needed, specify exact origins.
+## Key Takeaways
 
-**Retrying non-idempotent operations without safeguards**: Retrying POST requests that create resources can lead to duplicates. Implement idempotency keys or make operations idempotent by design.
-
-**Opening circuit breakers too aggressively**: A failure ratio that's too low or a minimum throughput that's too high can cause circuits to open during normal transient failures. Tune these values based on observed failure patterns.
-
-**Ignoring cancellation tokens in long-running operations**: Operations that don't check cancellation waste resources processing results that will never be used. Always respect cancellation tokens in async methods.
-
-**Placing UseCors after UseAuthorization**: CORS middleware must run before authorization so preflight requests, which don't include authorization headers, can succeed. The correct order is UseRouting, UseCors, UseAuthentication, UseAuthorization.
-
-**Setting timeouts longer than client expectations**: If clients have a 5-second timeout but your retry policy tries for 30 seconds, the client will have already given up. Align timeout policies with client expectations.
-
-**Forgetting to add retry jitter**: Without jitter, many clients retry simultaneously when a failure resolves, creating a thundering herd that can overwhelm the recovering service. Always enable jitter on retry policies.
+- Set `RejectionStatusCode` to 429, since the default is 503, and call `UseRateLimiter` after routing when endpoint policies are used.
+- Partition by authenticated identity where possible. IP addresses need the forwarded headers middleware behind a proxy, and headers the caller chooses freely, such as `Host`, are never partition keys.
+- The global limiter and an endpoint's policy both apply. `DisableRateLimiting` exempts an endpoint from both.
+- Limits are per instance, so a cluster-wide limit belongs at a gateway or in a shared store. Rate limiting isn't DDoS protection.
+- `Retry-After` comes from the lease metadata in an `OnRejected` callback, and only the fixed window and token bucket limiters provide it.
+- Request timeouts cancel `RequestAborted` and return 504 only if the handler observes the token.
+- Take a `CancellationToken` in every handler and pass it to reads and outbound calls, so abandoned requests stop their work. Writes that must complete need a transaction or `CancellationToken.None`.

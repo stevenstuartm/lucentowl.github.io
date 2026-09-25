@@ -3,7 +3,7 @@ title: "Core AI Concepts Diagrams"
 layout: resource
 type: reference
 category: "AI"
-description: "The diagrams behind how large language models work: self-attention, the token-by-token generation loop, tokenization, the shared context window, resent conversations, temperature and top-p sampling, embeddings as directions, and mixture-of-experts routing."
+description: "The diagrams behind how large language models work: how text becomes tokens, how the model attends to it, and how each next token is chosen."
 last_updated: 2026-09-23
 figures:
   - ai-self-attention

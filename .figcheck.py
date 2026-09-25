@@ -49,6 +49,15 @@ for path in sorted(glob.glob("_guides/**/*.md", recursive=True) + glob.glob("_re
     if block:
         for fid in re.findall(r"-\s+(\S+)", block.group(1)):
             record(fid, path + " (composite)")
+        # A composite's description states scope; the figures list is the inventory.
+        desc = re.search(r'^description:\s*"(.*)"\s*$', fm, re.M)
+        if desc and len(desc.group(1)) > 250:
+            problems.append(f"{path}: description is {len(desc.group(1))} chars (max 250); "
+                            "state the composite's scope, don't list its figures")
+        tags = re.search(r"^tags:\s*\[(.*)\]", fm, re.M)
+        if tags and len(tags.group(1).split(",")) > 6:
+            problems.append(f"{path}: {len(tags.group(1).split(','))} tags (max 6); "
+                            "tag the domain, not each figure")
 
 for fid, where in uses.items():
     composites = [w for w in where if w.endswith("(composite)")]

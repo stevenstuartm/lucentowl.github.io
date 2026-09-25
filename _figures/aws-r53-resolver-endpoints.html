@@ -1,0 +1,72 @@
+---
+title: "Hybrid DNS With Resolver Endpoints"
+kind: dynamic
+system: aws
+summary: "Inbound and outbound endpoints resolving names across a VPC and a data center."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 440" role="img" aria-labelledby="awsd-title awsd-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsd-title">How inbound and outbound Resolver endpoints connect DNS between a VPC and an on-premises network</title>
+<desc id="awsd-desc">An on-premises network and a VPC are connected by a VPN or Direct Connect. For an on-premises client resolving an AWS name, the corporate DNS server forwards the query to an inbound endpoint in the VPC, which hands it to the VPC Resolver, and the VPC Resolver answers from a private hosted zone. For an EC2 instance resolving an on-premises name, the VPC Resolver matches a forwarding rule for the on-premises domain and sends the query out through an outbound endpoint to the corporate DNS server.</desc>
+<style>
+.awsd-net { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsd-vt { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsd-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsd-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsd-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsd-in { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsd-out { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 7 4; }
+</style>
+<defs>
+<marker id="awsd-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsd-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsd-net" x="20" y="40" width="240" height="340" rx="10"/>
+<text class="awsd-vt" x="36" y="62">On-premises network</text>
+<rect class="awsd-box" x="50" y="180" width="180" height="60" rx="6"/>
+<text class="awsd-n" x="140" y="206" text-anchor="middle">Corporate DNS</text>
+<text class="awsd-k" x="140" y="224" text-anchor="middle">owns corp.example.com</text>
+
+<text class="awsd-lab" x="330" y="200" text-anchor="middle">VPN or</text>
+<text class="awsd-lab" x="330" y="216" text-anchor="middle">Direct Connect</text>
+
+<rect class="awsd-net" x="400" y="40" width="500" height="340" rx="10"/>
+<text class="awsd-vt" x="416" y="62">VPC</text>
+
+<rect class="awsd-box" x="430" y="104" width="170" height="52" rx="6"/>
+<text class="awsd-n" x="515" y="126" text-anchor="middle">Inbound endpoint</text>
+<text class="awsd-k" x="515" y="143" text-anchor="middle">[ENIs in two AZs]</text>
+
+<rect class="awsd-box" x="430" y="284" width="170" height="52" rx="6"/>
+<text class="awsd-n" x="515" y="306" text-anchor="middle">Outbound endpoint</text>
+<text class="awsd-k" x="515" y="323" text-anchor="middle">[ENIs in two AZs]</text>
+<text class="awsd-lab" x="430" y="360">forwarding rule: corp.example.com</text>
+
+<rect class="awsd-box" x="680" y="86" width="190" height="52" rx="6"/>
+<text class="awsd-n" x="775" y="108" text-anchor="middle">Private hosted zone</text>
+<text class="awsd-k" x="775" y="125" text-anchor="middle">aws.example.com</text>
+
+<rect class="awsd-box" x="680" y="190" width="190" height="52" rx="6"/>
+<text class="awsd-n" x="775" y="212" text-anchor="middle">VPC Resolver</text>
+<text class="awsd-k" x="775" y="229" text-anchor="middle">[VPC base + 2]</text>
+
+<rect class="awsd-box" x="680" y="298" width="190" height="52" rx="6"/>
+<text class="awsd-n" x="775" y="320" text-anchor="middle">EC2 instance</text>
+<text class="awsd-k" x="775" y="337" text-anchor="middle">asks for db.corp.example.com</text>
+
+<path class="awsd-in" d="M230,196 L428,136" marker-end="url(#awsd-a)"/>
+<path class="awsd-in" d="M600,140 L678,200" marker-end="url(#awsd-a)"/>
+<path class="awsd-in" d="M775,190 L775,140" marker-end="url(#awsd-a)"/>
+
+<path class="awsd-out" d="M775,298 L775,244" marker-end="url(#awsd-b)"/>
+<path class="awsd-out" d="M680,236 L602,294" marker-end="url(#awsd-b)"/>
+<path class="awsd-out" d="M428,306 L232,228" marker-end="url(#awsd-b)"/>
+
+<path class="awsd-in" d="M20,410 L60,410" marker-end="url(#awsd-a)"/>
+<text class="awsd-lab" x="70" y="414">On-premises clients resolving AWS names</text>
+<path class="awsd-out" d="M400,410 L440,410" marker-end="url(#awsd-b)"/>
+<text class="awsd-lab" x="450" y="414">VPC resources resolving on-premises names</text>
+</g>
+</svg>

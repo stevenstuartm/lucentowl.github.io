@@ -84,6 +84,8 @@ figures:
 
 The resource layout renders each figure in `section` mode: an `h2` anchored as `#fig-<id>`, the kind badge, the summary, and the diagram. Order the list the way a reader should meet the system: context first, then containers, then the parts.
 
+**The `figures:` list is the inventory, so the front matter around it isn't.** A composite's `description` states its scope, such as "the diagrams behind the WinUI 3 study guides: how a desktop app's markup, layout, controls, data, and threads fit together at run time". Its `tags` name the domain. Neither is extended when a figure is added. Each figure's own `title` and `summary` already describe it on the page, so a description that lists figures repeats them, grows with every addition, and turns a listing card into a paragraph. Sessions appending one clause per figure pushed several descriptions past 700 characters before this rule existed. See `description` and `tags` in the [resource guide](resource-guide.md).
+
 Every figure belongs to exactly one composite. `.figcheck.py` flags a figure that a guide embeds but no composite lists.
 
 A composite whose body tells a story, such as a worked example, can place its figures itself: set `figures_inline: true`, embed each listed figure in the body with the include, and the layout skips the list at the bottom. The `figures:` list still records ownership.
@@ -110,7 +112,7 @@ This renders the full diagram in a bordered container with its kind badge, title
 ## Workflow
 
 1. Draw the figure in `_figures/<id>.html`, validate it with `.svgcheck.py`, and look at it with `.figrender.py`.
-2. Add its id to the composite's `figures:` list, creating the composite resource if the system has none, and register a new composite in `assets/data/resources_config.json`.
+2. Add its id to the composite's `figures:` list, and the embedding guide to its `related_guides`, creating the composite resource if the system has none, and register a new composite in `assets/data/resources_config.json`. Leave the composite's `description` and `tags` alone. They state scope, not contents (see Composing a Composite Resource).
 3. Embed it in the guides that explain it.
 4. Run `python .figcheck.py`. It reports unknown ids, missing front matter, unused figures, and figures missing from every composite, and prints where each figure is used.
 5. Build. A running `jekyll serve` does not reload `_config.yml`, so restart it after any collection or config change.

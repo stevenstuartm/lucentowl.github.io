@@ -1,0 +1,65 @@
+---
+title: "The Target Tracking Loop"
+kind: dynamic
+system: aws
+summary: "An Auto Scaling group adjusting capacity to hold a metric at a target."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 330" role="img" aria-labelledby="awsl-title awsl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsl-title">How a target tracking policy, an Auto Scaling group, its instances, and a CloudWatch metric form a feedback loop</title>
+<desc id="awsl-desc">A target tracking policy sets the Auto Scaling group's desired capacity. The group launches or terminates instances across Availability Zones to match it. The instances publish a metric, such as average CPU utilization, to CloudWatch. The policy compares the metric to its target, for example 50 percent, and raises or lowers desired capacity, which closes the loop. Separately, health checks make the group replace any instance that fails them.</desc>
+<style>
+.awsl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsl-az { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsl-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsl-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsl-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsl-inst { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1; }
+.awsl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsl-hc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 5 3; }
+</style>
+<defs>
+<marker id="awsl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsl-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsl-box" x="30" y="40" width="210" height="60" rx="6"/>
+<text class="awsl-n" x="135" y="66" text-anchor="middle">Target tracking policy</text>
+<text class="awsl-k" x="135" y="84" text-anchor="middle">[keep average CPU at 50%]</text>
+
+<rect class="awsl-box" x="340" y="40" width="210" height="60" rx="6"/>
+<text class="awsl-n" x="445" y="66" text-anchor="middle">Auto Scaling group</text>
+<text class="awsl-k" x="445" y="84" text-anchor="middle">[desired capacity: 4]</text>
+
+<rect class="awsl-az" x="650" y="30" width="120" height="120" rx="6"/>
+<text class="awsl-lab" x="662" y="48">AZ a</text>
+<rect class="awsl-inst" x="664" y="62" width="40" height="30" rx="3"/>
+<rect class="awsl-inst" x="714" y="62" width="40" height="30" rx="3"/>
+<rect class="awsl-az" x="780" y="30" width="120" height="120" rx="6"/>
+<text class="awsl-lab" x="792" y="48">AZ b</text>
+<rect class="awsl-inst" x="794" y="62" width="40" height="30" rx="3"/>
+<rect class="awsl-inst" x="844" y="62" width="40" height="30" rx="3"/>
+<text class="awsl-lab" x="775" y="20" text-anchor="middle">Instances</text>
+
+<rect class="awsl-box" x="340" y="220" width="210" height="60" rx="6"/>
+<text class="awsl-n" x="445" y="246" text-anchor="middle">CloudWatch metric</text>
+<text class="awsl-k" x="445" y="264" text-anchor="middle">[average CPU]</text>
+
+<path class="awsl-flow" d="M240,70 L338,70" marker-end="url(#awsl-a)"/>
+<text class="awsl-lab" x="289" y="60" text-anchor="middle">sets desired</text>
+<path class="awsl-flow" d="M550,70 L648,70" marker-end="url(#awsl-a)"/>
+<text class="awsl-lab" x="599" y="60" text-anchor="middle">launch or</text>
+<text class="awsl-lab" x="599" y="92" text-anchor="middle">terminate</text>
+<path class="awsl-flow" d="M775,150 L775,250 L552,250" marker-end="url(#awsl-a)"/>
+<text class="awsl-lab" x="785" y="200">publish metric</text>
+<path class="awsl-flow" d="M340,250 L135,250 L135,102" marker-end="url(#awsl-a)"/>
+<text class="awsl-lab" x="145" y="180">compare</text>
+<text class="awsl-lab" x="145" y="196">to target</text>
+
+<path class="awsl-hc" d="M650,130 L600,130 L600,110 L552,100" marker-end="url(#awsl-b)"/>
+<text class="awsl-lab" x="488" y="140">failed health check:</text>
+<text class="awsl-lab" x="488" y="156">replace the instance</text>
+
+<text class="awsl-lab" x="30" y="316">The policy only moves desired capacity. The group's minimum and maximum bound it, and with a warmup set, new instances count only once ready.</text>
+</g>
+</svg>
