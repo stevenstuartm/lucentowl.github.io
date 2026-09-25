@@ -88,6 +88,12 @@ defaults:
       layout: "default"
 
 # Exclude from build
+# Pagefind writes its index into _site/pagefind/ after the build; keep it across rebuilds.
+keep_files:
+  - .git
+  - .svn
+  - pagefind
+
 exclude:
   - Gemfile
   - Gemfile.lock

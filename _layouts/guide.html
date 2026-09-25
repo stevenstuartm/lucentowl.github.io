@@ -25,24 +25,24 @@ layout: default
 }
 </script>
 
-<article class="guide">
+<article class="guide" data-pagefind-body data-pagefind-filter="type:Guide" data-pagefind-meta="category:{{ page.category }}">
     {% comment %} Add prev/next navigation at top {% endcomment %}
     {% include guide_navigation.html %}
 
     <header class="page-header-card">
         <div class="guide-header">
-            <nav class="breadcrumb">
+            <nav class="breadcrumb" data-pagefind-ignore>
                 <a href="{{ '/study-guides.html' | relative_url }}">Study Guides</a>
                 {% if page.category %}
                 <span class="separator">/</span>
                 <a href="{{ '/study-guides.html' | relative_url }}?category={{ page.category | slugify }}" class="category">{{ page.category }}</a>
                 {% endif %}
             </nav>
-            <h1 class="guide-title">{{ page.title }}</h1>
+            <h1 class="guide-title" data-pagefind-meta="title">{{ page.title }}</h1>
             {% assign words = content | strip_html | number_of_words %}
             {% assign minutes = words | divided_by: 200 %}
             {% if minutes < 1 %}{% assign minutes = 1 %}{% endif %}
-            <div class="header-badges">
+            <div class="header-badges" data-pagefind-ignore>
                 <div class="reading-time">
                     <span class="reading-time-icon">📖</span>
                     <span class="reading-time-text">{{ minutes }} min read</span>
@@ -53,7 +53,7 @@ layout: default
     </header>
 
     <!-- TOC Toggle Button -->
-    <button class="toc-toggle" id="tocToggle" aria-label="Toggle table of contents">
+    <button class="toc-toggle" id="tocToggle" data-pagefind-ignore aria-label="Toggle table of contents">
         <svg class="toc-toggle-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"></circle>
             <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"></circle>
@@ -66,7 +66,7 @@ layout: default
 
     <div class="guide-container" id="guideContainer">
         <!-- Table of Contents (auto-generated from headings) -->
-        <aside class="guide-toc" id="guideToc">
+        <aside class="guide-toc" id="guideToc" data-pagefind-ignore>
             <div class="toc-wrapper">
                 <h3>Table of Contents</h3>
                 <nav id="TableOfContents"></nav>
@@ -76,7 +76,7 @@ layout: default
         <div class="guide-content">
             {{ content }}
 
-            <div class="guide-share">
+            <div class="guide-share" data-pagefind-ignore>
                 <p>Found this guide helpful? Share it with your team:</p>
                 {% include share-linkedin.html %}
             </div>
@@ -86,7 +86,7 @@ layout: default
     {% comment %} Add prev/next navigation {% endcomment %}
     {% include guide_navigation.html %}
 
-    <footer class="guide-footer">
+    <footer class="guide-footer" data-pagefind-ignore>
         <a href="{{ '/study-guides.html' | relative_url }}{% if page.category %}?category={{ page.category | slugify }}{% endif %}" class="back-link">← Back to {% if page.category %}{{ page.category }}{% else %}all study guides{% endif %}</a>
     </footer>
 </article>

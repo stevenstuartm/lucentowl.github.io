@@ -48,6 +48,18 @@ jobs:
         run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
         env:
           JEKYLL_ENV: production
+      - name: Build search index
+        # Pagefind indexes the rendered pages into _site/pagefind/ for site search.
+        # The version is pinned so a new release can't change a deploy.
+        # A layout that loses data-pagefind-body drops out of the index silently,
+        # with exit code 0, so a page count below the floor fails the build.
+        run: |
+          npx -y pagefind@1.5.2 --site _site | tee pagefind.log
+          pages=$(grep -o 'Indexed [0-9]* pages' pagefind.log | grep -o '[0-9]*' || true)
+          if [ "${pages:-0}" -lt 450 ]; then
+            echo "::error::Pagefind indexed ${pages:-0} pages, expected at least 450. Check data-pagefind-body in the content layouts."
+            exit 1
+          fi
       - name: Upload artifact
         # Automatically uploads an artifact from the './_site' directory by default
         uses: actions/upload-pages-artifact@v3

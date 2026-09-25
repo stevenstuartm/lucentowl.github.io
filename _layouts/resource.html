@@ -24,19 +24,19 @@ layout: default
 }
 </script>
 
-<article class="resource" data-type="{{ page.type }}">
+<article class="resource" data-type="{{ page.type }}" data-pagefind-body data-pagefind-filter="type:Resource" data-pagefind-meta="category:{{ page.category }}">
     <header class="page-header-card">
         <div class="resource-header">
-            <nav class="breadcrumb">
+            <nav class="breadcrumb" data-pagefind-ignore>
                 <a href="{{ '/resources.html' | relative_url }}">Resources</a>
                 {% if page.category %}
                 <span class="separator">/</span>
                 <a href="{{ '/resources.html' | relative_url }}?category={{ page.category | slugify }}" class="category">{{ page.category }}</a>
                 {% endif %}
             </nav>
-            <h1 class="resource-title">{{ page.title }}</h1>
+            <h1 class="resource-title" data-pagefind-meta="title">{{ page.title }}</h1>
             {% if page.last_updated or page.related_guides or page.related_posts %}
-            <div class="header-badges">
+            <div class="header-badges" data-pagefind-ignore>
                 {% if page.last_updated %}
                 <p class="resource-meta">Last updated: <time datetime="{{ page.last_updated | date_to_xmlschema }}">{{ page.last_updated | date: "%B %d, %Y" }}</time></p>
                 {% endif %}
@@ -44,7 +44,7 @@ layout: default
             </div>
             {% endif %}
             {% if page.tags %}
-            <div class="resource-header-tags">
+            <div class="resource-header-tags" data-pagefind-ignore>
                 {% for tag in page.tags %}
                 <a href="{{ '/resources.html' | relative_url }}?tags={{ tag | downcase }}" class="guide-tag">{{ tag }}</a>
                 {% endfor %}
@@ -62,13 +62,13 @@ layout: default
         {% endfor %}
         {% endunless %}
 
-        <div class="guide-share">
+        <div class="guide-share" data-pagefind-ignore>
             <p>Found this useful? Share it:</p>
             {% include share-linkedin.html %}
         </div>
     </div>
 
-    <footer class="resource-footer">
+    <footer class="resource-footer" data-pagefind-ignore>
         <a href="{{ '/resources.html' | relative_url }}" class="back-link">← Back to Resources</a>
     </footer>
 </article>

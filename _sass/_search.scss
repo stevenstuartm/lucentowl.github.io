@@ -1,0 +1,323 @@
+/* ===== Site Search (header panel, assets/js/site-search.js) ===== */
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Header button: same footprint as the shelf and What's New buttons */
+.search-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--color-text);
+    padding: 0;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.search-indicator:hover,
+.search-indicator:focus-visible {
+    color: var(--color-primary);
+    background: rgba(26, 95, 138, 0.08);
+}
+
+.search-indicator-icon {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    pointer-events: none;
+}
+
+/* Panel: the shelf panel shell, near full height. The search box and tabs stay
+   put while only the results scroll. */
+.search-panel-overlay {
+    padding: 4vh var(--spacing-md);
+}
+
+.shelf-panel.search-panel {
+    max-width: 920px;
+    height: 92vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.search-panel-header {
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
+    flex-shrink: 0;
+}
+
+.search-panel-form {
+    flex: 1;
+}
+
+.search-panel-tabs {
+    padding: var(--spacing-xs) var(--spacing-lg) 0;
+    flex-shrink: 0;
+}
+
+.search-panel-body {
+    flex: 1;
+    max-height: none;
+    padding-top: 0;
+}
+
+/* Type tabs */
+.site-search-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: var(--spacing-sm);
+}
+
+.search-panel-tabs.site-search-tabs {
+    margin-top: 0;
+}
+
+.site-search-tabs[hidden] {
+    display: none;
+}
+
+.site-search-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-card-bg);
+    color: var(--color-text-light);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.site-search-tab:hover,
+.site-search-tab:focus-visible {
+    border-color: var(--color-secondary);
+    color: var(--color-secondary);
+}
+
+.site-search-tab.active {
+    background: var(--color-secondary);
+    border-color: var(--color-secondary);
+    color: #fff;
+}
+
+.site-search-tab-count {
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+/* Status and results */
+.site-search-status {
+    margin: var(--spacing-sm) 0 0;
+    color: var(--color-text-light);
+    font-size: 0.85rem;
+}
+
+.site-search-status:empty {
+    display: none;
+}
+
+.site-search-results {
+    list-style: none;
+    margin: var(--spacing-xs) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.site-search-result {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-secondary);
+    border-radius: var(--border-radius);
+    padding: 0.65rem 1rem 0.7rem;
+    transition: border-color 0.15s ease;
+}
+
+.site-search-result:focus-within {
+    border-color: var(--color-primary);
+}
+
+.site-search-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.6rem;
+}
+
+.site-search-type {
+    flex-shrink: 0;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(26, 95, 138, 0.1);
+    color: var(--color-primary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.site-search-title {
+    font-family: var(--font-brand);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.3;
+}
+
+.site-search-title:hover,
+.site-search-title:focus-visible {
+    color: var(--color-primary);
+}
+
+.site-search-meta {
+    display: inline-flex;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--color-text-light);
+    white-space: nowrap;
+}
+
+.site-search-meta span + span::before {
+    content: "·";
+    margin-right: 0.5rem;
+}
+
+.site-search-excerpt {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--color-text-light);
+}
+
+.site-search-excerpt mark {
+    background: rgba(201, 162, 39, 0.28); /* --color-gold, softened */
+    color: var(--color-text);
+    border-radius: 2px;
+    padding: 0 0.1em;
+}
+
+.site-search-page-excerpt {
+    margin: 0.3rem 0 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Matching sections: heading link and excerpt run together, two lines at most */
+.site-search-sections {
+    list-style: none;
+    margin: 0.35rem 0 0;
+    padding: 0 0 0 0.75rem;
+    border-left: 2px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.site-search-sections li {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.site-search-section-link {
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-right: 0.4rem;
+}
+
+.site-search-section-link:hover,
+.site-search-section-link:focus-visible {
+    color: var(--color-hover);
+    text-decoration: underline;
+}
+
+.site-search-extra {
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+}
+
+.site-search-more {
+    display: block;
+    margin: var(--spacing-md) auto 0;
+    padding: 0.55rem 1.5rem;
+    border: 1.5px solid var(--color-secondary);
+    border-radius: 30px;
+    background: var(--color-card-bg);
+    color: var(--color-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.site-search-more[hidden] {
+    display: none;
+}
+
+.site-search-more:hover,
+.site-search-more:focus-visible {
+    background: var(--color-secondary);
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .search-panel-overlay {
+        padding: 0;
+    }
+
+    .shelf-panel.search-panel {
+        height: 100%;
+    }
+
+    .search-panel-header {
+        padding: var(--spacing-sm);
+    }
+
+    .search-panel-tabs {
+        padding: var(--spacing-xs) var(--spacing-sm) 0;
+    }
+
+    /* One scrolling row instead of wrapping onto two */
+    .site-search-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .site-search-tab {
+        flex-shrink: 0;
+    }
+
+    .search-panel-body {
+        padding: 0 var(--spacing-sm) var(--spacing-sm);
+    }
+
+    .site-search-result {
+        padding: 0.6rem 0.75rem;
+    }
+}

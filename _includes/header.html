@@ -8,6 +8,12 @@
                 </a>
             </h1>
             <div class="header-actions">
+                <button class="search-indicator" id="searchIndicator" aria-label="Search (press /)" aria-haspopup="dialog" aria-expanded="false">
+                    <svg class="search-indicator-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <line x1="21" y1="21" x2="16.2" y2="16.2"></line>
+                    </svg>
+                </button>
                 <button class="whats-new-indicator" id="whatsNewIndicator" aria-label="What's new" aria-haspopup="dialog" aria-expanded="false">
                     <svg class="whats-new-indicator-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path class="whats-new-star-main" d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path>
@@ -89,6 +95,7 @@
 
 {% include shelf-panel.html %}
 {% include whats-new-panel.html %}
+{% include search-panel.html %}
 
 <script>
     (function() {

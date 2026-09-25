@@ -49,6 +49,9 @@ bundle exec jekyll serve
 
 # Build the site (output to _site/)
 bundle exec jekyll build
+
+# Build the search index into _site/pagefind/ (after a build; see Site Search)
+npx -y pagefind@1.5.2 --site _site
 ```
 
 `jekyll serve` does not reload `_config.yml`. Restart it after changing collections, defaults, or any other config, or pages that depend on the change render as if it never happened.
@@ -79,7 +82,7 @@ To upgrade, change the pin deliberately, run `bundle update <gem>` or `bundle lo
   - `blog-listing.html`: Blog listing page template
   - `author.html`: Author page template (avatar, bio, social links, post list)
   - `case-study.html`: Case study template with author byline
-- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html, post-sources.html, figure.html)
+- **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html, post-sources.html, figure.html, search-panel.html)
 - **_posts/**: Blog posts in Markdown with YAML front matter (format: YYYY-MM-DD-title.md)
 - **_guides/**: Study guides in Markdown organized by topic
 - **_figures/**: Diagram building blocks (`output: false`, no pages of their own), composed into guides and composite resources by `_includes/figure.html`
@@ -237,6 +240,20 @@ A header button (sparkle icon, next to the shelf bookmark) opens a panel listing
 - **Add an entry when you publish something a returning reader should know about:** a new post, guide, or resource, or a substantive refinement pass over a block of guides (one entry per pass, not per file). Skip mechanical changes like link moves or front-matter fixes.
 - **No reader tracking.** The panel is static: no badge, no seen/unseen state, nothing written to the reader's browser. Keep it that way.
 - A revision pass links to the filtered listing, e.g. `/study-guides.html?category=<slugified category>`.
+
+## Site Search
+
+Full-text search over every guide, post, resource, and case study, from a magnifier button in the header (or `/`). It has no search page. [Pagefind](https://pagefind.app) indexes the rendered HTML after `jekyll build`. The deploy workflow runs it as the `Build search index` step, pinned to an exact version, and fails the build if fewer than 450 pages are indexed.
+
+- **Files:** `_includes/search-panel.html` (the panel, in the shelf-panel shell), `assets/js/site-search.js` (search, rendering, tabs, keyboard), `_sass/_search.scss`. The Pagefind runtime loads on the first query, never on page load. Nothing about queries is stored or sent (the no-tracking rule).
+- **Every content layout needs the markup.** `data-pagefind-body` on the content wrapper, `data-pagefind-meta="title"` on its `<h1>`, `data-pagefind-filter="type:<Type>"` for the type tabs, and `data-pagefind-ignore` on chrome inside the wrapper (breadcrumbs, badges, TOC, share, footers, prev/next). Once any page has `data-pagefind-body`, pages without it are skipped. A new layout without the markup silently drops out of search. The title meta is required because the site header's logo is an `<h1>`, and Pagefind would take it as every page's title.
+- **Local preview:** `bundle exec jekyll build`, then the `npx pagefind` command above. `_config.yml`'s `keep_files` keeps `_site/pagefind/` across `jekyll serve` regenerations, but the index reflects content as of the last Pagefind run.
+- **Pagefind quirks the script works around:**
+  - A word with no match falls back to shorter prefixes ("kanban" matched a lone "k"); `isRealMatch` drops those results.
+  - Search responses carry no per-type counts until `pagefind.filters()` has run once.
+  - Without a title weight (`metaWeights`), pages that repeat a term in code outrank the page about it.
+  - "route53" misses content that writes "Route 53", so letter+digit words also run as an exact spaced phrase (`splitVariant`, `searchPhrase`).
+- **Headless testing:** Chrome's `--dump-dom` and `--screenshot` don't wait for Pagefind's fetches and WASM, so results look missing. Drive Chrome over the DevTools protocol with a real wait instead.
 
 ## Tech Radar
 

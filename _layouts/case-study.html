@@ -28,19 +28,19 @@ layout: default
 }
 </script>
 
-<article class="case-study">
+<article class="case-study" data-pagefind-body data-pagefind-filter="type:Case Study">
     <header class="page-header-card">
         <div class="case-study-header">
-            <nav class="breadcrumb">
+            <nav class="breadcrumb" data-pagefind-ignore>
                 <a href="{{ '/case-studies.html' | relative_url }}">Case Studies</a>
                 <span class="separator">/</span>
                 <span>{{ page.title }}</span>
             </nav>
-            <h1 class="case-study-title">{{ page.title }}</h1>
+            <h1 class="case-study-title" data-pagefind-meta="title">{{ page.title }}</h1>
             {% if page.subtitle %}
             <p class="case-study-subtitle">{{ page.subtitle }}</p>
             {% endif %}
-            <div class="case-study-meta">
+            <div class="case-study-meta" data-pagefind-ignore>
                 {% if page.author %}{% include author-byline.html author=page.author %}{% endif %}
                 {% if page.role %}
                 <span class="meta-item"><strong>Role:</strong> {{ page.role }}</span>
@@ -60,7 +60,7 @@ layout: default
             {% assign words = content | strip_html | number_of_words %}
             {% assign minutes = words | divided_by: 200 %}
             {% if minutes < 1 %}{% assign minutes = 1 %}{% endif %}
-            <div class="header-badges">
+            <div class="header-badges" data-pagefind-ignore>
                 <div class="reading-time">
                     <span class="reading-time-icon">📖</span>
                     <span class="reading-time-text">{{ minutes }} min read</span>
@@ -71,7 +71,7 @@ layout: default
     </header>
 
     <!-- TOC Toggle Button -->
-    <button class="toc-toggle" id="tocToggle" aria-label="Toggle table of contents">
+    <button class="toc-toggle" id="tocToggle" data-pagefind-ignore aria-label="Toggle table of contents">
         <svg class="toc-toggle-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"></circle>
             <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"></circle>
@@ -84,7 +84,7 @@ layout: default
 
     <div class="case-study-container" id="caseStudyContainer">
         <!-- Table of Contents (auto-generated from headings) -->
-        <aside class="case-study-toc" id="caseStudyToc">
+        <aside class="case-study-toc" id="caseStudyToc" data-pagefind-ignore>
             <div class="toc-wrapper">
                 <h3>Table of Contents</h3>
                 <nav id="TableOfContents"></nav>
@@ -94,14 +94,14 @@ layout: default
         <div class="case-study-content">
             {{ content }}
 
-            <div class="case-study-share">
+            <div class="case-study-share" data-pagefind-ignore>
                 <p>Find this case study insightful? Share it with your network:</p>
                 {% include share-linkedin.html %}
             </div>
         </div>
     </div>
 
-    <footer class="case-study-footer">
+    <footer class="case-study-footer" data-pagefind-ignore>
         <a href="{{ '/case-studies.html' | relative_url }}" class="back-link">← Back to all case studies</a>
     </footer>
 </article>

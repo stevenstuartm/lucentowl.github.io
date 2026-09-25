@@ -4,7 +4,7 @@
 {% endcomment %}
 
 {% if page.previous or page.next %}
-<nav class="guide-navigation">
+<nav class="guide-navigation" data-pagefind-ignore>
   <div class="guide-nav-container">
     {% comment %} Previous post (older) {% endcomment %}
     {% if page.next %}

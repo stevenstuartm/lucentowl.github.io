@@ -31,16 +31,16 @@
 {%- if include.mode == "section" -%}
 <div class="lo-figure lo-figure--section" data-figure="{{ fig_id }}">
 <h2 class="lo-figure-heading" id="fig-{{ fig_id }}">{{ fig.title }}</h2>
-<span class="lo-figure-kind">{{ fig_kind }}</span>
+<span class="lo-figure-kind" data-pagefind-ignore>{{ fig_kind }}</span>
 <p class="lo-figure-summary">{{ fig.summary }}</p>
-<div class="lo-figure-body">{{ fig.content | strip }}</div>
+<div class="lo-figure-body" data-pagefind-ignore>{{ fig.content | strip }}</div>
 </div>
 {%- else -%}
 <div class="lo-figure" data-figure="{{ fig_id }}">
-<span class="lo-figure-kind">{{ fig_kind }}</span>
+<span class="lo-figure-kind" data-pagefind-ignore>{{ fig_kind }}</span>
 <p class="lo-figure-title">{{ fig.title }}</p>
 <p class="lo-figure-summary">{{ fig.summary }}</p>
-<div class="lo-figure-body">{{ fig.content | strip }}</div>
+<div class="lo-figure-body" data-pagefind-ignore>{{ fig.content | strip }}</div>
 </div>
 {%- endif -%}
 {%- endif -%}

@@ -17,6 +17,11 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: site-search
+  change: new
+  title: "Search the whole site"
+  note: "Search the full text of every guide, post, resource, and case study: use the magnifier in the header, or press /."
+
 - id: beads-gas-city
   change: new
   type: guide

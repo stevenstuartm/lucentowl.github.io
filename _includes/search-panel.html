@@ -1,0 +1,25 @@
+<!-- Search panel (global). Behavior and rendering live in assets/js/site-search.js; the Pagefind index loads on first search. -->
+<div class="shelf-panel-overlay search-panel-overlay" id="searchPanelOverlay" data-bundle="{{ '/pagefind/' | relative_url }}">
+    <div class="shelf-panel search-panel" role="dialog" aria-modal="true" aria-labelledby="searchPanelTitle">
+        <div class="shelf-panel-header search-panel-header">
+            <h2 id="searchPanelTitle" class="visually-hidden">Search</h2>
+            <form class="guides-search-wrapper search-panel-form" role="search" data-search-form>
+                <svg class="guides-search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="search" class="guides-search-input" data-search-input
+                       placeholder="Search guides, posts, and resources"
+                       aria-label="Search the site"
+                       autocomplete="off" spellcheck="false">
+            </form>
+            <button class="shelf-panel-close" data-search-close aria-label="Close search">&times;</button>
+        </div>
+        <div class="site-search-tabs search-panel-tabs" data-search-tabs hidden></div>
+        <div class="shelf-panel-body search-panel-body">
+            <p class="site-search-status" data-search-status role="status" aria-live="polite"></p>
+            <ol class="site-search-results" data-search-results></ol>
+            <button type="button" class="site-search-more" data-search-more hidden>Show more results</button>
+        </div>
+    </div>
+</div>

@@ -3749,7 +3749,7 @@ ul.task-list {
        with the nav. The header is too short to stack them, so .header-content
        reserves the group's width and the nav centers in what is left. */
     .header-content {
-        padding-right: 80px; /* two 30px buttons + 8px gap + the badge's 6px overhang, rounded up */
+        padding-right: 118px; /* three 30px buttons + two 8px gaps + the badge's 6px overhang, rounded up */
     }
 
     .header-actions {
