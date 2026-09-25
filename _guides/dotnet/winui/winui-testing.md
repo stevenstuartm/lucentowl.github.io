@@ -3,56 +3,58 @@ title: "Testing WinUI 3 Applications"
 layout: guide
 category: "WinUI 3"
 subcategory: "Quality & Testing"
-description: "Testing strategies for WinUI 3 applications including ViewModel unit testing, UI testing with MSTest UITestMethod, end-to-end testing with WinAppDriver, and integration testing patterns."
-tags: [winui, winui-3, testing, unit-testing, ui-testing, mvvm, desktop, practical]
+description: "Testing a WinUI 3 app at three levels: view models and services in a plain library project, XAML objects on the UI thread with the WinUI Unit Test App and [UITestMethod], and end-to-end flows through UI Automation with Appium (and the WinAppDriver it still depends on) or FlaUI."
+tags: [testing, ui-automation, mstest, uitestmethod, appium, winappdriver, practical]
 ---
 
 ## Table of Contents
 
-- [Testing WinUI 3 Applications](#testing-winui-3-applications)
-- [ViewModel Unit Testing](#viewmodel-unit-testing)
-- [Testing Commands](#testing-commands)
-- [Testing Property Notifications](#testing-property-notifications)
-- [Mocking Services and Navigation](#mocking-services-and-navigation)
-- [MSTest with UITestMethod](#mstest-with-uitestmethod)
-- [UI Automation with WinAppDriver](#ui-automation-with-winappdriver)
-- [Integration Testing Patterns](#integration-testing-patterns)
-- [Test Project Setup](#test-project-setup)
-- [Desktop Testing Best Practices](#desktop-testing-best-practices)
+- [Three Places a Test Can Run](#three-places-a-test-can-run)
+- [Keep Testable Code in a Library](#keep-testable-code-in-a-library)
+- [What to Assert on a View Model](#what-to-assert-on-a-view-model)
+- [Testing the Real Service Registrations](#testing-the-real-service-registrations)
+- [Tests That Need the UI Thread](#tests-that-need-the-ui-thread)
+- [End-to-End Tests Through UI Automation](#end-to-end-tests-through-ui-automation)
+- [Keeping the Suite Useful](#keeping-the-suite-useful)
 
 ---
 
-## Testing WinUI 3 Applications
+## Three Places a Test Can Run
 
-Testing desktop applications presents different challenges from testing web or service code. A WinUI 3 application runs on the Windows App SDK runtime, some operations must execute on a specific UI thread, and the app itself packages and deploys as a self-contained Windows application. None of these constraints exist when testing a plain class library.
+Most types in the `Microsoft.UI.Xaml` namespaces can only be used on a UI thread inside a running XAML app. A plain test runner has no such thread, so a test that creates a `Button`, reads a dependency property, or constructs a custom control fails there. That rule decides where each test in a WinUI app has to run:
 
-The practical response is to separate your concerns clearly enough that most of your logic never touches the UI at all. ViewModels, services, repositories, and domain logic can all be tested with standard unit testing tools, no XAML required. The remaining UI-specific code benefits from a narrower set of techniques: thread-aware test execution for controls, UI automation frameworks for end-to-end flows, and integration test harnesses that wire up a real DI container against test doubles.
+| Level | Runs in | Can exercise | Cost |
+|---|---|---|---|
+| Library tests | Any .NET test project, on any thread | View models, services, validation, navigation decisions | Milliseconds per test, runs anywhere |
+| UI-thread tests | The **WinUI Unit Test App**, a small packaged WinUI app that hosts MSTest | Controls, dependency properties, anything built from XAML types | An app deploy and startup per run; Microsoft documents running them only from Visual Studio |
+| End-to-end tests | A separate process driving the installed app through UI Automation, the Windows accessibility API | Whole user flows, as a user would perform them | Seconds per test, needs an interactive desktop, most prone to flakiness |
 
-A well-tested WinUI 3 application will have a large base of fast ViewModel and service unit tests, a smaller set of thread-bound UI component tests, and a narrow layer of end-to-end UI automation tests that validate the most critical user flows.
+A healthy suite has many library tests, a few UI-thread tests, and a short list of end-to-end flows. The shape follows from how cheap each level is, and from how much of an app's logic can be kept out of reach of the UI thread.
 
 ---
 
-## ViewModel Unit Testing
+## Keep Testable Code in a Library
 
-Because a ViewModel is a plain C# class with no XAML dependencies, you can test it with any standard .NET test framework such as MSTest, NUnit, or xUnit. None of these require a special test host or UI thread. You simply create an instance of the ViewModel, interact with it, and assert on its state.
+Microsoft's [testing guidance for Windows App SDK apps](https://learn.microsoft.com/en-us/windows/apps/develop/testing/){:target="_blank" rel="noopener noreferrer"} recommends pulling the code under test out of the app project into a library that both the app and the tests reference. The app project is a Windows executable that carries pages, a `Window`, and packaging, which is more than a test needs to load to reach a view model.
+
+A library that references no WinUI types can target plain `net10.0`. Its tests are then ordinary .NET tests in MSTest, xUnit, or NUnit, run by `dotnet test` on any build agent. View models built with the MVVM Toolkit qualify, since `CommunityToolkit.Mvvm` doesn't depend on WinUI. The work is keeping WinUI types out of the view model: a `Visibility` or `Brush` property belongs in a converter, a `Frame` belongs behind a navigation service, and a `DispatcherQueue` belongs at the edge of the app.
+
+A view model test constructs the view model with fake services and checks its state:
 
 ```csharp
 [TestClass]
 public class ProductListViewModelTests
 {
     [TestMethod]
-    public async Task LoadProductsAsync_PopulatesCollection()
+    public async Task LoadCommand_FillsProductsFromService()
     {
-        var fakeService = new FakeProductService();
-        fakeService.Products = new List<Product>
+        var service = new FakeProductService
         {
-            new Product { Id = 1, Name = "Widget" },
-            new Product { Id = 2, Name = "Gadget" }
+            Products = [new Product(1, "Widget"), new Product(2, "Gadget")]
         };
+        var viewModel = new ProductListViewModel(service, new FakeNavigationService());
 
-        var viewModel = new ProductListViewModel(fakeService);
-
-        await viewModel.LoadProductsAsync();
+        await viewModel.LoadCommand.ExecuteAsync(null);
 
         Assert.AreEqual(2, viewModel.Products.Count);
         Assert.AreEqual("Widget", viewModel.Products[0].Name);
@@ -60,181 +62,258 @@ public class ProductListViewModelTests
 }
 ```
 
-The ViewModel receives its dependencies through constructor injection, which is what makes this pattern testable. When the real `IProductService` calls a database or remote API, the fake returns predictable data immediately. The test validates the ViewModel's behavior in isolation.
+When a library does have to reference WinUI, a test project that references it needs three changes, and the machine that runs it needs one more:
+
+- Its `TargetFramework` has to match the library's Windows-specific one (for example `net10.0-windows10.0.26100.0`), instead of the template's plain `net10.0`.
+- It lists `RuntimeIdentifiers` for `win-x86;win-x64;win-arm64`.
+- It sets `<WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>` so the test process loads the Windows App SDK runtime.
+- The Windows App SDK runtime has to be installed on every machine that runs the tests.
+
+That setup loads the runtime and nothing more. The test still runs without a UI thread, so it can test the library's non-XAML types but not its controls.
+
+Test doubles, mocking libraries, and framework choice work the same here as in any .NET code. Nothing about them is specific to WinUI.
 
 ---
 
-## Testing Commands
+## What to Assert on a View Model
 
-Commands are observable objects that ViewModels expose for the View to bind to. Testing them means verifying three things: that the command executes correctly, that `CanExecute` returns the right value under different conditions, and that state changes after execution are reflected in the ViewModel's properties.
+A view model's contract with its view is the bindings: properties that raise `PropertyChanged`, and commands that run and enable themselves at the right time. The tests that pay off check that contract, because a break in it fails silently at runtime. A button stays disabled, or a label stops updating, and nothing throws.
+
+### Commands
+
+A `[RelayCommand]` on an async method generates an `IAsyncRelayCommand`. Tests should await `ExecuteAsync` rather than call `Execute`. `Execute` is the `ICommand` method a button calls. It returns before the work finishes, so a test that calls it asserts too early, and an exception from the work doesn't fail the test where it happened. `ExecuteAsync` returns the task, which the test can await.
+
+A button re-reads `CanExecute` only when the command raises `CanExecuteChanged`. With the MVVM Toolkit, `[NotifyCanExecuteChangedFor]` on the property does that. A test that checks only `CanExecute` passes even when the attribute is missing, so check the event too:
 
 ```csharp
 [TestMethod]
-public void SaveCommand_IsDisabled_WhenNameIsEmpty()
+public void SaveCommand_ReevaluatesWhenNameChanges()
 {
     var viewModel = new EditProductViewModel(new FakeProductService());
-    viewModel.ProductName = string.Empty;
+    var raised = false;
+    viewModel.SaveCommand.CanExecuteChanged += (_, _) => raised = true;
 
-    bool canExecute = viewModel.SaveCommand.CanExecute(null);
-
-    Assert.IsFalse(canExecute);
-}
-
-[TestMethod]
-public async Task SaveCommand_ExecutesAndSetsIsSaved()
-{
-    var fakeService = new FakeProductService();
-    var viewModel = new EditProductViewModel(fakeService);
     viewModel.ProductName = "New Widget";
 
-    await viewModel.SaveCommand.ExecuteAsync(null);
-
-    Assert.IsTrue(viewModel.IsSaved);
-    Assert.AreEqual(1, fakeService.SaveCallCount);
+    Assert.IsTrue(raised);
+    Assert.IsTrue(viewModel.SaveCommand.CanExecute(null));
 }
 ```
 
-When using [CommunityToolkit.Mvvm](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/){:target="_blank" rel="noopener noreferrer"}, the generated `AsyncRelayCommand` and `RelayCommand` types expose `CanExecute` as a method and `ExecuteAsync` for awaitable commands, both of which test cleanly without any UI involvement.
+### Property notifications
 
----
-
-## Testing Property Notifications
-
-A ViewModel that implements `INotifyPropertyChanged` must raise `PropertyChanged` whenever a bound property changes. If it does not, the View silently stops updating and bugs appear only at runtime. Testing property notifications directly is straightforward.
+A generated property raises `PropertyChanged` for itself, so testing that adds little. The risk is a derived property, such as a `DisplayTotal` computed from `Quantity` and `Price`, whose notification depends on `[NotifyPropertyChangedFor]` or a hand-written call. Capture the raised names and assert on the derived one:
 
 ```csharp
 [TestMethod]
-public void SearchQuery_RaisesPropertyChanged()
+public void Quantity_RaisesDisplayTotal()
 {
-    var viewModel = new SearchViewModel(new FakeSearchService());
-    var raisedProperties = new List<string>();
+    var viewModel = new OrderLineViewModel { Price = 2.50m };
+    var raised = new List<string?>();
+    viewModel.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
-    viewModel.PropertyChanged += (_, e) =>
-        raisedProperties.Add(e.PropertyName ?? string.Empty);
+    viewModel.Quantity = 4;
 
-    viewModel.SearchQuery = "test query";
-
-    CollectionAssert.Contains(raisedProperties, nameof(viewModel.SearchQuery));
+    CollectionAssert.Contains(raised, nameof(OrderLineViewModel.DisplayTotal));
 }
 ```
 
-Subscribing to `PropertyChanged` before modifying the property and then asserting that the expected property name appeared in the captured events is a reliable pattern. For ViewModels built with `CommunityToolkit.Mvvm`, the source-generated setters raise `PropertyChanged` automatically, but it is still worth verifying that computed or derived properties fire correctly when their dependencies change.
+### Navigation
 
----
-
-## Mocking Services and Navigation
-
-ViewModels depend on services for data access, logging, navigation, and other cross-cutting concerns. For unit tests, those services should be replaced with test doubles that return controlled results. There are two practical approaches: hand-written fakes and mock frameworks.
-
-Hand-written fakes work well for services with a small number of methods and when the test suite needs to observe call counts or configure different responses per test:
+A view model that navigates through an `INavigationService`, instead of holding a `Frame`, can be tested with a fake that records the calls. The interface below is the one a navigation service exposes when it maps view model types to pages:
 
 ```csharp
-public class FakeNavigationService : INavigationService
+public sealed class FakeNavigationService : INavigationService
 {
-    public List<string> NavigatedTo { get; } = new();
-    public bool NavigateWasCalled => NavigatedTo.Count > 0;
+    public List<(Type Target, object? Parameter)> Calls { get; } = [];
+    public int BackCount { get; private set; }
 
-    public void Navigate(string destination, object? parameter = null)
+    public bool NavigateTo<TViewModel>(object? parameter = null)
     {
-        NavigatedTo.Add(destination);
+        Calls.Add((typeof(TViewModel), parameter));
+        return true;
     }
 
-    public void GoBack() { }
+    public bool GoBack()
+    {
+        BackCount++;
+        return true;
+    }
 }
-```
 
-Mock frameworks like [Moq](https://github.com/devlooped/moq){:target="_blank" rel="noopener noreferrer"} or [NSubstitute](https://nsubstitute.github.io/){:target="_blank" rel="noopener noreferrer"} are more concise when you need to configure behavior per-test without writing a separate class:
-
-```csharp
 [TestMethod]
-public async Task DeleteCommand_NavigatesBackAfterDeletion()
+public async Task OpenCommand_NavigatesToDetailWithProductId()
 {
-    var mockNav = new Mock<INavigationService>();
-    var mockService = new Mock<IProductService>();
-    mockService.Setup(s => s.DeleteAsync(It.IsAny<int>())).ReturnsAsync(true);
+    var navigation = new FakeNavigationService();
+    var viewModel = new ProductListViewModel(new FakeProductService(), navigation);
 
-    var viewModel = new ProductDetailViewModel(mockService.Object, mockNav.Object);
-    viewModel.ProductId = 42;
+    await viewModel.OpenCommand.ExecuteAsync(42);
 
-    await viewModel.DeleteCommand.ExecuteAsync(null);
-
-    mockNav.Verify(n => n.GoBack(), Times.Once);
+    Assert.AreEqual((typeof(ProductDetailViewModel), (object?)42), navigation.Calls.Single());
 }
 ```
 
-Navigation deserves particular attention because navigating in a ViewModel typically means calling a navigation service rather than directly manipulating a `Frame`. That indirection is exactly what makes it testable. A ViewModel that directly references a `Frame` cannot be unit tested without instantiating a real UI.
+The test checks the decision (which view model, which parameter), not that a page appeared. Whether the page mapping is right is a question for an end-to-end test.
+
+### Threads
+
+A test thread has no `DispatcherQueue`, so `DispatcherQueue.GetForCurrentThread()` returns `null` there. A view model that grabs the queue in its constructor can't be created in a test. Such a view model should take a dispatch interface instead, which the test implements by running the action inline.
 
 ---
 
-## MSTest with UITestMethod
+## Testing the Real Service Registrations
 
-Some code genuinely requires the UI thread. Custom controls, behaviors that interact with `DispatcherQueue`, or ViewModel logic that updates an `ObservableCollection` bound to a live control all need to run in a context where the UI infrastructure is initialized. MSTest provides a mechanism for this through the WinUI test app template.
+A view model test with hand-built fakes proves the logic. It doesn't prove that the app's container can build that view model, and a missing registration surfaces only when a page first asks for it. A test that uses the app's own registrations catches that.
 
-When creating a test project from the [MSTest WinUI App template](https://learn.microsoft.com/en-us/windows/apps/winui/winui3/winui-unit-tests){:target="_blank" rel="noopener noreferrer"} in Visual Studio, the project structure includes a WinUI application host alongside your test code. Tests that need to run on the UI thread are marked with `[UITestMethod]` instead of `[TestMethod]`.
+That requires the registrations to be callable from a test. Instead of a private method on `App`, put them in an extension method in the library, where the app and the tests both call it:
+
+```csharp
+public static class ServiceRegistration
+{
+    public static IServiceCollection AddAppServices(this IServiceCollection services)
+    {
+        services.AddSingleton<IProductRepository, SqliteProductRepository>();
+        services.AddSingleton<IProductService, ProductService>();
+        services.AddTransient<ProductListViewModel>();
+        services.AddTransient<ProductDetailViewModel>();
+        return services;
+    }
+}
+```
+
+The test replaces what touches disk, network, or the UI, and builds the provider with `ValidateOnBuild` and `ValidateScopes` on, so a missing dependency or a scope mistake fails the test instead of a page:
 
 ```csharp
 [TestClass]
-public class MyControlTests
+public class CompositionTests
+{
+    private ServiceProvider _provider = null!;
+
+    [TestInitialize]
+    public void Setup()
+    {
+        var services = new ServiceCollection().AddAppServices();
+
+        // Swap the SQLite repository for an in-memory one.
+        services.Replace(ServiceDescriptor.Singleton<IProductRepository, InMemoryProductRepository>());
+
+        // The app registers its Frame-backed navigation service itself.
+        services.AddSingleton<INavigationService, FakeNavigationService>();
+
+        _provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+    }
+
+    [TestMethod]
+    public async Task AddThenLoad_ReturnsTheNewProduct()
+    {
+        var viewModel = _provider.GetRequiredService<ProductListViewModel>();
+
+        await viewModel.AddCommand.ExecuteAsync("Integration Widget");
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Integration Widget", viewModel.Products.Single().Name);
+    }
+
+    [TestCleanup]
+    public void Teardown() => _provider.Dispose();
+}
+```
+
+`Replace` lives in `Microsoft.Extensions.DependencyInjection.Extensions`. The in-memory repository proves the wiring and the logic above it, not the SQL. Queries belong in tests against a real database engine.
+
+---
+
+## Tests That Need the UI Thread
+
+Some code can't leave the XAML world: a custom control's dependency properties, a templated control's state logic, a `UserControl`'s code-behind. Testing it needs a real UI thread, and that means running MSTest inside a WinUI app.
+
+The **WinUI Unit Test App** template provides one. In Visual Studio it appears under C#, Windows, WinUI; from the command line it is `dotnet new winui-unittest` from the prerelease `Microsoft.WindowsAppSDK.WinUI.CSharp.Templates` package. The project is itself a packaged WinUI app. At launch its `UnitTestApp` class creates a `UnitTestAppWindow`, assigns that window's queue to `UITestMethodAttribute.DispatcherQueue`, and hands control to the MSTest client. A test marked `[UITestMethod]` is dispatched onto that queue, so it runs on the window's UI thread. A `[TestMethod]` in the same project doesn't run there.
+
+The tested controls live in a WinUI class library that the test app references:
+
+```csharp
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
+
+[TestClass]
+public partial class RatingBadgeTests
 {
     [UITestMethod]
-    public void MyControl_DisplaysPlaceholderText_WhenEmpty()
+    public void Value_AboveMaximum_IsClamped()
     {
-        var control = new SearchBox();
-        control.PlaceholderText = "Enter search term";
+        var badge = new RatingBadge { Maximum = 5 };
 
-        // Measure and arrange so layout runs
-        control.Measure(new Windows.Foundation.Size(300, 48));
-        control.Arrange(new Windows.Foundation.Rect(0, 0, 300, 48));
+        badge.Value = 9;
 
-        Assert.AreEqual("Enter search term", control.PlaceholderText);
+        Assert.AreEqual(5, badge.Value);
     }
 }
 ```
 
-The test runner executes `[UITestMethod]` methods on the UI thread, which means controls can be instantiated, layout can run, and properties that require UI infrastructure will behave correctly. Tests marked with `[TestMethod]` continue to run on background threads as normal.
+`UITestMethod` lives in the `...UnitTesting.AppContainer` namespace, not the usual one. The template's own sample test creates a `Grid` under `[UITestMethod]`. The same line under `[TestMethod]` would run off the UI thread and break the rule this level exists for.
 
-Use `[UITestMethod]` selectively. If a test does not touch UI elements or the UI thread, marking it `[UITestMethod]` adds unnecessary overhead. Reserve it for tests that would fail or hang without proper UI thread context.
+A control created in a test isn't part of any window's element tree, so `Loaded` never fires for it. A test that depends on the loaded state has to put the control into the test app's window as content. The template keeps that window in a private `_window` field of `UnitTestApp`, so the app has to expose it to the tests first, for example through a static property.
+
+Keep this level small. Each run builds, deploys, and starts an app. Microsoft documents running these tests from Visual Studio's Test Explorer and describes no command-line or CI route, so plan on them running on developer machines. A test that could run in the library project belongs there.
 
 ---
 
-## UI Automation with WinAppDriver
+## End-to-End Tests Through UI Automation
 
-End-to-end testing validates that the whole application works from the user's perspective. [WinAppDriver](https://github.com/microsoft/WinAppDriver){:target="_blank" rel="noopener noreferrer"} is an automation server built on the WebDriver protocol that launches your packaged application and simulates real user input including clicks, keyboard entry, and gestures.
+An end-to-end test launches the real app and drives it from another process, clicking and typing as a user would. It finds elements through the same **UI Automation** tree that screen readers read, which is why accessibility work and testability reinforce each other.
 
-WinAppDriver tests run against a deployed application. The driver launches it, finds elements by their `AutomationId` or other accessibility properties, interacts with them, and asserts on the resulting UI state. Tests are authored in C# using the [Appium.WebDriver](https://github.com/appium/dotnet-client){:target="_blank" rel="noopener noreferrer"} client:
+### Choosing a driver
+
+**WinAppDriver**, Microsoft's WebDriver server for Windows apps, was the original tool. It is no longer under active development, and its last stable release (1.2.1) dates from November 2020. Microsoft's testing page names **Appium** with the **Windows driver** (`appium-windows-driver`) as the successor. That driver works as a proxy that forwards commands to WinAppDriver, so WinAppDriver still has to be installed and remains a dependency. The Appium .NET client, for its part, can no longer talk to a standalone WinAppDriver server, because WinAppDriver predates the W3C standard version of WebDriver, the HTTP protocol that browser automation settled on and that Appium speaks.
+
+| Tool | Between the test and the app | Machine prerequisites |
+|---|---|---|
+| [Appium](https://appium.io/){:target="_blank" rel="noopener noreferrer"} + [Windows driver](https://github.com/appium/appium-windows-driver){:target="_blank" rel="noopener noreferrer"} | Appium server (Node.js), the Windows driver, then WinAppDriver | Node.js, WinAppDriver, Developer Mode |
+| Appium + [NovaWindows driver](https://github.com/AutomateThePlanet/appium-novawindows-driver){:target="_blank" rel="noopener noreferrer"} | Appium server and a third-party driver that reaches UI Automation without WinAppDriver | Node.js |
+| [FlaUI](https://github.com/FlaUI/FlaUI){:target="_blank" rel="noopener noreferrer"} | Nothing; a .NET library wraps UI Automation inside the test process | None beyond the test project |
+
+Appium fits a team that already uses WebDriver tooling or writes tests in several languages, at the cost of a Node.js server and, with the Windows driver, a dependency that hasn't had a stable fix since 2020. NovaWindows keeps the Appium API without WinAppDriver, though it takes its own `automationName`, so the sample below needs changes to use it. FlaUI removes the server and WinAppDriver but ties the tests to .NET and to FlaUI's own API.
+
+### An Appium test
+
+The Appium setup is `npm install -g appium`, then `appium driver install windows`, then `appium driver run windows install-wad` to install WinAppDriver (the driver stopped installing it in version 3), then `appium` to start the server, which listens on port 4723. The `app` capability is the app's Application User Model ID for a packaged app, or the path to the executable for an unpackaged one. The `Get-StartApps` PowerShell command lists installed apps with their IDs. The C# client is the `Appium.WebDriver` package. Version 5 and later use a non-generic `WindowsDriver` and find elements through `MobileBy`:
 
 ```csharp
+using OpenQA.Selenium.Appium;
+using OpenQA.Selenium.Appium.Windows;
+
 [TestClass]
-public class LoginFlowTests
+public class NewOrderFlowTests
 {
-    private static WindowsDriver<WindowsElement>? _session;
+    private static WindowsDriver? _session;
 
     [ClassInitialize]
     public static void Setup(TestContext _)
     {
-        var options = new AppiumOptions();
-        options.AddAdditionalCapability("app", @"C:\path\to\MyApp.exe");
-        options.AddAdditionalCapability("deviceName", "WindowsPC");
+        var options = new AppiumOptions
+        {
+            PlatformName = "Windows",
+            AutomationName = "Windows",
+            App = "<PackageFamilyName>!App"
+        };
 
-        _session = new WindowsDriver<WindowsElement>(
-            new Uri("http://127.0.0.1:4723"),
-            options);
+        _session = new WindowsDriver(new Uri("http://127.0.0.1:4723"), options);
         _session.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(5);
     }
 
     [TestMethod]
-    public void Login_WithValidCredentials_NavigatesToDashboard()
+    public void SubmittingAnOrder_ShowsConfirmation()
     {
-        var usernameField = _session!.FindElementByAccessibilityId("UsernameInput");
-        var passwordField = _session.FindElementByAccessibilityId("PasswordInput");
-        var loginButton = _session.FindElementByAccessibilityId("LoginButton");
+        _session!.FindElement(MobileBy.AccessibilityId("CustomerInput")).SendKeys("Contoso Ltd");
+        _session.FindElement(MobileBy.AccessibilityId("QuantityInput")).SendKeys("3");
+        _session.FindElement(MobileBy.AccessibilityId("SubmitOrderButton")).Click();
 
-        usernameField.SendKeys("testuser@example.com");
-        passwordField.SendKeys("ValidPassword1!");
-        loginButton.Click();
-
-        var dashboardTitle = _session.FindElementByAccessibilityId("DashboardTitle");
-        Assert.AreEqual("Dashboard", dashboardTitle.Text);
+        var status = _session.FindElement(MobileBy.AccessibilityId("OrderStatusText"));
+        Assert.AreEqual("Order submitted", status.Text);
     }
 
     [ClassCleanup]
@@ -246,101 +325,34 @@ public class LoginFlowTests
 }
 ```
 
-For elements to be findable by `AutomationId`, XAML controls must have the `AutomationProperties.AutomationId` attribute set:
+The implicit wait makes each `FindElement` retry for up to five seconds, which absorbs most delays from navigation and data loading.
+
+### Giving elements stable IDs
+
+`MobileBy.AccessibilityId` matches the element's UI Automation **AutomationId**. When `AutomationProperties.AutomationId` isn't set, WinUI reports the element's `x:Name` instead, so named elements are findable without extra markup. Relying on that ties the tests to names chosen for code-behind, and renaming a field in a refactor breaks a test with no compile error. Setting the ID explicitly on every element a test touches makes it part of the contract. Accessibility Insights' Live Inspect shows the ID an element actually reports:
 
 ```xml
-<TextBox x:Name="UsernameInput"
-         AutomationProperties.AutomationId="UsernameInput"
-         PlaceholderText="Email address" />
+<TextBox x:Name="CustomerBox"
+         AutomationProperties.AutomationId="CustomerInput"
+         Header="Customer" />
 ```
 
-WinAppDriver tests are slower than unit tests because they launch a real process and interact with real UI. Keep the end-to-end suite focused on the flows that carry the most business risk: authentication, critical data entry, and navigation between major sections of the app.
+Elements generated from a `DataTemplate` all carry the same `x:Name`, so a test can't tell list items apart by it. Bind their `AutomationId` to something unique in the item, such as its key.
+
+### Where these tests run
+
+End-to-end tests drive a real desktop, and WinAppDriver's CI guidance requires a build agent configured to run interactively. Keep them in a separate test project so the fast suites can run on any agent.
+
+For web content hosted in a WebView2, Microsoft's testing page points to [Playwright's WebView2 support](https://playwright.dev/docs/webview2){:target="_blank" rel="noopener noreferrer"} rather than a Windows UI driver.
 
 ---
 
-## Integration Testing Patterns
+## Keeping the Suite Useful
 
-Integration tests validate that components work together correctly without simulating full end-to-end UI flows. In WinUI 3, this typically means testing a ViewModel wired to a real service against a test database or an in-memory substitute, while keeping the UI out of the picture.
+**Put each test at the cheapest level that can catch the bug.** A wrong enable state is a view model test. A missing registration is a registration test. A control that clamps its value is a UI-thread test. A page that doesn't appear after login is the only one that needs end-to-end automation.
 
-The DI container your application uses in production can be reconfigured for tests by replacing real services with test doubles that use local data:
+**Keep the end-to-end list short.** A few flows that carry the most risk, such as sign-in, the main data entry path, and moving between the app's major sections, cover more than a large suite that fails on timing and ends up disabled.
 
-```csharp
-[TestClass]
-public class ProductWorkflowTests
-{
-    private ServiceProvider? _services;
+**Start every test from a known state.** Desktop apps keep state in memory and on disk between operations. In library tests, construct a fresh view model and fresh fakes per test. In end-to-end tests, reset the app's data store and relaunch the app, or return to a known starting page, before each test.
 
-    [TestInitialize]
-    public void Setup()
-    {
-        var services = new ServiceCollection();
-
-        // Real ViewModel under test
-        services.AddTransient<ProductListViewModel>();
-
-        // Real service logic but in-memory database
-        services.AddSingleton<IProductRepository, InMemoryProductRepository>();
-        services.AddTransient<IProductService, ProductService>();
-
-        _services = services.BuildServiceProvider();
-    }
-
-    [TestMethod]
-    public async Task AddAndRetrieve_RoundTrip_WorksCorrectly()
-    {
-        var viewModel = _services!.GetRequiredService<ProductListViewModel>();
-
-        await viewModel.AddProductAsync("Integration Widget", 19.99m);
-        await viewModel.LoadProductsAsync();
-
-        Assert.AreEqual(1, viewModel.Products.Count);
-        Assert.AreEqual("Integration Widget", viewModel.Products[0].Name);
-    }
-
-    [TestCleanup]
-    public void Teardown()
-    {
-        _services?.Dispose();
-    }
-}
-```
-
-This pattern tests the full object graph from ViewModel through service to repository without requiring a database connection, a UI thread, or a running application. The `InMemoryProductRepository` stores data in a `Dictionary` or `List` for the duration of the test and is discarded afterward.
-
-Navigation flows are a common integration testing target. Rather than running the full app, construct a test navigation service that records transitions and assert that the ViewModel navigated to the expected destination with the correct parameters.
-
----
-
-## Test Project Setup
-
-WinUI 3 test projects require some configuration to work correctly. There are two distinct project types, and choosing the wrong one leads to frustrating failures.
-
-A standard MSTest, NUnit, or xUnit project targeting `net8.0-windows10.0.19041.0` works for ViewModel and service tests that have no UI dependencies. Add your ViewModel project as a reference, install whichever test framework you prefer, and run tests with the normal dotnet test command.
-
-For tests requiring the UI thread via `[UITestMethod]`, use the MSTest WinUI App template. This creates a project with a WinUI application host that bootstraps the runtime before test execution. The template is available in Visual Studio's new project dialog when the Windows App SDK workload is installed.
-
-Key NuGet packages for a standard ViewModel test project:
-
-- `Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter` and `MSTest.TestFramework` for MSTest
-- `Moq` or `NSubstitute` for mocking
-- `Microsoft.Extensions.DependencyInjection` for integration test container setup
-
-For WinAppDriver tests, add the `Appium.WebDriver` package and ensure WinAppDriver is installed and running on port 4723 before the test session starts.
-
----
-
-## Desktop Testing Best Practices
-
-Desktop applications have characteristics that differ from web services, and the testing strategy should account for them.
-
-Prioritize ViewModel coverage. The logic in ViewModels is where most bugs live: incorrect state transitions, missing validation, command guards that fire at the wrong time. A high-coverage ViewModel test suite catches these problems cheaply and quickly.
-
-Set `AutomationProperties.AutomationId` on interactive controls from the start. Retrofitting automation IDs into an existing codebase when you need to add end-to-end tests is tedious. Treating it as a standard practice alongside naming controls makes the app testable as it is built.
-
-Keep end-to-end tests narrow and stable. WinAppDriver tests are sensitive to timing, layout changes, and packaging issues. A small suite covering the five or ten most critical paths is more valuable than a large suite that flakes constantly and gets disabled.
-
-Use the [Windows Application Driver GitHub repository](https://github.com/microsoft/WinAppDriver){:target="_blank" rel="noopener noreferrer"} for sample test patterns and known workarounds. WinAppDriver is mature but has quirks around certain control types, and the issue tracker is a useful reference when elements are not found or interactions behave unexpectedly.
-
-Test state isolation matters more in desktop apps than in stateless web APIs. Desktop applications often hold significant in-process state across operations. Tests should leave the application in a clean state so that subsequent tests do not inherit leftover data. In ViewModel tests, constructing a fresh ViewModel per test method is the simplest guarantee. In end-to-end tests, resetting the backing data store or navigating to a known starting screen before each test serves the same purpose.
-
-Finally, testing async code requires care. ViewModels frequently have async load methods that populate collections. Tests must await those methods and, in cases where the ViewModel dispatches updates back to the UI thread through a `DispatcherQueue`, additional synchronization may be needed. When running outside the UI thread context, consider whether the ViewModel's thread dispatching logic needs to be configurable so that tests can bypass it and assert directly on the underlying collections.
+**Set AutomationIds as screens are built.** Adding them later means touching every screen at once, just when the first end-to-end test is needed.

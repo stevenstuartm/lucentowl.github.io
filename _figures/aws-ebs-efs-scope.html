@@ -1,0 +1,80 @@
+---
+title: "Where EBS and EFS Live"
+kind: deployment
+system: aws
+summary: "An EBS volume stays in one zone; an EFS file system spans the Region."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="awsb-title awsb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsb-title">The scope of an EBS volume, an EBS snapshot, and an EFS file system</title>
+<desc id="awsb-desc">A Region contains Availability Zones a and b. In zone a, instance 1 is attached to an EBS volume that exists only in zone a. A snapshot of that volume is stored at Region scope, and a new volume restored from it in zone b is attached to instance 2. An EFS file system is stored at Region scope across three or more zones. Each zone has one mount target, and each instance mounts the file system through the mount target in its own zone.</desc>
+<style>
+.awsb-reg { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.awsb-az { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsb-rbox { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsb-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsb-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsb-rn { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsb-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsb-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsb-link { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsb-copy { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="awsb-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsb-reg" x="10" y="10" width="880" height="350" rx="10"/>
+<text class="awsb-t" x="24" y="30">Region</text>
+
+<rect class="awsb-az" x="30" y="40" width="350" height="215" rx="8"/>
+<text class="awsb-t" x="42" y="58">Availability Zone a</text>
+
+<rect class="awsb-box" x="60" y="70" width="150" height="44" rx="6"/>
+<text class="awsb-n" x="135" y="89" text-anchor="middle">Instance 1</text>
+<text class="awsb-k" x="135" y="105" text-anchor="middle">[EC2]</text>
+
+<rect class="awsb-box" x="50" y="170" width="150" height="56" rx="6"/>
+<text class="awsb-n" x="125" y="192" text-anchor="middle">Mount target</text>
+<text class="awsb-k" x="125" y="210" text-anchor="middle">[NFS on port 2049]</text>
+
+<rect class="awsb-box" x="225" y="170" width="140" height="56" rx="6"/>
+<text class="awsb-n" x="295" y="192" text-anchor="middle">EBS volume</text>
+<text class="awsb-k" x="295" y="210" text-anchor="middle">[exists in zone a only]</text>
+
+<rect class="awsb-az" x="520" y="40" width="350" height="215" rx="8"/>
+<text class="awsb-t" x="532" y="58">Availability Zone b</text>
+
+<rect class="awsb-box" x="620" y="70" width="150" height="44" rx="6"/>
+<text class="awsb-n" x="695" y="89" text-anchor="middle">Instance 2</text>
+<text class="awsb-k" x="695" y="105" text-anchor="middle">[EC2]</text>
+
+<rect class="awsb-box" x="535" y="170" width="150" height="56" rx="6"/>
+<text class="awsb-n" x="610" y="192" text-anchor="middle">EBS volume</text>
+<text class="awsb-k" x="610" y="210" text-anchor="middle">[restored from snapshot]</text>
+
+<rect class="awsb-box" x="705" y="170" width="150" height="56" rx="6"/>
+<text class="awsb-n" x="780" y="192" text-anchor="middle">Mount target</text>
+<text class="awsb-k" x="780" y="210" text-anchor="middle">[NFS on port 2049]</text>
+
+<rect class="awsb-rbox" x="390" y="170" width="120" height="56" rx="6"/>
+<text class="awsb-rn" x="450" y="192" text-anchor="middle">EBS snapshot</text>
+<text class="awsb-k" x="450" y="210" text-anchor="middle">[Region scope]</text>
+
+<rect class="awsb-rbox" x="50" y="290" width="805" height="50" rx="6"/>
+<text class="awsb-rn" x="452" y="311" text-anchor="middle">EFS file system</text>
+<text class="awsb-k" x="452" y="328" text-anchor="middle">[Region scope, data stored across three or more zones]</text>
+
+<path class="awsb-link" d="M125,114 L125,170"/>
+<path class="awsb-link" d="M185,114 L270,170"/>
+<path class="awsb-link" d="M660,114 L625,170"/>
+<path class="awsb-link" d="M740,114 L780,170"/>
+<path class="awsb-link" d="M125,226 L125,290"/>
+<path class="awsb-link" d="M780,226 L780,290"/>
+<path class="awsb-copy" d="M365,198 L388,198" marker-end="url(#awsb-a)"/>
+<path class="awsb-copy" d="M510,198 L533,198" marker-end="url(#awsb-a)"/>
+
+<text class="awsb-lab" x="10" y="385">Solid lines are block attachments and NFS paths to the file system. Dashed arrows are taking a snapshot and restoring it into another zone.</text>
+</g>
+</svg>

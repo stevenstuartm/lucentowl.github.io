@@ -1,0 +1,99 @@
+---
+title: "Three Ways RDS and Aurora Stay Available"
+kind: deployment
+system: aws
+summary: "Where each high-availability option copies data, and which copies serve reads."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 320" role="img" aria-labelledby="awsm-title awsm-desc" style="width:100%; min-width:760px; height:auto; display:block;">
+<title id="awsm-title">Multi-AZ DB instance, Multi-AZ DB cluster, and Aurora DB cluster compared</title>
+<desc id="awsm-desc">Three panels. In a Multi-AZ DB instance deployment, a primary in zone a copies every write synchronously to a standby in zone b, each with its own EBS volume, and the standby serves no reads; failover takes 60 to 120 seconds. In a Multi-AZ DB cluster, a writer in zone a replicates to readers in zones b and c, and a commit waits for one reader to confirm; readers serve reads and failover takes under 35 seconds. In an Aurora DB cluster, a writer and two readers in three zones share one cluster volume that keeps six copies of the data across three zones; readers serve reads and failover usually takes under 60 seconds, often under 30.</desc>
+<style>
+.awsm-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsm-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsm-idle { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.awsm-vol { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsm-h { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsm-az { font-size: 11px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsm-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsm-in { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsm-vn { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsm-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsm-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsm-rep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsm-link { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="awsm-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsm-pan" x="10" y="10" width="320" height="265" rx="8"/>
+<text class="awsm-h" x="170" y="34" text-anchor="middle">Multi-AZ DB instance</text>
+<text class="awsm-az" x="110" y="66" text-anchor="middle">AZ a</text>
+<rect class="awsm-box" x="70" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="110" y="93" text-anchor="middle">Primary</text>
+<text class="awsm-k" x="110" y="109" text-anchor="middle">[read/write]</text>
+<text class="awsm-k" x="110" y="124" text-anchor="middle">[EBS volume]</text>
+<text class="awsm-az" x="230" y="66" text-anchor="middle">AZ b</text>
+<rect class="awsm-idle" x="190" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-in" x="230" y="93" text-anchor="middle">Standby</text>
+<text class="awsm-k" x="230" y="109" text-anchor="middle">[no reads]</text>
+<text class="awsm-k" x="230" y="124" text-anchor="middle">[EBS volume]</text>
+<path class="awsm-rep" d="M150,103 L188,103" marker-end="url(#awsm-a)"/>
+<text class="awsm-k" x="170" y="160" text-anchor="middle">synchronous copy of every write</text>
+<text class="awsm-lab" x="170" y="236" text-anchor="middle">Standby takes over in 60–120 s.</text>
+<text class="awsm-lab" x="170" y="252" text-anchor="middle">Reads need separate read replicas.</text>
+
+<rect class="awsm-pan" x="345" y="10" width="320" height="265" rx="8"/>
+<text class="awsm-h" x="505" y="34" text-anchor="middle">Multi-AZ DB cluster</text>
+<text class="awsm-az" x="400" y="66" text-anchor="middle">AZ a</text>
+<rect class="awsm-box" x="360" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="400" y="93" text-anchor="middle">Writer</text>
+<text class="awsm-k" x="400" y="109" text-anchor="middle">[read/write]</text>
+<text class="awsm-k" x="400" y="124" text-anchor="middle">[own storage]</text>
+<text class="awsm-az" x="505" y="66" text-anchor="middle">AZ b</text>
+<rect class="awsm-box" x="465" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="505" y="93" text-anchor="middle">Reader</text>
+<text class="awsm-k" x="505" y="109" text-anchor="middle">[reads]</text>
+<text class="awsm-k" x="505" y="124" text-anchor="middle">[own storage]</text>
+<text class="awsm-az" x="610" y="66" text-anchor="middle">AZ c</text>
+<rect class="awsm-box" x="570" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="610" y="93" text-anchor="middle">Reader</text>
+<text class="awsm-k" x="610" y="109" text-anchor="middle">[reads]</text>
+<text class="awsm-k" x="610" y="124" text-anchor="middle">[own storage]</text>
+<path class="awsm-rep" d="M440,103 L463,103" marker-end="url(#awsm-a)"/>
+<path class="awsm-rep" d="M400,132 L400,148 L610,148 L610,134" marker-end="url(#awsm-a)"/>
+<text class="awsm-k" x="505" y="170" text-anchor="middle">engine replication; a commit waits</text>
+<text class="awsm-k" x="505" y="185" text-anchor="middle">for one reader to confirm</text>
+<text class="awsm-lab" x="505" y="236" text-anchor="middle">Readers serve reads and take over</text>
+<text class="awsm-lab" x="505" y="252" text-anchor="middle">in under 35 s.</text>
+
+<rect class="awsm-pan" x="680" y="10" width="320" height="265" rx="8"/>
+<text class="awsm-h" x="840" y="34" text-anchor="middle">Aurora DB cluster</text>
+<text class="awsm-az" x="735" y="66" text-anchor="middle">AZ a</text>
+<rect class="awsm-box" x="695" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="735" y="93" text-anchor="middle">Writer</text>
+<text class="awsm-k" x="735" y="109" text-anchor="middle">[read/write]</text>
+<text class="awsm-k" x="735" y="124" text-anchor="middle">[compute]</text>
+<text class="awsm-az" x="840" y="66" text-anchor="middle">AZ b</text>
+<rect class="awsm-box" x="800" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="840" y="93" text-anchor="middle">Reader</text>
+<text class="awsm-k" x="840" y="109" text-anchor="middle">[reads]</text>
+<text class="awsm-k" x="840" y="124" text-anchor="middle">[compute]</text>
+<text class="awsm-az" x="945" y="66" text-anchor="middle">AZ c</text>
+<rect class="awsm-box" x="905" y="74" width="80" height="58" rx="6"/>
+<text class="awsm-n" x="945" y="93" text-anchor="middle">Reader</text>
+<text class="awsm-k" x="945" y="109" text-anchor="middle">[reads]</text>
+<text class="awsm-k" x="945" y="124" text-anchor="middle">[compute]</text>
+<rect class="awsm-vol" x="695" y="165" width="290" height="46" rx="6"/>
+<text class="awsm-vn" x="840" y="184" text-anchor="middle">Cluster volume</text>
+<text class="awsm-k" x="840" y="201" text-anchor="middle">[six copies across three AZs]</text>
+<path class="awsm-link" d="M735,132 L735,165"/>
+<path class="awsm-link" d="M840,132 L840,165"/>
+<path class="awsm-link" d="M945,132 L945,165"/>
+<text class="awsm-lab" x="840" y="236" text-anchor="middle">Readers serve reads and take over,</text>
+<text class="awsm-lab" x="840" y="252" text-anchor="middle">usually in under 60 s, often under 30.</text>
+
+<text class="awsm-lab" x="10" y="305">Arrows are replication between instances. Plain lines connect Aurora instances to the one volume they share.</text>
+</g>
+</svg>

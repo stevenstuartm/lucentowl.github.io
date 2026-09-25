@@ -1,0 +1,99 @@
+---
+layout: default
+---
+{% comment %}
+  One learning path, rendered from its front matter. Paths point to content, never the
+  reverse: this layout looks up the pages a path names, and no content layout reads paths.
+  Step titles and reading times come from the collections; the path file holds only each
+  step's URL and its "why". A URL that resolves to nothing renders as a visible missing
+  step. Run `python .pathcheck.py` to catch it before a build.
+{% endcomment %}
+{% assign all_docs = site.guides | concat: site.resources | concat: site.case_studies | concat: site.posts %}
+
+{% include learning-path-stats.html path=page %}
+
+<article class="learning-path" data-pagefind-body data-pagefind-filter="type:Path">
+    <header class="page-header-card">
+        <div class="path-header">
+            <nav class="breadcrumb" data-pagefind-ignore>
+                <a href="{{ '/learning-paths.html' | relative_url }}">Learning Paths</a>
+            </nav>
+            <h1 class="path-title" data-pagefind-meta="title">{{ page.title }}</h1>
+            <p class="path-goal">{{ page.goal }}</p>
+            <dl class="path-facts">
+                <div><dt>For</dt><dd>{{ page.audience }}</dd></div>
+                <div><dt>Assumes</dt><dd>{{ page.assumes }}</dd></div>
+            </dl>
+            <div class="header-badges" data-pagefind-ignore>
+                <span class="path-badge">{{ path_step_count }} steps in {{ page.stages.size }} stages</span>
+                <span class="path-badge">About {{ path_reading }} of reading</span>
+                {% if page.last_reviewed %}
+                <span class="path-badge">Reviewed <time datetime="{{ page.last_reviewed | date_to_xmlschema }}">{{ page.last_reviewed | date: "%B %d, %Y" }}</time></span>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <div class="path-body">
+        <p class="path-howto" data-pagefind-ignore>Steps you've opened turn grey.</p>
+
+        {% assign step_number = 0 %}
+        {% for stage in page.stages %}
+        <section class="path-stage" aria-labelledby="stage-{{ forloop.index }}">
+            <p class="path-stage-eyebrow" data-pagefind-ignore>Stage {{ forloop.index }}{% if stage.level %} · {{ stage.level }}{% endif %}</p>
+            <h2 class="path-stage-name" id="stage-{{ forloop.index }}">{{ stage.name }}</h2>
+            {% if stage.purpose %}<p class="path-stage-purpose">{{ stage.purpose }}</p>{% endif %}
+
+            <ol class="path-steps" start="{{ step_number | plus: 1 }}">
+                {% for step in stage.steps %}
+                {% assign step_number = step_number | plus: 1 %}
+                {% assign doc = all_docs | where: "url", step.url | first %}
+                {% if doc %}
+                    {% assign doc_words = doc.content | strip_html | number_of_words %}
+                    {% assign doc_minutes = doc_words | divided_by: 200 %}
+                    {% if doc_minutes < 1 %}{% assign doc_minutes = 1 %}{% endif %}
+                    {% case doc.collection %}
+                        {% when "guides" %}{% assign doc_type = "Guide" %}
+                        {% when "resources" %}{% assign doc_type = "Resource" %}
+                        {% when "case_studies" %}{% assign doc_type = "Case study" %}
+                        {% when "posts" %}{% assign doc_type = "Essay" %}
+                    {% endcase %}
+                <li class="path-step" id="step-{{ step_number }}">
+                    <span class="path-step-number" aria-hidden="true">{{ step_number }}</span>
+                    <div class="path-step-body">
+                        <div class="path-step-meta" data-pagefind-ignore>
+                            <span class="path-type-badge path-type-badge--{{ doc.collection }}">{{ doc_type }}</span>
+                            <span class="path-step-time">{{ doc_minutes }} min</span>
+                        </div>
+                        <a class="path-step-title" href="{{ doc.url | relative_url }}">{{ doc.title }}</a>
+                        <p class="path-step-why">{{ step.why }}</p>
+                    </div>
+                </li>
+                {% else %}
+                <li class="path-step path-step--missing" id="step-{{ step_number }}">
+                    <span class="path-step-number" aria-hidden="true">{{ step_number }}</span>
+                    <div class="path-step-body">
+                        <p class="path-step-why">Missing step: <code>{{ step.url }}</code></p>
+                    </div>
+                </li>
+                {% endif %}
+                {% endfor %}
+            </ol>
+
+            {% if stage.deeper %}
+            <p class="path-deeper">
+                <span class="path-deeper-label">Go deeper</span>
+                {% for deeper_url in stage.deeper %}
+                {% assign doc = all_docs | where: "url", deeper_url | first %}
+                {% if doc %}<a href="{{ doc.url | relative_url }}">{{ doc.title }}</a>{% else %}<code>Missing: {{ deeper_url }}</code>{% endif %}{% unless forloop.last %}<span class="path-deeper-sep" aria-hidden="true">·</span>{% endunless %}
+                {% endfor %}
+            </p>
+            {% endif %}
+        </section>
+        {% endfor %}
+    </div>
+
+    <footer class="resource-footer" data-pagefind-ignore>
+        <a href="{{ '/learning-paths.html' | relative_url }}" class="back-link">← All learning paths</a>
+    </footer>
+</article>

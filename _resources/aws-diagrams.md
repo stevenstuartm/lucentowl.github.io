@@ -4,7 +4,7 @@ layout: resource
 type: reference
 category: "AWS"
 description: "The diagrams behind the AWS study guides: how identity, account structure, and network layout decide what a request can do and where it can go."
-last_updated: 2026-09-24
+last_updated: 2026-09-25
 figures:
   - aws-iam-policy-evaluation
   - aws-iam-cross-account-role
@@ -33,6 +33,14 @@ figures:
   - aws-ecs-service-anatomy
   - aws-eks-control-data-plane
   - aws-s3-class-breakeven
+  - aws-ebs-efs-scope
+  - aws-rds-ha-topologies
+  - aws-ddb-partitions-gsi
+  - aws-elasticache-cluster-modes
+  - aws-db-derived-copies
+  - aws-sqs-message-lifecycle
+  - aws-sns-sqs-fanout
+  - aws-eventbridge-bus-ownership
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -48,4 +56,11 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-lambda-fundamentals.html
   - /study-guides/infrastructure/aws/aws-container-services.html
   - /study-guides/infrastructure/aws/aws-s3-fundamentals.html
+  - /study-guides/infrastructure/aws/aws-ebs-efs.html
+  - /study-guides/infrastructure/aws/aws-rds-aurora.html
+  - /study-guides/infrastructure/aws/aws-dynamodb.html
+  - /study-guides/infrastructure/aws/aws-elasticache.html
+  - /study-guides/infrastructure/aws/aws-database-selection.html
+  - /study-guides/infrastructure/aws/aws-sqs-sns.html
+  - /study-guides/infrastructure/aws/aws-eventbridge.html
 ---

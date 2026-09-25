@@ -1,0 +1,108 @@
+---
+title: "Four Ways a Request Reaches the App"
+kind: deployment
+system: aspnet-core
+summary: "The processes and servers a request crosses in each hosting model."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="aht-title aht-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aht-title">The path of a request in the four ASP.NET Core hosting models</title>
+<desc id="aht-desc">With Kestrel, a client's request reaches the app process directly or through an optional reverse proxy, and Kestrel inside the app process passes it to the middleware pipeline. With HTTP.sys, the Windows kernel-mode HTTP.sys driver receives the request and hands it to the HTTP.sys server inside the app process. With IIS in-process, the HTTP.sys driver hands the request to the IIS worker process, w3wp.exe, where the ASP.NET Core Module passes it to IIS HTTP Server and the pipeline, all in the same process. With IIS out-of-process, the request reaches the ASP.NET Core Module in w3wp.exe, which forwards it over loopback HTTP to a separate dotnet process running Kestrel and the pipeline.</desc>
+<style>
+.aht-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aht-krn { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.aht-proc { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.aht-lane { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.aht-n { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aht-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aht-t { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.aht-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aht-hop { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.aht-em { font-size: 10.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+<defs>
+<marker id="aht-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="aht-h" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="aht-lane" x="20" y="68">Kestrel</text>
+<rect class="aht-box" x="150" y="46" width="70" height="36" rx="5"/>
+<text class="aht-n" x="185" y="68" text-anchor="middle">Client</text>
+<rect class="aht-box" x="260" y="46" width="150" height="36" rx="5"/>
+<text class="aht-n" x="274" y="62">Reverse proxy</text>
+<text class="aht-k" x="274" y="76">optional</text>
+<rect class="aht-proc" x="440" y="32" width="270" height="64" rx="8"/>
+<text class="aht-k" x="450" y="46">app process</text>
+<rect class="aht-box" x="455" y="52" width="110" height="36" rx="5"/>
+<text class="aht-n" x="510" y="74" text-anchor="middle">Kestrel</text>
+<rect class="aht-box" x="585" y="52" width="110" height="36" rx="5"/>
+<text class="aht-n" x="640" y="74" text-anchor="middle">Pipeline</text>
+<path class="aht-flow" d="M220,64 L258,64" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M410,64 L453,70" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M565,70 L583,70" marker-end="url(#aht-a)"/>
+
+<text class="aht-lane" x="20" y="162">HTTP.sys</text>
+<rect class="aht-box" x="150" y="140" width="70" height="36" rx="5"/>
+<text class="aht-n" x="185" y="162" text-anchor="middle">Client</text>
+<rect class="aht-krn" x="260" y="140" width="150" height="36" rx="5"/>
+<text class="aht-n" x="274" y="156">HTTP.sys driver</text>
+<text class="aht-k" x="274" y="170">Windows kernel mode</text>
+<rect class="aht-proc" x="440" y="126" width="270" height="64" rx="8"/>
+<text class="aht-k" x="450" y="140">app process</text>
+<rect class="aht-box" x="455" y="146" width="110" height="36" rx="5"/>
+<text class="aht-n" x="510" y="168" text-anchor="middle">HTTP.sys server</text>
+<rect class="aht-box" x="585" y="146" width="110" height="36" rx="5"/>
+<text class="aht-n" x="640" y="168" text-anchor="middle">Pipeline</text>
+<path class="aht-flow" d="M220,158 L258,158" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M410,158 L453,164" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M565,164 L583,164" marker-end="url(#aht-a)"/>
+
+<text class="aht-lane" x="20" y="256">IIS in-process</text>
+<rect class="aht-box" x="150" y="234" width="70" height="36" rx="5"/>
+<text class="aht-n" x="185" y="256" text-anchor="middle">Client</text>
+<rect class="aht-krn" x="260" y="234" width="150" height="36" rx="5"/>
+<text class="aht-n" x="274" y="250">HTTP.sys driver</text>
+<text class="aht-k" x="274" y="264">Windows kernel mode</text>
+<rect class="aht-proc" x="440" y="220" width="400" height="64" rx="8"/>
+<text class="aht-k" x="450" y="234">w3wp.exe (IIS worker process)</text>
+<rect class="aht-box" x="455" y="240" width="110" height="36" rx="5"/>
+<text class="aht-n" x="510" y="262" text-anchor="middle">ANCM</text>
+<rect class="aht-box" x="585" y="240" width="120" height="36" rx="5"/>
+<text class="aht-n" x="645" y="262" text-anchor="middle">IIS HTTP Server</text>
+<rect class="aht-box" x="725" y="240" width="100" height="36" rx="5"/>
+<text class="aht-n" x="775" y="262" text-anchor="middle">Pipeline</text>
+<path class="aht-flow" d="M220,252 L258,252" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M410,252 L453,258" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M565,258 L583,258" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M705,258 L723,258" marker-end="url(#aht-a)"/>
+
+<text class="aht-lane" x="20" y="350">IIS out-of-process</text>
+<rect class="aht-box" x="150" y="328" width="70" height="36" rx="5"/>
+<text class="aht-n" x="185" y="350" text-anchor="middle">Client</text>
+<rect class="aht-krn" x="260" y="328" width="150" height="36" rx="5"/>
+<text class="aht-n" x="274" y="344">HTTP.sys driver</text>
+<text class="aht-k" x="274" y="358">Windows kernel mode</text>
+<rect class="aht-proc" x="440" y="314" width="140" height="64" rx="8"/>
+<text class="aht-k" x="450" y="328">w3wp.exe</text>
+<rect class="aht-box" x="455" y="334" width="110" height="36" rx="5"/>
+<text class="aht-n" x="510" y="356" text-anchor="middle">ANCM</text>
+<rect class="aht-proc" x="680" y="314" width="270" height="64" rx="8"/>
+<text class="aht-k" x="690" y="328">dotnet process</text>
+<rect class="aht-box" x="695" y="334" width="110" height="36" rx="5"/>
+<text class="aht-n" x="750" y="356" text-anchor="middle">Kestrel</text>
+<rect class="aht-box" x="825" y="334" width="110" height="36" rx="5"/>
+<text class="aht-n" x="880" y="356" text-anchor="middle">Pipeline</text>
+<path class="aht-flow" d="M220,346 L258,346" marker-end="url(#aht-a)"/>
+<path class="aht-flow" d="M410,346 L453,352" marker-end="url(#aht-a)"/>
+<path class="aht-hop" d="M565,352 L693,352" marker-end="url(#aht-h)"/>
+<text class="aht-em" x="592" y="344">loopback</text>
+<path class="aht-flow" d="M805,352 L823,352" marker-end="url(#aht-a)"/>
+
+<rect class="aht-proc" x="20" y="394" width="34" height="16" rx="4"/>
+<text class="aht-t" x="62" y="406">process boundary</text>
+<rect class="aht-krn" x="190" y="394" width="34" height="16" rx="3"/>
+<text class="aht-t" x="232" y="406">kernel mode</text>
+<path class="aht-hop" d="M330,402 L366,402" marker-end="url(#aht-h)"/>
+<text class="aht-t" x="374" y="406">extra network hop between processes</text>
+</g>
+</svg>

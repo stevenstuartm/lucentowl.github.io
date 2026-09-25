@@ -17,6 +17,22 @@
 #   note    one sentence on why it's worth reading
 #   links   optional { title, url } links shown as rows under the card
 
+- id: learning-paths
+  change: new
+  title: "Learning paths"
+  url: /learning-paths.html
+  cta: "Browse paths"
+  note: "Ordered routes through the site toward a goal, from foundations and arguments up to advanced practice, with a line on why each step comes where it does."
+  links:
+    - title: "Developer to Architect"
+      url: /learning-paths/developer-to-architect.html
+    - title: "Coding with AI Agents"
+      url: /learning-paths/coding-with-ai-agents.html
+    - title: "Cloud Architect on AWS"
+      url: /learning-paths/cloud-architect-aws.html
+    - title: "Leading Software Delivery"
+      url: /learning-paths/leading-software-delivery.html
+
 - id: site-search
   change: new
   title: "Search the whole site"

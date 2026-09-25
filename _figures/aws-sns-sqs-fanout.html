@@ -1,0 +1,85 @@
+---
+title: "SNS to SQS Fanout"
+kind: flow
+system: aws
+summary: "One topic, one queue and DLQ per consumer, beside a direct subscriber."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 470" role="img" aria-labelledby="awsfo-title awsfo-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsfo-title">An SNS topic fanning out to SQS queues</title>
+<desc id="awsfo-desc">A publisher sends each message once to an SNS topic. The topic delivers a copy to three SQS queues, one each for the fulfillment, inventory, and email consumers. Each consumer reads only its own queue, and each queue has its own dead-letter queue for messages that fail repeatedly. A Lambda function subscribed directly to the topic, with no queue, receives the message by push and has only SNS's retries, with no backlog of its own.</desc>
+<style>
+.awsfo-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsfo-top { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awsfo-q { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsfo-dlq { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.awsfo-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsfo-tn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsfo-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsfo-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsfo-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsfo-push { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsfo-pull { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsfo-fail { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+</style>
+<defs>
+<marker id="awsfo-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+<marker id="awsfo-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsfo-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsfo-app" x="20" y="200" width="130" height="44" rx="6"/>
+<text class="awsfo-t" x="85" y="220" text-anchor="middle">Publisher</text>
+<text class="awsfo-k" x="85" y="236" text-anchor="middle">[publishes once]</text>
+
+<rect class="awsfo-top" x="200" y="200" width="150" height="44" rx="6"/>
+<text class="awsfo-tn" x="275" y="220" text-anchor="middle">SNS topic</text>
+<text class="awsfo-k" x="275" y="236" text-anchor="middle">[order-placed]</text>
+
+<path class="awsfo-push" d="M150,222 L198,222" marker-end="url(#awsfo-a)"/>
+
+<path class="awsfo-push" d="M350,222 L395,222"/>
+<path class="awsfo-push" d="M395,42 L395,402"/>
+<path class="awsfo-push" d="M395,42 L438,42" marker-end="url(#awsfo-a)"/>
+<path class="awsfo-push" d="M395,162 L438,162" marker-end="url(#awsfo-a)"/>
+<path class="awsfo-push" d="M395,282 L438,282" marker-end="url(#awsfo-a)"/>
+<path class="awsfo-push" d="M395,402 L678,402" marker-end="url(#awsfo-a)"/>
+
+<rect class="awsfo-q" x="440" y="20" width="170" height="44" rx="6"/>
+<text class="awsfo-n" x="525" y="40" text-anchor="middle">Fulfillment queue</text>
+<text class="awsfo-k" x="525" y="56" text-anchor="middle">[SQS]</text>
+<rect class="awsfo-dlq" x="465" y="84" width="120" height="28" rx="5"/>
+<text class="awsfo-k" x="525" y="102" text-anchor="middle">dead-letter queue</text>
+<path class="awsfo-fail" d="M525,64 L525,82" marker-end="url(#awsfo-c)"/>
+<rect class="awsfo-app" x="680" y="20" width="160" height="44" rx="6"/>
+<text class="awsfo-t" x="760" y="46" text-anchor="middle">Fulfillment service</text>
+<path class="awsfo-pull" d="M612,42 L678,42" marker-end="url(#awsfo-b)"/>
+
+<rect class="awsfo-q" x="440" y="140" width="170" height="44" rx="6"/>
+<text class="awsfo-n" x="525" y="160" text-anchor="middle">Inventory queue</text>
+<text class="awsfo-k" x="525" y="176" text-anchor="middle">[SQS]</text>
+<rect class="awsfo-dlq" x="465" y="204" width="120" height="28" rx="5"/>
+<text class="awsfo-k" x="525" y="222" text-anchor="middle">dead-letter queue</text>
+<path class="awsfo-fail" d="M525,184 L525,202" marker-end="url(#awsfo-c)"/>
+<rect class="awsfo-app" x="680" y="140" width="160" height="44" rx="6"/>
+<text class="awsfo-t" x="760" y="166" text-anchor="middle">Inventory service</text>
+<path class="awsfo-pull" d="M612,162 L678,162" marker-end="url(#awsfo-b)"/>
+
+<rect class="awsfo-q" x="440" y="260" width="170" height="44" rx="6"/>
+<text class="awsfo-n" x="525" y="280" text-anchor="middle">Email queue</text>
+<text class="awsfo-k" x="525" y="296" text-anchor="middle">[SQS]</text>
+<rect class="awsfo-dlq" x="465" y="324" width="120" height="28" rx="5"/>
+<text class="awsfo-k" x="525" y="342" text-anchor="middle">dead-letter queue</text>
+<path class="awsfo-fail" d="M525,304 L525,322" marker-end="url(#awsfo-c)"/>
+<rect class="awsfo-app" x="680" y="260" width="160" height="44" rx="6"/>
+<text class="awsfo-t" x="760" y="286" text-anchor="middle">Email service</text>
+<path class="awsfo-pull" d="M612,282 L678,282" marker-end="url(#awsfo-b)"/>
+
+<rect class="awsfo-app" x="680" y="380" width="160" height="44" rx="6"/>
+<text class="awsfo-t" x="760" y="400" text-anchor="middle">Lambda function</text>
+<text class="awsfo-k" x="760" y="416" text-anchor="middle">[subscribed directly]</text>
+<text class="awsfo-lab" x="535" y="394" text-anchor="middle">SNS retries only, no backlog</text>
+
+<text class="awsfo-lab" x="20" y="455">Solid pink arrows are SNS pushing a copy. Blue arrows are each consumer receiving from its own queue. Dashed arrows are repeated failures moving to a DLQ.</text>
+</g>
+</svg>

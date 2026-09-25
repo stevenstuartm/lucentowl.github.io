@@ -1,0 +1,43 @@
+---
+layout: default
+---
+{% comment %}
+  Learning paths listing: one card per path, in `order`. Fewer than ten paths, so no filters.
+{% endcomment %}
+{% assign paths = site.learning_paths | sort: "order" %}
+
+<div class="guides-page learning-paths-page">
+    <section class="guides-hero">
+        <h1>{{ page.title }}</h1>
+        {% if page.subtitle %}
+        <p class="subtitle">{{ page.subtitle }}</p>
+        {% endif %}
+    </section>
+
+    {% assign intro = content | strip %}
+    {% if intro != "" %}
+    <div class="learning-paths-intro">
+        {{ content }}
+    </div>
+    {% endif %}
+
+    <div class="path-cards">
+        {% for path in paths %}
+        {% include learning-path-stats.html path=path %}
+        <article class="path-card">
+            <a href="{{ path.url | relative_url }}" class="path-card-link">
+                <h2 class="path-card-title">{{ path.title }}</h2>
+                <p class="path-card-goal">{{ path.goal }}</p>
+                <p class="path-card-for"><strong>For:</strong> {{ path.audience }}</p>
+                <p class="path-card-meta">{{ path_step_count }} steps · about {{ path_reading }}</p>
+                {% if path_categories.size > 0 %}
+                <ul class="path-card-categories" aria-label="Categories this path crosses">
+                    {% for category in path_categories %}<li>{{ category }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                <span class="read-more">Start the path →</span>
+            </a>
+        </article>
+        {% endfor %}
+    </div>
+</div>

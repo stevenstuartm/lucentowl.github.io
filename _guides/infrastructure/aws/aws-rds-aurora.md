@@ -1,573 +1,215 @@
 ---
-title: "AWS RDS & Aurora for System Architects"
+title: "Amazon RDS and Aurora for System Architects"
 layout: guide
 category: AWS
 subcategory: Database Services
-description: "Comprehensive guide to AWS RDS and Aurora covering database engines, high availability, performance optimization, Aurora Serverless, cost management, and when to use RDS vs Aurora"
-tags: [aws, rds, aurora, databases, relational-database, high-availability, cost-optimization, fundamentals]
+description: "How AWS runs relational databases: what RDS manages and what you still own, how Aurora's shared storage changes availability and scaling, choosing between them, Multi-AZ options, read scaling, Aurora serverless, backups, blue/green changes, security, connections, and cost."
+tags: [rds, aurora, aurora-serverless, multi-az, read-replicas, relational-databases, fundamentals]
 ---
 
-## What Is Amazon RDS?
-
-Amazon Relational Database Service (RDS) is a managed database service that handles operational tasks like provisioning, patching, backup, recovery, and scaling. RDS supports six database engines: MySQL, PostgreSQL, MariaDB, Oracle, SQL Server, and Db2.
-
-**What Problems RDS Solves**:
-- **Operational overhead**: Eliminates manual database administration tasks (patching, backups, monitoring)
-- **High availability**: Provides Multi-AZ deployments with automated failover (<35 seconds for Multi-AZ DB clusters)
-- **Scalability**: Supports vertical scaling (resize instances) and horizontal scaling (read replicas)
-- **Compliance**: Meets security and compliance requirements (encryption at rest/transit, audit logging, VPC isolation)
-- **Cost predictability**: Pay-as-you-go pricing with Reserved Instance options (up to 69% savings vs on-demand)
-
-**When to use RDS**:
-- You need a managed relational database without operational complexity
-- You require compatibility with specific database engines (Oracle, SQL Server, Db2)
-- Your workload has predictable performance requirements
-- You want lower costs compared to Aurora for non-critical or development workloads
-
-## What Is Amazon Aurora?
-
-Amazon Aurora is a MySQL- and PostgreSQL-compatible relational database built for the cloud. Aurora delivers up to 5x the throughput of MySQL and 3x the throughput of PostgreSQL while providing commercial-grade availability and durability.
-
-**What Makes Aurora Different**:
-- **Cloud-native storage**: Distributed, fault-tolerant storage layer that replicates data across 3 Availability Zones (6 copies)
-- **Performance**: Superior throughput compared to standard RDS engines
-- **Auto-scaling storage**: Grows automatically from 10 GB to 128 TB in 10 GB increments
-- **Fast recovery**: Crash recovery is nearly instantaneous (no replay of database redo logs)
-- **Advanced features**: Aurora Serverless v2, Global Database, I/O-Optimized configuration
-
-**When to use Aurora**:
-- You need premium performance for read-intensive or dynamic workloads
-- You require global database replication with <1 second lag
-- You want auto-scaling capacity without manual intervention (Aurora Serverless v2)
-- You need up to 15 read replicas (vs 5 for standard RDS)
-
-## RDS vs Aurora: Decision Framework
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Amazon RDS</h4>
-<ul>
-<li><strong>Best for:</strong> Predictable workloads, engine compatibility</li>
-<li><strong>Performance:</strong> Standard engine performance</li>
-<li><strong>Storage:</strong> gp3, Provisioned IOPS (up to 64 TB)</li>
-<li><strong>Read Replicas:</strong> Up to 5</li>
-<li><strong>Failover:</strong> 60-120 seconds (Multi-AZ)</li>
-<li><strong>Pricing:</strong> Lower baseline cost</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Amazon Aurora</h4>
-<ul>
-<li><strong>Best for:</strong> Dynamic workloads, read-heavy, global apps</li>
-<li><strong>Performance:</strong> 5x MySQL, 3x PostgreSQL throughput</li>
-<li><strong>Storage:</strong> Auto-scaling (10 GB to 128 TB)</li>
-<li><strong>Read Replicas:</strong> Up to 15</li>
-<li><strong>Failover:</strong> &lt;35 seconds (Multi-AZ DB cluster)</li>
-<li><strong>Pricing:</strong> 20-30% premium, better performance/GB</li>
-</ul>
-</div>
-</div>
-
-| Dimension | Amazon RDS | Amazon Aurora |
-|-----------|------------|---------------|
-| **Database Engines** | MySQL, PostgreSQL, MariaDB, Oracle, SQL Server, Db2 | MySQL-compatible, PostgreSQL-compatible |
-| **Performance** | Standard engine performance | 5x MySQL, 3x PostgreSQL throughput |
-| **Storage** | gp3, Provisioned IOPS (up to 64 TB) | Auto-scaling (10 GB to 128 TB) |
-| **Read Replicas** | Up to 5 | Up to 15 |
-| **Failover Time** | 60-120 seconds (Multi-AZ) | <35 seconds (Multi-AZ DB cluster) |
-| **Replication Lag** | Asynchronous (seconds to minutes) | <100ms typical |
-| **Pricing** | Lower baseline cost | 20-30% premium, but better performance/GB |
-| **Use Case** | Predictable workloads, engine compatibility | Dynamic workloads, read-heavy, global apps |
-
-**Cost Comparison Example** (db.r6g.xlarge in us-east-1):
-- **RDS MySQL**: $0.252/hour on-demand ($185/month) + storage ($0.115/GB gp3)
-- **Aurora MySQL**: $0.29/hour on-demand ($213/month) + I/O charges ($0.20 per million requests) or I/O-Optimized ($0.348/hour, $255/month)
-- **Savings Plans**: Up to 69% off on-demand pricing for 1-year or 3-year commitment
-
-## RDS Instance Types and Storage
-
-### Instance Classes
-
-RDS offers three instance families optimized for different workload characteristics:
-
-**General Purpose (db.m)**:
-- **db.m8g** (Graviton4): Latest generation, up to 48 vCPUs, 192 GB RAM, best price-performance
-- **db.m7i** (Intel Xeon): Up to 48 vCPUs, 192 GB RAM, for Intel-dependent workloads
-- **db.m7g** (Graviton3): Previous Graviton generation, still highly efficient
-- **Use case**: Balanced compute and memory for most production workloads
-
-**Memory Optimized (db.r)**:
-- **db.r8g** (Graviton4): Latest generation, up to 48 vCPUs, 384 GB RAM, 2:1 memory-to-vCPU ratio
-- **db.r7i** (Intel Xeon): Up to 48 vCPUs, 384 GB RAM
-- **db.r7g** (Graviton3): Previous Graviton generation
-- **Use case**: Memory-intensive workloads, large datasets, high-concurrency applications
-
-**Burstable (db.t)**:
-- **db.t4g** (Graviton2): 2-8 vCPUs, 0.5-32 GB RAM, baseline performance with burst credits
-- **Use case**: Development, testing, low-traffic applications with intermittent spikes
-
-<div class="callout callout--tip">
-<p class="callout__title">Graviton Instance Advantage</p>
-<p>Graviton-based instances (m8g, r8g, t4g) provide up to 40% better price-performance compared to Intel/AMD equivalents. This is one of the easiest ways to reduce costs without sacrificing performance.</p>
-</div>
+## What RDS Manages
 
-### Storage Types
+**Amazon RDS** (Relational Database Service) runs a database engine for you on instances AWS operates. It supports six engines: MySQL, PostgreSQL, MariaDB, Oracle, SQL Server, and Db2. RDS provisions the instance and storage, installs and patches the engine, takes backups, replaces failed hosts, and handles failover. What stays yours is everything inside the database: schema, indexes, queries, users, engine parameters, the instance size, and when to upgrade to a new major version.
 
-| Storage Type | Use Case | IOPS | Throughput | Cost (us-east-1) |
-|--------------|----------|------|------------|------------------|
-| **General Purpose SSD (gp3)** | Most workloads | 3,000-16,000 baseline | 125-1,000 MB/s | $0.115/GB/month |
-| **Provisioned IOPS SSD (io2)** | OLTP, latency-sensitive | Up to 256,000 | Up to 4,000 MB/s | $0.125/GB + $0.065/IOPS |
-| **Magnetic** | Legacy only | ~100 | Low | $0.10/GB (deprecated) |
+A few pieces make up an RDS database:
 
-**Storage Best Practices**:
-- **Default to gp3**: Balanced performance for 95% of workloads, 20% cheaper than gp2
-- **Use Provisioned IOPS for production OLTP**: When you need consistent high IOPS (>16,000) or sub-millisecond latency
-- **Migrate from gp2**: gp3 provides 3,000 baseline IOPS regardless of size (gp2 scales IOPS with size at 3 IOPS/GB)
-- **Size storage appropriately**: RDS storage auto-scales, but oversizing wastes cost; start with actual needs + 20% headroom
+- A **DB instance** is the compute, sized by an instance class such as `db.r8g.large`. Classes come in burstable (`db.t`), general purpose (`db.m`), and memory optimized (`db.r`, `db.x`) families, mostly on Graviton processors, which usually give the best price-performance. Most production databases are memory-bound, so `db.r` is the common choice.
+- **Storage** is EBS volumes attached to the instance (see Storage below).
+- A **DB subnet group** names the subnets, in at least two Availability Zones, that RDS may place instances in. The database lives inside your VPC, and a **security group** decides who can reach its port.
+- An **endpoint** is the DNS name clients connect to. It points at whichever instance is the current primary, which is how failover works without configuration changes in the application.
+- **Parameter groups** hold engine settings, and **option groups** hold engine features such as Oracle's or SQL Server's add-ons. Clusters of several instances, which Aurora and one of the Multi-AZ options below both use, also have a **cluster parameter group** whose settings apply to every instance in the cluster. The default groups can't be edited, so create your own before you need to change a setting.
+- A weekly **maintenance window**, 30 minutes by default, is when RDS applies patches and pending changes, and a daily **backup window** is when it takes automated backups. Minor engine versions can be upgraded automatically in the maintenance window if you allow it. Major version upgrades are yours to schedule, until a version runs out of support entirely.
 
-## High Availability: Multi-AZ Deployments
+Databases are Regional resources, and quotas are per account per Region: 40 DB instances by default, shared with Aurora, Neptune, and DocumentDB instances.
 
-Multi-AZ provides automatic failover to a standby instance in a different Availability Zone when the primary fails.
+### Engine Versions and Extended Support
 
-### Multi-AZ Deployment (Traditional)
+RDS supports each major engine version for a set period. When a version reaches the end of standard support, a database still running it is enrolled in **RDS Extended Support**, which keeps security patches coming for up to three more years for an extra hourly charge, unless you opted out when creating it. After that, RDS upgrades it automatically. Extended Support is easy to miss on a bill, because nothing about the database changes on the day the charges start. Plan major version upgrades before the end of standard support, and use blue/green deployments (below) to do them with little downtime.
 
-**How it works**:
-- Synchronous replication to a standby instance in a different AZ
-- Automatic failover in 60-120 seconds when primary fails
-- Standby instance is not accessible for reads (passive)
-- Failover triggers: AZ failure, primary instance failure, OS patching, storage failure
+### Storage
 
-**Cost**: ~30% premium over single-AZ (you pay for the standby instance)
+RDS stores data on EBS volumes, AWS's network-attached block storage. Their performance is measured in IOPS, the number of reads and writes per second, and throughput in MiB/s. The options follow EBS with a few RDS-specific twists:
 
-**Use case**: Production workloads requiring 99.95%+ availability
+| Type | Size | Performance | Price (Single-AZ, us-east-1) |
+|---|---|---|---|
+| **gp3** (default) | 20 GiB–64 TiB | 3,000 IOPS and 125 MiB/s included below 400 GiB; 12,000 IOPS and 500 MiB/s at 400 GiB and above; up to 64,000 IOPS and 4,000 MiB/s | $0.115 per GB-month, plus $0.02 per extra IOPS and $0.08 per extra MiB/s |
+| **io2 Block Express** | 100 GiB–64 TiB (20 GiB minimum for SQL Server) | Up to 256,000 IOPS, sub-millisecond latency | $0.125 per GB-month plus $0.10 per provisioned IOPS |
 
-### Multi-AZ DB Cluster (Newer Option)
+The jump at 400 GiB (200 GiB for Oracle) happens because RDS stripes larger volumes across four EBS volumes. SQL Server doesn't stripe, so its gp3 baseline stays at 3,000 IOPS at any size, with up to 80,000 IOPS and 2,000 MiB/s provisionable. Oracle and SQL Server can add up to three extra volumes for a total of 256 TiB. The previous-generation gp2 and io1 types still exist for older databases, and magnetic storage is retired.
 
-**How it works**:
-- One primary instance (read/write) + two readable standby instances across 3 AZs
-- Faster failover (<35 seconds) compared to traditional Multi-AZ
-- Standby instances are readable (can offload read traffic)
-- Dedicated transaction log instances for faster commits
+Storage can grow but not shrink, except that Oracle and SQL Server can remove an additional volume. **Storage autoscaling** raises the allocation automatically when free space runs low, up to a maximum you set, which guards against a database stopping because its disk filled up. The instance class also caps performance. A volume provisioned with more IOPS than the instance can drive only costs more.
 
-**Cost**: ~50% premium over single-AZ (three instances total)
+**RDS Custom**, for Oracle and SQL Server, gives you operating-system access to the underlying host for software that needs it, at the cost of taking back some of the management RDS normally does.
 
-**Use case**: Mission-critical workloads requiring <35 second recovery and readable standbys
+---
 
-**Comparison**:
+## How Aurora Differs
 
-| Feature | Multi-AZ Deployment | Multi-AZ DB Cluster |
-|---------|---------------------|---------------------|
-| **Failover Time** | 60-120 seconds | <35 seconds |
-| **Readable Standbys** | No | Yes (2 readable standbys) |
-| **AZ Coverage** | 2 AZs | 3 AZs |
-| **Cost Premium** | ~30% | ~50% |
-| **Engines** | All RDS engines | MySQL, PostgreSQL |
-
-## Read Replicas
-
-Read replicas allow you to offload read traffic from the primary instance to one or more replicas.
-
-**RDS Read Replicas**:
-- Up to 5 read replicas per primary instance
-- Asynchronous replication (typical lag: seconds to minutes depending on workload)
-- Can be in the same Region or cross-Region
-- Can be promoted to standalone instances
-- **Use case**: Scale read-heavy workloads, analytics queries, disaster recovery
-
-**Aurora Read Replicas**:
-- Up to 15 read replicas sharing the same storage layer
-- Replication lag typically <100ms (much faster than RDS)
-- Auto-scaling read replicas based on load
-- Failover target (one replica becomes primary if primary fails)
-- **Use case**: Highly concurrent read traffic, global applications
-
-**Replication Lag Considerations**:
-- **<1 second lag**: Acceptable for most applications (eventual consistency tolerated)
-- **>5 seconds lag**: Indicates replica struggling to keep up; consider larger instance or reduce write volume
-- **Monitor CloudWatch metric**: `ReplicaLag` for RDS, `AuroraReplicaLag` for Aurora
-
-## Aurora Serverless v2
-
-Aurora Serverless v2 automatically scales database capacity based on application demand, eliminating the need to provision and manage instances.
-
-**How it works**:
-- Capacity measured in Aurora Capacity Units (ACUs): 1 ACU = 2 GB RAM + corresponding CPU/networking
-- Scales from 0.5 ACUs to 256 ACUs in fine-grained increments
-- Scaling happens in seconds without interrupting connections
-- Pay only for capacity used per second ($0.12/ACU hour in us-east-1)
-
-**When to use Aurora Serverless v2**:
-- **Variable workloads**: Traffic patterns with unpredictable spikes (e.g., SaaS applications with usage variations)
-- **Development/test environments**: Only pay for capacity when actively used
-- **Multi-tenant applications**: Auto-scale per tenant load without manual intervention
-- **Infrequently accessed applications**: Scale down to minimum during idle periods
-
-**Cost Example**:
-- **Provisioned Aurora**: db.r6g.large ($0.174/hour = $128/month) always running
-- **Serverless v2**: 0.5 ACUs minimum ($0.06/hour = $44/month) + scaling for peaks
-- **Savings**: 66% cost reduction for workloads idle 50%+ of the time
-
-**Minimum Capacity Considerations**:
-- **Global Database**: Requires minimum 8 ACUs for secondary regions
-- **Read replicas**: Each replica has independent ACU scaling
-- **Cold start**: No cold start delay (capacity adjusts in seconds, not minutes)
-
-**2025 Performance Improvements**: Aurora Serverless v2 received 30% performance improvement for write-heavy workloads in early 2025.
-
-## Aurora Global Database
-
-Aurora Global Database enables a single database to span multiple AWS Regions with sub-second replication and disaster recovery.
-
-**How it works**:
-- One primary Region (read/write) + up to 5 secondary Regions (read-only)
-- Replication lag typically <1 second across Regions
-- Each secondary Region can have up to 16 read replicas
-- Promotes a secondary Region to primary in <1 minute during disaster recovery
-
-**Cost**:
-- **Replication charges**: $0.20 per million replicated write I/Os
-- **Cross-Region data transfer**: $0.02/GB
-- **Example**: 1 million writes/day = $6/month replication cost
-
-**Use cases**:
-- **Disaster recovery**: <1 minute RTO (Recovery Time Objective), <1 second RPO (Recovery Point Objective)
-- **Low-latency global reads**: Serve users from nearest Region with local read replicas
-- **Business continuity**: Entire Region failure doesn't impact global availability
-
-**Performance Expectations**:
-- **Replication lag**: <1 second typical (99th percentile)
-- **Failover time**: <1 minute to promote secondary Region
-- **Write forwarding**: Secondary Regions can forward writes to primary (adds latency)
-
-## Aurora I/O-Optimized
-
-Traditionally, Aurora charged per I/O request ($0.20 per million), which made costs unpredictable for write-heavy workloads. Aurora I/O-Optimized (introduced 2023) eliminates I/O charges in exchange for higher instance costs.
-
-**Pricing Comparison** (db.r6g.xlarge in us-east-1):
-
-| Configuration | Instance Cost | I/O Cost | Total (1B I/Os/month) |
-|---------------|---------------|----------|-----------------------|
-| **Standard** | $0.29/hour ($213/month) | $0.20/million I/Os | $213 + $200 = $413 |
-| **I/O-Optimized** | $0.348/hour ($255/month) | $0 | $255 |
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Aurora I/O-Optimized</h4>
-<p><strong>When to use:</strong></p>
-<ul>
-<li>I/O costs exceed 25% of total Aurora spend</li>
-<li>Write-heavy workloads with unpredictable I/O patterns</li>
-<li>Simplified cost forecasting (instance cost only)</li>
-</ul>
-<p><strong>Pricing:</strong> Higher instance cost, $0 I/O charges</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Aurora Standard</h4>
-<p><strong>When to use:</strong></p>
-<ul>
-<li>Read-heavy workloads with low I/O</li>
-<li>I/O costs &lt;25% of total spend</li>
-<li>Predictable I/O patterns</li>
-</ul>
-<p><strong>Pricing:</strong> Lower instance cost, $0.20 per million I/Os</p>
-</div>
-</div>
-
-**Migration**: You can switch between Standard and I/O-Optimized configurations without downtime.
-
-## Blue/Green Deployments
-
-Blue/Green deployments allow you to create a staging environment (green) that's a clone of production (blue), test changes safely, and switch traffic with <1 minute downtime.
-
-**How it works**:
-1. Create green environment (clone of blue production database)
-2. Apply changes to green: major version upgrades, schema changes, parameter changes
-3. Test changes in green environment
-4. Switch traffic from blue to green (<1 minute switchover)
-5. Blue environment remains available as rollback option
-
-<div class="callout callout--tip">
-<p class="callout__title">Blue/Green Deployment Advantage</p>
-<p>Blue/Green deployments reduce major version upgrade downtime from hours to less than 1 minute. The blue environment remains available as a rollback option, making upgrades much safer.</p>
-</div>
-
-**Use cases**:
-- **Major version upgrades**: PostgreSQL 12 → 15, MySQL 5.7 → 8.0
-- **Schema changes**: Test DDL changes before applying to production
-- **Parameter tuning**: Validate configuration changes
-- **Disaster recovery drills**: Practice failover without affecting production
-
-**Cost**: You pay for both environments during testing period (typically hours to days)
-
-**Supported Engines**: RDS MySQL, RDS PostgreSQL, Aurora MySQL, Aurora PostgreSQL
-
-## Cost Optimization
-
-### Reserved Instances and Savings Plans
-
-**Reserved Instances** (1-year or 3-year commitment):
-- **1-year partial upfront**: 37% savings
-- **3-year all upfront**: 69% savings
-- Applies to specific instance class and engine
+**Amazon Aurora** is a MySQL- and PostgreSQL-compatible engine that AWS rebuilt around a distributed storage layer. Applications use the same drivers and SQL, but the database underneath works differently in three ways.
 
-**Savings Plans** (more flexible):
-- Commit to consistent spend ($/hour) for 1 or 3 years
-- Applies across instance families, sizes, and Regions
-- Up to 72% savings for Aurora
+**Storage is shared and separate from compute.** An Aurora **DB cluster** keeps its data in one **cluster volume** that stores six copies across three Availability Zones, whether the cluster has one instance or sixteen. A write is acknowledged once four of the six copies have it, so the cluster keeps working through the loss of a zone. The volume grows automatically up to 256 TiB for current engine versions, and it shrinks when you drop tables or data, which RDS storage never does. You pay only for what's stored.
 
-**Strategy**:
-- Use Reserved Instances for stable baseline capacity
-- Use on-demand or Savings Plans for variable capacity
-- Combine with Aurora Serverless v2 for cost-effective auto-scaling
+**Readers don't copy the data.** A cluster has one writer instance and up to 15 **Aurora Replicas** (reader instances), all attached to the same volume. Adding a reader doesn't copy the database, so it's ready in minutes, and replicas typically lag the writer by less than 100 milliseconds because they only need to catch up their memory caches, not replay changes onto their own storage.
 
-### Storage Cost Management
+**Failover promotes a reader.** When the writer fails, Aurora promotes a replica, usually in under 60 seconds and often under 30. A cluster with no replicas recreates the writer instead, which typically takes under 10 minutes, so production clusters keep at least one replica in another zone. Each replica has a **promotion tier** from 0 to 15 that decides the order.
 
-**RDS Storage**:
-- **gp3 default**: $0.115/GB/month
-- **Snapshot storage**: $0.095/GB/month (incremental)
-- Delete old snapshots (retention >35 days typically unnecessary)
-- Automated backups: Free (equal to database size), manual snapshots billed separately
+Clients connect through **endpoints** rather than instance addresses. The **cluster endpoint** always points at the current writer. The **reader endpoint** spreads connections across the replicas. **Custom endpoints** group chosen instances, for example to send reporting queries to two large replicas and keep them away from the rest.
 
-**Aurora Storage**:
-- **Standard**: $0.10/GB/month + I/O charges ($0.20/million)
-- **I/O-Optimized**: $0.25/GB/month, no I/O charges
-- **Snapshot storage**: $0.021/GB/month (90% cheaper than RDS snapshots)
-- **Backup storage**: Free (equal to sum of database cluster storage)
+A few other capabilities come from the shared storage:
 
-**Cost Reduction Tactics**:
-- Enable automated snapshots (free for retention period)
-- Delete manual snapshots older than compliance requirements
-- Use I/O-Optimized for write-heavy workloads (breakeven at 25% I/O cost)
-- Right-size instances (use CloudWatch metrics: CPUUtilization, DatabaseConnections, ReadIOPS, WriteIOPS)
+- **Clones** create a new cluster that shares the source's storage and copies pages only as either side changes them, so a full-size copy of production for testing is ready in minutes and costs little until it diverges.
+- **Aurora Global Database** replicates a cluster to up to 10 other Regions through the storage layer, with lag typically under a second, for disaster recovery and local reads.
+- **Aurora PostgreSQL Limitless Database** shards tables, splitting their rows across many instances by a key, behind one endpoint, for write volumes beyond a single writer.
+- **Babelfish for Aurora PostgreSQL** accepts SQL Server's T-SQL dialect and wire protocol, which can let some SQL Server applications move to Aurora with few code changes.
 
-### Right-Sizing Instances
+Aurora's documentation claims up to six times the throughput of standard MySQL and of standard PostgreSQL on similar hardware. Treat that as AWS's benchmark result, not a promise for any particular workload. **Aurora DSQL** shares the name but is a different, serverless distributed database with PostgreSQL compatibility and active-active writes across Regions, suited to a different set of trade-offs.
 
-**Metrics to monitor** (CloudWatch):
-- **CPUUtilization**: Sustained >80% = upsize, <20% = downsize
-- **DatabaseConnections**: High connection count = increase instance size or use connection pooling (RDS Proxy)
-- **FreeableMemory**: <10% free memory = upsize to memory-optimized instance
-- **ReadIOPS / WriteIOPS**: Consistent max IOPS = upgrade to Provisioned IOPS or larger gp3 volume
+### Aurora Standard and I/O-Optimized
 
-**Example Downsize Scenario**:
-- db.r6g.xlarge (4 vCPUs, 32 GB, $0.504/hour) with 15% CPU, 40% connections
-- Downsize to db.r6g.large (2 vCPUs, 16 GB, $0.252/hour)
-- **Savings**: 50% reduction = $181/month
+Aurora bills storage in one of two configurations, chosen per cluster:
 
-**Performance Testing**: Always test in staging before resizing production instances.
+| Configuration | Storage | I/O | Instance or ACU price |
+|---|---|---|---|
+| **Aurora Standard** | $0.10 per GB-month | $0.20 per million read and write I/Os | Base price |
+| **Aurora I/O-Optimized** | $0.225 per GB-month | None | About 30% higher |
 
-## Security Best Practices
+AWS's rule of thumb is to choose I/O-Optimized when I/O makes up 25% or more of the cluster's Aurora bill. Standard is cheaper for clusters that mostly read from memory. A write-heavy cluster on Standard can find its I/O line larger than its instances. You can switch from Standard to I/O-Optimized once every 30 days, and back at any time.
 
-### Encryption
+---
 
-**Encryption at rest**:
-- Enable during creation (cannot be enabled later without migration)
-- Uses AWS KMS (customer-managed or AWS-managed keys)
-- Encrypts database storage, snapshots, backups, and read replicas
-- No performance impact
+## High Availability
 
-**Encryption in transit**:
-- SSL/TLS connections enforced via parameter group (`rds.force_ssl=1`)
-- Use SSL certificates provided by RDS (download from AWS)
+A production database needs a copy in a second Availability Zone that can take over automatically. RDS and Aurora offer three designs, which differ in where the copy is made and whether it can serve reads.
 
-**Snapshots**:
-- Encrypted snapshots from encrypted databases (automatic)
-- Cannot restore encrypted snapshot to unencrypted instance
-- Share encrypted snapshots by sharing KMS key access
+{% include figure.html id="aws-rds-ha-topologies" %}
 
-### Network Isolation
+| | Multi-AZ DB instance | Multi-AZ DB cluster | Aurora cluster |
+|---|---|---|---|
+| **Copies** | Primary plus one standby | Writer plus two readers in three zones | Writer plus up to 15 readers sharing one volume |
+| **Replication** | Synchronous, at the storage level (SQL Server instead uses Database Mirroring, Always On availability groups, or block-level replication, depending on version) | Semisynchronous engine replication: each commit waits for one reader | Shared storage, six copies |
+| **Standby serves reads** | No | Yes | Yes |
+| **Typical failover** | 60–120 s | Under 35 s | Under 60 s, often under 30 |
+| **Engines** | All six | MySQL and PostgreSQL, on instance classes with local NVMe storage | Aurora MySQL and PostgreSQL |
 
-**VPC Best Practices**:
-- Deploy RDS instances in private subnets (no Internet Gateway route)
-- Use security groups to restrict access (allow 3306/MySQL, 5432/PostgreSQL only from application subnets)
-- Never expose RDS instances to public internet (`PubliclyAccessible: false`)
+The **Multi-AZ DB instance** deployment is the classic design. The standby receives every write before the primary acknowledges it, so no committed data is lost in a failover, but it can't serve queries, and synchronous replication can add some write latency. It roughly doubles the instance and storage cost (Multi-AZ gp3 is $0.23 per GB-month). The **Multi-AZ DB cluster** trades the standby for two readable instances and faster failover, with lower write latency than the instance deployment. It runs three instances, with storage billed at about three times the Single-AZ rate. A commit needs only one reader's acknowledgement, so the other can lag, and failover waits for the promoted reader to apply what it's missing.
 
-**VPC Peering and PrivateLink**:
-- Use VPC Peering for cross-VPC access within same Region
-- Use AWS PrivateLink for cross-Region or cross-account access
+In all three, failover moves the endpoint's DNS record to the new primary, and existing connections drop. Applications need retry logic and a short DNS cache. AWS recommends a DNS time-to-live of no more than 60 seconds in the JVM, whose default can cache forever. **RDS Proxy** (see Connections below) hides much of this by holding client connections open and redirecting them itself, and AWS reports it cuts Aurora failover time by up to 66%.
 
-### IAM Database Authentication
+Failover also happens during maintenance, such as operating-system patching and some instance modifications, which is one more reason even a modest production database runs Multi-AZ.
 
-Replace database passwords with IAM credentials for short-lived tokens (15 minutes).
+---
 
-**How it works**:
-1. Application requests authentication token from IAM
-2. Token is signed with AWS credentials
-3. Database validates token against IAM permissions
-4. Connection established without storing passwords
+## Read Scaling
 
-**Benefits**:
-- No password management or rotation
-- Centralized access control via IAM policies
-- Audit trail in CloudTrail
+**RDS read replicas** are copies of a DB instance kept up to date through the engine's own asynchronous replication. A primary can have up to 15 (AWS suggests no more than 5 for Oracle), in the same Region or in others. Applications must send read queries to a replica's own endpoint, and because replication is asynchronous, a replica can serve data that's seconds or more out of date. The `ReplicaLag` metric shows how far behind it is. A replica can be promoted to a standalone database, which is a common disaster-recovery and migration step, but promotion breaks replication for good. RDS doesn't add or remove replicas automatically.
 
-**Supported Engines**: MySQL, PostgreSQL, Aurora MySQL, Aurora PostgreSQL
+Aurora readers are added the same way but share the cluster's storage, and **Aurora Auto Scaling** can add and remove them based on CPU or connections. Applications reach them through the reader endpoint.
 
-**Limitations**: 256 connections/second per database (use connection pooling for high-concurrency apps)
+A replica only helps if the application can tolerate reading slightly old data. A user who saves a change and immediately reloads the page from a replica may not see it, so read-your-own-writes paths go to the writer.
 
-### RDS Proxy
+---
 
-RDS Proxy manages database connections, improving application scalability and security.
+## Aurora Serverless
 
-**What RDS Proxy solves**:
-- **Connection overhead**: Opening new database connections is expensive (100-200ms); Proxy maintains connection pools
-- **IAM authentication**: Proxy handles IAM authentication, reducing token requests
-- **Failover resilience**: Proxy maintains connections during failover, reducing errors
+**Aurora Serverless v2**, which AWS's documentation now simply calls Aurora serverless, replaces fixed instance classes with capacity that scales continuously. Capacity is measured in **Aurora Capacity Units (ACUs)**, each about 2 GiB of memory with matching CPU and networking, and you set a minimum and maximum between 0 and 256 ACUs for the cluster. Each serverless writer or reader scales within that range, in steps as small as 0.5 ACU, without dropping connections or waiting for a quiet moment. Billing is per second at $0.12 per ACU-hour for Aurora Standard in US East (N. Virginia), or $0.156 on I/O-Optimized.
 
-**Cost**: $0.015/hour per vCPU of target RDS instance (~$11/month for db.r6g.large)
+Since late 2024, recent engine versions accept a minimum of **0 ACUs**. An instance with no connections for a set period, 5 minutes to a day, **pauses** and costs nothing for compute, then resumes when a connection arrives. Resuming typically takes about 15 seconds, or 30 seconds or more after a day paused, so client connection timeouts need to be longer than that. That suits development environments and rarely used internal tools, not user-facing paths. Anything that holds a connection open prevents pausing, including an RDS Proxy attached to the cluster, and the writer of a Global Database primary never pauses.
 
-**Use cases**:
-- Serverless applications (Lambda) with frequent connections
-- Applications with connection spikes
-- Multi-tenant SaaS with variable load
+A cluster can mix provisioned and serverless instances, for example a large provisioned writer with serverless readers. Readers in promotion tiers 0 and 1 scale with the writer so they're ready to take over, while readers in lower tiers scale on their own load.
 
-**Performance**: Reduces connection overhead by 50-80% for Lambda-based applications.
+Aurora serverless isn't automatically cheaper. An ACU-hour costs more than the equivalent memory in a provisioned instance, so a database that runs near a steady load all day is cheaper provisioned. It pays off for spiky or intermittent load, and for avoiding the capacity planning a new application can't do yet. Set the minimum high enough to keep the working set, the data queries touch regularly, in the database's memory cache. A database that scales down to a few ACUs evicts that cache and is slow for a while after load returns.
 
-## Performance Optimization
+---
 
-### Query Performance Insights
+## Choosing RDS or Aurora
 
-Performance Insights is a built-in database performance monitoring tool that identifies slow queries and resource bottlenecks.
+| Question | Points to RDS | Points to Aurora |
+|---|---|---|
+| **Engine** | Oracle, SQL Server, Db2, or MariaDB | MySQL or PostgreSQL (or SQL Server code through Babelfish) |
+| **Read scaling** | A few replicas that can lag | Up to 15 readers with little lag, added in minutes |
+| **Failover** | A standby or a Multi-AZ DB cluster is fast enough | Readers as failover targets |
+| **Storage** | Predictable size, and shrinking isn't needed | Grows and shrinks automatically, up to 256 TiB |
+| **Load shape** | Steady | Variable or idle for long periods (Aurora serverless) |
+| **Features** | Engine features Aurora doesn't support | Clones, Global Database, fast readers |
+| **Cost** | Small or steady databases, where RDS instances and gp3 storage cost less | I/O-heavy or read-scaled workloads, where shared storage avoids paying for a copy per replica |
 
-**How to use it**:
-1. Enable Performance Insights (free for 7 days retention, $0.18/vCPU/month for longer)
-2. View top SQL queries consuming CPU, I/O, locks, or memory
-3. Identify inefficient queries and optimize (add indexes, rewrite queries)
-4. Monitor wait events (I/O waits, lock waits, CPU waits)
+For MySQL or PostgreSQL there's no single right answer. A small application database with one standby is usually cheaper on RDS. A database that needs several readers is often cheaper on Aurora, because each RDS replica carries a full copy of the storage and Aurora's readers share one.
 
-**Common Optimization Patterns**:
-- **High I/O waits**: Add indexes to reduce full table scans
-- **High CPU**: Optimize query logic, reduce data processing in database
-- **Lock waits**: Reduce transaction duration, optimize locking strategy
+---
 
-### Enhanced Monitoring
+## Backups and Restores
 
-Enhanced Monitoring provides OS-level metrics (CPU, memory, disk I/O, network) at 1-second granularity.
+**Automated backups** let you restore to any second within the retention period, up to 35 days. RDS takes a daily snapshot of the storage volume during the backup window and keeps transaction logs in between. Aurora backs up its cluster volume continuously and incrementally, with no backup window. The latest restorable time is typically within five minutes of the present. A restore always creates a **new** database with a new endpoint. It never overwrites the existing one, so the application has to be pointed at it. Backup storage up to the size of the database is free, and beyond that costs $0.095 per GB-month for RDS and $0.021 for Aurora.
 
-**Key Metrics**:
-- **CPU utilization**: Identify CPU bottlenecks
-- **Memory usage**: Track buffer pool efficiency
-- **Disk I/O**: Monitor read/write throughput and latency
-- **Network throughput**: Identify network bottlenecks
+**Manual snapshots** last until you delete them, survive deletion of the database, and can be copied to another Region or shared with another account. Automated backups are deleted with the database unless you choose to retain them. When deleting a production database, take a final snapshot.
 
-**Cost**: $0.30/instance/month for 1-second granularity
+Aurora adds two faster ways back:
 
-### Parameter Groups
+- **Backtrack** (Aurora MySQL only, in some Regions) rewinds a cluster in place to a point up to 72 hours back, in minutes, which undoes a bad `DELETE` without a restore. It has to be turned on when the cluster is created or restored, it closes all connections while it runs, and it bills hourly for the change records it keeps.
+- **Clones** give a point-in-time copy for investigation without touching production.
 
-Parameter groups control database engine configuration (e.g., buffer pool size, query cache, timeouts).
+AWS Backup can manage RDS and Aurora backups alongside other services, with cross-account copies and longer retention.
 
-**Key Parameters**:
-- **max_connections**: Maximum concurrent connections (default varies by instance size)
-- **innodb_buffer_pool_size** (MySQL): 70-80% of instance memory for InnoDB cache
-- **shared_buffers** (PostgreSQL): 25% of instance memory
-- **log_min_duration_statement** (PostgreSQL): Log slow queries (e.g., >1000ms)
+---
 
-**Best Practice**: Create custom parameter groups (don't modify default); test changes in staging before production.
+## Changing a Database with Blue/Green Deployments
 
-## Backup and Recovery
+A **blue/green deployment** copies the production database (blue) into a staging copy (green) that RDS keeps in sync through replication. You make the change on green, such as a major version upgrade, a parameter change, or a different instance class, and test it. Then a **switchover** promotes green. RDS briefly blocks writes, waits for green to catch up, and swaps the names and endpoints so the application connects to green without configuration changes. The switchover typically takes under a minute, and built-in guardrails cancel it if replication isn't healthy.
 
-### Automated Backups
+Blue/green works for RDS for MySQL, MariaDB, and PostgreSQL, and for Aurora MySQL and Aurora PostgreSQL. Keep green read-only while testing. Writes made there can conflict with replication or end up in production after switchover.
 
-RDS automatically creates daily snapshots and transaction logs for point-in-time recovery.
+After switchover, the old blue environment is renamed and kept, but replication to it stops. It's a copy of production as of the switchover, useful for comparison, not a live fallback that keeps receiving new writes. Rolling back after new writes have landed on green means another migration, so test on green thoroughly before switching.
 
-**Retention**:
-- Default: 7 days
-- Maximum: 35 days
-- Free storage equal to database size
+---
 
-**Point-in-Time Recovery (PITR)**:
-- Restore to any point within retention period (accurate to 5 minutes)
-- Creates new RDS instance (does not overwrite existing)
-- **Recovery Time**: 10-30 minutes depending on database size
+## Security
 
-### Manual Snapshots
+**Network.** Put databases in private subnets and keep them from being publicly accessible. Allow the database port (3306 for MySQL, 5432 for PostgreSQL, 1433 for SQL Server) only from the security groups of the applications that use it.
 
-Manual snapshots are user-initiated backups stored indefinitely until deleted.
+**Encryption at rest** is chosen when a database is created and can't be turned on or off afterward. It covers storage, logs, backups, snapshots, and replicas, using a KMS key in the database's Region. To encrypt an existing database, snapshot it, copy the snapshot with encryption on, and restore from the copy, which means a new database and a cutover. The key can't be changed either, except through the same copy. Disabling or losing access to the key stops the database. RDS moves it to an inaccessible state and, if the key isn't restored within seven days, it can only be recovered from a backup. Snapshots encrypted with the default AWS managed key can't be shared with other accounts, so databases that need cross-account copies use a customer managed key.
 
-**Use cases**:
-- Pre-upgrade snapshots
-- Compliance retention (>35 days)
-- Disaster recovery snapshots
+**Encryption in transit** uses TLS with certificates from RDS's certificate authority. To require it, set `rds.force_ssl` for PostgreSQL (on by default from version 15) or `require_secure_transport` for MySQL and MariaDB.
 
-**Cost**: $0.095/GB/month (RDS), $0.021/GB/month (Aurora)
+**Credentials.** RDS can create the master password in AWS Secrets Manager and rotate it for you, so it never appears in templates. For MySQL, MariaDB, and PostgreSQL, **IAM database authentication** lets applications connect with a token generated from their IAM role instead of a password. Each token lasts 15 minutes, and only the connection is checked, not the session afterward. It needs between 300 and 1,000 MiB of spare memory on the instance, and connection attempts with it aren't logged in CloudTrail. Applications that open connections at a high rate usually pair it with RDS Proxy.
 
-**Restore Time**: 10-30 minutes for RDS, 5-15 minutes for Aurora
+---
 
-### Cross-Region Snapshots
+## Connections and RDS Proxy
 
-Automate snapshot replication to secondary Region for disaster recovery.
+Every database connection holds memory on the server, so each instance class has a maximum. On RDS for MySQL the default is roughly one connection per 12 MB of instance memory, so an instance with 8 GiB allows about 630. Applications that keep a pool of connections per server usually stay well under that. Serverless and heavily scaled-out applications don't. A burst of Lambda invocations can each open a connection at once and exhaust the database.
 
-**Cost**: Cross-Region data transfer ($0.02/GB) + snapshot storage in secondary Region
+**RDS Proxy** sits between the application and the database, keeps a pool of database connections, and shares them among many client connections, lending a database connection to a client only for the length of a transaction. It queues or rejects clients beyond the limits you set instead of letting them overwhelm the database. It also keeps client connections open across a failover. Some session features, such as temporary tables or session variables set outside the proxy's configuration, **pin** a client to one database connection for the rest of the session, which removes the sharing, so watch the proxy's pinning metrics.
 
-**Use case**: Disaster recovery with RPO = backup frequency (daily, hourly)
+RDS Proxy works with Aurora and with RDS for MySQL, PostgreSQL, MariaDB, and SQL Server, but not Oracle or Db2, and on RDS it attaches to the primary, not to read replicas. The proxy runs in the database's VPC, can't be publicly reachable, and connects to the database with credentials from Secrets Manager or IAM authentication. It costs $0.015 per vCPU-hour of the database instance in US East (N. Virginia), or per ACU-hour for Aurora serverless.
 
-## Common Pitfalls
+---
 
-| Pitfall | Impact | Solution |
-|---------|--------|----------|
-| **1. Enabling public accessibility** | Security risk: database exposed to internet | Deploy in private subnets, set `PubliclyAccessible: false` |
-| **2. Not enabling encryption at creation** | Cannot encrypt later without migration | Always enable encryption for production databases |
-| **3. Using default parameter groups** | Cannot modify; changes affect all databases | Create custom parameter groups |
-| **4. Ignoring CloudWatch alarms** | Performance degradation, outages unnoticed | Set alarms: CPUUtilization >80%, FreeableMemory <10%, DatabaseConnections near max |
-| **5. Oversizing instances** | 50%+ wasted cost | Right-size using CloudWatch metrics (target 50-70% CPU utilization) |
-| **6. Not using gp3 storage** | 20% higher cost vs gp3 | Migrate gp2 to gp3 for immediate savings |
-| **7. Skipping Multi-AZ for production** | Downtime during failures = $10K-$100K+/hour | Enable Multi-AZ for 99.95%+ availability |
-| **8. Not monitoring replication lag** | Stale reads, data inconsistency | Monitor `ReplicaLag` metric; alert if >5 seconds |
-| **9. Using Standard Aurora for write-heavy workloads** | Unpredictable I/O costs (30-50% of total spend) | Switch to I/O-Optimized when I/O costs >25% |
-| **10. Not testing Blue/Green deployments** | Failed upgrades, extended downtime | Test major upgrades in green environment before switchover |
-| **11. Ignoring Performance Insights** | Slow queries waste resources | Enable Performance Insights, optimize top queries |
-| **12. Not using RDS Proxy for Lambda** | Connection overhead (100-200ms), connection exhaustion | Use RDS Proxy for serverless applications |
-| **13. Manual snapshot sprawl** | Unnecessary storage costs ($0.095/GB/month) | Delete snapshots >35 days (unless compliance required) |
-| **14. Not using Reserved Instances** | Paying 37-69% more than necessary | Purchase RIs for stable baseline capacity (1-year or 3-year) |
-| **15. Mixing Standard and I/O-Optimized clusters** | Confusion, suboptimal costs | Standardize on I/O-Optimized for write-heavy, Standard for read-heavy |
+## Monitoring
 
-**Cost Impact Examples**:
-- **Pitfall #5** (oversizing): db.r6g.2xlarge ($1,008/month) → db.r6g.xlarge ($504/month) = **$504/month savings**
-- **Pitfall #6** (gp2 vs gp3): 1 TB gp2 ($115/month) → 1 TB gp3 ($115/month but better IOPS) = **20% performance improvement, same cost**
-- **Pitfall #9** (Standard Aurora with high I/O): $213/month instance + $200/month I/O = $413/month → I/O-Optimized $255/month = **$158/month savings**
-- **Pitfall #14** (on-demand vs Reserved): db.r6g.xlarge on-demand ($504/month) → 3-year RI ($156/month) = **$348/month savings (69%)**
+A handful of CloudWatch metrics catch most problems: `CPUUtilization`, `FreeableMemory`, `DatabaseConnections`, `FreeStorageSpace` for RDS, read and write latency and IOPS, `ReplicaLag` or `AuroraReplicaLag`, and for Aurora Standard, the I/O counts that drive the bill. **CloudWatch Database Insights**, which now includes what was Performance Insights, shows database load broken down by wait event, SQL statement, host, and user, which is usually the fastest way from "the database is slow" to the query responsible. **Enhanced Monitoring** adds operating-system metrics such as per-process memory, at intervals down to one second.
+
+---
+
+## Where the Money Goes
+
+- **Instances** are usually the largest line. A Multi-AZ DB instance roughly doubles it, a Multi-AZ DB cluster triples it, and each read replica is another full instance. Development databases can be stopped for up to seven days at a time, after which RDS starts them again.
+- **Storage** is billed as allocated for RDS, and multiplied by the number of copies for Multi-AZ. Aurora bills what's stored once, plus I/O on the Standard configuration.
+- **Backups** beyond the free allowance, and manual snapshots that nobody deletes.
+- **Extended Support** charges for engine versions past their standard support date.
+- **Data transfer** between zones for cross-AZ application traffic, and between Regions for cross-Region replicas and Global Database.
+
+Reserved instances and Savings Plans can cut the instance line for databases that run all the time.
+
+---
 
 ## Key Takeaways
 
-**Use RDS when**:
-- You need specific database engines (Oracle, SQL Server, Db2, MariaDB)
-- You have predictable workloads with lower performance requirements
-- You want lower baseline costs compared to Aurora
-
-**Use Aurora when**:
-- You need superior performance (5x MySQL, 3x PostgreSQL)
-- You require up to 15 read replicas or <100ms replication lag
-- You want auto-scaling storage (10 GB to 128 TB)
-- You need global database replication (<1 second cross-Region lag)
-
-**High Availability**:
-- Multi-AZ deployments provide 99.95%+ availability with 60-120 second failover
-- Multi-AZ DB Clusters provide <35 second failover + readable standbys
-- Aurora read replicas fail over in <30 seconds
-
-**Aurora Serverless v2**:
-- Auto-scales from 0.5 to 256 ACUs based on demand
-- 66% cost reduction for workloads idle 50%+ of the time
-- Minimum 8 ACUs required for Global Database secondary regions
-
-**Cost Optimization**:
-- Use gp3 storage for 20% savings vs gp2
-- Purchase Reserved Instances for 37-69% savings on stable workloads
-- Switch to Aurora I/O-Optimized when I/O costs exceed 25% of total spend
-- Right-size instances using CloudWatch metrics (target 50-70% CPU)
-
-**Security**:
-- Enable encryption at rest during creation (cannot enable later)
-- Deploy in private subnets with restrictive security groups
-- Use IAM database authentication for short-lived credentials
-- Enable SSL/TLS for encryption in transit
-
-**Performance**:
-- Enable Performance Insights to identify slow queries
-- Use RDS Proxy for serverless applications to reduce connection overhead
-- Monitor replication lag (<1 second acceptable, >5 seconds problematic)
-- Optimize parameter groups for workload characteristics
-
-**Blue/Green Deployments**:
-- Test major version upgrades safely with <1 minute switchover
-- Reduces upgrade downtime from hours to <1 minute
-- Keeps blue environment as rollback option
+1. **RDS runs the engine; you still own the database.** Schema, queries, parameters, sizing, and major version upgrades stay your job, and a version left past standard support starts paying Extended Support.
+2. **Aurora's shared storage is what makes it different.** Six copies across three zones, readers without their own copy, fast failover, clones, and storage that grows and shrinks.
+3. **Choose by engine, read scaling, and load shape.** Oracle, SQL Server, Db2, and MariaDB mean RDS. For MySQL and PostgreSQL, Aurora pays off with several readers, variable load, or heavy I/O.
+4. **Run production Multi-AZ.** A Multi-AZ DB instance gives a synchronous standby; a Multi-AZ DB cluster or Aurora gives readable standbys and faster failover. All of them move DNS, so applications must reconnect.
+5. **Replicas are asynchronous.** Send only reads that tolerate lag to them, and keep read-your-own-writes on the writer.
+6. **Aurora serverless is for variable load.** It scales from 0 to 256 ACUs without dropping connections, but steady workloads cost less provisioned.
+7. **Restores create new databases.** Point-in-time recovery, snapshots, and clones all produce a new endpoint, so plan the cutover, not just the backup.
+8. **Blue/green makes upgrades short, not reversible.** Switchover takes about a minute, but the old environment stops receiving writes.
+9. **Decide encryption and connections early.** Encryption can't be added in place, and connection-hungry applications need RDS Proxy.

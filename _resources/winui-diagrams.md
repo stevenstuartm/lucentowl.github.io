@@ -4,7 +4,7 @@ layout: resource
 type: reference
 category: "WinUI 3"
 description: "The diagrams behind the WinUI 3 study guides: how a desktop app's markup, layout, controls, data, and threads fit together at run time."
-last_updated: 2026-09-24
+last_updated: 2026-09-25
 figures:
   - winui-markup-to-objects
   - winui-measure-arrange
@@ -29,6 +29,7 @@ figures:
   - winui-composition-hand-in
   - winui-webview2-processes
   - winui-oauth2-redirect
+  - winui-automation-tree
 tags: [diagrams, xaml-layout, data-binding, mvvm, templated-controls, dispatcherqueue]
 related_guides:
   - /study-guides/dotnet/winui/winui-xaml-fundamentals.html
@@ -52,4 +53,5 @@ related_guides:
   - /study-guides/dotnet/winui/winui-media-and-graphics.html
   - /study-guides/dotnet/winui/winui-webview2.html
   - /study-guides/dotnet/winui/winui-security.html
+  - /study-guides/dotnet/winui/winui-accessibility.html
 ---

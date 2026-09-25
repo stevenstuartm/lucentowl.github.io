@@ -1,0 +1,66 @@
+---
+title: "An SQS Message's Lifecycle"
+kind: state
+system: aws
+summary: "A received message hides, then is deleted, reappears, or moves to a DLQ."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 295" role="img" aria-labelledby="awsql-title awsql-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsql-title">The states of a message in an SQS queue</title>
+<desc id="awsql-desc">A producer sends a message and it becomes visible in the queue. A consumer's ReceiveMessage call returns it, raises its receive count by one, and hides it from other consumers for the visibility timeout. If the consumer deletes it before the timeout ends, it is gone. If the timeout expires first, the message becomes visible again for another receive. Once its receive count exceeds the redrive policy's maxReceiveCount, SQS moves it to the dead-letter queue instead.</desc>
+<style>
+.awsql-st { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsql-end { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.awsql-dlq { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsql-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsql-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsql-dn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsql-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsql-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsql-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsql-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsql-back { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awsql-mv { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="awsql-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awsql-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsql-c" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsql-app" x="20" y="40" width="130" height="56" rx="6"/>
+<text class="awsql-t" x="85" y="73" text-anchor="middle">Producer</text>
+
+<rect class="awsql-st" x="230" y="40" width="180" height="56" rx="6"/>
+<text class="awsql-n" x="320" y="63" text-anchor="middle">Visible</text>
+<text class="awsql-k" x="320" y="81" text-anchor="middle">[any consumer can receive it]</text>
+
+<rect class="awsql-st" x="580" y="40" width="170" height="56" rx="6"/>
+<text class="awsql-n" x="665" y="63" text-anchor="middle">In flight</text>
+<text class="awsql-k" x="665" y="81" text-anchor="middle">[hidden from other consumers]</text>
+
+<rect class="awsql-end" x="840" y="40" width="120" height="56" rx="6"/>
+<text class="awsql-t" x="900" y="73" text-anchor="middle">Deleted</text>
+
+<rect class="awsql-dlq" x="215" y="180" width="210" height="56" rx="6"/>
+<text class="awsql-dn" x="320" y="203" text-anchor="middle">Dead-letter queue</text>
+<text class="awsql-k" x="320" y="221" text-anchor="middle">[same account, Region, and type]</text>
+
+<path class="awsql-ln" d="M150,68 L228,68" marker-end="url(#awsql-a)"/>
+<text class="awsql-lab" x="189" y="60" text-anchor="middle">SendMessage</text>
+
+<path class="awsql-ln" d="M410,55 L578,55" marker-end="url(#awsql-a)"/>
+<text class="awsql-lab" x="494" y="47" text-anchor="middle">ReceiveMessage, count + 1</text>
+
+<path class="awsql-back" d="M580,83 L412,83" marker-end="url(#awsql-b)"/>
+<text class="awsql-lab" x="496" y="101" text-anchor="middle">visibility timeout expires</text>
+
+<path class="awsql-ln" d="M750,68 L838,68" marker-end="url(#awsql-a)"/>
+<text class="awsql-lab" x="794" y="60" text-anchor="middle">DeleteMessage</text>
+
+<path class="awsql-mv" d="M320,96 L320,178" marker-end="url(#awsql-c)"/>
+<text class="awsql-lab" x="332" y="142">receive count exceeds maxReceiveCount</text>
+
+<text class="awsql-lab" x="20" y="275">The visibility timeout defaults to 30 seconds and can be up to 12 hours. A consumer can extend it for a message it is still working on.</text>
+</g>
+</svg>

@@ -1,0 +1,59 @@
+---
+title: "A Pod Shutting Down in Kubernetes"
+kind: dynamic
+system: aspnet-core
+summary: "Routing updates, the preStop sleep, and the app's drain, inside one grace period."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 330" role="img" aria-labelledby="aks-title aks-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aks-title">The timeline of a Kubernetes pod shutdown for an ASP.NET Core app with a 10-second preStop sleep and a 60-second grace period</title>
+<desc id="aks-desc">At time zero the pod is deleted and the 60-second termination grace period starts. Two things happen at once. The kubelet runs the preStop hook, a 10-second sleep. Meanwhile the control plane removes the pod from the Service's endpoints, and node proxies and load balancers take a few seconds to stop sending it traffic. During the sleep the app keeps serving normally, so requests that still arrive are handled. At 10 seconds the kubelet sends SIGTERM. The app raises ApplicationStopping, Kestrel stops accepting connections and drains in-flight requests, hosted services stop, and the process exits, all within its 45-second ShutdownTimeout, which ends at 55 seconds. If the container is still running when the grace period ends at 60 seconds, the kubelet kills it with SIGKILL.</desc>
+<style>
+.aks-bar { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.aks-act { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aks-lane { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.aks-t { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.aks-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aks-em { font-size: 10.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.aks-mark { stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.aks-axis { stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.aks-brk { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.4; }
+.aks-brk2 { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.4; }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<line class="aks-axis" x1="180" y1="30" x2="900" y2="30"/>
+<text class="aks-k" x="180" y="22" text-anchor="middle">0 s</text>
+<text class="aks-k" x="300" y="22" text-anchor="middle">10 s</text>
+<text class="aks-k" x="840" y="22" text-anchor="middle">55 s</text>
+<text class="aks-k" x="900" y="22" text-anchor="middle">60 s</text>
+
+<text class="aks-lane" x="20" y="72">kubelet</text>
+<rect class="aks-act" x="180" y="52" width="120" height="30" rx="4"/>
+<text class="aks-t" x="190" y="71">preStop: sleep 10 s</text>
+<text class="aks-em" x="310" y="71">SIGTERM</text>
+<text class="aks-em" x="892" y="71" text-anchor="end">SIGKILL if still running</text>
+
+<text class="aks-lane" x="20" y="122">Endpoints and</text>
+<text class="aks-lane" x="20" y="137">load balancers</text>
+<rect class="aks-bar" x="180" y="110" width="84" height="30" rx="4"/>
+<text class="aks-t" x="312" y="122">pod removed from the Service; routing catches up</text>
+<text class="aks-t" x="312" y="136">over a few seconds, then no new requests arrive</text>
+
+<text class="aks-lane" x="20" y="190">App</text>
+<rect class="aks-bar" x="180" y="170" width="120" height="30" rx="4"/>
+<text class="aks-t" x="190" y="189">serves normally</text>
+<rect class="aks-act" x="300" y="170" width="215" height="30" rx="4"/>
+<text class="aks-t" x="310" y="189">Kestrel drains in-flight requests</text>
+<rect class="aks-act" x="515" y="170" width="125" height="30" rx="4"/>
+<text class="aks-t" x="525" y="189">hosted services stop</text>
+<text class="aks-t" x="650" y="189">process exits</text>
+
+<line class="aks-mark" x1="300" y1="40" x2="300" y2="210"/>
+<line class="aks-mark" x1="900" y1="40" x2="900" y2="210"/>
+
+<path class="aks-brk" d="M300,228 L300,238 L840,238 L840,228"/>
+<text class="aks-t" x="310" y="254">ShutdownTimeout, 45 s: the app's own budget for draining and stopping</text>
+<path class="aks-brk2" d="M180,272 L180,282 L900,282 L900,272"/>
+<text class="aks-em" x="190" y="298">terminationGracePeriodSeconds, 60 s: starts before the preStop hook</text>
+<text class="aks-k" x="190" y="318">The sleep keeps the app serving while routing moves away from the pod.</text>
+</g>
+</svg>

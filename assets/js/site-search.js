@@ -15,7 +15,7 @@ class SiteSearch {
     static WORDS_PER_MINUTE = 200;
 
     // Values of data-pagefind-filter="type:…" in the content layouts, in tab order
-    static TYPES = { 'Guide': 'Guides', 'Post': 'Posts', 'Resource': 'Resources', 'Case Study': 'Case Studies' };
+    static TYPES = { 'Guide': 'Guides', 'Post': 'Posts', 'Resource': 'Resources', 'Case Study': 'Case Studies', 'Path': 'Paths' };
 
     constructor(root) {
         this.root = root;

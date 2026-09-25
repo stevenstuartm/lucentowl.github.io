@@ -1,494 +1,267 @@
 ---
-title: ".NET Aspire Distributed Applications"
+title: "Aspire Distributed Applications"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Aspire"
-description: "Multi-project orchestration, service discovery, backing services, testing, and deployment patterns for distributed .NET applications using Aspire."
-tags: [aspire, distributed-systems, service-discovery, microservices, cloud-native, testing, deployment, orchestration]
+description: "Building a multi-service application with Aspire: service discovery, backing services in development and production, existing infrastructure, service-to-service communication, integration testing, and publishing to Docker Compose, Kubernetes, or Azure."
+tags: [aspire, service-discovery, deployment, integration-testing, microservices, practical]
 ---
 
-## Orchestrating Distributed .NET Applications
+## One AppHost for the Whole System
 
-Once an application grows beyond a single API project, you need to coordinate service-to-service communication, shared infrastructure like databases and caches, consistent configuration across projects, and startup ordering. Without a central orchestration point, each developer ends up managing connection strings, ports, and container configurations independently, leading to environment drift and onboarding friction.
+Once an application grows past a single API, the hard parts move between services: which service calls which, where each one's database lives, what starts first, and how the same topology gets from a laptop to a cluster. Aspire puts all of that in one AppHost, which declares every project and backing service with `Add` calls and connects them with `WithReference()`.
 
-.NET Aspire's AppHost project serves as that central orchestration point. It defines the entire application topology in a single C# file: which service projects participate, what infrastructure they depend on, and how they discover each other. During local development, the AppHost starts everything together, wires up service discovery, and provides a dashboard for monitoring health and logs. For deployment, it generates a manifest that describes the topology for cloud provisioning tools.
-
-This guide covers the core patterns for building distributed .NET applications with Aspire: multi-project orchestration, service discovery, backing services, communication patterns, testing, and deployment. Each section explains the concepts before showing the Aspire-specific APIs that implement them.
-
-## Multi-Project Orchestration
-
-The AppHost project is the entry point for an Aspire application. It references all the service projects and infrastructure resources that make up the distributed system, declaring the relationships between them. The result is a dependency graph that Aspire uses for startup ordering, service discovery, and manifest generation.
-
-### Adding Projects
-
-Each service project is added to the AppHost using `AddProject<T>()`, where `T` is a marker type from the project reference. The string argument becomes the resource name, which also serves as the service discovery hostname.
+A realistic system has a public gateway, an internal order service, and a background worker, sharing PostgreSQL, Redis, and RabbitMQ, plus a one-shot service that applies database migrations:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var apiGateway = builder.AddProject<Projects.ApiGateway>("api-gateway");
-var orderService = builder.AddProject<Projects.OrderService>("order-service");
-var worker = builder.AddProject<Projects.BackgroundWorker>("background-worker");
-```
-
-The resource name you choose matters because it becomes the hostname that other services use to communicate. A service named `"order-service"` is reachable at `http://order-service` from any project that references it.
-
-### Declaring Dependencies with WithReference
-
-The `WithReference()` method declares that one project depends on another. This creates two things: a startup ordering constraint ensuring the dependency is healthy before the dependent starts, and a service discovery entry so the dependent can locate the dependency by name.
-
-```csharp
 var redis = builder.AddRedis("cache");
-var postgres = builder.AddPostgres("postgres")
-    .AddDatabase("orders-db");
+var ordersDb = builder.AddPostgres("postgres").AddDatabase("orders-db");
 var rabbit = builder.AddRabbitMQ("messaging");
 
+var migrations = builder.AddProject<Projects.MigrationService>("migrations")
+    .WithReference(ordersDb).WaitFor(ordersDb);
+
 var orderService = builder.AddProject<Projects.OrderService>("order-service")
-    .WithReference(postgres)
+    .WithReference(ordersDb).WaitForCompletion(migrations)
     .WithReference(redis)
-    .WithReference(rabbit);
+    .WithReference(rabbit).WaitFor(rabbit)
+    .WithHttpHealthCheck("/health");
 
-var apiGateway = builder.AddProject<Projects.ApiGateway>("api-gateway")
-    .WithReference(orderService)
-    .WithReference(redis);
-
-var worker = builder.AddProject<Projects.BackgroundWorker>("background-worker")
-    .WithReference(rabbit)
-    .WithReference(postgres);
-```
-
-This AppHost orchestrates a public-facing API gateway that calls the order service and uses Redis for caching, an internal order service backed by PostgreSQL, Redis, and RabbitMQ, and a background worker that consumes messages from RabbitMQ and writes to PostgreSQL.
-
-### External Endpoints and Configuration
-
-By default, Aspire projects are only reachable within the application's internal network. For services that need to accept traffic from outside, such as a public API or a frontend, use `WithExternalHttpEndpoints()`.
-
-```csharp
-var apiGateway = builder.AddProject<Projects.ApiGateway>("api-gateway")
+builder.AddProject<Projects.ApiGateway>("api-gateway")
     .WithExternalHttpEndpoints()
-    .WithReference(orderService);
+    .WithReference(orderService).WaitFor(orderService)
+    .WithReference(redis)
+    .WithHttpHealthCheck("/health");
+
+builder.AddProject<Projects.BackgroundWorker>("background-worker")
+    .WithReference(rabbit).WaitFor(rabbit)
+    .WithReference(ordersDb).WaitForCompletion(migrations);
+
+builder.Build().Run();
 ```
 
-You can pass environment variables to projects using `WithEnvironment()`, which is useful for configuration values that differ between services or that come from parameters.
+Only the gateway has external endpoints, because only the gateway takes traffic from outside the system. The order service and the worker never reference each other. They share the `messaging` resource, and that shared broker is the only coupling between them.
 
-```csharp
-var featureFlag = builder.AddParameter("enable-new-checkout");
+{% include figure.html id="asp-aspire-topology" %}
 
-var apiGateway = builder.AddProject<Projects.ApiGateway>("api-gateway")
-    .WithEnvironment("FEATURE_NEW_CHECKOUT", featureFlag);
-```
+Without `WaitFor()`, the AppHost starts resources in parallel, so a service can start before its database accepts connections. Waiting only means something when the dependency has a health check. The hosting integrations for PostgreSQL, Redis, and RabbitMQ register those checks in the AppHost, so waiting on them means waiting until they accept connections. A project has no check until you add one, so without it the dashboard and `WaitFor()` treat the project as healthy the moment its process runs. `WithHttpHealthCheck("/health")` points the AppHost at the order service's and the gateway's health endpoints instead. The template's ServiceDefaults maps `/health` only in the Development environment, which a project's default launch profile sets, so this works locally as generated.
 
-### Conditional Resource Configuration
-
-The `builder.ExecutionContext.IsPublishMode` property distinguishes between local development and deployment. This lets you use container-based resources locally while targeting managed cloud services in production.
-
-```csharp
-var cache = builder.ExecutionContext.IsPublishMode
-    ? builder.AddAzureRedis("cache")
-    : builder.AddRedis("cache");
-```
-
-This pattern keeps the local development experience fast and self-contained while producing the correct deployment manifest for cloud infrastructure.
+`WaitForCompletion()` waits for a resource to exit successfully rather than to become healthy. The migration service runs once, applies the schema, and exits, and neither the order service nor the worker starts until it has. If it exits with an error, they don't start at all, which is easier to diagnose than two services failing on a missing table.
 
 ## Service Discovery
 
-Aspire's service discovery eliminates the need for hardcoded URLs and manual port management. When a project references another project via `WithReference()`, the consuming service receives configuration entries that map the resource name to a concrete endpoint. Services then use the resource name as the hostname in their HTTP calls.
+Service discovery lets the gateway call `order-service` by name. The resource name in the AppHost becomes the host name every caller uses, locally and after deployment.
 
 ### How Discovery Works
 
-Under the hood, Aspire generates configuration entries in the format that `Microsoft.Extensions.ServiceDiscovery` understands. The ServiceDefaults project, which every Aspire service project references, calls `AddServiceDiscovery()` during startup to register the discovery infrastructure.
-
-When service A has a reference to service B named `"order-service"`, Aspire injects configuration that tells the service discovery middleware where `order-service` is running. Service A can then make HTTP requests to `http://order-service` and the middleware resolves the actual address.
-
-### Using Typed HttpClients with Service Discovery
-
-The standard pattern for service-to-service HTTP calls uses `IHttpClientFactory` with named or typed clients. The `AddHttpClient` extension accepts the resource name as the base address, and service discovery resolves it at runtime.
+`WithReference(orderService)` puts the order service's endpoints into the gateway's configuration under `services__order-service__…` keys. ServiceDefaults registers `Microsoft.Extensions.ServiceDiscovery` and adds its handler to every `HttpClient` from `IHttpClientFactory`. When the gateway sends a request to `order-service`, the handler looks the name up in that configuration and rewrites the request to the real address.
 
 ```csharp
-// In the consuming project's Program.cs
+// In the gateway's Program.cs
 builder.Services.AddHttpClient<OrderServiceClient>(client =>
 {
     client.BaseAddress = new Uri("https+http://order-service");
 });
 ```
 
-The `https+http://` scheme prefix tells service discovery to prefer HTTPS but fall back to HTTP. You can also use `http://` or `https://` explicitly.
-
-The typed client class then makes calls without worrying about actual addresses or ports.
+The `https+http://` scheme means "prefer HTTPS, fall back to HTTP," which lets the same code work whether the order service exposes one scheme or both. `https://` or `http://` pins one. A typed client, a class that receives the configured `HttpClient` through its constructor, then contains no addresses at all:
 
 ```csharp
-public class OrderServiceClient
+public class OrderServiceClient(HttpClient httpClient)
 {
-    private readonly HttpClient _httpClient;
-
-    public OrderServiceClient(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
-
-    public async Task<Order?> GetOrderAsync(int orderId)
-    {
-        return await _httpClient.GetFromJsonAsync<Order>($"/orders/{orderId}");
-    }
+    public Task<Order?> GetOrderAsync(int orderId) =>
+        httpClient.GetFromJsonAsync<Order>($"/orders/{orderId}");
 }
 ```
 
-### Connection Strings vs. Service Endpoints
+Resolution only works for clients that have the discovery handler. A client from `IHttpClientFactory` gets it through ServiceDefaults. A `new HttpClient()` doesn't, and sends `order-service` to DNS as a literal host name.
 
-Service discovery works differently depending on the resource type. When you reference a project, Aspire provides a service endpoint that supports HTTP-based discovery. When you reference infrastructure resources like databases or message brokers, Aspire provides a connection string instead.
+### Discovery After Deployment
+
+Configuration is one source among several. When no configuration entry exists for a name, the default pass-through provider leaves `order-service` unchanged and lets the platform's own DNS resolve it. That is what happens on Kubernetes and Azure Container Apps, where a service's name is already a resolvable host name. For Kubernetes named ports, the separate `Microsoft.Extensions.ServiceDiscovery.Dns` package adds an opt-in provider that reads DNS SRV records, which carry a port as well as a host. Because the caller only ever names `order-service`, moving from the AppHost's configuration to the platform's resolution changes nothing in the calling code.
+
+### External HTTP Services
+
+A third-party API or another team's service can join the model too. `AddExternalService()` declares it by URL, or by a parameter that holds the URL, and references to it feed service discovery like a project's endpoints do:
 
 ```csharp
-// Project reference: provides a service endpoint for HTTP discovery
-apiGateway.WithReference(orderService);
+var payments = builder.AddExternalService("payments", "https://api.payments.example.com/");
 
-// Database reference: provides a connection string
-orderService.WithReference(ordersDb);
+builder.AddProject<Projects.OrderService>("order-service")
+    .WithReference(payments);
 ```
 
-On the consuming side, a project reference means you use `HttpClient` with the resource name as hostname. A database reference means you read the connection string from configuration using the resource name as the key, typically handled by the corresponding client integration like `AddNpgsqlDataSource("orders-db")`.
+The order service calls `https://payments` through its `HttpClient`, and the URL lives in one place in the AppHost instead of in every consumer's configuration. The external service shows up in the dashboard, and `WithHttpHealthCheck()` on it reports whether it's reachable.
 
-## Adding Backing Services
+## Backing Services
 
-Aspire provides first-class integrations for common infrastructure services. Each integration has two sides: the hosting integration used in the AppHost to define and configure the resource, and the client integration used in the consuming project to get a pre-configured client with health checks and telemetry.
-
-### Databases
-
-Aspire supports several database engines. Each uses a similar pattern: add the server resource in the AppHost, optionally create a named database within it, and reference the database from consuming projects.
-
-**AppHost side (hosting integration):**
+Each backing service is a hosting integration in the AppHost and a client integration in each consumer. RabbitMQ shows the two calls:
 
 ```csharp
-var postgres = builder.AddPostgres("pg-server")
-    .AddDatabase("orders-db");
+// AppHost (Aspire.Hosting.RabbitMQ)
+var rabbit = builder.AddRabbitMQ("messaging")
+    .WithManagementPlugin();
 
-var sqlServer = builder.AddSqlServer("sql-server")
-    .AddDatabase("inventory-db");
-```
-
-The `AddPostgres()` call creates a PostgreSQL server container. `AddDatabase()` creates a logical database within that server. The database resource is what you pass to `WithReference()`.
-
-**Consuming project side (client integration):**
-
-```csharp
-// In Program.cs of the consuming project
-builder.AddNpgsqlDataSource("orders-db");
-// or for Entity Framework:
-builder.AddNpgsqlDbContext<OrdersDbContext>("orders-db");
-```
-
-The client integration reads the connection string that Aspire injected via `WithReference()`, configures health checks that appear in the Aspire dashboard, and adds OpenTelemetry tracing for database operations.
-
-### Caching
-
-Redis is the primary caching integration. The hosting side creates a Redis container, and the client side provides either a distributed cache or a raw connection multiplexer.
-
-**AppHost side:**
-
-```csharp
-var redis = builder.AddRedis("cache");
-```
-
-**Consuming project side:**
-
-```csharp
-// For IDistributedCache:
-builder.AddRedisDistributedCache("cache");
-
-// For direct IConnectionMultiplexer access:
-builder.AddRedisClient("cache");
-```
-
-Both options include health checks and telemetry automatically. The `IDistributedCache` option integrates with ASP.NET Core's output caching and session state without any additional configuration.
-
-### Messaging
-
-RabbitMQ is the most common messaging integration. The hosting side creates a RabbitMQ container with the management plugin enabled, and the client side provides a configured `IConnection`.
-
-**AppHost side:**
-
-```csharp
-var rabbit = builder.AddRabbitMQ("messaging");
-```
-
-**Consuming project side:**
-
-```csharp
+// Each consuming project (Aspire.RabbitMQ.Client)
 builder.AddRabbitMQClient("messaging");
 ```
 
-This registers an `IConnection` in the DI container with health checks and telemetry. Your application code uses the connection to create channels and publish or consume messages as usual.
+The hosting side runs the RabbitMQ container, and `WithManagementPlugin()` switches to the image with the management UI. The client side registers an `IConnection` in dependency injection, with a health check and tracing. Your code creates channels from that connection and publishes or consumes as usual. PostgreSQL, SQL Server, Redis, Kafka, MongoDB, and the rest follow the same two calls with their own names, and the [integrations overview](https://aspire.dev/integrations/overview/){:target="_blank" rel="noopener noreferrer"} lists them.
 
-### Cloud Storage
+### Local Containers, Managed Services in Production
 
-Azure Storage integrations follow the same hosting-plus-client pattern. The hosting side configures the storage account and specific services, while the client side provides typed SDK clients.
-
-**AppHost side:**
+The service you run in a container locally is rarely the one you run in production. Aspire's cloud hosting integrations model the managed service and let you swap in a container for local runs:
 
 ```csharp
-var storage = builder.AddAzureStorage("storage");
-var blobs = storage.AddBlobs("blob-storage");
-var queues = storage.AddQueues("queue-storage");
-var tables = storage.AddTables("table-storage");
+var ordersDb = builder.AddAzurePostgresFlexibleServer("postgres")
+    .RunAsContainer()
+    .AddDatabase("orders-db");
+
+var storage = builder.AddAzureStorage("storage")
+    .RunAsEmulator();
+var blobs = storage.AddBlobs("blobs");
 ```
 
-**Consuming project side:**
+In a local run, `RunAsContainer()` starts a PostgreSQL container and `RunAsEmulator()` starts the Azurite storage emulator. When you publish, the same resources become Azure Database for PostgreSQL and an Azure Storage account. The resource name, and so the connection string's name, is the same in both modes.
 
-```csharp
-builder.AddAzureBlobClient("blob-storage");
-builder.AddAzureQueueClient("queue-storage");
-builder.AddAzureTableClient("table-storage");
-```
+The client side can still differ. The Azure PostgreSQL server uses Microsoft Entra ID authentication by default, so its connection string carries no password. Consumers use the Azure client integration, `AddAzureNpgsqlDataSource` from `Aspire.Azure.Npgsql`, which attaches an Entra token provider, rather than plain `AddNpgsqlDataSource`. Check each Azure integration's client page for the package it expects.
 
-During local development, Aspire uses the Azurite storage emulator. In publish mode, it targets real Azure Storage accounts.
+Leave out `RunAsContainer()` or `RunAsEmulator()` and a local run provisions the real Azure resource in your subscription, which needs Azure credentials and costs money. For differences that go beyond one resource, `builder.ExecutionContext.IsPublishMode` tells the AppHost which mode it's running in, so it can branch on it directly.
 
 ## Working with Existing Infrastructure
 
-Not every piece of infrastructure lives inside the Aspire application. Production databases, shared services, and third-party APIs often exist outside of Aspire's control. The `AddConnectionString()` method lets you incorporate these external resources into the Aspire model.
+Not everything belongs to the AppHost. A shared database, another team's service, or a third-party API already exists, and Aspire shouldn't create or manage it.
 
-### Using AddConnectionString for External Resources
+### AddConnectionString
 
-When infrastructure already exists and Aspire should not create or manage it, `AddConnectionString()` reads a connection string from the application's configuration sources such as appsettings.json, environment variables, or user secrets.
-
-```csharp
-var existingSql = builder.AddConnectionString("legacy-database");
-
-var apiService = builder.AddProject<Projects.ApiService>("api-service")
-    .WithReference(existingSql);
-```
-
-The consuming project still uses `WithReference()` identically to how it references Aspire-managed resources. This consistency means the consuming project does not need to know whether the resource is a local container or an existing external service. The connection string named `"legacy-database"` must exist in the configuration of the AppHost.
-
-You can mix managed and external resources freely. An AppHost might spin up Redis locally for caching while pointing to an existing SQL Server that contains production data.
+`AddConnectionString()` adds a resource whose value the AppHost reads from its own configuration under `ConnectionStrings:<name>`, from user secrets, `appsettings.json`, or environment variables:
 
 ```csharp
 var redis = builder.AddRedis("cache");
-var existingSql = builder.AddConnectionString("production-db");
+var legacyDb = builder.AddConnectionString("legacy-db");
 
-var apiService = builder.AddProject<Projects.ApiService>("api-service")
+builder.AddProject<Projects.ApiService>("api-service")
     .WithReference(redis)
-    .WithReference(existingSql);
+    .WithReference(legacyDb);
 ```
+
+The consuming project references it exactly as it references a managed resource, so it can't tell a local container from an external server. An AppHost can run Redis in a container while pointing at a shared SQL Server that already exists.
 
 ### Custom Containers
 
-For services that lack a first-class Aspire integration, `AddContainer()` lets you run any Docker image as part of the application.
+For software without an integration, `AddContainer()` runs any image as a resource, with the same lifecycle, dashboard entry, and references as the rest:
 
 ```csharp
-var seq = builder.AddContainer("seq", "datalust/seq")
-    .WithEnvironment("ACCEPT_EULA", "Y")
-    .WithHttpEndpoint(port: 5341, targetPort: 80);
+var mail = builder.AddContainer("mail", "axllent/mailpit", "v1.20")
+    .WithHttpEndpoint(targetPort: 8025, name: "ui")
+    .WithEndpoint(targetPort: 1025, name: "smtp");
+
+builder.AddProject<Projects.ApiService>("api-service")
+    .WithEnvironment("Smtp__Endpoint", mail.GetEndpoint("smtp"));
 ```
 
-Custom containers participate in the Aspire dashboard and lifecycle management. You can reference their endpoints from other projects using `GetEndpoint()`.
+`GetEndpoint()` returns a reference that the AppHost resolves to the real address at startup, so the project never sees a hard-coded port. An endpoint declared with `WithEndpoint()` defaults to the `tcp` scheme, so the project receives a `tcp://host:port` URL and parses the host and port out of it. Pin image tags. A container defined with `latest` changes under you the next time the image is pulled, and a reproducible development environment is much of the point of an AppHost.
 
 ## Communication Patterns
 
-Distributed applications need services to communicate with each other. Aspire supports several communication patterns, each suited to different requirements around latency, coupling, and reliability.
+### HTTP Between Services
 
-### HTTP Service-to-Service
+HTTP is the default. The caller references the target project, registers a client with the resource name as the base address, and makes ordinary requests. The standard resilience handler is already on every factory client through ServiceDefaults, so don't add `AddStandardResilienceHandler()` to individual clients again. Stacking a second handler nests a second set of retries and timeouts inside the first. A client that needs different limits calls `RemoveAllResilienceHandlers()` and then adds its own.
 
-HTTP is the default communication pattern in Aspire. You reference one project from another, register a typed HttpClient with service discovery, and make standard HTTP calls using the resource name as the hostname.
-
-```csharp
-// In the API Gateway project
-builder.Services.AddHttpClient<OrderServiceClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://order-service");
-});
-```
-
-This pattern works well for synchronous request-response interactions where the caller needs an immediate result. Combining this with resilience policies from `Microsoft.Extensions.Http.Resilience` adds retry logic and circuit breaking.
-
-```csharp
-builder.Services.AddHttpClient<OrderServiceClient>(client =>
-{
-    client.BaseAddress = new Uri("https+http://order-service");
-})
-.AddStandardResilienceHandler();
-```
+HTTP suits request-response work where the caller needs the answer now, and it couples the caller's availability to the callee's.
 
 ### gRPC
 
-gRPC uses the same service discovery mechanism as HTTP. You reference the target project and configure the gRPC channel to use the resource name as the address. Since gRPC runs over HTTP/2, no additional port configuration is needed.
+gRPC clients built with `AddGrpcClient` come from `IHttpClientFactory`, so they get the same discovery handler and resolve `order-service` by name. They need a plain scheme, though:
 
 ```csharp
-builder.Services.AddGrpcClient<OrderService.OrderServiceClient>(options =>
+builder.Services.AddGrpcClient<Orders.OrdersClient>(options =>
 {
-    options.Address = new Uri("https+http://order-service");
+    options.Address = new Uri("https://order-service");
 });
 ```
 
-The gRPC client resolves the address through service discovery just like an HttpClient does. This works because Aspire's service discovery operates at the transport level, not the application protocol level.
+`GrpcChannel` chooses its credentials and resolver from the address's scheme and recognizes only `https` and `http`, so the `https+http` form that works for plain HTTP clients breaks a gRPC client. Pick the scheme the service actually serves.
 
-### Messaging Through Backing Services
+### Messaging Through a Shared Broker
 
-For asynchronous communication, services publish and consume messages through a shared messaging resource. The AppHost wires both the publisher and the consumer to the same resource, and each service uses the client integration to get a configured connection.
+For work the caller doesn't wait on, services communicate through a broker that both reference. In the opening AppHost, the order service and the background worker both reference `messaging`, and both call `AddRabbitMQClient("messaging")`. The order service publishes an event when an order is created and returns to the user. The worker consumes the event to run fulfillment and notifications.
 
-```csharp
-// In the AppHost
-var rabbit = builder.AddRabbitMQ("messaging");
+Neither service knows the other exists, so the worker can scale, restart, or fall behind without the order service noticing. The price is eventual consistency. The order exists before its fulfillment starts, and the design has to tolerate that gap.
 
-var orderService = builder.AddProject<Projects.OrderService>("order-service")
-    .WithReference(rabbit);
+## Integration Testing with the AppHost
 
-var worker = builder.AddProject<Projects.BackgroundWorker>("background-worker")
-    .WithReference(rabbit);
-```
-
-Both projects call `builder.AddRabbitMQClient("messaging")` in their respective Program.cs files. The order service publishes messages when orders are created, and the background worker consumes them for processing. Neither service knows about the other directly, which reduces coupling and allows independent scaling.
-
-This pattern is particularly valuable when the publisher does not need to wait for the result of the processing. Order creation returns immediately to the user while fulfillment, notifications, and analytics happen asynchronously.
-
-## Testing Aspire Applications
-
-Aspire provides a testing framework that lets you spin up the full application model, or a subset of it, for integration testing. The `Aspire.Hosting.Testing` package includes `DistributedApplicationTestingBuilder`, which creates a test host from your AppHost project.
-
-### Setting Up Integration Tests
-
-The test project references both the AppHost project and the `Aspire.Hosting.Testing` NuGet package. The testing builder creates an application instance that starts the same resources your AppHost defines, including containers for databases and caches.
+`Aspire.Hosting.Testing` runs your real AppHost inside a test. The test project references the AppHost project, which is where the `Projects.AppHost` type comes from, and `DistributedApplicationTestingBuilder` builds the application model from it. The AppHost then runs inside the test process, while each project and container it starts runs as its own process, exactly as in a local run.
 
 ```csharp
 [Fact]
-public async Task GetOrderReturnsSuccess()
+public async Task GetOrdersReturnsOk()
 {
+    var timeout = TimeSpan.FromSeconds(60);
+    var ct = CancellationToken.None;
+
     var appHost = await DistributedApplicationTestingBuilder
-        .CreateAsync<Projects.AspireAppHost>();
+        .CreateAsync<Projects.AppHost>(ct);
 
-    await using var app = await appHost.BuildAsync();
-    await app.StartAsync();
+    await using var app = await appHost.BuildAsync(ct).WaitAsync(timeout, ct);
+    await app.StartAsync(ct).WaitAsync(timeout, ct);
 
-    var httpClient = app.CreateHttpClient("api-gateway");
+    await app.ResourceNotifications
+        .WaitForResourceHealthyAsync("api-gateway", ct)
+        .WaitAsync(timeout, ct);
 
-    var response = await httpClient.GetAsync("/health");
+    using var httpClient = app.CreateHttpClient("api-gateway");
+    using var response = await httpClient.GetAsync("/orders", ct);
 
     Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 }
 ```
 
-The `CreateAsync<T>()` method takes the AppHost project as a type parameter and builds the full application model. After calling `BuildAsync()` and `StartAsync()`, the test has a running instance of the entire distributed application with real containers.
+`StartAsync()` returns once the resources are launched, not once they are ready, so the test waits for the gateway's health check, the `WithHttpHealthCheck` from the opening AppHost, before calling it. `CreateHttpClient("api-gateway")` returns a client aimed at that resource's real endpoint. The `WaitAsync` timeouts keep a container that never becomes healthy from hanging the test run.
 
-`CreateHttpClient("api-gateway")` returns an `HttpClient` configured with the actual endpoint of the named resource. You use it to make real HTTP requests against the running service.
+Between `CreateAsync` and `BuildAsync`, the test can change the builder's configuration and services. `appHost.Services` is the service collection of the AppHost process running inside the test, so it affects the clients that process creates, such as the one `CreateHttpClient` returns and the ones behind `WithHttpHealthCheck`. It doesn't reach into the services under test, which run in their own processes and get their configuration from the AppHost as usual.
 
-### Customizing the Test Environment
-
-Tests often need to override resources or configuration. The testing builder provides access to the AppHost's builder, allowing you to modify resources before building the application.
-
-```csharp
-var appHost = await DistributedApplicationTestingBuilder
-    .CreateAsync<Projects.AspireAppHost>();
-
-appHost.Services.ConfigureHttpClientDefaults(http =>
-{
-    http.AddStandardResilienceHandler(options =>
-    {
-        options.Retry.MaxRetryAttempts = 0;
-    });
-});
-```
-
-Since the tests start real containers for databases and message brokers, they serve as true integration tests that verify the full request path from HTTP endpoint through to data persistence. This catches configuration errors, serialization issues, and infrastructure problems that unit tests miss.
-
-The trade-off is that these tests are slower and require Docker to be running. Structure your test suite to run fast unit tests frequently and reserve Aspire integration tests for CI pipelines or pre-merge validation.
+These tests start real containers, so they catch what unit tests can't: wrong connection strings, serialization mismatches between services, and missing migrations. They are also slow and need a container runtime on the build agent. Keep them few, cover the paths that cross service boundaries, and leave the logic inside one service to that service's own tests.
 
 ## Deployment
 
-Aspire's deployment story bridges the gap between the local development topology defined in the AppHost and the cloud infrastructure needed to run the application in production. The AppHost generates a deployment manifest that describes the application's structure, and external tools consume that manifest to provision infrastructure and deploy services.
+The AppHost's model describes the whole system, so Aspire can generate deployment artifacts from it instead of having you describe the topology a second time in Compose files, Helm charts, or Bicep.
 
-### Manifest Generation
+### Publish and Deploy
 
-The AppHost can generate a JSON manifest that describes every resource, its dependencies, and its configuration. This manifest serves as the contract between Aspire and deployment tooling.
+The Aspire CLI has two commands for this, and both run the AppHost in publish mode:
 
-The manifest includes project resources with their Dockerfile references, container images with their configuration, connection strings and environment variables, and dependency relationships between resources. Deployment tools read this manifest to understand what infrastructure to create and how to wire services together.
+| Command | What it does | Use it when |
+| --- | --- | --- |
+| `aspire publish` | Writes target-specific artifacts and leaves parameter values unresolved | Another tool, such as your pipeline or GitOps controller, applies them later |
+| `aspire deploy` | Generates the artifacts, resolves parameters, and applies them to the target | Aspire itself should carry the deployment through |
 
-### Deployment Manifests and the Path to Production
-
-While Aspire is primarily a development-time tool, it bridges the gap to production through deployment manifest generation. The `azd` (Azure Developer CLI) can read an Aspire AppHost and generate the corresponding Azure infrastructure: container apps, databases, caches, and networking. This means the topology you define in `Program.cs` translates directly into deployment artifacts without maintaining a separate infrastructure definition.
-
-For teams not using Azure, Aspire can generate Docker Compose files or Kubernetes manifests from the application model. The `dotnet run --publisher manifest` command produces a JSON manifest that deployment tools can consume. This approach ensures that the application topology defined in code remains the single source of truth, reducing the drift between what developers run locally and what gets deployed.
-
-That said, most mature organizations already have established deployment pipelines and infrastructure-as-code practices. In those environments, Aspire's manifest generation is useful as a reference or starting point rather than a replacement for existing Terraform, Bicep, or Helm configurations. The development-time orchestration value stands on its own regardless of whether you adopt the deployment manifest features.
-
-### Azure Container Apps
-
-Azure Container Apps is the primary supported deployment target for Aspire applications. The [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/overview){:target="_blank" rel="noopener noreferrer"} (`azd`) reads the Aspire manifest and maps resources to Azure services automatically.
-
-The mapping follows predictable patterns: project resources become Container App instances, Redis resources map to Azure Cache for Redis, PostgreSQL resources map to Azure Database for PostgreSQL, and RabbitMQ resources can map to container-based deployments. Service discovery configuration translates to the Container Apps environment's built-in service discovery.
-
-The workflow is straightforward. You initialize the deployment configuration, and then a single command provisions all the Azure infrastructure and deploys the container images. The Azure Developer CLI handles building Docker images, pushing them to a container registry, and configuring the Container Apps environment with the correct service bindings.
-
-### Kubernetes
-
-For teams deploying to Kubernetes, the [Aspirate](https://github.com/prom3theu5/aspirern){:target="_blank" rel="noopener noreferrer"} (`aspirate`) community tool generates Kubernetes manifests or Helm charts from the Aspire manifest. This produces deployments, services, config maps, and secrets that reflect the application topology.
-
-The generated Kubernetes resources include Deployment and Service definitions for each project, ConfigMaps for environment variables and configuration, and PersistentVolumeClaims for stateful resources. You can customize the generated manifests before applying them to your cluster.
-
-### Publish Mode vs. Run Mode
-
-The `builder.ExecutionContext.IsPublishMode` property is the key mechanism for varying behavior between local development and deployment. In run mode, Aspire starts local containers for infrastructure. In publish mode, it generates the manifest with references to managed cloud services.
+Where each resource goes is decided by a compute environment you add to the AppHost:
 
 ```csharp
-var db = builder.ExecutionContext.IsPublishMode
-    ? builder.AddAzurePostgresFlexibleServer("pg").AddDatabase("orders")
-    : builder.AddPostgres("pg").AddDatabase("orders");
+builder.AddDockerComposeEnvironment("compose");
 ```
 
-This lets you develop against lightweight local containers while producing deployment manifests that reference fully managed cloud databases. The consuming projects remain identical in both cases because the connection string injection works the same way regardless of the backing implementation.
+The targets include Docker Compose (`AddDockerComposeEnvironment`), Kubernetes (`AddKubernetesEnvironment`, which publishes a Helm chart), Azure Container Apps, Azure App Service, and AKS. The [deployment docs](https://aspire.dev/deployment/deploy-with-aspire/){:target="_blank" rel="noopener noreferrer"} list which targets support publish, deploy, or both. In the generated output, projects become container images, `RunAsContainer()` resources become their managed services, `WithExternalHttpEndpoints()` decides what is exposed publicly, and development-only companions such as pgAdmin are left out. Plain container resources like the opening AppHost's `AddPostgres`, `AddRedis`, and `AddRabbitMQ` stay containers in the Compose file or Helm chart, which makes you responsible for their storage, backups, and upgrades in production. That is the usual reason to model production data stores with the managed-service integrations and `RunAsContainer()` instead.
 
-## Practical Patterns and Common Pitfalls
+### The Azure Developer CLI and the Manifest
 
-### Waiting for Dependencies
+Before these commands existed, deployment ran through a JSON manifest that the AppHost wrote and the [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/overview){:target="_blank" rel="noopener noreferrer"} (`azd`) consumed to provision Azure Container Apps. That path still works for existing `azd` workflows, which generate the manifest themselves. The manifest format is deprecated and no longer evolving, though, and Aspire's docs recommend `aspire deploy` for new Azure deployments. Community tools built on the manifest, such as Aspirate for Kubernetes, haven't been updated since April 2025, and the built-in Kubernetes environment covers the same ground.
 
-By default, Aspire starts resources in dependency order but does not wait for them to become fully healthy. A database container might be running at the OS level before it is ready to accept connections. Use `WaitFor()` to ensure a resource reports healthy before starting dependent services.
+### Where Generation Stops
 
-```csharp
-var postgres = builder.AddPostgres("pg").AddDatabase("orders");
+Most organizations that have run services for a while already have infrastructure as code, pipelines, and cluster conventions. There, the generated Helm chart or Compose file is a starting point to review and fold into the existing setup, not a replacement for it. The development loop pays for itself even if you never generate a deployment artifact.
 
-var orderService = builder.AddProject<Projects.OrderService>("order-service")
-    .WithReference(postgres)
-    .WaitFor(postgres);
-```
+Whichever path you take, every reference in the AppHost is a configuration value that production has to supply. A connection string that the AppHost injected locally has to come from somewhere after deployment: the generated artifacts, a secret store, or your own configuration system. A missing one surfaces only at run time, when the service first tries to connect. Walk the AppHost's references and parameters before the first deployment and check that each one has a production source.
 
-Without `WaitFor()`, the order service might start before PostgreSQL is ready, causing connection failures during startup. While services should handle transient connection failures gracefully, `WaitFor()` avoids the noise of retry logs during normal startup.
+## Pitfalls
 
-### Persistent Volumes for Development
+### Waiting Doesn't Replace Retries
 
-Container-based databases lose their data when the container restarts. During development, this means losing test data every time you restart the AppHost. `WithDataVolume()` attaches a named Docker volume to persist data between restarts.
+`WaitFor()` orders startup. It doesn't protect a service when its database restarts an hour later, or when a network hiccup drops a connection during startup. Services still need to handle transient failures. The standard resilience handler covers HTTP calls, and database clients need their own retry settings. Using only one of the two leaves either startup or steady state exposed.
 
-```csharp
-var postgres = builder.AddPostgres("pg")
-    .WithDataVolume("pg-data")
-    .AddDatabase("orders");
-```
+### The Local Topology Can Drift from Production
 
-This is a development convenience, not a production pattern. In deployment, managed database services handle their own persistence.
-
-### Custom Container Configuration
-
-When working with custom containers or configuring built-in resources beyond the defaults, Aspire provides several methods for fine-tuning. `WithImageTag()` pins a specific image version. `WithBindMount()` maps a host directory into the container for configuration files. Port mappings can be customized with `WithHttpEndpoint()` or `WithEndpoint()`.
-
-```csharp
-var seq = builder.AddContainer("seq", "datalust/seq")
-    .WithImageTag("latest")
-    .WithEnvironment("ACCEPT_EULA", "Y")
-    .WithHttpEndpoint(port: 5341, targetPort: 80);
-```
-
-Be deliberate about image tags in your AppHost. Using `latest` can cause unexpected behavior when images update. Pinning to specific versions provides reproducible environments.
-
-### Resource Health and the Dashboard
-
-The Aspire dashboard shows the health status of every resource in the application. Container resources report health based on their Docker health checks. Project resources report health through the ASP.NET Core health check endpoints configured in ServiceDefaults.
-
-When a resource shows unhealthy in the dashboard, check its logs directly from the dashboard UI. The centralized logging view often reveals the root cause faster than searching individual log files. Health check failures during startup typically point to connection string misconfiguration or port conflicts.
-
-### Startup Ordering and Transient Failures
-
-Even with `WaitFor()`, services should handle transient connection failures during startup. Network timing, DNS resolution delays, and resource initialization can cause brief windows where connections fail. The client integrations provided by Aspire configure sensible retry policies by default, but custom infrastructure connections should include explicit retry logic.
-
-The combination of `WaitFor()` for ordering and retry policies for resilience provides a robust startup experience. Relying on only one of these approaches leaves gaps that manifest as intermittent startup failures.
-
-### Configuration Parity Between Environments
-
-Aspire provides connection strings and service endpoints automatically during local development. In production, these values must come from the deployment environment. Every `WithReference()` call in the AppHost has a corresponding configuration key that needs a value in production, whether through environment variables, Azure App Configuration, Kubernetes secrets, or another source.
-
-Audit your AppHost references and verify that each one has an equivalent configuration source in your deployment environment. Missing a connection string is one of the most common deployment failures, and it only surfaces at runtime when the service tries to connect.
+`RunAsContainer()` makes local runs fast, but a PostgreSQL container isn't a managed flexible server with its own extensions, network rules, and version. Pin the container image to the version production runs, and test against the managed service in a shared environment before relying on anything version-specific.

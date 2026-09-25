@@ -1,0 +1,80 @@
+---
+title: "A Multi-Service AppHost"
+kind: container
+system: aspnet-core
+summary: "A gateway, order service, and worker sharing a database, cache, and broker."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 460" role="img" aria-labelledby="ast-title ast-desc" style="width:100%; min-width:700px; height:auto; display:block;">
+<title id="ast-title">The resources in a multi-service Aspire AppHost and how they connect</title>
+<desc id="ast-desc">Outside traffic reaches only the api-gateway project, the one resource with external endpoints. The gateway calls order-service by name through service discovery and uses the Redis cache. The order-service uses the cache, the PostgreSQL orders-db database, and publishes to the RabbitMQ messaging broker. The background-worker consumes from messaging and writes to orders-db. It never references order-service. A migrations project runs once, applies the schema to orders-db, and exits. Both order-service and background-worker wait for it to finish before they start.</desc>
+<style>
+.ast-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ast-alt { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.ast-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ast-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ast-t { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.ast-lbl { font-size: 10.5px; font-style: italic; fill: var(--color-accent, #A5486E); }
+.ast-conn { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ast-disc { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="ast-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ast-d" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="ast-t" x="30" y="24">Outside traffic</text>
+<path class="ast-conn" d="M110,30 L110,58" marker-end="url(#ast-a)"/>
+
+<rect class="ast-box" x="20" y="60" width="180" height="70" rx="5"/>
+<text class="ast-n" x="32" y="80">api-gateway</text>
+<text class="ast-k" x="32" y="97">[Project]</text>
+<text class="ast-t" x="32" y="114">External endpoints</text>
+
+<rect class="ast-box" x="260" y="60" width="180" height="70" rx="5"/>
+<text class="ast-n" x="272" y="80">order-service</text>
+<text class="ast-k" x="272" y="97">[Project]</text>
+<text class="ast-t" x="272" y="114">Waits for migrations</text>
+
+<rect class="ast-alt" x="500" y="60" width="170" height="70" rx="5"/>
+<text class="ast-n" x="512" y="80">messaging</text>
+<text class="ast-k" x="512" y="97">[Container: RabbitMQ]</text>
+
+<rect class="ast-box" x="730" y="60" width="190" height="70" rx="5"/>
+<text class="ast-n" x="742" y="80">background-worker</text>
+<text class="ast-k" x="742" y="97">[Project]</text>
+<text class="ast-t" x="742" y="114">Waits for migrations</text>
+
+<rect class="ast-alt" x="110" y="220" width="180" height="60" rx="5"/>
+<text class="ast-n" x="122" y="242">cache</text>
+<text class="ast-k" x="122" y="259">[Container: Redis]</text>
+
+<rect class="ast-alt" x="470" y="220" width="240" height="60" rx="5"/>
+<text class="ast-n" x="482" y="242">orders-db</text>
+<text class="ast-k" x="482" y="259">[Container: PostgreSQL]</text>
+
+<rect class="ast-box" x="470" y="340" width="240" height="60" rx="5"/>
+<text class="ast-n" x="482" y="362">migrations</text>
+<text class="ast-k" x="482" y="379">[Project] runs once, then exits</text>
+
+<path class="ast-disc" d="M200,100 L258,100" marker-end="url(#ast-d)"/>
+<text class="ast-lbl" x="206" y="92">by name</text>
+
+<path class="ast-conn" d="M440,100 L498,100" marker-end="url(#ast-a)"/>
+<text class="ast-lbl" x="446" y="92">publish</text>
+<path class="ast-conn" d="M670,100 L728,100" marker-end="url(#ast-a)"/>
+<text class="ast-lbl" x="676" y="92">consume</text>
+
+<path class="ast-conn" d="M140,130 L140,218" marker-end="url(#ast-a)"/>
+<path class="ast-conn" d="M280,130 L280,218" marker-end="url(#ast-a)"/>
+<path class="ast-conn" d="M420,130 L500,218" marker-end="url(#ast-a)"/>
+<path class="ast-conn" d="M770,130 L690,218" marker-end="url(#ast-a)"/>
+<path class="ast-conn" d="M590,340 L590,282" marker-end="url(#ast-a)"/>
+<text class="ast-lbl" x="598" y="316">applies schema</text>
+
+<path class="ast-conn" d="M20,432 L60,432" marker-end="url(#ast-a)"/>
+<text class="ast-t" x="68" y="436">connection string, or broker traffic</text>
+<path class="ast-disc" d="M340,432 L380,432" marker-end="url(#ast-d)"/>
+<text class="ast-t" x="388" y="436">HTTP call resolved by service discovery</text>
+</g>
+</svg>

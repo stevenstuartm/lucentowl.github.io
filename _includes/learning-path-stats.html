@@ -1,0 +1,32 @@
+{% comment %}
+  Totals for one learning path, shared by the path page and the listing cards.
+  Usage: {% include learning-path-stats.html path=some_path %}
+  Sets (in the caller's scope): path_step_count, path_hours, path_minutes (rounded down to
+  15), path_reading ("2 h 15 min"), and path_categories (the site categories the main steps
+  cross, in first-seen order; taken from guides and resources only, since post categories
+  are free-form).
+{% endcomment %}
+{% assign path_docs = site.guides | concat: site.resources | concat: site.case_studies | concat: site.posts %}
+{% assign path_step_count = 0 %}
+{% assign path_words = 0 %}
+{% assign path_categories = "" | split: "" %}
+{% for stage in include.path.stages %}
+    {% for step in stage.steps %}
+        {% assign path_step_count = path_step_count | plus: 1 %}
+        {% assign path_doc = path_docs | where: "url", step.url | first %}
+        {% if path_doc %}
+            {% assign path_doc_words = path_doc.content | strip_html | number_of_words %}
+            {% assign path_words = path_words | plus: path_doc_words %}
+            {% if path_doc.category and path_doc.collection != "posts" and path_doc.collection != "case_studies" %}
+                {% unless path_categories contains path_doc.category %}
+                    {% assign path_categories = path_categories | push: path_doc.category %}
+                {% endunless %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+{% assign path_total_minutes = path_words | divided_by: 200 %}
+{% assign path_hours = path_total_minutes | divided_by: 60 %}
+{% assign path_minutes = path_total_minutes | modulo: 60 | divided_by: 15 | times: 15 %}
+{% capture path_reading %}{% if path_hours > 0 %}{{ path_hours }} h{% endif %}{% if path_minutes > 0 %} {{ path_minutes }} min{% endif %}{% if path_hours == 0 and path_minutes == 0 %}under 15 min{% endif %}{% endcapture %}
+{% assign path_reading = path_reading | strip %}

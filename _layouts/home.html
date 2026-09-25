@@ -37,6 +37,28 @@ layout: default
         </div>
     </section>
 
+    <!-- Learning paths: one slim band under the four doors, so the site's scope reads first -->
+    {% assign home_paths = site.learning_paths | sort: "order" %}
+    {% if home_paths.size > 0 %}
+    <nav class="home-paths-band" aria-labelledby="homePathsLabel">
+        <div class="home-paths-head">
+            <span class="home-paths-label" id="homePathsLabel">Start with a goal</span>
+            <a class="home-paths-all" href="{{ '/learning-paths.html' | relative_url }}">All learning paths →</a>
+        </div>
+        <ul class="home-paths-list">
+            {% for path in home_paths limit: 4 %}
+            {% include learning-path-stats.html path=path %}
+            <li>
+                <a href="{{ path.url | relative_url }}" title="{{ path.goal | escape }}">
+                    <span class="home-path-title">{{ path.title }}</span>
+                    <span class="home-path-meta">{{ path_step_count }} steps · about {{ path_reading }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+
     <!-- Featured: secondary to the learning paths above -->
     {% if page.featured_items %}
     <section class="home-featured" aria-labelledby="homeFeaturedHeading">

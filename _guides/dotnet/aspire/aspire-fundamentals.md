@@ -1,93 +1,105 @@
 ---
-title: ".NET Aspire Fundamentals"
+title: "Aspire Fundamentals"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Aspire"
-description: "The .NET Aspire application model, project structure, service defaults, dashboard, and integrations for building cloud-native .NET applications."
-tags: [aspire, cloud-native, orchestration, distributed-systems, observability, service-discovery, dotnet]
+description: "How Aspire's AppHost models an application, injects each service's configuration, and pairs with ServiceDefaults, the dashboard, and hosting and client integrations."
+tags: [aspire, apphost, orchestration, service-defaults, opentelemetry, fundamentals]
 ---
 
-## What .NET Aspire Solves
+## What Aspire Solves
 
-Building a distributed .NET application locally means spinning up databases, caches, message brokers, and multiple service projects, then wiring them all together with the right connection strings, ports, and configuration. Developers often cobble this together with Docker Compose files, environment variables scattered across launch profiles, and manual steps documented in a wiki that nobody keeps current. The experience is fragile, time-consuming, and different on every developer's machine.
+Running a distributed application locally means starting databases, caches, message brokers, and several service projects, then wiring them together with the right connection strings, ports, and configuration. Teams usually hold this together with Docker Compose files, environment variables scattered across launch profiles, and setup steps in a wiki that nobody keeps current. The result is fragile, slow to set up, and different on every developer's machine.
 
-[.NET Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/get-started/aspire-overview){:target="_blank" rel="noopener noreferrer"} addresses this by providing an opinionated orchestration layer for .NET applications. It handles local service composition so that running a single project starts your APIs, workers, containers, and backing services together. It standardizes cross-cutting concerns like OpenTelemetry, health checks, and HTTP resilience through a shared configuration project. And it provides a local dashboard that aggregates logs, traces, and metrics from every service in one place, giving you production-grade observability during development without manual instrumentation.
+[Aspire](https://aspire.dev/){:target="_blank" rel="noopener noreferrer"} replaces that with an application model written in code. Running one project starts your APIs, workers, frontends, and backing containers together, and hands each service the addresses and credentials it needs. A shared ServiceDefaults project gives every .NET service the same OpenTelemetry, health check, resilience, and service discovery setup. A local dashboard collects logs, traces, and metrics from every service in one place.
 
-Aspire is not a deployment platform or a runtime. It is a development-time orchestration and configuration framework that also produces deployment manifests for tools like the Azure Developer CLI or custom provisioning pipelines. Your services still deploy as normal .NET applications; Aspire just makes the path from local development to production more consistent and less manual.
+The product was called .NET Aspire until version 13 (November 2025), which dropped the prefix. It now orchestrates Python and JavaScript apps as well as .NET projects, and the orchestrating project can be written in TypeScript as well as C# (generally available since Aspire 13.5). This guide uses C# throughout. A C# AppHost needs the .NET 10 SDK, although the services it runs can target .NET 8 or later. Running container resources locally needs a container runtime such as Docker Desktop or Podman.
 
-## The Aspire Project Structure
+Aspire is not a runtime and not a hosting platform. Your services still deploy as ordinary applications, and the application model's main job is the development loop.
 
-Aspire applications follow a three-project pattern that separates orchestration, shared configuration, and your actual services.
+## The Three Kinds of Project
 
-### AppHost
+An Aspire solution separates orchestration, shared service configuration, and the services themselves. Where each piece runs decides what it can do, so the split matters before any code does.
 
-The AppHost project is the orchestration entry point. You run this project during development, and it starts everything your application needs: your .NET projects, container dependencies like Redis or PostgreSQL, and the Aspire dashboard. The AppHost defines which resources compose your application and how they connect to each other. It does not deploy to production. Think of it as the conductor that knows what instruments are in the orchestra and ensures they all start playing together.
+| Project | Runs where | Deployed? | Responsibility |
+| --- | --- | --- | --- |
+| **AppHost** | On the developer's machine, in integration tests, and when publishing deployment artifacts | Never | Declares every resource and how they connect; starts them all |
+| **ServiceDefaults** | Inside every .NET service, as a referenced library | Yes, with each service | Telemetry, health checks, HTTP resilience, service discovery |
+| **Service projects** | As their own processes | Yes | Application logic |
 
-### ServiceDefaults
+The **AppHost** is the orchestration entry point. You run it during development, and it starts your projects, their container dependencies, and the dashboard. It knows every resource because it declares them all, but nothing in production runs it.
 
-The ServiceDefaults project is a shared class library that every service in your application references. It configures cross-cutting concerns like OpenTelemetry for traces, metrics, and logs, along with health check endpoints, HTTP client resilience with retry and circuit breaker policies, and service discovery so that services can find each other by name rather than by hardcoded URLs. Unlike the AppHost, ServiceDefaults ships with your services to production. It represents your team's shared policy for how every service should behave regarding observability, resilience, and discovery.
+The **ServiceDefaults** project is a shared class library that each service references and calls once at startup. Its project file sets `IsAspireSharedProject`. Unlike the AppHost, its code ships inside every service, so it is the place to put the team's policy for how each service reports telemetry, exposes health, and calls other services.
 
-### Service Projects
+**Service projects** are ordinary .NET projects such as APIs, workers, and frontends. The AppHost references them to put them in the application model, but they have no compile-time dependency on the AppHost. They run without it as long as their connection strings and endpoints come from some other configuration source.
 
-Your actual service projects, such as APIs, workers, and frontends, are standard .NET projects that reference ServiceDefaults. They contain your application logic and are the projects that deploy to production. The AppHost references these projects to include them in the orchestration graph, but the projects themselves have no compile-time dependency on the AppHost.
+### Creating an Aspire Solution
 
-### Scaffolding a New Aspire Application
-
-The `dotnet new aspire-starter` template generates this three-project structure automatically:
+The `aspire new` command in the Aspire CLI, or `dotnet new aspire-starter`, generates the three-project structure with sample services:
 
 ```
-MyApp/
-  MyApp.AppHost/          # Orchestration (startup project)
-  MyApp.ServiceDefaults/  # Shared cross-cutting concerns
-  MyApp.ApiService/       # Example API project
-  MyApp.Web/              # Example Blazor frontend
+AspireSample/
+  AspireSample.AppHost/          # Orchestration (the project you run)
+  AspireSample.ServiceDefaults/  # Shared service configuration
+  AspireSample.ApiService/       # Minimal API
+  AspireSample.Web/              # Blazor frontend
 ```
 
-The AppHost project is set as the startup project. Running it launches all referenced services, spins up any container dependencies, and opens the Aspire dashboard. You get a working distributed application with telemetry, health checks, and service discovery from the first `dotnet run`.
+The starter can also add a test project. Running the AppHost, from an IDE or with `aspire run`, starts both services and the dashboard, with telemetry, health checks, and service discovery already working.
 
 ## The AppHost and the Application Model
 
-The AppHost project's `Program.cs` is where you define your application's topology. This is the core concept in Aspire: a declarative model that describes what resources your application consists of and how they relate to each other.
+The AppHost's `Program.cs` defines the application's topology, in code that declares which resources the application consists of and how they relate. The dashboard's resource list and the deployment tooling both read from that model.
 
 ### Building the Application Model
 
-The entry point uses `DistributedApplication.CreateBuilder()` to create a builder, then adds resources to describe the application graph:
+`DistributedApplication.CreateBuilder()` creates a builder, and each `Add` call registers a resource:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Add container-based infrastructure
+// Container-based infrastructure
 var cache = builder.AddRedis("cache");
 var db = builder.AddPostgres("postgres")
     .AddDatabase("catalogdb");
 
-// Add .NET projects and wire up their dependencies
+// .NET projects, wired to their dependencies
 var catalogApi = builder.AddProject<Projects.CatalogApi>("catalog-api")
     .WithReference(db)
     .WithReference(cache);
 
 var frontend = builder.AddProject<Projects.WebFrontend>("web-frontend")
     .WithReference(catalogApi)
+    .WaitFor(catalogApi)
     .WithExternalHttpEndpoints();
 
 builder.Build().Run();
 ```
 
-Each `Add` call registers a resource in the application model. `AddRedis("cache")` tells Aspire to run a Redis container with the logical name "cache." `AddPostgres("postgres").AddDatabase("catalogdb")` runs a PostgreSQL container and creates a database named "catalogdb" within it. `AddProject<T>("name")` registers a .NET project as a service in the graph.
+`AddRedis("cache")` runs a Redis container under the resource name "cache." `AddPostgres("postgres").AddDatabase("catalogdb")` runs a PostgreSQL container and adds a database resource named "catalogdb," which Aspire creates in that server if it doesn't already exist. `AddProject<T>("name")` adds a .NET project. `WithExternalHttpEndpoints()` marks the frontend's endpoints as reachable from outside the application, which matters once it's deployed. Without it, a project's endpoints are meant only for other resources in the model.
 
-The `AddProject<T>()` method uses a source-generated type reference that points to a specific project in the solution. The Aspire SDK generates a `Projects` class at build time containing type references for each project in the AppHost's dependency graph. This provides compile-time safety: if you rename or remove a project, the AppHost fails to build rather than failing at runtime.
+The `T` in `AddProject<T>()` comes from a `Projects` class that the Aspire SDK generates at build time, with one type for each project the AppHost references. Renaming or removing a service project breaks the AppHost's build rather than failing at run time.
 
 ### Wiring Resources with WithReference
 
-The `WithReference()` method is how you express dependencies between resources. When the catalog API calls `.WithReference(db)`, Aspire automatically injects the correct connection string into the catalog API's configuration at startup. When the frontend calls `.WithReference(catalogApi)`, Aspire configures service discovery so the frontend can reach the catalog API by name.
+`WithReference()` declares that one resource depends on another, and at startup the AppHost turns each reference into environment variables on the dependent service. The shape of those variables depends on what is referenced:
 
-This wiring replaces the manual process of copying connection strings into `appsettings.json` or environment variables. The AppHost knows the ports, hostnames, and credentials for every resource because it started them. It passes that information to dependent services through .NET's standard configuration system using the `ConnectionStrings` configuration section.
+| Referenced resource | What the dependent service receives | Read by |
+| --- | --- | --- |
+| A resource with a connection string (database, cache, broker) | `ConnectionStrings__catalogdb` | `IConfiguration.GetConnectionString("catalogdb")` and client integrations |
+| A project's endpoints | `services__catalog-api__https__0` and similar | .NET service discovery |
+| The same project's endpoints, for any language | `CATALOG_API_HTTPS` (name uppercased, hyphens become underscores) | Any code that reads environment variables |
+| Some resources' individual properties (since Aspire 13) | `CATALOGDB_URI`, `CATALOGDB_HOST`, `CATALOGDB_PORT`, and so on | Non-.NET services, or code that wants one part |
 
-The dependency graph is also visible in the dashboard. If a container resource fails to start, the dashboard shows which services depend on it and are therefore unable to function. This makes startup failures in a multi-service application much easier to diagnose than tailing log files from several terminal windows.
+.NET's configuration system maps the double underscore to its `:` separator, so `ConnectionStrings__catalogdb` arrives as the `ConnectionStrings:catalogdb` connection string with no code in the service. Nobody copies connection strings into `appsettings.json`. The AppHost started the container, so it already knows the port, host name, and generated password.
+
+A reference passes configuration and records the dependency, which the dashboard's graph draws. It doesn't make the dependent wait for the dependency to be ready. That is `WaitFor()`, which the frontend in the sample uses to hold its start until the catalog API is running (and healthy, if the resource declares a health check).
+
+{% include figure.html id="asp-aspire-run-model" %}
 
 ### Configuring Resources
 
-Resources support additional configuration through fluent methods. You can set environment variables, configure ports, mount volumes, and control resource behavior:
+Resources take further configuration through fluent methods: environment variables, endpoints, volumes, container image tags, and companion tools.
 
 ```csharp
 var db = builder.AddPostgres("postgres")
@@ -96,64 +108,90 @@ var db = builder.AddPostgres("postgres")
     .AddDatabase("catalogdb");
 
 var cache = builder.AddRedis("cache")
-    .WithRedisCommander();
+    .WithRedisInsight();
 ```
 
-The `WithDataVolume()` call creates a named Docker volume so that database data persists across restarts. `WithPgAdmin()` and `WithRedisCommander()` add companion management UI containers alongside the infrastructure resource. These management tools run only during development and give you browser-based access to inspect your data without installing additional local tools.
+`WithDataVolume()` mounts a named container volume, so the database's data survives an AppHost restart. Without it, every run starts from an empty database. `WithPgAdmin()` and `WithRedisInsight()` add a browser-based management UI as a separate container next to the resource. Aspire leaves those UI containers out when it publishes the application for deployment, so they exist only in the development loop.
 
-You can also pass configuration parameters to resources, set custom container images, and configure health check intervals. The fluent API is designed to handle common development scenarios without requiring you to drop down to raw Docker configuration.
+### Parameters and Environment Variables
+
+`WithReference()` covers configuration that comes from another resource. Values that come from outside the model, such as an API key or a feature flag, are declared as parameters and passed on with `WithEnvironment()`:
+
+```csharp
+var stripeKey = builder.AddParameter("stripe-key", secret: true);
+
+builder.AddProject<Projects.CatalogApi>("catalog-api")
+    .WithEnvironment("Stripe__ApiKey", stripeKey);
+```
+
+The AppHost reads a parameter's value from its own configuration under `Parameters:stripe-key`, so user secrets, `appsettings.json`, or an environment variable can supply it. When a value is missing in a local run, the dashboard or CLI prompts for it. Marking a parameter `secret` tells the tooling to treat the value as sensitive, including when you publish.
+
+### Resources That Aren't .NET Projects
+
+`AddProject<T>()` is one entry point among several. `AddContainer()` runs any container image and `AddExecutable()` runs any local executable. The Python and JavaScript hosting integrations add `AddPythonApp()`, `AddUvicornApp()`, `AddJavaScriptApp()`, and `AddViteApp()`, each pointed at an app directory:
+
+```csharp
+var api = builder.AddProject<Projects.CatalogApi>("catalog-api");
+
+builder.AddViteApp("storefront", "../storefront")
+    .WithReference(api);
+```
+
+These resources take part in `WithReference()` like any other. A non-.NET service doesn't use ServiceDefaults, though. It reads the injected environment variables itself, such as `CATALOG_API_HTTPS` for the API's address, and its telemetry reaches the dashboard only if it sets up its own OpenTelemetry SDK.
 
 ### What Happens When You Run the AppHost
 
-Running the AppHost project triggers a sequence of operations. Aspire pulls and starts the required container images for infrastructure dependencies like Redis and PostgreSQL. It launches each .NET project with the appropriate environment variables and configuration injected. It starts the Aspire dashboard, which connects to the telemetry streams from all running resources. The result is your entire distributed application running locally from a single `F5` or `dotnet run` command.
+Running the AppHost pulls and starts the container images, launches each project with its injected environment variables, and starts the dashboard. Your whole distributed application runs from one F5 in an IDE, which also opens the dashboard in a browser, or from `aspire run`, which prints the dashboard's link.
 
 ## Service Defaults
 
-The ServiceDefaults project contains an extension method, typically named `AddServiceDefaults()`, that each service calls during startup. This single method call applies a consistent set of cross-cutting behaviors across every service in the application.
+The ServiceDefaults project contains an extension method, `AddServiceDefaults()`, that each service calls during startup. That one call gives every service the same cross-cutting setup.
 
 ### What AddServiceDefaults Configures
 
-A typical ServiceDefaults implementation configures four areas.
+The template's version configures four things.
 
-**OpenTelemetry** is set up with exporters for traces, metrics, and logs using the OTLP protocol. This means every HTTP request, database call, and custom span is captured and exported to whatever backend is listening. During local development, the Aspire dashboard acts as the collector. In production, the same telemetry flows to backends like Azure Monitor, Jaeger, or Grafana without changing your service code.
+**OpenTelemetry** for logs, traces, and metrics, with ASP.NET Core, `HttpClient`, and .NET runtime instrumentation. The exporter speaks OTLP, the OpenTelemetry Protocol, and it is switched on only when the `OTEL_EXPORTER_OTLP_ENDPOINT` setting is present. The AppHost sets it on every project to point at the dashboard. In production you set it to your own collector or backend, and the service code doesn't change.
 
-**Health check endpoints** are registered at `/health` for a full readiness check and `/alive` for a liveness probe. These endpoints follow the patterns that container orchestrators like Kubernetes expect for determining whether a service should receive traffic or needs a restart.
+**Health checks**, with a `self` check tagged `live`. `MapDefaultEndpoints()` exposes them as `/health`, which runs every registered check, and `/alive`, which runs only the checks tagged `live`. The template maps both endpoints **only in the Development environment**, because health endpoints expose information about the service. A production deployment whose orchestrator probes the service for liveness or readiness has to map its own endpoints and decide how to protect them.
 
-**HTTP client resilience** is configured through `Microsoft.Extensions.Http.Resilience`, which adds retry policies with exponential backoff and circuit breaker patterns to all `HttpClient` instances created through the `IHttpClientFactory`. This means service-to-service calls automatically retry on transient failures and stop hammering a failing downstream service. The standard resilience handler includes configurable retry counts, jitter to prevent thundering herd scenarios, and timeout policies. These defaults work well for most service-to-service communication and can be customized per-client when specific endpoints require different behavior.
+**HTTP resilience** through `ConfigureHttpClientDefaults`, which adds the standard resilience handler from `Microsoft.Extensions.Http.Resilience` (built on Polly) to every client created by `IHttpClientFactory`. Calls to other services then get retries with backoff, timeouts, and a circuit breaker by default.
 
-**Service discovery** enables services to call each other by name. Instead of configuring `http://localhost:5123` as the address for the catalog API, the frontend simply uses `http://catalog-api` and the service discovery system resolves it at runtime. During local development, the AppHost provides the resolution by injecting endpoint information as configuration. In production, you can configure DNS-based discovery, Kubernetes service resolution, or other mechanisms. The service code stays the same regardless of the discovery backend because it always refers to services by their logical name.
+**Service discovery**, which lets one service call another by resource name instead of `localhost` and a port. It resolves names from the configuration the AppHost injected.
 
 ### How Services Consume ServiceDefaults
 
-Each service project calls `AddServiceDefaults()` early in its `Program.cs` and maps the health check endpoints after building:
+Each service calls `AddServiceDefaults()` on the builder and `MapDefaultEndpoints()` on the built app:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// Register your application services
 builder.Services.AddScoped<ICatalogService, CatalogService>();
 
 var app = builder.Build();
 
-app.MapDefaultEndpoints(); // Maps /health and /alive
-app.MapControllers();
+app.MapDefaultEndpoints(); // /health and /alive, in Development only
+app.MapGet("/products", (ICatalogService catalog) => catalog.GetProductsAsync());
 
 app.Run();
 ```
 
-The `MapDefaultEndpoints()` call registers the health check endpoints that `AddServiceDefaults()` configured. This two-step pattern (add defaults on the builder, map endpoints on the app) follows the same builder/app separation that ASP.NET Core uses for middleware registration.
+The split follows ASP.NET Core's own: services are registered on the builder, and endpoints are mapped on the built app.
 
-### The Typical ServiceDefaults Pattern
+### Inside the ServiceDefaults Project
 
-The `Extensions.cs` file in the ServiceDefaults project follows this general structure:
+The template generates an `Extensions.cs` that you own and edit. Its core, lightly trimmed:
 
 ```csharp
 public static class Extensions
 {
-    public static IHostApplicationBuilder AddServiceDefaults(
-        this IHostApplicationBuilder builder)
+    private const string HealthEndpointPath = "/health";
+    private const string AlivenessEndpointPath = "/alive";
+
+    public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
     {
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
@@ -168,8 +206,8 @@ public static class Extensions
         return builder;
     }
 
-    private static IHostApplicationBuilder ConfigureOpenTelemetry(
-        this IHostApplicationBuilder builder)
+    public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
     {
         builder.Logging.AddOpenTelemetry(logging =>
         {
@@ -178,111 +216,120 @@ public static class Extensions
         });
 
         builder.Services.AddOpenTelemetry()
-            .WithMetrics(metrics =>
-            {
-                metrics.AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
-            })
-            .WithTracing(tracing =>
-            {
-                tracing.AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation();
-            });
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation())
+            .WithTracing(tracing => tracing
+                .AddSource(builder.Environment.ApplicationName)
+                .AddAspNetCoreInstrumentation(options =>
+                    // Keep health probes out of the traces
+                    options.Filter = context =>
+                        !context.Request.Path.StartsWithSegments(HealthEndpointPath)
+                        && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath))
+                .AddHttpClientInstrumentation());
 
-        builder.AddOpenTelemetryExporters();
+        if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+        {
+            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+        }
 
         return builder;
     }
 
-    private static IHostApplicationBuilder AddDefaultHealthChecks(
-        this IHostApplicationBuilder builder)
+    public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
     {
         builder.Services.AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy());
+            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
 
         return builder;
+    }
+
+    public static WebApplication MapDefaultEndpoints(this WebApplication app)
+    {
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapHealthChecks(HealthEndpointPath);
+            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
+            {
+                Predicate = r => r.Tags.Contains("live")
+            });
+        }
+
+        return app;
     }
 }
 ```
 
-Teams can customize this file to add additional telemetry instrumentation, change resilience policies, or register custom health checks. If a team decides that all services should include database query instrumentation in their traces, they add the relevant instrumentation call to `ConfigureOpenTelemetry()` once, and every service picks it up. If the security team requires a specific health check pattern, it goes into `AddDefaultHealthChecks()`. The ServiceDefaults project acts as a policy layer that enforces consistency without requiring each service team to understand the details of OpenTelemetry configuration or resilience patterns.
+The methods are generic over `IHostApplicationBuilder`, so a worker service that uses `Host.CreateApplicationBuilder` gets the same defaults as a web API. Because the file belongs to the solution, it is where team policy goes. If every service should trace database queries, one instrumentation call in `ConfigureOpenTelemetry()` covers them all, and a health check every service must run goes in `AddDefaultHealthChecks()`. Service teams then get consistent telemetry and resilience without each one learning the OpenTelemetry and Polly configuration.
 
 ## The Aspire Dashboard
 
-When you run the AppHost, Aspire launches a local dashboard that provides a unified view of your entire distributed application. This dashboard is not a simple log viewer; it is a full observability tool built on the OpenTelemetry data that ServiceDefaults collects from every service.
+The AppHost starts a dashboard alongside your resources. It is a full OpenTelemetry viewer, fed by the OTLP exporter that ServiceDefaults configures in each service.
 
 ### What the Dashboard Shows
 
-The dashboard provides several views. The **Resources** view shows every project and container in your application model along with its current status, endpoint URLs, and environment variables. You can see at a glance which services are running, which containers have started, and whether anything has failed.
+| View | Shows |
+| --- | --- |
+| **Resources** | Every project, container, and executable with its state, endpoints, environment variables, and actions such as restart. A graph view draws the resources and the references between them |
+| **Console logs** | Raw standard output from each resource, including output from before logging starts and from containers that don't emit OpenTelemetry |
+| **Structured logs** | Log entries from every service in one searchable stream, filterable by resource, level, and any property |
+| **Traces** | Distributed traces across service boundaries, with the timing of each span |
+| **Metrics** | Each service's metrics as charts or tables, such as request duration and .NET runtime counters |
 
-The **Structured Logs** view aggregates log output from all services into a single, searchable stream. Logs are structured rather than plain text, so you can filter by service, severity, or any property in the log entry. This replaces the experience of switching between multiple terminal windows to find the right log output.
+### Working with the Dashboard
 
-The **Traces** view displays distributed traces that follow requests across service boundaries. If the frontend calls the catalog API, which queries PostgreSQL and checks the Redis cache, the trace shows the entire request flow with timing for each step. This makes it straightforward to identify where latency originates in a multi-service request.
+The dashboard's address comes from the AppHost's `launchSettings.json`. Because it shows environment variables and other sensitive data, it requires a browser token. Launching from Visual Studio or VS Code signs you in automatically. From the command line, the console prints a login link that carries the token.
 
-The **Metrics** view surfaces runtime and application metrics from each service, including request rates, error rates, response times, and system-level metrics like CPU and memory usage.
+A typical session starts in Resources to confirm everything started, then moves to Traces to follow a request. If a request from the frontend to the catalog API is slow, the trace shows whether the time went to the database query, a cache miss, or the call between services. Log entries written during a traced request link to that trace, so you can move from a suspicious log line to the whole request.
 
-The **Console** view provides raw stdout and stderr output from each resource, which is useful for debugging startup failures or container issues that happen before structured logging initializes.
+### The Dashboard Outside Development
 
-### Navigating the Dashboard in Practice
-
-The dashboard launches automatically when you run the AppHost and opens in your default browser. It binds to a random port by default, though you can configure a fixed port in the AppHost's launch settings. The URL is printed to the console output when the AppHost starts.
-
-The most common workflow during development involves using the Resources view to confirm everything started correctly, then switching to Traces when debugging request flow between services. If a request from the frontend to the catalog API is slow, the trace view shows exactly which step introduced latency: was it the database query, the Redis cache miss, or network overhead between services? This kind of visibility is typically only available through production monitoring tools, but the dashboard brings it to the inner development loop.
-
-The Structured Logs view supports filtering by resource name, severity level, and log properties. You can isolate logs from a specific service during a specific time window, which is far more efficient than scrolling through interleaved console output from multiple processes. Log entries that are part of a trace include links to the associated trace, making it straightforward to move from a log entry to a full request flow visualization.
-
-### The Dashboard Beyond Local Development
-
-The Aspire dashboard is primarily a local development tool, but the telemetry it consumes is standard OpenTelemetry. In production, the same traces, metrics, and logs flow to whatever backend your infrastructure uses, such as Azure Application Insights, Jaeger, Prometheus, or Grafana. Switching from local dashboard to production observability requires no code changes in your services because the ServiceDefaults project configures OTLP exporters that work with any compatible collector.
-
-The dashboard is also available as a [standalone container image](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/standalone){:target="_blank" rel="noopener noreferrer"} that you can run without the full Aspire stack. Teams that want the dashboard's trace and log visualization for non-Aspire applications can point their OpenTelemetry exporters at the standalone dashboard container. This makes the dashboard useful even in organizations that adopt Aspire incrementally: you can start with the dashboard as a local observability tool before committing to the full AppHost orchestration model.
+The dashboard is a development tool, not production monitoring. It also runs [standalone](https://aspire.dev/dashboard/standalone/){:target="_blank" rel="noopener noreferrer"}, as the `mcr.microsoft.com/dotnet/aspire-dashboard` container image or with `aspire dashboard run`, and accepts OTLP from any application. A team can adopt it as a local telemetry viewer before adopting the AppHost at all.
 
 ## Integrations
 
-Aspire integrations are NuGet packages that handle the boilerplate of connecting your services to infrastructure dependencies. Each integration comes in two parts that work together across the AppHost and service projects.
+Aspire integrations are NuGet packages that remove the boilerplate of connecting to infrastructure. Each comes in two halves, one for each side of the AppHost/service split.
 
 ### Hosting Integrations
 
-Hosting integrations are used in the AppHost project to define infrastructure resources. These packages know how to run containers, configure ports, create databases, and manage resource lifecycle. When you call `builder.AddRedis("cache")` in the AppHost, the `Aspire.Hosting.Redis` package handles pulling the Redis container image, starting it, assigning a port, and exposing the connection information to dependent services.
+Hosting integrations are used in the AppHost to model resources. They know how to run the container, which port to expose, and what connection information to hand to dependents. `builder.AddRedis("cache")` comes from `Aspire.Hosting.Redis`, which pulls the Redis image, starts it, assigns a port, and builds the connection string that `WithReference()` passes on.
 
-Hosting integrations are available for a wide range of infrastructure including PostgreSQL, SQL Server, MySQL, MongoDB, Redis, RabbitMQ, Kafka, Elasticsearch, and Azure services like Azure Storage, Azure Service Bus, and Azure Cosmos DB. The [integration list](https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/integrations-overview){:target="_blank" rel="noopener noreferrer"} continues to grow as the ecosystem matures.
+First-party hosting integrations cover the usual databases, caches, brokers, and search engines (PostgreSQL, SQL Server, MongoDB, Redis, RabbitMQ, Kafka, Elasticsearch, Qdrant, and others) and Azure services such as Storage, Service Bus, and Cosmos DB, which can often run against a local emulator. Hosting integrations for Python and JavaScript apps are what put non-.NET services in the same model. The [integrations overview](https://aspire.dev/integrations/overview/){:target="_blank" rel="noopener noreferrer"} lists the current set.
 
 ### Client Integrations
 
-Client integrations are used in the service projects that consume infrastructure resources. These packages configure the client libraries with health checks, OpenTelemetry instrumentation, connection management, and the connection string that the AppHost provides. Instead of manually registering a Redis health check, adding Redis instrumentation to your OpenTelemetry setup, and parsing a connection string from configuration, the client integration does all of this in a single call.
+Client integrations are used in the service projects. Each one registers the client library in dependency injection, reads its connection string from the configuration the AppHost injected, and adds a health check and OpenTelemetry instrumentation for that client. You make one call instead of registering the client, a health check, and telemetry separately.
 
-### Hosting and Client Integrations Working Together
+Client integrations are .NET packages. A Python or JavaScript service reads the injected environment variables itself.
 
-The two-part model becomes clear when you see both sides for the same resource. Here is how Redis and PostgreSQL look across the AppHost and a service project.
+### Both Halves for the Same Resource
 
-In the **AppHost** `Program.cs`:
+The two halves meet at the resource name. In the AppHost:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
 var cache = builder.AddRedis("cache");
-var postgres = builder.AddPostgres("pg").AddDatabase("orders");
+var orders = builder.AddPostgres("pg").AddDatabase("orders");
 
 builder.AddProject<Projects.OrdersApi>("orders-api")
     .WithReference(cache)
-    .WithReference(postgres);
+    .WithReference(orders);
 
 builder.Build().Run();
 ```
 
-In the **OrdersApi** `Program.cs`:
+In the OrdersApi project:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// Client integration for Redis
-builder.AddRedisDistributedCache("cache");
-
-// Client integration for PostgreSQL via EF Core
-builder.AddNpgsqlDbContext<OrdersDbContext>("orders");
+builder.AddRedisDistributedCache("cache");            // Aspire.StackExchange.Redis.DistributedCaching
+builder.AddNpgsqlDbContext<OrdersDbContext>("orders"); // Aspire.Npgsql.EntityFrameworkCore.PostgreSQL
 
 var app = builder.Build();
 app.MapDefaultEndpoints();
@@ -290,32 +337,28 @@ app.MapDefaultEndpoints();
 app.Run();
 ```
 
-The logical names matter. The `"cache"` string in `AddRedisDistributedCache("cache")` matches the `"cache"` name used in the AppHost's `AddRedis("cache")`. Aspire uses this name to inject the correct connection string into the service at runtime. The same applies to the `"orders"` database name. You never hardcode a connection string; the AppHost manages the mapping.
+`"cache"` in `AddRedisDistributedCache("cache")` matches `AddRedis("cache")` in the AppHost, because the client reads `ConnectionStrings:cache`. The same holds for `"orders"`. A mismatched name is the usual reason a client integration throws at startup for a missing connection string.
 
-The `AddRedisDistributedCache` call from the `Aspire.StackExchange.Redis.DistributedCaching` package does more than register a cache. It also registers a health check that verifies Redis connectivity, adds OpenTelemetry instrumentation for Redis operations, and configures connection multiplexing. The `AddNpgsqlDbContext` call from `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL` similarly registers the DbContext with the connection string from the AppHost, adds a PostgreSQL health check, configures OpenTelemetry instrumentation for database queries, and sets up connection pooling.
+`AddRedisDistributedCache` registers `IDistributedCache` and the underlying `IConnectionMultiplexer`, with a Redis health check and tracing. `AddNpgsqlDbContext` registers the `DbContext` with context pooling on by default, a health check that calls EF Core's `CanConnectAsync`, and database telemetry. Every service that uses Redis or PostgreSQL gets the same checks and telemetry without repeating the setup.
 
-This pattern keeps infrastructure wiring consistent across services. Every team that uses Redis gets the same health checks, the same telemetry, and the same resilience configuration without duplicating setup code.
+### Community and Custom Integrations
 
-### Community and Third-Party Integrations
-
-Beyond the Microsoft-published integrations, the Aspire ecosystem includes community-contributed integrations for infrastructure like Milvus, Qdrant, Seq, Grafana, and others. The integration model is extensible, so teams can create custom hosting integrations for internal infrastructure that follows the same `Add`/`WithReference` pattern. If your organization runs a custom message broker or an internal service that multiple teams depend on, you can package it as an Aspire hosting integration so that every team's AppHost can include it with a single method call.
+The [Aspire Community Toolkit](https://github.com/CommunityToolkit/Aspire){:target="_blank" rel="noopener noreferrer"} publishes integrations outside the first-party set, such as Ollama, Dapr, and Go and Java apps. The integration model is open, so a team can write its own hosting integration for internal infrastructure. If several teams depend on an internal broker or service, packaging it as an integration lets each AppHost add it in one call with the same `Add`/`WithReference` pattern.
 
 ## When Aspire Fits and When It Doesn't
 
-Aspire is a strong fit for teams building distributed .NET applications with multiple services that share infrastructure dependencies. If your application consists of several APIs, a worker service or two, and backing services like databases and caches, Aspire eliminates the manual orchestration that typically slows down local development. It is also valuable for teams that want consistent observability across services without the overhead of manually configuring OpenTelemetry in every project. The ServiceDefaults project turns production-grade telemetry into a one-line setup call.
+Aspire fits applications made of several services that share infrastructure: a few APIs, a worker or two, and the databases, caches, and brokers behind them. It removes the manual orchestration that slows local development, and ServiceDefaults gives every service the same telemetry and resilience with one call. Since Aspire 13 the services don't all have to be .NET, so a stack with a Python or JavaScript service is no longer a reason to stay on Docker Compose.
 
-Aspire is less relevant for applications that do not involve distributed services or container dependencies. A single ASP.NET Core API with a database does not need orchestration across multiple projects. Static websites, desktop applications, and mobile backends with no container dependencies gain little from the Aspire model. If your application runs as a single process with no external dependencies to coordinate, the three-project structure adds complexity without corresponding benefit.
+It adds little to an application that is one process. A single API with one database gains a second and third project and not much else, although the standalone dashboard can still be useful there.
 
-Aspire does not replace your production infrastructure tools. It is not a substitute for Docker Compose in scenarios where non-.NET services dominate the stack, although it can replace Docker Compose for .NET-centric applications. It does not replace Kubernetes for production orchestration, Terraform or Bicep for infrastructure provisioning, or your CI/CD pipeline. Aspire generates deployment manifests that these tools can consume, but it does not own your production environment.
+It doesn't replace production tooling. Kubernetes or a managed container platform still runs the services, Terraform or Bicep still provisions infrastructure, and your pipeline still deploys. Aspire can generate deployment artifacts from the application model, but it doesn't own the production environment.
 
-The clearest signal that Aspire fits is when developers on your team spend meaningful time on "plumbing" rather than building features: starting containers manually, copying connection strings, debugging telemetry configuration, or troubleshooting why service A cannot reach service B locally. Aspire absorbs that plumbing into a declarative model that works the same way on every developer's machine.
+The clearest signal that Aspire fits is developers spending time on plumbing rather than features: starting containers by hand, copying connection strings, debugging telemetry setup, or working out why service A can't reach service B on one machine. Aspire moves that plumbing into code that runs the same way on every machine.
 
 ## Key Takeaways
 
-The Aspire application model separates concerns cleanly: the AppHost handles orchestration, ServiceDefaults handles shared policy, and service projects handle business logic. This separation means that infrastructure wiring changes happen in one place rather than across every service.
-
-The `WithReference()` model for connecting resources eliminates manual connection string management and makes the dependency graph between services explicit in code. Reading an AppHost's `Program.cs` tells you exactly what the application consists of and how its parts connect.
-
-Integrations handle the tedious work of registering health checks, configuring telemetry instrumentation, and managing connections for each infrastructure dependency. The two-part hosting and client integration model keeps the AppHost focused on topology while service projects stay focused on consuming resources with best-practice configuration applied automatically.
-
-The Aspire dashboard provides local observability that matches the fidelity of production monitoring tools. Because it is built on OpenTelemetry, the same telemetry data flows to production backends without code changes. This consistency between local development and production observability reduces the gap between "it works on my machine" and "it works in production."
+- The AppHost declares the application and runs during development, testing, and publishing, but is never deployed. ServiceDefaults ships inside every service. Service projects hold the application logic and don't depend on the AppHost.
+- `WithReference()` turns a dependency into environment variables: `ConnectionStrings__<name>` for resources with a connection string, `services__<name>__…` for .NET service discovery, and uppercase variables for any language. It doesn't wait for the dependency; `WaitFor()` does.
+- ServiceDefaults is team policy in code. Its template enables OTLP export only when an endpoint is configured, and maps `/health` and `/alive` only in Development.
+- The dashboard is a local OpenTelemetry viewer. Production uses the same telemetry pointed at a different endpoint.
+- Hosting integrations model resources in the AppHost, and client integrations consume them in services. The resource name joins the two.

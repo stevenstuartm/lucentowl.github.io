@@ -1,1005 +1,233 @@
 ---
-title: "AWS EventBridge for System Architects"
+title: "Amazon EventBridge for System Architects"
 layout: guide
 category: AWS
 subcategory: Application Integration & Messaging
-description: "Comprehensive guide to AWS EventBridge covering event buses, rules, targets, EventBridge Pipes and Scheduler, event-driven architecture patterns, SNS comparison, and cost optimization for building scalable serverless applications"
-tags: [aws, eventbridge, event-driven, serverless, integration, messaging, architecture, cost-optimization, fundamentals]
+description: "How EventBridge routes events by their content: events and patterns, Classic event buses with rules and targets, the Custom Event Bus with subscribers, retention, and ordering, cross-account routing, choosing EventBridge or SNS, Pipes, Scheduler, schemas, security, and cost."
+tags: [eventbridge, event-bus, eventbridge-pipes, eventbridge-scheduler, event-driven, schema-registry, fundamentals]
 ---
 
-## What Problems EventBridge Solves
+## What EventBridge Does
 
-### Without EventBridge
+**Amazon EventBridge** routes **events**, JSON records saying that something happened, from the services that produce them to the services that care. A producer publishes "order placed" without knowing who's listening. Consumers declare which events they want by describing their content, and EventBridge delivers each matching event to them. Adding a consumer changes nothing in the producer.
 
-**Tight Coupling Issues:**
-- Services directly poll or call each other to detect events
-- Adding new event consumers requires changing producer code
-- No standardized event format across organization
-- Complex routing logic embedded in application code
-- Difficult to integrate with SaaS providers (Auth0, Zendesk, Datadog)
+EventBridge is several related services under one name:
 
-**Real-World Impact:**
-- New feature requires updating 5 different microservices to subscribe to events
-- SaaS integration requires custom webhook handlers and retry logic
-- Event schemas differ across teams; integration breaks frequently
-- Scheduled jobs scattered across cron, CloudWatch Events, and application code
+| Service | What it does |
+|---|---|
+| **Event buses** | Receive events and route each one to every consumer whose filter matches it. There are two kinds, covered below. |
+| **Pipes** | Connect one source, such as a queue or stream, to one target, with filtering and enrichment between them |
+| **Scheduler** | Invokes a target at a time, on a rate, or on a cron schedule |
+| **Schema registry** | Records the structure of the events on a bus, and generates code for them |
 
-### With EventBridge
-
-**Decoupled Event-Driven Architecture:**
-- **Event bus**: Central routing layer; producers publish once, consumers subscribe independently
-- **Content-based filtering**: Route events to specific targets based on event content (not just attributes)
-- **Schema registry**: Discover and version event schemas across organization
-- **SaaS integrations**: Native integrations with 35+ SaaS providers (no custom code)
-- **Managed scheduling**: Unified scheduler for cron and one-time schedules
-- **Transformation**: Modify events before delivery to targets (no Lambda required)
-
-**Problem-Solution Mapping:**
-
-| Problem | EventBridge Solution |
-|---------|---------------------|
-| Adding consumers changes producer code | Event bus decouples producers from consumers; add consumers without touching producer |
-| Complex routing logic in code | Content-based filtering rules route events declaratively |
-| Different event formats across teams | Schema Registry discovers and versions schemas organization-wide |
-| Custom SaaS webhook handlers | Native SaaS integrations (Auth0, Zendesk, Datadog, Stripe, etc.) |
-| Scattered scheduled jobs | EventBridge Scheduler consolidates all scheduled tasks |
-| Lambda glue code for transformations | Built-in input transformation (no Lambda required) |
+Everything in EventBridge is Regional. A bus, pipe, or schedule lives in one Region of one account, and quotas are per account per Region.
 
 ---
 
-## EventBridge Fundamentals
+## Events and Patterns
 
-### What is EventBridge?
-
-**Amazon EventBridge** is a serverless event bus service that enables event-driven architectures by routing events from sources to targets based on rules.
-
-<div class="callout callout--note">
-<p class="callout__title">Core Concept</p>
-<p>Event sources publish events to an event bus; rules evaluate events and route matching events to targets.</p>
-</div>
-
-```
-Event Source → [Event Bus] → Rules (filtering + routing) → Targets
-```
-
-### Three EventBridge Services
-
-| Service | Purpose | Use When |
-|---------|---------|----------|
-| **EventBridge Event Bus** | Central event routing with rules and targets | Building event-driven architectures across AWS services, SaaS apps, custom applications |
-| **EventBridge Pipes** | Point-to-point integration with filtering, transformation, enrichment | Connecting single source to single target with optional processing |
-| **EventBridge Scheduler** | Managed scheduling for one-time and recurring tasks | Replacing cron jobs, scheduled Lambda invocations, time-based workflows |
-
-**Relationship:**
-- **Event Bus**: One-to-many (fan-out)
-- **Pipes**: One-to-one (point-to-point)
-- **Scheduler**: Time-based triggering
-
----
-
-## Event Buses, Rules, and Targets
-
-### Event Bus Types
-
-**1. Default Event Bus**
-- Automatically created in every AWS account
-- Receives events from AWS services (EC2 state changes, S3 uploads, etc.)
-- Free (AWS service events don't count toward custom event charges)
-
-**2. Custom Event Bus**
-- Created by you for your applications
-- Logical separation by domain, team, or environment
-- Best practice: Use custom event buses for modular design
-
-**3. Partner Event Bus**
-- Created automatically when configuring SaaS partner integration
-- Receives events from SaaS providers (Auth0, Zendesk, Datadog, MongoDB Atlas, Stripe, etc.)
-
-**4. Cross-Account Event Bus**
-- Receive events from other AWS accounts
-- Sender account publishes; receiver account processes
-- Billed to sender as custom events
-
-### Event Structure
-
-Events are JSON documents with specific structure:
+Every event on a bus has the same envelope. The producer sets `source`, `detail-type`, and `detail`, and EventBridge fills in the rest.
 
 ```json
 {
   "version": "0",
-  "id": "unique-id",
+  "id": "6a7e8feb-b491-4cf7-a9f1-bf3703467718",
+  "source": "com.example.orders",
   "detail-type": "Order Placed",
-  "source": "com.myapp.orders",
-  "account": "123456789012",
-  "time": "2025-01-14T12:00:00Z",
+  "account": "111122223333",
+  "time": "2026-09-25T12:00:00Z",
   "region": "us-east-1",
   "resources": [],
   "detail": {
     "orderId": "12345",
-    "customerId": "67890",
-    "amount": 99.99,
-    "items": [
-      {"sku": "ABC123", "quantity": 2}
-    ]
+    "amount": 150.00,
+    "shipping": "Expedited"
   }
 }
 ```
 
-**Key Fields:**
-- `source`: Origin of event (e.g., `aws.ec2`, `com.myapp.orders`)
-- `detail-type`: Type of event (e.g., `EC2 Instance State-change Notification`, `Order Placed`)
-- `detail`: Event-specific data (free-form JSON)
+AWS services publish their own events in this format, such as an EC2 instance changing state, an object arriving in S3, or a CloudFormation stack finishing. An event can be up to 1 MB (raised from 256 KB in January 2026), and each 64 KB of it is billed as one event.
 
-### Rules
-
-**Rule:** Defines which events to match and where to route them.
-
-**Components:**
-1. **Event pattern**: Filter that matches specific events
-2. **Targets**: Where to send matching events (up to 5 targets per rule)
-3. **Input transformation** (optional): Modify event before sending to target
-
-**Event Pattern Example:**
+Consumers select events with an **event pattern**, a JSON document with the same shape as the events it matches. This pattern matches expedited orders over $100:
 
 ```json
 {
-  "source": ["com.myapp.orders"],
+  "source": ["com.example.orders"],
   "detail-type": ["Order Placed"],
   "detail": {
-    "amount": [{"numeric": [">", 100]}]
+    "shipping": ["Expedited"],
+    "amount": [{ "numeric": [">", 100] }]
   }
 }
 ```
 
-**Matches:** Events from `com.myapp.orders` with `detail-type=Order Placed` where `amount>100`.
-
-### Targets
-
-EventBridge supports 20+ target types:
-
-| Category | Targets |
-|----------|---------|
-| **Compute** | Lambda, ECS task, Fargate, Batch job, EC2 RunCommand |
-| **Integration** | SNS topic, SQS queue, Kinesis stream, Firehose, Step Functions |
-| **API** | API Gateway, HTTP endpoint (API Destinations), AppSync |
-| **Events** | Another event bus (cross-account, cross-region) |
-| **Other** | CloudWatch Logs, Systems Manager Run Command, Redshift Data API |
-
-<div class="callout callout--tip">
-<p class="callout__title">Target Configuration</p>
-<ul>
-<li>Each rule can have up to 5 targets</li>
-<li>Same event delivered to all targets in parallel</li>
-<li>Each target configured independently (different IAM roles, input transformations, retry policies)</li>
-</ul>
-</div>
-
-### Input Transformation
-
-**Problem:** Event structure doesn't match target's expected input format.
-
-**Solution:** Transform event before delivery using input transformer.
-
-**Example: Lambda expects simplified payload**
-
-**Original Event:**
-
-```json
-{
-  "detail-type": "Order Placed",
-  "detail": {
-    "orderId": "12345",
-    "customerId": "67890",
-    "amount": 99.99
-  }
-}
-```
-
-**Desired Lambda Input:**
-
-```json
-{
-  "order": "12345",
-  "customer": "67890",
-  "total": 99.99
-}
-```
-
-**Input Transformer Configuration:**
-
-```json
-{
-  "InputPathsMap": {
-    "orderId": "$.detail.orderId",
-    "customerId": "$.detail.customerId",
-    "amount": "$.detail.amount"
-  },
-  "InputTemplate": "{\"order\": \"<orderId>\", \"customer\": \"<customerId>\", \"total\": <amount>}"
-}
-```
-
-**Benefit:** No Lambda function required for simple transformations (saves cost, reduces latency).
+Every field in the pattern must match, and a list of values matches any one of them. Patterns can also match prefixes, suffixes, and wildcards, ignore case, test whether a field exists, exclude values with `anything-but`, match IP ranges, and combine alternatives with `$or`. Because patterns can test any field in `detail`, routing depends on what an event says rather than on labels the producer had to attach.
 
 ---
 
-## EventBridge Pipes
+## Classic Event Buses: Rules and Targets
 
-### What are Pipes?
+Until September 2026, every EventBridge bus worked this way. The console now calls a custom bus of this kind a **Custom Event Bus - Classic**. Three kinds exist:
 
-**EventBridge Pipes** connect a single source to a single target with optional filtering, transformation, and enrichment.
+- The **default bus**, one per account per Region, receives events from AWS services. Ingesting them costs nothing.
+- **Custom buses** receive your applications' events, published with the `PutEvents` API in batches of up to 10.
+- **Partner buses** receive events from SaaS partners such as Zendesk, Datadog, or Auth0, set up from the partner's side.
 
-**Architecture:**
+On any of them, a **rule** pairs one event pattern with up to **five targets**. A bus can have 300 rules by default. When an event matches a rule, EventBridge sends it to every target of that rule in parallel.
 
-```
-Source → [Filtering] → [Enrichment] → [Target]
-```
+**Targets** span most of AWS: Lambda functions, SQS queues, SNS topics, Kinesis and Firehose streams, Step Functions state machines, ECS tasks, API Gateway, CloudWatch Logs, another event bus, and more. EventBridge calls a target with a resource policy on the target (Lambda, SQS, SNS) or with an IAM role you give the rule. An **input transformer** on a target can reshape the event first, pulling out fields and placing them into a template, so a target that expects its own format doesn't need a Lambda function in between.
 
-**When to Use Pipes vs Event Bus:**
+**API destinations** make any HTTPS endpoint a target. A **connection** holds the endpoint's credentials (an API key, basic authentication, or OAuth client credentials), and EventBridge stores them in AWS Secrets Manager. Each destination has a rate limit, 300 calls per second by default, and EventBridge queues calls above it rather than overwhelming the endpoint. A private connection reaches an endpoint inside a VPC or on premises.
 
-| Use Case | Use Pipes | Use Event Bus |
-|----------|-----------|---------------|
-| Point-to-point integration (1 source, 1 target) | ✅ | ❌ |
-| Fan-out (1 source, many targets) | ❌ | ✅ |
-| Need filtering, transformation, enrichment | ✅ | ✅ (via rules + Lambda) |
-| SaaS partner events | ❌ | ✅ |
-| Scheduled events | ❌ | ✅ (use Scheduler) |
+### Delivery and Failures
 
-### Pipe Components
+Classic buses deliver **at least once**, so a target can occasionally receive an event twice, and they don't preserve order. When a delivery fails with an error that might succeed later, EventBridge retries with exponential backoff and jitter, for 24 hours and up to 185 attempts by default. A shorter retry policy can be set per target. After the last attempt, the event is dropped unless the target has a **dead-letter queue**, an SQS queue that receives the event along with the error. Give every important target one, and alarm on it.
 
-**1. Source (Required)**
+Two quotas govern throughput. `PutEvents` accepts 10,000 requests per second in us-east-1, us-west-2, and eu-west-1, and as few as 400 in smaller Regions. Deliveries to targets are limited to 18,750 per second in the largest Regions, and deliveries above that are delayed, not dropped. Both can be raised. Latency from publishing to the first delivery attempt was about 130 milliseconds at p99 in August 2024.
 
-Supported sources:
-- DynamoDB Stream
-- Kinesis Stream
-- SQS Queue (Standard or FIFO)
-- Amazon MQ
-- Apache Kafka (MSK, self-managed)
+### Archives and Replay
 
-**2. Filtering (Optional)**
+A Classic bus doesn't keep events after delivering them. An **archive** on the bus stores the events that match a pattern, for a set period or indefinitely, and a **replay** sends archived events from a time range back through the bus's rules. Replay is how a fixed consumer reprocesses the events it mishandled.
 
-Filter events before processing (reduces costs by processing only relevant events).
+### Across Accounts and Regions
 
-**Example Filter:**
+Organizations with many accounts usually send events across them. A Classic bus supports three ways to do this:
 
-```json
-{
-  "data": {
-    "amount": [{"numeric": [">", 100]}]
-  }
-}
-```
+- A **bus policy** lets other accounts, or a whole AWS Organization, publish to the bus.
+- A rule can target a **bus in another account or Region**, forwarding events to rules that the other account owns.
+- Since January 2025, a rule can deliver **directly to a target in another account**, such as an SQS queue, Lambda function, SNS topic, Kinesis stream, or API Gateway API, as long as the target's resource policy allows the rule's IAM role.
 
-**3. Enrichment (Optional)**
-
-Call external service to augment event before delivery.
-
-**Enrichment options:**
-- Lambda function (transform, call external API)
-- Step Functions (complex logic, multiple steps)
-- API Destinations (call HTTP endpoint)
-- API Gateway (call REST API)
-
-**4. Target (Required)**
-
-Supported targets:
-- Event bus
-- Lambda
-- SQS
-- SNS
-- Step Functions
-- Kinesis Stream
-- Firehose
-- CloudWatch Logs
-- Redshift
-- S3
-
-### Pipes Use Case: DynamoDB Stream Processing
-
-**Scenario:** DynamoDB table tracks orders; send high-value orders to fulfillment queue.
-
-**Without Pipes:**
-
-```
-DynamoDB Stream → Lambda (filter + transform) → SQS Queue
-
-Costs:
-- Lambda invocations: All DynamoDB changes (including low-value orders)
-- Lambda duration: Processing time per invocation
-```
-
-**With Pipes:**
-
-```
-DynamoDB Stream → [Pipe with filter: amount>100] → SQS Queue
-
-Costs:
-- Pipe charges: Only for filtered events (events >$100)
-- No Lambda required
-```
-
-**Savings:** Pipe filtering happens before processing; pay only for events that match filter.
-
-### Pipes Pricing
-
-- $0.40 per million events processed (after filtering)
-- Batching supported (reduces per-event cost)
-- Cheaper than Lambda for simple transformations
+In each case, someone writes a rule for every consumer, either in the central account or in each account a central bus forwards to. **Global endpoints** add Regional failover for Classic custom buses, sending published events to a bus in a second Region when a health check fails.
 
 ---
 
-## EventBridge Scheduler
+## The Custom Event Bus
 
-### What is EventBridge Scheduler?
+In September 2026, EventBridge launched a second kind of custom bus, called the **Custom Event Bus**, built around a different idea. The bus keeps every event for a retention period of 1 to 365 days, and each consumer attaches its own **subscriber**. A subscriber holds one filter, one target, a retry policy, and a dead-letter destination. Sending events to three targets takes three subscribers. At launch it's available in 14 Regions, and Classic buses keep working unchanged alongside it.
 
-**EventBridge Scheduler** is a managed scheduling service for one-time and recurring tasks.
+Retention changes what consumers can do:
 
-**Replaces:**
-- Cron jobs on EC2
-- CloudWatch Events scheduled rules
-- Custom scheduling logic in applications
+- A new subscriber can **start from a point in the past**, reading retained events before catching up to live ones. A new analytics service can read the last month of orders on its first day.
+- A subscriber can **pause and resume** without losing events, which is also how a consumer replays events after fixing a bug.
 
-### Schedule Types
+It adds ordering and deduplication, which Classic buses don't have. A producer can tag events with an **event group ID**, such as an account number, and a subscriber of type `FIFO` delivers each group's events in the order they were published, while other groups continue in parallel. An event that can't be delivered holds up the later events in its group. A producer can also ask the bus to drop duplicates published within 5 minutes, matched on a key the producer supplies or on a hash of the content. With both, each accepted event reaches a FIFO subscriber once and in order. Beyond the 5-minute window, a repeated publish is a new event, so consumers still need to be idempotent.
 
-**1. One-Time Schedules**
-- Execute once at specific date/time
-- Use case: Send reminder email on specific date
+The bus is built to be shared. The owning account shares it through **AWS Resource Access Manager**, granting other accounts permission to publish, to subscribe, or both. Each consuming account then creates and owns its subscribers on the shared bus, and the bus owner writes no routing for them.
 
-**Example:**
+{% include figure.html id="aws-eventbridge-bus-ownership" %}
 
-```
-2025-12-25T09:00:00 (Christmas morning reminder)
-```
+Other differences matter at scale. A Custom Event Bus accepts up to 500,000 events per second, and `PutRawEvents` publishes Avro, Protobuf, or raw bytes as well as JSON. Its billing is by volume rather than by event count (see Where the Money Goes). Each account can create 5 buses by default.
 
-**2. Recurring Schedules**
-
-**Rate-based:**
-- `rate(30 minutes)` - Every 30 minutes
-- `rate(1 hour)` - Every hour
-- `rate(5 days)` - Every 5 days
-
-**Cron-based:**
-- `cron(0 9 * * ? *)` - Every day at 9:00 AM UTC
-- `cron(0 12 ? * MON-FRI *)` - Weekdays at noon
-- `cron(0 0 1 * ? *)` - First day of every month at midnight
-
-**3. Flexible Time Windows**
-- Execute within time window (not at exact time)
-- Use case: Batch job can run anytime between 2 AM - 4 AM
-
-### Scheduler Targets
-
-Same as EventBridge Event Bus targets (20+ options):
-- Lambda, Step Functions, ECS task, SQS, SNS, Kinesis, etc.
-
-### Scheduler Pricing
-
-- 14 million free invocations per month
-- $1.00 per million invocations after free tier
-- One-time schedules billed same as recurring schedules
-
-**Cost Comparison:**
-
-| Approach | Cost (1M invocations/month) |
-|----------|----------------------------|
-| EventBridge Scheduler | $1.00 (after free tier) |
-| CloudWatch Events | $1.00 |
-| Lambda + custom scheduling | $0.20 (Lambda) + development cost |
-
-**Benefit:** Unified, managed scheduling without custom code.
+**Which bus to use.** For a new event backbone shared across teams and accounts, or any consumer that needs ordering, deduplication, or replay from the recent past, the Custom Event Bus fits better. A Classic bus remains the simpler choice for routing within one account, for Regions the new bus doesn't reach yet, and for existing applications, which have no reason to move until they need one of those capabilities. AWS publishes a migration guide from rules to subscribers.
 
 ---
 
-## EventBridge vs SNS
+## EventBridge or SNS
 
-### Feature Comparison
+Both route one message to many consumers, and each fits a different kind of work:
 
-| Feature | EventBridge | SNS |
-|---------|-------------|-----|
-| **Target Types** | 20+ (Lambda, SQS, Step Functions, ECS, API Gateway, HTTP, etc.) | 6 (SQS, Lambda, HTTP/S, Email, SMS, Firehose) |
-| **Filtering** | Content-based (filter on any field in JSON) | Attribute-based (filter on message attributes only) |
-| **Transformation** | Built-in input transformation | None (requires Lambda) |
-| **Schema Registry** | Yes (discover and version schemas) | No |
-| **SaaS Integration** | Yes (35+ partners: Auth0, Zendesk, Datadog, etc.) | No |
-| **Archival & Replay** | Yes (archive events, replay later) | FIFO topics only (365 days max) |
-| **Cross-Account** | Yes (bus-to-bus) | Yes (topic subscriptions) |
-| **Latency** | ~500ms | <30ms |
-| **Throughput** | 10,000 events/sec per region (custom events) | Unlimited |
-| **Pricing** | $1.00 per million custom events | $0.50 per million publishes + delivery costs |
+| | EventBridge | SNS |
+|---|---|---|
+| **Built for** | Routing events between services, by content | Fast, high-volume fanout, including to people |
+| **Sources** | Your applications, AWS services, and SaaS partners | Your applications |
+| **Targets** | Most AWS services, any HTTPS API, other buses | SQS, Lambda, Firehose, HTTPS, email, SMS, and mobile push |
+| **Filtering** | Patterns on any field of the event | Filter policies on attributes or on the body |
+| **Transformation** | Built in, per target | None |
+| **Replay** | Archives on Classic buses; retention on the Custom Event Bus | FIFO topics only |
+| **Ordering** | FIFO subscribers on the Custom Event Bus | FIFO topics |
+| **Throughput** | 10,000 `PutEvents` requests per second in the largest Regions (Classic), 500,000 events per second per Custom Event Bus | 30,000 publishes per second in us-east-1 |
+| **Price for 1 million small events delivered within one account** | $1.00 (Classic) | $0.50, with no charge to deliver to SQS or Lambda |
 
-### When to Use EventBridge
+Choose **EventBridge** when events come from AWS services or SaaS partners, when consumers need to select events by their content, when targets are services other than queues and functions, or when events need replaying. Choose **SNS** for plain fanout at the lowest cost and highest rate, and for notifications to people by email, SMS, or mobile push. The two combine well. A rule can target an SNS topic to reach people, and either one can deliver to SQS queues that give each consumer a buffer.
 
-✅ **Use EventBridge when:**
-- Building event-driven architectures with complex routing
-- Need content-based filtering (filter on any JSON field)
-- Need message transformation (no Lambda required)
-- Integrating with SaaS providers (Auth0, Datadog, Zendesk, etc.)
-- Need schema discovery and versioning
-- Need event archival and replay
-- Latency <1 second acceptable
-- Target types beyond Lambda/SQS/HTTP (Step Functions, ECS, API Gateway, etc.)
-
-**Examples:**
-- Microservices architecture with complex event routing
-- Multi-account event distribution
-- Integrating AWS services with SaaS tools
-- Event sourcing with schema management
-- Scheduled workflows (using Scheduler)
-
-### When to Use SNS
-
-✅ **Use SNS when:**
-- Need very low latency (<30ms)
-- Need very high throughput (>10,000 events/sec)
-- Simple fanout (no complex filtering needed)
-- Need mobile push notifications, SMS, or email delivery
-- Cost optimization (SNS cheaper for simple fanout)
-
-**Examples:**
-- CloudWatch alarms → Email/SMS/PagerDuty
-- Mobile push notifications
-- High-throughput simple fanout
-- Low-latency notifications
-
-### Decision Matrix
-
-| Scenario | Recommendation |
-|----------|---------------|
-| Low latency required (<100ms) | SNS |
-| High throughput (>10,000/sec) | SNS |
-| Complex content-based filtering | EventBridge |
-| SaaS integration (Auth0, Datadog, etc.) | EventBridge |
-| Need transformation without Lambda | EventBridge |
-| Mobile push, SMS, email | SNS |
-| Multi-step workflows (Step Functions target) | EventBridge |
-| Simple fanout, cost-sensitive | SNS |
-
-**Can Use Both:** EventBridge → SNS (EventBridge filters/transforms, SNS delivers to mobile/email).
+When services react to each other's events this way, with no coordinator deciding the order of steps, the pattern is called **choreography**. It keeps services independent but spreads a multi-step process across many rules and services, which makes the overall flow harder to see and change. A process that needs a defined sequence, with retries and compensation when a step fails, usually belongs in a workflow engine such as Step Functions, which can itself publish events when it finishes.
 
 ---
 
-## Event-Driven Architecture Patterns
+## Pipes
 
-### Pattern 1: Event Router (Decoupled Microservices)
+A **pipe** connects one source to one target, with optional steps between them:
 
-**Problem:** Microservices need to react to events from other services without tight coupling.
+1. The **source** is something that has to be polled, such as an SQS queue, a Kinesis or DynamoDB stream, an Amazon MSK or self-managed Kafka topic, or an Amazon MQ broker.
+2. A **filter** drops records that don't match a pattern. Filtered-out records aren't charged.
+3. An **enrichment** step calls a Lambda function, Step Functions Express workflow, API Gateway API, or API destination to add data, such as looking up a customer's details for an order.
+4. The **target** receives the result, with the same range of targets as a bus.
 
-**Architecture:**
-
-```
-Order Service → [EventBridge: OrderPlaced event]
-                     ↓
-         ┌───────────┼───────────┐
-         ↓           ↓           ↓
-  Fulfillment   Inventory    Analytics
-   (Lambda)      (Lambda)     (Kinesis)
-```
-
-**How It Works:**
-1. Order Service publishes `OrderPlaced` event to EventBridge
-2. Rules route event to 3 targets based on content
-3. Each service processes independently
-
-**Benefits:**
-- Add new consumers without changing Order Service
-- Each consumer scales independently
-- Failures isolated (one consumer failure doesn't affect others)
+Pipes replace the small Lambda functions that used to sit between a queue or stream and a service, reading records, filtering them, and passing them on. A pipe needs no code for that, preserves the order of records within a batch through enrichment, and costs $0.40 per million records that pass the filter. A pipe is point to point. Use a bus when one source has many consumers, and a pipe can feed a bus when both are needed.
 
 ---
 
-### Pattern 2: Cross-Account Event Distribution
+## Scheduler
 
-**Problem:** Central account needs to distribute events to multiple child accounts.
+**EventBridge Scheduler** invokes a target on a schedule:
 
-**Architecture:**
+- **One-time** schedules run once at a date and time, such as a reminder 30 days after sign-up.
+- **Rate** schedules run at a fixed interval, such as every 15 minutes.
+- **Cron** schedules run at calendar times, such as 9:00 every weekday, in any time zone, with daylight saving time handled.
 
-```
-Central Account Event Bus
-         ↓
-Rule: Forward all events to child accounts
-         ↓
-    ┌────┴────┐
-    ↓         ↓
-Account A  Account B
-Event Bus  Event Bus
-```
+A **flexible time window** lets Scheduler run a schedule at any point within a window, which spreads load when many schedules would otherwise fire at the same moment. Beyond templated targets like Lambda, SQS, SNS, and Step Functions, a **universal target** calls any of more than 6,000 API operations across more than 270 AWS services directly, such as stopping an EC2 instance at night. Delivery is at least once, with a retry policy and a dead-letter queue per schedule.
 
-**How It Works:**
-1. Central account publishes events
-2. Rule forwards to child account event buses
-3. Each child account has own rules/targets
-
-**Benefits:**
-- Centralized event publishing
-- Decentralized event processing
-- Each account manages own subscriptions
-
-**Billing:** Sender (central account) pays for cross-account events.
-
----
-
-### Pattern 3: SaaS Integration Hub
-
-**Problem:** Integrate multiple SaaS providers (Auth0, Stripe, Datadog) with AWS services.
-
-**Architecture:**
-
-```
-Auth0 → [Partner Event Bus] → Rule: User Signup → Lambda (create profile)
-Stripe → [Partner Event Bus] → Rule: Payment Success → Step Functions (fulfillment)
-Datadog → [Partner Event Bus] → Rule: Alert → SNS → PagerDuty
-```
-
-**How It Works:**
-1. Configure SaaS partner integration (EventBridge console)
-2. Partner events arrive on partner event bus
-3. Rules route to AWS targets
-
-**Benefits:**
-- No custom webhook handlers
-- No retry logic (EventBridge handles retries)
-- Unified event processing across SaaS and AWS
-
----
-
-### Pattern 4: Claim Check (Large Payloads)
-
-**Problem:** Events >256 KB exceed EventBridge limit.
-
-**Architecture:**
-
-```
-1. Producer uploads large payload to S3
-2. Producer publishes event with S3 reference (claim check)
-3. Consumer receives event, downloads payload from S3
-```
-
-**Event Structure:**
-
-```json
-{
-  "detail": {
-    "orderId": "12345",
-    "payloadBucket": "my-bucket",
-    "payloadKey": "orders/12345.json"
-  }
-}
-```
-
-**Benefits:**
-- Bypass 256 KB limit
-- Reduce EventBridge costs (smaller events)
-- S3 provides durable storage
-
----
-
-### Pattern 5: Choreography (No Central Orchestrator)
-
-**Problem:** Multi-step workflow where each step triggers next step independently.
-
-**Architecture:**
-
-```
-Order Service publishes: OrderPlaced
-    ↓
-Inventory Service processes, publishes: InventoryReserved
-    ↓
-Payment Service processes, publishes: PaymentProcessed
-    ↓
-Fulfillment Service processes, publishes: OrderShipped
-```
-
-**How It Works:**
-- Each service listens for specific events
-- Each service publishes events after completing work
-- No central orchestrator
-
-**Benefits:**
-- Services completely decoupled
-- Easy to add new steps
-- Failure isolated to single service
-
-**Trade-Off:** Harder to track overall workflow state (consider Step Functions for complex workflows).
+Scheduler is built for millions of schedules, which suits per-user or per-order timers that scheduled rules on an event bus can't handle, and it's the recommended replacement for scheduled rules. The first 14 million invocations each month are free, then $1.00 per million.
 
 ---
 
 ## Schema Registry
 
-### What is Schema Registry?
+A **schema registry** stores the structure of events. Every AWS service event has a schema in the built-in registry. **Schema discovery**, turned on for a bus, samples the events passing through and records a schema for each event type, adding a new version when the structure changes. From a schema, the registry generates **code bindings** in languages such as Java, Python, and TypeScript, so consumers work with typed objects instead of raw JSON. Discovery is free for the first 5 million events a month, then billed per event ingested.
 
-**Schema Registry** discovers, stores, and versions event schemas across your organization.
-
-**Benefits:**
-- Discover what events exist in organization
-- Understand event structure without reading documentation
-- Generate code bindings for strongly-typed languages
-- Validate events against schema
-
-### How It Works
-
-**1. Enable Schema Discovery (on event bus)**
-
-EventBridge samples events and auto-generates schemas.
-
-**2. View Discovered Schemas**
-
-All AWS service events have pre-defined schemas (CloudFormation, EC2, S3, etc.).
-
-**3. Generate Code Bindings**
-
-Download code bindings for Python, Java, TypeScript, etc.
-
-**Example: Python code binding**
-
-```python
-from aws_schema import OrderPlaced
-
-# Type-safe event handling
-def handler(event, context):
-    order = OrderPlaced(**event)
-    print(f"Order ID: {order.detail.orderId}")
-    print(f"Amount: {order.detail.amount}")
-```
-
-**4. Version Schemas**
-
-Schema changes tracked as versions; consumers can handle multiple versions.
-
-### Schema Registry Pricing
-
-**Free:** Schema storage and discovery are free.
+A registry describes events. It doesn't reject events that don't match, so a producer that changes a field's type still breaks its consumers. Treat event structures as a published contract. Add fields freely, and version the `detail-type` or publish a new event type for changes that remove or retype fields.
 
 ---
 
-## Cost Optimization Strategies
+## Security
 
-### Pricing Overview (us-east-1, 2025)
-
-- **Custom events**: $1.00 per million events
-- **AWS service events**: Free (e.g., EC2 state changes, S3 uploads)
-- **Cross-account events**: $1.00 per million (billed to sender)
-- **EventBridge Pipes**: $0.40 per million events processed
-- **EventBridge Scheduler**: 14M free invocations/month, then $1.00 per million
-- **Each 64 KB chunk = 1 event** (256 KB event = 4 events)
-
-### 1. Minimize Event Size
-
-**Problem:** Large events cost more (each 64 KB = 1 event).
-
-**Example:**
-- 256 KB event = 4 events = $4.00 per million
-- 32 KB event = 1 event = $1.00 per million
-- **Savings: 75%**
-
-**Solution:** Use claim check pattern (S3 reference instead of full payload).
+- **Who can publish.** IAM policies grant `events:PutEvents` on specific buses. A Classic bus's resource policy lets other accounts publish, and a Custom Event Bus uses its RAM share.
+- **Who EventBridge acts as.** A rule, subscriber, pipe, or schedule invokes its target either through the target's resource policy or through an IAM role that EventBridge assumes. Give each its own role, scoped to its one target.
+- **Encryption.** Events are encrypted at rest with an AWS owned key by default. Since May 2024, a bus can use a customer managed KMS key instead, for control over the key and an audit trail in CloudTrail. On a Classic bus, events from AWS services are still encrypted with an AWS owned key, even when the bus has a customer managed key.
+- **Credentials for HTTP targets** live in Secrets Manager through connections, never in rules or code.
 
 ---
 
-### 2. Use Pipes Filtering
+## Monitoring
 
-**Problem:** Processing all events from source (e.g., DynamoDB Stream) even if only subset relevant.
+For Classic buses, a few CloudWatch metrics per rule cover most problems:
 
-**Without Pipes:**
+| Metric | What it shows |
+|---|---|
+| `FailedInvocations` | Deliveries that failed permanently |
+| `DeadLetterInvocations` | Events sent to a dead-letter queue. Alarm on anything above zero. |
+| `ThrottledRules` | Rules delayed by the invocation quota |
+| `IngestionToInvocationStartLatency` | How long events take to reach their first delivery attempt |
 
-```
-DynamoDB Stream → Lambda (all events) → Process + filter
-Cost: $0.20 per million Lambda invocations + duration
-```
-
-**With Pipes:**
-
-```
-DynamoDB Stream → [Pipe filter: amount>100] → Lambda (filtered events)
-Cost: $0.40 per million filtered events
-```
-
-**Savings:** If only 10% of events match filter, Pipes processes 100K events vs Lambda processing 1M events.
+A rule that matches nothing produces no errors at all, so a pattern with a typo fails silently. Test patterns against sample events before deploying them, with the `TestEventPattern` API or the console's sandbox.
 
 ---
 
-### 3. Leverage Free AWS Service Events
-
-**Free Events:**
-- EC2 state changes
-- S3 object uploads
-- CloudFormation stack updates
-- All AWS service events on default event bus
-
-**Paid Events:**
-- Custom events published by your applications
-- Cross-account events
-- Partner events (SaaS)
-
-**Optimization:** Use AWS service events where possible (e.g., S3 upload events trigger processing).
-
----
-
-### 4. Batch Events When Possible
-
-**Single Event Publishing:**
-
-```
-PutEvents × 1000 = 1000 API calls = 1000 events
-```
-
-**Batch Publishing:**
-
-```
-PutEvents (batch of 10) × 100 = 100 API calls = 1000 events
-
-Same event count, fewer API calls (better throughput, lower risk of throttling)
-```
-
-**EventBridge supports up to 10 events per PutEvents call.**
-
----
-
-### 5. Use Scheduler Free Tier
-
-**EventBridge Scheduler:**
-- 14 million free invocations per month
-- Most workloads stay within free tier
-
-**Example:**
-- 1 cron job per minute = 43,200 invocations/month (well under free tier)
-- 100 cron jobs per minute = 4.3M invocations/month (still free)
-
----
-
-### Cost Example: Event-Driven Architecture
-
-**Scenario:** 10 million custom events per month, 3 targets per event.
-
-**Costs:**
-- Events: 10M × $1.00/M = $10.00
-- Targets: Free (no per-target charges; only pay for target execution like Lambda, SQS)
-- **Total: $10.00/month**
-
-**Compare to SNS + SQS Fanout:**
-- SNS publish: 10M × $0.50/M = $5.00
-- SNS delivery: 30M × $0.09/M = $2.70
-- SQS receive: 30M × $0.40/M = $12.00
-- **Total: $19.70/month**
-
-**EventBridge cheaper** when content-based filtering, transformation, or SaaS integration needed.
-
----
-
-## Performance and Scalability
-
-### Throughput Limits
-
-| Event Type | Throughput Limit |
-|------------|------------------|
-| **Custom events** | 10,000 events/sec per region |
-| **AWS service events** | No limit (managed by AWS) |
-| **Cross-account events** | 10,000 events/sec per region |
-
-**Scaling:** Request limit increase via AWS Support if >10,000 events/sec required.
-
-### Latency
-
-**Typical Latency:** 500ms (event published → target invoked)
-
-**Compare to:**
-- SNS: <30ms
-- SQS: <10ms (polling latency separate)
-
-**When Latency Matters:** Use SNS for <100ms latency requirements; EventBridge for <1s acceptable.
-
-### Target Invocation
-
-- Targets invoked in parallel (not sequential)
-- Each target retries independently
-- Retry policy: Exponential backoff up to 24 hours (185 retries)
-
----
-
-## Security Best Practices
-
-### 1. Resource-Based Policies
-
-Control who can publish events to event bus.
-
-**Example: Allow specific accounts**
-
-```json
-{
-  "Effect": "Allow",
-  "Principal": {
-    "AWS": "arn:aws:iam::123456789012:root"
-  },
-  "Action": "events:PutEvents",
-  "Resource": "arn:aws:events:us-east-1:111111111111:event-bus/my-bus"
-}
-```
-
-### 2. IAM Roles for Targets
-
-EventBridge assumes IAM role to invoke targets.
-
-**Example: Invoke Lambda**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": "lambda:InvokeFunction",
-  "Resource": "arn:aws:lambda:us-east-1:123456789012:function:my-function"
-}
-```
-
-**Best Practice:** Separate IAM role per target for least privilege.
-
-### 3. Encryption at Rest
-
-EventBridge encrypts events at rest using AWS-managed keys (automatic, no configuration required).
-
-**For additional security:** Use AWS KMS customer-managed key (CMK) to encrypt events.
-
-### 4. Use Private API Destinations
-
-For HTTP endpoint targets, use VPC endpoints or PrivateLink to keep traffic private (don't expose APIs to public internet).
-
----
-
-## Observability and Monitoring
-
-### Key CloudWatch Metrics
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `Invocations` | Events matching rules | Monitor for sudden drops (indicates event source issue) |
-| `FailedInvocations` | Target invocation failures | >0 (investigate target errors) |
-| `ThrottledRules` | Rules throttled due to rate limits | >0 (request limit increase) |
-| `DeadLetterInvocations` | Events sent to DLQ after retries exhausted | >0 (indicates systemic target failures) |
-
-### CloudWatch Alarms
-
-**1. Failed Invocations**
-
-```
-Metric: FailedInvocations
-Threshold: >10
-Duration: 5 minutes
-Action: Alert on-call (investigate target failures)
-```
-
-**2. Dead Letter Queue Depth**
-
-```
-Metric: ApproximateNumberOfMessagesVisible (on DLQ)
-Threshold: >0
-Duration: 1 minute
-Action: Alert on-call (events failing after retries)
-```
-
-### AWS X-Ray Tracing
-
-Enable X-Ray tracing to visualize event flow across services.
-
-**Trace Example:**
-
-```
-EventBridge → Lambda (enrichment) → Step Functions → DynamoDB
-```
-
-**Benefit:** Identify latency bottlenecks and failures.
-
----
-
-## Integration Patterns
-
-### Pattern 1: EventBridge + SQS (Buffering)
-
-**Use Case:** Protect consumer from traffic spikes.
-
-```
-EventBridge Rule → SQS Queue → Lambda Consumer
-```
-
-**Benefit:** SQS buffers events; Lambda processes at steady rate.
-
----
-
-### Pattern 2: EventBridge + Step Functions (Orchestration)
-
-**Use Case:** Multi-step workflow with error handling.
-
-```
-EventBridge Rule → Step Functions State Machine
-```
-
-**Benefit:** Visual workflow designer, built-in retries, error handling.
-
----
-
-### Pattern 3: EventBridge + API Destinations (External APIs)
-
-**Use Case:** Call external HTTP API.
-
-```
-EventBridge Rule → API Destination (HTTPS endpoint)
-```
-
-**Benefit:** Built-in retry, authentication (OAuth, API key).
-
----
-
-## Common Pitfalls
-
-### Pitfall 1: Not Using Dead Letter Queues
-
-**Problem:** Failed target invocations lost after 24 hours of retries.
-
-**Solution:** Configure DLQ for rules.
-
-**Cost Impact:** Lost events = lost business (orders not processed, alerts not sent).
-
----
-
-### Pitfall 2: Large Events Without Claim Check
-
-**Problem:** 256 KB event = 4 charges.
-
-**Solution:** Use S3 for large payloads; event contains reference.
-
-**Cost Impact:** 1M events at 256 KB = $4.00; with claim check (32 KB) = $1.00 (75% savings).
-
----
-
-### Pitfall 3: Not Monitoring Failed Invocations
-
-**Problem:** Target failures go unnoticed; events not processed.
-
-**Solution:** CloudWatch alarm on `FailedInvocations`.
-
-**Cost Impact:** Business impact (lost orders, missed alerts).
-
----
-
-### Pitfall 4: Using EventBridge When SNS Sufficient
-
-**Problem:** EventBridge costs more than SNS for simple fanout.
-
-**Solution:** Use SNS for simple fanout; EventBridge for complex routing.
-
-**Cost Impact:** 10M events: EventBridge=$10, SNS+SQS=$7.70 (EventBridge 30% more expensive for simple fanout).
-
----
-
-### Pitfall 5: Not Using Schema Registry
-
-**Problem:** Teams don't know what events exist; integration breaks when schemas change.
-
-**Solution:** Enable schema discovery; use versioned schemas.
-
-**Cost Impact:** Development time wasted investigating event structures; production incidents from schema changes.
+## Where the Money Goes
+
+| Charge (us-east-1) | Price |
+|---|---|
+| Custom and partner events published to a Classic bus | $1.00 per million |
+| AWS service events on the default bus | No charge |
+| Classic deliveries to targets in the same account | No charge |
+| Classic deliveries to another account | $1.00 per million |
+| Custom Event Bus ingress | $0.18 per GB for the first 5,000 GB a month, then $0.12 |
+| Custom Event Bus delivery to subscribers | $0.05 per GB |
+| Custom Event Bus retention beyond the included period | $0.08 per GB-month |
+| Pipes | $0.40 per million records after filtering |
+| API destinations | $0.20 per million calls |
+| Scheduler | First 14 million invocations a month free, then $1.00 per million |
+| Archive and replay (Classic) | $1.00 per million events archived and per million replayed, plus storage |
+
+Each 64 KB of an event counts as one event on a Classic bus, in Pipes, and for API destinations. The Custom Event Bus bills by volume instead, so small events cost less there than on a Classic bus, and a large volume of small events is where the new bus saves the most. Optional processing on it, such as content-based deduplication and transformations, adds $0.15 per million events. Cross-Region delivery adds standard data transfer charges.
 
 ---
 
 ## Key Takeaways
 
-1. **EventBridge enables event-driven architectures with decoupled services.** Event bus routes events from sources to targets; add consumers without changing producers.
-
-2. **Three EventBridge services serve different purposes.** Event Bus for one-to-many routing, Pipes for point-to-point integration, Scheduler for time-based workflows.
-
-3. **EventBridge provides content-based filtering and transformation.** Filter on any JSON field (not just attributes); transform events without Lambda.
-
-4. **Use EventBridge for complex routing, SNS for simple fanout.** EventBridge: 20+ target types, SaaS integration, schema management. SNS: lower latency, higher throughput, lower cost for simple fanout.
-
-5. **Schema Registry discovers and versions event schemas.** Enable schema discovery to understand event structures; generate type-safe code bindings.
-
-6. **EventBridge Pipes reduce costs for filtered processing.** Filter events before processing; pay only for matching events (cheaper than Lambda for simple filtering).
-
-7. **EventBridge Scheduler consolidates scheduled tasks.** 14M free invocations/month; replaces cron jobs, CloudWatch Events, custom scheduling.
-
-8. **Event size impacts cost (each 64 KB = 1 event).** Use claim check pattern for large payloads; store in S3, event contains reference.
-
-9. **AWS service events are free; custom events cost $1/million.** Leverage free AWS service events (EC2, S3, CloudFormation) where possible.
-
-10. **Configure DLQs for rules to prevent event loss.** Failed invocations retry for 24 hours; without DLQ, events lost after retries exhausted.
-
-11. **EventBridge supports 35+ SaaS integrations.** Native integrations with Auth0, Datadog, Zendesk, Stripe, and MongoDB Atlas eliminate custom webhook handlers.
-
-12. **Monitor FailedInvocations metric to detect target issues.** Alert on failures; investigate target errors (permissions, timeouts, logic errors).
-
-EventBridge is AWS's strategic event-driven architecture service, providing content-based routing, SaaS integrations, and schema management that SNS cannot. Choose EventBridge for complex event-driven architectures; choose SNS for simple, high-throughput fanout.
+- EventBridge routes events by their content, so consumers subscribe without the producer knowing about them, and AWS services and SaaS partners publish to it too.
+- On a Classic bus, rules pair a pattern with up to five targets. Delivery is at least once and unordered, with 24 hours of retries by default. Put a dead-letter queue on every important target.
+- The Custom Event Bus (September 2026) retains events for up to a year, lets each consumer own a subscriber on a shared bus, and adds per-group ordering and 5-minute deduplication. Use it for new cross-account backbones and for consumers that need replay or order.
+- Choose EventBridge for content-based routing, AWS and SaaS sources, and varied targets. Choose SNS for the cheapest, fastest plain fanout and for notifications to people.
+- Pipes replace glue functions between a queue or stream and a target, and Scheduler replaces cron hosts and scheduled rules, at up to millions of schedules.
+- A schema registry documents events but doesn't enforce them, so treat event structures as a contract and version breaking changes.

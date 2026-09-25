@@ -48,6 +48,11 @@ collections:
   resources:
     output: true
     permalink: /resources/:path.html
+  # Learning paths point to content, never the reverse: no guide, resource, case study,
+  # or post layout reads this collection. See .claude/content/learning-path-guide.md.
+  learning_paths:
+    output: true
+    permalink: /learning-paths/:path.html
   # Figures are building blocks, never pages: composed into guides and resources
   # through _includes/figure.html. See .claude/content/figure-guide.md.
   figures:
@@ -77,6 +82,11 @@ defaults:
     values:
       layout: "resource"
       author: "lucent"
+  - scope:
+      path: ""
+      type: "learning_paths"
+    values:
+      layout: "learning-path"
   - scope:
       path: ""
       type: "figures"

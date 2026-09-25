@@ -1,523 +1,280 @@
 ---
-title: "Hosting, Deployment, and Operational Patterns"
+title: "Hosting and Deployment"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Testing & Operations"
-description: "Covers hosting models, server configuration, containerization strategies, Native AOT deployment, and operational patterns for production ASP.NET Core applications."
-tags: [asp-net-core, hosting, deployment, docker, native-aot, kestrel, reverse-proxy, performance]
+description: "Running an ASP.NET Core app in production: choosing between Kestrel, HTTP.sys, and IIS in-process or out-of-process hosting, Kestrel endpoints and limits, forwarded headers behind a proxy, container images, Native AOT, and draining cleanly on shutdown in Kubernetes."
+tags: [practical, kestrel, iis, reverse-proxy, containers, native-aot, kubernetes]
 ---
 
-## Hosting and Deployment Fundamentals
+An ASP.NET Core app is a console program that contains its own web server. Deploying it means deciding what sits between the network and that server, how the server is configured, what the app is packaged as, and how it stops when the platform replaces it. Each decision has defaults that work on a developer's machine and fail in specific, recognizable ways in production: a redirect loop behind a load balancer, a container that answers on the wrong port, or requests dropped on every deployment.
 
-ASP.NET Core applications can run in multiple hosting configurations depending on the platform, performance requirements, and operational constraints. The runtime environment determines which web server handles requests, how the application is deployed, and what operational patterns are available for managing traffic, configuration, and lifecycle events.
+## Choosing a Server and Hosting Model
 
-The choices you make about hosting models, server configuration, and deployment formats directly affect startup time, memory footprint, request throughput, and the ability to gracefully handle traffic shifts and configuration changes. These decisions are not one-size-fits-all. They depend on whether you're optimizing for Windows integration, Linux containerization, edge performance, or operational simplicity.
+Every request reaches the app through an `IServer` implementation, which accepts connections and turns each request into an `HttpContext`. Three servers ship with ASP.NET Core, and IIS adds a fourth arrangement by proxying to one of them:
 
-## Web Servers in ASP.NET Core
+| Model | Server | Platform | Choose it when |
+|---|---|---|---|
+| **Kestrel** | Kestrel, inside the app's process | Windows, Linux, macOS | The default for everything else, including containers and apps behind a proxy or load balancer |
+| **HTTP.sys** | The Windows kernel HTTP driver | Windows only | The app needs a feature only HTTP.sys has, such as port sharing between processes or kernel-mode response caching, without IIS |
+| **IIS in-process** | IIS HTTP Server, inside the IIS worker process | Windows with IIS | The app is deployed to IIS, which is the default model there |
+| **IIS out-of-process** | Kestrel, behind IIS | Windows with IIS | The app needs its own process under IIS, such as sharing an app pool or a single-file deployment |
 
-ASP.NET Core includes two primary web server implementations: Kestrel and HTTP.sys. Each serves different scenarios and provides distinct capabilities.
+{% include figure.html id="asp-hosting-topologies" %}
 
 ### Kestrel
 
-Kestrel is a cross-platform web server built on libuv, designed for performance and flexibility. It runs on Windows, Linux, and macOS and serves as the default web server for ASP.NET Core applications. Kestrel provides excellent throughput and low memory overhead, making it suitable for containerized environments and cloud deployments.
+Kestrel is a cross-platform server built on .NET's socket APIs. It runs inside the app's process, so the app and server start, fail, and stop together. It serves HTTP/1.1 and HTTP/2 on every endpoint by default. HTTP/2 over a plain-text connection needs care, because clients choose HTTP/2 during the TLS handshake, and a plain-text endpoint that also allows HTTP/1.1 falls back to HTTP/1.1. A gRPC service without TLS therefore needs an endpoint restricted to HTTP/2. HTTP/3 is off until an endpoint sets `HttpProtocols.Http1AndHttp2AndHttp3` over HTTPS, and it needs the MsQuic library on the host. Clients discover HTTP/3 through the `alt-svc` header Kestrel adds, so the first request always arrives over HTTP/1.1 or HTTP/2.
 
-Kestrel can run as an edge server directly exposed to the internet or behind a reverse proxy like Nginx, Apache, or IIS. When used behind a reverse proxy, Kestrel handles application logic while the proxy manages SSL termination, static file serving, load balancing, and additional security layers. When used as an edge server without a reverse proxy, Kestrel handles all HTTP responsibilities directly but requires careful configuration for HTTPS certificates, request limits, and timeouts.
-
-Kestrel supports HTTP/1.1, HTTP/2, and HTTP/3. HTTP/2 is enabled by default starting with .NET Core 3.0 and supports features needed for gRPC, including response trailers and reset frames. HTTP/3 uses QUIC instead of TCP, offering improved performance on mobile and lossy networks with lower latency and better connection resilience. Since not all network infrastructure supports HTTP/3, production configurations typically enable HTTP/1.1, HTTP/2, and HTTP/3 together, allowing clients to negotiate the best available protocol.
+Kestrel can face the internet directly. It often sits behind a reverse proxy or load balancer anyway, because the proxy terminates TLS for many services, balances across instances, and lets the app listen only on a private network.
 
 ### HTTP.sys
 
-HTTP.sys is a Windows-only web server built on the HTTP.sys kernel driver and HTTP Server API. It provides mature, kernel-mode handling of HTTP requests with features unavailable in Kestrel, including port sharing, kernel-mode Windows authentication, fast proxying via queue transfers, direct file transmission, and response caching.
+HTTP.sys is the Windows kernel driver that IIS itself runs on, used directly as the app's server. It supports Windows authentication (Kerberos, NTLM, Negotiate), port sharing between several processes, kernel-mode response caching, direct file transmission, HTTP/2, and HTTP/3 on Windows 11 and Windows Server 2022. Microsoft's docs recommend it for Windows apps exposed to the internet without IIS, and for internal apps that need one of those features. Kestrel covers Windows authentication too, through the Negotiate handler, so authentication alone rarely decides the choice. HTTP.sys can't be combined with IIS or the ASP.NET Core Module.
 
-HTTP.sys operates as a shared kernel component, making it suitable for scenarios requiring advanced Windows integration or security features tied to the operating system. However, it lacks the cross-platform flexibility of Kestrel and typically shows lower performance compared to Kestrel in high-throughput scenarios.
+### IIS: In-Process and Out-of-Process
 
-When choosing between Kestrel and HTTP.sys, prefer Kestrel unless the application specifically requires Windows-only features like kernel-mode authentication or port sharing. HTTP.sys makes sense for Windows Server deployments where native Windows security integration is mandatory.
+On IIS, the ASP.NET Core Module (ANCM), installed by the .NET Hosting Bundle, connects IIS to the app. It hosts the app in one of two ways, set by `AspNetCoreHostingModel` in the project file.
 
-### When to Use a Reverse Proxy
+**In-process** has been the default since ASP.NET Core 3.0. ANCM loads the .NET runtime into the IIS worker process (`w3wp.exe`), and IIS HTTP Server hands each request to the app in memory. Kestrel isn't used. With no hop over the loopback network, Microsoft reports significantly higher throughput than out-of-process. The costs are constraints on the deployment: one app per application pool, the app's bitness must match the pool's, and a single-file published app can't be loaded.
 
-Using a reverse proxy with Kestrel provides several operational advantages. The reverse proxy handles SSL certificate management, static file serving with efficient caching, request filtering and rate limiting, load balancing across multiple application instances, and unified logging and monitoring across services.
+**Out-of-process** starts the app as its own `dotnet` process running Kestrel on a port ANCM chooses, and proxies each request to it over loopback. IIS integration then enables forwarded headers middleware automatically, restricted to that single local proxy, so the app sees the real client address and scheme without further configuration.
 
-Running Kestrel behind a reverse proxy also isolates the application server from direct internet exposure, allowing the proxy to absorb malicious traffic before it reaches the application. The reverse proxy can enforce security headers, block known attack patterns, and provide DDoS mitigation.
+In both models IIS request filtering runs first, and its `maxAllowedContentLength` rejects oversized uploads before the app's own body size limit is consulted.
 
-In containerized environments, reverse proxies like Nginx or Traefik run as separate containers that route traffic to application containers, enabling independent scaling of the proxy layer and application layer. In cloud platforms, managed load balancers or API gateways serve the reverse proxy role while providing integration with cloud-native security, monitoring, and routing features.
+### As a Windows Service or systemd Unit
 
-## Kestrel: The Cross-Platform Web Server
+Outside containers and IIS, a Kestrel app on a server usually runs under the operating system's service manager. `builder.Services.AddWindowsService()` (from `Microsoft.Extensions.Hosting.WindowsServices`) lets the app run as a Windows Service, reporting its state to the Service Control Manager and using the app's own folder as the content root rather than the service's `system32` working directory. `builder.Services.AddSystemd()` (from `Microsoft.Extensions.Hosting.Systemd`) does the equivalent under systemd on Linux, typically behind Nginx or Apache. Both calls do nothing when the app isn't running under that service manager, so the same build still runs from a console. The service manager's own stop timeout then plays the role the grace period plays in Kubernetes, described under graceful shutdown below.
 
-Kestrel serves as the default, cross-platform web server for ASP.NET Core. Built for performance and efficiency, it handles HTTP requests directly and runs on Windows, Linux, and macOS.
+## Configuring Kestrel
 
-### Kestrel Architecture
+Kestrel reads its endpoints and limits from configuration and from `builder.WebHost.ConfigureKestrel`. With no endpoint configured anywhere, it listens only on `http://localhost:5000`, which is unreachable from outside the machine or container. The official container images set `ASPNETCORE_HTTP_PORTS=8080`, so a containerized app listens on port 8080 on all interfaces unless told otherwise.
 
-Kestrel uses a layered architecture with distinct responsibilities. The transport layer manages network connections and sockets, handling TCP listeners and connection establishment. The connection management layer sits above transport, managing connection lifecycles, pooling, keep-alive mechanisms, and protocol-specific handling. The middleware pipeline receives requests from connection management and processes them through your application's middleware stack.
+### Endpoints and Certificates
 
-This separation allows Kestrel to optimize for different workloads. The transport layer can be swapped for different implementations, including specialized transports for Unix domain sockets or named pipes. Connection management applies pooling and keep-alive strategies that reduce overhead for high-frequency requests.
+Endpoints in configuration can change per environment without a rebuild:
 
-### Performance Characteristics
+```json
+{
+  "Kestrel": {
+    "Endpoints": {
+      "Http": {
+        "Url": "http://*:8080"
+      },
+      "Https": {
+        "Url": "https://*:8443",
+        "Certificate": {
+          "Path": "/certs/api.pfx",
+          "Password": "set-from-a-secret-store"
+        }
+      }
+    }
+  }
+}
+```
 
-Kestrel optimizes for throughput and concurrent connections. It uses asynchronous I/O throughout, minimizing thread pool usage. Connection pooling reduces allocation overhead. Keep-alive support reuses connections across multiple requests, avoiding TCP handshake costs.
-
-These optimizations make Kestrel effective for microservices, containerized workloads, and resource-constrained environments. Running in containers with limited memory, Kestrel manages resources efficiently without sacrificing request throughput.
-
-### Configuration Patterns
-
-Kestrel configuration happens through KestrelServerOptions, accessible via builder.WebHost.ConfigureKestrel(). Common configuration includes URL bindings for HTTP and HTTPS endpoints, connection limits to prevent resource exhaustion under load, timeouts for keep-alive pings and request processing, and HTTPS certificate configuration for TLS termination.
+The same endpoints in code look like this:
 
 ```csharp
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxConcurrentConnections = 100;
-    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+    options.ListenAnyIP(8080);
+    options.ListenAnyIP(8443, listen => listen.UseHttps("/certs/api.pfx", certPassword));
 });
 ```
 
-### When Kestrel Is Sufficient
+Code-defined endpoints and the `Kestrel:Endpoints` section both take priority over `ASPNETCORE_URLS` and the `urls` setting. An HTTPS endpoint without a certificate of its own uses `Certificates:Default` or, in development, the SDK's development certificate. The development certificate doesn't exist on a production host, so an HTTPS endpoint there needs a certificate from configuration or code. Apps behind a TLS-terminating proxy often skip HTTPS in Kestrel entirely and listen on plain HTTP on a private network. `CreateSlimBuilder` leaves Kestrel's HTTPS support out altogether, and it comes back with `builder.WebHost.UseKestrelHttpsConfiguration()`.
 
-Kestrel works well as a standalone server for many scenarios. Internal microservices behind API gateways, containerized applications in orchestrated environments like Kubernetes, and applications behind cloud load balancers that handle SSL termination and traffic distribution all benefit from Kestrel's lightweight design.
+### Limits
 
-You can expose Kestrel directly to the internet when paired with proper security hardening. However, production deployments typically place Kestrel behind a reverse proxy for additional features Kestrel intentionally omits.
+Kestrel's limits protect the process from clients that send too much or too slowly. The defaults suit most APIs:
 
-## HTTP.sys: Windows-Only Alternative
-
-HTTP.sys provides a Windows-specific web server option that differs from Kestrel in architecture and capabilities. It operates as a kernel-mode component within Windows, sharing infrastructure with IIS.
-
-### Kernel-Mode Operation
-
-Unlike Kestrel, which runs in user mode, HTTP.sys operates in kernel mode. This provides performance advantages for certain workloads by reducing context switches between kernel and user space. It also provides mature security features built into Windows, including kernel-mode Windows Authentication without user-mode code.
-
-### When to Choose HTTP.sys
-
-Use HTTP.sys when you need features unavailable in Kestrel and cannot use a reverse proxy to provide them. Windows Authentication without a reverse proxy, port sharing where multiple applications listen on the same port differentiated by host headers or paths, and direct internet exposure on Windows without a reverse proxy all favor HTTP.sys.
-
-HTTP.sys requires Windows Server or Windows 10/11. It cannot run on Linux or macOS, limiting portability compared to Kestrel-based applications.
-
-### Incompatibility with ASP.NET Core Module
-
-HTTP.sys cannot work with the ASP.NET Core Module for IIS hosting. If deploying to IIS or IIS Express, you must use Kestrel. HTTP.sys serves as an alternative for standalone Windows deployments, not as an IIS hosting model.
-
-## Reverse Proxy Patterns
-
-Production deployments commonly place ASP.NET Core applications behind reverse proxies that provide features beyond basic HTTP handling. Reverse proxies offload concerns like SSL termination, static file serving, request caching, and load balancing from the application server.
-
-### Common Reverse Proxy Options
-
-IIS serves as a reverse proxy for ASP.NET Core on Windows through the ASP.NET Core Module. This module manages application lifecycle, forwards requests to Kestrel, and provides process management. Nginx provides a lightweight, high-performance reverse proxy commonly used on Linux for SSL termination, load balancing, and static file serving. Apache serves similar purposes with mod_proxy, offering mature configuration options and integration with existing Apache-based infrastructure.
-
-Cloud load balancers like AWS Application Load Balancer, Azure Application Gateway, and Google Cloud Load Balancing provide reverse proxy capabilities at the infrastructure layer, handling SSL termination, health checks, and traffic distribution across multiple application instances.
-
-### Forwarded Headers
-
-When running behind a reverse proxy, the application sees requests originating from the proxy's IP address rather than the original client. The proxy forwards the original request information through headers like X-Forwarded-For, X-Forwarded-Proto, and X-Forwarded-Host.
-
-ASP.NET Core provides Forwarded Headers Middleware to process these headers and update the request properties accordingly. Enable this middleware by setting the ASPNETCORE_FORWARDEDHEADERS_ENABLED environment variable to true, or configure it explicitly in code.
-
-```csharp
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
-```
-
-Without forwarded headers middleware, URL generation, redirects, and authentication schemes may fail because they generate URLs using the proxy's address rather than the original request address.
-
-### Security Considerations
-
-Configure forwarded headers middleware carefully to prevent spoofing. Limit the proxy IP addresses that the application trusts using KnownProxies or KnownNetworks properties. Without these restrictions, malicious clients can send forged forwarded headers that the application might trust, potentially bypassing IP-based security controls.
-
-## Kestrel Configuration
-
-Kestrel exposes configuration options for endpoints, HTTPS certificates, connection limits, timeouts, and protocol settings. Understanding these options allows you to tune Kestrel for specific workloads and deployment scenarios.
-
-### Endpoint Configuration
-
-Kestrel listens on one or more endpoints, each defined by a protocol, address, and port. New projects are configured to bind to a random HTTP port between 5000 and 5300 and a random HTTPS port between 7000 and 7300 during development. Production configurations specify explicit ports based on deployment requirements.
-
-Endpoints can be configured in code or through configuration files. Configuring in code provides compile-time safety and strong typing, while configuration files allow changing endpoints without recompiling. Both approaches support binding to specific IP addresses, enabling IPv4 or IPv6, and specifying different endpoints for different protocols.
+| Limit | Default | What it stops |
+|---|---|---|
+| `MaxRequestBodySize` | 30,000,000 bytes (about 28.6 MB) | Oversized uploads |
+| `RequestHeadersTimeout` | 30 seconds | Clients that open a connection and send headers slowly (slowloris) |
+| `MinRequestBodyDataRate` | 240 bytes per second after a 5-second grace period | Clients that trickle a request body |
+| `KeepAliveTimeout` | 130 seconds | Idle connections held open indefinitely |
+| `MaxRequestHeadersTotalSize` | 32 KB | Oversized headers |
+| `MaxConcurrentConnections` | Unlimited | Connection floods, when set |
+| `Http2.MaxStreamsPerConnection` | 100 | One HTTP/2 connection monopolizing the server |
 
 ```csharp
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(5000); // HTTP on any IP
-    options.ListenAnyIP(5001, listenOptions =>
-    {
-        listenOptions.UseHttps(); // HTTPS with default cert
-    });
+    options.Limits.MaxConcurrentConnections = 10_000;
+    // Above the load balancer's 5-minute idle timeout (see below).
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(6);
 });
 ```
 
-When running behind a reverse proxy, Kestrel typically listens on localhost or a private network interface rather than exposing ports directly to the internet. The reverse proxy forwards traffic to Kestrel on these internal endpoints.
+The body size limit is usually better raised per endpoint than globally, with `[RequestSizeLimit]` or the `IHttpMaxRequestBodySizeFeature`, so that only the upload endpoint accepts large bodies. The keep-alive timeout matters behind a load balancer. If the balancer keeps idle connections open longer than Kestrel does, Kestrel closes connections the balancer still considers usable, and the next request sent on one of them fails. The 130-second default already exceeds many balancers' idle timeouts, so the problem tends to appear when someone raises the balancer's timeout, for long polling or slow clients, without raising Kestrel's to stay above it. The timeouts and data rates aren't enforced while a debugger is attached, so a slow-client problem can't be reproduced under one.
 
-### HTTPS Configuration
+## Behind a Reverse Proxy
 
-HTTPS in Kestrel requires a certificate for each HTTPS endpoint. Certificates can be loaded from a file, certificate store, or generated dynamically. Development environments use a self-signed development certificate, while production environments load certificates from secure storage or certificate authorities.
+A proxy or load balancer ends the client's connection and opens its own to the app. From the app's side, every request now comes from the proxy's address, over the proxy's scheme, often plain HTTP, and possibly with a different host and path. The proxy passes the originals along in headers:
+
+| Header | Carries | Restores |
+|---|---|---|
+| `X-Forwarded-For` | The client's address, plus any earlier proxies | `HttpContext.Connection.RemoteIpAddress` |
+| `X-Forwarded-Proto` | The original scheme | `HttpContext.Request.Scheme` |
+| `X-Forwarded-Host` | The original `Host` header | `HttpContext.Request.Host` |
+| `X-Forwarded-Prefix` | A path prefix the proxy removed | `HttpContext.Request.PathBase` |
+
+Until something reads those headers, the app gets the proxy's view. HTTPS redirection sees every request as HTTP and redirects forever, OpenID Connect sends `http://` redirect URIs that the identity provider rejects, and rate limiting and audit logs record every request as coming from the proxy.
+
+### Forwarded Headers Middleware
+
+`UseForwardedHeaders` applies the headers to the request, but only from proxies it trusts:
 
 ```csharp
-options.ListenAnyIP(5001, listenOptions =>
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    listenOptions.UseHttps(httpsOptions =>
-    {
-        httpsOptions.ServerCertificate = LoadCertificate();
-    });
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
 });
+
+var app = builder.Build();
+
+app.UseForwardedHeaders();
+app.UseHsts();
+app.UseHttpsRedirection();
 ```
 
-Production configurations often delegate HTTPS to the reverse proxy, allowing Kestrel to serve HTTP traffic on internal endpoints while the proxy terminates SSL and forwards decrypted traffic. This approach centralizes certificate management at the proxy layer and reduces the configuration surface area for the application.
+The defaults are strict, and they explain most "the headers are ignored" reports:
 
-### Request Limits and Timeouts
+- **No headers are processed** until `ForwardedHeaders` names them. The default is `None`.
+- **Only loopback proxies are trusted.** `KnownProxies` holds `::1` and `KnownIPNetworks` holds `127.0.0.0/8`. A proxy on another machine or in another container is ignored, and the middleware logs its address only at Debug level, so the log level for `Microsoft.AspNetCore.HttpOverrides` has to be lowered to see why. Add the proxy's address or network. In .NET 10, `KnownIPNetworks` (using `System.Net.IPNetwork`) replaces the now-obsolete `KnownNetworks`.
+- **Only the rightmost value is used.** `ForwardLimit` is 1, so behind two proxies it takes the address the nearest proxy recorded, which is the outer proxy rather than the client. Raise it only together with trusted proxies or networks.
 
-Kestrel enforces limits on request size, header size, connection counts, and timeouts to protect against resource exhaustion and slowloris attacks. Default limits are conservative but may require tuning for applications handling large uploads, high concurrency, or slow clients.
+Consider a client behind two proxies:
 
-The maximum request body size defaults to 30 MB but can be increased for endpoints accepting large file uploads. Request header timeout defaults to 30 seconds, giving clients time to send headers over slow connections. Minimum data rate defaults to 240 bytes per second with a 5-second grace period, disconnecting clients that send data too slowly.
+```text
+client 203.0.113.7  ->  outer proxy 10.0.1.5  ->  inner proxy 10.0.2.9  ->  app
 
-```csharp
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
-    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(60);
-    options.Limits.MinRequestBodyDataRate = new MinDataRate(
-        bytesPerSecond: 100,
-        gracePeriod: TimeSpan.FromSeconds(10));
-});
+The app sees:   RemoteIpAddress = 10.0.2.9
+                X-Forwarded-For: 203.0.113.7, 10.0.1.5
 ```
 
-Connection limits control how many concurrent connections Kestrel accepts. The default is unlimited, but production deployments often set explicit limits to prevent a single application instance from exhausting system resources under load spikes.
+The middleware reads the header from right to left, and it applies each entry only if the address it currently holds is trusted. With `ForwardLimit` at 1 and `10.0.0.0/8` trusted, it checks 10.0.2.9, applies 10.0.1.5, and stops, so the app records the outer proxy as the client. With `ForwardLimit` at 2, it then checks 10.0.1.5, which is also trusted, and applies 203.0.113.7.
 
-## IIS Hosting Models
+The middleware must run before anything that reads the scheme, host, or client address, such as HSTS (the header telling browsers to use HTTPS only), HTTPS redirection, authentication, and rate limiting. Trusting `X-Forwarded-Host` also means setting `ForwardedHeadersOptions.AllowedHosts`, because an unrestricted forwarded host lets a client choose the host the app puts in the links it generates.
 
-When hosting ASP.NET Core applications on Windows with IIS, two hosting models are available: in-process and out-of-process. The hosting model determines whether the application runs inside the IIS worker process or in a separate process.
+Setting the environment variable `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` turns the middleware on without code, processing `X-Forwarded-For` and `X-Forwarded-Proto`. It also clears both trusted lists, so the app accepts the headers from any sender. That suits a platform where the app can be reached only through the platform's own load balancer, and it lets any client that can reach the app directly forge its address and scheme. Microsoft's docs warn about it for that reason. Behind IIS out-of-process, none of this is needed, because IIS integration configures the middleware itself.
 
-### In-Process Hosting
+## Containers
 
-In-process hosting runs the ASP.NET Core application in the same process as the IIS worker process. Instead of using Kestrel, the application uses IIS HTTP Server, a native IIS module that handles HTTP requests directly within the worker process. This eliminates the overhead of proxying requests between IIS and Kestrel, reducing latency and improving throughput.
+Three of the official image repositories matter for a web app. `mcr.microsoft.com/dotnet/sdk` builds the app. `dotnet/aspnet` runs a framework-dependent app, one that relies on the .NET runtime already installed in the image. `dotnet/runtime-deps` holds only the operating system libraries .NET needs, for a self-contained app that carries its own runtime or a Native AOT app, which needs none. Since .NET 10 the default tags are Ubuntu 24.04 based, and Debian variants are no longer published. Other variants are selected by tag suffix. Alpine is smaller. The `chiseled` images strip out the shell and package manager and are set up to run as a non-root user, which shrinks both the image and what an attacker can do inside it. Like Alpine, they leave out the ICU globalization and time zone data, so an app on them has to run in invariant globalization mode or use an `-extra` variant.
 
-In-process hosting provides the best performance on Windows because requests flow from the HTTP.sys kernel driver directly to the IIS worker process and then to application code without crossing process boundaries. The application benefits from IIS features like application pool isolation, process recycling, and integrated Windows authentication without configuration overhead.
+Every image since .NET 8 includes a non-root `app` user, whose ID is in the `APP_UID` environment variable. The move to port 8080 described earlier came with it, because a non-root process can't bind ports below 1024 in some environments.
 
-Since ASP.NET Core 3.0, in-process hosting has been the default for applications deployed to IIS. Applications explicitly configure in-process hosting by setting the hosting model in the project file.
-
-```xml
-<PropertyGroup>
-  <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
-</PropertyGroup>
-```
-
-### Out-of-Process Hosting
-
-Out-of-process hosting runs the ASP.NET Core application as a separate process, using Kestrel as the web server. IIS acts as a reverse proxy, receiving requests from the HTTP.sys kernel driver and forwarding them to Kestrel on a random port. The application runs independently of IIS, allowing it to restart without affecting the IIS worker process.
-
-Out-of-process hosting provides better isolation between IIS and the application. If the application crashes, IIS can restart it without recycling the worker process. The application can also use cross-platform features and configurations identical to those used when running on Linux, making the deployment more portable.
-
-```xml
-<PropertyGroup>
-  <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
-</PropertyGroup>
-```
-
-Choosing between in-process and out-of-process hosting depends on performance requirements and operational constraints. In-process hosting delivers better performance and tighter Windows integration, while out-of-process hosting provides better isolation and cross-platform consistency.
-
-## Reverse Proxy Configuration
-
-Reverse proxies sit between clients and ASP.NET Core applications, forwarding requests while providing additional functionality like SSL termination, load balancing, and request filtering. Common reverse proxies include Nginx, Apache, IIS (in out-of-process mode), and cloud-native load balancers.
-
-### Forwarded Headers
-
-When running behind a reverse proxy, the application receives forwarded requests rather than direct client requests. The reverse proxy includes headers indicating the original client IP address, protocol, and host, which the application must interpret to reconstruct the original request context.
-
-ASP.NET Core provides Forwarded Headers Middleware to read these headers and populate HttpContext with the correct values. Without this middleware, the application sees the proxy's IP address instead of the client's IP address and may generate incorrect URLs when redirecting or constructing absolute URIs.
-
-```csharp
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
-```
-
-When using IIS, Forwarded Headers Middleware is automatically configured. For Nginx, Apache, or cloud load balancers, the application must explicitly enable the middleware by setting the `ASPNETCORE_FORWARDEDHEADERS_ENABLED` environment variable to true or configuring it in code.
-
-The middleware must run early in the pipeline, before any middleware that relies on the original client IP address or protocol, such as HTTPS redirection or authentication middleware.
-
-### Nginx Configuration
-
-Nginx is a popular reverse proxy for ASP.NET Core applications on Linux. It handles SSL termination, serves static files, and forwards dynamic requests to Kestrel. A typical Nginx configuration specifies the upstream Kestrel server, proxy headers, and SSL settings.
-
-Nginx forwards the original client IP address using the `X-Forwarded-For` header and the original protocol using the `X-Forwarded-Proto` header. The application reads these headers through Forwarded Headers Middleware to reconstruct the original request context.
-
-Nginx also handles client connection timeouts, buffering, and load balancing across multiple application instances. When multiple Kestrel instances run behind Nginx, the upstream block defines the pool of application servers, and Nginx distributes requests among them.
-
-### Apache Configuration
-
-Apache can also serve as a reverse proxy using `mod_proxy` and `mod_proxy_http` modules. Apache forwards requests to Kestrel while handling SSL, static files, and URL rewriting. The configuration specifies proxy targets, forwarded headers, and SSL certificates.
-
-Apache provides similar forwarding capabilities to Nginx but with different configuration syntax and performance characteristics. Apache's process-based or threaded model may show different resource usage patterns compared to Nginx's event-driven architecture, but both are capable of handling production traffic efficiently.
-
-### Load Balancer Considerations
-
-Cloud load balancers and API gateways provide managed reverse proxy functionality with built-in health checks, auto-scaling integration, and observability. These services forward the original client information using standard headers that Forwarded Headers Middleware interprets automatically.
-
-Load balancers often terminate SSL at the edge, forwarding unencrypted traffic to application instances on private networks. This requires configuring the application to trust the forwarded protocol header and avoid forcing HTTPS when already behind SSL termination.
-
-## Docker Containerization
-
-Containerizing ASP.NET Core applications with Docker provides consistent deployment artifacts, simplified dependency management, and portable runtime environments. Multi-stage Dockerfiles optimize image size by separating build and runtime environments.
-
-### Multi-Stage Dockerfiles
-
-A multi-stage Dockerfile uses separate stages for building and running the application. The build stage uses the .NET SDK image to restore dependencies, compile code, and publish the application. The runtime stage uses the smaller ASP.NET runtime image and copies the published output from the build stage.
+### A Multi-Stage Dockerfile
 
 ```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["MyApi/MyApi.csproj", "MyApi/"]
-RUN dotnet restore "MyApi/MyApi.csproj"
+COPY ["Orders.Api/Orders.Api.csproj", "Orders.Api/"]
+RUN dotnet restore "Orders.Api/Orders.Api.csproj"
 COPY . .
-WORKDIR "/src/MyApi"
-RUN dotnet publish "MyApi.csproj" -c Release -o /app/publish
+RUN dotnet publish "Orders.Api/Orders.Api.csproj" -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
-ENTRYPOINT ["dotnet", "MyApi.dll"]
+USER $APP_UID
+ENTRYPOINT ["dotnet", "Orders.Api.dll"]
 ```
 
-The runtime image contains only the ASP.NET runtime, shared libraries, and published application files. It excludes the SDK, build tools, and intermediate build artifacts, reducing the final image size and attack surface.
+The build stage has the SDK and the runtime stage doesn't, so the final image carries only the published output. Copying the project file and restoring before copying the source lets Docker reuse the restore layer when only code changes. `USER $APP_UID` runs the app as the non-root user. Configuration then arrives through environment variables, where `__` separates sections, so `ConnectionStrings__Orders` sets `ConnectionStrings:Orders`.
 
-Multi-stage builds optimize layer caching. Copying the project file and running restore before copying source code allows Docker to cache restored dependencies, speeding up subsequent builds when only application code changes.
+One piece of state commonly breaks here. ASP.NET Core's Data Protection keys, which encrypt authentication cookies and antiforgery tokens, are stored on the local file system by default. In a container they vanish on every restart and differ between replicas, so users are signed out on each deployment and a cookie issued by one replica fails on another. The keys need persistent storage shared by all instances, such as a mounted volume, a database, or blob storage.
 
-### Container Configuration
+### Publishing Without a Dockerfile
 
-Containerized applications typically load configuration from environment variables rather than configuration files. Environment variables provide a consistent configuration mechanism across different orchestration platforms like Kubernetes, Docker Compose, and cloud container services.
+The .NET SDK can build the image itself, with no Dockerfile:
 
-ASP.NET Core configuration automatically binds environment variables using a double underscore separator to represent nested configuration sections. For example, the environment variable `ConnectionStrings__DefaultConnection` maps to the configuration key `ConnectionStrings:DefaultConnection`.
-
-Health check endpoints help orchestration platforms determine when containers are ready to receive traffic and when they need replacement. ASP.NET Core provides built-in health check middleware that responds to health probe requests with status information.
-
-```csharp
-builder.Services.AddHealthChecks();
-app.MapHealthChecks("/health");
+```bash
+dotnet publish --os linux --arch x64 /t:PublishContainer
 ```
 
-Container orchestrators like Kubernetes use liveness and readiness probes to monitor container health. Liveness probes determine if the container should restart, while readiness probes determine if the container should receive traffic. Applications can implement separate health check endpoints for each probe type with different logic and dependencies.
+By default the image is loaded into the local Docker or Podman, so one of them has to be running. Setting `ContainerRegistry` pushes it straight to a registry instead, and `ContainerArchiveOutputPath` writes it to a tarball, and neither needs a local container runtime. The SDK picks the base image from the project: `aspnet` for a web app, and `runtime-deps` for a self-contained or AOT app. For .NET 8 and later images it runs the app as the non-root `app` user, and it infers the exposed port from `ASPNETCORE_HTTP_PORTS`. MSBuild properties such as `ContainerFamily` (for example `noble-chiseled`), `ContainerRepository`, and `ContainerRegistry` choose the variant, the image name, and where to push. The SDK can't run commands inside the image, so an image that needs extra OS packages still needs a Dockerfile or a custom base image.
 
-### Image Optimization
+## Native AOT
 
-.NET 8 introduced composite runtime images that combine multiple runtime components into a single layer, improving startup performance and reducing disk footprint. These optimized images are available as variants of the standard runtime images.
+Native AOT compiles the app to machine code at publish time. The result is a single executable that needs no .NET runtime, starts faster, and uses less memory, which matters most when many instances start and stop often, such as containers that scale with load. The price is that nothing can be generated or discovered at run time. Reflection over arbitrary types, `System.Reflection.Emit`, and loading assemblies dynamically don't work, and publishing trims every piece of code the compiler can't see being used.
 
-Minimizing layer count and optimizing layer order improve pull times and storage efficiency. Frequently changing layers should appear late in the Dockerfile, while stable dependencies should appear early to maximize cache reuse across builds.
+That rules out parts of ASP.NET Core:
 
-Non-root user configuration improves container security by running the application process without elevated privileges. The runtime image includes a non-root user that applications can switch to before starting.
+| Support | Features |
+|---|---|
+| **Supported** | gRPC, CORS, health checks, HTTP logging, JWT bearer authentication, localization, output caching, rate limiting, request decompression, response caching and compression, URL rewriting, static files, WebSockets |
+| **Partial** | Minimal APIs, SignalR |
+| **Not supported** | MVC controllers, Blazor Server, OData, authentication handlers other than JWT bearer, session, SPA middleware |
 
-```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
-WORKDIR /app
-COPY --from=build /app/publish .
-USER app
-ENTRYPOINT ["dotnet", "MyApi.dll"]
-```
-
-## Native AOT Deployment
-
-Native Ahead-of-Time compilation produces applications that compile directly to native machine code rather than intermediate language. Native AOT eliminates the JIT compiler, reducing startup time and memory footprint but imposing constraints on runtime behavior.
-
-### Benefits and Constraints
-
-Native AOT applications start faster because they skip JIT compilation during startup. They consume less memory because the runtime does not need to store IL code or JIT-compiled code. The published output is a self-contained native executable, simplifying deployment by eliminating the need to install the .NET runtime.
-
-However, Native AOT imposes strict constraints. Applications cannot use unbounded reflection because the compiler cannot predict which types might be accessed reflectively at runtime. Features relying on dynamic code generation, like certain serialization libraries or dynamic proxies, are incompatible with Native AOT.
-
-ASP.NET Core uses source generators to produce code that avoids reflection. The Request Delegate Generator creates RequestDelegate instances for Minimal API endpoints at compile time rather than using reflection to discover route handlers at runtime. This makes Minimal APIs compatible with Native AOT while MVC remains incompatible due to its reliance on runtime reflection.
-
-### Compatible Features
-
-Native AOT supports Minimal APIs, gRPC services, and worker services. Applications must use Minimal APIs exclusively and avoid features that depend on runtime code generation. Dependency injection works with Native AOT when registering services explicitly at compile time.
-
-Configuration, logging, and middleware pipelines work with Native AOT because they use compile-time-known types and do not rely on reflection. JSON serialization works using System.Text.Json source generators that produce serialization code at compile time.
-
-Applications must mark trimming-safe and AOT-compatible entry points to guide the compiler. Attributes on the Program class or endpoint handlers indicate which code paths the compiler should preserve.
+The `webapiaot` template shows the working shape. It uses minimal APIs, the smaller `WebApplication.CreateSlimBuilder`, and a source-generated JSON context, because `System.Text.Json` would otherwise fall back to reflection:
 
 ```csharp
 var builder = WebApplication.CreateSlimBuilder(args);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonContext.Default));
+
 var app = builder.Build();
-
-app.MapGet("/hello", () => "Hello, Native AOT!");
-
+app.MapGet("/orders/{id}", (int id) => new Order(id, "Pending"));
 app.Run();
+
+public record Order(int Id, string Status);
+
+[JsonSerializable(typeof(Order))]
+internal partial class AppJsonContext : JsonSerializerContext;
 ```
 
-The CreateSlimBuilder method configures a minimal set of services optimized for Native AOT, excluding features that rely on reflection or dynamic code generation.
+`<PublishAot>true</PublishAot>` in the project file enables the compiler at publish and the AOT analyzers during every build. The app still runs with the JIT during development, so an incompatibility shows up as a warning in the build and only as a failure in the published app. Treat those warnings as errors. Microsoft's docs say that an app publishing with no AOT warnings can be expected to behave like its JIT-compiled version. Publishing needs the platform's native toolchain, which is Visual Studio's C++ workload on Windows and clang on Linux, and the executable targets one runtime identifier, such as `linux-x64`. Building in a container is the usual way to produce a Linux binary from any machine, using the SDK images tagged `-aot`, which add the native toolchain the regular SDK images lack, or installing clang in the build stage.
 
-### Publishing for Native AOT
+AOT has costs beyond the feature list. Publishing takes noticeably longer, and each binary runs on only the one runtime identifier it was built for. Without a JIT, the app also loses the run-time optimizations, such as dynamic profile-guided optimization, that let a long-running JIT-compiled app speed up as it runs, so peak throughput can be lower. AOT pays off when instances start often or memory is tight, and less for a few long-lived instances.
 
-Publishing a Native AOT application requires enabling AOT compilation in the project file and targeting a specific runtime identifier. The compiler produces a platform-specific native executable rather than portable IL assemblies.
+Trimming and self-contained deployment are also available without AOT. They shrink a self-contained app and remove the need for an installed runtime, while keeping the JIT and reflection.
 
-```xml
-<PropertyGroup>
-  <PublishAot>true</PublishAot>
-  <InvariantGlobalization>true</InvariantGlobalization>
-</PropertyGroup>
-```
+## Graceful Shutdown
 
-Invariant globalization disables culture-specific behavior, reducing binary size by excluding culture data. Applications requiring localization cannot enable invariant globalization.
-
-The published output includes a single native executable and any necessary native dependencies. The executable does not require the .NET runtime, making deployment straightforward for environments where installing runtimes is difficult or restricted.
-
-## Trimming and Self-Contained Deployment
-
-Trimming removes unused code from the published application, reducing deployment size. Self-contained deployment bundles the .NET runtime with the application, eliminating runtime installation as a deployment prerequisite.
-
-### How Trimming Works
-
-The trimmer analyzes the application's code paths starting from entry points, identifying which types and methods are reachable. Unreachable code is removed from the published output. Trimming works best with applications that use static dependencies and avoid reflection.
-
-Reflection complicates trimming because the trimmer cannot statically determine which types might be accessed reflectively. Libraries that rely heavily on reflection may not trim correctly, leading to runtime errors when trimmed code attempts to access removed types.
-
-ASP.NET Core libraries are annotated with trimming attributes that guide the trimmer, indicating which APIs are safe to trim and which require preserving dynamic dependencies. Applications can add similar annotations to custom code to improve trimming effectiveness.
-
-```xml
-<PropertyGroup>
-  <PublishTrimmed>true</PublishTrimmed>
-</PropertyGroup>
-```
-
-Trimming integrates with Native AOT but can also be used independently with JIT-compiled applications to reduce deployment size without requiring AOT compilation.
-
-### Self-Contained Deployment
-
-Self-contained deployments include the .NET runtime alongside the application, producing a deployment package that runs without requiring a pre-installed runtime. This simplifies deployment to environments with restricted access or strict version requirements.
-
-The trade-off is larger deployment size because each application includes a full runtime copy. Framework-dependent deployments share a single runtime across multiple applications, reducing disk usage but requiring runtime installation and version management.
-
-Self-contained deployments ensure consistent runtime behavior across environments because the application always uses the bundled runtime version. Framework-dependent deployments may encounter runtime version mismatches if the environment installs a different runtime version.
-
-```xml
-<PropertyGroup>
-  <SelfContained>true</SelfContained>
-  <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
-</PropertyGroup>
-```
-
-Combining self-contained deployment with trimming produces a smaller self-contained package by removing unused runtime components.
-
-## Environment-Specific Configuration
-
-ASP.NET Core supports environment-specific configuration files and behavior based on the ASPNETCORE_ENVIRONMENT variable. Environments typically include Development, Staging, and Production, though applications can define custom environments.
-
-### Configuration Files
-
-Configuration loads from a hierarchy of sources, including appsettings.json, environment-specific files like appsettings.Production.json, environment variables, and command-line arguments. Later sources override earlier sources, allowing environment-specific overrides.
-
-```json
-// appsettings.json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information"
-    }
-  }
-}
-
-// appsettings.Production.json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Warning"
-    }
-  }
-}
-```
-
-Environment variables provide the highest precedence, making them suitable for secrets and deployment-specific configuration. Containerized applications typically receive all configuration through environment variables, avoiding the need to build environment-specific images.
-
-### Environment-Specific Behavior
-
-Application code can conditionally enable features based on the environment. Development environments might enable detailed error pages and swagger documentation, while production environments disable these features to avoid leaking sensitive information.
+When the platform stops an instance, it sends SIGTERM, or the Windows equivalent. The host raises `ApplicationStopping`, and Kestrel stops accepting connections and lets in-flight requests finish. Hosted services then stop in reverse registration order, and the whole sequence has `HostOptions.ShutdownTimeout`, 30 seconds by default, before remaining work is abandoned. The timeout is set on the builder:
 
 ```csharp
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-    app.UseSwagger();
-}
-else
-{
-    app.UseExceptionHandler("/error");
-    app.UseHsts();
-}
+builder.Services.Configure<HostOptions>(options =>
+    options.ShutdownTimeout = TimeSpan.FromSeconds(45));
 ```
 
-The environment name is case-insensitive but conventionally capitalized. Custom environments like Staging or UAT allow separate configuration for pre-production environments that differ from both development and production.
+### Shutting Down in Kubernetes
 
-## Graceful Shutdown and Drain Patterns
+Kubernetes stops a pod along two paths at once. The kubelet runs the container's `preStop` hook and then sends SIGTERM. Meanwhile, the control plane removes the pod from the Service's endpoints, and every node's proxy and any external load balancer have to catch up. Those updates take time, so a pod can receive new requests for a few seconds after SIGTERM. If the app has already stopped accepting connections, those requests fail.
 
-Graceful shutdown allows applications to complete in-flight requests before terminating, preventing abrupt disconnections and data loss. ASP.NET Core provides built-in support for handling shutdown signals and coordinating shutdown behavior.
+A short `preStop` sleep closes that gap by keeping the app serving normally until routing has moved on:
 
-### Shutdown Process
-
-When the host receives a shutdown signal like SIGTERM, it notifies the application by triggering the ApplicationStopping event. The host then calls StopAsync on the web server, instructing it to stop accepting new connections and complete existing requests within the shutdown timeout.
-
-Kestrel closes listening sockets and stops accepting new connections immediately. Existing connections continue processing requests until completion or timeout. The default shutdown timeout is 30 seconds, giving requests time to finish before forcibly terminating the process.
-
-```csharp
-builder.Host.ConfigureHostOptions(options =>
-{
-    options.ShutdownTimeout = TimeSpan.FromSeconds(30);
-});
+```yaml
+spec:
+  terminationGracePeriodSeconds: 60
+  containers:
+    - name: orders-api
+      lifecycle:
+        preStop:
+          sleep:
+            seconds: 10
 ```
 
-Hosted services and background tasks receive cancellation tokens that signal when shutdown begins. Long-running background work should monitor these tokens and exit gracefully when cancellation is requested.
+The `sleep` hook action has been on by default since Kubernetes 1.30 and stable since 1.34. On older clusters, an `exec` hook running `sleep` does the same, except in chiseled images, which have no `sleep` binary to run.
 
-### Traffic Draining
+{% include figure.html id="asp-k8s-pod-shutdown" %}
 
-When deploying new versions behind a load balancer, draining traffic from old instances prevents dropped connections. The deployment process brings up new instances, waits for health checks to pass, updates the load balancer to route traffic to new instances, removes old instances from the load balancer, signals old instances to shut down, and waits for them to drain or timeout.
+The timings have to fit inside one budget. The grace period starts before the `preStop` hook runs, and when it expires the kubelet kills the container. The default grace period of 30 seconds equals the default `ShutdownTimeout`, so any `preStop` delay leaves the app less time to drain than it expects. In the manifest above, 10 seconds of sleep plus the 45-second `ShutdownTimeout` set earlier fits inside 60 seconds with a margin.
 
-This pattern ensures clients experience no disruption during deployments. New connections go to new instances while old instances finish serving existing connections. The load balancer health check determines when new instances are ready, preventing traffic from reaching instances still initializing.
+Requests that take longer than the timeout are cut off regardless. Work that can't finish in that window, such as a long import or a report, belongs in a queue that a worker picks up and can resume, rather than in the request.
 
-Kubernetes and similar orchestrators implement this pattern through readiness probes, termination grace periods, and pod lifecycle hooks. The orchestrator stops sending traffic when the pod enters the terminating state, allowing the application to drain existing requests before the container terminates.
+## Key Takeaways
 
-### Handling Long-Running Requests
-
-Requests that exceed the shutdown timeout are forcibly terminated. Applications processing long-running operations should persist state incrementally and design for resumability. If a request is interrupted, the client or another process should be able to resume the operation from the last persisted checkpoint.
-
-Background jobs and asynchronous tasks should coordinate with the shutdown process by checking cancellation tokens and persisting intermediate progress. Shutdown timeout should be tuned based on the expected maximum request duration, balancing graceful shutdown against deployment speed.
-
-## Operational Best Practices
-
-Production deployments require careful attention to configuration, monitoring, and operational patterns that affect reliability and maintainability.
-
-### Health Checks and Readiness
-
-Health checks provide a mechanism for orchestration platforms and load balancers to determine application health. Applications should implement health checks that verify critical dependencies like database connectivity, message queue availability, and external API reachability.
-
-Separate liveness and readiness checks allow orchestrators to distinguish between containers that should restart and containers that need more time to initialize. Liveness checks verify the application process is running and responsive, while readiness checks verify the application is ready to handle traffic.
-
-Health checks should execute quickly and avoid expensive operations. Repeatedly checking database connectivity during high traffic can overload the database or introduce latency. Health check results can be cached for short periods to reduce overhead.
-
-### Logging and Diagnostics
-
-Structured logging provides consistent log output that monitoring systems can parse and query. ASP.NET Core integrates with logging frameworks like Serilog and NLog that support structured output formats.
-
-Logging configuration should vary by environment, using detailed logging in development and structured, aggregated logging in production. Production logs should avoid including sensitive information like passwords or personal data.
-
-Distributed tracing provides visibility into request flows across services. ASP.NET Core supports OpenTelemetry and Application Insights for capturing trace data and correlating requests across service boundaries.
-
-### Configuration Management
-
-Secrets should never be stored in configuration files or source control. Use environment variables, secret management systems like Azure Key Vault or AWS Secrets Manager, or configuration services that inject secrets at runtime.
-
-Configuration changes should not require redeployment when possible. Externalizing configuration into environment variables or configuration stores allows updating configuration without rebuilding or restarting applications. However, some configuration changes, particularly those affecting middleware pipelines or endpoint routing, may require restart.
-
-Configuration validation at startup catches misconfigurations early before they cause runtime errors. Applications can validate required configuration values during host startup and fail fast if critical configuration is missing or invalid.
-
-### Resource Limits and Quotas
-
-Production deployments should enforce resource limits to prevent individual instances from consuming excessive CPU, memory, or network bandwidth. Container orchestrators like Kubernetes allow specifying resource requests and limits per container.
-
-Request rate limiting protects applications from overload by rejecting excess requests. Rate limiting can operate at the reverse proxy layer, application layer, or both. Proxy-level rate limiting prevents overload before requests reach the application, while application-level rate limiting provides finer-grained control based on user identity or request characteristics.
-
-Connection limits prevent resource exhaustion from connection storms. Kestrel enforces connection limits when configured, but reverse proxies and load balancers often provide more sophisticated connection management with per-client limits and adaptive throttling.
-
-## Summary
-
-Hosting and deployment decisions shape the operational characteristics of ASP.NET Core applications. Choosing between Kestrel and HTTP.sys depends on platform requirements and feature needs. Configuring Kestrel for endpoints, HTTPS, and limits tunes the server for specific workloads. Deciding between in-process and out-of-process IIS hosting balances performance against isolation.
-
-Reverse proxy configuration determines how the application integrates with load balancers, SSL termination, and network infrastructure. Docker containerization provides consistent deployment artifacts, while multi-stage Dockerfiles optimize image size and build caching. Native AOT compilation delivers fast startup and low memory footprint but imposes strict constraints on runtime behavior.
-
-Trimming and self-contained deployment reduce deployment size and eliminate runtime dependencies, while environment-specific configuration adapts behavior across development, staging, and production. Graceful shutdown and drain patterns prevent disruption during deployments and ensure in-flight requests complete successfully.
-
-Operational patterns like health checks, structured logging, secret management, and resource limits provide the foundation for reliable production deployments that maintain performance and availability under real-world conditions.
+- Kestrel is the default server everywhere. HTTP.sys is for Windows features Kestrel lacks, and IIS in-process is the fastest arrangement on IIS, at the cost of one app per pool.
+- Kestrel listens on `localhost:5000` when nothing is configured, and the container images move it to port 8080 on all interfaces.
+- The development certificate doesn't exist in production. HTTPS in Kestrel needs a real certificate, or TLS terminates at the proxy.
+- Behind a proxy, forwarded headers are ignored until the middleware names them and trusts the proxy's address. The environment-variable shortcut trusts every sender.
+- The .NET 10 images are Ubuntu based, listen on 8080, and include a non-root `app` user. Chiseled variants have no shell.
+- Native AOT trades run-time flexibility for startup time and memory. MVC and most authentication handlers are out, and AOT warnings in the build are the only early warning.
+- In Kubernetes, the grace period must cover the `preStop` sleep and the app's `ShutdownTimeout`, or the drain is cut short.

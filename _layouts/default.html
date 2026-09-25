@@ -69,7 +69,7 @@
         {{ content }}
     </main>
 
-    {% assign shelfable_layouts = "post,guide,resource,case-study" | split: "," %}
+    {% assign shelfable_layouts = "post,guide,resource,case-study,learning-path" | split: "," %}
     {% if shelfable_layouts contains page.layout %}
     {% include shelf-button.html %}
     {% endif %}

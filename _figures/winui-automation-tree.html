@@ -1,0 +1,81 @@
+---
+title: "Elements, Automation Peers, and What Narrator Reads"
+kind: structure
+system: winui
+summary: "Each element's peer decides what a screen reader announces."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 450" role="img" aria-labelledby="wat-title wat-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wat-title">How four XAML elements become entries in the UI Automation control view through their automation peers</title>
+<desc id="wat-desc">Four elements on a page are shown in the left column, each connected to its automation peer in the middle column, and each peer connected to what Narrator announces in the right column. A Button with AutomationProperties.Name set to Settings gets a built-in ButtonAutomationPeer with the Invoke pattern, and Narrator announces "Settings, button". A divider Rectangle with AccessibilityView set to Raw is kept out of the control view, so nothing is announced. A TextBlock reading Orders with HeadingLevel set to Level1 gets a built-in TextBlockAutomationPeer, and Narrator announces "Orders, heading level 1". A custom StarRating control named Rating overrides OnCreateAutomationPeer to return a custom StarRatingAutomationPeer with the RangeValue pattern, and Narrator announces "Rating, slider, 3". A dashed arrow runs back from the rating's announcement to the StarRating control, showing that a pattern call such as SetValue from the screen reader goes through the peer into the control's own logic.</desc>
+<style>
+.wat-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.wat-alt { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.wat-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.wat-q { font-size: 12.5px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wat-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wat-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wat-code { font-size: 11px; font-family: Consolas, 'Courier New', monospace; fill: var(--color-text, #1A202C); }
+.wat-lg { font-size: 10.5px; fill: var(--color-text-light, #4A5568); }
+.wat-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.wat-call { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="wat-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="wat-ag" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="wat-hd" x="16" y="66">ELEMENTS ON THE PAGE</text>
+<text class="wat-hd" x="340" y="66">AUTOMATION PEERS</text>
+<text class="wat-hd" x="664" y="66">WHAT NARRATOR READS</text>
+
+<rect class="wat-box" x="16" y="84" width="280" height="56" rx="6"/>
+<text class="wat-n" x="30" y="106">Button</text>
+<text class="wat-code" x="30" y="126">AutomationProperties.Name="Settings"</text>
+<rect class="wat-box" x="340" y="84" width="280" height="56" rx="6"/>
+<text class="wat-n" x="354" y="106">ButtonAutomationPeer</text>
+<text class="wat-k" x="354" y="126">[Built in] Invoke pattern</text>
+<rect class="wat-box" x="664" y="84" width="280" height="56" rx="6"/>
+<text class="wat-q" x="678" y="117">"Settings, button"</text>
+<path class="wat-flow" d="M296,112 L338,112" marker-end="url(#wat-a)"/>
+<path class="wat-flow" d="M620,112 L662,112" marker-end="url(#wat-a)"/>
+
+<rect class="wat-box" x="16" y="154" width="280" height="56" rx="6"/>
+<text class="wat-n" x="30" y="176">Rectangle (divider)</text>
+<text class="wat-code" x="30" y="196">AccessibilityView="Raw"</text>
+<rect class="wat-alt" x="340" y="154" width="280" height="56" rx="6"/>
+<text class="wat-n" x="354" y="176">Out of the control view</text>
+<text class="wat-k" x="354" y="196">[Raw view only, for diagnostic tools]</text>
+<text class="wat-k" x="678" y="186">(nothing announced)</text>
+<path class="wat-flow" d="M296,182 L338,182" marker-end="url(#wat-a)"/>
+
+<rect class="wat-box" x="16" y="224" width="280" height="56" rx="6"/>
+<text class="wat-n" x="30" y="246">TextBlock "Orders"</text>
+<text class="wat-code" x="30" y="266">HeadingLevel="Level1"</text>
+<rect class="wat-box" x="340" y="224" width="280" height="56" rx="6"/>
+<text class="wat-n" x="354" y="246">TextBlockAutomationPeer</text>
+<text class="wat-k" x="354" y="266">[Built in] reports the heading level</text>
+<rect class="wat-box" x="664" y="224" width="280" height="56" rx="6"/>
+<text class="wat-q" x="678" y="257">"Orders, heading level 1"</text>
+<path class="wat-flow" d="M296,252 L338,252" marker-end="url(#wat-a)"/>
+<path class="wat-flow" d="M620,252 L662,252" marker-end="url(#wat-a)"/>
+
+<rect class="wat-box" x="16" y="294" width="280" height="56" rx="6"/>
+<text class="wat-n" x="30" y="316">StarRating (custom Control)</text>
+<text class="wat-code" x="30" y="336">overrides OnCreateAutomationPeer</text>
+<rect class="wat-box" x="340" y="294" width="280" height="56" rx="6"/>
+<text class="wat-n" x="354" y="316">StarRatingAutomationPeer</text>
+<text class="wat-k" x="354" y="336">[Custom] Slider role, RangeValue pattern</text>
+<rect class="wat-box" x="664" y="294" width="280" height="56" rx="6"/>
+<text class="wat-q" x="678" y="327">"Rating, slider, 3"</text>
+<path class="wat-flow" d="M296,322 L338,322" marker-end="url(#wat-a)"/>
+<path class="wat-flow" d="M620,322 L662,322" marker-end="url(#wat-a)"/>
+
+<path class="wat-call" d="M804,350 L804,374 L156,374 L156,354" marker-end="url(#wat-ag)"/>
+<text class="wat-lg" x="480" y="392" text-anchor="middle">SetValue from the screen reader runs through the peer into the control's own logic</text>
+
+<path class="wat-flow" d="M24,428 L64,428" marker-end="url(#wat-a)"/>
+<text class="wat-lg" x="72" y="432">the element creates its peer, and the peer reports name, role, and value</text>
+<path class="wat-call" d="M560,428 L600,428" marker-end="url(#wat-ag)"/>
+<text class="wat-lg" x="608" y="432">a pattern call coming back from the screen reader</text>
+</g>
+</svg>

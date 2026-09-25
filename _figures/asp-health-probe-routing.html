@@ -1,0 +1,80 @@
+---
+title: "Health Checks Routed to Kubernetes Probes"
+kind: flow
+system: aspnet-core
+summary: "How tags send each check to a probe, and what each probe's failure does."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 345" role="img" aria-labelledby="ahp-title ahp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ahp-title">Registered health checks routed by tag to liveness and readiness endpoints and Kubernetes probes</title>
+<desc id="ahp-desc">Three health checks are registered. The self check carries the live tag and always returns Healthy. The database and external-api checks carry the ready tag. The /health/live endpoint's predicate selects checks tagged live, so it runs only the self check. The /health/ready endpoint's predicate selects checks tagged ready, so it runs the other two. The liveness probe calls /health/live and reads the status code, 200 or 503; when it fails failureThreshold times in a row, the kubelet restarts the container. The readiness probe calls /health/ready; when it fails, the pod is removed from the Service's endpoints and gets no traffic, but it is not restarted and probing continues. A database outage therefore fails readiness on every pod, which leave rotation together, while liveness never runs the database check and so can't cause restarts.</desc>
+<style>
+.ahp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ahp-alt { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.ahp-bad { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.ahp-col { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.ahp-n { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ahp-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ahp-t { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.ahp-em { font-size: 11.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ahp-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ahp-fail { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="ahp-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="ahp-f" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="ahp-col" x="20" y="28">Registered checks</text>
+<text class="ahp-col" x="300" y="28">Endpoints</text>
+<text class="ahp-col" x="560" y="28">Probes</text>
+<text class="ahp-col" x="770" y="28">When the probe fails</text>
+
+<rect class="ahp-box" x="20" y="50" width="200" height="46" rx="5"/>
+<text class="ahp-n" x="34" y="70">self</text>
+<text class="ahp-k" x="34" y="86">tag live, always Healthy</text>
+<rect class="ahp-box" x="20" y="150" width="200" height="46" rx="5"/>
+<text class="ahp-n" x="34" y="170">database</text>
+<text class="ahp-k" x="34" y="186">tag ready</text>
+<rect class="ahp-box" x="20" y="220" width="200" height="46" rx="5"/>
+<text class="ahp-n" x="34" y="240">external-api</text>
+<text class="ahp-k" x="34" y="256">tag ready, Degraded on failure</text>
+
+<rect class="ahp-alt" x="300" y="45" width="190" height="56" rx="5"/>
+<text class="ahp-n" x="314" y="68">/health/live</text>
+<text class="ahp-k" x="314" y="86">Predicate: tag live</text>
+<rect class="ahp-alt" x="300" y="180" width="190" height="56" rx="5"/>
+<text class="ahp-n" x="314" y="203">/health/ready</text>
+<text class="ahp-k" x="314" y="221">Predicate: tag ready</text>
+
+<path class="ahp-flow" d="M220,73 L298,73" marker-end="url(#ahp-a)"/>
+<path class="ahp-flow" d="M220,173 L260,173 L260,200 L298,200" marker-end="url(#ahp-a)"/>
+<path class="ahp-flow" d="M220,243 L260,243 L260,216 L298,216" marker-end="url(#ahp-a)"/>
+
+<rect class="ahp-box" x="560" y="45" width="150" height="56" rx="5"/>
+<text class="ahp-n" x="574" y="68">livenessProbe</text>
+<text class="ahp-k" x="574" y="86">reads the status code</text>
+<rect class="ahp-box" x="560" y="180" width="150" height="56" rx="5"/>
+<text class="ahp-n" x="574" y="203">readinessProbe</text>
+<text class="ahp-k" x="574" y="221">reads the status code</text>
+
+<path class="ahp-flow" d="M490,73 L558,73" marker-end="url(#ahp-a)"/>
+<text class="ahp-t" x="500" y="65">200 / 503</text>
+<path class="ahp-flow" d="M490,208 L558,208" marker-end="url(#ahp-a)"/>
+<text class="ahp-t" x="500" y="200">200 / 503</text>
+
+<rect class="ahp-bad" x="770" y="45" width="180" height="56" rx="5"/>
+<text class="ahp-em" x="784" y="68">Restart the container</text>
+<text class="ahp-k" x="784" y="86">after failureThreshold misses</text>
+<rect class="ahp-bad" x="770" y="180" width="180" height="56" rx="5"/>
+<text class="ahp-em" x="784" y="203">Remove pod from Service</text>
+<text class="ahp-k" x="784" y="221">no restart, probing continues</text>
+
+<path class="ahp-fail" d="M710,73 L768,73" marker-end="url(#ahp-f)"/>
+<text class="ahp-t" x="722" y="65">fails</text>
+<path class="ahp-fail" d="M710,208 L768,208" marker-end="url(#ahp-f)"/>
+<text class="ahp-t" x="722" y="200">fails</text>
+
+<text class="ahp-k" x="20" y="318">A database outage fails /health/ready on every pod, so all of them leave rotation together.</text>
+<text class="ahp-k" x="20" y="335">/health/live never runs the database check, so the outage can't restart anything.</text>
+</g>
+</svg>

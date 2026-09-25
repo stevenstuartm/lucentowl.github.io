@@ -3,276 +3,142 @@ title: "Performance Optimization"
 layout: guide
 category: "WinUI 3"
 subcategory: "Quality & Testing"
-description: "Optimizing WinUI 3 application performance through UI virtualization, deferred loading, compiled bindings, resource dictionary management, and profiling tools."
-tags: [winui, winui-3, performance, virtualization, profiling, optimization, desktop, advanced]
+description: "Finding and fixing WinUI 3 performance problems: how a frame spends its time, measuring with the XAML Frame Analysis plugin and other profilers, startup cost, ReadyToRun and Native AOT, element count, layout structure, overdraw, resource placement, UI-thread work, and memory growth."
+tags: [performance, profiling, startup-performance, x-load, native-aot, windows-performance-analyzer, advanced]
 ---
 
-## Table of Contents
+## Where a WinUI App Spends Its Time
 
-- [UI Virtualization in ListView and GridView](#ui-virtualization-in-listview-and-gridview)
-- [Compiled Bindings with x:Bind](#compiled-bindings-with-xbind)
-- [Deferred Element Creation with x:Load and x:DeferLoadStrategy](#deferred-element-creation-with-xload-and-xdeferloadstrategy)
-- [ResourceDictionary Lookup Depth](#resourcedictionary-lookup-depth)
-- [ItemsRepeater with Custom Layouts](#itemsrepeater-with-custom-layouts)
-- [Async Data Loading Patterns](#async-data-loading-patterns)
-- [Image Optimization](#image-optimization)
-- [Profiling with Windows Performance Analyzer and Visual Studio](#profiling-with-windows-performance-analyzer-and-visual-studio)
-- [Common Performance Pitfalls](#common-performance-pitfalls)
+WinUI is a retained-mode framework. The app describes a tree of elements, and WinUI lays it out and renders it on the UI thread in batches called **frames**. A frame should finish within one refresh interval of the display, about 16.7 ms at 60 Hz. When one runs long, the screen stops updating, and the UI thread can't handle input either, because layout, rendering, input, and the app's own event handlers all take turns on that one thread.
 
----
+That single fact explains most WinUI performance problems. A frame is slow because the thread is doing too much of one of four things:
 
-## UI Virtualization in ListView and GridView
+- **Creating elements**, when XAML loads a page or a template is applied. Element count drives this cost.
+- **Running layout**, the measure and arrange passes over the tree. The depth and repetition of the tree drive this cost.
+- **Rendering**, which grows with the number of pixels drawn, including pixels drawn more than once.
+- **Running app code** in event handlers, converters, and property-changed callbacks.
 
-Both `ListView` and `GridView` virtualize their item containers by default. Virtualization means the control only creates the visual elements for items currently visible in the viewport, plus a small buffer above and below. As the user scrolls, containers scroll out of view and are recycled for incoming items rather than destroyed and recreated. A list with 10,000 items might only maintain 30 to 40 live containers in memory at any given time.
-
-This behavior comes from the `ItemsVirtualizingStackPanel` that serves as the default items panel for both controls. You generally do not need to configure it manually; it is active as long as you do not replace it with a non-virtualizing panel.
-
-Container recycling is the mechanism that makes scrolling smooth. When an item scrolls out of view, its container is placed into a reuse queue. When a new item scrolls in, the binding system updates the recycled container's data context to the new item and the bindings refresh. This makes the per-scroll cost proportional to the visible viewport size rather than the total item count.
-
-Several patterns break virtualization and should be avoided:
-
-- Wrapping a `ListView` inside a `ScrollViewer`. The outer `ScrollViewer` takes ownership of scrolling, and the `ListView` can no longer virtualize because it must render all items to report its total height.
-- Setting the `ListView` height to `Auto` inside a `StackPanel`. The `StackPanel` grants its children unlimited height, so the `ListView` measures all items at once and renders them all.
-- Replacing the items panel with `WrapPanel` or `StackPanel` via `ItemsPanel`. These panels do not implement virtualization.
-
-The correct pattern when you need a `ListView` inside a scrollable region is to give the `ListView` a fixed height or place it in a `Grid` row with `*` sizing so the grid constrains its height and the `ListView` handles its own scrolling internally.
+A separate render thread applies some changes, including many animations that don't affect layout, without waiting for the UI thread. That's why an animation of opacity or a transform can stay smooth while the UI thread is busy, and why an animation that changes `Width` can't.
 
 ---
 
-## Compiled Bindings with x:Bind
+## Measure Before Changing Anything
 
-The classic `{Binding}` markup extension resolves property paths at runtime using reflection. Each property access traverses the path string, calls into the reflection API, and extracts the value. This overhead is small for a handful of bindings but accumulates noticeably when a `DataTemplate` with many bindings is instantiated hundreds of times inside a list.
+Microsoft's workflow starts with a baseline. Pick the scenarios users repeat, such as launch, navigation between pages, and scrolling the main list, and measure a **Release** build on hardware like your users'. Record cold startup (first launch after a reboot) and warm startup separately, and time startup to when the app becomes usefully interactive, not to when its window first appears. After each change, rerun the same scenarios under the same conditions, and watch memory and CPU alongside time, since a fix in one can cost in another.
 
-`{x:Bind}` generates strongly-typed C# code at compile time. The generated code calls properties directly, bypassing reflection entirely. The performance difference is most visible in collection scenarios where many item containers are created or recycled in rapid succession.
+| Tool | Answers |
+| --- | --- |
+| Visual Studio Performance Profiler | Which methods use the CPU (CPU Usage) and which code paths allocate (.NET Object Allocation Tracking) |
+| Windows Performance Recorder and Analyzer (WPR/WPA) | What the whole system did during a trace, including every WinUI frame and layout pass |
+| PerfView | .NET-specific CPU, allocation, and garbage-collection analysis |
+| Visual Studio Live Visual Tree | How many elements each part of the tree holds |
+| `Application.DebugSettings` | On-screen frame-rate and per-frame CPU counters (`EnableFrameRateCounter`) and an overdraw heat map (`IsOverdrawHeatMapEnabled`) |
 
-```xml
-<!-- {Binding}: resolved at runtime via reflection -->
-<TextBlock Text="{Binding ProductName}" />
+### Finding Slow Frames with WPA
 
-<!-- {x:Bind}: resolved at compile time as a direct property call -->
-<TextBlock Text="{x:Bind ProductName}" />
-```
+WinUI logs an ETW (Event Tracing for Windows) event at the start and end of every frame, and WPA can turn those into durations. Record a trace in WPR with the **CPU usage** and **XAML activity** profiles selected, then open it in WPA from the Windows ADK 10.1.26100.1 or later, which includes the **XAML Frame Analysis** table. It's off by default. Close WPA, add `perf_xaml.dll` to the list of DLLs in `perfcore.ini` in the Windows Performance Toolkit folder, and restart WPA.
 
-Inside a `DataTemplate`, you must declare the item type with `x:DataType` for `{x:Bind}` to generate the correct code:
+The table has two views. **Interesting Xaml Frames** shows the frames most likely to hurt responsiveness: regions that start with WinUI initialization, a frame navigation, or a flyout opening, and end with the next frame, because those change the element tree the most. **All Xaml Info** shows every frame and layout pass. Sort by duration, find the longest frames, and drill into the CPU samples inside them to see which code ran.
 
-```xml
-<DataTemplate x:DataType="local:Product">
-    <Grid ColumnDefinitions="*,Auto" Padding="8">
-        <TextBlock Text="{x:Bind Name}" />
-        <TextBlock Grid.Column="1" Text="{x:Bind Price}" />
-    </Grid>
-</DataTemplate>
-```
-
-One important default to remember: `{x:Bind}` defaults to `OneTime` mode, not `OneWay`. If a property changes after the initial binding evaluation and you expect the UI to update, you must add `Mode=OneWay` explicitly. Forgetting this causes the control to show stale data with no error or warning.
-
-`{x:Bind}` also supports binding to methods and functions directly in XAML, which lets you avoid creating converter classes for simple transformations:
-
-```xml
-<!-- Bind directly to a method on the page or view model -->
-<TextBlock Text="{x:Bind FormatPrice(ViewModel.Price), Mode=OneWay}" />
-```
-
-```csharp
-private string FormatPrice(decimal price) => $"{price:C2}";
-```
-
-This function binding capability works well for light formatting logic but should not be used for expensive computations, since the function will be called every time the binding evaluates.
+Set `DebugSettings` properties from `OnLaunched` while investigating, and don't ship them. The frame-rate counter appears even without a debugger attached.
 
 ---
 
-## Deferred Element Creation with x:Load and x:DeferLoadStrategy
+## Startup
 
-Complex pages often contain UI regions that are not visible when the page first loads, such as expanded sections, error panels, or secondary content that appears after a user action. Creating all of those elements at page construction time adds to startup cost even though most users may never trigger them.
+Startup runs through a fixed sequence, and each stage can be made cheaper:
 
-`x:Load` lets you control when an element and its subtree are created and attached to the visual tree. Setting `x:Load="False"` on an element prevents it from being realized until you set it to `True` from code.
+1. The process starts, and generated code calls `Main`.
+2. The `App` constructor calls `InitializeComponent`, which parses `App.xaml` and creates its resources.
+3. `OnLaunched` creates the main window, sets its content, and calls `Activate`.
+4. The first page's constructor parses its XAML and creates its elements.
+5. The layout pass runs. Applying control templates is usually most of this stage.
+6. The first frame renders and appears.
+
+### Show a Light Window, Then Load
+
+The first goal is getting something interactive on screen. Keep the `App` constructor and `OnLaunched` to what the first frame needs: create the window, give it lightweight content, activate it, and start the rest asynchronously. If data takes a while, show a loading page, or show the parts of the UI that don't need the data and fill in the rest as it arrives. A loading indicator is feedback, not a finished startup, so measure to the point the user can act.
+
+.NET loads an assembly the first time code that uses it runs. Startup code that references a feature's types, even on a branch that rarely runs, can pull that feature's assemblies into cold startup. Move the rarely taken branch into a separate method, so the startup method itself no longer references those types.
+
+### Fewer Elements at Startup
+
+Microsoft's rough benchmark is about **1 ms per element** created during startup, so element count is the main lever. Two common techniques don't reduce it. `Visibility="Collapsed"` skips an element when rendering but still creates it and its children in memory, and `Opacity="0"` doesn't prevent creation either. `x:Load="False"` does reduce it: the element isn't created until something loads it, at a cost of about 600 bytes for the placeholder.
 
 ```xml
-<!-- Not created until needed -->
-<StackPanel x:Name="ErrorPanel" x:Load="False">
-    <TextBlock Text="An error occurred." Style="{ThemeResource BodyStrongTextBlockStyle}" />
-    <TextBlock x:Name="ErrorDetail" />
-</StackPanel>
-```
-
-```csharp
-// Trigger creation and attachment when an error occurs
-ErrorPanel.Visibility = Visibility.Visible; // This alone won't work if x:Load is false
-// Instead, bind x:Load to a property or use FindName after setting x:Load programmatically
-```
-
-The cleaner pattern is to bind `x:Load` to a view model property:
-
-```xml
+<!-- Created only when the error first appears -->
 <StackPanel x:Name="ErrorPanel" x:Load="{x:Bind ViewModel.HasError, Mode=OneWay}">
     <TextBlock Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" />
 </StackPanel>
 ```
 
-When `HasError` transitions from `false` to `true`, the element subtree is created and inserted into the visual tree. When it transitions back to `false`, the subtree is destroyed and memory is released. This is more aggressive than `Visibility.Collapsed`, which hides the element but keeps it in memory and still participates in layout measurement.
+Setting the bound value to `true` creates the subtree, and setting it back to `false` unloads it. `FindName("ErrorPanel")` also loads an element, but only under a `Page` or `UserControl` root. In WinUI 3 it doesn't work when the XAML root is a `Window`, so markup in `MainWindow.xaml` uses the `x:Bind` form. Unloading discards the element's state, so anything it showed has to come from bindings or be reapplied in its `Loaded` handler, and the object stays in memory until the app's own references to it are released. Microsoft recommends `x:Load` over the older `x:DeferLoadStrategy` in Windows App SDK apps. Use it for UI that many sessions never show: secondary tabs, alternate views, error panels, and settings sections. For a handful of elements the placeholder can cost more than it saves, so measure.
 
-`x:DeferLoadStrategy="Lazy"` is an older alternative that defers creation until the element is first accessed via `FindName`. It keeps the element placeholder in the tree but does not realize the full subtree. `x:Load` is the preferred approach for most cases since it was designed to supersede the earlier strategy and gives more explicit control.
+### Ahead-of-Time Compilation
 
-Use deferred loading for secondary panels, flyout contents, settings sections, and any UI branch that a significant portion of users will never see during a typical session.
+A .NET app normally compiles its code to machine code as it runs, which adds to cold startup. WinUI's project templates set `PublishReadyToRun` for Release publishing, which precompiles most of the code while keeping the JIT for the rest. It isn't free. ReadyToRun assemblies grow to two or three times their size, and an app with little code of its own gains little, since the .NET runtime libraries are already precompiled. **Native AOT**, supported since Windows App SDK 1.6 as an opt-in (`PublishAot`), compiles the whole app ahead of time and removes the JIT. Microsoft measured a 50% reduction in start time and a roughly 8x smaller package on its Contoso Camera sample, when the app uses the shared Windows App SDK runtime package rather than bundling it, and says results vary by app.
 
----
-
-## ResourceDictionary Lookup Depth
-
-When WinUI 3 resolves a `{StaticResource}` or `{ThemeResource}` key, it walks a lookup chain starting from the current element's local resources, then the parent's resources, then the page resources, then the app resources, and finally the system theme dictionaries. Each step in the chain that must be searched adds to the resolution cost.
-
-This lookup happens once per resource reference at page or control construction time for `{StaticResource}`, making the cost a startup concern rather than an ongoing one. For `{ThemeResource}`, the lookup repeats when the theme changes, so deeply nested theme resources carry a slightly higher switching cost.
-
-The practical guidance is to keep frequently used resources as close to the point of use as possible when you have many resource dictionaries. Splitting resources into separate `ResourceDictionary` files and merging them with `MergedDictionaries` is good for organization, but very deep merge chains can slow initial dictionary loading. Flat or shallow merge structures load faster than deep chains.
-
-Avoid defining the same key in multiple dictionaries at different levels. Shadowing keys across levels makes behavior hard to predict and forces the lookup to walk farther before finding the right definition. Defining style overrides at the application level rather than at the page level also reduces the chance of duplicate keys.
-
-For resources used in hot paths like item templates that repeat hundreds of times, prefer `{StaticResource}` over `{ThemeResource}` when theme-awareness is not needed. `{StaticResource}` is resolved once; `{ThemeResource}` registers for theme change notifications on every control instance.
+Native AOT builds on trimming, which removes code the app doesn't appear to use. Code reached only through reflection looks unused, so the trimmer removes it unless it's annotated or rewritten, and every dependency, including NuGet packages and serializers, has to be trim- and AOT-compatible too. WinUI adds two requirements of its own. Classes that implement WinRT interfaces need to be `partial`, so CsWinRT (the C# projection of the Windows Runtime) can generate their interop code at build time, and types used as `{Binding}` sources need to be `partial` too, marked with `[WinRT.GeneratedBindableCustomProperty]`. The trim and AOT analyzer warnings at build time are the list of what to fix, and the published build, not the debug run, is the one to test.
 
 ---
 
-## ItemsRepeater with Custom Layouts
+## Element Count and Layout Structure
 
-`ItemsRepeater` is a lower-level alternative to `ListView` and `GridView` that provides virtualization without the overhead of selection, headers, footers, and interactive container behaviors. It is the right choice when you need highly customized item arrangements or when you want full control over layout without fighting the opinionated structure of the standard list controls.
+Panels are structural, not pixel-producing. Every nested `StackPanel` or `Grid` adds measure and arrange work without drawing anything, so the biggest layout gains come from flattening the tree. A trivial saving, one panel on a page, doesn't show up in measurements. The saving that matters is in **repeated** structure: a `DataTemplate` instantiated for every item in a list multiplies every panel it contains.
 
-`ItemsRepeater` virtualizes by default through its `Layout` property. The built-in `StackLayout` and `UniformGridLayout` both support virtualization. Custom layout implementations can also participate in virtualization by implementing `VirtualizingLayout` instead of the simpler `NonVirtualizingLayout`.
+| Instead of | Use | Why |
+| --- | --- | --- |
+| An outer `StackPanel` of horizontal `StackPanel`s, one per form row | One `Grid` (or `RelativePanel`) with rows | One panel instead of several for the same pixels |
+| A `Border` wrapped around a `Grid`, `StackPanel`, `RelativePanel`, or `ContentPresenter` | Its own `BorderBrush`, `BorderThickness`, `CornerRadius`, and `Padding` | One element instead of two |
+| A `Rectangle` behind a panel to color it | The panel's `Background` | One element instead of two |
+| Nested panels to overlap elements | A single-cell `Grid`, with no row or column definitions | WinUI optimizes overlap in a single-cell `Grid` |
+| `LayoutUpdated` to react to a size change | `SizeChanged` | `LayoutUpdated` fires on every element whenever any element's layout changes |
+| Many copies of the same vector shape | An `Image` of it | An image decodes once, while each vector element is built separately |
 
-```xml
-<ScrollViewer>
-    <ItemsRepeater ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
-        <ItemsRepeater.Layout>
-            <UniformGridLayout MinItemWidth="200" MinItemHeight="150"
-                               ItemsStretch="Fill" />
-        </ItemsRepeater.Layout>
-        <ItemsRepeater.ItemTemplate>
-            <DataTemplate x:DataType="local:TileItem">
-                <Border CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                    <TextBlock Text="{x:Bind Title}" Margin="12" />
-                </Border>
-            </DataTemplate>
-        </ItemsRepeater.ItemTemplate>
-    </ItemsRepeater>
-</ScrollViewer>
-```
+Choosing between `Grid`, `StackPanel`, and `RelativePanel` for their own sake isn't a performance decision. Microsoft says every panel performs similarly for similar UI. Choose by layout behavior, then reduce how many of them there are.
 
-Note that `ItemsRepeater` does not include its own scroll surface. You must wrap it in a `ScrollViewer` and avoid placing that `ScrollViewer` inside another scrollable container for the same reasons described in the virtualization section above.
-
-Because `ItemsRepeater` does not manage selection, you add interaction handling yourself through pointer events or by tracking selection state in the view model. This is more work than using `ListView`, but it gives you a lighter control that renders exactly what you need without the layout and event plumbing you may not need.
+Lists deserve the same attention to their templates, but list-specific tuning belongs to the controls themselves. A `ListView` or `GridView` virtualizes only when its height is constrained, so one inside a vertical `StackPanel` or an `Auto` grid row creates every item. `x:Phase` staggers the parts of an item template across frames, but only with `{x:Bind}` inside `ListView` and `GridView`. Compiled `{x:Bind}` bindings avoid the reflection cost of `{Binding}` in templates that repeat. Images decode at their displayed size automatically except in a few cases, such as setting the source before the `BitmapImage` joins the tree or using `Stretch="None"`.
 
 ---
 
-## Async Data Loading Patterns
+## Overdraw
 
-Blocking the UI thread while loading data produces a frozen interface. WinUI 3 runs all UI operations on the main thread, so any synchronous work that takes more than a few milliseconds delays rendering, input processing, and animations.
+**Overdraw** is drawing the same pixel more than once. A panel colored blue behind an item template that is also blue fills those pixels twice, and a semi-transparent rectangle blended over a background fills its area once for each layer. `DebugSettings.IsOverdrawHeatMapEnabled` tints the window by how many times each pixel is drawn, which often reveals elements nobody knew were there.
 
-The right approach is to return from page navigation handlers immediately and load data asynchronously, updating the UI once the data arrives. The `Loaded` event or an override of `OnNavigatedTo` are common entry points:
+- **Delete what can't be seen.** An element that's fully transparent or hidden behind others, and that doesn't contribute to layout, only costs.
+- **Paint each area once.** When a list already has a background, its item templates don't need the same one. A panel that must still receive pointer input without painting gets `Background="Transparent"`.
+- **Prefer one shape to layers.** A single opaque gray rectangle beats white at 50% opacity over black, which fills 150% of the pixels for the same result.
+- **Cache static composites.** `CacheMode="BitmapCache"` renders a group of overlapping, non-animated shapes to a bitmap once and reuses it every frame. Don't use it on anything that animates, since the cache then regenerates every frame.
 
-```csharp
-protected override async void OnNavigatedTo(NavigationEventArgs e)
-{
-    base.OnNavigatedTo(e);
-    ViewModel.IsLoading = true;
-    try
-    {
-        await ViewModel.LoadDataAsync();
-    }
-    finally
-    {
-        ViewModel.IsLoading = false;
-    }
-}
-```
-
-Show a loading indicator bound to `IsLoading` so the user sees feedback during the wait. `ProgressRing` with `IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"` is the standard WinUI 3 pattern for this.
-
-When loading large datasets, consider loading a small initial batch immediately and loading additional pages on demand as the user scrolls. `ISupportIncrementalLoading` is the interface that `ListView` and `GridView` recognize for triggering automatic incremental loads as the user approaches the end of the list:
-
-```csharp
-public class IncrementalProductCollection : ObservableCollection<Product>,
-    ISupportIncrementalLoading
-{
-    private int _pageIndex = 0;
-    public bool HasMoreItems { get; private set; } = true;
-
-    public IAsyncOperation<LoadMoreItemsResult> LoadMoreItemsAsync(uint count)
-    {
-        return AsyncInfo.Run(async token =>
-        {
-            var items = await FetchPageAsync(_pageIndex++, (int)count);
-            foreach (var item in items)
-                Add(item);
-            if (items.Count < count)
-                HasMoreItems = false;
-            return new LoadMoreItemsResult { Count = (uint)items.Count };
-        });
-    }
-}
-```
-
-Avoid running expensive computations on the UI thread after data arrives. If you need to sort or filter a large collection, do that work on a background thread and then marshal only the final result back to the UI thread via `DispatcherQueue.TryEnqueue`.
+Fewer elements and less overdraw can pull in opposite directions, such as two rectangles versus one blended layer, so the heat map and the frame times settle it.
 
 ---
 
-## Image Optimization
+## Resources and Startup Cost
 
-Images are among the most common sources of unnecessary memory consumption in WinUI 3 applications, and the problem is easy to overlook. Displaying an image at 48x48 pixels when the source file is 1200x900 causes WinUI 3 to decode the full 1200x900 bitmap into memory, then scale it down during rendering. That decoded bitmap consumes roughly 4 MB of memory for a thumbnail that could have been decoded at 48x48 for about 9 KB.
+`ResourceDictionary` creates a resource only when something asks for it, but four patterns defeat that:
 
-`DecodePixelWidth` and `DecodePixelHeight` on `BitmapImage` instruct the image subsystem to decode the image at the specified dimensions, dramatically reducing memory usage when displaying thumbnails or small previews:
+- **`x:Name` on a resource** creates it immediately, because the generated code needs a field to hold it. Reference resources with `x:Key`.
+- **A `ResourceDictionary` inside a `UserControl`** is copied for every instance of the control. Move it to the page or app when the control is used often.
+- **`App.xaml` is parsed at startup.** A resource used by only one page, other than the first page, belongs in that page's resources. And merging a large dictionary into the first page to use one resource from it parses the whole file.
+- **Identical brushes declared inline** are separate objects, since WinUI can't tell that two inline brushes (or `"Orange"` and `"#FFFFA500"`) are the same. Define a shared brush once as a resource.
 
-```xml
-<Image Width="48" Height="48">
-    <Image.Source>
-        <BitmapImage UriSource="{x:Bind ThumbnailUrl}"
-                     DecodePixelWidth="48"
-                     DecodePixelHeight="48"
-                     DecodePixelType="Logical" />
-    </Image.Source>
-</Image>
-```
-
-`DecodePixelType="Logical"` specifies that the dimensions are in logical pixels, which accounts for display scaling automatically. Use `Physical` if you want to specify exact physical pixels, though `Logical` is the safer default for apps that need to run correctly on high-DPI displays.
-
-In `DataTemplate` scenarios where the display dimensions are fixed, always set decode dimensions to match the display size. In virtualized lists, every item container that displays a full-resolution thumbnail holds an unnecessarily large decoded bitmap in memory, and with hundreds of containers cycling through the reuse queue the cumulative impact is significant.
-
-For images loaded from the network, caching matters. The `BitmapImage` class does not cache by default across control recycling. If your list contains remote images and containers are recycled frequently, the same image URL may be fetched and decoded multiple times. Introducing a simple in-memory cache keyed by URL, or using an image loading library that handles caching, eliminates redundant network requests and decode operations.
+Windows App SDK compiles XAML to a binary form at build time, which removes text parsing at run time. Keep the normal build steps that produce it.
 
 ---
 
-## Profiling with Windows Performance Analyzer and Visual Studio
+## Keeping the UI Thread Free
 
-Profiling should drive optimization decisions. Guessing at bottlenecks without measurement leads to optimizing the wrong things while actual problems remain.
+Every millisecond an event handler holds the UI thread is a millisecond with no layout, rendering, or input. In a profile, the usual culprit is synchronous work inside an `async` handler: the code before the first genuinely asynchronous `await` runs on the UI thread, as does any CPU-bound work the handler does itself, so parsing, sorting, and image processing belong on a background thread with only the result handed back.
 
-[Windows Performance Analyzer](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/windows-performance-analyzer){:target="_blank" rel="noopener noreferrer"} (WPA) is part of the Windows Performance Toolkit and provides deep insight into CPU usage, GPU activity, memory allocations, and disk I/O across the entire system. To profile a WinUI 3 application with WPA, you record a trace with the [Windows Performance Recorder](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/windows-performance-recorder){:target="_blank" rel="noopener noreferrer"} (WPR) while exercising the performance scenario, then open the trace file in WPA for analysis. The CPU Usage (Sampled) graph shows where processor time is spent, while the GPU Hardware Queue graph reveals rendering bottlenecks.
-
-Visual Studio's built-in [Performance Profiler](https://learn.microsoft.com/en-us/visualstudio/profiling/profiling-feature-tour){:target="_blank" rel="noopener noreferrer"} is more accessible for everyday profiling during development. The CPU Usage tool shows a flame graph of call stacks, making it straightforward to identify which methods consume the most time. The .NET Object Allocation Tracking tool records heap allocations with their call stacks, which helps find code paths that allocate frequently in hot loops or event handlers.
-
-For diagnosing UI rendering issues specifically, the XAML frame rate counter provides a lightweight first signal. You can enable it in debug builds by setting `DebugSettings.EnableFrameRateCounter = true` in your `App.xaml.cs`. The overlay shows the current frame rate and helps confirm whether a reported "slow" experience corresponds to a rendering bottleneck or to a data loading delay.
-
-When investigating list scrolling performance, look for:
-
-- Synchronous work on the UI thread during item container preparation (the `ContainerContentChanging` event)
-- Converters that perform expensive computations on every evaluation
-- Images loading synchronously on the UI thread instead of asynchronously
-- Layout passes that force measure and arrange on every frame
-
-Profiling frame time during a scroll scenario gives you concrete numbers. A smooth scroll at 60 fps requires each frame to complete within roughly 16 ms. If a frame consistently takes 30 ms or more, the profiler's call tree will point to the method consuming that time.
+Code that runs as part of binding and layout sits on the same thread. A value converter or a dependency property's change callback runs on the thread that owns the element, and inside a list template it runs for every item that's realized, so a converter doing I/O or heavy computation pays that cost per item as the list scrolls. Precompute the value on the model instead. App code can also force extra layout passes: calling `UpdateLayout` repeatedly, or changing sizes from inside `SizeChanged` until layout never settles, shows up in WPA as long `UpdateLayout` rows, and `DebugSettings.LayoutCycleTracingLevel` reports layout cycles while debugging.
 
 ---
 
-## Common Performance Pitfalls
+## Memory Over Time
 
-**Nesting ScrollViewers**: Placing a `ListView` or `GridView` inside a `ScrollViewer` disables virtualization. The outer scroll container measures all items at once, defeating the purpose of having a virtualizing panel. Use a single scroll surface and let the list control manage it.
+Some costs don't show in a single measurement but grow the longer the app runs.
 
-**Using ObservableCollection for batch updates**: `ObservableCollection<T>` raises a `CollectionChanged` event for every individual `Add` or `Remove` operation. Adding 500 items in a loop fires 500 events, triggering 500 layout passes. For bulk updates, clear the collection and re-add in a single operation, or use a `List<T>` as the backing store and replace the entire collection reference at once.
-
-**Synchronous image decoding**: Loading a `BitmapImage` from a stream on the UI thread blocks rendering during decode. Use `SetSourceAsync` instead of `SetSource` to decode asynchronously.
-
-**Subscribing to events without unsubscribing**: Attaching to `PropertyChanged` or `CollectionChanged` without unsubscribing when the subscribing object is disposed creates memory leaks. The publisher holds a reference to the subscriber, preventing garbage collection. Use weak event patterns or ensure `Dispose` methods clean up subscriptions explicitly.
-
-**Deep visual trees in item templates**: Each additional layer of nesting in a `DataTemplate` adds layout overhead that multiplies across hundreds of item containers. Prefer shallow templates with `Grid` layouts over deeply nested `StackPanel` hierarchies.
-
-**Creating brushes and transforms in code on every frame**: Allocating new `SolidColorBrush` or `TranslateTransform` objects inside event handlers that fire repeatedly creates GC pressure. Cache these objects as fields or static resources and mutate their properties rather than replacing them.
-
-**Unthrottled search or filter bindings**: Binding a filter expression to a `TextBox` with `UpdateSourceTrigger=PropertyChanged` and refiltering a large collection on every keystroke can produce noticeable lag. Introduce a small debounce delay, such as 200 ms, so the filter operation runs only when the user pauses typing rather than on every character.
-
-These pitfalls share a common thread: they impose costs that scale with collection size, frame count, or user interaction frequency. Catching them during development with the profiler is far cheaper than diagnosing them in a shipped application.
+- **The navigation back stack has no size limit.** Each entry holds its navigation parameter, so a user navigating in a loop grows it indefinitely, and a parameter that references a large object or an open file keeps that alive too. Pass small values such as ids, and trim `Frame.BackStack` when it grows.
+- **Page caching trades memory for speed.** A cached page (`NavigationCacheMode`) skips being rebuilt on return, and every cached page stays in the process's working set, the memory it holds resident.
+- **Event subscriptions keep subscribers alive.** A page that subscribes to an event on a long-lived object, such as an app-wide service or a view model shared across pages, stays in memory as long as that object does, unless it unsubscribes when it unloads. Comparing two snapshots in Visual Studio's Memory Usage tool, before and after a navigation that should release a page, shows what survived.

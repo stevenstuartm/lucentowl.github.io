@@ -1,0 +1,67 @@
+---
+title: "One Source of Truth, Derived Copies"
+kind: flow
+system: aws
+summary: "One store takes every write, and three copies follow it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 400" role="img" aria-labelledby="awsdc-title awsdc-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsdc-title">A source of truth feeding derived copies</title>
+<desc id="awsdc-desc">The application writes only to the source of truth, which is Aurora, RDS, or DynamoDB. It reads a cache in ElastiCache first and fills it from the source on a miss, so a cached entry can be stale until its TTL expires. A search index in OpenSearch Service is fed from the source by a change-stream consumer or a managed ingestion pipeline and is never written directly. A Redshift warehouse is fed by a zero-ETL integration, seconds behind Aurora or RDS and 15 to 30 minutes behind DynamoDB.</desc>
+<style>
+.awsdc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsdc-src { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awsdc-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsdc-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsdc-sn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsdc-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsdc-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsdc-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsdc-req { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsdc-rep { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+</style>
+<defs>
+<marker id="awsdc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awsdc-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsdc-app" x="30" y="160" width="160" height="60" rx="6"/>
+<text class="awsdc-t" x="110" y="185" text-anchor="middle">Application</text>
+<text class="awsdc-k" x="110" y="203" text-anchor="middle">[writes one store]</text>
+
+<rect class="awsdc-src" x="270" y="160" width="190" height="60" rx="6"/>
+<text class="awsdc-sn" x="365" y="185" text-anchor="middle">Source of truth</text>
+<text class="awsdc-k" x="365" y="203" text-anchor="middle">[Aurora, RDS, or DynamoDB]</text>
+
+<rect class="awsdc-box" x="650" y="40" width="300" height="60" rx="6"/>
+<text class="awsdc-n" x="800" y="63" text-anchor="middle">Cache</text>
+<text class="awsdc-k" x="800" y="80" text-anchor="middle">[ElastiCache]</text>
+<text class="awsdc-lab" x="800" y="94" text-anchor="middle">stale until its TTL expires</text>
+
+<rect class="awsdc-box" x="650" y="160" width="300" height="60" rx="6"/>
+<text class="awsdc-n" x="800" y="183" text-anchor="middle">Search index</text>
+<text class="awsdc-k" x="800" y="200" text-anchor="middle">[OpenSearch Service]</text>
+<text class="awsdc-lab" x="800" y="214" text-anchor="middle">never written directly</text>
+
+<rect class="awsdc-box" x="650" y="275" width="300" height="80" rx="6"/>
+<text class="awsdc-n" x="800" y="298" text-anchor="middle">Warehouse</text>
+<text class="awsdc-k" x="800" y="315" text-anchor="middle">[Redshift]</text>
+<text class="awsdc-lab" x="800" y="331" text-anchor="middle">seconds behind Aurora or RDS,</text>
+<text class="awsdc-lab" x="800" y="346" text-anchor="middle">15 to 30 minutes behind DynamoDB</text>
+
+<path class="awsdc-req" d="M190,190 L268,190" marker-end="url(#awsdc-a)"/>
+<text class="awsdc-lab" x="229" y="182" text-anchor="middle">writes</text>
+
+<path class="awsdc-req" d="M110,160 L110,70 L648,70" marker-end="url(#awsdc-a)"/>
+<text class="awsdc-lab" x="380" y="62" text-anchor="middle">read first; on a miss, load from the source and fill</text>
+
+<path class="awsdc-rep" d="M460,190 L648,190" marker-end="url(#awsdc-b)"/>
+<text class="awsdc-lab" x="554" y="182" text-anchor="middle">change-stream consumer</text>
+<text class="awsdc-lab" x="554" y="208" text-anchor="middle">or managed ingestion</text>
+
+<path class="awsdc-rep" d="M430,220 L430,315 L648,315" marker-end="url(#awsdc-b)"/>
+<text class="awsdc-lab" x="539" y="307" text-anchor="middle">zero-ETL integration</text>
+
+<text class="awsdc-lab" x="30" y="388">Solid arrows are application requests. Dashed arrows are replication from the source of truth.</text>
+</g>
+</svg>

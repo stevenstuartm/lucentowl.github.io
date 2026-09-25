@@ -1,7 +1,7 @@
 /**
  * Shelf Manager
- * Local-only reading list. Lets a reader save posts, guides, resources, and
- * case studies to revisit later. All state lives in localStorage.
+ * Local-only reading list. Lets a reader save posts, guides, resources,
+ * case studies, and learning paths to revisit later. All state lives in localStorage.
  */
 
 class ShelfManager {
@@ -13,7 +13,8 @@ class ShelfManager {
         posts: 'Post',
         guides: 'Guide',
         resources: 'Resource',
-        case_studies: 'Case Study'
+        case_studies: 'Case Study',
+        learning_paths: 'Path'
     };
 
     static getTypeLabel(type) {

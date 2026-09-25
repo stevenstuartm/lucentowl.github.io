@@ -3,310 +3,339 @@ title: "Accessibility in WinUI 3"
 layout: guide
 category: "WinUI 3"
 subcategory: "Quality & Testing"
-description: "Building accessible WinUI 3 applications with automation peers, screen reader support, keyboard navigation, high contrast themes, and UI Automation testing."
-tags: [winui, winui-3, accessibility, screen-reader, keyboard-navigation, desktop, practical]
+description: "Making a WinUI 3 app work with screen readers, keyboards, contrast themes, and text scaling: how UI Automation sees the app, naming and structuring elements, announcing changes, custom automation peers, and testing against WCAG 2.2."
+tags: [accessibility, ui-automation, automation-peers, screen-reader, contrast-themes, wcag, practical]
 ---
 
-## Table of Contents
+## How Assistive Technology Sees a WinUI App
 
-- [Why Accessibility Matters for Desktop Apps](#why-accessibility-matters-for-desktop-apps)
-- [AutomationProperties: The Foundation](#automationproperties-the-foundation)
-- [UI Automation and AutomationPeer Classes](#ui-automation-and-automationpeer-classes)
-- [Custom Control Accessibility](#custom-control-accessibility)
-- [Keyboard Navigation](#keyboard-navigation)
-- [Screen Reader Support with Narrator](#screen-reader-support-with-narrator)
-- [High Contrast Theme Support](#high-contrast-theme-support)
-- [Testing Accessibility](#testing-accessibility)
-- [WCAG Considerations for Desktop Apps](#wcag-considerations-for-desktop-apps)
+A screen reader never looks at pixels. Narrator, JAWS, and NVDA read a desktop app through **UI Automation** (UIA), the Windows accessibility API, which presents the app as a tree of automation elements. Each element answers three questions: its **name** (what the screen reader says), its **role** (button, list item, slider), and, where it has one, its **value** (the text in a box, the position of a slider). Everything a screen reader user can do in the app happens through that tree.
 
----
+WinUI builds the tree from **automation peers**. Every built-in control creates a peer, such as `ButtonAutomationPeer` for `Button`, which reports the control's name, role, and state to UIA and exposes **control patterns**, the interfaces through which UIA operates the control. A button supports the Invoke pattern, a check box the Toggle pattern, a slider the RangeValue pattern. When a screen reader user presses "activate", the screen reader calls the pattern, not a mouse click.
 
-## Why Accessibility Matters for Desktop Apps
+UIA offers the tree in three views. The **raw** view holds nearly every element, the **control** view holds interactive controls and structural landmarks, and the **content** view holds what carries user-facing information. Screen readers and inspection tools mostly work from the control view.
 
-Accessibility in desktop applications is often treated as an afterthought, something to bolt on before shipping rather than design for from the start. The consequence of that approach is expensive retrofitting. Accessibility features in WinUI 3 are mostly built into the controls themselves, but custom controls, complex layouts, and unusual interaction patterns require deliberate work to get right.
+{% include figure.html id="winui-automation-tree" %}
 
-Windows has a long-established accessibility infrastructure called UI Automation (UIA). Assistive technologies like Narrator, JAWS, and NVDA all communicate with applications through this API, and WinUI 3 controls expose themselves to UIA through automation peers. When you build a standard `Button` or `ListBox`, the framework handles most of the UIA exposure automatically. When you build a custom control or compose existing controls in non-standard ways, you take on responsibility for that exposure yourself.
+Built-in controls get all of this right on their own. The work falls on the app in four places:
 
-The good news is that WinUI 3 gives you the tools to do this well. `AutomationProperties`, `AutomationPeer` subclasses, and the `AccessibilityView` attached property cover the overwhelming majority of real-world scenarios.
+- Elements whose name can't be inferred, such as icon-only buttons and images.
+- Changes that happen without the user moving focus, such as a status message appearing.
+- Custom controls, which have no peer until the app provides one.
+- Styling that overrides the system's colors or text size.
 
 ---
 
-## AutomationProperties: The Foundation
+## Naming and Describing Elements
 
-`AutomationProperties` is an attached property class that lets you annotate any `UIElement` with metadata that assistive technologies read. You can apply these properties in XAML without touching code-behind, which makes them easy to add incrementally.
+`AutomationProperties` is a set of attached properties that set what an element reports to UIA, in XAML, on any element. They override what the element's peer would report by default.
 
-The most commonly needed property is `AutomationProperties.Name`. Every interactive element should have a name that describes its purpose. Built-in controls infer this name from their content when possible: a `Button` with text content uses that text as its automation name automatically. Problems arise with icon-only buttons, image buttons, and controls whose visible label is separate from the control itself.
+### Where the Name Comes From
+
+Many elements name themselves. A `TextBlock` uses its text, and a `Button` or other `ContentControl` converts its content to a string. The gaps are elements with no text content: an icon-only button, an `Image`, a chart. Those need `AutomationProperties.Name`.
 
 ```xml
-<!-- Icon-only button without accessible name - a screen reader reads nothing useful -->
+<!-- Narrator announces only "button" -->
 <Button>
     <FontIcon Glyph="&#xE713;" />
 </Button>
 
-<!-- With an accessible name -->
+<!-- Narrator announces "Settings, button" -->
 <Button AutomationProperties.Name="Settings">
     <FontIcon Glyph="&#xE713;" />
 </Button>
 ```
 
-`AutomationProperties.LabeledBy` connects a control to a separate `TextBlock` that serves as its label. This is useful when the label is visually obvious from layout but not structurally associated in the accessibility tree.
+Don't put the role in the name. The screen reader appends the role from the peer, so a name of "Settings button" is read as "Settings button, button". UIA truncates names at 2,048 characters. Names are user-facing text, so localize them like any other string. With an `x:Uid` on the element, the resource key targets the attached property as `SettingsButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name`.
+
+### Labels and Descriptions
+
+A form field's accessible name should match its visible label. When the label is a separate `TextBlock`, `AutomationProperties.LabeledBy` points the field at it, so the same text drives both what's shown and what's spoken:
 
 ```xml
 <TextBlock x:Name="EmailLabel" Text="Email address" />
 <TextBox AutomationProperties.LabeledBy="{x:Bind EmailLabel}" />
 ```
 
-`AutomationProperties.HelpText` provides supplementary information beyond the name. Screen readers can optionally read this to the user when they focus an element. Use it for hints about expected input format or contextual notes that do not belong in the name itself.
+The same technique captions an image with visible text. `AutomationProperties.HelpText` adds a description for context the name shouldn't carry, like an input format. Narrator reads it on request rather than with every announcement, so it can't hold information the user needs to operate the field.
+
+### Hiding Decoration
+
+Purely decorative elements, such as a background shape, a divider, or an icon beside text that already says the same thing, add noise to screen-reader navigation. `AutomationProperties.AccessibilityView="Raw"` moves an element out of the control and content views, where screen readers look, while leaving it in the raw view for diagnostic tools:
 
 ```xml
-<TextBox
-    AutomationProperties.Name="Password"
-    AutomationProperties.HelpText="Must be at least 12 characters and include a symbol." />
+<Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+           AutomationProperties.AccessibilityView="Raw" />
 ```
 
-`AutomationProperties.LiveSetting` is for dynamic regions that update without user interaction. Setting it to `Polite` tells Narrator to announce changes after the user finishes their current task. Setting it to `Assertive` announces changes immediately, interrupting whatever the screen reader was doing. Use `Assertive` sparingly, reserving it for genuinely urgent updates like error messages or status alerts.
+Control templates do the same for their internal parts. A composed control whose children would each show up separately can hide them this way, as long as the control itself reports everything they conveyed.
 
-```xml
-<TextBlock
-    x:Name="StatusMessage"
-    AutomationProperties.LiveSetting="Polite" />
-```
+### Names for Data-Bound Items
 
-In code, you update the text of this element normally and Narrator will announce the new content at the next appropriate moment.
-
-`AutomationProperties.AccessibilityView` controls whether an element is visible in the accessibility tree. Setting it to `Raw` hides it from screen readers entirely. This is appropriate for purely decorative elements like background shapes or separators that carry no information and would only add noise to the reading experience.
-
-```xml
-<Rectangle Fill="Gray" AutomationProperties.AccessibilityView="Raw" />
-```
+A `ListView` or `GridView` item built from a data template has a container, the `ListViewItem` or `GridViewItem`, and like other content controls the container derives its name by converting its content to a string. A bound model object without a `ToString` override converts to its type name, so every row is announced as something like "MyApp.Models.Order". Give each item a real name, either by overriding `ToString` on the model or by setting `AutomationProperties.Name` on the container in the list's `ContainerContentChanging` event. Then check the result with a screen reader after the data loads, since the name exists only once binding has run.
 
 ---
 
-## UI Automation and AutomationPeer Classes
+## Structuring a Page with Headings and Landmarks
 
-Behind `AutomationProperties` lies the full UI Automation framework. Every WinUI 3 control has an associated `AutomationPeer` class that implements the UIA provider interface, exposing properties and control patterns to assistive technologies.
+A sighted user scans a page by its headings and regions. A screen reader user does the same thing through two properties. `AutomationProperties.HeadingLevel` marks an element, usually a `TextBlock`, as a heading from `Level1` to `Level9`. `AutomationProperties.LandmarkType` marks a container as a `Main`, `Navigation`, `Search`, `Form`, or `Custom` region (a custom one is named with `LocalizedLandmarkType`). A landmark container should hold everything in that region and nothing from another, so regions sit side by side rather than inside each other. Screen readers can then jump between regions and headings, and Narrator lists a window's landmarks with Caps Lock+F5 and its headings with Caps Lock+F6.
 
-Control patterns are the structured behaviors that UIA defines for interactive elements. A button implements the `Invoke` pattern, which lets UIA clients programmatically click it. A checkbox implements the `Toggle` pattern. A list implements the `Selection` pattern. Assistive technologies use these patterns to understand what an element can do and to perform actions on the user's behalf.
+```xml
+<Grid ColumnDefinitions="240, *" RowDefinitions="Auto, *">
+    <AutoSuggestBox Grid.ColumnSpan="2" PlaceholderText="Search orders"
+                    AutomationProperties.LandmarkType="Search" />
 
-When you use standard WinUI 3 controls, all of this is handled for you. The `ButtonAutomationPeer`, `CheckBoxAutomationPeer`, and other built-in peers implement the appropriate patterns. Understanding these patterns matters when you build custom controls that need to behave like a known control type.
+    <ListView Grid.Row="1" x:Name="Sections"
+              AutomationProperties.LandmarkType="Navigation" />
+
+    <ScrollViewer Grid.Row="1" Grid.Column="1"
+                  AutomationProperties.LandmarkType="Main">
+        <StackPanel>
+            <TextBlock Text="Orders" Style="{StaticResource TitleTextBlockStyle}"
+                       AutomationProperties.HeadingLevel="Level1" />
+            <TextBlock Text="Open orders" Style="{StaticResource SubtitleTextBlockStyle}"
+                       AutomationProperties.HeadingLevel="Level2" />
+        </StackPanel>
+    </ScrollViewer>
+</Grid>
+```
+
+A visual style doesn't make text a heading. A `TitleTextBlockStyle` text block is still plain text to UIA until `HeadingLevel` is set. For keyboard users, the matching convention is F6 to move between the major panes, as File Explorer and Outlook do, which Microsoft recommends alongside landmarks in any app with several regions.
 
 ---
 
-## Custom Control Accessibility
+## Announcing Changes the User Didn't Cause
 
-A custom control that inherits from `Control` does not automatically expose itself to UIA in any meaningful way. You need to provide a custom `AutomationPeer` that describes the control to assistive technologies.
+When focus moves, the screen reader announces the newly focused element. A change elsewhere, such as a save confirmation, a validation error, or a search result count, produces no announcement unless the app asks for one. WCAG treats these as status messages, and there are two ways to announce them. A live region suits text that stays on screen, like a result count. A notification event suits a transient confirmation that may never be visible.
 
-Creating a custom peer involves two steps: defining the peer class and overriding `OnCreateAutomationPeer` on your control to return an instance of it.
+### Live Regions
+
+`AutomationProperties.LiveSetting` marks an element as a **live region** whose changes a screen reader should report. `Polite` waits until the screen reader finishes its current speech, and `Assertive` interrupts it, which suits only urgent messages. The screen reader learns of a change through the `LiveRegionChanged` automation event, so after changing the content, raise it through the element's peer:
+
+```xml
+<TextBlock x:Name="StatusMessage" AutomationProperties.LiveSetting="Polite" />
+```
 
 ```csharp
-// The custom control
-public class RatingControl : Control
+StatusMessage.Text = $"{results.Count} results";
+
+AutomationPeer peer = FrameworkElementAutomationPeer.FromElement(StatusMessage)
+                      ?? FrameworkElementAutomationPeer.CreatePeerForElement(StatusMessage);
+peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+```
+
+### Notification Events
+
+`AutomationPeer.RaiseNotificationEvent` announces a string that doesn't have to appear on screen at all, which suits confirmations like "Saved" that the UI shows only as an icon. The last argument is an **activity id**, a non-localized string that groups related notifications, and the processing argument says what the screen reader does when several arrive from the same activity:
+
+| `AutomationNotificationProcessing` | Behavior |
+| --- | --- |
+| `All` | Delivers every notification |
+| `MostRecent` | Interrupts the current notification with the newest |
+| `CurrentThenMostRecent` | Finishes the current one, then reads only the latest, so a burst of progress updates doesn't pile up |
+| `ImportantAll`, `ImportantMostRecent` | The same, delivered as soon as possible (Microsoft warns that `ImportantAll` can flood the user) |
+
+```csharp
+AutomationPeer peer = FrameworkElementAutomationPeer.FromElement(SaveButton)
+                      ?? FrameworkElementAutomationPeer.CreatePeerForElement(SaveButton);
+peer?.RaiseNotificationEvent(
+    AutomationNotificationKind.ActionCompleted,
+    AutomationNotificationProcessing.MostRecent,
+    "Document saved",
+    "SaveStatus");
+```
+
+When new UI appears in place of the old, such as a panel that expands or a step in a wizard, announcing it is usually the wrong fix. Move keyboard focus into it with `Focus(FocusState.Programmatic)`, and the screen reader announces the focused element as it would any other focus change.
+
+---
+
+## Giving a Custom Control an Automation Peer
+
+A control derived directly from `Control` has no peer of its own, because the base `Control` class has none. Until the control overrides `OnCreateAutomationPeer`, a screen reader can't tell what it is or operate it. The peer's job is to report the control's role and to implement the control patterns that match its behavior.
+
+Start by deriving from the closest built-in base class. A custom range control derived from `RangeBase` should return a peer derived from `RangeBaseAutomationPeer`, which already implements the RangeValue pattern, so the custom peer may need only a class name. A control derived from `Control` needs a peer derived from `FrameworkElementAutomationPeer`, which supplies bounding rectangle, focus, and enabled state from the element itself.
+
+The sample below is a star rating built on `Control`. It reports itself as a slider and implements `IRangeValueProvider`. A peer that implements a pattern interface also has to return itself from `GetPatternCore` for that pattern, because UIA asks the peer for one pattern at a time by its `PatternInterface` identifier rather than checking which interfaces it implements.
+
+```csharp
+using System;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Automation.Provider;
+using Microsoft.UI.Xaml.Controls;
+
+public sealed class StarRating : Control
 {
+    // Value, Minimum, and Maximum are dependency properties (not shown).
+    // Value's property-changed callback calls OnValueChanged.
+
     protected override AutomationPeer OnCreateAutomationPeer()
-        => new RatingControlAutomationPeer(this);
+        => new StarRatingAutomationPeer(this);
+
+    private void OnValueChanged(double oldValue, double newValue)
+    {
+        if (AutomationPeer.ListenerExists(AutomationEvents.PropertyChanged) &&
+            FrameworkElementAutomationPeer.FromElement(this) is StarRatingAutomationPeer peer)
+        {
+            peer.RaisePropertyChangedEvent(
+                RangeValuePatternIdentifiers.ValueProperty, oldValue, newValue);
+        }
+    }
 }
-```
 
-```csharp
-// The automation peer
-public class RatingControlAutomationPeer : FrameworkElementAutomationPeer, IRangeValueProvider
+// partial lets the CsWinRT generator add the interface support that trimming and AOT need.
+public sealed partial class StarRatingAutomationPeer : FrameworkElementAutomationPeer, IRangeValueProvider
 {
-    private RatingControl RatingControl => (RatingControl)Owner;
+    public StarRatingAutomationPeer(StarRating owner) : base(owner) { }
 
-    public RatingControlAutomationPeer(RatingControl owner) : base(owner) { }
+    private StarRating Rating => (StarRating)Owner;
 
-    // Tell UIA what kind of control this is
+    protected override string GetClassNameCore() => nameof(StarRating);
+
     protected override AutomationControlType GetAutomationControlTypeCore()
         => AutomationControlType.Slider;
 
-    // Provide a class name for additional identification
-    protected override string GetClassNameCore()
-        => nameof(RatingControl);
+    protected override object GetPatternCore(PatternInterface patternInterface)
+        => patternInterface == PatternInterface.RangeValue
+            ? this
+            : base.GetPatternCore(patternInterface);
 
-    // The accessible name, falling back to AutomationProperties.Name if set
-    protected override string GetNameCore()
-        => string.IsNullOrEmpty(base.GetNameCore()) ? "Rating" : base.GetNameCore();
-
-    // IRangeValueProvider members
-    public double Value => RatingControl.Value;
-    public double Minimum => RatingControl.Minimum;
-    public double Maximum => RatingControl.Maximum;
+    public double Value => Rating.Value;
+    public double Minimum => Rating.Minimum;
+    public double Maximum => Rating.Maximum;
     public double SmallChange => 1;
     public double LargeChange => 1;
-    public bool IsReadOnly => false;
+    public bool IsReadOnly => !Rating.IsEnabled;
 
     public void SetValue(double value)
     {
-        if (!IsReadOnly)
-            RatingControl.Value = (int)value;
+        if (IsReadOnly)
+        {
+            return;   // a disabled rating ignores the request
+        }
+        Rating.Value = Math.Clamp(Math.Round(value), Minimum, Maximum);
     }
 }
 ```
 
-The peer inherits from `FrameworkElementAutomationPeer` and implements `IRangeValueProvider` to expose the slider-like behavior that a rating control has. Choosing the right `AutomationControlType` and the right control pattern interfaces tells screen readers how to describe the control and what keyboard interactions to announce.
+Four details in the sample carry over to any peer:
 
-When the control's state changes in a way that assistive technologies should know about, raise property changed events through the peer.
+- **`GetClassNameCore` is the minimum override** for a new peer. It isn't spoken, so it needs no localization.
+- **Pick a specific `AutomationControlType`.** UIA supplies a localized spoken role for every type except `Custom`, which leaves the peer to provide one through `GetLocalizedControlTypeCore`.
+- **Route pattern calls through the control's own logic.** `SetValue` sets the same property that a click or an arrow key sets, so every path runs the same validation and visual state changes.
+- **Raise events only when someone is listening.** `ListenerExists` skips building the event when no UIA client subscribes, and `FromElement` returns `null` when no peer has been created yet.
 
-```csharp
-// In RatingControl, when Value changes
-private void NotifyValueChanged(double oldValue, double newValue)
-{
-    var peer = FrameworkElementAutomationPeer.FromElement(this) as RatingControlAutomationPeer;
-    peer?.RaisePropertyChangedEvent(
-        RangeValuePatternIdentifiers.ValueProperty,
-        oldValue,
-        newValue);
-}
-```
-
-The [Microsoft.UI.Xaml.Automation.Peers namespace](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.automation.peers){:target="_blank" rel="noopener noreferrer"} lists all available peer base classes and pattern interfaces.
+The peer gives screen readers access, but it doesn't give keyboard users a way to operate the control. The control still handles the arrow keys itself, and the peer can report its shortcuts through `GetAcceleratorKeyCore` and `GetAccessKeyCore`.
 
 ---
 
-## Keyboard Navigation
+## Keyboard Access
 
-Keyboard accessibility means that every function available through the mouse is also reachable and operable through the keyboard alone. In WinUI 3, Tab-based focus navigation is the primary mechanism, with arrow key navigation available for composite controls like lists and menus.
+WCAG's keyboard criterion asks that every function available with a pointer also work from the keyboard, and a screen reader user depends on the keyboard entirely. Built-in controls handle their own keys. The app's share is keeping the Tab order logical, giving custom interactions (drag-and-drop, canvas editing, hover-only commands) a keyboard path, and never hiding the focus indicator.
 
-`IsTabStop` controls whether an element participates in Tab navigation. It defaults to `true` for interactive controls and `false` for non-interactive elements like `TextBlock`. Setting it to `false` on a button removes it from the Tab order, which is appropriate only when the button is decorative or its function is provided by another path.
-
-`TabIndex` sets the explicit position of an element in the Tab sequence. The default behavior, where Tab visits elements in document order, is usually correct. Explicit `TabIndex` values are sometimes needed when layout order and reading order diverge, but they require careful management as the UI evolves.
-
-```xml
-<StackPanel>
-    <!-- Visited first -->
-    <TextBox TabIndex="0" Header="First name" />
-    <!-- Visited second -->
-    <TextBox TabIndex="1" Header="Last name" />
-    <!-- Visited third -->
-    <Button TabIndex="2" Content="Submit" />
-</StackPanel>
-```
-
-`XYFocus` properties control directional navigation using arrow keys. This is especially useful for game-style layouts, media interfaces, or any UI designed for use with a remote control or gamepad, but it also benefits keyboard users navigating spatially organized content.
-
-```xml
-<Button x:Name="LeftBtn" Content="Left"
-        XYFocus.Right="{x:Bind RightBtn}" />
-<Button x:Name="RightBtn" Content="Right"
-        XYFocus.Left="{x:Bind LeftBtn}" />
-```
-
-`FocusVisualKind` on `Application` or individual controls controls how the focus indicator renders. The default `HighVisibility` mode draws a visible focus rectangle, which is what most users need. Setting it to `Reveal` uses the Fluent Design reveal effect. Avoid `None` entirely because it removes the visual indication of focus, making keyboard navigation non-functional for sighted keyboard users.
-
-For custom keyboard handling within a control, override `OnKeyDown` to intercept specific keys.
-
-```csharp
-protected override void OnKeyDown(KeyRoutedEventArgs e)
-{
-    if (e.Key == VirtualKey.Enter || e.Key == VirtualKey.Space)
-    {
-        // Activate the control
-        ExecutePrimaryAction();
-        e.Handled = true;
-    }
-    base.OnKeyDown(e);
-}
-```
-
-Setting `e.Handled = true` prevents the key event from bubbling further up the visual tree, which avoids double-handling in parent controls.
+WinUI's focus visuals have no setting that turns them off, and a custom template shouldn't find another way. Static text stays out of the Tab order. Screen reader users reach it by moving through elements with the Narrator key and the arrow keys, which doesn't depend on focus, so putting a `TextBlock` in the Tab order to make it readable only adds stops that do nothing.
 
 ---
 
-## Screen Reader Support with Narrator
+## Supporting Contrast Themes
 
-Narrator is the built-in Windows screen reader and the primary tool for testing WinUI 3 accessibility. It reads element names, roles, and states as the user navigates with Tab, arrow keys, or the mouse.
+Windows **contrast themes** (Aquatic, Desert, Dusk, and Night sky, under **Settings > Accessibility > Contrast themes**) replace the app's palette with a small set of user-chosen system colors, usually at contrast ratios of 7:1 or higher. They're separate from the light and dark themes. Built-in controls follow them automatically. Custom styling breaks them in two ways: a hard-coded color stays fixed while the text around it changes to the theme's colors, and an explicit `Foreground` on text inside a list item template stops it from inverting when the item is selected.
 
-The interaction between WinUI 3 and Narrator flows through UIA. Narrator queries the automation peer for the element's name, control type, and state, then speaks or displays it in braille. This means that anything you expose correctly through `AutomationProperties` or a custom peer will work with Narrator and with third-party screen readers that also use UIA, such as JAWS and NVDA.
+The fix is a `HighContrast` entry in the app's theme dictionaries that maps each custom brush to a **SystemColor** resource. Both references use `{ThemeResource}`, which re-resolves when the theme changes, where `{StaticResource}` resolves once at load:
 
-A few patterns cause consistent problems with Narrator. Nested interactive elements, such as a button inside a list item that is itself focusable, create confusion about what the user is interacting with. Group containers that aggregate multiple interactive children should generally have `AutomationProperties.AccessibilityView` set in a way that presents the group sensibly rather than exposing every inner element individually.
-
-When a significant UI change happens without navigation, such as a dialog opening or a content region replacing itself, the user needs to be informed. For dialogs opened programmatically, set focus to the dialog's first interactive element immediately after opening it, which causes Narrator to announce the new context. For in-place content changes, use a live region with `AutomationProperties.LiveSetting`.
-
-```csharp
-// After opening a dialog, move focus to the first element
-private async void OpenConfirmDialog()
-{
-    await ConfirmDialog.ShowAsync();
-    // Focus is automatically managed by ContentDialog in WinUI 3,
-    // but for custom dialogs, explicitly set focus:
-    ConfirmButton.Focus(FocusState.Programmatic);
-}
+```xml
+<ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Default">
+        <SolidColorBrush x:Key="BrandedPanelBrush" Color="#E6E6E6" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="HighContrast">
+        <SolidColorBrush x:Key="BrandedPanelBrush" Color="{ThemeResource SystemColorWindowColor}" />
+    </ResourceDictionary>
+</ResourceDictionary.ThemeDictionaries>
 ```
 
-Narrator's scan mode, activated with Caps Lock + Space, lets users navigate through all elements on screen regardless of Tab order. Every element that carries information should be reachable in scan mode, which means that purely decorative elements should be hidden from the accessibility tree with `AutomationProperties.AccessibilityView="Raw"`.
+Each SystemColor has a role and a partner it's meant to sit on:
+
+| Resource | Use for | Pair with |
+| --- | --- | --- |
+| `SystemColorWindowColor` | Page, pane, and popup backgrounds | `SystemColorWindowTextColor` |
+| `SystemColorWindowTextColor` | Body text, headings, non-interactive UI | `SystemColorWindowColor` |
+| `SystemColorButtonFaceColor` / `SystemColorButtonTextColor` | Interactive UI at rest | Each other |
+| `SystemColorHighlightColor` / `SystemColorHighlightTextColor` | Selected, hovered, pressed, or in-progress UI | Each other |
+| `SystemColorHotlightColor` | Hyperlinks only | `SystemColorWindowColor` |
+| `SystemColorGrayTextColor` | Disabled UI only, not secondary text | `SystemColorWindowColor` |
+
+By default, `HighContrastAdjustment` draws text in the contrast theme's text color over a solid backplate, so content stays readable even when the app's styling is wrong. It's set per element on `UIElement` or app-wide on `Application`. Once the app's resources handle contrast themes correctly, set it to `None` so the intended styling shows. An app that has to react in code, for example to swap a bitmap for a contrast-theme version, uses `Microsoft.UI.System.ThemeSettings`, created per window and raising `Changed` when the setting flips. In a `Window` subclass such as `MainWindow`:
+
+```csharp
+_themeSettings = ThemeSettings.CreateForWindowId(AppWindow.Id);   // keep the reference
+_themeSettings.Changed += (settings, _) =>
+    DispatcherQueue.TryEnqueue(() => UseContrastAssets(settings.HighContrast));
+```
+
+The object stops raising `Changed` once the app releases its last reference, so hold it in a field. Test in all four built-in themes, since users can also edit each theme's colors. Left Alt+Left Shift+Print Screen toggles a contrast theme on and off.
 
 ---
 
-## High Contrast Theme Support
+## Text Size and Contrast Ratios
 
-Windows high contrast mode replaces the application's color scheme with a small set of system-defined colors that provide maximum contrast for users with low vision or photosensitivity. WinUI 3 controls handle this automatically through the built-in theme resources, but custom controls and custom styles can break in high contrast if they use hardcoded colors.
+### Contrast in the Default Themes
 
-The solution is to use theme resources rather than literal color values. WinUI 3 defines a set of system color brushes that automatically resolve to the correct high contrast values when the user switches modes. Using `SystemControlForegroundBaseHighBrush` instead of a hardcoded `#1C1C1C` means your control will honor whatever the user has configured.
+Contrast themes are an opt-in accommodation, not a substitute for readable defaults. Text needs a contrast ratio of at least 4.5:1 against its background in the light and dark themes too. WCAG lowers that to 3:1 for large text (18 point, or 14 point bold) and exempts logos, inactive UI, and decorative text. Contrast ratio is a luminance calculation, so two hues that look distinct, like red on green, can still fail it. Check with a contrast tool, which for a desktop app often means sampling a screenshot.
 
-```xml
-<!-- Breaks in high contrast because it ignores system colors -->
-<Border Background="#E8E8E8" BorderBrush="#CCCCCC">
-    <TextBlock Foreground="#1C1C1C" Text="Hello" />
-</Border>
+### Text Scaling
 
-<!-- Respects high contrast because it uses theme resources -->
-<Border Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
-        BorderBrush="{ThemeResource SystemControlForegroundBaseHighBrush}">
-    <TextBlock Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}" Text="Hello" />
-</Border>
-```
+**Settings > Accessibility > Text size** lets users enlarge text across apps, up to 225%, without changing the size of everything else. WinUI text controls follow it by default through `IsTextScaleFactorEnabled`, which is `true` on `TextBlock`, `RichTextBlock`, `Control`, `FontIcon`, and related types. Smaller font sizes grow more than larger ones.
 
-For custom visual states, verify that each state still provides enough contrast in high contrast mode. Colors that look distinct in normal mode can collapse to the same high contrast color, making states indistinguishable. Testing in both high contrast black and high contrast white modes covers the two most common configurations.
-
-You can detect high contrast mode at runtime if you need to branch logic.
-
-```csharp
-using Microsoft.UI.Xaml.Media;
-
-bool isHighContrast = AccessibilitySettings.HighContrast;
-```
-
-The `AccessibilitySettings` class is available through [Windows.UI.ViewManagement](https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.accessibilitysettings){:target="_blank" rel="noopener noreferrer"} and provides `HighContrast` and `HighContrastScheme` properties. You can subscribe to the `HighContrastChanged` event to update any runtime-computed values when the user switches modes.
+The breakage is in layout. Text that grows inside a fixed `Height`, a fixed-width column, or a single-line container gets clipped. Design for it by letting text containers size to content, allowing wrapping, and testing at the maximum setting. Setting `IsTextScaleFactorEnabled="False"` removes the user's control and should be rare. When other UI has to scale with the text, such as an icon drawn as an image, `Windows.UI.ViewManagement.UISettings.TextScaleFactor` (1.0 to 2.25) and its `TextScaleFactorChanged` event report the setting.
 
 ---
 
 ## Testing Accessibility
 
-Three tools cover most accessibility testing needs for WinUI 3 applications.
+Microsoft recommends automated checks as a gate on every change, plus manual screen reader and keyboard passes for the flows that need judgment.
 
-[Accessibility Insights for Windows](https://accessibilityinsights.io/docs/en/windows/overview/){:target="_blank" rel="noopener noreferrer"} is a free tool from Microsoft that inspects the UIA tree of any running application. It shows you exactly what a screen reader sees: the names, roles, states, and control patterns of every element. The FastPass feature checks for common issues like missing names and broken keyboard navigation automatically. Use it during development to verify that each screen exposes the accessibility tree you expect.
+[Accessibility Insights for Windows](https://accessibilityinsights.io/docs/windows/overview){:target="_blank" rel="noopener noreferrer"} is the primary tool. **Live Inspect** shows the UIA properties of whatever is under the pointer or has focus. **FastPass** runs automated checks on a window and walks through a keyboard tab-stop test in a few minutes, and **Troubleshooting** digs into a specific issue, including the events a control raises. The older Windows SDK tools (Inspect, AccEvent, AccScope) still work, but Microsoft steers new work to Accessibility Insights.
 
-Narrator is your primary screen reader for manual testing. Enable it with Windows key + Ctrl + Enter and navigate through your application with Tab and arrow keys. Pay attention to what Narrator announces as you move between elements: whether names are descriptive, whether state changes are announced, and whether the reading order matches the visual order. Testing with Narrator gives you direct experience of what your users hear.
+For the automated gate itself, [Axe.Windows](https://github.com/microsoft/axe-windows){:target="_blank" rel="noopener noreferrer"}, the rules engine behind Accessibility Insights, is a NuGet package that scans a running app from a test, so the same checks can fail a build.
 
-UI Automation test automation lets you drive accessibility testing from code. The `Microsoft.TestTools.UiAutomation` namespace provides classes for locating elements by their automation properties and invoking control patterns programmatically. This is particularly useful for regression testing, where you want to ensure that accessibility properties remain intact across code changes.
+A Narrator pass covers what no automated check can: whether names make sense in context and whether the reading order matches the visual order.
 
-```csharp
-// Example using UI Automation APIs in a test
-var automation = new CUIAutomation8();
-var root = automation.GetRootElement();
-var condition = automation.CreatePropertyCondition(
-    UIA_PropertyIds.UIA_NamePropertyId,
-    "Settings");
-var settingsButton = root.FindFirst(TreeScope.TreeScope_Descendants, condition);
-var invokePattern = settingsButton?.GetCurrentPattern(UIA_PatternIds.UIA_InvokePatternId)
-    as IUIAutomationInvokePattern;
-invokePattern?.Invoke();
-```
+| Action | Keys |
+| --- | --- |
+| Start or stop Narrator | Windows+Ctrl+Enter |
+| Move through elements, including static text | Caps Lock+Left/Right arrow |
+| Activate the current element | Caps Lock+Enter |
+| List the window's landmarks, or its headings | Caps Lock+F5, Caps Lock+F6 |
+| Show all Narrator commands | Caps Lock+F1 |
+| Developer mode (masks the screen, shows only what UIA exposes) | Ctrl+Caps Lock+F12 |
 
-For a structured approach to checking compliance, the [Accessibility Insights FastPass checklist](https://accessibilityinsights.io/docs/en/windows/getstarted/fastpass/){:target="_blank" rel="noopener noreferrer"} walks through the most common failure categories in a defined order. Running FastPass on every screen in your application before each release catches regressions early.
+Insert works as the Narrator key in place of Caps Lock. A keyboard-only pass then checks that Tab visits every interactive element in a sensible order, that arrow keys work inside composite controls, and that Enter or Space activates every command.
+
+UI test frameworks for desktop apps find elements through the same UIA tree, so the accessibility work also serves testing. Setting `AutomationProperties.AutomationId` on elements gives tests a stable handle that doesn't change with localization, and a test that asserts a control's name or invokes its pattern checks the accessibility contract on every build.
 
 ---
 
-## WCAG Considerations for Desktop Apps
+## WCAG and Desktop Apps
 
-[WCAG 2.1](https://www.w3.org/TR/WCAG21/){:target="_blank" rel="noopener noreferrer"} was written primarily for web content, but its four principles, perceivable, operable, understandable, and robust, translate directly to desktop applications. Many enterprise contracts and government procurements require WCAG 2.1 AA compliance regardless of platform.
+The Web Content Accessibility Guidelines are written for the web, but they're the yardstick for desktop software too. W3C's WCAG2ICT guidance interprets each Level A and AA criterion for non-web software. Level A is the minimum, Level AA is what laws and contracts cite, and Level AAA is aspirational. The current version is [WCAG 2.2](https://www.w3.org/TR/WCAG22/){:target="_blank" rel="noopener noreferrer"}, a W3C Recommendation since October 2023 and also published as ISO/IEC 40500:2025. Procurement rules pin specific versions. US Section 508 applies WCAG 2.0 Level AA to software, and Europe's EN 301 549 v4.1.1, published in September 2026, adopts WCAG 2.2, though v3.2.1 (WCAG 2.1 AA) stays the legal reference for the European Accessibility Act until the EU cites the new version. WCAG 3.0 is a working draft that W3C doesn't expect to finish for years.
 
-Perceivability means that information is not conveyed through color alone. If a required field is indicated only by a red border, a color-blind user has no way to distinguish it from an optional field. Add a text indicator, an icon, or an `AutomationProperties.Name` that includes the required state.
+The Level A and AA criteria that land most directly on a WinUI app:
 
-Operability means that all functionality is available without a mouse. Every action reachable by mouse click should also be reachable by keyboard. Custom drag-and-drop interactions need keyboard alternatives, and any timed operations should give users enough time to respond or the ability to turn off timing.
-
-Understandability means that controls behave predictably and that error messages describe both what went wrong and how to fix it. An error message that says only "Invalid input" is not understandable in the WCAG sense. An error message that says "Email address must include the @ symbol" is.
-
-Robustness means that the application works correctly with current and future assistive technologies. Implementing UIA properly through `AutomationPeer` and `AutomationProperties`, rather than relying on hacks or workarounds, is what makes an application robust in this sense. An application that exposes its structure correctly through UIA will continue to work as Narrator and other assistive technologies evolve.
-
-The Level AA success criteria most relevant to WinUI 3 applications include 1.4.3 (contrast ratio of at least 4.5:1 for normal text), 1.4.4 (text resize to 200% without loss of content), 2.1.1 (all functionality operable by keyboard), 2.4.7 (visible keyboard focus indicator), and 4.1.2 (name, role, and value programmatically determinable). Meeting these criteria requires combining proper use of `AutomationProperties`, high contrast theme support, keyboard navigation configuration, and custom automation peers for any non-standard controls.
+| Criterion | What it asks | Where the WinUI work is |
+| --- | --- | --- |
+| 1.1.1 Non-text Content (A) | Text alternatives for images and icons | `AutomationProperties.Name` on images and icon-only buttons |
+| 1.3.1 Info and Relationships (A) | Structure available programmatically | `HeadingLevel`, `LandmarkType`, `LabeledBy` |
+| 1.4.1 Use of Color (A) | Color isn't the only signal | Pair a red border with text or an icon, and put the state in the name |
+| 1.4.3 Contrast (Minimum) (AA) | 4.5:1 for text, 3:1 for large text | Default themes, not only contrast themes |
+| 1.4.4 Resize Text (AA) | Text scales to 200% without loss | Text scaling with layouts that grow |
+| 1.4.11 Non-text Contrast (AA) | 3:1 for control boundaries and focus indicators | Custom borders and focus visuals |
+| 2.1.1 Keyboard (A) | Everything works from the keyboard | Keyboard paths for custom interactions |
+| 2.1.2 No Keyboard Trap (A) | Focus can always move away from a component | Custom controls that handle Tab or arrow keys themselves |
+| 2.4.3 Focus Order (A) | Focus moves in an order that preserves meaning | Tab order that follows reading order |
+| 2.4.7 Focus Visible (AA) | The focus indicator is visible | Never suppress focus visuals |
+| 2.4.11 Focus Not Obscured (Minimum) (AA, new in 2.2) | The focused element isn't entirely hidden by the app's own content | Sticky bars and overlays that can cover a focused item |
+| 2.5.7 Dragging Movements (AA, new in 2.2) | Anything done by dragging also works with single clicks or taps | Drag-to-reorder, sliders, and canvas editing |
+| 2.5.8 Target Size (Minimum) (AA, new in 2.2) | Pointer targets at least 24 by 24 CSS pixels (WCAG2ICT reads these as device-independent pixels, WinUI's effective pixels), or spaced apart | Small custom buttons and dense toolbars |
+| 4.1.2 Name, Role, Value (A) | Every control reports all three | Automation peers for custom controls |
+| 4.1.3 Status Messages (AA) | Status changes announced without moving focus | Live regions and notification events |

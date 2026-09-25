@@ -1,0 +1,106 @@
+---
+title: "OpenTelemetry in an ASP.NET Core App"
+kind: flow
+system: aspnet-core
+summary: "Telemetry from .NET's APIs, through name-based subscriptions, to a collector."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="aot-title aot-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="aot-title">How telemetry flows from .NET's logging, tracing, and metrics APIs through the OpenTelemetry SDK to a collector and backends</title>
+<desc id="aot-desc">Inside the app, telemetry is produced by .NET's own APIs: ILogger for log entries, the Microsoft.AspNetCore ActivitySource for request spans, a custom Orders.Processing ActivitySource for custom spans, the Microsoft.AspNetCore.Hosting meter for request duration, and a custom Orders.Api meter. The OpenTelemetry SDK subscribes to them by name. The LoggerProvider receives log entries. The TracerProvider receives the framework's request spans through the ASP.NET Core instrumentation and Orders.Processing through AddSource with the Orders.* wildcard, and its sampler keeps or drops each trace. The MeterProvider receives the hosting meter through the ASP.NET Core instrumentation and Orders.Api through AddMeter. A Billing.Sync ActivitySource that no AddSource call matches has no subscriber, so StartActivity returns null and nothing is recorded. All three providers feed one OTLP exporter configured by UseOtlpExporter, which sends to an OpenTelemetry Collector. The collector forwards each signal to the backend that stores it: a trace store, Prometheus, and a log store.</desc>
+<style>
+.aot-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aot-alt { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.aot-off { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.3; stroke-dasharray: 5 4; }
+.aot-col { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.aot-n { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.aot-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.aot-t { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.aot-em { font-size: 10.5px; font-style: italic; fill: var(--color-accent, #A5486E); }
+.aot-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.aot-none { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.3; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="aot-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="aot-col" x="20" y="28">.NET APIs in the app</text>
+<text class="aot-col" x="280" y="28">OpenTelemetry SDK</text>
+<text class="aot-col" x="520" y="28">Export</text>
+<text class="aot-col" x="670" y="28">Outside the app</text>
+
+<rect class="aot-box" x="20" y="50" width="210" height="46" rx="5"/>
+<text class="aot-n" x="32" y="70">ILogger</text>
+<text class="aot-k" x="32" y="86">[logging] log entries</text>
+<rect class="aot-box" x="20" y="108" width="210" height="46" rx="5"/>
+<text class="aot-n" x="32" y="128">Microsoft.AspNetCore</text>
+<text class="aot-k" x="32" y="144">[ActivitySource] request spans</text>
+<rect class="aot-box" x="20" y="166" width="210" height="46" rx="5"/>
+<text class="aot-n" x="32" y="186">Orders.Processing</text>
+<text class="aot-k" x="32" y="202">[ActivitySource] custom spans</text>
+<rect class="aot-box" x="20" y="224" width="210" height="46" rx="5"/>
+<text class="aot-n" x="32" y="244">Microsoft.AspNetCore.Hosting</text>
+<text class="aot-k" x="32" y="260">[Meter] request duration</text>
+<rect class="aot-box" x="20" y="282" width="210" height="46" rx="5"/>
+<text class="aot-n" x="32" y="302">Orders.Api</text>
+<text class="aot-k" x="32" y="318">[Meter] custom metrics</text>
+<rect class="aot-off" x="20" y="340" width="210" height="46" rx="5"/>
+<text class="aot-n" x="32" y="360">Billing.Sync</text>
+<text class="aot-k" x="32" y="376">[ActivitySource] not registered</text>
+
+<rect class="aot-alt" x="280" y="50" width="200" height="46" rx="5"/>
+<text class="aot-n" x="292" y="70">LoggerProvider</text>
+<text class="aot-k" x="292" y="86">Logging.AddOpenTelemetry</text>
+<rect class="aot-alt" x="280" y="108" width="200" height="104" rx="5"/>
+<text class="aot-n" x="292" y="128">TracerProvider</text>
+<text class="aot-t" x="292" y="148">ASP.NET Core instrumentation</text>
+<text class="aot-t" x="292" y="166">AddSource("Orders.*")</text>
+<text class="aot-k" x="292" y="186">sampler keeps or drops</text>
+<text class="aot-k" x="292" y="201">each trace</text>
+<rect class="aot-alt" x="280" y="224" width="200" height="104" rx="5"/>
+<text class="aot-n" x="292" y="244">MeterProvider</text>
+<text class="aot-t" x="292" y="264">ASP.NET Core instrumentation</text>
+<text class="aot-t" x="292" y="282">AddMeter("Orders.Api")</text>
+
+<path class="aot-flow" d="M230,73 L278,73" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M230,131 L278,140" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M230,189 L278,175" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M230,247 L278,258" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M230,305 L278,292" marker-end="url(#aot-a)"/>
+<path class="aot-none" d="M230,363 L290,363"/>
+<text class="aot-em" x="298" y="360">no subscriber, so StartActivity</text>
+<text class="aot-em" x="298" y="375">returns null and nothing is recorded</text>
+
+<rect class="aot-box" x="520" y="150" width="120" height="80" rx="5"/>
+<text class="aot-n" x="532" y="172">OTLP exporter</text>
+<text class="aot-k" x="532" y="192">UseOtlpExporter</text>
+<text class="aot-k" x="532" y="208">one endpoint,</text>
+<text class="aot-k" x="532" y="222">all three signals</text>
+
+<path class="aot-flow" d="M480,73 L500,73 L500,165 L518,165" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M480,190 L518,190" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M480,276 L500,276 L500,215 L518,215" marker-end="url(#aot-a)"/>
+
+<rect class="aot-box" x="670" y="150" width="140" height="80" rx="5"/>
+<text class="aot-n" x="682" y="172">Collector</text>
+<text class="aot-k" x="682" y="192">OpenTelemetry</text>
+<text class="aot-k" x="682" y="208">forwards each signal</text>
+<text class="aot-k" x="682" y="222">to its store</text>
+<path class="aot-flow" d="M640,190 L668,190" marker-end="url(#aot-a)"/>
+<text class="aot-t" x="645" y="182">OTLP</text>
+
+<rect class="aot-alt" x="850" y="120" width="100" height="34" rx="5"/>
+<text class="aot-n" x="862" y="142">Trace store</text>
+<rect class="aot-alt" x="850" y="173" width="100" height="34" rx="5"/>
+<text class="aot-n" x="862" y="195">Prometheus</text>
+<rect class="aot-alt" x="850" y="226" width="100" height="34" rx="5"/>
+<text class="aot-n" x="862" y="248">Log store</text>
+<path class="aot-flow" d="M810,180 L830,180 L830,137 L848,137" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M810,190 L848,190" marker-end="url(#aot-a)"/>
+<path class="aot-flow" d="M810,200 L830,200 L830,243 L848,243" marker-end="url(#aot-a)"/>
+
+<path class="aot-flow" d="M20,418 L60,418" marker-end="url(#aot-a)"/>
+<text class="aot-t" x="68" y="422">subscribed: recorded and exported</text>
+<path class="aot-none" d="M280,418 L320,418"/>
+<text class="aot-t" x="328" y="422">no subscriber: nothing recorded</text>
+</g>
+</svg>

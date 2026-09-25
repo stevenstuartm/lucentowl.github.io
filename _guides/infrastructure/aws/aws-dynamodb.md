@@ -1,705 +1,235 @@
 ---
-title: "AWS DynamoDB for System Architects"
+title: "Amazon DynamoDB for System Architects"
 layout: guide
 category: AWS
 subcategory: Database Services
-description: "Comprehensive guide to AWS DynamoDB covering partition key design, capacity modes, indexes, single-table design, DynamoDB Streams, cost optimization, and when to use NoSQL vs relational databases"
-tags: [aws, dynamodb, nosql, partition-key, gsi, capacity-modes, cost-optimization, fundamentals]
+description: "How DynamoDB stores and serves data, and how to design for it: keys, partitions, and hot keys; queries, transactions, and consistency; secondary indexes; modeling around access patterns; on-demand and provisioned capacity; Streams and TTL; DAX; backups; security; and what drives the bill."
+tags: [dynamodb, partition-keys, secondary-indexes, single-table-design, dynamodb-streams, capacity-modes, fundamentals]
 ---
 
-## What Is Amazon DynamoDB?
+## What DynamoDB Is
 
-Amazon DynamoDB is a fully managed, serverless NoSQL database service that delivers single-digit millisecond performance at any scale. DynamoDB automatically scales throughput capacity up or down and handles operational tasks like hardware provisioning, patching, and replication.
+**Amazon DynamoDB** is a serverless key-value and document database. You create a **table**, write **items** into it, and DynamoDB handles the servers, storage, replication, and scaling. There's no instance to size, no engine to patch, and no connection limit to manage, which is why it pairs naturally with Lambda and other short-lived compute. A table is a Regional resource, and DynamoDB stores its data across three Availability Zones. Requests go over HTTPS to the DynamoDB API, typically with single-digit-millisecond latency at any table size.
 
-**What Problems DynamoDB Solves**:
-- **Scalability bottlenecks**: Relational databases struggle to scale beyond vertical limits; DynamoDB scales horizontally to handle millions of requests per second
-- **Operational overhead**: Eliminates database administration tasks (no servers to manage, patch, or upgrade)
-- **Performance at scale**: Provides consistent single-digit millisecond latency even at petabyte scale
-- **Unpredictable workloads**: On-demand capacity mode auto-scales without manual intervention
-- **Global availability**: Multi-Region replication with Global Tables for low-latency global access
+An item is a set of named **attributes**, up to 400 KB in total, including the attribute names. Only the key attributes are fixed. Every other attribute can differ from item to item, and values can be strings, numbers, binary, sets, lists, or nested maps up to 32 levels deep.
 
-**When to use DynamoDB**:
-- You need horizontal scalability beyond what RDS can handle
-- Your access patterns are known and can be modeled with partition/sort keys
-- You require single-digit millisecond latency at scale
-- You have unpredictable traffic spikes (on-demand mode)
-- You need serverless architecture with zero operational overhead
+The trade for that scale and simplicity is the query model. DynamoDB can only retrieve items efficiently by their key or by the key of an index you defined in advance. It has no joins and no ad-hoc SQL over arbitrary columns, so you design the table around the questions the application will ask, before it asks them. When those questions aren't known yet, or change often, a relational database is usually the better fit.
 
-## Core Concepts
+DynamoDB also stores vector embeddings in **vector indexes** and searches them by similarity (since August 2026), so an application can keep embeddings next to the operational data they describe.
 
-### Tables, Items, and Attributes
+---
 
-DynamoDB organizes data into **tables**. Each table contains **items** (similar to rows) composed of **attributes** (similar to columns).
+## Keys and Partitions
 
-**Schemaless Design**: Unlike relational databases, DynamoDB is schemaless. Items in the same table can have different attributes (except for the required partition key and optional sort key).
+### The Primary Key
 
-**Example**:
-```
-Table: ProductCatalog
+Every table has a **primary key** that uniquely identifies each item, in one of two forms:
 
-Item 1:
-- ProductID: "ABC123" (partition key)
-- Name: "Laptop"
-- Price: 1200
-- Category: "Electronics"
+- A **partition key** alone, such as `UserId`. Each value identifies one item.
+- A **partition key and sort key**, such as `CustomerId` and `OrderDate`. Many items can share a partition key value as long as their sort keys differ.
 
-Item 2:
-- ProductID: "DEF456" (partition key)
-- Name: "Desk"
-- Material: "Wood"  (different attribute from Item 1)
-- Dimensions: "60x30x29"
-```
+Items that share a partition key value form an **item collection**. DynamoDB stores a collection's items together, ordered by sort key, so one request can return all of a customer's orders, or only those in a date range, already sorted.
 
-### Primary Keys
+### How DynamoDB Spreads Data
 
-Every DynamoDB table requires a **primary key** that uniquely identifies each item.
+DynamoDB stores a table on **partitions**, units of storage and throughput that it adds automatically as the table grows or its traffic rises. It hashes each item's partition key to choose the partition. A **global secondary index** (covered below) is a second copy of the items, organized by a different key on partitions of its own.
 
-**Two Types**:
+{% include figure.html id="aws-ddb-partitions-gsi" %}
 
-1. **Partition Key** (Simple Primary Key):
-   - Single attribute (e.g., `UserID`)
-   - DynamoDB uses the partition key value as input to an internal hash function to determine the physical partition where the item is stored
-   - Must be unique for each item
+Each partition serves up to 3,000 read units and 1,000 write units per second, where a read unit is one strongly consistent read of up to 4 KB and a write unit is one write of up to 1 KB (Capacity Modes below covers units in full). The table's total capacity is the sum across partitions, so it scales without limit as long as requests spread across many partition key values. A single item can never get more than one partition's throughput. A partition key value with many items can spread across several partitions, because DynamoDB splits a large or busy item collection by sort key when the table has no local secondary indexes (covered below), but only when requests spread across the sort key range. Traffic that keeps landing on the newest sort key, as time-ordered keys do, stays on one partition and is throttled when it exceeds that partition's limits.
 
-2. **Partition Key + Sort Key** (Composite Primary Key):
-   - Two attributes (e.g., `UserID` + `Timestamp`)
-   - Items with the same partition key are stored together, sorted by sort key value
-   - Partition key does not need to be unique, but the combination of partition key + sort key must be unique
+That's the **hot key** problem, and it comes from choosing a partition key with few values or skewed traffic:
 
-**Example**:
-```
-Table: Orders (Partition Key: CustomerID, Sort Key: OrderDate)
+- A `Status` key with values like `ACTIVE` and `INACTIVE` puts most of the table on a handful of keys.
+- A date key such as `2026-09-25` sends every write today to one key.
+- A tenant key in a multi-tenant system concentrates load on the largest tenant.
 
-Item 1: CustomerID="C123", OrderDate="2024-01-15", OrderTotal=250
-Item 2: CustomerID="C123", OrderDate="2024-02-20", OrderTotal=180
-Item 3: CustomerID="C456", OrderDate="2024-01-10", OrderTotal=320
+A good partition key has many distinct values that requests hit roughly evenly, such as a user, device, or order ID. DynamoDB softens moderate skew on its own. **Burst capacity** keeps up to five minutes of unused capacity on a table with capacity set in advance, for short spikes, and **adaptive capacity** shifts throughput toward busy partitions and can move an especially hot item onto a partition of its own. Neither lets a single item exceed a partition's limits, and neither can split traffic that always lands on the newest sort key. CloudWatch throttling metrics show that a table is being throttled, and **CloudWatch Contributor Insights** for DynamoDB shows which keys are most accessed and most throttled. When one key has to take more writes than a partition allows, **write sharding** spreads it across several keys, such as `EVENT#2026-09-25#0` through `#9`, with readers querying all ten and merging the results.
 
-Query: Get all orders for Customer C123 → Returns Items 1 and 2, sorted by OrderDate
-```
+---
 
-### Partition Key Design Best Practices
+## Reading and Writing
 
-<div class="callout callout--warning">
-<p class="callout__title">The Most Critical Decision</p>
-<p>Partition key design determines performance, scalability, and cost. Each partition supports up to 3,000 RCUs and 1,000 WCUs. Hot partitions cause throttling regardless of total table capacity.</p>
-</div>
+### Operations
 
-**Design for Uniform Distribution**:
-- Avoid "hot partitions" where a few partition keys receive disproportionate traffic
-- Each partition supports up to 3,000 read capacity units (RCU) and 1,000 write capacity units (WCU)
-- ❌ Bad: `Status` field with only "Active" or "Inactive" (creates 2 hot partitions)
-- ✅ Good: `UserID` with millions of unique values (distributes load evenly)
+| Operation | What it reads | Cost |
+|---|---|---|
+| **GetItem** | One item by its full primary key | One read unit per 4 KB, half that for the default eventually consistent read |
+| **Query** | Items in one item collection, optionally narrowed by a sort key condition such as `begins_with` or `between` | Read units for the data read, at most 1 MB per page |
+| **Scan** | Every item in the table or index | Read units for the whole table |
 
-**Avoid Time-Based Partition Keys**:
-- ❌ Bad: `Date` as partition key (today's date gets all writes, creating a hot partition)
-- ✅ Better: `UserID` as partition key, `Timestamp` as sort key
+A Query or Scan returns up to 1 MB per call, with a key to continue from for the next page. A **filter expression** removes items from the results after they're read, so it saves network transfer but not capacity. A Scan that filters a million items down to ten still pays for a million. Parallel scans split the work into segments for exports and one-off jobs, but a regular application path that needs a Scan usually means the table is missing an index.
 
-**Use Write Sharding for High-Write Scenarios**:
-- If a partition key receives too many writes (>1,000 WCUs), shard it
-- Add a random suffix: `CustomerID="C123#1"`, `CustomerID="C123#2"`, `CustomerID="C123#3"`
-- Distribute writes across multiple partitions, then aggregate on read
+**BatchGetItem** reads up to 100 items (16 MB) and **BatchWriteItem** writes or deletes up to 25 items (16 MB) in one request. They save round trips, not capacity, and each item succeeds or fails on its own, so the response lists any unprocessed items to retry.
 
-**Partition Capacity Limits**:
-- Maximum 3,000 RCUs per partition
-- Maximum 1,000 WCUs per partition
-- Maximum 10 GB per partition key value
+### Consistency
+
+Reads are **eventually consistent** by default. A read immediately after a write might not see it, and it costs half a read unit per 4 KB. A **strongly consistent** read always returns the latest committed write and costs a full unit. It's available on the table and on local secondary indexes, but not on global secondary indexes, which are always eventually consistent (both index types are covered below).
+
+### Conditions and Transactions
+
+A **condition expression** makes a write succeed only if the item is in an expected state, for example `attribute_not_exists(OrderId)` to prevent overwriting an existing order, or a version number check for optimistic locking. It's the basic tool for correctness under concurrency. A write that fails its condition still consumes write capacity for the item's size, so conditions protect correctness, not cost.
+
+**Transactions** (`TransactWriteItems` and `TransactGetItems`) apply up to 100 actions across one or more tables in the same account and Region atomically, up to 4 MB in total. Each item in a transaction costs twice the usual read or write units, and the capacity is consumed even when the transaction is cancelled because a condition failed. Transactions are for invariants that span items, such as debiting one account and crediting another, not for every write.
+
+---
 
 ## Secondary Indexes
 
-Secondary indexes enable queries on attributes other than the primary key.
+An index gives the table a second way to be queried. There are two kinds:
 
-### Global Secondary Indexes (GSI)
+| | Global secondary index (GSI) | Local secondary index (LSI) |
+|---|---|---|
+| **Key** | Any partition key and sort key, each built from up to four attributes | Same partition key as the table, different sort key |
+| **When created** | Any time | Only when the table is created |
+| **Per table** | 20 by default | 5 |
+| **Consistency** | Eventually consistent only | Strongly consistent reads available |
+| **Capacity** | Its own, separate from the table's | Shares the table's |
+| **Size effect** | None on the table | Each item collection, table plus LSIs, is limited to 10 GB |
 
-A GSI has a partition key and optional sort key that can be **different from the base table**.
+A GSI is effectively a second table that DynamoDB keeps up to date asynchronously. Every write to the base table that touches indexed attributes also writes to each affected GSI, and those writes are billed. Changing an indexed attribute's value costs two index writes, one to remove the old entry and one to add the new. In provisioned mode, where capacity is set in advance (see Capacity Modes), a GSI without enough write capacity throttles writes to the base table, so an index's capacity has to keep up with the table's.
 
-**Key Characteristics**:
-- Can be created or deleted at any time (even after table creation)
-- Has its own provisioned throughput (separate from base table)
-- No size limit per partition key value
-- Eventually consistent reads only (not strongly consistent)
-- Up to 20 GSIs per table
+**Projection** decides which attributes the index copies: only the keys (`KEYS_ONLY`), the keys plus named attributes (`INCLUDE`), or everything (`ALL`). Smaller projections cost less storage and write capacity, but a query that needs an attribute the index doesn't hold must fetch it from the table separately.
 
-**Use Cases**:
-- Query by different attributes: Base table uses `UserID`, GSI uses `Email` for login queries
-- Support multiple access patterns without duplicating data
+A GSI is **sparse** when only some items have its key attribute. Only those items appear in the index, so a GSI on an `OpenTicketPriority` attribute that's removed when a ticket closes holds just the open tickets, and queries against it stay small however large the table grows.
 
-**Cost Considerations**:
-- Writing to base table writes to all GSIs with that attribute (multiplicative cost)
-- Updating an indexed attribute requires 2 writes: delete old index entry + add new entry
-- GSI storage is billed separately ($0.25/GB/month standard class)
+Because an LSI can only be added at creation and brings the 10 GB collection limit with it, choose a GSI unless the query needs strong consistency within one item collection.
 
-**Example**:
-```
-Base Table: Users (Partition Key: UserID)
-- UserID, Email, Name, CreatedDate
+---
 
-GSI: EmailIndex (Partition Key: Email)
-- Enables query: "Find user by email"
-```
+## Modeling for Access Patterns
 
-### Local Secondary Indexes (LSI)
+Relational design starts from entities and normalizes them. DynamoDB design starts from the list of **access patterns**, the specific reads and writes the application performs, and shapes keys and indexes so each pattern is a single GetItem or Query.
 
-An LSI has the **same partition key as the base table** but a **different sort key**.
+For an order system, that list might include getting a customer's profile, listing a customer's orders newest first, getting one order with its line items, and listing all orders in a given status. A table with partition key `PK` and sort key `SK` can serve the first three from one item collection per customer:
 
-**Key Characteristics**:
-- Must be created at table creation time (cannot add later)
-- Shares provisioned throughput with base table
-- Maximum 10 GB per partition key value (combined base table + all LSIs)
-- Supports strongly consistent reads
-- Up to 5 LSIs per table
+| PK | SK | Attributes |
+|---|---|---|
+| `CUSTOMER#C123` | `PROFILE` | Name, email |
+| `CUSTOMER#C123` | `ORDER#2026-09-20#O789` | Total, status |
+| `CUSTOMER#C123` | `ORDER#2026-09-20#O789#LINE#1` | Product, quantity |
 
-**Use Cases**:
-- Alternative sort orders for items with the same partition key
-- Example: Base table sorts orders by `OrderDate`, LSI sorts by `TotalAmount`
+A Query on `PK = CUSTOMER#C123` returns the profile and all orders, `begins_with(SK, "ORDER#")` returns just the orders sorted by date, and `begins_with(SK, "ORDER#2026-09-20#O789")` returns one order with its lines. A GSI on the order's status and date answers the fourth pattern, as long as each status sees modest traffic. A status key has few values, so at high write rates it becomes a hot key on the index. A sparse index holding only open orders, or a status key sharded as `PENDING#0` through `PENDING#9`, spreads that load.
 
-**When to Use LSI vs GSI**:
+Storing several entity types in one table this way is called **single-table design**. It returns related data in one request without joins, and it can update related items together in one transaction. It has costs as well. The keys are hard to read, a new access pattern can mean restructuring keys and backfilling data (though GSI keys built from several existing attributes, since November 2025, avoid the backfill for many new indexes), and analytics across entity types needs an export to another system. Separate tables per entity are easier to understand and evolve, at the cost of more requests per page. Single-table design pays off when access patterns are known and stable and request counts matter. It's a poor fit for a young application whose queries are still changing.
 
-| Dimension | LSI | GSI |
-|-----------|-----|-----|
-| **Partition Key** | Same as base table | Different from base table |
-| **When Created** | At table creation only | Anytime |
-| **Throughput** | Shares with base table | Separate provisioned throughput |
-| **Size Limit** | 10 GB per partition | Unlimited |
-| **Consistency** | Strongly consistent available | Eventually consistent only |
-| **Use Case** | Alternative sort order | Query different attributes |
+Large values don't belong in items either. Store big documents, images, or blobs in S3 and keep the object key in DynamoDB. Every read and write is billed by item size, so a 300 KB item costs 75 read units for a strongly consistent read of an attribute that's a few bytes long.
 
-**Best Practice**: Prefer GSIs over LSIs in most cases for flexibility (can be added/removed anytime).
-
-### Index Projection
-
-**Projection** determines which attributes are copied from the base table to the index.
-
-**Three Options**:
-
-1. **KEYS_ONLY**: Only partition key, sort key, and index keys
-   - Smallest index size, lowest cost
-   - Requires additional read to base table for other attributes
-
-2. **INCLUDE**: Keys + specified attributes
-   - Balance between size and query efficiency
-   - Use when you frequently query a specific subset of attributes
-
-3. **ALL**: All attributes
-   - Largest index size, highest cost
-   - Fastest queries (no additional reads needed)
-
-**Cost Optimization**: Only project attributes you actually query. Updating projected attributes incurs write costs to the index.
+---
 
 ## Capacity Modes
 
-DynamoDB offers two capacity modes: **On-Demand** and **Provisioned**.
+DynamoDB measures throughput in units. A **read unit** is one strongly consistent read per second of an item up to 4 KB, or two eventually consistent reads. A **write unit** is one write per second of an item up to 1 KB. Larger items consume one unit per 4 KB read or 1 KB written, rounded up.
 
-### On-Demand Capacity Mode
+### On-Demand
 
-Pay-per-request pricing with automatic scaling.
-
-**How It Works**:
-- No capacity planning required
-- Scales instantly to handle traffic spikes
-- Billed per read request unit (RRU) and write request unit (WRU)
-- Default and recommended mode for most workloads
-
-**Pricing (us-east-1, 2024)**:
-- **Writes**: $1.25 per million WRUs
-- **Reads** (eventually consistent): $0.25 per million RRUs
-- **Reads** (strongly consistent): $0.50 per million RRUs (2x RRUs)
-
-**Capacity Units**:
-- **1 WRU**: One write of up to 1 KB
-- **1 RRU**: One strongly consistent read of up to 4 KB
-- **0.5 RRU**: One eventually consistent read of up to 4 KB
-- **2 RRU**: One transactional read of up to 4 KB
-
-**Example Cost Calculation**:
-- 10 million reads per month (4 KB items, eventually consistent)
-- 10 million reads = 10M RRUs × 0.5 = 5M RRUs
-- Cost: 5M RRUs × $0.25 / 1M = **$1.25/month**
+In **on-demand** mode, the default and AWS's recommendation for most tables, you pay per request and DynamoDB scales on its own. A new on-demand table can immediately serve 4,000 writes and 12,000 reads per second, and it can always absorb up to double its previous peak without warning. Growing beyond double the previous peak within 30 minutes can be throttled while DynamoDB adds partitions.
 
-**When to Use On-Demand**:
-- Unpredictable or spiky traffic patterns
-- New applications with unknown workload
-- Low-traffic applications (idle most of the time)
-- Serverless applications (pay only when active)
+For launches and planned events, **warm throughput** shows the reads and writes per second a table can serve immediately, and you can raise it ahead of time (**pre-warming**, a one-time charge) without changing modes. An optional **maximum throughput** per table or index caps on-demand usage, which bounds the cost of a runaway client or a retry storm. A table defaults to 40,000 read and write units per second, raisable through Service Quotas.
 
-**November 2024 Price Reduction**: AWS reduced on-demand pricing significantly, making it cost-effective for more workloads than previously.
+### Provisioned
 
-### Provisioned Capacity Mode
+In **provisioned** mode, you set read and write capacity per table and per GSI, and pay per hour for what you set, used or not. **Auto scaling** adjusts it toward a target utilization, commonly 70%, but it reacts over minutes, so sudden spikes above the provisioned level are throttled while it catches up. You can raise capacity at any time, but decreases are limited to 4 at the start of each day plus one more each hour.
 
-Pre-allocate read and write capacity units with optional auto-scaling.
+Provisioned capacity costs less per request when it's used steadily. At US East (N. Virginia) prices, one write unit provisioned for a month costs about $0.47, and writing at that rate all month on demand costs about $1.64. Provisioned is cheaper once average utilization exceeds roughly 30% of what's provisioned, and much cheaper for flat, predictable load. **Reserved capacity** discounts provisioned units further for one- or three-year commitments, and Database Savings Plans (December 2025) cover DynamoDB usage in exchange for a one-year hourly spending commitment.
 
-**How It Works**:
-- Specify RCUs and WCUs in advance
-- Billed hourly based on provisioned capacity (not actual usage)
-- Auto-scaling can adjust capacity based on utilization
+| | On-demand | Provisioned |
+|---|---|---|
+| **You pay for** | Each request | Capacity per hour |
+| **Writes (us-east-1)** | $0.625 per million | $0.00065 per write unit-hour |
+| **Reads (us-east-1)** | $0.125 per million read units | $0.00013 per read unit-hour |
+| **Scaling** | Automatic, up to double the previous peak instantly | Auto scaling toward a target, over minutes |
+| **Fits** | New, spiky, or idle-heavy workloads | Steady, forecastable load |
 
-**Pricing (us-east-1, 2024)**:
-- **1 WCU**: $0.00065/hour ($0.47/month)
-- **1 RCU**: $0.00013/hour ($0.09/month)
+A table can switch from provisioned to on-demand up to four times in 24 hours, and back to provisioned at any time.
 
-**Capacity Units**:
-- **1 RCU**: One strongly consistent read/second (up to 4 KB) OR two eventually consistent reads/second
-- **1 WCU**: One write/second (up to 1 KB)
-
-**Example Cost Calculation**:
-- Provision 100 RCUs and 50 WCUs
-- RCU cost: 100 × $0.09 = $9/month
-- WCU cost: 50 × $0.47 = $23.50/month
-- **Total**: $32.50/month (regardless of actual usage)
-
-**When to Use Provisioned**:
-- Predictable, steady workload
-- High utilization (>70% average)
-- Cost-sensitive applications (provisioned is cheaper at high utilization)
-
-**Reserved Capacity**: Purchase 1-year or 3-year commitments for additional savings.
-
-<div class="callout callout--tip">
-<p class="callout__title">Default to On-Demand Mode</p>
-<p>On-demand mode eliminates capacity planning and auto-scales instantly. Switch to provisioned only when utilization is consistently &gt;70% and workload is predictable.</p>
-</div>
-
-### On-Demand vs Provisioned: Decision Framework
+### Table Classes
 
-| Scenario | On-Demand | Provisioned |
-|----------|-----------|-------------|
-| **Unpredictable traffic** | ✅ Best choice | ❌ Risk of throttling or over-provisioning |
-| **New application** | ✅ No capacity planning | ❌ Hard to estimate |
-| **Steady workload (>70% utilization)** | ❌ More expensive | ✅ Cost-effective |
-| **Spiky workload (idle >50% of time)** | ✅ Pay only when active | ❌ Pay for idle capacity |
-| **Low-traffic (<1M requests/month)** | ✅ Low absolute cost | ✅ Free tier available |
+The **Standard-Infrequent Access** table class stores data for $0.10 per GB-month instead of $0.25, but charges about 25% more per request. It suits tables where storage outweighs throughput in the bill, such as order history or audit records that are mostly kept, not read.
 
-**Rule of Thumb**: Use on-demand by default. Switch to provisioned if utilization is consistently >70% and workload is predictable.
-
-**Switching Modes**: You can switch between on-demand and provisioned once per 24 hours.
-
-## DynamoDB Streams
-
-DynamoDB Streams captures a time-ordered sequence of item-level modifications (inserts, updates, deletes) in a DynamoDB table.
+---
 
-**How It Works**:
-- Stream records appear within seconds of the change
-- Records remain available for 24 hours
-- Each record contains: old image, new image, or both (configurable)
-- Guaranteed ordering within a partition key
+## Streams and Expiring Data
 
-**Use Cases**:
-- **Event-driven architectures**: Trigger Lambda functions on table changes
-- **Data replication**: Sync data to other databases, search indexes, or data lakes
-- **Audit logging**: Track all changes for compliance
-- **Real-time analytics**: Process changes as they occur
+### DynamoDB Streams
 
-**Integration with EventBridge Pipes**:
-- EventBridge Pipes provides native integration between DynamoDB Streams and EventBridge
-- Enables filtering, enrichment, and routing to multiple targets
-- Supports batching (up to 5 minutes or 6 MB) to reduce processing overhead
-- Processes up to 10 batches per shard simultaneously while maintaining partition key ordering
+A **stream** records every change to a table's items within moments of the change. Each record can hold the item's keys, its new image, its old image, or both, chosen when the stream is enabled. Each change appears in the stream exactly once, and changes to the same item appear in the order they happened. Order across different items isn't guaranteed. Records are kept for 24 hours.
 
-**Example Pattern**:
-```
-DynamoDB Table: Orders
-→ DynamoDB Streams (captures inserts)
-→ EventBridge Pipe (filters for high-value orders >$1000)
-→ EventBridge Rule (routes to appropriate targets)
-→ Lambda: Send email notification
-→ SQS: Queue for fulfillment processing
-→ S3: Archive for analytics
-```
-
-**Cost**: DynamoDB Streams is free. You pay only for Lambda invocations or other processing costs.
-
-## Single-Table Design
-
-Single-table design stores multiple entity types in one DynamoDB table using generic partition and sort keys.
-
-**Core Principle**: Model your data around access patterns, not entities.
-
-### How It Works
-
-**Generic Keys**:
-- Use generic attribute names: `PK` (partition key), `SK` (sort key)
-- Overload keys with multiple entity types
-
-**Example**:
-```
-Table: AppData (PK, SK)
-
-Entity: User
-- PK: "USER#john@example.com"
-- SK: "PROFILE"
-- Name: "John Doe"
-- CreatedDate: "2024-01-15"
-
-Entity: Order (belonging to User)
-- PK: "USER#john@example.com"
-- SK: "ORDER#2024-02-20"
-- OrderTotal: 250
-- Status: "Shipped"
-
-Entity: Product
-- PK: "PRODUCT#ABC123"
-- SK: "METADATA"
-- Name: "Laptop"
-- Price: 1200
-
-Query: Get user profile and all orders for john@example.com
-→ Query PK="USER#john@example.com", SK begins_with "ORDER"
-→ Returns all orders in a single request
-```
-
-### Benefits
-
-1. **Fewer Requests**: Retrieve related data in a single query (no joins)
-2. **Lower Costs**: Fewer round trips, fewer read capacity units consumed
-3. **Better Performance**: Single-digit millisecond latency for complex queries
-4. **Atomic Transactions**: Update related items atomically (up to 100 items in a transaction)
-
-### Drawbacks
-
-1. **Harder to Evolve**: New access patterns may require significant refactoring
-2. **Complex Modeling**: Requires deep understanding of access patterns upfront
-3. **Analytics Challenges**: Hard to query across entity types (use DynamoDB Streams + analytics tools)
-
-### When to Use Single-Table Design
-
-**✅ Use single-table design when**:
-- Access patterns are well-defined and stable
-- You need low latency for complex queries
-- You want to minimize costs (fewer requests)
-- Your application is mature and access patterns are predictable
-
-**❌ Avoid single-table design when**:
-- Application is new and access patterns are evolving rapidly
-- You need ad-hoc queries and analytics
-- Developer agility is more important than performance optimization
-
-**Alternative**: Use multiple tables for different entity types and accept higher request counts. This is simpler to understand and easier to evolve.
-
-## DynamoDB Accelerator (DAX)
-
-DAX is a fully managed, in-memory cache for DynamoDB that delivers microsecond latency.
-
-**Performance**:
-- Reduces read latency from milliseconds to **microseconds**
-- Up to **10x faster** for eventually consistent reads
-- Can serve **millions of requests per second**
-
-**How It Works**:
-- DAX sits between your application and DynamoDB
-- Cache hit: Returns data from memory (microseconds)
-- Cache miss: Fetches from DynamoDB, caches result, then returns data
-
-**Cache Types**:
-1. **Item Cache**: Caches individual items from GetItem/BatchGetItem
-2. **Query Cache**: Caches query result sets
+Streams are how a table drives other work, such as a Lambda function that updates a search index, sends a notification, or maintains an aggregate each time an item changes. A stream is divided into **shards**, one for each of the table's partitions. Lambda processes each shard in order, and its reads from the stream are free. Other consumers pay $0.02 per 100,000 stream read requests, and no more than two processes should read a shard at once. For longer retention or more consumers, **Kinesis Data Streams for DynamoDB** sends the same changes to a Kinesis stream instead, at the cost of possible duplicates and ordering that consumers have to restore from timestamps.
 
-**TTL (Time-to-Live)**:
-- Default: 5 minutes
-- Configurable per cache type
-- Longer TTL = better cache hit rate but more stale data
-
-**When to Use DAX**:
-- Read-heavy workloads with repeated queries
-- Applications requiring microsecond latency
-- Eventually consistent reads (DAX doesn't support strongly consistent reads)
-- Cost reduction for read-intensive workloads (cache hits don't consume RCUs/RRUs)
+### Time to Live
 
-**When NOT to Use DAX**:
-- Write-heavy workloads (DAX only caches reads)
-- Strongly consistent reads required
-- Cost-sensitive applications with low read volume (DAX adds instance costs)
+**Time to Live (TTL)** deletes items automatically after a timestamp stored in an attribute you choose, as epoch seconds. Deletion is free and consumes no write capacity, but it isn't prompt. Expired items are typically removed within a few days, and until then they still appear in reads, so queries filter them out by comparing the attribute to the current time. TTL deletions appear in the stream marked as service deletions, which lets a Lambda function archive expired items to S3 before they're gone.
 
-**Pricing (us-east-1, 2024)**:
-- **dax.t3.small**: $0.04/hour ($29/month)
-- **dax.r5.large**: $0.31/hour ($227/month)
-- Recommendation: Start with t3.small, scale up if needed
+---
 
-**DAX vs ElastiCache**:
+## DynamoDB Accelerator
 
-| Dimension | DAX | ElastiCache (Redis) |
-|-----------|-----|---------------------|
-| **DynamoDB Integration** | Native (drop-in replacement) | Requires manual cache logic |
-| **Latency** | Microseconds | Sub-millisecond |
-| **Use Case** | DynamoDB-specific caching | General-purpose caching, session storage |
-| **Complexity** | Low (automatic cache management) | Higher (manual invalidation) |
+**DAX** is an in-memory cache cluster that sits in front of DynamoDB, speaks the same API through its own client, and cuts eventually consistent read latency from milliseconds to microseconds. Reads it serves from cache consume no table capacity. Writes go through DAX to the table, and strongly consistent reads pass straight through without caching. A cluster runs in your VPC, with one primary node and up to ten read replicas, and is billed per node-hour.
 
-## Cost Optimization
+DAX suits read-heavy tables where the same items are read repeatedly and microseconds matter, such as a product catalog or game state. It adds little for write-heavy tables, for mostly unique reads, or for applications that need strong consistency, and a general-purpose cache like ElastiCache is the better fit when the cached data isn't only DynamoDB items.
 
-### Storage Costs
+---
 
-**Standard Table Class**:
-- $0.25/GB/month
-- Default for most workloads
+## Backups and Recovery
 
-**Standard-IA (Infrequent Access) Table Class**:
-- $0.10/GB/month (60% savings on storage)
-- Higher read/write costs (25% more)
-- Use for tables accessed infrequently (<1 query per hour)
+**Point-in-time recovery (PITR)** keeps continuous backups for a recovery period you choose between 1 and 35 days, and restores to any second within it. It costs $0.20 per GB-month of table and LSI size, whatever the period. A restore always creates a **new table**, in the same or another Region. Auto scaling settings, IAM policies, alarms, tags, TTL settings, and stream settings aren't restored and must be reapplied. **On-demand backups** are full copies kept until deleted, at $0.10 per GB-month, for long-term retention. Restores are billed per GB. AWS Backup can take scheduled snapshot backups (not PITR), and with its advanced DynamoDB features turned on, copy them to other accounts and Regions.
 
-**Cost Example**:
-- 100 GB table, 10M reads/month (on-demand, eventually consistent)
-- **Standard**: (100 GB × $0.25) + (5M RRUs × $0.25/1M) = $25 + $1.25 = **$26.25/month**
-- **Standard-IA**: (100 GB × $0.10) + (5M RRUs × $0.3125/1M) = $10 + $1.56 = **$11.56/month**
-- **Savings**: $14.69/month (56%)
+**Deletion protection** blocks `DeleteTable` until it's turned off, which prevents the one mistake a backup can't cover quickly. Turn it on for production tables.
 
-### Capacity Mode Optimization
+PITR also enables **export to S3**, full or incremental, which writes the table's data to S3 for Athena or other analytics without consuming table capacity. **Zero-ETL integrations**, which copy data continuously without a pipeline you build, can replicate a table into Amazon Redshift or OpenSearch.
 
-**On-Demand Breakeven Analysis**:
-- On-demand cost: Requests × ($1.25/M for writes, $0.25/M for reads)
-- Provisioned cost: (WCUs × $0.47) + (RCUs × $0.09)
-- Switch to provisioned when utilization >70% and workload is predictable
+**Global tables** replicate a table to other Regions with writes accepted in every Region, and replicated writes are billed in each.
 
-**Example**:
-- 1 million writes/month, 10 million reads/month (4 KB, eventually consistent)
-- **On-demand**: (1M WRUs × $1.25/M) + (5M RRUs × $0.25/M) = $1.25 + $1.25 = **$2.50/month**
-- **Provisioned** (assuming constant load):
-  - 0.4 WCUs (1M writes / 2.6M seconds/month) → minimum 1 WCU = $0.47
-  - 1.9 RCUs (5M RRUs / 2.6M seconds) → 2 RCUs = $0.18
-  - **Total**: $0.65/month
-- **Savings**: $1.85/month (74% cheaper with provisioned)
+---
 
-### Index Optimization
+## Security
 
-**Project Only What You Query**:
-- Use KEYS_ONLY or INCLUDE instead of ALL
-- Reduces storage costs and write costs
+**Encryption at rest** is always on. Tables use an AWS owned key by default, or an AWS managed or customer managed KMS key when you need to audit or control key use. Requests use TLS.
 
-**Sparse Indexes**:
-- Only include items in GSI if they have the indexed attribute
-- Example: GSI on `ExpirationDate` only includes items with expiration dates
-- Reduces index size and write costs
+**Access control** is IAM policies on principals plus, optionally, a **resource-based policy** on the table itself for cross-account access. IAM conditions can restrict access below the table level. The `dynamodb:LeadingKeys` condition limits a principal to items whose partition key matches a value, such as the caller's identity. `dynamodb:Attributes`, combined with conditions on what a request may return, limits which attributes it can read or write. This policy lets users signed in through a Cognito identity pool read and write only their own item collection, because the policy variable `${cognito-identity.amazonaws.com:sub}` resolves to each caller's identity ID:
 
-**Delete Unused Indexes**:
-- Each GSI adds storage and write costs
-- Audit indexes quarterly; delete those rarely queried
-
-### Backup Costs
-
-**Point-in-Time Recovery (PITR)**:
-- $0.20/GB/month (us-east-1)
-- Continuous backups for 1-35 days
-- Cost is based on table size, not recovery window
-
-**On-Demand Backups**:
-- $0.10/GB/month (stored until deleted)
-- Use for long-term archival (>35 days)
-
-**Cost Comparison** (100 GB table):
-- PITR: $20/month (automated, 35-day retention)
-- On-Demand: $10/month per snapshot (manual, indefinite retention)
-
-**Best Practice**: Enable PITR for production tables. Use on-demand backups for compliance (long-term retention).
-
-### Free Tier
-
-**25 GB storage** + **25 RCUs** + **25 WCUs** per month (provisioned mode) or **200M requests/month** (on-demand mode).
-
-**What This Covers**:
-- Small applications (<1M requests/day)
-- Development and testing environments
-- Learning and experimentation
-
-## Security Best Practices
-
-### Encryption
-
-**Encryption at Rest**:
-- Enabled by default (AWS-owned keys)
-- No performance impact
-- Options: AWS-owned keys (free), AWS-managed keys (KMS, $1/month), customer-managed keys (full control)
-
-**Encryption in Transit**:
-- All API calls use TLS 1.2+
-- Automatic (no configuration required)
-
-### IAM Access Control
-
-**Use IAM Policies for Fine-Grained Access**:
-- Grant least privilege access (only required tables/actions)
-- Use conditions to restrict by partition key (row-level security)
-
-**Example Policy** (restrict to user's own data):
 ```json
 {
-  "Effect": "Allow",
-  "Action": ["dynamodb:GetItem", "dynamodb:Query"],
-  "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/Users",
-  "Condition": {
-    "ForAllValues:StringEquals": {
-      "dynamodb:LeadingKeys": ["${aws:userid}"]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:us-east-1:111122223333:table/UserData",
+      "Condition": {
+        "ForAllValues:StringEquals": {
+          "dynamodb:LeadingKeys": ["${cognito-identity.amazonaws.com:sub}"]
+        }
+      }
     }
-  }
+  ]
 }
 ```
 
-This policy allows users to query only items where the partition key matches their AWS user ID.
+**Network access** from private subnets goes through a **gateway endpoint** for DynamoDB, which is free and avoids NAT gateway processing charges, or an interface endpoint when on-premises clients need a private address.
 
-### VPC Endpoints
+---
 
-**Use VPC Endpoints for Private Access**:
-- DynamoDB traffic stays within AWS network (doesn't traverse internet)
-- Reduces latency and improves security
-- No additional cost
+## Where the Money Goes
 
-**Best Practice**: Deploy Lambda functions and applications in VPC with DynamoDB VPC endpoint.
+- **Requests or provisioned capacity.** Driven by item size as much as request count, since every 1 KB written and 4 KB read is a separate unit.
+- **Index writes.** Each GSI roughly adds another write per affected table write, and `ALL` projections copy entire items.
+- **Storage.** $0.25 per GB-month in Standard, including index copies, or $0.10 in Standard-IA.
+- **Backups.** PITR per GB of table size, and on-demand backups until deleted.
+- **Global tables.** Replicated writes in every Region, plus inter-Region transfer.
+- **Streams.** Free for Lambda, per request for other readers.
+- **Scans.** Full-table reads on a schedule, which a GSI or an export to S3 usually replaces for less.
 
-## Performance Optimization
-
-### Batch Operations
-
-**BatchGetItem** and **BatchWriteItem** reduce request overhead.
-
-**Benefits**:
-- Retrieve up to 100 items (16 MB) in a single request
-- Write up to 25 items in a single request
-- Lower latency (fewer round trips)
-
-**Cost Savings**:
-- On-demand: Same cost as individual requests (but faster)
-- Provisioned: Reduces consumed capacity (batching is more efficient)
-
-### Parallel Scans
-
-**Scan** operations read the entire table sequentially (slow and expensive).
-
-**Parallel Scans**:
-- Divide table into segments (e.g., 4 segments)
-- Scan each segment in parallel (4 concurrent workers)
-- Aggregate results
-
-**Performance**: 4x faster with 4 segments (but consumes 4x read capacity).
-
-**Best Practice**: Use parallel scans only for infrequent operations (backfill, analytics). Prefer Query over Scan whenever possible.
-
-### Query Optimization
-
-**Use Query Instead of Scan**:
-- Query reads only items matching partition key (efficient)
-- Scan reads entire table (inefficient)
-
-**Example**:
-- Table: 1 million items, query 100 items by partition key
-- **Query**: Reads 100 items (0.4 KB each) = 10 RCUs
-- **Scan**: Reads 1 million items (400 MB) = 100,000 RCUs
-- **Savings**: 99.99% fewer RCUs with Query
-
-**Use Sparse Indexes**:
-- Query GSI instead of base table when filtering by indexed attribute
-
-**Limit Result Set**:
-- Use `Limit` parameter to retrieve only needed items
-- Implement pagination for large result sets
-
-## Common Pitfalls
-
-| Pitfall | Impact | Solution |
-|---------|--------|----------|
-| **1. Hot partition keys** | Throttling, poor performance | Design partition keys for uniform distribution; use write sharding |
-| **2. Using Scan instead of Query** | 100-1000x higher costs | Model data for Query access patterns; use GSIs for alternative queries |
-| **3. Projecting ALL attributes to GSI** | 2-3x higher storage and write costs | Project only KEYS_ONLY or INCLUDE specific attributes |
-| **4. Not enabling PITR for production** | Data loss risk | Enable PITR ($0.20/GB/month) for 35-day recovery window |
-| **5. Over-provisioning in provisioned mode** | 50-70% wasted capacity costs | Use auto-scaling or switch to on-demand mode |
-| **6. Not using batch operations** | Higher latency, more requests | Use BatchGetItem/BatchWriteItem for bulk operations |
-| **7. Creating too many GSIs** | Write amplification, storage costs | Limit to 5-10 GSIs; delete unused indexes |
-| **8. Ignoring item size limits** | Write failures, throttling | Item size limit: 400 KB; use S3 for large objects, store reference in DynamoDB |
-| **9. Using LSIs instead of GSIs** | Locked in at table creation, 10 GB limit | Prefer GSIs (can add/remove anytime, unlimited size) |
-| **10. Not monitoring consumed capacity** | Unexpected throttling or costs | Set CloudWatch alarms: ConsumedReadCapacityUnits, ConsumedWriteCapacityUnits, ThrottledRequests |
-| **11. Strongly consistent reads when not needed** | 2x read costs | Use eventually consistent reads (default) unless strong consistency required |
-| **12. Not using DAX for read-heavy workloads** | 10x slower, higher read costs | Add DAX for workloads with >50% cache hit rate |
-| **13. Time-based partition keys** | Hot partitions (today's date gets all writes) | Use entity ID as partition key, timestamp as sort key |
-| **14. Not using Standard-IA for infrequent tables** | 60% higher storage costs | Switch to Standard-IA for tables accessed <1 query/hour |
-| **15. Storing large attributes in every item** | Storage costs, slower queries | Store large attributes (descriptions, JSON) in S3, reference in DynamoDB |
-
-**Cost Impact Examples**:
-- **Pitfall #2** (Scan vs Query): 1M item table, query 100 items → Scan: 100,000 RCUs ($25 on-demand), Query: 10 RCUs ($0.0025) = **99.99% savings**
-- **Pitfall #5** (over-provisioning): 100 RCUs provisioned, 30% utilization → Wasted: $6.30/month
-- **Pitfall #7** (5 unused GSIs): 100 GB table, 1M writes/month → Extra cost: (5 GSIs × 100 GB × $0.25) + (5M WRUs × $1.25/M) = $125 + $6.25 = **$131.25/month wasted**
-- **Pitfall #14** (not using Standard-IA): 500 GB infrequently accessed table → Savings: 500 GB × ($0.25 - $0.10) = **$75/month**
-
-## When to Use DynamoDB vs RDS
-
-<div class="callout callout--note">
-<p class="callout__title">DynamoDB vs RDS Decision</p>
-<p>Choose DynamoDB when access patterns are known and key-based. Choose RDS when you need complex SQL queries, joins, and ad-hoc analytics. Many systems use both: DynamoDB for operational data and RDS for reporting.</p>
-</div>
-
-| Dimension | DynamoDB | RDS (Relational) |
-|-----------|----------|------------------|
-| **Data Model** | Key-value, document (schemaless) | Relational (tables, joins, SQL) |
-| **Scalability** | Horizontal (unlimited) | Vertical (limited by instance size) |
-| **Latency** | Single-digit milliseconds | Low milliseconds |
-| **Queries** | Key-based queries, secondary indexes | Complex SQL queries, joins, aggregations |
-| **Transactions** | Limited (up to 100 items, same Region) | ACID transactions across tables |
-| **Access Patterns** | Must be known upfront | Ad-hoc queries supported |
-| **Operational Overhead** | Zero (fully managed, serverless) | Low (managed, but requires instance sizing) |
-| **Cost at Scale** | Lower for high-scale workloads | Higher due to vertical scaling limits |
-| **Use Case** | Session storage, user profiles, IoT, gaming leaderboards | ERP, CRM, financial transactions, reporting |
-
-**Decision Framework**:
-
-**Choose DynamoDB when**:
-- You need horizontal scalability beyond RDS limits
-- Access patterns are known and key-based
-- You require single-digit millisecond latency
-- You want zero operational overhead (serverless)
-
-**Choose RDS when**:
-- You need complex SQL queries, joins, and aggregations
-- Access patterns are unpredictable or ad-hoc
-- You require strong ACID transactions across tables
-- Your team is familiar with relational databases
-
-**Hybrid Approach**: Use both: DynamoDB for high-scale operational data, RDS for analytics and reporting (sync via DynamoDB Streams).
+---
 
 ## Key Takeaways
 
-**Partition Key Design**:
-- The most critical decision for performance and cost
-- Design for uniform distribution (avoid hot partitions)
-- Each partition supports 3,000 RCUs and 1,000 WCUs
-- Use write sharding if a partition key exceeds limits
-
-**Capacity Modes**:
-- On-demand is default and recommended (auto-scales, pay-per-request)
-- Provisioned is cheaper for steady workloads with >70% utilization
-- Switch modes once per 24 hours
-
-**Secondary Indexes**:
-- GSIs provide flexibility (different partition/sort keys, add/remove anytime)
-- LSIs share partition key with base table (created at table creation only)
-- Prefer GSIs in most cases
-- Project only attributes you query (KEYS_ONLY or INCLUDE)
-
-**Single-Table Design**:
-- Stores multiple entity types in one table
-- Benefits: Fewer requests, lower costs, better performance
-- Drawbacks: Harder to evolve, complex modeling
-- Use when access patterns are stable and well-defined
-
-**DynamoDB Streams**:
-- Captures item-level changes for event-driven architectures
-- Integrates with EventBridge Pipes for filtering and routing
-- Free (pay only for processing costs)
-
-**DAX (DynamoDB Accelerator)**:
-- In-memory cache delivering microsecond latency
-- 10x faster for read-heavy workloads
-- Use for workloads requiring microsecond latency or high cache hit rates
-
-**Cost Optimization**:
-- Use Standard-IA for infrequent access (60% storage savings)
-- Switch to provisioned mode for predictable, high-utilization workloads
-- Project only needed attributes to GSIs
-- Delete unused indexes
-- Enable PITR for production ($0.20/GB/month)
-
-**Performance**:
-- Use Query instead of Scan (100-1000x more efficient)
-- Batch operations for bulk reads/writes
-- DAX for microsecond latency on repeated queries
-- Parallel scans for infrequent full-table operations
-
-**Security**:
-- Encryption at rest enabled by default
-- Use IAM policies for fine-grained access control
-- VPC endpoints for private access
-- Row-level security with IAM condition keys
+1. **Design keys around access patterns.** DynamoDB answers the questions its keys and indexes were built for, cheaply and at any scale, and little else.
+2. **Spread traffic across many partition key values.** Each partition serves 3,000 reads and 1,000 writes per second, so a low-cardinality or time-based key throttles no matter how large the table is.
+3. **Query, don't scan.** Filters don't reduce cost, and a regular Scan on a request path usually means a missing index.
+4. **Prefer GSIs, and project only what's queried.** Every GSI adds write cost and is eventually consistent. LSIs lock in a 10 GB collection limit at creation.
+5. **Use conditions for correctness and transactions for cross-item invariants.** Transactions cost double and cover up to 100 items.
+6. **Start on-demand, move steady load to provisioned.** On-demand scales to double the previous peak instantly. Provisioned is cheaper once utilization is consistently high.
+7. **Streams and TTL turn a table into an event source.** Every change appears once, in order per item, for 24 hours, and TTL deletes expired items for free within days.
+8. **Turn on PITR and deletion protection for production.** Restores create new tables, so plan the cutover.

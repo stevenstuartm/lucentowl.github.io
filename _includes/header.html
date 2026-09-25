@@ -34,7 +34,30 @@
             </button>
             <div class="header-right">
                 <nav class="site-nav">
-                    <a href="{{ '/study-guides.html' | relative_url }}">Study Guides</a>
+                    <div class="nav-group">
+                        <button type="button" class="nav-group-toggle" aria-expanded="false" aria-controls="navMenuLearn">
+                            <span>Learn</span>
+                            <svg class="nav-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="nav-group-menu" id="navMenuLearn">
+                            <a href="{{ '/learning-paths.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Learning Paths</span>
+                                    <span class="nav-menu-count">{{ site.learning_paths.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Ordered routes toward a goal</span>
+                            </a>
+                            <a href="{{ '/study-guides.html' | relative_url }}">
+                                <span class="nav-menu-head">
+                                    <span class="nav-menu-title">Study Guides</span>
+                                    <span class="nav-menu-count">{{ site.guides.size }}</span>
+                                </span>
+                                <span class="nav-menu-desc">Topics built from the fundamentals up</span>
+                            </a>
+                        </div>
+                    </div>
 
 
                     <div class="nav-group">

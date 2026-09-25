@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`study-guide-guide.md`](.claude/content/study-guide-guide.md) | Writing or editing study guides — format, tagging, organization, the new-guide workflow (scope gate, independent subagent review, definition of done), and the Quality Checklist shared with refinement |
 | [`resource-guide.md`](.claude/content/resource-guide.md) | Writing or editing resources — format, cross-linking, quality standards |
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
+| [`learning-path-guide.md`](.claude/content/learning-path-guide.md) | Writing or editing a learning path — what qualifies, the front matter format, "why" lines, isolation, validation |
 | [`figure-guide.md`](.claude/content/figure-guide.md) | Drawing a diagram as a figure, composing figures into a composite resource, or embedding one in a guide |
 | [`guide-presentation-standard.md`](.claude/content/guide-presentation-standard.md) | Cheap refinement of existing guides — form, tone, prose, tables, diagrams, tags — without re-verifying facts. Use when a standard changed or a guide reads badly |
 | [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Depth refinement of a block of study guides — factual verification, gaps, consolidation (Phase 0), the plan doc in `_drafts/`. Runs the presentation standard as its last step. Use when facts may be stale or the guide set is rough |
@@ -73,7 +74,7 @@ To upgrade, change the pin deliberately, run `bundle update <gem>` or `bundle lo
 - **_config.yml**: Site configuration, author info, social links, and build settings. Sets `data_dir: assets/data`, so `site.data` reads from `assets/data/`, not `_data/`
 - **_layouts/**: HTML templates that wrap content
   - `default.html`: Base template with header/footer includes
-  - `home.html`: Homepage layout (extends default). Education first: hero, "four ways to learn" cards with live counts, then `featured_items` from `index.md` as a secondary section
+  - `home.html`: Homepage layout (extends default). Education first: hero, "four ways to learn" cards with live counts, a slim "Start with a goal" band linking the first four learning paths, then `featured_items` from `index.md` as a secondary section
   - `post.html`: Blog post template with metadata, tags, and author byline
   - `page.html`: Generic page template
   - `radar.html`: Tech radar page template with D3.js visualization
@@ -82,9 +83,12 @@ To upgrade, change the pin deliberately, run `bundle update <gem>` or `bundle lo
   - `blog-listing.html`: Blog listing page template
   - `author.html`: Author page template (avatar, bio, social links, post list)
   - `case-study.html`: Case study template with author byline
+  - `learning-path.html`: One learning path, rendered from its front matter
+  - `learning-paths.html`: Learning paths listing page template
 - **_includes/**: Reusable HTML partials (header.html, footer.html, related-links.html, related-pill.html, post-sources.html, figure.html, search-panel.html)
 - **_posts/**: Blog posts in Markdown with YAML front matter (format: YYYY-MM-DD-title.md)
 - **_guides/**: Study guides in Markdown organized by topic
+- **_learning_paths/**: Learning paths, one file per path, all data in front matter (see Learning Paths)
 - **_figures/**: Diagram building blocks (`output: false`, no pages of their own), composed into guides and composite resources by `_includes/figure.html`
 - **_site/**: Generated static site (excluded from git)
 - **pages/**: Site pages (blog, about, tech-radar, study-guides, authors/)
@@ -231,6 +235,16 @@ The `related_*` fields are declared on the resource, never on the guide, case st
 Diagrams are authored as **figures**, one per file in `_figures/<id>.html` (front matter `title`, `kind`, `system`, `summary`, then one `<svg>`). A **composite resource** lists figure ids under `figures:` and the resource layout renders them, each anchored as `#fig-<id>`. Figures never link to the pages that use them. Guides embed a figure in full with `{% include figure.html id="<id>" %}`. There is one embed mode, with no buttons, modal, or script. Never copy a figure's SVG into a page. Adding a figure to a composite never touches its `description` or `tags`. Those state the composite's scope, and the `figures:` list is the inventory (`.figcheck.py` fails a composite description over 250 characters or more than 6 tags). Run `python .figcheck.py` after adding or embedding a figure. Validate each figure's geometry with `python .svgcheck.py _figures/<id>.html`, then look at it with `python .figrender.py <id>` (a headless-Chrome screenshot). Full rules: [`.claude/content/figure-guide.md`](.claude/content/figure-guide.md).
 
 For the Lookup Test (deciding whether content qualifies as a resource), quality standards, and organization guidance, see [`.claude/content/resource-guide.md`](.claude/content/resource-guide.md).
+
+## Learning Paths
+
+Ordered routes through existing content toward a goal, at `/learning-paths.html` and `/learning-paths/<id>.html`. Each step is a site URL plus a "why" line. Full rules: [`.claude/content/learning-path-guide.md`](.claude/content/learning-path-guide.md).
+
+- **Files:** `_learning_paths/<id>.md` (the whole path in front matter, sorted by `order`, no config file), `_layouts/learning-path.html`, `_layouts/learning-paths.html`, `_includes/learning-path-stats.html` (step count, reading time, categories crossed), `_sass/_learning-paths.scss`, `pages/learning-paths.md`.
+- **Paths are isolated.** A path points to pages; no page points back. Never add path links, "part of this path" notes, or path-aware navigation to guide, resource, case study, or post layouts or content.
+- **Moving or deleting content means running `python .pathcheck.py`.** It resolves every step URL and checks the authoring rules. A step that doesn't resolve also renders as a visible "Missing step".
+- **No reader state.** The path page is the navigation. Step anchors (`#step-7`) and the browser's own `:visited` color are the only "progress", and the site stores nothing.
+- The design history and the candidate path catalogue are in `_drafts/learning-paths-plan.md`.
 
 ## What's New Stack
 
