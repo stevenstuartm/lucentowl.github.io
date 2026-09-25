@@ -1,0 +1,63 @@
+---
+title: "How a Custom Resource Responds"
+kind: dynamic
+system: aws
+summary: "CloudFormation waits for the provider's response in S3, not its return value."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 330" role="img" aria-labelledby="awscr-title awscr-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awscr-title">The custom resource request and response protocol</title>
+<desc id="awscr-desc">During a stack operation, CloudFormation sends the custom resource's provider, a Lambda function or SNS topic, a request with the request type (Create, Update, or Delete), the resource properties, and a pre-signed S3 response URL. The provider does the work, such as calling an external API, and then uploads its response to the pre-signed URL: SUCCESS or FAILED, a physical ID, and any attributes. CloudFormation reads the response from S3 and continues the stack operation. If no response arrives within the ServiceTimeout, one hour by default, the operation fails.</desc>
+<style>
+.awscr-cfn { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awscr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awscr-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awscr-cn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awscr-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awscr-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awscr-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awscr-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awscr-num { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awscr-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awscr-to { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="awscr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awscr-cfn" x="20" y="60" width="200" height="60" rx="6"/>
+<text class="awscr-cn" x="120" y="86" text-anchor="middle">CloudFormation</text>
+<text class="awscr-k" x="120" y="104" text-anchor="middle">[stack operation in progress]</text>
+
+<rect class="awscr-box" x="400" y="60" width="200" height="60" rx="6"/>
+<text class="awscr-n" x="500" y="86" text-anchor="middle">Provider</text>
+<text class="awscr-k" x="500" y="104" text-anchor="middle">[Lambda function or SNS topic]</text>
+
+<rect class="awscr-ext" x="760" y="60" width="200" height="60" rx="6"/>
+<text class="awscr-t" x="860" y="86" text-anchor="middle">External system</text>
+<text class="awscr-k" x="860" y="104" text-anchor="middle">[the thing being managed]</text>
+
+<rect class="awscr-box" x="400" y="220" width="200" height="60" rx="6"/>
+<text class="awscr-n" x="500" y="246" text-anchor="middle">Pre-signed S3 URL</text>
+<text class="awscr-k" x="500" y="264" text-anchor="middle">[holds the response]</text>
+
+<path class="awscr-ln" d="M220,90 L398,90" marker-end="url(#awscr-a)"/>
+<text class="awscr-num" x="309" y="60" text-anchor="middle">1 request</text>
+<text class="awscr-lab" x="309" y="76" text-anchor="middle">Create, Update, or Delete</text>
+<text class="awscr-lab" x="309" y="108" text-anchor="middle">properties + response URL</text>
+
+<path class="awscr-ln" d="M600,90 L758,90" marker-end="url(#awscr-a)"/>
+<text class="awscr-num" x="679" y="80" text-anchor="middle">2 does the work</text>
+
+<path class="awscr-ln" d="M500,120 L500,218" marker-end="url(#awscr-a)"/>
+<text class="awscr-num" x="512" y="150">3 uploads the response</text>
+<text class="awscr-lab" x="512" y="166">SUCCESS or FAILED, physical ID,</text>
+<text class="awscr-lab" x="512" y="181">attributes for !GetAtt</text>
+
+<path class="awscr-ln" d="M400,250 L120,250 L120,122" marker-end="url(#awscr-a)"/>
+<text class="awscr-num" x="260" y="242" text-anchor="middle">4 reads it and continues</text>
+
+<path class="awscr-to" d="M60,120 L60,300"/>
+<text class="awscr-lab" x="70" y="300">no response within ServiceTimeout (1 hour by default): the operation fails</text>
+</g>
+</svg>

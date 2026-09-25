@@ -3,7 +3,7 @@ layout: guide
 title: "Pipeline Architecture"
 category: Architecture
 subcategory: Styles
-description: "The pipes-and-filters style that moves data through producer, transformer, tester, and consumer filters: topology variations, batch versus stream flow, when the style fits, and how it evolves toward event-driven or orchestrated designs."
+description: "The pipes-and-filters style that moves data from a source through single-purpose filters to a sink: topology variations, batch versus stream flow, when the style fits, and how it evolves toward event-driven or orchestrated designs."
 tags: [practical, pipeline-architecture, pipes-and-filters, etl, stream-processing, batch-processing]
 ---
 
@@ -19,15 +19,13 @@ The topology has two parts. **Pipes** are the channels that carry data between s
 
 A pipeline is usually deployed as a single application, which makes it a monolithic style. Its pipes can still cross process or network boundaries when stages run separately, and that variation comes up again under evolution below.
 
-### The Four Filter Types
+### What the Filters Do
 
-**Producers** start the pipeline. They read files, query databases, call APIs, or listen to event streams, and inject the data into the first pipe.
+Data enters a pipeline at a **source**, such as a file drop, a database query, an API, or an event stream, and leaves at a **sink**, such as a database, an external system, a report, or a set of published events. Each filter between them does one of two jobs.
 
-**Transformers** change the data's format or content. They parse text into structured records, aggregate records, enrich them with computed or looked-up fields, or convert between formats.
+**Reshaping a record.** The filter parses text into structured fields, converts between formats, aggregates records, or enriches a record with computed or looked-up values.
 
-**Testers** check data against criteria. They validate completeness and business rules, discard invalid records, or route records to different downstream pipes based on their content.
-
-**Consumers** end the pipeline. They write to databases, send data to external systems, generate reports, or publish events.
+**Deciding about a record.** The filter checks a record against completeness and business rules, then passes it on, drops it, or sends it down a different branch based on its content.
 
 ### Design Principles
 
@@ -35,7 +33,7 @@ A pipeline is usually deployed as a single application, which makes it a monolit
 
 **Keep filters single-purpose.** Parsing, validation, enrichment, and persistence each belong in their own filter. Single-purpose filters are easier to understand, test, and reuse.
 
-**Keep flow unidirectional.** Data moves forward from producer to consumer, and filters don't send responses or acknowledgments upstream. That constraint makes the system easy to reason about, and it limits the style to workflows that are naturally sequential.
+**Keep flow unidirectional.** Data moves forward from source to sink, and filters don't send responses or acknowledgments upstream. That constraint makes the system easy to reason about, and it limits the style to workflows that are naturally sequential.
 
 **Compose filters into different pipelines.** A "parse CSV" filter can serve several pipelines, and a "validate customer record" filter can appear in both an import and an update workflow. Over time, a team builds a library of reusable steps.
 
@@ -71,20 +69,6 @@ The simplest pipeline is **linear**: each filter has one input and one output, a
 <p>Some pipelines mix the two. Data arrives as a stream and accumulates in a staging area, a scheduler triggers batch processing on what has accumulated, and the results publish to a stream for real-time consumers. Hybrids balance latency against complexity.</p>
 </div>
 
-## Characteristics
-
-Ratings are relative to other architecture styles, not measurements.
-
-| Characteristic | Rating | Notes |
-|----------------|--------|-------|
-| **Simplicity** | ⭐⭐⭐⭐ | Clear one-way flow that is easy to visualize |
-| **Cost** | ⭐⭐⭐⭐ | Simple infrastructure, and batch processing is cheap |
-| **Testability** | ⭐⭐⭐⭐⭐ | Single-purpose, stateless filters test in isolation |
-| **Modularity** | ⭐⭐⭐⭐ | Filters compose and get reused across pipelines |
-| **Evolvability** | ⭐⭐⭐⭐ | Filters can be added or replaced without affecting others |
-| **Scalability** | ⭐⭐⭐ | Parallel filter instances raise throughput within one deployment |
-| **Deployability** | ⭐⭐⭐ | Usually one deployment, which can split into separately deployed stages |
-
 ## When Pipeline Architecture Fits
 
 **ETL systems.** Extracting data from sources, transforming it through several steps, and loading it into a destination is the classic pipeline workflow.
@@ -97,7 +81,9 @@ Ratings are relative to other architecture styles, not measurements.
 
 **Tight budgets.** The style is conceptually simple and doesn't require sophisticated distributed infrastructure. Batch pipelines can run on modest compute.
 
-**Predictable, ordered steps.** The workflow can be drawn as a directed acyclic graph with clear inputs and outputs at each stage.
+**Predictable, ordered steps.** The workflow can be drawn as a directed acyclic graph with clear inputs and outputs at each stage, so each filter can be tested on its own with nothing but sample input.
+
+**Workflows that keep gaining steps.** A new filter slots into the flow and an existing one can be replaced without touching the rest, and a filter written for one pipeline can be reused in another.
 
 ## When to Avoid Pipeline Architecture
 
@@ -105,7 +91,7 @@ Ratings are relative to other architecture styles, not measurements.
 
 **Stages with very different scaling needs.** When one stage needs far more capacity than the rest, a single deployed pipeline wastes resources on the stages that don't.
 
-**Bidirectional communication.** If downstream filters need to request more data from producers, send results back upstream, or coordinate with each other, the style works against you.
+**Bidirectional communication.** If downstream filters need to request more data from the source, send results back upstream, or coordinate with each other, the style works against you.
 
 **Interactive applications.** Users waiting on a response need request-response semantics, which pipelines don't provide. Pipelines suit background processing.
 
@@ -127,7 +113,7 @@ Useful pipeline metrics include throughput in records per second, end-to-end lat
 
 ### Schema Evolution
 
-Data formats change, so pipelines must handle records in more than one schema version. Versioned transformers can detect a record's version and apply the matching transformation, or a schema registry can enforce compatibility at the boundary.
+Data formats change, so pipelines must handle records in more than one schema version. Versioned filters can detect a record's version and apply the matching transformation, or a schema registry can enforce compatibility at the boundary.
 
 ## Evolution and Alternatives
 

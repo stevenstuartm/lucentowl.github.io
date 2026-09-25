@@ -3,556 +3,210 @@ title: "AWS CloudFormation: Fundamentals"
 layout: guide
 category: AWS
 subcategory: Infrastructure as Code
-description: "Core CloudFormation concepts including stacks, templates, resources, and basic workflow for managing AWS infrastructure as code."
-tags: [infrastructure, iac, aws, cloudformation, fundamentals, practical]
+description: "How CloudFormation turns templates into stacks: template sections and intrinsic functions, how creates and updates are ordered, change sets, validation, and update behaviors, rollback and express mode, deletion policies, cross-stack and cross-account references, permissions, deployment tooling, quotas, and cost."
+tags: [cloudformation, stacks, change-sets, deletion-policy, cross-stack-references, fundamentals]
 ---
+{% raw %}
 
-## What is AWS CloudFormation
+## What CloudFormation Does
 
-**AWS CloudFormation** is a service that gives you an easy way to model, provision, and manage AWS resources by treating infrastructure as code.
+**AWS CloudFormation** creates and manages AWS resources from a **template**, a YAML or JSON file that declares the resources you want and how they're configured. You don't write the steps to build them. CloudFormation works out the order, calls the AWS APIs, waits for each resource, and records what it built.
 
-### How CloudFormation Works
+The resources created from one template form a **stack**. A stack is managed as a unit. Changing the template and updating the stack changes the resources to match, and deleting the stack deletes them (unless told otherwise). Because the template describes the whole environment, it can go through code review, live in version control, and build identical copies for development, testing, and production.
 
-1. **Write Template:** Define infrastructure in JSON or YAML
-2. **Create Stack:** CloudFormation reads template and provisions resources
-3. **Manage Stack:** Update, delete, or modify stack as a single unit
-4. **Track Changes:** All changes tracked and versioned
+A stack lives in one Region of one account, and its name is unique there. CloudFormation is also the engine underneath the AWS CDK and AWS SAM, which generate templates and deploy them as stacks, so what follows applies to them too.
 
-### Key Benefits
-
-**Infrastructure as Code:**
-- Version control for infrastructure
-- Code review process
-- Repeatable deployments
-- Self-documenting architecture
-
-**Automated Management:**
-- Dependency resolution (creates resources in correct order)
-- Rollback on failure
-- Change preview (change sets)
-- Drift detection
-
-**AWS Native:**
-- No additional cost (pay only for AWS resources)
-- Deep AWS service integration
-- AWS-managed service (no servers to maintain)
-- Supports all AWS services
-- Immediate access to new AWS features
-
-**Consistency:**
-- Same template creates identical infrastructure
-- Eliminates manual configuration errors
-- Standardized deployments across environments
+Using CloudFormation costs nothing for AWS's own resource types. Extensions, meaning resource types published by third parties or your own organization and custom deployment checks called Hooks, are billed per operation.
 
 ---
 
-## Core Concepts
-
-### Stacks
-
-**Stack:** A collection of AWS resources managed as a single unit.
-
-**Characteristics:**
-- Created, updated, and deleted together
-- Resources share lifecycle
-- Atomic operations (all or nothing)
-- Unique stack name per region
-
-**Stack States:**
-- `CREATE_IN_PROGRESS` - Stack being created
-- `CREATE_COMPLETE` - Successfully created
-- `CREATE_FAILED` - Creation failed
-- `UPDATE_IN_PROGRESS` - Stack being updated
-- `UPDATE_COMPLETE` - Successfully updated
-- `UPDATE_ROLLBACK_IN_PROGRESS` - Update failed, rolling back
-- `DELETE_IN_PROGRESS` - Stack being deleted
-- `DELETE_COMPLETE` - Successfully deleted
-
-### Templates
-
-**Template:** JSON or YAML file describing AWS resources and their configuration.
-
-**Minimal template:**
-```yaml
-Resources:
-  MyBucket:
-    Type: AWS::S3::Bucket
-```
-
-### Resources
-
-**Resource:** An AWS component (EC2 instance, S3 bucket, etc.) defined in the template.
-
-**Resource syntax:**
-```yaml
-LogicalID:
-  Type: AWS::Service::Resource
-  Properties:
-    Property1: Value1
-    Property2: Value2
-```
-
-**Example:**
-```yaml
-WebServerInstance:
-  Type: AWS::EC2::Instance
-  Properties:
-    ImageId: ami-0c55b159cbfafe1f0
-    InstanceType: t2.micro
-    Tags:
-      - Key: Name
-        Value: WebServer
-```
-
-### Change Sets
-
-**Change Set:** Preview of proposed changes before executing a stack update.
-
-**Benefits:**
-- See exactly what will change
-- Prevent unintended modifications
-- Review before applying
-- No changes until executed
-
----
-
-## Template Anatomy
-
-### YAML vs. JSON
-
-<div class="callout callout--tip">
-<p class="callout__title">Use YAML for CloudFormation Templates</p>
-<p>YAML is more readable, supports comments, and is less verbose than JSON. Use YAML unless you have a specific reason to use JSON.</p>
-</div>
-
-**YAML (recommended):**
-```yaml
-Resources:
-  MyBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: my-unique-bucket
-      VersioningConfiguration:
-        Status: Enabled
-```
-
-**JSON:**
-```json
-{
-  "Resources": {
-    "MyBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": "my-unique-bucket",
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        }
-      }
-    }
-  }
-}
-```
-
-**YAML advantages:**
-- More readable
-- Comments supported
-- Less verbose
-- Easier to write
-
-### Template Sections
-
-**Template structure:**
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'  # Optional
-Description: 'Template description'      # Optional
-
-Metadata:                               # Optional
-  # Additional information
-
-Parameters:                             # Optional
-  # Input values
-
-Mappings:                              # Optional
-  # Lookup tables
-
-Conditions:                            # Optional
-  # Conditional logic
-
-Transform:                             # Optional
-  # Macros (e.g., SAM)
-
-Resources:                             # REQUIRED
-  # AWS resources to create
-
-Outputs:                               # Optional
-  # Values to export
-```
-
-### Resources Section (Required)
-
-```yaml
-Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: MyVPC
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: MyIGW
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-```
-
-**Resource anatomy:**
-- **Logical ID:** Unique identifier within template (e.g., `VPC`)
-- **Type:** AWS resource type (e.g., `AWS::EC2::VPC`)
-- **Properties:** Configuration specific to resource type
-
----
-
-## Outputs
-
-**Outputs** export values that can be viewed or imported by other stacks.
-
-```yaml
-Outputs:
-  VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
-    Export:
-      Name: !Sub ${AWS::StackName}-VPCID
-
-  PublicSubnets:
-    Description: Public subnet IDs
-    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
-    Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnets
-
-  WebServerURL:
-    Description: URL of web server
-    Value: !Sub http://${WebServer.PublicDnsName}
-
-  LoadBalancerDNS:
-    Description: Load balancer DNS name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-```
-
-**Using exported values in other stacks:**
-```yaml
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      SubnetId: !ImportValue MyNetworkStack-PublicSubnet1
-```
-
----
-
-## Working with Stacks
-
-### Creating Stacks
-
-**Via AWS CLI:**
-
-```bash
-# Basic create
-aws cloudformation create-stack \
-  --stack-name my-stack \
-  --template-body file://template.yaml
-
-# With parameters
-aws cloudformation create-stack \
-  --stack-name my-stack \
-  --template-body file://template.yaml \
-  --parameters \
-    ParameterKey=InstanceType,ParameterValue=t2.small \
-    ParameterKey=KeyName,ParameterValue=my-key
-
-# From S3
-aws cloudformation create-stack \
-  --stack-name my-stack \
-  --template-url https://s3.amazonaws.com/bucket/template.yaml
-
-# With IAM capabilities (required for IAM resources)
-aws cloudformation create-stack \
-  --stack-name my-stack \
-  --template-body file://template.yaml \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-
-# With tags
-aws cloudformation create-stack \
-  --stack-name my-stack \
-  --template-body file://template.yaml \
-  --tags Key=Environment,Value=Production Key=Owner,Value=TeamA
-```
-
-**Via AWS Console:**
-1. Navigate to CloudFormation
-2. Click "Create Stack"
-3. Upload template or use S3 URL
-4. Specify parameters
-5. Configure options (tags, permissions, rollback)
-6. Review and create
-
-### Updating Stacks
-
-**Direct update:**
-```bash
-aws cloudformation update-stack \
-  --stack-name my-stack \
-  --template-body file://template-updated.yaml
-```
-
-**Update with change set (recommended):**
-```bash
-# 1. Create change set
-aws cloudformation create-change-set \
-  --stack-name my-stack \
-  --change-set-name my-changes \
-  --template-body file://template-updated.yaml
-
-# 2. Describe change set (review changes)
-aws cloudformation describe-change-set \
-  --stack-name my-stack \
-  --change-set-name my-changes
-
-# 3. Execute change set
-aws cloudformation execute-change-set \
-  --stack-name my-stack \
-  --change-set-name my-changes
-```
-
-### Deleting Stacks
-
-```bash
-# Delete stack
-aws cloudformation delete-stack \
-  --stack-name my-stack
-
-# Wait for deletion
-aws cloudformation wait stack-delete-complete \
-  --stack-name my-stack
-```
-
-### Viewing Stack Information
-
-```bash
-# Describe stack
-aws cloudformation describe-stacks \
-  --stack-name my-stack
-
-# List all stacks
-aws cloudformation list-stacks
-
-# View stack events
-aws cloudformation describe-stack-events \
-  --stack-name my-stack
-
-# Get stack outputs
-aws cloudformation describe-stacks \
-  --stack-name my-stack \
-  --query 'Stacks[0].Outputs'
-```
-
-### Validating Templates
-
-```bash
-# Validate template syntax
-aws cloudformation validate-template \
-  --template-body file://template.yaml
-
-# Use cfn-lint for advanced validation
-pip install cfn-lint
-cfn-lint template.yaml
-```
-
----
-
-## Resource Management
-
-### Resource Dependencies
-
-**Implicit dependencies** (automatic):
-```yaml
-Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-
-  Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC  # Creates implicit dependency
-      CidrBlock: 10.0.1.0/24
-```
-
-CloudFormation knows to create VPC before Subnet because Subnet references VPC.
-
-**Explicit dependencies** (when implicit isn't enough):
-```yaml
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    DependsOn: GatewayAttachment  # Explicit dependency
-    Properties:
-      ImageId: ami-0c55b159cbfafe1f0
-      InstanceType: t2.micro
-
-  GatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-```
-
-**When to use DependsOn:**
-- Resource needs to wait for creation to complete (not just ID)
-- IAM role needs policy attached before use
-- Internet gateway needs attachment before routing
-
-### Deletion Policies
-
-```yaml
-Resources:
-  MyDB:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot  # Create snapshot before deleting
-    Properties:
-      DBInstanceIdentifier: mydb
-      Engine: postgres
-
-  LogsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain  # Keep bucket when stack deleted
-    Properties:
-      BucketName: my-logs-bucket
-```
-
-**DeletionPolicy values:**
-- `Delete` (default) - Delete resource when stack deleted
-- `Retain` - Keep resource after stack deletion
-- `Snapshot` - Create snapshot before deletion (RDS, EC2 volumes, Redshift)
-
-### Update Behaviors
-
-Each resource property has an update behavior:
-
-**Update with No Interruption:**
-- Property updated without interrupting resource
-- Example: EC2 instance tags
-
-**Some Interruption:**
-- Brief interruption (restart, etc.)
-- Example: RDS instance type change
-
-**Replacement:**
-- Resource deleted and recreated
-- New physical ID
-- Example: EC2 instance type (sometimes), S3 bucket name
-
----
-
-## Getting Started
-
-### Example: Simple Web Server
+## Templates
+
+A template has up to ten top-level sections. Only `Resources` is required.
+
+| Section | Holds |
+|---|---|
+| `AWSTemplateFormatVersion`, `Description` | The format version (always `2010-09-09`) and a description |
+| `Parameters` | Values supplied when the stack is created or updated, such as an environment name |
+| `Mappings` | Fixed lookup tables, such as settings per environment |
+| `Conditions` | True-or-false expressions that decide whether resources or properties are included |
+| `Rules` | Checks on parameter values before any resource is touched |
+| `Transform` | Macros, programs that rewrite the template before processing, such as the one AWS SAM uses to expand its shorthand |
+| `Resources` | The resources to create. Required. |
+| `Outputs` | Values to show after deployment or share with other stacks |
+| `Metadata` | Extra information, such as how the console groups parameters |
+
+Each resource has a **logical ID**, its name inside the template, and a **type** such as `AWS::SQS::Queue`. When CloudFormation creates it, the resource also gets a **physical ID**, its real name or Amazon Resource Name (ARN) in AWS. Templates refer to resources by logical ID, and CloudFormation substitutes the physical values.
+
+**Intrinsic functions** compute values while the stack deploys. The ones nearly every template uses are:
+
+- `!Ref` returns a parameter's value, or a resource's main identifier (for a queue, its URL).
+- `!GetAtt` returns another attribute of a resource, such as a queue's ARN.
+- `!Sub` builds a string with values substituted, such as `${AWS::StackName}-orders`. `AWS::StackName`, `AWS::Region`, and `AWS::AccountId` are **pseudo parameters** that CloudFormation always provides.
+
+YAML is the usual choice over JSON, because it allows comments and the short `!Ref` forms. This template creates a queue with a dead-letter queue and a bucket, and publishes the queue's URL. It also uses a **condition**, a named true-or-false expression that `!If` reads, and three settings covered later in this guide, `DeletionPolicy`, `UpdateReplacePolicy`, and `Export`:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Simple EC2 web server
+Description: Order intake queue and archive bucket
 
 Parameters:
-  KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
-
-  InstanceType:
+  Environment:
     Type: String
-    Default: t2.micro
-    AllowedValues:
-      - t2.micro
-      - t2.small
-      - t2.medium
-    Description: EC2 instance type
+    AllowedValues: [dev, prod]
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
 
 Resources:
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  OrdersDeadLetterQueue:
+    Type: AWS::SQS::Queue
     Properties:
-      GroupDescription: Allow HTTP and SSH
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+      MessageRetentionPeriod: 1209600
 
-  WebServer:
-    Type: AWS::EC2::Instance
+  OrdersQueue:
+    Type: AWS::SQS::Queue
     Properties:
-      ImageId: ami-0c55b159cbfafe1f0
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      SecurityGroups:
-        - !Ref SecurityGroup
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo "<h1>Hello from CloudFormation</h1>" > /var/www/html/index.html
-      Tags:
-        - Key: Name
-          Value: WebServer
+      VisibilityTimeout: 120
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt OrdersDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  ArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VersioningConfiguration:
+        Status: !If [IsProd, Enabled, Suspended]
 
 Outputs:
-  WebServerPublicIP:
-    Description: Public IP of web server
-    Value: !GetAtt WebServer.PublicIp
-
-  WebServerURL:
-    Description: URL of web server
-    Value: !Sub http://${WebServer.PublicDnsName}
+  OrdersQueueUrl:
+    Value: !Ref OrdersQueue
+    Export:
+      Name: !Sub ${AWS::StackName}-OrdersQueueUrl
 ```
 
-### Deploy the Example
-
-```bash
-# Create stack
-aws cloudformation create-stack \
-  --stack-name my-web-server \
-  --template-body file://web-server.yaml \
-  --parameters \
-    ParameterKey=KeyName,ParameterValue=my-key \
-    ParameterKey=InstanceType,ParameterValue=t2.micro
-
-# Wait for completion
-aws cloudformation wait stack-create-complete \
-  --stack-name my-web-server
-
-# Get outputs
-aws cloudformation describe-stacks \
-  --stack-name my-web-server \
-  --query 'Stacks[0].Outputs'
-```
+The queues and bucket have no names in the template, so CloudFormation generates unique ones from the stack name and logical ID. That's usually the better choice, for reasons covered under Update Behaviors.
 
 ---
 
+## How CloudFormation Makes Changes
+
+### Ordering Through Dependencies
+
+CloudFormation builds a **dependency graph** from the template. Whenever one resource refers to another with `!Ref` or `!GetAtt`, the referenced resource must exist first. In the template above, `OrdersQueue` refers to the dead-letter queue's ARN, so the dead-letter queue is created first, while the bucket, which depends on nothing, is created at the same time. Resources with no path between them are created in parallel, and deletion runs the graph in reverse.
+
+When a dependency isn't visible in the properties, declare it with `DependsOn`. The classic case is a resource with a public IP address, such as an instance in a public subnet, which needs the internet gateway attached to the VPC first, even though nothing in its properties refers to the attachment.
+
+A resource marked complete isn't always ready to use. An EC2 instance is complete when it's running, not when its startup script has installed the application. A **`CreationPolicy`** makes CloudFormation wait for a success signal, sent from the instance with the `cfn-signal` helper, before it counts the resource as created.
+
+### Change Sets
+
+Updating a stack directly applies the changes at once. A **change set** shows what an update will do before anything changes, listing each resource that will be added, modified, or removed, and whether a modification **replaces** the resource. Review it, then execute it or throw it away. The `aws cloudformation deploy` command in the CLI creates and executes a change set in one step.
+
+CloudFormation also validates before it deploys, on change sets since November 2025 and on direct creates and updates since June 2026. It catches common failures, such as invalid property values, names that clash with existing resources, and buckets that must be emptied before deletion, before any resource is touched instead of partway through, and warns about service quotas that the deployment would exceed. A **drift-aware change set** goes further and compares the template with the resources as they actually are, so it can put back settings someone changed by hand.
+
+### Update Behaviors
+
+Changing a property updates a resource in one of three ways, and the resource type's reference documentation states which, property by property:
+
+| Behavior | What happens | Example |
+|---|---|---|
+| **No interruption** | Updated in place, still available | A queue's visibility timeout |
+| **Some interruption** | Updated in place, briefly unavailable, such as a restart | An EC2 instance's instance type, for an instance whose root disk is an EBS volume |
+| **Replacement** | A new resource is created with a new physical ID, references are switched to it, and the old one is deleted | A DynamoDB table's key schema, or turning a standard SQS queue into a FIFO queue |
+
+Replacement is the one to watch in every change set. The old resource is deleted with its data unless an `UpdateReplacePolicy` keeps it. A resource given a fixed name in the template can't be replaced unless the name changes in the same update, because the new resource would need the name while the old one still exists. Letting CloudFormation generate names avoids that.
+
+### Rollback
+
+When a create or update fails partway, CloudFormation **rolls back** by default, returning the stack to its last working state. Three outcomes are common:
+
+- A stack whose first creation failed ends in `ROLLBACK_COMPLETE`. It can't be updated, only deleted and created again.
+- A failed update rolls back to `UPDATE_ROLLBACK_COMPLETE`, and the stack works as before.
+- If the rollback itself fails, often because a resource was changed or deleted outside CloudFormation, the stack stops in `UPDATE_ROLLBACK_FAILED`. Fix the cause, then **continue update rollback**, optionally skipping the resources that can't be restored.
+
+A deletion can fail too, leaving the stack in `DELETE_FAILED`, most often because a bucket still holds objects. Empty or retain the resource and delete again.
+
+During development, turning off rollback keeps the resources that did succeed, so a fix can be retried without recreating everything. **Express mode** (since June 2026) goes further. It marks each resource complete as soon as its configuration is applied, without waiting for stabilization checks like traffic readiness or cleanup of replaced resources, and turns off rollback by default. It suits fast development loops, and it's a poor fit for production deployments that depend on each resource being ready before the next step.
+
+---
+
+## Protecting Data
+
+A stack's resources share its lifecycle, which is dangerous for anything holding data. Several controls exist:
+
+- **`DeletionPolicy`** decides what happens to a resource when the stack is deleted or the resource is removed from the template. `Delete` is the default for most types. `Retain` keeps the resource. `Snapshot` takes a final snapshot first, for types that support it, such as RDS, EBS volumes, ElastiCache, Neptune, DocumentDB, and Redshift. `RetainExceptOnCreate` keeps the resource except when the stack operation that created it rolls back, so empty resources from a failed first deployment don't linger. RDS clusters, and RDS instances that aren't part of a cluster, default to `Snapshot`.
+- **`UpdateReplacePolicy`** does the same for the old resource when an update replaces it. Set both on every data store.
+- **Termination protection** on a stack blocks deletion until someone turns it off.
+- A **stack policy** protects resources from updates. Once a stack has one, every resource is protected unless the policy explicitly allows updates to it, so a policy usually allows everything and then denies updates to a few resources, such as the production database. A policy can be overridden for a single update, and it can be changed but never removed.
+
+An S3 bucket can't be deleted while it holds objects, so a stack deleting a non-empty bucket fails unless the bucket is retained.
+
+---
+
+## Connecting Stacks
+
+Large systems are split across stacks, often by lifecycle and owner, such as a network stack changed rarely by a platform team and application stacks deployed daily. Stacks share values in three ways:
+
+| | Export and `!ImportValue` | `Fn::GetStackOutput` | Parameter Store |
+|---|---|---|---|
+| **How** | The producer marks an output with an `Export` name, and consumers import it by that name | Consumers read any output of the producer stack directly, with no export needed | The producer writes a parameter, and consumers read it at deployment |
+| **Reach** | Same account and Region | Any account and Region in the partition | Same account and Region |
+| **Reference** | Strong. The producer can't be deleted, and an imported output can't be changed or removed, while any stack imports it | Weak. Read when the consumer deploys, with nothing stopping the producer from changing | Weak, the same way |
+| **Since** | Always | May 2026 | Always |
+
+Export names must be unique in their account and Region. The strong link protects consumers, but it also means changing a shared output can require updating every consuming stack first. `Fn::GetStackOutput` reaches across accounts and Regions through a `Region` and an IAM `RoleArn`, and a consumer picks up a changed value only on its next update, so protect the producer stack from accidental deletion. Parameters in AWS Systems Manager Parameter Store, AWS's store for configuration values, are read through a parameter of type `AWS::SSM::Parameter::Value<String>` or through a **dynamic reference** that CloudFormation resolves at deployment:
+
+```yaml
+QueueUrl: '{{resolve:ssm:/orders/prod/queue-url}}'
+```
+
+Dynamic references to Secrets Manager (`resolve:secretsmanager`) and to encrypted SecureString parameters (`resolve:ssm-secure`) work the same way, and they're how a password reaches a resource without appearing in the template or in parameter values.
+
+Use exports when a consumer must never have a value change underneath it, and `Fn::GetStackOutput` or parameters when producers and consumers deploy independently or live in different accounts and Regions.
+
+---
+
+## Permissions
+
+By default, CloudFormation acts with the permissions of whoever starts the operation, so deploying a stack requires permission to create everything in it. A **service role** changes that. CloudFormation assumes the role for every operation on the stack, and the people or pipelines deploying need only CloudFormation permissions plus `iam:PassRole` for that role, the permission to hand a role to an AWS service to use. Service roles let a team deploy stacks without holding broad permissions themselves.
+
+Some deployments need an explicit acknowledgment, called a **capability**, so nobody makes a sensitive change by accident. `CAPABILITY_IAM` acknowledges that the template creates or changes IAM resources, and `CAPABILITY_NAMED_IAM` is needed when those resources have fixed names. `CAPABILITY_AUTO_EXPAND` acknowledges that macros, such as SAM's transform, will rewrite the template before it's deployed.
+
+---
+
+## Tooling Around Templates
+
+- **cfn-lint** checks templates against the resource specifications, catching invalid properties and values before deployment. **CloudFormation Guard** checks them against your own policy rules, such as requiring encryption on every bucket.
+- **Git sync** deploys a stack from a template in a GitHub, GitLab, or Bitbucket repository whenever the branch changes.
+- The **IaC generator** scans resources that already exist in an account, including ones created by hand, and produces a template for them, which can then be imported into a stack.
+- **Infrastructure Composer** is a visual editor that draws a template as a diagram.
+- **Hooks** run checks during deployments and can stop a non-compliant resource from being created.
+
+---
+
+## Quotas
+
+| Quota | Value |
+|---|---|
+| Stacks per account per Region | 2,000 (raisable) |
+| Resources per template | 500 |
+| Parameters, outputs, and mappings per template | 200 each |
+| Template size | 51,200 bytes passed directly, 1 MB from S3 |
+| Dynamic references per template | 60 |
+
+The 500-resource limit is the one real systems meet. Splitting a system into several stacks keeps each template manageable well before that.
+
+---
+
+## Key Takeaways
+
+- A template declares resources, and a stack is the set CloudFormation created from it, in one account and Region. CloudFormation orders the work from the references between resources.
+- Review every update as a change set, and look for replacements. A replaced resource loses its data unless an `UpdateReplacePolicy` keeps it, and a resource with a fixed name can't be replaced without renaming it.
+- Set `DeletionPolicy` and `UpdateReplacePolicy` on every data store, and turn on termination protection for stacks that matter.
+- Failed operations roll back. A failed first creation leaves a stack that can only be deleted, and a failed rollback needs fixing and continuing.
+- Share values between stacks with exports when consumers must be protected from change, and with `Fn::GetStackOutput` or Parameter Store when stacks deploy independently or span accounts and Regions. Pull secrets in with dynamic references.
+- Deploy through a service role, and acknowledge IAM changes with capabilities.
+{% endraw %}

@@ -1,1242 +1,185 @@
 ---
-title: "AWS Kinesis for System Architects"
+title: "Amazon Kinesis Data Streams and Data Firehose for System Architects"
 layout: guide
 category: AWS
 subcategory: Application Integration & Messaging
-description: "Comprehensive guide to AWS Kinesis covering Data Streams and Firehose for real-time streaming, sharding strategies, scaling patterns, cost optimization, and comparison with SQS for event processing"
-tags: [aws, kinesis, streaming, real-time, data-processing, analytics, architecture, cost-optimization, fundamentals]
+description: "How to move streaming data on AWS: Kinesis Data Streams shards, partition keys, ordering, retention, and replay; On-demand and provisioned capacity; shared and enhanced fan-out consumers; delivery to S3 and Iceberg tables; Amazon Data Firehose buffering and transformation; choosing a stream, a queue, or MSK; monitoring; and cost."
+tags: [kinesis-data-streams, data-firehose, event-streaming, shards, partition-keys, enhanced-fan-out, fundamentals]
 ---
 
-## What Problems Kinesis Solves
+## Streams and Queues
 
-### Without Streaming Infrastructure
+A **queue** hands each message to one consumer and deletes it once processed. A **stream** is an ordered log. Records are appended to it and kept for a set period, whether or not anyone has read them, and every consumer reads the whole log at its own pace, keeping its own place. That difference decides most of what follows:
 
-**Real-Time Data Processing Challenges:**
-- Batch processing delays prevent real-time insights (hours/days lag)
-- Custom infrastructure required to handle high-throughput data ingestion
-- No ordering guarantees for events from same source
-- Difficult to replay historical data for reprocessing
-- Complex fan-out logic to distribute data to multiple consumers
-- Manual sharding and partition management
+- Several applications can read the same records independently, such as a fraud detector, a dashboard, and an archive job, without the producer sending anything twice.
+- Records with the same key are read in the order they were written.
+- A consumer can go back and **replay** the log, to recover from a bug or to fill a new system with history.
+- A slow consumer falls behind without holding anyone else up, and it only loses data if it falls further behind than the retention period.
 
-**Real-World Impact:**
-- Clickstream analytics delayed by 24 hours; can't respond to user behavior in real-time
-- IoT sensor data processed in hourly batches; anomalies detected too late
-- Log aggregation from 10,000 servers requires custom collection infrastructure
-- Failed processing job requires manual reconstruction of input data
-- Adding new analytics consumer requires changing producer code
-
-### With Kinesis
-
-**Managed Streaming Platform:**
-- **Real-time ingestion**: Millisecond latency from data production to consumption
-- **Ordered delivery**: Events from same partition key delivered in order
-- **Replay capability**: Reprocess historical data with up to 365 days retention
-- **Multiple consumers**: Fan-out to multiple applications reading same stream
-- **Automatic scaling**: On-demand mode scales with traffic for Data Streams or fully managed for Firehose
-- **Durable storage**: Data replicated across 3 Availability Zones
-
-**Problem-Solution Mapping:**
-
-| Problem | Kinesis Data Streams Solution | Kinesis Firehose Solution |
-|---------|------------------------------|---------------------------|
-| Real-time processing needed | Sub-second latency with immediate consumer processing | Near real-time delivery to destinations in 60-900 seconds |
-| High throughput exceeding 10,000 events/sec | Scales to millions of events/sec with sharding | Auto-scales without throughput limits |
-| Need to replay data | Retain data 1-365 days and reprocess anytime | No replay with direct delivery; use Data Streams if needed |
-| Multiple consumers need same data | Enhanced fan-out provides 2 MB/sec per consumer | Single destination per delivery stream |
-| Custom processing before storage | Lambda and KCL apps process and transform | Built-in Lambda transformation before delivery |
-| Complex infrastructure management | Managed service with no servers to manage | Fully managed with zero infrastructure |
+AWS's managed services for this are **Amazon Kinesis Data Streams**, the stream itself, and **Amazon Data Firehose** (called Kinesis Data Firehose until February 2024), which loads streaming data into S3, warehouses, and search and monitoring tools without any consumer code. Both are Regional, and their quotas are per account per Region. Two relatives are out of this guide's scope. **Amazon MSK** runs Apache Kafka, the open-source equivalent of a stream, and **Amazon Managed Service for Apache Flink** (formerly Kinesis Data Analytics) runs stream-processing applications. The SQL flavor of Kinesis Data Analytics ended support in January 2026.
 
 ---
 
-## Kinesis Service Family
+## Kinesis Data Streams
 
-AWS Kinesis comprises four services for different streaming use cases.
+A producer writes a **record**, a blob of data up to 10 MiB (mebibytes, about 10.5 MB) with a **partition key** attached. A stream is divided into **shards**, and a hash of the partition key decides which shard a record goes to, so all records with the same key land in the same shard. Within a shard, each record gets a **sequence number**, and records are stored and read in that order. Order is guaranteed only within a shard, which in practice means per partition key.
 
-### Service Comparison
+Records stay in the stream for its **retention period**, 24 hours by default and up to 365 days, and are then deleted whether or not they were read. Each consumer tracks its own position in each shard, often called a **checkpoint**, and resumes from there after a restart.
 
-| Service | Purpose | Use Case | Latency | Consumer Types |
-|---------|---------|----------|---------|---------------|
-| **Kinesis Data Streams** | Real-time data streaming with custom processing | Build custom real-time applications (analytics, monitoring, ML) | 70ms-200ms | Lambda, KCL apps, Firehose, Analytics |
-| **Kinesis Firehose** | Serverless data delivery to AWS services | Load streaming data into S3, Redshift, OpenSearch, HTTP endpoints | 60s (minimum) | S3, Redshift, OpenSearch, Splunk, HTTP |
-| **Kinesis Data Analytics** | SQL queries on streaming data | Real-time SQL analytics, anomaly detection | Real-time | Firehose, Lambda, Streams |
-| **Kinesis Video Streams** | Stream video from devices | Video surveillance, computer vision, media analytics | Real-time | EC2, SageMaker, custom apps |
+{% include figure.html id="aws-kds-shards-consumers" %}
 
-**This guide focuses on Data Streams and Firehose** (most commonly used for event processing and data ingestion).
+A shard is also the unit of capacity. Each shard accepts writes of up to 1 MB per second or 1,000 records per second, whichever comes first, and serves reads of up to 2 MB per second. Records larger than 1 MiB are allowed as occasional bursts.
 
----
-
-## Kinesis Data Streams Fundamentals
-
-### What is Kinesis Data Streams?
-
-**Kinesis Data Streams** is a real-time data streaming service that captures and stores data streams for processing by custom applications.
-
-**Architecture:**
-
-```
-Producers → [Kinesis Data Stream] → Consumers
-              (Shards)                (KCL, Lambda, Firehose)
-
-Stream = Ordered sequence of data records
-Shard = Unit of capacity (1 MB/sec write, 2 MB/sec read)
-```
-
-### Core Concepts
-
-**1. Stream**
-
-Logical collection of shards that ingest and store data records.
-
-**2. Shard**
-
-Basic unit of capacity and parallelism.
-
-<div class="callout callout--note">
-<p class="callout__title">Shard Capacity</p>
-<ul>
-<li>Write: 1 MB/sec or 1,000 records/sec</li>
-<li>Read: 2 MB/sec (shared mode) or 2 MB/sec per consumer (enhanced fan-out)</li>
-</ul>
-</div>
-
-**3. Data Record**
-
-Individual unit of data written to stream.
-
-**Record Structure:**
-
-```json
-{
-  "Data": "base64-encoded payload",
-  "PartitionKey": "user-12345",
-  "SequenceNumber": "49590338271490256608559692538361571095921575989136588898"
-}
-```
-
-**Key Fields:**
-- `Data`: Payload (up to 1 MB)
-- `PartitionKey`: Determines which shard receives record
-- `SequenceNumber`: Unique identifier; increases over time within shard
-
-**4. Partition Key**
-
-String used to group related records into same shard (ensures ordering).
-
-**Example:** `user-12345` ensures all events from user 12345 go to same shard and are processed in order.
+Producers usually send batches with `PutRecords`, up to 500 records per call. A batch isn't all-or-nothing. The response lists which records failed, typically with a throttling error, and the producer must retry just those, with backoff. The **Kinesis Producer Library** (KPL) handles batching and retries, and also **aggregates** many small records into one Kinesis record, which lets a shard carry more than 1,000 small records per second, and since writes are billed per record or per payload unit, fewer, larger records usually cost less.
 
 ### Capacity Modes
 
-**1. On-Demand Mode (2022+)**
+A stream uses one of three modes, and you can switch a stream between on-demand and provisioned twice in 24 hours:
 
-**Characteristics:**
-- Automatically scales shards based on traffic
-- No capacity planning required
-- Pay per GB ingested/retrieved
+| | On-demand Standard | On-demand Advantage | Provisioned |
+|---|---|---|---|
+| **Capacity** | Scales on its own. Handles up to double the peak write rate of the last 30 days without throttling. | Same scaling, plus **warm throughput**, capacity you ask for ahead of a known spike so it doesn't wait for scaling, at no extra charge | You choose the shard count and change it |
+| **Starts at** | 4 MB/s write, 8 MB/s read | Same | Your shard count |
+| **Largest stream** | 10 GB/s write in us-east-1, us-west-2, and eu-west-1, 200 MB/s elsewhere by default | Same | No hard limit, within the account's shard quota (20,000 in the largest Regions, raisable) |
+| **Billing** | Per stream-hour, plus per GB written and read | Per GB written and read, at least 60% below Standard, with no stream-hour charge | Per shard-hour, plus per 25 KB of data written |
+| **Commitment** | None | An account-wide minimum of 25 MiB/s written and 25 MiB/s read across all on-demand streams in the Region | None |
 
-**When to Use:**
-- Unpredictable or variable traffic
-- New workloads with unknown capacity needs
-- Traffic with large spikes
+On-demand Advantage isn't a per-stream choice. It's an account setting that changes how every on-demand stream in the Region is billed, which pays off for accounts with steady, high volume or hundreds of streams. On-demand Standard suits new or unpredictable streams. Provisioned suits steady, well-understood traffic, and it gives fine control over which keys share a shard.
 
-**Pricing:**
-- $0.040 per GB ingested
-- $0.015 per GB retrieved
+In provisioned mode, you change capacity with `UpdateShardCount`, or by splitting and merging individual shards. A shard that's split or merged closes, and its records must be read before its children's to keep each key in order. The KCL and Lambda handle that ordering for you.
 
-**2. Provisioned Mode**
-
-**Characteristics:**
-- Manually specify number of shards
-- Predictable capacity and cost
-- Pay per shard-hour
-
-**When to Use:**
-- Predictable traffic patterns
-- Cost optimization for steady workloads
-
-**Pricing:**
-- $0.015 per shard-hour ($10.80/month per shard)
-- $0.014 per million PUT requests (>1 million/month)
-
-### Retention Period
-
-**Configurable retention:**
-- Default: 24 hours
-- Maximum: 365 days (8,760 hours)
-
-**Pricing:** $0.023 per GB-month for retention >24 hours
-
-**Use Case:** Replay data for reprocessing, debugging, or backfilling analytics.
+One limit applies in every mode. A single partition key always lands in one shard, so no key can exceed one shard's write limit of 1 MB or 1,000 records per second. On-demand scaling adds shards as traffic grows, but no amount of scaling spreads one hot key (see Choosing a Partition Key).
 
 ---
 
-## Kinesis Data Firehose Fundamentals
+## Reading a Stream
 
-### What is Kinesis Firehose?
+Consumers read in one of two ways:
 
-**Kinesis Data Firehose** is a fully managed service for loading streaming data into AWS data stores and analytics services.
+- **Shared throughput.** Consumers call `GetRecords` on each shard, and all of them together share that shard's 2 MB per second and five calls per second. Two or three consumers fit. More start throttling each other and falling behind.
+- **Enhanced fan-out.** A registered consumer gets its own 2 MB per second from every shard, and Kinesis pushes records to it over a long-lived connection instead of waiting to be polled, typically within about 70 milliseconds. A stream can have 20 enhanced fan-out consumers, or 50 under On-demand Advantage.
 
-**Architecture:**
+Several kinds of consumers read streams:
 
-```
-Producers → [Firehose Delivery Stream] → Transformation (optional) → Destination
-                                            (Lambda)                  (S3, Redshift, etc.)
-```
+| Consumer | How it reads |
+|---|---|
+| **Lambda** | An event source mapping, a poller that Lambda runs for you, reads each shard or subscribes with enhanced fan-out, and invokes the function with batches of records in order |
+| **Kinesis Client Library (KCL)** | A library for long-running consumer applications. It balances shards across the application's workers and stores checkpoints in a DynamoDB table |
+| **Managed Service for Apache Flink** | Runs stateful stream processing, such as windowed aggregations and joins |
+| **Firehose** | Reads the stream and delivers it to a destination (see below) |
 
-**Key Difference from Data Streams:** Firehose is a **delivery service** (push model) vs Data Streams is a **streaming platform** (pull model with custom consumers).
+Delivery is **at least once**. A producer that retries after a timeout may write a record twice, and a consumer that crashes before checkpointing processes some records again when it restarts. Consumers need to be **idempotent**, producing the same result when they see a record twice, for example by keying writes on an ID carried in the record.
 
-### Core Concepts
+A record that always fails, a **poison record**, behaves differently by consumer, and either default can surprise:
 
-**1. Delivery Stream**
-
-Configuration defining source, transformation, and destination.
-
-**2. Destinations**
-
-Supported targets:
-- **S3**: Data lake storage, archival, analytics
-- **Redshift**: Data warehousing (via S3 COPY)
-- **OpenSearch**: Log analytics, full-text search
-- **Splunk**: Third-party SIEM
-- **HTTP Endpoint**: Custom destinations, third-party services
-- **Datadog, New Relic, MongoDB, Snowflake**: Partner integrations
-
-**3. Buffering**
-
-Firehose batches records before delivery.
-
-**Buffer Configuration:**
-- **Size**: `1 MB − 128 MB` (default: 5 MB)
-- **Interval**: `60 seconds − 900 seconds` (default: 300s)
-
-**Delivery triggers when EITHER condition met:**
-- Buffer size reached
-- Buffer interval elapsed
-
-**Example:** 5 MB buffer, 60s interval
-- If 5 MB accumulated in 30s, deliver immediately
-- If only 1 MB after 60s, deliver anyway
-
-### Data Transformation
-
-**Built-in Lambda transformation:**
-
-```
-Source → [Firehose] → Lambda (transform) → Destination
-```
-
-**Common Transformations:**
-- Convert formats (JSON → Parquet, CSV → JSON)
-- Enrich data (add metadata, lookup values)
-- Filter records (exclude certain events)
-- Decompress/compress
-
-**Lambda Limitations:**
-- 6 MB payload limit
-- 5 minutes execution timeout
-
-### Dynamic Partitioning (S3 Only)
-
-**Problem:** All records written to single S3 prefix; queries scan entire dataset.
-
-**Solution:** Partition records by key (e.g., `year/month/day/hour`) for efficient queries.
-
-**Configuration:**
-
-```json
-{
-  "PartitioningConfiguration": {
-    "Enabled": true,
-    "PartitionKeys": [
-      {
-        "Name": "year",
-        "Type": "Date",
-        "Path": "$.timestamp",
-        "Format": "yyyy"
-      },
-      {
-        "Name": "month",
-        "Type": "Date",
-        "Path": "$.timestamp",
-        "Format": "MM"
-      }
-    ]
-  }
-}
-```
-
-**Output Structure:**
-
-```
-s3://my-bucket/
-  └── year=2025/
-      └── month=01/
-          └── day=14/
-              └── data-2025-01-14-12-00.parquet
-```
-
-**Benefit:** Athena and Redshift queries filter by partition and scan only relevant data.
+- **Lambda** retries a failing batch by default, and because each shard is read in order, every record behind it waits, for up to a week. The event source mapping's retry limit, maximum record age, and on-failure destination bound that wait and keep a record of what was skipped.
+- **The KCL** skips a batch whose processing code throws, and never delivers it again, so a failure silently loses records unless the application catches the exception and handles the record itself.
 
 ---
 
-## Sharding Strategies
+## Choosing a Partition Key
 
-### Understanding Shards
+The partition key decides both ordering and load, so it's the main design decision for a stream:
 
-**Shard determines:**
-1. Which records are processed together (partition key grouping)
-2. Order guarantees (records in same shard ordered by sequence number)
-3. Throughput capacity (1 MB/sec write per shard)
+- Use the entity whose events must stay in order, such as a customer ID, device ID, or account number. Records for different entities may be read out of order relative to each other, which is usually fine.
+- Choose a key with many distinct values, so the hash spreads records evenly. A key like log level or event type, with a handful of values, puts all traffic on a handful of shards.
+- Watch for single keys with extreme volume, such as one very large customer, since one key's traffic can't be spread.
 
-### Choosing Partition Key
+When records don't need ordering at all, as with logs, metrics, or telemetry, an on-demand stream can choose the placement itself. With **service-managed partition keys** (since September 2026, in the latest SDKs and KPL), a producer omits the partition key and Kinesis spreads records across shards by available capacity, so no key can run hot.
 
-**Good Partition Keys:**
-- High cardinality (many unique values)
-- Evenly distributed (no hot shards)
-- Groups related events (e.g., user ID, device ID, session ID)
-
-**Examples:**
-
-| Use Case | Good Partition Key | Bad Partition Key |
-|----------|-------------------|-------------------|
-| Clickstream | `user-{userId}` | `page-name` (few unique values) |
-| IoT sensors | `device-{deviceId}` | `sensor-type` (creates hot shards) |
-| Application logs | `request-{requestId}` | `log-level` (ERROR/INFO/DEBUG = 3 shards) |
-| Financial transactions | `account-{accountId}` | `transaction-type` (buy/sell = 2 shards) |
-
-### Calculating Required Shards
-
-**Formula:**
-
-```
-Required Shards = MAX(
-  CEIL(Write Throughput MB/sec / 1 MB/sec),
-  CEIL(Read Throughput MB/sec / 2 MB/sec)
-)
-```
-
-**Example 1: Write-Heavy**
-
-```
-Write: 5 MB/sec
-Read: 3 MB/sec
-
-Shards needed = MAX(CEIL(5/1), CEIL(3/2)) = MAX(5, 2) = 5 shards
-```
-
-**Example 2: Read-Heavy (3 consumers, shared mode)**
-
-```
-Write: 2 MB/sec
-Read: 2 MB/sec per consumer × 3 consumers = 6 MB/sec total
-
-Shared mode: All consumers share 2 MB/sec per shard
-Shards needed = MAX(CEIL(2/1), CEIL(6/2)) = MAX(2, 3) = 3 shards
-```
-
-**Example 3: Enhanced Fan-Out (3 consumers)**
-
-```
-Write: 2 MB/sec
-Read: 2 MB/sec per consumer (each gets dedicated 2 MB/sec per shard)
-
-Enhanced fan-out: Each consumer gets 2 MB/sec per shard independently
-Shards needed = MAX(CEIL(2/1), CEIL(2/2)) = MAX(2, 1) = 2 shards
-```
-
-### Hot Shards
-
-**Problem:** Uneven distribution causes some shards to hit limits while others are underutilized.
-
-**Cause:** Poor partition key choice (e.g., celebrity user gets 80% of traffic).
-
-**Detection:**
-
-```
-CloudWatch Metric: WriteProvisionedThroughputExceeded > 0 on specific shards
-CloudWatch Metric: IncomingBytes per shard (identify which shards hot)
-```
-
-**Solutions:**
-
-**1. Add Random Suffix to Partition Key:**
-
-```python
-# Before (hot shard for celebrity user)
-partition_key = f"user-{user_id}"
-
-# After (distribute across shards)
-import random
-partition_key = f"user-{user_id}-{random.randint(0, 9)}"
-```
-
-**Trade-Off:** Loses ordering guarantees across suffixes (records for same user split across shards).
-
-**2. Use Composite Key:**
-
-```python
-# Combine user ID with timestamp hour
-partition_key = f"user-{user_id}-{hour}"
-```
-
-**3. Increase Shard Count:**
-
-Add more shards so hot key doesn't saturate single shard.
-
-### Resharding
-
-**Shard Splitting:**
-
-Split single shard into two (increase capacity).
-
-```
-Before: Shard-001 (1 MB/sec write)
-After: Shard-002 (1 MB/sec write) + Shard-003 (1 MB/sec write) = 2 MB/sec total
-```
-
-**Shard Merging:**
-
-Merge two shards into one (decrease capacity, reduce cost).
-
-**On-Demand Mode:** Automatic resharding (no manual intervention).
-
-**Provisioned Mode:** Manual or use Application Auto Scaling.
+When only some keys are hot, one hot key can be spread by adding a suffix, such as `customer-42-3` with a suffix from 0 to 9, which splits its records across up to ten shards. The price is order, since that customer's records are no longer read in sequence. Do this only for keys that don't need ordering, or have consumers put the records back in order themselves.
 
 ---
 
-## Kinesis vs SQS Decision Framework
+## Delivering a Stream to S3
 
-### Feature Comparison
+Two services load streaming data into S3 without consumer code.
 
-| Feature | Kinesis Data Streams | SQS |
-|---------|---------------------|-----|
-| **Ordering** | Guaranteed per shard (partition key) | FIFO queues only (up to 300 TPS) |
-| **Delivery** | At-least-once (consumers read records) | At-least-once (Standard), Exactly-once (FIFO) |
-| **Retention** | `24 hours − 365 days` | `1 minute − 14 days` |
-| **Replay** | Yes (reprocess any point in retention) | No (message deleted after processing) |
-| **Multiple Consumers** | Yes (fan-out to unlimited consumers) | No (each message consumed once; use SNS+SQS for fan-out) |
-| **Latency** | `70ms − 200ms` | <10ms (polling latency separate) |
-| **Throughput** | Millions of events/sec (with sharding) | Unlimited (Standard), 300-3,000 TPS (FIFO) |
-| **Message Size** | Up to 1 MB | Up to 256 KB |
-| **Consumer Model** | Pull (consumers poll shards) | Pull (consumers poll queue) |
-| **Routing** | Partition key (deterministic sharding) | Random (Standard), Message group ID (FIFO) |
+**Kinesis Data Streams delivery** (since August 2026) writes a stream straight to S3 from the stream itself, on on-demand streams only:
 
-### When to Use Kinesis Data Streams
+- **Streaming tables** write the records into Apache Iceberg tables in Amazon S3 Tables. Iceberg is an open table format that lets many query engines treat files in S3 as database tables, and S3 Tables is S3's managed storage for them. Records are converted to Parquet, a columnar file format, and **compacted**, merged into fewer large files, since thousands of tiny files make queries slow. They're queryable by Athena, EMR, Redshift, or any Iceberg engine within minutes.
+- **General purpose S3 delivery** writes the records to an ordinary bucket in their original format, batched into larger objects with optional compression, for archives and batch processing.
 
-✅ **Use Kinesis Data Streams when:**
-- Need to replay data for reprocessing
-- Multiple consumers need same data stream
-- Ordering required at high throughput (>300 TPS)
-- Real-time analytics, dashboards, monitoring
-- Event sourcing patterns
-- Log aggregation from distributed systems
-- IoT data ingestion
-- Clickstream analytics
-- Financial transaction streams
+Delivery arrives within a freshness window of 5 to 15 minutes, doesn't use any of the stream's read capacity, and delivers each shard's records exactly once. The destination must be in the same Region. Delivered data is encrypted with S3-managed keys by default, and a KMS key, if you choose one, must be customer managed. A stream encrypted with the AWS managed key can't be a delivery source at all, so a stream that needs encryption and delivery must use a customer managed key. Streaming tables also need the records' schema in the AWS Glue Schema Registry, a catalog of record formats that delivery uses to convert records into table columns, plus an S3 dead-letter location for records that can't be delivered, with the stream, table bucket, and registry all in one account.
 
-**Examples:**
-- Clickstream: 100,000 events/sec, multiple consumers (real-time dashboard, ML model, data lake)
-- IoT: 1M devices sending sensor data; need to replay for model retraining
-- Event sourcing: Append-only log of domain events; rebuild state by replaying
+**Amazon Data Firehose** is the older and broader option. It accepts records sent directly by producers (up to 1,000 KB each) or reads them from a Kinesis data stream, and delivers them to S3, Iceberg tables, Redshift, OpenSearch, Snowflake, Splunk, any HTTPS endpoint, or monitoring partners like Datadog and New Relic. It can also read an MSK topic and deliver it to S3. Along the way it can:
 
-### When to Use SQS
+- **Buffer** records until a size (1 to 128 MB for S3) or an interval (0 to 900 seconds, 300 by default) is reached, whichever comes first. Larger buffers mean fewer, larger S3 objects, which are cheaper to write and faster to query. A zero interval delivers within seconds to most destinations.
+- **Transform** records with a Lambda function, such as parsing log lines or dropping fields.
+- **Convert** JSON to Parquet or ORC, columnar formats that analytics engines scan far faster than JSON.
+- **Partition** S3 output by fields in the data, such as `customer_id=42/date=2026-09-25/`, so queries read only the partitions they need.
+- **Back up** the source data, or just the records it failed to deliver, to S3.
 
-✅ **Use SQS when:**
-- Simple point-to-point messaging (one producer, one consumer)
-- No need to replay messages
-- Lower latency required (<10ms)
-- Message processing order unimportant (or low throughput FIFO acceptable)
-- Dead letter queue for failed messages
-- Decoupling microservices
-- Task queues, job processing
+Firehose delivers at least once, so duplicates are possible at the destination. When a destination stays unavailable, what happens depends on the source. Records sent directly to Firehose are retried for a limited time, up to 24 hours for S3, and then discarded, which is why the failed-record backup matters. Records read from a Kinesis stream or MSK topic are retried for as long as the source still holds them.
 
-**Examples:**
-- Order processing: Place order → process order (no need to replay)
-- Background jobs: Resize image, send email (one-time tasks)
-- Microservices: Service A → Queue → Service B (loose coupling)
-
-### When to Use Kinesis Firehose
-
-✅ **Use Kinesis Firehose when:**
-- Need to load streaming data into S3, Redshift, OpenSearch, Splunk
-- Don't need custom consumer logic (just delivery)
-- Near real-time acceptable (60s+ latency)
-- Zero infrastructure management desired
-- Built-in transformation sufficient (Lambda)
-
-**Examples:**
-- Log aggregation to S3 for long-term storage
-- Clickstream to Redshift for analytics
-- Application logs to OpenSearch for search/visualization
-- Streaming ETL with Lambda transformation
-
-### Decision Matrix
-
-| Scenario | Recommendation |
-|----------|---------------|
-| Need to replay data | Kinesis Data Streams |
-| Multiple consumers need same data | Kinesis Data Streams |
-| High-throughput ordered delivery (>300 TPS) | Kinesis Data Streams |
-| Simple job queue, no replay needed | SQS |
-| Low latency (<10ms), simple fanout | SQS + SNS |
-| Load data into S3/Redshift/OpenSearch | Kinesis Firehose |
-| Custom processing, then delivery | Kinesis Data Streams → Lambda → Firehose |
-| Event sourcing, audit log | Kinesis Data Streams (365 day retention) |
-
-### Hybrid Patterns
-
-**Pattern 1: Kinesis → Firehose (Real-Time + Archival)**
-
-```
-Producers → [Kinesis Data Streams] → Lambda (real-time processing)
-                ↓
-            Firehose → S3 (archive)
-```
-
-**Benefit:** Real-time processing + automatic S3 archival.
-
-**Pattern 2: Kinesis → SQS (Distribute to Independent Consumers)**
-
-```
-Producers → [Kinesis Data Streams] → Lambda (filter/route) → SQS Queues
-                                                                 ↓
-                                                           Consumer Services
-```
-
-**Benefit:** Kinesis provides replay capability; SQS provides independent consumer scaling.
+Choose Kinesis delivery for a plain archive or Iceberg tables fed from an on-demand stream. Choose Firehose when producers write directly without a stream, when the destination isn't S3, or when records need transforming, converting, or partitioning on the way.
 
 ---
 
-## Scaling Patterns
+## Kinesis, SQS, or MSK
 
-### Data Streams Scaling
+| | Kinesis Data Streams | SQS | Amazon MSK |
+|---|---|---|---|
+| **Model** | Ordered log with retention | Queue, messages deleted once processed | Ordered log with retention (Kafka) |
+| **Several consumers of the same data** | Yes, each at its own position | No. Each message goes to one consumer, so fanout needs SNS or several queues | Yes |
+| **Order** | Per partition key | Per message group, on FIFO queues | Per partition key |
+| **Replay** | Within retention, up to 365 days | No | Within retention |
+| **Consumer failure** | Depends on the consumer, which either blocks the shard or skips the record (see Reading a Stream) | Standard queues retry a failing message alone. On FIFO queues it holds up its message group. Either can move it to a dead-letter queue | Depends on the consumer, as with Kinesis |
+| **Scaling unit** | Shards, or on-demand | None to manage | Brokers and partitions, or MSK Serverless |
 
-**On-Demand Mode (Recommended for Variable Traffic):**
-
-- Auto-scales up to 200 MB/sec write, 400 MB/sec read (default)
-- Request limit increase via AWS Support
-- Scales down after 15 minutes of reduced traffic
-- No manual intervention
-
-**Provisioned Mode:**
-
-**1. Application Auto Scaling (Target Tracking):**
-
-```json
-{
-  "TargetValue": 70.0,
-  "PredefinedMetricSpecification": {
-    "PredefinedMetricType": "KinesisDataStreamsIncomingBytes"
-  },
-  "ScaleInCooldown": 300,
-  "ScaleOutCooldown": 60
-}
-```
-
-**Configuration:**
-- Target: 70% of shard capacity (0.7 MB/sec per shard)
-- Scale out: Add shards when exceeds target
-- Scale in: Remove shards when below target
-
-**2. Scheduled Scaling:**
-
-```python
-# Scale up before daily 9 AM traffic spike
-schedule = "cron(0 8 * * ? *)"  # 8 AM UTC
-min_capacity = 20  # 20 shards
-max_capacity = 50
-```
-
-### Firehose Scaling
-
-**Fully Automatic:**
-- No configuration required
-- Scales to any throughput
-- Zero operational overhead
-
-**Buffering Considerations:**
-
-High throughput → reduce buffer size/interval for faster delivery:
-
-```json
-{
-  "BufferingHints": {
-    "SizeInMBs": 64,
-    "IntervalInSeconds": 60
-  }
-}
-```
-
-Low throughput → increase buffer for cost efficiency (fewer S3 PUTs):
-
-```json
-{
-  "BufferingHints": {
-    "SizeInMBs": 128,
-    "IntervalInSeconds": 900
-  }
-}
-```
+Use **SQS** for work items that each need doing once, by whichever worker is free, where one bad message shouldn't block others. Use **Kinesis Data Streams** when several applications need the same records, when order per key matters at high volume, or when you need replay. Use **MSK** when you already run Kafka, need the Kafka ecosystem of connectors and stream processors, or need retention and throughput patterns Kinesis doesn't offer.
 
 ---
 
-## Cost Optimization Strategies
+## Security
 
-### Kinesis Data Streams Pricing (us-east-1, 2025)
-
-**On-Demand Mode:**
-- $0.040 per GB ingested
-- $0.015 per GB retrieved
-- Extended retention (>24h): $0.023 per GB-month
-
-**Provisioned Mode:**
-- $0.015 per shard-hour ($10.80/shard/month)
-- $0.014 per million PUT requests (>1M/month)
-- Extended retention: $0.023 per GB-month
-
-**Enhanced Fan-Out:**
-- $0.015 per shard-hour per consumer ($10.80/consumer/month per shard)
-- $0.015 per GB retrieved
-
-### Kinesis Firehose Pricing
-
-- $0.029 per GB ingested
-- Data format conversion (Parquet, ORC): +$0.018 per GB
-- Dynamic partitioning: +$0.0075 per GB
-- VPC delivery: +$0.01 per hour per AZ
-
-### 1. Choose Right Capacity Mode
-
-**On-Demand vs Provisioned (Data Streams):**
-
-**Scenario:** 100 GB/day = 4.17 GB/hour = 1.16 MB/sec average
-
-**Peak Traffic:** 5× average = 5.8 MB/sec → need 6 shards provisioned
-
-**On-Demand Cost:**
-- Ingestion: 100 GB × $0.040 = $4.00/day = $120/month
-- Retrieval (1 consumer): 100 GB × $0.015 = $1.50/day = $45/month
-- **Total: $165/month**
-
-**Provisioned Cost (6 shards):**
-- Shard hours: 6 shards × $10.80 = $64.80/month
-- PUT requests: 100 GB ÷ 25 KB avg size = 4.2M records/day = 126M/month
-- PUT cost: 126M × $0.014/M = $1.76/month
-- Retrieval: Free (included)
-- **Total: $66.56/month**
-
-**Savings: 60% with provisioned mode for predictable traffic**
-
-**When On-Demand Makes Sense:**
-- Unpredictable traffic (spikes 10×+ average)
-- New workloads (unknown capacity)
-- Variable daily patterns
+- **Access.** IAM policies grant `kinesis:PutRecords` to producers and read actions to consumers on specific stream ARNs. A **resource policy** on a stream or consumer lets other accounts read or write it directly.
+- **Encryption at rest.** Kinesis Data Streams encrypts records with a KMS key only once you turn on server-side encryption for the stream, using the AWS managed key or your own. Records written before that stay unencrypted. Sharing an encrypted stream with another account requires a customer managed key. Firehose can encrypt the data it holds with a KMS key, and writes to S3 using the destination bucket's encryption or a key you choose.
+- **Private access.** Interface VPC endpoints let producers and consumers in private subnets reach both services without a NAT gateway.
 
 ---
 
-### 2. Optimize Retention Period
+## Monitoring
 
-**Problem:** Extended retention costs $0.023 per GB-month.
+| Metric | What it shows |
+|---|---|
+| `GetRecords.IteratorAgeMilliseconds` | How far behind the newest record a shared-throughput consumer is. The key alarm, since a consumer falling further behind than retention loses data. |
+| `SubscribeToShardEvent.MillisBehindLatest` | The same, for an enhanced fan-out consumer |
+| `WriteProvisionedThroughputExceeded` | Writes throttled, usually by a hot key or a traffic jump past on-demand's doubling |
+| `ReadProvisionedThroughputExceeded` | Shared-throughput reads throttled, usually by too many consumers |
+| Firehose `DeliveryToS3.DataFreshness` | Age of the oldest record not yet delivered to S3 |
 
-**Example:** 100 GB/day, 7-day retention
-
-```
-Daily ingestion: 100 GB
-Retention: 7 days
-Storage: 700 GB average
-
-Cost: 700 GB × $0.023 = $16.10/month
-```
-
-**24-hour retention:** $0 (included)
-
-**Optimization:** Use minimum retention required; archive to S3 for long-term storage (cheaper).
-
-**Alternative: Firehose → S3**
-
-```
-Kinesis Data Streams (24h retention) → Firehose → S3
-
-S3 cost: 100 GB/day × 30 days = 3 TB/month
-S3 Standard: 3 TB × $0.023 = $69/month (includes unlimited retention)
-```
-
-**Benefit:** S3 cheaper for long-term storage than Kinesis extended retention.
+Stream-level metrics hide a single hot shard. **Enhanced shard-level monitoring** adds per-shard metrics at extra cost, for diagnosing uneven keys.
 
 ---
 
-### 3. Batch Records
+## Where the Money Goes
 
-**Problem:** Each PUT request costs $0.014 per million (after 1M free/month).
+| Kinesis Data Streams (us-east-1) | On-demand Standard | On-demand Advantage | Provisioned |
+|---|---|---|---|
+| **Capacity** | $0.04 per stream-hour | No charge | $0.015 per shard-hour |
+| **Writes** | $0.08 per GB, each record rounded up to 1 KB | $0.032 per GB, rounded up to 1 KB | $0.014 per million 25 KB units |
+| **Reads** | $0.04 per GB | $0.016 per GB | Included for shared throughput |
+| **Enhanced fan-out** | $0.04 per GB read | No extra charge | $0.015 per consumer-shard-hour, plus $0.013 per GB |
+| **Delivery to S3 / streaming tables** | $0.0275 / $0.035 per GB | $0.011 / $0.014 per GB | Not available |
 
-**Without Batching:**
+Retention beyond 24 hours costs extra in every mode, and reading records older than 7 days carries its own charge. **Firehose** charges $0.029 per GB for data sent directly or read from a Kinesis stream, rounding every record up to 5 KB, and $0.055 per GB from MSK with no rounding. Format conversion, dynamic partitioning, and delivery into a VPC add their own charges.
 
-```
-100 GB/day, 1 KB per record
-Records: 100 GB ÷ 1 KB = 100M records/day = 3B records/month
-PUT calls: 3B (one per record)
-Cost: 3,000M × $0.014 = $42,000/month
-```
+The rounding rules matter most for small records. Provisioned streams bill writes in 25 KB units, with every record at least one unit, so a 1 KB record costs a full unit. A stream writing 1,000 records of 1 KB per second, 1 MB per second or about 2.6 TB in a 30-day month, with one consumer, costs roughly:
 
-**With Batching (PutRecords, 500 records per batch):**
+- **Provisioned**, with two shards for headroom, about $22 for shards and $36 for 2.6 billion write units, around **$58 a month**.
+- **On-demand Standard**, about $29 for the stream, $207 for writes, and $104 for reads, around **$340 a month**.
+- **Firehose** reading the same records bills every 1 KB record as 5 KB, about $376 a month, five times what the data volume suggests. Combining records into larger ones before sending avoids the rounding.
 
-```
-PUT calls: 3B ÷ 500 = 6M calls/month
-Cost: 6M × $0.014 = $84/month
-
-Savings: $41,916/month (99.8% reduction)
-```
-
-**Best Practice:** Use `PutRecords` API (batch up to 500 records per call).
-
----
-
-### 4. Use Firehose for Simple Delivery
-
-**Scenario:** Load logs into S3 (no custom processing needed).
-
-**Data Streams + Lambda + S3:**
-
-```
-Data Streams: $120/month (on-demand, 100 GB)
-Lambda: 100M invocations = $20/month
-S3 PUTs: Depends on batch size
-
-Total: $140+/month
-```
-
-**Firehose → S3:**
-
-```
-Firehose: 100 GB × $0.029 = $87/month (auto-batches to S3)
-
-Savings: $53/month (38%)
-```
-
-**Benefit:** Firehose eliminates Lambda and auto-batches S3 writes.
-
----
-
-### 5. Compress Data Before Ingestion
-
-**Problem:** Kinesis charges per GB ingested.
-
-**Example:** 100 GB/day uncompressed JSON
-
-**With Gzip Compression (typical 80% reduction):**
-
-```
-Compressed size: 20 GB/day
-Kinesis cost: 20 GB × $0.040 = $0.80/day = $24/month (vs $120/month)
-
-Savings: $96/month (80%)
-```
-
-**Trade-Off:** Consumer must decompress (minimal CPU cost with modern libraries).
-
----
-
-### 6. Shared vs Enhanced Fan-Out
-
-**Scenario:** 3 consumers, 6 shards, 100 GB/day
-
-**Shared Mode (Default):**
-
-```
-Cost: Free (consumers share 2 MB/sec per shard)
-Latency: 200ms average (pull model, polling every 1s)
-```
-
-**Enhanced Fan-Out:**
-
-```
-Cost: 3 consumers × 6 shards × $10.80 = $194.40/month
-     + (100 GB × 3 consumers) × $0.015 = $4.50/month
-     = $198.90/month
-
-Latency: 70ms average (push model, HTTP/2)
-
-Additional Cost: $198.90/month for lower latency
-```
-
-**Use Enhanced Fan-Out Only When:**
-- Need <100ms latency
-- Have >2 consumers (shared mode throughput split across consumers)
-- Read throughput per consumer limited by 2 MB/sec shard limit
-
----
-
-## Performance Optimization
-
-### Data Streams Throughput Optimization
-
-**1. Optimize Record Size**
-
-**Problem:** 1,000 records/sec shard limit hit before 1 MB/sec limit.
-
-**Without Aggregation:**
-
-```
-1 KB per record
-Throughput: 1,000 records/sec per shard = 1 MB/sec ✓
-Limit: 1,000 records/sec ✗ (hit first)
-```
-
-**With Kinesis Producer Library (KPL) Aggregation:**
-
-```
-Aggregate 100 records into single 100 KB record
-Throughput: 10,000 records/sec per shard (100 records × 100 aggregated)
-           = 1 MB/sec (100 KB × 10)
-Limit: Neither limit hit
-
-10× throughput improvement
-```
-
-**2. Parallel Shard Processing**
-
-**KCL (Kinesis Client Library) automatically parallelizes:**
-
-```
-6 shards, 6 consumer instances
-Each instance reads 1 shard (default: max 1 instance per shard)
-
-Throughput: 6 shards × 2 MB/sec = 12 MB/sec read
-```
-
-**Scaling Consumers:**
-- Scale consumer instances to match shard count
-- KCL handles shard assignment via DynamoDB coordination table
-
-**3. Enhanced Fan-Out for Low Latency**
-
-**Shared Mode:**
-- Consumers poll every 200ms-1s
-- Latency: 200ms-1s
-
-**Enhanced Fan-Out:**
-- Kinesis pushes records via HTTP/2
-- Latency: 70ms average
-
-**Use Case:** Real-time dashboards, fraud detection (latency-sensitive).
-
-### Firehose Throughput Optimization
-
-**1. Adjust Buffer Settings**
-
-**High Throughput Scenario (100 MB/sec):**
-
-```json
-{
-  "BufferingHints": {
-    "SizeInMBs": 128,
-    "IntervalInSeconds": 60
-  }
-}
-```
-
-**Benefit:** Larger buffers = fewer S3 PUTs = lower S3 request costs.
-
-**2. Data Format Conversion**
-
-**Convert JSON → Parquet for analytics:**
-
-```
-JSON: 100 GB/day
-Parquet: 20 GB/day (80% compression)
-
-Firehose conversion cost: 100 GB × $0.018 = $1.80/day
-S3 storage savings: 80 GB × $0.023 = $1.84/day (breaks even immediately)
-
-Athena query cost savings: 80% less data scanned
-```
-
-**Benefit:** Parquet columnar format 10× faster for Athena queries.
-
----
-
-## Security Best Practices
-
-### 1. Encryption at Rest
-
-**Data Streams:**
-- Server-side encryption with AWS KMS
-- Encryption applied to entire stream
-
-**Enable Encryption:**
-
-```bash
-aws kinesis start-stream-encryption \
-  --stream-name my-stream \
-  --encryption-type KMS \
-  --key-id arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
-```
-
-**Cost:** KMS API requests ($0.03 per 10,000 requests) for encrypt/decrypt operations.
-
-**Firehose:**
-- Automatically encrypted in transit and at rest
-- Uses AWS-managed keys or customer-managed KMS keys
-
----
-
-### 2. Encryption in Transit
-
-**All Kinesis services:**
-- TLS 1.2+ for all API calls
-- Automatic (no configuration required)
-
----
-
-### 3. IAM Policies
-
-**Principle of Least Privilege:**
-
-**Producer Policy:**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "kinesis:PutRecord",
-    "kinesis:PutRecords"
-  ],
-  "Resource": "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"
-}
-```
-
-**Consumer Policy:**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "kinesis:GetRecords",
-    "kinesis:GetShardIterator",
-    "kinesis:DescribeStream",
-    "kinesis:ListShards"
-  ],
-  "Resource": "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"
-}
-```
-
-**KCL Consumer (Additional DynamoDB/CloudWatch Permissions):**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "dynamodb:CreateTable",
-    "dynamodb:DescribeTable",
-    "dynamodb:GetItem",
-    "dynamodb:PutItem",
-    "dynamodb:UpdateItem",
-    "dynamodb:Scan"
-  ],
-  "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/my-app"
-}
-```
-
----
-
-### 4. VPC Endpoints (PrivateLink)
-
-**Keep traffic private (no internet):**
-
-```
-Application in VPC → VPC Endpoint → Kinesis (private connection)
-```
-
-**Benefit:** Traffic doesn't traverse internet; reduced attack surface.
-
----
-
-## Observability and Monitoring
-
-### Key CloudWatch Metrics (Data Streams)
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `IncomingBytes` | Bytes ingested per stream | Monitor trends; detect anomalies |
-| `IncomingRecords` | Records ingested per stream | Compare to expected throughput |
-| `WriteProvisionedThroughputExceeded` | Requests throttled due to shard limit | >0 (scale up or optimize partition key) |
-| `ReadProvisionedThroughputExceeded` | Consumers throttled (shared mode) | >0 (use enhanced fan-out or reduce polling) |
-| `GetRecords.IteratorAgeMilliseconds` | Time lag between ingestion and consumption | >60000 (1 minute) indicates consumer falling behind |
-| `PutRecord.Success` | Successful put operations | Monitor for drops |
-
-### Key CloudWatch Metrics (Firehose)
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `IncomingBytes` | Bytes ingested | Monitor trends |
-| `DeliveryToS3.Success` | Successful S3 deliveries | <100% (investigate failures) |
-| `DeliveryToS3.DataFreshness` | Age of oldest record in Firehose | >900 (15 min) indicates backlog |
-| `IncomingRecords` | Records ingested | Compare to expected |
-| `DataTransformation.Duration` | Lambda transformation time | >30s (optimize Lambda) |
-
-### CloudWatch Alarms
-
-**1. Consumer Lag (Data Streams)**
-
-```
-Metric: GetRecords.IteratorAgeMilliseconds
-Threshold: >60000 (1 minute lag)
-Duration: 5 minutes
-Action: Alert on-call; scale consumers or shards
-```
-
-**2. Throttling (Data Streams)**
-
-```
-Metric: WriteProvisionedThroughputExceeded
-Threshold: >100
-Duration: 1 minute
-Action: Scale up shards or optimize partition key distribution
-```
-
-**3. Delivery Failures (Firehose)**
-
-```
-Metric: DeliveryToS3.Success
-Threshold: <100%
-Duration: 5 minutes
-Action: Check IAM permissions, S3 bucket policy, Lambda errors
-```
-
-### Enhanced Monitoring
-
-**Data Streams:**
-- Shard-level metrics (per-shard throughput)
-- Enable via `EnableEnhancedMonitoring` API
-
-**Cost:** $0.015 per shard-hour per metric (7 metrics available)
-
-**When to Enable:** Debugging hot shard issues, uneven traffic distribution.
-
----
-
-## Integration Patterns
-
-### Pattern 1: Kinesis Data Streams → Lambda (Real-Time Processing)
-
-**Use Case:** Process events in real-time (filtering, enrichment, aggregation).
-
-**Architecture:**
-
-```
-Producers → [Kinesis Data Streams] → Lambda → DynamoDB/S3/SNS
-```
-
-**Lambda Configuration:**
-- Batch size: 100-10,000 records (trade-off: latency vs efficiency)
-- Batch window: 0-300 seconds (wait to accumulate records)
-- Parallelization factor: 1-10 (concurrent executions per shard)
-
-**Example: Clickstream Analytics**
-
-```
-Clickstream → Kinesis → Lambda (aggregate clicks per user) → DynamoDB (user profile)
-```
-
----
-
-### Pattern 2: Kinesis Data Streams → Firehose → S3 (Archive)
-
-**Use Case:** Real-time processing + long-term archival.
-
-**Architecture:**
-
-```
-Producers → [Kinesis Data Streams] → Lambda (process)
-                ↓
-            Firehose → S3 (archive)
-```
-
-**Benefit:** Lambda processes for real-time insights; Firehose archives for historical analysis.
-
----
-
-### Pattern 3: Kinesis Firehose → Lambda → S3 (ETL)
-
-**Use Case:** Transform data before storage (format conversion, enrichment).
-
-**Architecture:**
-
-```
-Producers → [Firehose] → Lambda (transform) → S3 (Parquet)
-```
-
-**Example: Log Processing**
-
-```python
-def lambda_handler(event, context):
-    output = []
-    for record in event['records']:
-        # Decode, transform, enrich
-        payload = base64.b64decode(record['data'])
-        log = json.loads(payload)
-
-        # Add metadata
-        log['processed_at'] = datetime.now().isoformat()
-
-        # Re-encode
-        output_record = {
-            'recordId': record['recordId'],
-            'result': 'Ok',
-            'data': base64.b64encode(json.dumps(log).encode())
-        }
-        output.append(output_record)
-
-    return {'records': output}
-```
-
----
-
-### Pattern 4: EventBridge → Kinesis Data Streams
-
-**Use Case:** Route events from EventBridge to Kinesis for replay capability.
-
-**Architecture:**
-
-```
-AWS Services → EventBridge → Kinesis Data Streams → Consumers
-```
-
-**Benefit:** EventBridge provides content-based routing; Kinesis provides replay and multiple consumers.
-
----
-
-### Pattern 5: Multi-Region Active-Active (Data Streams)
-
-**Use Case:** Global application with regional processing.
-
-**Architecture:**
-
-```
-Region 1: Producers → Kinesis Stream 1 → Consumers
-Region 2: Producers → Kinesis Stream 2 → Consumers
-
-Cross-region replication via Lambda or Firehose
-```
-
-**Note:** Kinesis Data Streams has no native cross-region replication; implement via Lambda or Firehose.
-
----
-
-## Common Pitfalls
-
-### Pitfall 1: Hot Shards
-
-**Problem:** Poor partition key choice causes uneven shard utilization; some shards throttled while others idle.
-
-**Example:** Partition key = celebrity user ID; 80% of traffic to 1 shard out of 10.
-
-**Solution:** Add random suffix or use composite key (user ID + timestamp hour).
-
-**Cost Impact:** Wasted capacity (9 idle shards) and throttling (lost data).
-
----
-
-### Pitfall 2: Consumer Lag Not Monitored
-
-**Problem:** Consumer falling behind; `IteratorAgeMilliseconds` increasing over time.
-
-**Symptom:** Real-time dashboard shows data from 10 minutes ago.
-
-**Solution:** CloudWatch alarm on `IteratorAgeMilliseconds > 60000`; scale consumers or shards.
-
-**Cost Impact:** Stale data reduces business value of real-time processing.
-
----
-
-### Pitfall 3: Not Using KPL/KCL
-
-**Problem:** Custom producer/consumer code doesn't handle retries, aggregation, checkpointing.
-
-**Solution:** Use Kinesis Producer Library (KPL) for producers and Kinesis Client Library (KCL) for consumers.
-
-**Benefit:**
-- KPL: Automatic retry, batching, aggregation (10× throughput)
-- KCL: Automatic shard discovery, checkpointing, failover
-
-**Cost Impact:** Development time wasted reinventing built-in functionality.
-
----
-
-### Pitfall 4: Firehose Buffer Too Large
-
-**Problem:** 900s interval, 128 MB buffer; low throughput means data delayed 15 minutes.
-
-**Example:** 1 MB/hour throughput; 128 MB buffer never fills; data always waits 15 minutes.
-
-**Solution:** Reduce buffer interval to 60s for near real-time delivery.
-
-**Cost Impact:** Delayed insights; defeats purpose of streaming.
-
----
-
-### Pitfall 5: Not Compressing Data
-
-**Problem:** Sending uncompressed JSON; paying for 5× more data ingestion.
-
-**Solution:** Compress with Gzip before sending to Kinesis.
-
-**Cost Impact:** 80% higher Kinesis costs (for typical JSON compression ratios).
-
----
-
-### Pitfall 6: Using Data Streams for Simple S3 Delivery
-
-**Problem:** Data Streams + Lambda → S3 when Firehose sufficient.
-
-**Solution:** Use Firehose for simple delivery to S3/Redshift/OpenSearch (no custom processing needed).
-
-**Cost Impact:** 40%+ higher costs vs Firehose; operational overhead of managing Lambda.
-
----
-
-### Pitfall 7: Retention Too Long Without Archival Strategy
-
-**Problem:** 365-day retention on Data Streams for 100 GB/day = 36.5 TB storage.
-
-**Cost:** 36.5 TB × $0.023 = $839/month (just for retention)
-
-**Solution:** Use 24-hour retention; archive to S3 via Firehose ($69/month for 3 TB).
-
-**Cost Impact:** 92% savings by using S3 for long-term storage.
+On-demand costs more for steady traffic and saves money and effort for traffic that's spiky, idle much of the time, or hard to predict. On-demand Advantage narrows the gap only for accounts that reach its 25 MiB/s minimum, which is 25 times the stream in this example.
 
 ---
 
 ## Key Takeaways
 
-1. **Kinesis Data Streams enables real-time streaming with replay capability.** Ingest millions of events/sec, consumers process in real-time, and replay data up to 365 days for reprocessing.
-
-2. **Kinesis Firehose delivers streaming data to AWS services with zero infrastructure.** Fully managed service with automatic scaling and built-in transformation. It loads data into S3, Redshift, OpenSearch, and Splunk.
-
-3. **Choose Data Streams for custom processing and replay; Firehose for simple delivery.** Data Streams: custom consumers, multiple readers, replay needed. Firehose: delivery to S3/Redshift/OpenSearch without custom code.
-
-4. **Sharding determines throughput, ordering, and parallelism.** Each shard: 1 MB/sec write, 2 MB/sec read. Partition key groups related records into same shard for ordering guarantees.
-
-5. **Partition key choice critical to avoid hot shards.** Use high-cardinality, evenly distributed keys (user ID, device ID, request ID). Avoid low-cardinality keys (log level, page name).
-
-6. **On-demand mode recommended for variable traffic; provisioned for steady workloads.** On-demand auto-scales, while provisioned saves 60%+ for predictable traffic.
-
-7. **Use KPL/KCL for production workloads.** KPL: automatic batching, aggregation, retry (10× throughput). KCL: automatic shard discovery, checkpointing, failover.
-
-8. **Enhanced fan-out provides dedicated throughput per consumer.** Each consumer gets 2 MB/sec per shard (vs shared 2 MB/sec across all consumers). Use for low latency (<100ms) or >2 consumers.
-
-9. **Batch records to reduce PUT request costs.** `PutRecords` API batches up to 500 records per call; saves 99% on request costs vs individual `PutRecord` calls.
-
-10. **Monitor IteratorAgeMilliseconds to detect consumer lag.** Increasing iterator age means consumer falling behind; scale consumers or shards.
-
-11. **Compress data before ingestion to reduce costs 80%.** Gzip compression typical for JSON; pay only for compressed size.
-
-12. **Use Firehose for S3/Redshift delivery to save 40% vs Data Streams + Lambda.** Firehose auto-batches S3 writes; eliminates Lambda costs and operational overhead.
-
-13. **Data Streams supports multiple consumers; SQS supports single consumer.** Use Data Streams for fan-out to multiple applications reading same stream. Use SQS for point-to-point messaging.
-
-14. **Firehose buffer configuration trades latency vs cost.** Smaller buffer/interval = faster delivery, more S3 PUTs. Larger buffer = delayed delivery, fewer S3 PUTs (lower cost).
-
-15. **Kinesis provides ordering guarantees per partition key; SQS FIFO limited to 300 TPS.** Use Kinesis for high-throughput ordered delivery (millions/sec). Use SQS FIFO for low-throughput strict ordering (<300 TPS).
-
-**AWS Kinesis is the strategic service for real-time streaming on AWS, providing millisecond latency, replay capability, and multiple consumer fan-out that batch processing and message queues cannot. Choose Data Streams for custom real-time processing and Firehose for zero-infrastructure delivery to AWS data stores.**
+- A stream is an ordered log that every consumer reads at its own pace, with replay within retention. Use it when several applications need the same records or order per key matters, and a queue when each item just needs doing once.
+- The partition key decides both order and load. Pick a high-cardinality key that matches the entity whose order matters, since one key can never exceed one shard's 1 MB or 1,000 records per second. When order doesn't matter, let an on-demand stream place records itself.
+- On-demand Standard needs no planning and costs more for steady load. Provisioned is cheapest for predictable traffic. On-demand Advantage cuts on-demand rates for accounts with high, steady volume.
+- Beyond two or three consumers, use enhanced fan-out. Make consumers idempotent, and decide what happens to a record that keeps failing, since Lambda blocks the shard behind it and the KCL skips it by default.
+- Deliver to S3 or Iceberg with Kinesis delivery on on-demand streams, or with Firehose when producers write directly, the destination isn't S3, or records need transforming or partitioning.
+- Alarm on iterator age, and mind the rounding rules: 1 KB per record on on-demand writes, 25 KB units on provisioned, 5 KB on Firehose.

@@ -46,7 +46,7 @@ Every event on a bus has the same envelope. The producer sets `source`, `detail-
 }
 ```
 
-AWS services publish their own events in this format, such as an EC2 instance changing state, an object arriving in S3, or a CloudFormation stack finishing. An event can be up to 1 MB (raised from 256 KB in January 2026), and each 64 KB of it is billed as one event.
+AWS services publish their own events in this format, such as an EC2 instance changing state, an object arriving in S3, or a CloudFormation stack finishing. An event can be up to 1 MB, raised from 256 KB in January 2026.
 
 Consumers select events with an **event pattern**, a JSON document with the same shape as the events it matches. This pattern matches expedited orders over $100:
 
@@ -81,7 +81,7 @@ On any of them, a **rule** pairs one event pattern with up to **five targets**. 
 
 ### Delivery and Failures
 
-Classic buses deliver **at least once**, so a target can occasionally receive an event twice, and they don't preserve order. When a delivery fails with an error that might succeed later, EventBridge retries with exponential backoff and jitter, for 24 hours and up to 185 attempts by default. A shorter retry policy can be set per target. After the last attempt, the event is dropped unless the target has a **dead-letter queue**, an SQS queue that receives the event along with the error. Give every important target one, and alarm on it.
+Classic buses deliver **at least once**, so a target can occasionally receive an event twice, and they don't preserve order. Targets need to be **idempotent**, meaning that handling the same event twice has the same effect as handling it once, for example by recording each event's `id` and skipping ones already seen. When a delivery fails with an error that might succeed later, EventBridge retries with growing, randomized delays between attempts, for 24 hours and up to 185 attempts by default. A shorter retry policy can be set per target. After the last attempt, the event is dropped unless the target has a **dead-letter queue**, an SQS queue that receives the event along with the error. Give every important target one, and alarm on it.
 
 Two quotas govern throughput. `PutEvents` accepts 10,000 requests per second in us-east-1, us-west-2, and eu-west-1, and as few as 400 in smaller Regions. Deliveries to targets are limited to 18,750 per second in the largest Regions, and deliveries above that are delayed, not dropped. Both can be raised. Latency from publishing to the first delivery attempt was about 130 milliseconds at p99 in August 2024.
 
@@ -103,22 +103,24 @@ In each case, someone writes a rule for every consumer, either in the central ac
 
 ## The Custom Event Bus
 
-In September 2026, EventBridge launched a second kind of custom bus, called the **Custom Event Bus**, built around a different idea. The bus keeps every event for a retention period of 1 to 365 days, and each consumer attaches its own **subscriber**. A subscriber holds one filter, one target, a retry policy, and a dead-letter destination. Sending events to three targets takes three subscribers. At launch it's available in 14 Regions, and Classic buses keep working unchanged alongside it.
+In September 2026, EventBridge launched a second kind of custom bus, called the **Custom Event Bus**, built around a different idea. The bus keeps every event for a retention period of 1 to 365 days (1 day if you don't set one), and each consumer attaches its own **subscriber**. A subscriber holds its filters, one target, a retry policy (5 attempts within 300 seconds by default), and an SQS dead-letter queue. Sending events to three targets takes three subscribers. Targets include SQS, Lambda, SNS, Kinesis, Firehose, Step Functions, HTTP endpoints, other buses, and universal targets that call any state-changing AWS API action directly. At launch the bus is available in 14 Regions, and Classic buses keep working unchanged alongside it.
+
+AWS service and SaaS partner events reach a Custom Event Bus through an **event source**, a resource that names the origin and the destination bus, so the new bus isn't limited to your own applications' events.
 
 Retention changes what consumers can do:
 
 - A new subscriber can **start from a point in the past**, reading retained events before catching up to live ones. A new analytics service can read the last month of orders on its first day.
 - A subscriber can **pause and resume** without losing events, which is also how a consumer replays events after fixing a bug.
 
-It adds ordering and deduplication, which Classic buses don't have. A producer can tag events with an **event group ID**, such as an account number, and a subscriber of type `FIFO` delivers each group's events in the order they were published, while other groups continue in parallel. An event that can't be delivered holds up the later events in its group. A producer can also ask the bus to drop duplicates published within 5 minutes, matched on a key the producer supplies or on a hash of the content. With both, each accepted event reaches a FIFO subscriber once and in order. Beyond the 5-minute window, a repeated publish is a new event, so consumers still need to be idempotent.
+It adds ordering and deduplication, which Classic buses don't have. A producer can tag events with an **event group ID**, such as an account number, and a subscriber of type `FIFO` delivers each group's events in the order they were published, while other groups continue in parallel. An event that can't be delivered holds up the later events in its group, so a FIFO subscriber needs an alarm on its backlog (see Monitoring). A producer can also ask the bus to drop duplicates published within 5 minutes, matched on a key the producer supplies or on a hash of the content. With both, each accepted event reaches a FIFO subscriber once and in order. Beyond the 5-minute window, a repeated publish is a new event, so consumers still need to be idempotent. Groups and deduplication are both scoped to the publishing account, so two accounts publishing to a shared bus with the same group ID create two separate groups, with no order between them.
 
-The bus is built to be shared. The owning account shares it through **AWS Resource Access Manager**, granting other accounts permission to publish, to subscribe, or both. Each consuming account then creates and owns its subscribers on the shared bus, and the bus owner writes no routing for them.
+The bus is built to be shared. The owning account shares it through **AWS Resource Access Manager**, granting other accounts permission to publish, to subscribe, to attach event sources, or all three. Each consuming account then creates and owns its subscribers on the shared bus, and the bus owner writes no routing for them.
 
 {% include figure.html id="aws-eventbridge-bus-ownership" %}
 
-Other differences matter at scale. A Custom Event Bus accepts up to 500,000 events per second, and `PutRawEvents` publishes Avro, Protobuf, or raw bytes as well as JSON. Its billing is by volume rather than by event count (see Where the Money Goes). Each account can create 5 buses by default.
+Other differences matter at scale. A Custom Event Bus accepts up to 500,000 events per second, and `PutRawEvents` publishes Avro and Protobuf (compact binary formats defined by a schema) or raw bytes as well as JSON. Its billing is by volume rather than by event count (see Where the Money Goes). Each account can create 5 buses per Region by default.
 
-**Which bus to use.** For a new event backbone shared across teams and accounts, or any consumer that needs ordering, deduplication, or replay from the recent past, the Custom Event Bus fits better. A Classic bus remains the simpler choice for routing within one account, for Regions the new bus doesn't reach yet, and for existing applications, which have no reason to move until they need one of those capabilities. AWS publishes a migration guide from rules to subscribers.
+**Which bus to use.** AWS recommends the Custom Event Bus for new applications, and it fits best for an event backbone shared across teams and accounts, or any consumer that needs ordering, deduplication, or replay. Classic buses remain the choice in Regions the new bus doesn't reach yet, for rules on the default bus that react to AWS service events within one account, and for existing applications, which have no reason to move until they need one of those capabilities. AWS publishes a migration guide from rules to subscribers.
 
 ---
 
@@ -129,18 +131,18 @@ Both route one message to many consumers, and each fits a different kind of work
 | | EventBridge | SNS |
 |---|---|---|
 | **Built for** | Routing events between services, by content | Fast, high-volume fanout, including to people |
-| **Sources** | Your applications, AWS services, and SaaS partners | Your applications |
+| **Sources** | Your applications, a structured stream of events from AWS services, and SaaS partners | Your applications, and notifications from AWS services such as CloudWatch alarms and S3 |
 | **Targets** | Most AWS services, any HTTPS API, other buses | SQS, Lambda, Firehose, HTTPS, email, SMS, and mobile push |
 | **Filtering** | Patterns on any field of the event | Filter policies on attributes or on the body |
 | **Transformation** | Built in, per target | None |
 | **Replay** | Archives on Classic buses; retention on the Custom Event Bus | FIFO topics only |
 | **Ordering** | FIFO subscribers on the Custom Event Bus | FIFO topics |
 | **Throughput** | 10,000 `PutEvents` requests per second in the largest Regions (Classic), 500,000 events per second per Custom Event Bus | 30,000 publishes per second in us-east-1 |
-| **Price for 1 million small events delivered within one account** | $1.00 (Classic) | $0.50, with no charge to deliver to SQS or Lambda |
+| **Price for 1 million 1 KB events delivered to one consumer** | $1.00 on a Classic bus. About $0.23 on a Custom Event Bus ($0.18 in, $0.05 out) | $0.50, with no charge to deliver to SQS or Lambda |
 
-Choose **EventBridge** when events come from AWS services or SaaS partners, when consumers need to select events by their content, when targets are services other than queues and functions, or when events need replaying. Choose **SNS** for plain fanout at the lowest cost and highest rate, and for notifications to people by email, SMS, or mobile push. The two combine well. A rule can target an SNS topic to reach people, and either one can deliver to SQS queues that give each consumer a buffer.
+Choose **EventBridge** when consumers react to AWS service events or SaaS partner events, when consumers need to select events by their content, when targets are services other than queues and functions, or when events need replaying. Choose **SNS** for plain fanout at the lowest cost and highest rate, and for notifications to people by email, SMS, or mobile push. The two combine well. A rule can target an SNS topic to reach people, and either one can deliver to SQS queues that give each consumer a buffer.
 
-When services react to each other's events this way, with no coordinator deciding the order of steps, the pattern is called **choreography**. It keeps services independent but spreads a multi-step process across many rules and services, which makes the overall flow harder to see and change. A process that needs a defined sequence, with retries and compensation when a step fails, usually belongs in a workflow engine such as Step Functions, which can itself publish events when it finishes.
+Services reacting to each other's events with no coordinator is called choreography. A process that needs a defined sequence of steps, with compensation when one fails, usually belongs in a workflow engine such as Step Functions instead.
 
 ---
 
@@ -165,9 +167,9 @@ Pipes replace the small Lambda functions that used to sit between a queue or str
 - **Rate** schedules run at a fixed interval, such as every 15 minutes.
 - **Cron** schedules run at calendar times, such as 9:00 every weekday, in any time zone, with daylight saving time handled.
 
-A **flexible time window** lets Scheduler run a schedule at any point within a window, which spreads load when many schedules would otherwise fire at the same moment. Beyond templated targets like Lambda, SQS, SNS, and Step Functions, a **universal target** calls any of more than 6,000 API operations across more than 270 AWS services directly, such as stopping an EC2 instance at night. Delivery is at least once, with a retry policy and a dead-letter queue per schedule.
+A **flexible time window** lets Scheduler run a schedule at any point within a window, which spreads load when many schedules would otherwise fire at the same moment. Beyond templated targets like Lambda, SQS, SNS, and Step Functions, a **universal target** calls one of more than 6,000 API operations across more than 270 AWS services directly, such as stopping an EC2 instance at night. Delivery is at least once, with a retry policy and a dead-letter queue per schedule.
 
-Scheduler is built for millions of schedules, which suits per-user or per-order timers that scheduled rules on an event bus can't handle, and it's the recommended replacement for scheduled rules. The first 14 million invocations each month are free, then $1.00 per million.
+Scheduler is built for millions of schedules, which suits per-user or per-order timers. Classic rules can also run on a schedule instead of an event pattern, but AWS now treats these **scheduled rules** as legacy and recommends Scheduler in their place. The first 14 million invocations each month are free, then $1.00 per million.
 
 ---
 
@@ -190,7 +192,7 @@ A registry describes events. It doesn't reject events that don't match, so a pro
 
 ## Monitoring
 
-For Classic buses, a few CloudWatch metrics per rule cover most problems:
+On a Classic bus, a few CloudWatch metrics per rule cover most problems:
 
 | Metric | What it shows |
 |---|---|
@@ -199,7 +201,9 @@ For Classic buses, a few CloudWatch metrics per rule cover most problems:
 | `ThrottledRules` | Rules delayed by the invocation quota |
 | `IngestionToInvocationStartLatency` | How long events take to reach their first delivery attempt |
 
-A rule that matches nothing produces no errors at all, so a pattern with a typo fails silently. Test patterns against sample events before deploying them, with the `TestEventPattern` API or the console's sandbox.
+A Custom Event Bus reports per-subscriber metrics in the `AWS/EventsV2` namespace. Alarm on `EventsDropped` (events that exhausted retries with no dead-letter queue) and `OnFailureDestinationDelivered` (events sent to the dead-letter queue), and on `ApproximateBacklogAge`, the age of the oldest event the subscriber hasn't delivered, which is how a stuck FIFO group shows up. Subscribers can also log every delivery attempt, off by default.
+
+A rule or filter that matches nothing produces no errors at all, so a pattern with a typo fails silently. Test patterns against sample events before deploying them, with the `TestEventPattern` API or the console's sandbox.
 
 ---
 
@@ -217,9 +221,10 @@ A rule that matches nothing produces no errors at all, so a pattern with a typo 
 | Pipes | $0.40 per million records after filtering |
 | API destinations | $0.20 per million calls |
 | Scheduler | First 14 million invocations a month free, then $1.00 per million |
-| Archive and replay (Classic) | $1.00 per million events archived and per million replayed, plus storage |
+| Archiving (Classic) | $0.10 per GB processed, plus $0.023 per GB-month stored |
+| Replay (Classic) | $1.00 per million events replayed |
 
-Each 64 KB of an event counts as one event on a Classic bus, in Pipes, and for API destinations. The Custom Event Bus bills by volume instead, so small events cost less there than on a Classic bus, and a large volume of small events is where the new bus saves the most. Optional processing on it, such as content-based deduplication and transformations, adds $0.15 per million events. Cross-Region delivery adds standard data transfer charges.
+Each 64 KB of an event counts as one event on a Classic bus, in Pipes, and for API destinations. The Custom Event Bus bills by volume instead, so small events cost less there than on a Classic bus, and a large volume of small events is where the new bus saves the most. Optional event evaluation on it, meaning content-based deduplication, transformations, and schema validation, adds $0.15 per million events when configured. Cross-Region delivery adds standard data transfer charges.
 
 ---
 
@@ -227,7 +232,7 @@ Each 64 KB of an event counts as one event on a Classic bus, in Pipes, and for A
 
 - EventBridge routes events by their content, so consumers subscribe without the producer knowing about them, and AWS services and SaaS partners publish to it too.
 - On a Classic bus, rules pair a pattern with up to five targets. Delivery is at least once and unordered, with 24 hours of retries by default. Put a dead-letter queue on every important target.
-- The Custom Event Bus (September 2026) retains events for up to a year, lets each consumer own a subscriber on a shared bus, and adds per-group ordering and 5-minute deduplication. Use it for new cross-account backbones and for consumers that need replay or order.
+- The Custom Event Bus (September 2026) retains events for up to a year, lets each consumer own a subscriber on a shared bus, and adds per-group ordering and 5-minute deduplication. AWS recommends it for new applications, and it fits cross-account backbones and consumers that need replay or order.
 - Choose EventBridge for content-based routing, AWS and SaaS sources, and varied targets. Choose SNS for the cheapest, fastest plain fanout and for notifications to people.
 - Pipes replace glue functions between a queue or stream and a target, and Scheduler replaces cron hosts and scheduled rules, at up to millions of schedules.
 - A schema registry documents events but doesn't enforce them, so treat event structures as a contract and version breaking changes.

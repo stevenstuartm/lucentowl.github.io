@@ -35,7 +35,7 @@ layout: default
     </header>
 
     <div class="path-body">
-        <p class="path-howto" data-pagefind-ignore>Steps you've opened turn grey.</p>
+        <p class="path-howto" data-pagefind-ignore>Steps open in a new tab, so this page stays where you left it. Steps you've opened turn grey.</p>
 
         {% assign step_number = 0 %}
         {% for stage in page.stages %}
@@ -65,7 +65,7 @@ layout: default
                             <span class="path-type-badge path-type-badge--{{ doc.collection }}">{{ doc_type }}</span>
                             <span class="path-step-time">{{ doc_minutes }} min</span>
                         </div>
-                        <a class="path-step-title" href="{{ doc.url | relative_url }}">{{ doc.title }}</a>
+                        <a class="path-step-title" href="{{ doc.url | relative_url }}" target="_blank" rel="noopener">{{ doc.title }}</a>
                         <p class="path-step-why">{{ step.why }}</p>
                     </div>
                 </li>
@@ -85,7 +85,7 @@ layout: default
                 <span class="path-deeper-label">Go deeper</span>
                 {% for deeper_url in stage.deeper %}
                 {% assign doc = all_docs | where: "url", deeper_url | first %}
-                {% if doc %}<a href="{{ doc.url | relative_url }}">{{ doc.title }}</a>{% else %}<code>Missing: {{ deeper_url }}</code>{% endif %}{% unless forloop.last %}<span class="path-deeper-sep" aria-hidden="true">·</span>{% endunless %}
+                {% if doc %}<a href="{{ doc.url | relative_url }}" target="_blank" rel="noopener">{{ doc.title }}</a>{% else %}<code>Missing: {{ deeper_url }}</code>{% endif %}{% unless forloop.last %}<span class="path-deeper-sep" aria-hidden="true">·</span>{% endunless %}
                 {% endfor %}
             </p>
             {% endif %}

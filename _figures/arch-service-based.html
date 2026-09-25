@@ -6,7 +6,7 @@ summary: "A few coarse domain services behind one UI, sharing a database."
 ---
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="asb-title asb-desc" style="width:100%; min-width:680px; height:auto; display:block;">
 <title id="asb-title">Service-based architecture topology</title>
-<desc id="asb-desc">A user interface routes requests to four separately deployed, coarse-grained domain services: catalog, checkout, inventory, and fulfillment. Each service has its own API facade, business logic, and persistence. All four share one database, with tables grouped by domain: catalog, orders, stock, and shipping.</desc>
+<desc id="asb-desc">A user interface routes requests to four separately deployed, coarse-grained domain services: catalog, checkout, inventory, and fulfillment. Each service has its own API, business logic, and persistence. All four share one database, with tables grouped by domain: catalog, orders, stock, and shipping.</desc>
 <style>
 .asb-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
 .asb-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
@@ -31,7 +31,7 @@ summary: "A few coarse domain services behind one UI, sharing a database."
 <rect class="asb-box" x="40" y="114" width="190" height="120" rx="6"/>
 <text class="asb-n" x="54" y="138">Catalog service</text>
 <text class="asb-k" x="54" y="156">[separately deployed]</text>
-<text class="asb-s" x="54" y="173">API facade</text>
+<text class="asb-s" x="54" y="173">API</text>
 <text class="asb-s" x="54" y="190">business logic</text>
 <text class="asb-s" x="54" y="207">persistence</text>
 <path class="asb-flow" d="M 135,234 L 135,290" marker-end="url(#asb-a)"/>
@@ -39,7 +39,7 @@ summary: "A few coarse domain services behind one UI, sharing a database."
 <rect class="asb-box" x="250" y="114" width="190" height="120" rx="6"/>
 <text class="asb-n" x="264" y="138">Checkout service</text>
 <text class="asb-k" x="264" y="156">[separately deployed]</text>
-<text class="asb-s" x="264" y="173">API facade</text>
+<text class="asb-s" x="264" y="173">API</text>
 <text class="asb-s" x="264" y="190">business logic</text>
 <text class="asb-s" x="264" y="207">persistence</text>
 <path class="asb-flow" d="M 345,234 L 345,290" marker-end="url(#asb-a)"/>
@@ -47,7 +47,7 @@ summary: "A few coarse domain services behind one UI, sharing a database."
 <rect class="asb-box" x="460" y="114" width="190" height="120" rx="6"/>
 <text class="asb-n" x="474" y="138">Inventory service</text>
 <text class="asb-k" x="474" y="156">[separately deployed]</text>
-<text class="asb-s" x="474" y="173">API facade</text>
+<text class="asb-s" x="474" y="173">API</text>
 <text class="asb-s" x="474" y="190">business logic</text>
 <text class="asb-s" x="474" y="207">persistence</text>
 <path class="asb-flow" d="M 555,234 L 555,290" marker-end="url(#asb-a)"/>
@@ -55,7 +55,7 @@ summary: "A few coarse domain services behind one UI, sharing a database."
 <rect class="asb-box" x="670" y="114" width="190" height="120" rx="6"/>
 <text class="asb-n" x="684" y="138">Fulfillment service</text>
 <text class="asb-k" x="684" y="156">[separately deployed]</text>
-<text class="asb-s" x="684" y="173">API facade</text>
+<text class="asb-s" x="684" y="173">API</text>
 <text class="asb-s" x="684" y="190">business logic</text>
 <text class="asb-s" x="684" y="207">persistence</text>
 <path class="asb-flow" d="M 765,234 L 765,290" marker-end="url(#asb-a)"/>

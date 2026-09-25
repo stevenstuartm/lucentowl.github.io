@@ -80,7 +80,7 @@ The checklist is the [Quality Checklist](study-guide-guide.md#quality-checklist)
 
 A depth pass runs it in two parts per guide:
 
-1. **Content items:** 1 (factual correctness), 3 (gaps), 7 (hierarchy and scope), and 2 against the topic ownership map when one exists.
+1. **Content items:** 1 (factual correctness), 10 (derivation), 3 (gaps), 7 (hierarchy and scope), and 2 against the topic ownership map when one exists.
 2. **The [presentation pass](guide-presentation-standard.md)** over the result: items 2 (within the file), 4, 5, 6, 8, 9, out-of-scope links, and `/refine-prose`. Its "meaning does not change" rule applies only to that step. The content items before it are where meaning is allowed to change.
 
 Two refinement-specific additions:

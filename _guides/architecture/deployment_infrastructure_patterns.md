@@ -66,7 +66,7 @@ How many BFFs to run follows the experiences, not the device list. Newman's rule
 
 ## Sidecar
 
-*Named as a single-node container pattern by Brendan Burns in Designing Distributed Systems (2018), alongside the ambassador*
+*Named as a single-node container pattern, alongside the ambassador, by Brendan Burns and David Oppenheimer in "Design Patterns for Container-Based Distributed Systems" (2016), and developed in Burns's Designing Distributed Systems (2018)*
 
 A helper process deployed alongside each instance of a service, sharing its lifecycle and usually its network namespace and storage. The application doesn't call the sidecar through a library. The sidecar intercepts or observes what the application does and adds behavior from outside it.
 

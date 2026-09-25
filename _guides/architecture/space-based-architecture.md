@@ -3,7 +3,7 @@ layout: guide
 title: "Space-Based Architecture"
 category: Architecture
 subcategory: Styles
-description: "The distributed style that takes the database out of the request path by keeping active data in replicated in-memory grids: processing units, virtualized middleware, data pumps, writers, and readers, replicated versus distributed caching, data collisions, and when extreme elasticity justifies the complexity."
+description: "The distributed style that takes the database out of the request path by keeping active data in replicated in-memory grids: how a request is served from memory, how changes spread and reach the database, replicated versus distributed caching, collisions, and when extreme elasticity justifies the complexity."
 tags: [advanced, space-based-architecture, in-memory-data-grid, processing-units, elasticity, replicated-caching]
 ---
 
@@ -15,112 +15,60 @@ Space-based architecture keeps a system's active data in replicated in-memory da
 
 The name comes from the tuple space concept in distributed computing, a shared memory space that independent processes read from and write to without calling each other directly.
 
-## How It Works
+## Taking the Database Out of the Request Path
 
-In a typical web application under rising load, adding web servers helps until the database saturates, and the database is the hardest part to scale quickly. Space-based architecture avoids that limit by taking synchronous database access out of the request path entirely.
-
-Requests go to processing units, each of which holds application code and an in-memory copy of the data it needs. A unit handles a request from memory, and the data grid replicates any changes to the other units. Changes reach the database later and asynchronously, so the database stays as durable storage but no longer sits between a user and a response.
+In a typical web application under rising load, adding web servers helps until the database saturates, and the database is the hardest part to scale quickly. Space-based architecture avoids that limit by never making a request wait on the database. Following one request and the data it changes shows how.
 
 {% include figure.html id="arch-space-based" %}
 
-### Processing Units
+### A Request Is Served from Memory
 
-A processing unit contains the application logic for some part of the system along with an in-memory data grid holding the data that logic needs. Units handle requests entirely from memory, and many instances run at once. A system may have several kinds of units, each covering a different part of its functionality.
+A request arrives at a router, which sends it to one of many **processing units**. Each unit bundles application code with an in-memory copy of the data that code needs, so it can answer without calling anything else. Many identical units run at once, and a system can have several kinds, each covering a different part of its functionality. Where a user's requests must keep landing on the same unit, the router maintains that session affinity.
 
-### Virtualized Middleware
+A request that needs more than one kind of unit has to be coordinated across them. Designs try to keep that rare, since every cross-unit step gives back some of the speed that serving from memory bought.
 
-The middleware handles the infrastructure concerns that keep the units working together.
+### A Change Spreads to the Other Units
 
-**Messaging grid**: Receives incoming requests and routes each one to an available processing unit, keeping session affinity where the application needs it.
+When a unit changes data, an in-memory data grid replicates the change to every other unit that holds the same data. Replication is asynchronous, so for a short window different units can see different values, and the system is eventually consistent.
 
-**Data grid**: Replicates data changes between processing units, so an update made in one unit reaches the others. That replication is asynchronous, so the system is eventually consistent.
+If two units change the same data inside that window, the replicated changes collide. Resolving collisions takes a deliberate strategy. Last-write-wins is simple but silently discards one update. Version vectors detect conflicts correctly at the cost of complexity. Domain-specific resolution uses business rules to decide which change stands.
 
-**Processing grid**: Coordinates a request that needs more than one kind of processing unit, which the design tries to keep rare.
+Whether that window is acceptable depends on what inconsistency costs the domain. During a university's course registration rush, a seat count that is a moment stale is tolerable, as long as the final enrollment resolves the collision and gives the last seat to exactly one student. Domains that need every read to reflect every write, such as account balances or audit trails that must be exact, fit poorly.
 
-**Deployment manager**: Watches load and starts or stops processing unit instances to match it. This is where the style's elasticity comes from.
+### The Database Catches Up Later
 
-### Data Pumps, Writers, and Readers
+The database stays the durable record, but it is written behind the requests rather than during them. Changes go onto a queue, and a separate writer applies them to the database at its own pace. A surge fills the queue instead of stalling users.
 
-**Data pumps** send changes from the in-memory grid toward the database asynchronously, usually through messaging, so no request waits on a database write.
+The database also supplies data in the other direction. A unit that starts empty, such as the first unit of its kind after a restart, loads its working data from the database before it takes requests. That load is the slowest moment in a unit's life, and it matters more the more often units start.
 
-**Data writers** receive those changes and apply them to the database.
+### Capacity Follows the Load
 
-**Data readers** load data from the database into processing units when units start cold, such as when every instance of a unit type has stopped or the system restarts.
+Because no unit depends on the database to answer, capacity grows by starting more units and shrinks by stopping them. An autoscaler watches load and does both, which is where the style's elasticity comes from. The limits move to places that are cheaper to scale: memory in each unit, replication traffic between units, and the queue behind them.
 
-## Replicated and Distributed Caching
+## Where the Active Data Lives
 
-How data is placed across processing units shapes most of the style's trade-offs.
+Units can each hold a full copy of the data, or all of them can share a separate cache cluster. The choice shapes most of the style's trade-offs.
 
 {% include figure.html id="arch-space-caching" %}
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Replicated Caching</h4>
-<p>Every processing unit holds a full copy of the cached data, and changes replicate between units.</p>
-<p><strong>Advantages:</strong></p>
-<ul>
-<li>Very fast reads, because data is always local</li>
-<li>High fault tolerance, since losing a unit loses no data</li>
-<li>Simple request routing</li>
-</ul>
-<p><strong>Trade-offs:</strong></p>
-<ul>
-<li>Every unit must hold the whole cache in memory, which caps cache size</li>
-<li>Updates take time to reach every copy</li>
-<li>Frequent updates multiply replication traffic</li>
-</ul>
-<p><strong>When to use:</strong> Relatively small caches with read-heavy access and an update rate the replication can keep up with.</p>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Distributed Caching</h4>
-<p>Data lives in a separate cache cluster, and processing units read and write it remotely instead of holding their own copies.</p>
-<p><strong>Advantages:</strong></p>
-<ul>
-<li>Scales to much larger data volumes</li>
-<li>Better consistency, because there is one authoritative copy rather than many replicas</li>
-<li>Handles high update rates without replication overhead</li>
-</ul>
-<p><strong>Trade-offs:</strong></p>
-<ul>
-<li>Every data access crosses the network, which adds latency</li>
-<li>The cache cluster must itself be made highly available</li>
-<li>More infrastructure to operate</li>
-</ul>
-<p><strong>When to use:</strong> Large caches, high update rates, or data that must stay consistent across units.</p>
-</div>
-</div>
+| | Replicated: a full copy in every unit | Distributed: one shared cache cluster |
+| --- | --- | --- |
+| **Reads** | Local and very fast | Cross the network on every access |
+| **Losing a unit** | Loses no data, since every other unit has a copy | Loses no data, but the cluster itself must be made highly available |
+| **Data size** | Capped by what one unit can hold | Grows with the cluster |
+| **Frequent updates** | Multiply replication traffic between units | Handled without replication overhead |
+| **Consistency** | Copies lag each other briefly | One authoritative copy |
+| **Suits** | Small, read-heavy data with a modest update rate | Large data, high update rates, or data that must stay consistent |
 
-A **near-cache** hybrid combines the two, keeping a small, frequently used subset in each unit in front of a distributed cache. It adds the complexity of both approaches and of deciding what goes where, so reserve it for cases with clear evidence that neither pure approach works.
-
-## Consistency and Data Collisions
-
-Space-based architecture is eventually consistent. A change made in one processing unit reaches the other units, and later the database, after a delay. During that window, different units can see different values.
-
-When two units update the same data during that window, the replicated changes collide. Resolving collisions takes a deliberate strategy. Last-write-wins is simple but silently discards one update. Version vectors detect conflicts correctly at the cost of complexity. Domain-specific resolution uses business rules to decide which change stands.
-
-Whether that is acceptable depends on what inconsistency costs the domain. Concert ticketing and online auctions are classic fits for the style. A briefly stale count of available seats or a current bid that takes a moment to propagate is tolerable, as long as the system resolves collisions on the final commitment, such as confirming a specific seat to exactly one buyer. Domains that need every read to reflect every write, such as account balances or regulatory audit trails that must be exact, fit poorly.
-
-## Characteristics
-
-Ratings are relative to other architecture styles, not measurements.
-
-| Characteristic | Rating | Notes |
-|----------------|--------|-------|
-| **Elasticity** | ⭐⭐⭐⭐⭐ | Units start and stop quickly to match load |
-| **Scalability** | ⭐⭐⭐⭐⭐ | Capacity grows by adding processing units |
-| **Performance** | ⭐⭐⭐⭐⭐ | Requests are served from memory |
-| **Evolvability** | ⭐⭐⭐ | Processing units change readily, but middleware changes are hard |
-| **Cost** | ⭐⭐ | Large memory footprint and complex infrastructure |
-| **Simplicity** | ⭐⭐ | Complex middleware and consistency behavior |
-| **Testability** | ⭐⭐ | Load extremes and consistency timing are hard to reproduce |
+Some data grids also offer a near cache, a small local copy of frequently used entries in front of a distributed cache. It brings the complexity of both approaches, plus the question of what goes where, so it earns its place only when measurements show neither pure approach works.
 
 ## Real-World Fits
 
-**Concert and event ticketing.** Load is modest most of the time and spikes sharply when popular events go on sale. The system adds processing units for the surge and removes them once sales settle.
+**Product drops and flash sales.** Traffic can jump many times above normal for minutes when a limited item goes on sale, and the system absorbs the surge without provisioning for it the rest of the year.
 
-**Online auctions.** Most auctions see little activity while a few draw intense concurrent bidding, and the load shifts as auctions open and close.
+**Course registration.** Load is light for months and then concentrates in the hours after registration opens, when thousands of students compete for the same seats.
 
-**Retail during major sales events.** Traffic can jump many times above normal for a short period, and space-based architecture absorbs the surge without provisioning for it the rest of the year.
+**In-play sports betting.** Activity follows the match, with sharp spikes around goals and key moments, and odds and open positions change constantly while the spike lasts.
 
 ## When Space-Based Architecture Fits
 
@@ -128,7 +76,7 @@ Ratings are relative to other architecture styles, not measurements.
 
 **A database that remains the bottleneck after optimization.** Queries are tuned, indexes and caching are in place, read replicas exist, and the database still saturates under peak load.
 
-**A working set that fits in memory.** The data active requests touch is small enough to hold in memory, even if historical data is vast. A ticketing system cares about current seat availability, not last year's sales.
+**A working set that fits in memory.** The data active requests touch is small enough to hold in memory, even if historical data is vast. A registration system cares about the current term's open seats, not a decade of past enrollments.
 
 **High value per peak.** The revenue or importance of handling the spike justifies the infrastructure and operational complexity.
 
@@ -144,7 +92,7 @@ Ratings are relative to other architecture styles, not measurements.
 
 **A working set too large for memory.** When the active data won't fit across the units, distributed caching helps, at the cost of more complexity and latency.
 
-**Limited operational expertise.** The style demands experience with in-memory grids, replication, and eventual consistency. Without it, teams tend to produce failures that are hard to diagnose.
+**Limited operational expertise.** The style demands experience with in-memory grids, replication, and eventual consistency. Without it, teams tend to produce failures that are hard to diagnose, and the load extremes and consistency timing behind those failures are hard to reproduce in tests.
 
 ## Common Challenges
 
@@ -162,6 +110,6 @@ When space-based architecture doesn't fit, or stops fitting:
 
 **Use a conventional distributed cache.** Keep a distributed cache in front of the database for hot data, giving up elastic processing units in exchange for much less complexity.
 
-**Apply it only where the spikes are.** Use space-based techniques for the few high-load paths, such as ticket purchase or bidding, and conventional architectures for administrative and reporting functions.
+**Apply it only where the spikes are.** Use space-based techniques for the few high-load paths, such as checkout during a product drop or enrollment during registration, and conventional architectures for administrative and reporting functions.
 
 **Absorb spikes with event streaming.** Put an event stream in front of the processing, and let services consume at their own pace. That buffers load spikes without the in-memory grid, at the cost of processing that isn't immediate.

@@ -3,7 +3,7 @@ layout: guide
 title: "Architecture Characteristics"
 category: Architecture
 subcategory: Foundations
-description: "How to recognize, categorize, select, and measure the architecture characteristics that drive structural decisions, why they are scoped per architecture quantum, and how fitness functions keep a system from drifting away from them."
+description: "How to recognize, find, select, and measure the architecture characteristics that drive structural decisions, why they are scoped per architecture quantum, and how fitness functions keep a system from drifting away from them."
 tags: [fundamentals, quality-attributes, fitness-functions, evolutionary-architecture, trade-offs, architecture-quantum]
 ---
 
@@ -13,31 +13,21 @@ Architecture characteristics define the qualities a system must exhibit to be su
 <p>Every characteristic you add constrains the design, so a short, prioritized list beats a long wish list.</p>
 </blockquote>
 
-## What Qualifies as an Architecture Characteristic
+## Telling a Characteristic From a Requirement
 
-Not every desirable quality is an architecture characteristic. To qualify, a property must meet three criteria.
+Not every desirable quality belongs on the architecture's list. A quality earns a place when getting it wrong would force a change to the system's structure and would cost the business something it can't absorb.
 
-**1. It specifies a non-domain consideration.** It addresses how the system operates rather than what the business does. "Process customer orders" is a functional requirement. "Process 10,000 orders per second" is an architecture characteristic.
+Take order processing. "Process customer orders" is a functional requirement. It says what the system does, and almost any structure can do it. "Process 10,000 orders per second" is a characteristic, because meeting it might take caching, asynchronous processing, or read replicas, and those are structural decisions made before the first order flows through. It still earns its place only if falling short matters. If slow checkout makes customers abandon their carts, performance is architectural. If somewhat slower responses are acceptable, performance stays a design concern that individual features handle.
 
-**2. It influences structural design.** It changes how the system is built, not just how a feature is implemented. A demanding performance target might require caching layers, asynchronous processing, or read replicas, and that structural consequence is what separates a characteristic from an implementation detail.
+## Where to Look for Them
 
-**3. It is critical or important to success.** If poor performance means users abandon the product, performance is an architecture characteristic. If somewhat slower responses are acceptable, performance stays a design concern rather than an architectural one.
+Runtime qualities come up unprompted: how fast the system responds, how available it stays, how far it scales, and how it recovers from failure. They usually demand structural responses such as redundancy, failover, caching, or horizontal scaling.
 
-## Categories of Architecture Characteristics
-
-Characteristics fall into four broad categories. The category matters less than the reminder it gives to look past the runtime qualities everyone thinks of first.
-
-**Operational characteristics** describe runtime behavior: availability, continuity, performance, recoverability, reliability, robustness, and scalability. They usually demand structural responses such as redundancy, failover, caching, or horizontal scaling.
-
-**Structural characteristics** describe how easy the system is to change and maintain: configurability, deployability, extensibility, maintainability, portability, testability, and upgradeability. They shape how code is partitioned and how components depend on each other.
-
-**Cloud-specific characteristics** arise when the platform can change shape at runtime: on-demand scalability and elasticity, zone-based availability, and region-based privacy.
-
-**Cross-cutting characteristics** span the whole system rather than one part of it: accessibility, authentication, authorization, legal compliance, privacy, security, and supportability.
+Two kinds are easier to miss. Qualities of change describe how easily the system can be deployed, tested, extended, and upgraded, and they shape how the code is divided and how its parts depend on each other. Qualities that span the whole system, such as security, privacy, legal compliance, accessibility, and supportability, belong to no single component, so nobody owns them unless someone puts them on the list. Running on a cloud platform adds a few of its own, such as elasticity and constraints on where data may be stored or replicated.
 
 ## Characteristics Are Scoped to an Architecture Quantum
 
-Characteristics don't have to apply uniformly to a whole system. An architecture quantum is an independently deployable part of a system with high functional cohesion, and each quantum can have its own set of characteristics. A checkout quantum might need high availability and elastic scalability, while a monthly reporting quantum needs neither.
+Characteristics don't have to apply uniformly to a whole system. An architecture quantum, in the definition Neal Ford, Mark Richards, Pramod Sadalage, and Zhamak Dehghani give in *Software Architecture: The Hard Parts*, is an independently deployable part of a system with high functional cohesion, and each quantum can have its own set of characteristics. A checkout quantum might need high availability and elastic scalability, while a monthly reporting quantum needs neither.
 
 This scope has structural consequences. If two parts of a system need genuinely different characteristics, they are hard to keep in a single deployable unit, because that unit has to meet the stricter set everywhere. Differing characteristics are one of the strongest signals that a system should be split into separate quanta. A single set that suffices for everything is a signal that it may not need to be.
 
@@ -67,7 +57,7 @@ You cannot optimize for everything, so selection is about priority rather than c
 
 Characteristics start vague and subjective, because "good performance" means different things to different people. Each critical characteristic needs at least one metric that turns it into a target a build or a review can pass or fail.
 
-Operational characteristics map to runtime measures such as percentile latency, uptime, and error rate. Percentiles matter more than averages, because an average hides the slow requests users actually notice. Structural characteristics map to code measures such as cyclomatic complexity and dependency depth. Characteristics tied to delivery and support, such as deployability and supportability, map to measures like deployment frequency and time to diagnose an issue.
+Runtime qualities map to measures such as percentile latency, uptime, and error rate. Percentiles matter more than averages, because an average hides the slow requests users actually notice. Qualities of change map to measures of the code, such as cyclomatic complexity and dependency depth, and of delivery, such as deployment frequency. Supportability maps to measures like the time it takes to diagnose an issue.
 
 ## Fitness Functions
 

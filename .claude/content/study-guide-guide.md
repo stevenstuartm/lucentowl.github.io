@@ -239,9 +239,9 @@ Apply these tests to a candidate new guide at the scope gate, and to every exist
 
 Every guide passes this checklist, whether newly written or under refinement.
 
-**Order of operations:** run item 1 (correctness and completeness) **first** — it is the only pass that adds or rewrites content, and every later check has to operate on the corrected text, not the original. Items 2-7 then refine that content. The two front-matter items (8 and 9) run last so they confirm tags and description against the final content.
+**Order of operations:** run item 1 (correctness and completeness) **first** — it is the only pass that adds or rewrites content, and every later check has to operate on the corrected text, not the original. Items 2-7 then refine that content. Item 10 (derivation) runs with the content items, before items 2-7. The two front-matter items (8 and 9) run last so they confirm tags and description against the final content.
 
-**Content vs presentation.** Items 1, 3, and 7 are content items: they verify, add, or rewrite what a guide claims. Items 4, 5, 6, 8, and 9 are presentation items, as is item 2 within a single file. Item 2 checked against a topic ownership map is a content item. New guides run all nine. Refinement splits them: the [presentation pass](guide-presentation-standard.md) runs only the presentation items, and the [depth pass](guide-refinement-standard.md) runs the content items and then the presentation pass.
+**Content vs presentation.** Items 1, 3, 7, and 10 are content items: they verify, add, or rewrite what a guide claims. Items 4, 5, 6, 8, and 9 are presentation items, as is item 2 within a single file. Item 2 checked against a topic ownership map is a content item. New guides run all ten. Refinement splits them: the [presentation pass](guide-presentation-standard.md) runs only the presentation items, and the [depth pass](guide-refinement-standard.md) runs the content items and then the presentation pass.
 
 1. **Factual correctness and completeness (verify against authoritative sources) — do this first.** Distinct from item 3's *pedagogical* gaps: this checks whether the guide's technical claims are actually true and current, and whether a materially important part of the topic is missing — not treating the prose as given. Web-research the guide's falsifiable claims against its authoritative sources (named in the plan document during a refinement pass): service limits, naming and character constraints, defaults, support matrices, feature availability and release/preview status, tier and pricing boundaries, and any hard number or absolute ("max 24 characters", "not supported", "always inherits", "only in the same region"). Prioritize claims that are (a) falsifiable, (b) consequential if a reader acts on them, or (c) prone to drift as the product evolves — don't spend the pass rubber-stamping prose that merely reads plausibly, and don't try to re-verify inherently stable conceptual framing. Correct stale or wrong content in place. Where a claim can't be confirmed against a source, soften it to what's verifiable rather than leaving an unverified absolute in place. **Completeness is judged at study-guide altitude, not doc-completeness** — flag only a missing piece a practitioner would reasonably expect given the guide's stated scope and description, not every edge case. Because this pass can add or modify content, run the remaining checks over whatever it produces.
 2. **Redundancy** — same fact, table, or explanation repeated across sections; consolidate or cross-reference within the same file. Where an ownership map exists, a guide that doesn't own a concept doesn't re-teach it.
@@ -252,6 +252,7 @@ Every guide passes this checklist, whether newly written or under refinement.
 7. **Hierarchy and scope clarity.** When a guide introduces a resource or concept whose behavior or constraints depend on where it sits in the domain's containment hierarchy, state that scope explicitly and early rather than leaving the reader to infer it from a buried constraint bullet. The tell is a constraint bullet that only makes sense if you already know the scope — a line like "all members must be in the same VNet" tells a reader who already knows the answer, and tells nobody else. Apply this only where scope is genuinely ambiguous or consequential for how the reader would design or deploy something, not as boilerplate on every resource mentioned.
 8. Confirm front matter (tags, description) still matches content after edits.
 9. **Front matter tag audit** against the [Tagging System](#tagging-system) policy. Which tags count as filler is measured per category: during a refinement pass the plan document records it; for a new guide, count tag frequency across the guide's category before choosing.
+10. **Derivation** — content that reproduces one source's distinctive form without naming it: scores for judgments, a fixed grid repeated across a series, coined names, counted taxonomies, a book's examples. Run [derivation-check.md](derivation-check.md). Credit borrowed content (a term, technique, or rule) in prose at the specific item. Restructure borrowed form (structure, taxonomy, selection, examples) into the guide's own, since a credit never fixes form. Cut what adds nothing.
 
 ### Explicitly out of scope
 
@@ -301,29 +302,18 @@ When writing about software architecture, use correct terminology:
 - ❌ Avoid: "Non-functional requirements" (outdated term)
 - Reference: [Architecture Characteristics](/study-guides/architecture/architecture-characteristics.html)
 
-**Selection process**:
+**Selection process** (Richards and Ford's worksheet method; credit it as theirs when a guide uses it):
 1. Identify 7 characteristics critical to the project's success
 2. Prioritize the top 3 — these drive architecture style selection
 3. Use structured worksheets: [Developer to Architect Worksheets](https://developertoarchitect.com/downloads/worksheets.html){:target="_blank" rel="noopener noreferrer"}
-
-**Characteristics must meet three criteria**:
-- Specify non-domain consideration
-- Influence structural design
-- Be critical to success
-
-**Common categories**:
-
-| Category | Examples |
-| --- | --- |
-| Operational | Availability, Performance, Scalability, Reliability, Recoverability |
-| Structural | Maintainability, Extensibility, Portability, Upgradeability |
-| Cross-Cutting | Security, Privacy, Supportability, Accessibility |
 
 **When writing AAA Phase 2 (Agree) content**:
 - List "Architectural Characteristics" as the FIRST design decision
 - Emphasize that the top 3 characteristics drive the architecture style choice
 - Reference the worksheets for systematic evaluation
 - Link to the Architecture Characteristics guide for detailed explanations
+
+**Architecture style guides** (Architecture → Styles) carry their trade-offs in two sections, `## When <Style> Fits` and `## When to Avoid <Style>`, each written as bold-lead paragraphs. Every entry names a situation and gives the reason the style helps or hurts there, such as "the core becomes the bottleneck". Don't rate styles on a fixed set of characteristics, whether with stars, scores, or a uniform grid across guides. That format and its scores reproduce the tables in *Fundamentals of Software Architecture*. Write only the trade-offs that distinguish the style, in the guide's own reasoning.
 
 ---
 

@@ -1,9 +1,9 @@
 ---
 layout: guide
-title: "Component-Based Thinking"
+title: "Identifying Logical Components"
 category: Architecture
 subcategory: Foundations
-description: "How to identify logical components with the workflow and actor/action approaches, avoid the entity trap, separate logical from physical architecture, and refine component boundaries by assigning requirements and analyzing characteristics."
+description: "How to find a system's logical components from its journeys and actors, avoid naming components after tables, test the boundaries against requirements, and keep logical components separate from deployment decisions."
 tags: [fundamentals, logical-components, logical-architecture, entity-trap, component-identification]
 ---
 
@@ -11,72 +11,43 @@ Architects think in **logical components** rather than classes. A logical compon
 
 Working at this level lets an architect reason about responsibilities and dependencies without getting lost in class design, and without committing yet to how anything will be deployed.
 
-## Logical vs Physical Architecture
+## Finding the First Components
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Logical Architecture</h4>
-<ul>
-<li>Shows components and how they interact</li>
-<li>Maps to namespaces and directory structure</li>
-<li>Independent of deployment</li>
-<li><strong>Focus:</strong> What the system does</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Physical Architecture</h4>
-<ul>
-<li>Shows services, user interfaces, and databases</li>
-<li>Describes the deployment topology</li>
-<li>Reflects infrastructure decisions</li>
-<li><strong>Focus:</strong> Where things run</li>
-</ul>
-</div>
-</div>
+Start from what the system does, not from the data it stores. A veterinary clinic's practice system makes a useful example. It books appointments, sends reminders, checks animals in, records visits and prescriptions, bills owners, and files insurance claims. Two ways of looking at it turn that description into candidate components, and they work best together.
 
-Create the logical architecture first. It organizes the code and gives teams a shared map of responsibilities, and it stays valid across several possible physical designs. The same set of components could deploy as a single modular monolith or as a handful of services. Deciding that is a separate step, driven by the characteristics each group of components needs.
+**Trace the main journeys.** Follow the paths a user or process takes through the system, happy path first, and group related steps. Booking an appointment runs through finding availability, booking the slot, reminding the owner, and checking the animal in, which suggests scheduling, reminder, and check-in components. Mark Richards and Neal Ford call this the workflow approach. It fits when the major journeys are reasonably well understood.
 
-## Identifying Core Components
+**List who acts and what they do.** Name the actors, such as pet owners, vets, front-desk staff, and the insurers who receive claims, and list the major actions of each. Owners book and pay, vets record visits and prescribe, and insurers receive claims, so medical records, prescriptions, and claims join the list. Richards and Ford call this the actor/action approach. It fits systems with several distinct kinds of users, because it keeps one actor's needs from shaping the whole design.
 
-The first pass produces a set of initial core components. Two approaches help, and they work well together.
+### Don't Name Components After Tables
 
-### The Workflow Approach
-
-Model the major paths a user or process takes through the system, focusing on the happy path first. Each workflow breaks into steps, and related steps suggest components. An order workflow of "browse catalog, place order, pay, ship" suggests components for catalog browsing, order placement, payment, and fulfillment. This approach fits when the major journeys through the system are reasonably well understood.
-
-### The Actor/Action Approach
-
-Identify the actors who use the system, such as customers, warehouse staff, or an external payment provider, and list the major actions each one performs. Components emerge from grouping those actions. This approach fits when the system has several distinct kinds of users, because it keeps any one actor's needs from dominating the design.
-
-### Avoid the Entity Trap
-
-The tempting shortcut is to create a component for each major entity: a Customer Manager, an Order Manager, a Product Manager.
+The tempting shortcut, which Richards and Ford call the entity trap, is a component for each major entity: an Owner Manager, a Pet Manager, an Appointment Manager.
 
 <div class="callout callout--warning">
 <p class="callout__title">The Entity Trap</p>
-<p>Entity-based components mirror the database rather than the system's behavior. The result is a component-relational mapping, not an architecture, because database relations are not workflows.</p>
+<p>Entity-based components copy the shape of the data model instead of describing what the system does. How tables relate says nothing about how work moves through the system, so the components end up organized around storage rather than behavior.</p>
 <p><strong>Symptoms:</strong> Vague names like "Manager" that attract unrelated logic, components that grow into dumping grounds, and boundaries too coarse to scale, test, or deploy independently.</p>
 <p><strong>If the system really is simple CRUD:</strong> Use a CRUD framework rather than designing a custom architecture around it.</p>
 </div>
 
-## Refining Components Iteratively
+## Testing the Boundaries
 
-Initial components are a hypothesis. Refinement tests and reshapes them in a loop.
+A first set of components is a guess, and the requirements are what test it. Walk the user stories and requirements through the components, and watch for these signs that a boundary is wrong.
 
-1. **Assign requirements.** Map user stories and requirements to components. A story that fits nowhere signals a missing component. A component that attracts stories from unrelated areas signals one that should split.
-2. **Analyze roles and responsibilities.** Check that each component's operations belong together. A component whose responsibilities read like an unrelated list has low cohesion.
-3. **Analyze architecture characteristics.** Check whether the operations inside a component need different characteristics. If order placement must scale elastically but order history does not, they may belong in separate components.
-4. **Restructure.** Split, merge, or move responsibilities based on what the previous steps found, then repeat as understanding deepens.
+**A requirement fits nowhere.** A story such as "vets can see an animal's vaccination history during a visit" that no component can own points to a missing one.
 
-The loop never fully ends. New requirements and a better understanding of the domain keep reshaping components throughout a system's life.
+**A component collects unrelated requirements.** When scheduling starts owning waitlists, room allocation, and staff rotas as well as appointments, it is doing several jobs and should split.
 
-## Component Identification Checklist
+**Its responsibilities don't read as one job.** List what a component does. If the list reads as unrelated items rather than facets of one responsibility, the component has low cohesion.
 
-- [ ] Model the major workflows
-- [ ] Identify the actors and their major actions
-- [ ] Avoid entity-based "manager" components
-- [ ] Assign user stories to components
-- [ ] Confirm each component's responsibilities are cohesive
-- [ ] Check whether operations within a component need different characteristics
-- [ ] Minimize coupling between components
-- [ ] Iterate as requirements and understanding change
+**Its parts need different characteristics.** Booking must stay responsive during the Monday-morning rush, while medical records must be retained for years and every change audited. Operations with such different needs rarely belong in the same component.
+
+**Two components always change together.** If every change to reminders also changes scheduling, the boundary between them isn't doing anything, and they are probably one component.
+
+Expect to revisit the components as requirements arrive and the team learns the domain. The boundaries that hold up are the ones the requirements keep confirming.
+
+## Components Before Deployment
+
+The components are a **logical architecture**. They describe what the system does and map to namespaces or directories, and nothing about them says where anything runs. The **physical architecture** decides that: which components deploy together as services, which user interfaces and databases exist, and what infrastructure hosts them.
+
+Settle the logical architecture first. It gives teams a shared map of responsibilities and stays valid across several physical designs. The clinic's components could ship as one modular monolith or as a handful of services, and that choice is a separate step, driven by the characteristics each group of components needs.

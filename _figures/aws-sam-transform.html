@@ -1,0 +1,82 @@
+---
+title: "What the SAM Transform Generates"
+kind: structure
+system: aws
+summary: "Each line of a SAM function or table becomes one or more CloudFormation resources, ten in all here."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 430" role="img" aria-labelledby="awssam-title awssam-desc" style="width:100%; min-width:760px; height:auto; display:block;">
+<title id="awssam-title">How the SAM transform expands a function and a table</title>
+<desc id="awssam-desc">The template declares OrdersFunction, an AWS::Serverless::Function, and OrdersTable, an AWS::Serverless::SimpleTable. When CloudFormation processes the template, the SAM transform expands each part into CloudFormation resources. The function itself becomes a Lambda function and an IAM execution role. AutoPublishAlias set to live becomes a Lambda version and a Lambda alias. The HttpApi event becomes an HTTP API, its default stage, and a Lambda permission that lets the API invoke the function. The SQS event becomes an event source mapping and adds queue-read permissions to the execution role. The connector granting Write access to OrdersTable becomes an IAM managed policy. The SimpleTable becomes an on-demand DynamoDB table. That is ten resources in all. Plain CloudFormation resources in the template, such as the queue itself, pass through the transform unchanged.</desc>
+<style>
+.awssam-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awssam-src { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awssam-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awssam-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awssam-code { font-size: 11px; font-family: 'Consolas', 'Menlo', monospace; fill: var(--color-accent, #A5486E); font-weight: 700; }
+.awssam-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awssam-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awssam-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awssam-cmd { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awssam-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.3; }
+</style>
+<defs>
+<marker id="awssam-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awssam-pan" x="15" y="20" width="310" height="360" rx="8"/>
+<text class="awssam-h" x="30" y="42">What you write</text>
+<rect class="awssam-pan" x="425" y="20" width="600" height="360" rx="8"/>
+<text class="awssam-h" x="440" y="42">What CloudFormation deploys</text>
+<text class="awssam-cmd" x="375" y="42" text-anchor="middle">SAM transform</text>
+
+<rect class="awssam-src" x="30" y="60" width="280" height="36" rx="5"/>
+<text class="awssam-code" x="42" y="82">OrdersFunction: Serverless::Function</text>
+<path class="awssam-ln" d="M310,78 L438,78" marker-end="url(#awssam-a)"/>
+<rect class="awssam-box" x="440" y="60" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="532" y="82" text-anchor="middle">Lambda::Function</text>
+<rect class="awssam-box" x="635" y="60" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="727" y="82" text-anchor="middle">IAM::Role</text>
+
+<rect class="awssam-src" x="50" y="114" width="260" height="36" rx="5"/>
+<text class="awssam-code" x="62" y="136">AutoPublishAlias: live</text>
+<path class="awssam-ln" d="M310,132 L438,132" marker-end="url(#awssam-a)"/>
+<rect class="awssam-box" x="440" y="114" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="532" y="136" text-anchor="middle">Lambda::Version</text>
+<rect class="awssam-box" x="635" y="114" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="727" y="136" text-anchor="middle">Lambda::Alias</text>
+
+<rect class="awssam-src" x="50" y="168" width="260" height="36" rx="5"/>
+<text class="awssam-code" x="62" y="190">Events: HttpApi</text>
+<path class="awssam-ln" d="M310,186 L438,186" marker-end="url(#awssam-a)"/>
+<rect class="awssam-box" x="440" y="168" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="532" y="190" text-anchor="middle">ApiGatewayV2::Api</text>
+<rect class="awssam-box" x="635" y="168" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="727" y="190" text-anchor="middle">ApiGatewayV2::Stage</text>
+<rect class="awssam-box" x="830" y="168" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="922" y="190" text-anchor="middle">Lambda::Permission</text>
+
+<rect class="awssam-src" x="50" y="222" width="260" height="36" rx="5"/>
+<text class="awssam-code" x="62" y="244">Events: SQS</text>
+<path class="awssam-ln" d="M310,240 L438,240" marker-end="url(#awssam-a)"/>
+<rect class="awssam-box" x="440" y="222" width="220" height="36" rx="5"/>
+<text class="awssam-n" x="550" y="244" text-anchor="middle">Lambda::EventSourceMapping</text>
+<text class="awssam-k" x="672" y="244">+ queue-read permissions on the role</text>
+
+<rect class="awssam-src" x="50" y="276" width="260" height="36" rx="5"/>
+<text class="awssam-code" x="62" y="298">Connectors: Write to OrdersTable</text>
+<path class="awssam-ln" d="M310,294 L438,294" marker-end="url(#awssam-a)"/>
+<rect class="awssam-box" x="440" y="276" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="532" y="298" text-anchor="middle">IAM::ManagedPolicy</text>
+
+<rect class="awssam-src" x="30" y="330" width="280" height="36" rx="5"/>
+<text class="awssam-code" x="42" y="352">OrdersTable: Serverless::SimpleTable</text>
+<path class="awssam-ln" d="M310,348 L438,348" marker-end="url(#awssam-a)"/>
+<rect class="awssam-box" x="440" y="330" width="185" height="36" rx="5"/>
+<text class="awssam-n" x="532" y="352" text-anchor="middle">DynamoDB::Table</text>
+<text class="awssam-k" x="637" y="352">on-demand capacity</text>
+
+<text class="awssam-lab" x="15" y="404">Plain CloudFormation resources in the same template, such as the queue the SQS event reads from, pass through the transform unchanged.</text>
+<text class="awssam-lab" x="15" y="422">Adding DeploymentPreference to the function would also generate a CodeDeploy application, a deployment group, and a service role.</text>
+</g>
+</svg>

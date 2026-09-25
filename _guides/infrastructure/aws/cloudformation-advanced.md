@@ -1,1228 +1,183 @@
 ---
-title: "CloudFormation Advanced Features"
+title: "AWS CloudFormation: Advanced"
 layout: guide
 category: AWS
 subcategory: Infrastructure as Code
-description: "Change sets, nested stacks, StackSets, custom resources, drift detection, and best practices for production CloudFormation deployments."
-tags: [infrastructure, iac, aws, cloudformation, advanced, practical]
+description: "CloudFormation beyond a single stack: nested stacks, StackSets across accounts and Regions, custom resources, registry extensions, and Hooks, detecting and fixing drift, importing existing resources, and moving resources between stacks with stack refactoring."
+tags: [cloudformation, nested-stacks, stacksets, custom-resources, drift-detection, stack-refactoring, advanced]
 ---
-{% raw %}
 
-## Change Sets
+## Beyond One Stack
 
-**Change Sets** preview proposed changes before executing a stack update.
+A single stack works until a system outgrows it. Templates approach the 500-resource limit, several teams need to change different parts at different speeds, the same baseline has to exist in dozens of accounts, or resources that were created by hand need to come under management. CloudFormation has a tool for each:
 
-### Creating Change Sets
+| Need | Tool |
+|---|---|
+| Reuse a component, or split a large template, within one deployment | Nested stacks |
+| Deploy one template to many accounts and Regions | StackSets |
+| Manage something CloudFormation has no resource type for, or enforce rules on every deployment | Custom resources, registry extensions, and Hooks |
+| Find and fix changes made outside CloudFormation | Drift detection |
+| Bring existing resources under management, or reorganize stacks without recreating resources | Import and stack refactoring |
 
-```bash
-# Create change set
-aws cloudformation create-change-set \
-  --stack-name my-stack \
-  --change-set-name my-updates \
-  --template-body file://template-updated.yaml \
-  --parameters ParameterKey=InstanceType,ParameterValue=t2.medium
-```
-
-### Reviewing Change Sets
-
-```bash
-# Describe change set
-aws cloudformation describe-change-set \
-  --stack-name my-stack \
-  --change-set-name my-updates
-```
-
-**Change types:**
-- `Add` - New resource will be created
-- `Modify` - Resource properties will be updated
-- `Remove` - Resource will be deleted
-- `Dynamic` - Change determined at execution time
-
-**Replacement:**
-- `True` - Resource will be replaced
-- `False` - Resource will be updated in place
-- `Conditional` - Depends on other changes
-
-### Executing Change Sets
-
-```bash
-# Execute change set
-aws cloudformation execute-change-set \
-  --stack-name my-stack \
-  --change-set-name my-updates
-```
-
-### Best Practices
-
-- Always use change sets for production
-- Review changes thoroughly
-- Get approval before execution
-- Document changes in change set name
+Separate stacks that share values through exports, `Fn::GetStackOutput`, or Parameter Store remain the simplest split of all.
 
 ---
 
 ## Nested Stacks
 
-**Nested stacks** are stacks created as part of other stacks for organizing and reusing templates.
+A **nested stack** is a stack that another stack creates as one of its resources, of type `AWS::CloudFormation::Stack`. The parent passes parameters in, and reads the child's outputs with `!GetAtt`:
 
-### Why Use Nested Stacks
-
-- Overcome template size limits (51,200 bytes)
-- Reuse common templates
-- Organize complex infrastructure
-- Separate concerns (network, compute, storage)
-- Update components independently
-
-### Creating Nested Stacks
-
-**Parent template:**
 ```yaml
 Resources:
-  NetworkStack:
+  Network:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/my-bucket/network.yaml
+      TemplateURL: https://example-templates.s3.amazonaws.com/network.yaml
       Parameters:
-        VpcCIDR: 10.0.0.0/16
-      TimeoutInMinutes: 30
+        VpcCidr: 10.0.0.0/16
 
-  ComputeStack:
+  Service:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/my-bucket/compute.yaml
+      TemplateURL: https://example-templates.s3.amazonaws.com/service.yaml
       Parameters:
-        VpcId: !GetAtt NetworkStack.Outputs.VPCId
-        SubnetIds: !GetAtt NetworkStack.Outputs.PublicSubnets
-      TimeoutInMinutes: 30
+        VpcId: !GetAtt Network.Outputs.VpcId
+        SubnetIds: !GetAtt Network.Outputs.PrivateSubnetIds
 ```
 
-**Child template (network.yaml):**
-```yaml
-Parameters:
-  VpcCIDR:
-    Type: String
+Child templates live in S3. The CLI's `aws cloudformation package` command uploads local child templates and rewrites the parent's paths to point at them.
 
-Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCIDR
+The whole tree deploys and rolls back as one unit from the **root stack**. AWS recommends starting every update from the root rather than updating a child directly, since the next root update applies the parent's version of each child again. A change set on the root can include the changes in every nested stack, and one operation can change at most 2,500 resources across the tree.
 
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 6, 8]]
-
-Outputs:
-  VPCId:
-    Value: !Ref VPC
-  PublicSubnets:
-    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
-```
-
-### Organization Pattern
-
-```
-templates/
-├── main.yaml              # Parent template
-├── network/
-│   └── vpc.yaml          # Network nested stack
-├── compute/
-│   ├── asg.yaml          # Compute nested stack
-│   └── launch-template.yaml
-└── storage/
-    └── s3.yaml           # Storage nested stack
-```
+Nested stacks suit reusable components, such as a standard network or a standard queue with its alarms, and templates too large for one file, as long as everything deploys together. They suit separate teams poorly. A failure anywhere rolls back the whole tree, and one team can't deploy its part alone. When parts have different owners or release cycles, separate stacks with references fit better. Drift detection on a root stack also doesn't look into its nested stacks, so each has to be checked on its own.
 
 ---
 
 ## StackSets
 
-**StackSets** create, update, or delete stacks across multiple AWS accounts and regions.
+A **StackSet** deploys one template as a stack in each of many accounts and Regions, such as a security baseline, logging configuration, or IAM roles every account needs. Each deployed stack is a **stack instance**. A StackSet lives in the **administrator account** and Region where it's created, and it deploys to **target accounts**.
 
-### Use Cases
+StackSets use one of two permission models:
 
-- Deploy baseline security across all accounts
-- Create standard networking in multiple regions
-- Enforce compliance policies organization-wide
-- Manage multi-region applications
+- **Self-managed.** You create an administration role in the administrator account, and in each target account an execution role whose trust policy lets the administration role assume it. Any account where those roles can be created can be a target.
+- **Service-managed.** StackSets uses AWS Organizations, AWS's service for grouping accounts, to create the roles itself, once trusted access between the two is turned on. You target organizational units (OUs), optionally filtered to particular accounts, and with **automatic deployment** on, an account that joins a targeted OU gets its stack instances without anyone updating the StackSet, and an account that leaves has them removed or retained. The administrator is the organization's **management account** or a **delegated administrator**, a member account given that role. Stacks aren't deployed to the management account even when it sits in a targeted OU.
 
-### Creating StackSets
+A template change deploys to every stack instance. **Operation preferences** control how fast that happens and when it stops:
 
-```bash
-# Create StackSet
-aws cloudformation create-stack-set \
-  --stack-set-name baseline-security \
-  --template-body file://security-baseline.yaml \
-  --capabilities CAPABILITY_NAMED_IAM
+| Preference | Controls |
+|---|---|
+| **Maximum concurrent accounts** | How many accounts, by number or percentage, deploy at once within a Region |
+| **Failure tolerance** | How many failures, per Region, stop the operation |
+| **Region concurrency and order** | Whether Regions deploy one at a time in a given order, or in parallel |
+| **Concurrency mode** | **Strict**, the default, starts at the lower of the maximum and the failure tolerance plus one, and slows as failures accumulate. **Soft** runs at the maximum regardless of failures. |
 
-# Create stack instances
-aws cloudformation create-stack-instances \
-  --stack-set-name baseline-security \
-  --accounts 111122223333 444455556666 \
-  --regions us-east-1 us-west-2 \
-  --operation-preferences \
-    MaxConcurrentCount=2,FailureToleranceCount=1
-```
+{% include figure.html id="aws-cfn-stackset-rollout" %}
 
-### Deployment Options
+Rolling out a few accounts at a time, one Region at a time, with a low failure tolerance, limits the damage a bad template can do across an organization. Under the default strict mode, a failure tolerance of zero means one account at a time, however high the maximum is set. StackSets doesn't really run fixed batches either. It starts the next account as soon as one finishes, up to the concurrency limit.
 
-```yaml
-OperationPreferences:
-  RegionConcurrencyType: PARALLEL  # Or SEQUENTIAL
-  RegionOrder:
-    - us-east-1
-    - us-west-2
-    - eu-west-1
-  FailureToleranceCount: 1
-  MaxConcurrentCount: 3
-```
+Parameter values can be overridden for particular accounts or Regions, but with automatic deployment, overrides apply only to accounts in the OU when they're set, and accounts that join later get the StackSet's defaults. Removing instances can **retain** the stacks, leaving them running as ordinary stacks in their accounts. A StackSet can hold 100,000 stack instances, and an administrator account 1,000 StackSets.
 
-### Organizational StackSets
-
-```bash
-# Create StackSet for entire organization
-aws cloudformation create-stack-set \
-  --stack-set-name org-wide-logging \
-  --template-body file://logging.yaml \
-  --permission-model SERVICE_MANAGED \
-  --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false
-
-# Deploy to organization
-aws cloudformation create-stack-instances \
-  --stack-set-name org-wide-logging \
-  --deployment-targets OrganizationalUnitIds=ou-xxxx-yyyyyyyy \
-  --regions us-east-1
-```
+An operation across hundreds of accounts takes a long time. To try a change on a few accounts first, update the StackSet targeting just those accounts or Regions. The rest are marked `OUTDATED` and keep running the previous template until a follow-up operation brings them up to date. The StackSet itself holds only one template version, so the outdated instances are a rollout in progress, not a second supported version.
 
 ---
 
-## Custom Resources
+## Extending CloudFormation
 
-**Custom resources** enable custom provisioning logic for resources not supported by CloudFormation.
+### Custom Resources
 
-### Lambda-Backed Custom Resource
+A **custom resource** runs your code as part of a stack operation, for something CloudFormation can't do itself, such as calling an external API, seeding a database, or looking up a value at deployment. The template declares it with a type of `AWS::CloudFormation::CustomResource`, or a name of your choosing like `Custom::DnsRecord`, and a `ServiceToken`, the ARN of a Lambda function or SNS topic in the same Region:
 
 ```yaml
 Resources:
-  CustomResourceFunction:
-    Type: AWS::Lambda::Function
+  PartnerWebhook:
+    Type: Custom::PartnerWebhook
     Properties:
-      Runtime: python3.9
-      Handler: index.handler
-      Code:
-        ZipFile: |
-          import cfnresponse
-          import boto3
-
-          def handler(event, context):
-              try:
-                  if event['RequestType'] == 'Create':
-                      # Custom create logic
-                      response_data = {'Result': 'Created'}
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
-                  elif event['RequestType'] == 'Delete':
-                      # Custom delete logic
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                  else:
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-              except Exception as e:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
-      Role: !GetAtt LambdaExecutionRole.Arn
-
-  CustomResource:
-    Type: Custom::MyCustomResource
-    Properties:
-      ServiceToken: !GetAtt CustomResourceFunction.Arn
-      CustomProperty: CustomValue
+      ServiceToken: !GetAtt WebhookProvider.Arn
+      ServiceTimeout: 300
+      CallbackUrl: !Sub https://${ApiDomain}/webhooks/partner
 ```
 
-### Use Cases
+On create, update, and delete, CloudFormation sends the function a request with the request type, the properties, and a pre-signed S3 URL. The function does its work and uploads a response to that URL with `SUCCESS` or `FAILED`, a **physical ID** for the resource, and any attributes other resources can read with `!GetAtt`. A few rules follow from that protocol:
 
-- Provision resources not supported by CloudFormation
-- Call external APIs
-- Perform custom validation
-- Clean up or transform data
+- **Always respond.** A function that crashes or times out without responding leaves the stack waiting until `ServiceTimeout` runs out, one hour by default. Catch every error and report `FAILED`.
+- **Handle delete properly.** A delete request arrives during stack deletion and rollback, often for resources the function never finished creating. Deleting something that doesn't exist should still report success, or the stack can't be deleted.
+- **Understand replacement.** When an update returns a different physical ID, CloudFormation treats it as a replacement and sends a delete request for the old ID later.
+- **Keep it idempotent.** The same request can arrive more than once.
+
+{% include figure.html id="aws-cfn-custom-resource" %}
+
+Custom resources are the quick option for one stack. For something many stacks use, a registry resource type is sturdier.
+
+### Registry Extensions
+
+The **CloudFormation registry** holds extensions that behave like built-in types. Extensions are activated per account and Region.
+
+| Extension | What it is | Use for |
+|---|---|---|
+| **Resource types** | New resource types with **handlers**, the code CloudFormation calls to create, read, update, delete, and list the resource. Published by third parties, such as monitoring vendors, or privately by your organization, written with the CloudFormation CLI (a separate tool from the AWS CLI). | Anything many stacks manage. Private resource types that CloudFormation can provision also support drift detection and import, which custom resources don't. |
+| **Modules** | A packaged group of resources and settings that templates use as a single resource | Standard building blocks, such as a bucket with its required encryption and logging |
+| **Hooks** | Checks that run before CloudFormation provisions resources (see below) | Rules every deployment must pass |
+
+Third-party and private resource types and custom Hooks are billed per handler operation. **Macros** are a separate mechanism. A macro is a Lambda function, declared as an `AWS::CloudFormation::Macro` resource and invoked from a template's `Transform` section, that rewrites the template before CloudFormation processes it, as AWS SAM's transform does. Its runs are billed as ordinary Lambda invocations.
+
+### Hooks
+
+**Hooks** check resources, stacks, or change sets before CloudFormation provisions them, and resource operations made through the Cloud Control API, and either fail the operation or let it continue with a warning. A Hook can require encryption on every bucket, restrict instance sizes in development accounts, or require backups on databases. Hooks can be written as **CloudFormation Guard** rules, a declarative policy language, as Lambda functions, or with the CloudFormation CLI, and AWS Control Tower's **proactive controls** are Hooks managed for you.
+
+A Hook is activated in one account and Region, with filters for which stacks, resource types, and operations it checks. Enforcing it across an organization means deploying it to every account and Region, typically with a StackSet or through Control Tower. Start new Hooks in warning mode, and switch to failing mode once they stop flagging legitimate deployments.
 
 ---
 
-## Drift Detection
+## Drift
 
-**Drift** occurs when resources are modified outside CloudFormation.
+A resource has **drifted** when its actual configuration no longer matches the template, usually because someone changed it in the console. Drift makes the next stack update unpredictable, since CloudFormation's record no longer describes reality.
 
-### Detect Drift
+**Drift detection** compares each resource's current configuration with the template, for a whole stack, for chosen resources, or for every stack instance of a StackSet. Each resource comes back as `IN_SYNC`, `MODIFIED` (with the differing properties listed), `DELETED`, or `NOT_CHECKED` for types that don't support detection. Only properties set in the template are compared, so a setting added by hand that the template never mentions isn't reported. The AWS Config managed rule `cloudformation-stack-drift-detection-check` runs detection on a schedule and flags drifted stacks.
 
-```bash
-# Start drift detection
-aws cloudformation detect-stack-drift \
-  --stack-name my-stack
+A drifted resource can be fixed three ways:
 
-# Check status
-aws cloudformation describe-stack-drift-detection-status \
-  --stack-drift-detection-id <id>
+- Put it back with a **drift-aware change set**, which compares the template with each resource's actual state and changes resources to match the template, recreating deleted ones.
+- Accept the change by updating the template to match the resource.
+- For a resource deleted outside CloudFormation that you don't want back, remove it from the template.
 
-# View drift results
-aws cloudformation describe-stack-resource-drifts \
-  --stack-name my-stack
-```
-
-### Drift Statuses
-
-- `IN_SYNC` - Resource matches template
-- `MODIFIED` - Resource differs from template
-- `DELETED` - Resource deleted outside CloudFormation
-- `NOT_CHECKED` - Resource type doesn't support drift detection
-
-### Handling Drift
-
-- Update template to match current state
-- Revert manual changes
-- Import changed resources
-
-### Interpret Drift Results
-
-**IN_SYNC:** Template matches actual resource (good!).
-
-**MODIFIED:** Actual resource differs from template:
-- Someone changed the resource manually after import
-- Template doesn't capture all properties
-- **Action:** Update template to match reality or fix the resource
-
-**DELETED:** Resource no longer exists:
-- Resource was deleted outside CloudFormation
-- **Action:** Recreate or remove from template
-
-**NOT_CHECKED:** Resource type doesn't support drift detection
-
-### Fix Drift
-
-If drift detected, you have two options:
-
-**Option 1: Update template to match reality**
-
-```bash
-# 1. Update template with actual configuration
-# 2. Update stack
-aws cloudformation update-stack \
-  --stack-name prod-foundation \
-  --template-body file://updated-template.yaml
-```
-
-**Option 2: Fix resource to match template**
-
-Manually change the resource back to match the template, or use CloudFormation to update it.
+A drift-aware change set reverts drift across the whole stack, not just in the resources the template change touches, so review its full list of changes. It leaves properties that AWS itself manages, such as an Auto Scaling group's desired capacity, as they are, can't fix drift in properties that would require replacement, and for a few resource types falls back to an ordinary comparison with the previous template.
 
 ---
 
 ## Bringing Existing Resources Under CloudFormation
 
+Resources created by hand, by scripts, or by another tool can be brought into a stack without recreating them. There are three ways to start:
 
-**Goal:** Bring AWS resources under CloudFormation management.
+- The **IaC generator** scans the account's resources and generates a template for the ones you select, which can then create a stack that imports them. It's the quickest path for an account built by hand.
+- **Manual import** takes a template you write, describing the resources as they exist, plus each resource's identifier, such as a bucket name or a VPC ID.
+- **Auto-import** imports resources during an ordinary create or update when the template gives them fixed custom names that match existing resources.
 
-**Two migration scenarios:**
+Import runs as a change set of type `IMPORT`, and a few rules apply. Every imported resource needs a `DeletionPolicy` in the template (auto-import requires `Retain` or `RetainExceptOnCreate`). The operation can't create, change, or delete any other resource at the same time. A resource can belong to only one stack. CloudFormation checks that the resource exists and that the template is valid, but not that the template matches the resource's actual settings. Run drift detection right after an import, and fix any difference before the next update, which would otherwise apply the template's version.
 
-1. **Importing unmanaged resources**: Resources created manually or outside CloudFormation
-2. **Moving resources between stacks**: Resources already in CloudFormation but need to move to different stacks
-
-**Why migrate:**
-- Version control for infrastructure
-- Drift detection
-- Automated deployments
-- Rollback capabilities
-- Documented architecture
-
-**Migration process:**
-1. Discover what resources exist
-2. Tag resources for organization
-3. Choose migration strategy
-4. Generate CloudFormation templates
-5. Import resources into stacks
-6. Verify with drift detection
-7. Clean up temporary tags
-
-### Step 3: Choose Migration Strategy
-
-Choose your migration approach based on whether resources are already managed by CloudFormation or not.
-
-#### Scenario 1: Moving Resources Between Existing Stacks
-
-**When:** Resources are already in CloudFormation Stack A, need to move to Stack B.
-
-**Common reasons:**
-- Refactoring monolithic stacks into smaller stacks by layer
-- Reorganizing stacks by team ownership or domain
-- Moving resources created in the wrong stack
-- Consolidating duplicate infrastructure
-
-**Two methods available:**
-
-##### Method 1: Stack Refactoring (NEW - February 2025)
-
-**What it is:** Native AWS solution that automates moving resources between stacks atomically.
-
-**Advantages:**
-- Single atomic operation (all-or-nothing)
-- Preview changes before execution
-- No manual DeletionPolicy management
-- Safer for production environments
-
-**Limitations:**
-- Resources must have `FULLY_MUTABLE` provisioning type
-- Cannot create, delete, or modify resources during refactor
-- Source stacks cannot have stack policies attached
-- CLI/SDK only (no Console support yet)
-- Not all resource types supported
-
-**When to use:** Supported resources in production where safety is critical.
-
-See [Step 5: Import Resources](#step-5-import-resources) for detailed stack refactoring procedure.
-
-##### Method 2: Manual DeletionPolicy + Import
-
-**What it is:** Traditional method using `DeletionPolicy: Retain` and resource import.
-
-**Advantages:**
-- Broader resource type support
-- More control over the process
-- Can modify properties during migration
-- Works in AWS Console
-
-**Disadvantages:**
-- Multi-step manual process
-- Higher risk of mistakes
-- Must match properties exactly
-
-**When to use:** Resources not supported by stack refactoring, or when you need to modify properties.
-
-See [Step 5: Import Resources](#step-5-import-resources) for detailed manual import procedure.
-
-#### Scenario 2: Importing Unmanaged Resources
-
-Decide whether to import resources as-is or recreate them from scratch.
-
-##### Option A: Import (No Downtime)
-
-**What it does:** Brings existing resources under CloudFormation without recreating them.
-
-**When to use:**
-- Production resources that can't tolerate downtime
-- Stateful resources (databases, S3 buckets with data)
-- Resources with complex configurations
-- Resources already correctly configured
-
-**Advantages:**
-- Zero downtime
-- No resource recreation
-- Immediate CloudFormation management
-- Resources keep same IDs and configurations
-
-**Disadvantages:**
-- Template must match exact current configuration
-- Inherits any technical debt
-- More complex for resources with many dependencies
-
-**Recommended for:**
-- Foundation layer (VPCs, networking)
-- Platform layer (shared databases, queues, registries)
-- Any stateful resources with data
-
-##### Option B: Recreate (Clean Start)
-
-**What it does:** Create new resources via CloudFormation, migrate data, delete old resources.
-
-**When to use:**
-- Non-critical resources
-- Easily replaceable resources
-- Want to redesign or apply best practices
-- Can tolerate downtime or migration window
-
-**Advantages:**
-- Clean slate (no configuration baggage)
-- Apply best practices from scratch
-- Simpler templates
-- Forces documentation
-
-**Disadvantages:**
-- Requires downtime or migration window
-- Data migration complexity
-- Higher risk
-- Resources get new IDs
-
-**Recommended for:**
-- DevOps layer (pipelines, repos - can recreate)
-- Application layer compute (EC2, Lambda - can recreate)
-- Non-critical resources
-
-##### Option C: Hybrid (Phased Approach)
-
-**What it does:** Import critical resources, recreate others, migrate gradually.
-
-**When to use:**
-- Large, complex environments
-- Want to minimize risk
-- Different teams own different resources
-
-**Approach:**
-- Import foundation and platform layers
-- Recreate DevOps and application layers
-- Migrate workloads gradually
-- Decommission old resources over time
-
-### Step 4: Generate Templates
-
-Create CloudFormation templates that describe your existing resources.
-
-#### Option A: Use IaC Generator
-
-**What it is:** AWS service that scans your account and generates CloudFormation templates.
-
-**How to use:**
-
-**1. Scan your account:**
-
-```bash
-# Create a resource scan
-aws cloudformation create-resource-scan
-
-# List scans
-aws cloudformation list-resource-scans
-
-# Get scan details
-aws cloudformation describe-resource-scan \
-  --resource-scan-id <scan-id>
-```
-
-**2. List resources found:**
-
-```bash
-aws cloudformation list-resource-scan-resources \
-  --resource-scan-id <scan-id>
-```
-
-**3. Generate template:**
-
-In AWS Console:
-1. CloudFormation → IaC Generator
-2. Review scanned resources
-3. Select resources to include (use tags or resource groups to filter)
-4. Generate template
-5. Download YAML template
-
-**4. Review and customize:**
-
-```yaml
-# Generated template will look like:
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Generated from existing resources
-
-Parameters:
-  BucketName:
-    Type: String
-    Default: my-existing-bucket
-
-Resources:
-  MyBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref BucketName
-      VersioningConfiguration:
-        Status: Enabled
-```
-
-**Limitations:**
-- Over 600 resource types supported, but not all
-- May not capture all configuration details
-- Check [supported resources](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resource-import-supported-resources.html){:target="_blank" rel="noopener noreferrer"}
-
-#### Option B: Write Templates Manually
-
-**When to use:**
-- IaC Generator doesn't support the resource type
-- You want full control over template structure
-- Simple resources where manual is faster
-
-**How to do it:**
-
-1. Use AWS Console or CLI to view current resource configuration
-2. Look up CloudFormation resource documentation
-3. Write template matching current configuration
-4. Validate template syntax
-
-```bash
-# Validate template
-aws cloudformation validate-template \
-  --template-body file://template.yaml
-
-# Use cfn-lint for better validation
-pip install cfn-lint
-cfn-lint template.yaml
-```
-
-### Step 5: Import Resources
-
-Bring existing resources under CloudFormation management using the import operation.
-
-#### Procedure A: Stack Refactoring (Moving Between Stacks)
-
-Use this when moving resources from one CloudFormation stack to another.
-
-**1. Prepare updated templates**
-
-Create the desired end-state templates for both source and destination stacks:
-
-```yaml
-# source-stack-updated.yaml (resource removed)
-Resources:
-  # Other resources remain, DataBucket removed
-
-# destination-stack.yaml (resource added)
-Resources:
-  DataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: my-data-bucket
-      VersioningConfiguration:
-        Status: Enabled
-```
-
-**2. Create the refactor operation**
-
-```bash
-aws cloudformation create-stack-refactor \
-  --description "Move data bucket to new stack" \
-  --enable-stack-creation \
-  --resource-mappings \
-    Source={StackName=SourceStack,LogicalResourceId=DataBucket},Destination={StackName=DestinationStack,LogicalResourceId=DataBucket} \
-  --stack-definitions \
-    StackName=SourceStack,TemplateBody=file://source-stack-updated.yaml \
-    StackName=DestinationStack,TemplateBody=file://destination-stack.yaml
-```
-
-Returns:
-```json
-{
-  "StackRefactorId": "arn:aws:cloudformation:us-east-1:123456789012:stackrefactor/abc-123"
-}
-```
-
-**3. Check status and preview changes**
-
-```bash
-# Check refactor status
-aws cloudformation describe-stack-refactor \
-  --stack-refactor-id arn:aws:cloudformation:us-east-1:123456789012:stackrefactor/abc-123
-
-# Preview the changes
-aws cloudformation list-stack-refactor-actions \
-  --stack-refactor-id arn:aws:cloudformation:us-east-1:123456789012:stackrefactor/abc-123
-```
-
-**4. Execute the refactor**
-
-```bash
-aws cloudformation execute-stack-refactor \
-  --stack-refactor-id arn:aws:cloudformation:us-east-1:123456789012:stackrefactor/abc-123
-```
-
-**JSON input format (alternative):**
-
-```json
-{
-  "Description": "Move data bucket to new stack",
-  "EnableStackCreation": true,
-  "ResourceMappings": [
-    {
-      "Source": {
-        "StackName": "SourceStack",
-        "LogicalResourceId": "DataBucket"
-      },
-      "Destination": {
-        "StackName": "DestinationStack",
-        "LogicalResourceId": "DataBucket"
-      }
-    }
-  ],
-  "StackDefinitions": [
-    {
-      "StackName": "SourceStack",
-      "TemplateBody": "..."
-    },
-    {
-      "StackName": "DestinationStack",
-      "TemplateBody": "..."
-    }
-  ]
-}
-```
-
-**Limitations:**
-- Resources must have `FULLY_MUTABLE` provisioning type
-- Cannot create, delete, or modify resources during refactor
-- Maximum 2-5 destination stacks per refactor
-- Unsupported resource types include: AWS::Lambda::EventInvokeConfig, AWS::Route53::RecordSet, AWS::DynamoDB::GlobalTable
-- Check [full list of unsupported resources](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stack-refactoring.html){:target="_blank" rel="noopener noreferrer"}
-
-#### Procedure B: Manual DeletionPolicy + Import (Moving Between Stacks)
-
-Use this when stack refactoring doesn't support your resource type.
-
-**1. Add DeletionPolicy to source stack**
-
-```yaml
-Resources:
-  DataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain  # Add this
-    Properties:
-      BucketName: my-data-bucket
-      VersioningConfiguration:
-        Status: Enabled
-```
-
-**2. Update source stack to apply the policy**
-
-```bash
-aws cloudformation update-stack \
-  --stack-name SourceStack \
-  --template-body file://source-with-retain.yaml \
-  --capabilities CAPABILITY_IAM
-```
-
-**3. Remove resource from source stack template**
-
-```yaml
-# source-stack-updated.yaml
-Resources:
-  # DataBucket removed entirely
-  # Other resources remain
-```
-
-**4. Update source stack (resource persists in AWS)**
-
-```bash
-aws cloudformation update-stack \
-  --stack-name SourceStack \
-  --template-body file://source-stack-updated.yaml \
-  --capabilities CAPABILITY_IAM
-```
-
-The resource is now "orphaned"; it exists in AWS but is not managed by any stack.
-
-**5. Prepare destination stack template**
-
-```yaml
-# destination-stack.yaml
-Resources:
-  DataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain  # Keep Retain for safety
-    Properties:
-      BucketName: my-data-bucket  # Must match exactly
-      VersioningConfiguration:
-        Status: Enabled  # Must match exactly
-```
-
-**6. Create resources-to-import file**
-
-```json
-[
-  {
-    "ResourceType": "AWS::S3::Bucket",
-    "LogicalResourceId": "DataBucket",
-    "ResourceIdentifier": {
-      "BucketName": "my-data-bucket"
-    }
-  }
-]
-```
-
-**7. Import into destination stack**
-
-For new stack:
-```bash
-aws cloudformation create-stack \
-  --stack-name DestinationStack \
-  --template-body file://destination-stack.yaml \
-  --resources-to-import file://resources-to-import.json
-```
-
-For existing stack:
-```bash
-# Create import change set
-aws cloudformation create-change-set \
-  --stack-name DestinationStack \
-  --change-set-name import-data-bucket \
-  --change-set-type IMPORT \
-  --template-body file://destination-stack-updated.yaml \
-  --resources-to-import file://resources-to-import.json
-
-# Review changes
-aws cloudformation describe-change-set \
-  --stack-name DestinationStack \
-  --change-set-name import-data-bucket
-
-# Execute import
-aws cloudformation execute-change-set \
-  --stack-name DestinationStack \
-  --change-set-name import-data-bucket
-```
-
-**8. Verify the import**
-
-```bash
-aws cloudformation describe-stack-resources \
-  --stack-name DestinationStack \
-  --logical-resource-id DataBucket
-```
-
-#### Procedure C: Importing Unmanaged Resources
-
-Use this for resources created manually or outside CloudFormation.
-
-##### Prepare Import File
-
-Create a JSON file specifying which resources to import:
-
-```json
-[
-  {
-    "ResourceType": "AWS::S3::Bucket",
-    "LogicalResourceId": "MyBucket",
-    "ResourceIdentifier": {
-      "BucketName": "my-actual-bucket-name"
-    }
-  },
-  {
-    "ResourceType": "AWS::EC2::VPC",
-    "LogicalResourceId": "MainVPC",
-    "ResourceIdentifier": {
-      "VpcId": "vpc-abc123"
-    }
-  }
-]
-```
-
-**Resource identifier by type:**
-
-| Resource Type | Identifier Property |
-|--------------|---------------------|
-| AWS::S3::Bucket | BucketName |
-| AWS::EC2::Instance | InstanceId |
-| AWS::EC2::VPC | VpcId |
-| AWS::RDS::DBInstance | DBInstanceIdentifier |
-| AWS::Lambda::Function | FunctionName |
-| AWS::DynamoDB::Table | TableName |
-| AWS::IAM::Role | RoleName |
-
-##### Import into New Stack
-
-```bash
-aws cloudformation create-stack \
-  --stack-name prod-foundation \
-  --template-body file://template.yaml \
-  --resources-to-import file://resources-to-import.json
-```
-
-##### Import into Existing Stack
-
-```bash
-# 1. Create change set with import
-aws cloudformation create-change-set \
-  --stack-name existing-stack \
-  --change-set-name import-more-resources \
-  --change-set-type IMPORT \
-  --template-body file://updated-template.yaml \
-  --resources-to-import file://resources-to-import.json
-
-# 2. Review change set
-aws cloudformation describe-change-set \
-  --stack-name existing-stack \
-  --change-set-name import-more-resources
-
-# 3. Execute import
-aws cloudformation execute-change-set \
-  --stack-name existing-stack \
-  --change-set-name import-more-resources
-```
-
-##### Requirements for Successful Import
-
-**Template requirements:**
-- Resource properties must match existing resource exactly
-- Must include all required properties
-- Use correct resource identifier property
-
-**Common import failures:**
-- Template property doesn't match actual resource
-- Missing required properties
-- Resource already managed by another stack
-- Resource doesn't exist
-
-### Common Challenges
-
-#### Challenge 1: Resources Without CloudFormation Support
-
-**Problem:** Not all AWS resources support CloudFormation or import.
-
-**Solutions:**
-- Use AWS CDK custom resources
-- Use CloudFormation custom resources with Lambda
-- Manage separately with Terraform or scripts
-- Check AWS roadmap for future support
-
-#### Challenge 2: Template Doesn't Match Resource
-
-**Problem:** Import fails because template properties don't match actual resource.
-
-**Solutions:**
-- Use IaC Generator to get accurate configuration
-- Use AWS Console to view actual resource properties
-- Compare template with actual configuration carefully
-- Start with minimal required properties, add more later
-
-#### Challenge 3: Complex Dependencies
-
-**Problem:** Resources have circular dependencies or unclear relationships.
-
-**Solutions:**
-- Use Tag Editor to map resource relationships
-- Review AWS Config for dependency graph
-- Use `DependsOn` attribute explicitly in template
-- Break into multiple stacks if needed
-
-#### Challenge 4: Drift After Import
-
-**Problem:** Template shows drift immediately after import.
-
-**Solutions:**
-- IaC Generator may not capture all properties
-- Some properties are computed/output-only (don't include in template)
-- Update template to match actual configuration
-- Check CloudFormation documentation for resource-specific notes
-
-#### Challenge 5: Missing Resource Identifiers
-
-**Problem:** Don't know resource identifier needed for import.
-
-**Solutions:**
-
-```bash
-# Find S3 buckets
-aws s3 ls
-
-# Find EC2 instance IDs
-aws ec2 describe-instances \
-  --query 'Reservations[].Instances[].[InstanceId,Tags[?Key==`Name`].Value|[0]]'
-
-# Find RDS instances
-aws rds describe-db-instances \
-  --query 'DBInstances[].[DBInstanceIdentifier,Engine]'
-
-# Find VPC IDs
-aws ec2 describe-vpcs \
-  --query 'Vpcs[].[VpcId,Tags[?Key==`Name`].Value|[0]]'
-```
-
-#### Challenge 6: Large Number of Resources
-
-**Problem:** Too many resources to migrate at once.
-
-**Solutions:**
-- Use migration batches (tag with `MigrationBatch`)
-- Migrate one layer at a time (foundation → platform → devops → application)
-- Use Resource Groups to organize batches
-- Automate with scripts for repetitive tasks
-
-#### Challenge 7: Resources Created by Other Tools
-
-**Problem:** Resources were created by Terraform, CDK, or other tools.
-
-**Solutions:**
-- Check if resource is already managed by another tool (avoid conflicts)
-- Use `terraform state rm` to remove from Terraform state before importing to CloudFormation
-- For CDK: CDK uses CloudFormation under the hood, resources already in stacks
-- Document which tool manages what to avoid confusion
-
-#### Challenge 8: Moving Resources Between Stacks
-
-**Problem:** Need to refactor stack organization without recreating resources.
-
-**Solutions:**
-
-**Option 1: Use Stack Refactoring (NEW in February 2025)**
-```bash
-aws cloudformation create-stack-refactor \
-  --description "Move S3 bucket to new stack" \
-  --enable-stack-creation \
-  --resource-mappings Source={StackName=OldStack,LogicalResourceId=Bucket},Destination={StackName=NewStack,LogicalResourceId=Bucket} \
-  --stack-definitions StackName=OldStack,TemplateBody=file://old.yaml StackName=NewStack,TemplateBody=file://new.yaml
-```
-
-**Option 2: Manual DeletionPolicy method**
-1. Add `DeletionPolicy: Retain` to resource in source stack
-2. Update source stack to apply policy
-3. Remove resource from source template and update (resource persists)
-4. Import resource into destination stack
-
-**Limitations:**
-- Stack refactoring only supports `FULLY_MUTABLE` resources
-- Cannot modify resource properties during refactoring
-- Manual method requires exact property matching in destination template
-
-See [Moving Resources Between Existing Stacks](#moving-resources-between-existing-stacks) for complete procedures.
+Resources managed by another tool, such as Terraform, must be removed from that tool's state first, or two tools will fight over them.
 
 ---
 
-## Best Practices
+## Moving and Renaming Resources
 
-### Template Organization
+Stacks outgrow their first design. A stack holding a whole application may need splitting by team, or a resource may need a clearer logical ID. Changing either in a template would normally delete and recreate the resource.
 
-**Consistent Structure:**
-```
-infrastructure/
-├── README.md
-├── templates/
-│   ├── network.yaml
-│   ├── compute.yaml
-│   └── storage.yaml
-├── parameters/
-│   ├── dev.json
-│   ├── staging.json
-│   └── prod.json
-└── policies/
-    └── stack-policy.json
-```
+**Stack refactoring** (since February 2025) moves resources between stacks, splits a stack into several, merges stacks, and renames logical IDs, without touching the resources themselves. You provide the revised template for each stack involved, up to five, and a mapping for any resource whose logical ID changes. CloudFormation validates the plan, shows the actions it will take, and applies them together when you execute it. It has limits:
 
-**Naming Conventions:**
-```yaml
-# Stack names: <env>-<app>-<component>
-# Example: prod-webapp-network
+- It only reorganizes. Resources can't be created, deleted, or changed in the same operation, and parameters, conditions, and mappings can't change either, so make other changes in separate updates first.
+- Resource types must be ones CloudFormation can fully update (provisioning type `FULLY_MUTABLE`). Some types are excluded, including Auto Scaling groups, launch templates, Route 53 record sets, ElastiCache clusters, and custom resources.
+- Stacks with stack policies, the rules that protect a stack's resources from updates, can't be refactored, and a stack can't be left empty.
+- Resources that refer to values that differ between stacks, such as `AWS::StackName`, can't move.
 
-# Resource names: <env>-<component>-<resource>
-resource "aws_s3_bucket" "data" {
-  bucket = "myapp-prod-s3-data"
-}
-```
-
-### Security
-
-**Least Privilege IAM:**
-```yaml
-Resources:
-  EC2Role:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub ${DataBucket.Arn}/*
-```
-
-**Encryption:**
-```yaml
-Resources:
-  DataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-
-  Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      StorageEncrypted: true
-      KmsKeyId: !Ref DatabaseKey
-```
-
-**Secrets:**
-```yaml
-# Use Secrets Manager
-Resources:
-  DBSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: password
-        PasswordLength: 32
-
-  Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
-```
-
-### Tagging
-
-```yaml
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-web-server
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Application
-          Value: !Ref ApplicationName
-        - Key: Owner
-          Value: !Ref OwnerEmail
-        - Key: CostCenter
-          Value: !Ref CostCenter
-        - Key: ManagedBy
-          Value: CloudFormation
-```
-
-### Version Control
-
-**.gitignore:**
-```
-# Sensitive files
-*-secrets.yaml
-*-secrets.json
-*.key
-*.pem
-
-# IDE files
-.idea/
-.vscode/
-
-# Temp files
-*.swp
-*.tmp
-```
-
-### Testing
-
-**Validation Pipeline:**
-```yaml
-# GitHub Actions
-name: CloudFormation CI/CD
-on: [push]
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Validate template
-        run: |
-          aws cloudformation validate-template \
-            --template-body file://template.yaml
-
-      - name: Lint
-        run: |
-          pip install cfn-lint
-          cfn-lint template.yaml
-
-      - name: Security scan
-        run: |
-          gem install cfn-nag
-          cfn_nag_scan --input-path template.yaml
-
-  deploy-test:
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to test
-        run: |
-          aws cloudformation deploy \
-            --template-file template.yaml \
-            --stack-name test-stack \
-            --parameter-overrides EnvironmentName=test
-```
+For resources refactoring doesn't support, the older way still works. Set `DeletionPolicy: Retain` on the resource and update the source stack, remove it from the source template and update again, which leaves the resource running but unmanaged, then import it into the destination stack.
 
 ---
 
-## Troubleshooting
+## Key Takeaways
 
-### Common Errors
-
-**Resource creation failed:**
-```
-CREATE_FAILED: The security group 'sg-xxxxx' does not exist
-```
-**Solution:** Check dependencies, ensure resources created in correct order.
-
-**Circular dependency:**
-```
-Circular dependency between resources
-```
-**Solution:** Review Ref and GetAtt relationships, break circular references.
-
-**Insufficient permissions:**
-```
-User is not authorized to perform: ec2:CreateVpc
-```
-**Solution:** Grant required IAM permissions to CloudFormation execution role.
-
-### Stack Rollback
-
-**Preventing rollback for debugging:**
-```bash
-aws cloudformation create-stack \
-  --stack-name my-stack \
-  --template-body file://template.yaml \
-  --on-failure DO_NOTHING  # Keep resources for debugging
-```
-
-**Manual rollback:**
-```bash
-# Cancel update and roll back
-aws cloudformation cancel-update-stack \
-  --stack-name my-stack
-
-# Continue rollback if stuck
-aws cloudformation continue-update-rollback \
-  --stack-name my-stack
-```
-
-### Viewing Logs
-
-```bash
-# View stack events
-aws cloudformation describe-stack-events \
-  --stack-name my-stack
-
-# Watch events in real-time
-aws cloudformation describe-stack-events \
-  --stack-name my-stack \
-  --query 'StackEvents[*].[Timestamp,ResourceStatus,ResourceType,LogicalResourceId,ResourceStatusReason]' \
-  --output table
-```
-
-### Debugging Tips
-
-1. **Use Change Sets**: Preview changes before applying
-2. **Start Small**: Test with minimal template first
-3. **Check Dependencies**: Review implicit dependencies
-4. **Validate Templates**: Use `validate-template` and `cfn-lint`
-5. **Enable Termination Protection**: Prevent accidental deletion
-
-```bash
-# Enable termination protection
-aws cloudformation update-termination-protection \
-  --enable-termination-protection \
-  --stack-name production-stack
-```
-
----
-{% endraw %}
+- Use nested stacks for reusable components deployed as one unit, separate stacks with references for parts with different owners, and StackSets for the same template across many accounts and Regions.
+- With service-managed StackSets, target OUs and turn on automatic deployment, and roll out a few accounts and one Region at a time with a low failure tolerance.
+- Custom resources must always respond, handle deletes of things that may not exist, and be idempotent. Prefer registry resource types for anything shared widely.
+- Hooks enforce rules on every deployment. Introduce them in warning mode.
+- Detect drift regularly, on each nested stack too, and fix it with drift-aware change sets or template updates, remembering that detection only compares properties the template sets and that drift-aware change sets revert drift across the whole stack.
+- Import existing resources with the IaC generator or manual import, give each a `DeletionPolicy`, and run drift detection straight after. Reorganize stacks with stack refactoring rather than recreating resources.

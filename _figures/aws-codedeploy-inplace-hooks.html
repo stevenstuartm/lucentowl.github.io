@@ -1,0 +1,70 @@
+---
+title: "The Order of EC2 Deployment Hooks"
+kind: flow
+system: aws
+summary: "An in-place deployment behind a load balancer takes each instance out of service, replaces the application, and returns it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="awscdh-title awscdh-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awscdh-title">Lifecycle events of an in-place CodeDeploy deployment to one instance behind a load balancer</title>
+<desc id="awscdh-desc">For each instance, an in-place deployment behind a load balancer runs thirteen lifecycle events in order, in three groups. First it takes the instance out of service: BeforeBlockTraffic, BlockTraffic, and AfterBlockTraffic. Then it replaces the application: ApplicationStop, DownloadBundle, BeforeInstall, Install, AfterInstall, ApplicationStart, and ValidateService. Finally it returns the instance to service: BeforeAllowTraffic, AllowTraffic, and AfterAllowTraffic. BlockTraffic, DownloadBundle, Install, and AllowTraffic are run by CodeDeploy itself and can't run scripts. BeforeBlockTraffic, AfterBlockTraffic, and ApplicationStop run scripts from the last successful revision's AppSpec file, and the remaining events run scripts from the new revision's. Without a load balancer, only the middle group runs. ApplicationStop is skipped on an instance's first deployment.</desc>
+<style>
+.awscdh-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awscdh-old { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awscdh-on { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awscdh-res { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.awscdh-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awscdh-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awscdh-rt { font-size: 12px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awscdh-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awscdh-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.3; }
+</style>
+<defs>
+<marker id="awscdh-a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L7,3 L0,6 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="awscdh-h" x="30" y="42">Take the instance out of service</text>
+<rect class="awscdh-old" x="30" y="60" width="250" height="28" rx="5"/>
+<text class="awscdh-on" x="155" y="79" text-anchor="middle">BeforeBlockTraffic</text>
+<path class="awscdh-ln" d="M155,88 L155,100" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-res" x="30" y="102" width="250" height="28" rx="5"/>
+<text class="awscdh-rt" x="155" y="121" text-anchor="middle">BlockTraffic (CodeDeploy)</text>
+<path class="awscdh-ln" d="M155,130 L155,142" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-old" x="30" y="144" width="250" height="28" rx="5"/>
+<text class="awscdh-on" x="155" y="163" text-anchor="middle">AfterBlockTraffic</text>
+<text class="awscdh-h" x="365" y="42">Replace the application</text>
+<rect class="awscdh-old" x="365" y="60" width="250" height="28" rx="5"/>
+<text class="awscdh-on" x="490" y="79" text-anchor="middle">ApplicationStop</text>
+<path class="awscdh-ln" d="M490,88 L490,100" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-res" x="365" y="102" width="250" height="28" rx="5"/>
+<text class="awscdh-rt" x="490" y="121" text-anchor="middle">DownloadBundle (CodeDeploy)</text>
+<path class="awscdh-ln" d="M490,130 L490,142" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-box" x="365" y="144" width="250" height="28" rx="5"/>
+<text class="awscdh-n" x="490" y="163" text-anchor="middle">BeforeInstall</text>
+<path class="awscdh-ln" d="M490,172 L490,184" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-res" x="365" y="186" width="250" height="28" rx="5"/>
+<text class="awscdh-rt" x="490" y="205" text-anchor="middle">Install (CodeDeploy)</text>
+<path class="awscdh-ln" d="M490,214 L490,226" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-box" x="365" y="228" width="250" height="28" rx="5"/>
+<text class="awscdh-n" x="490" y="247" text-anchor="middle">AfterInstall</text>
+<path class="awscdh-ln" d="M490,256 L490,268" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-box" x="365" y="270" width="250" height="28" rx="5"/>
+<text class="awscdh-n" x="490" y="289" text-anchor="middle">ApplicationStart</text>
+<path class="awscdh-ln" d="M490,298 L490,310" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-box" x="365" y="312" width="250" height="28" rx="5"/>
+<text class="awscdh-n" x="490" y="331" text-anchor="middle">ValidateService</text>
+<text class="awscdh-h" x="700" y="42">Return it to service</text>
+<rect class="awscdh-box" x="700" y="60" width="250" height="28" rx="5"/>
+<text class="awscdh-n" x="825" y="79" text-anchor="middle">BeforeAllowTraffic</text>
+<path class="awscdh-ln" d="M825,88 L825,100" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-res" x="700" y="102" width="250" height="28" rx="5"/>
+<text class="awscdh-rt" x="825" y="121" text-anchor="middle">AllowTraffic (CodeDeploy)</text>
+<path class="awscdh-ln" d="M825,130 L825,142" marker-end="url(#awscdh-a)"/>
+<rect class="awscdh-box" x="700" y="144" width="250" height="28" rx="5"/>
+<text class="awscdh-n" x="825" y="163" text-anchor="middle">AfterAllowTraffic</text>
+<path class="awscdh-ln" d="M280,158 L322,158 L322,74 L363,74" marker-end="url(#awscdh-a)"/>
+<path class="awscdh-ln" d="M615,326 L657,326 L657,74 L698,74" marker-end="url(#awscdh-a)"/>
+<text class="awscdh-lab" x="30" y="376">BeforeBlockTraffic, AfterBlockTraffic, and ApplicationStop run the last successful revision's scripts. The other solid events run the new revision's.</text>
+<text class="awscdh-lab" x="30" y="394">Dashed events are run by CodeDeploy and can't run scripts. ApplicationStop is skipped on an instance's first deployment.</text>
+<text class="awscdh-lab" x="30" y="412">Without a load balancer in the deployment group, only the middle column runs.</text>
+</g>
+</svg>

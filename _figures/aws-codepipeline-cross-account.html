@@ -1,0 +1,79 @@
+---
+title: "A Pipeline That Deploys to Other Accounts"
+kind: deployment
+system: aws
+summary: "The pipeline stays in a tooling account and assumes a role in each target account to deploy there."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" role="img" aria-labelledby="awscpx-title awscpx-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awscpx-title">Cross-account deployment from a tooling account</title>
+<desc id="awscpx-desc">A tooling account holds the pipeline, its CodeBuild projects, and the artifact bucket, which is encrypted with a customer managed KMS key. The pipeline stores artifacts in the bucket and runs builds in CodeBuild. For each target account, staging and production, the pipeline's service role assumes a cross-account role in that account. That role, which the target account trusts only for the pipeline's service role, reads the artifacts from the tooling account's bucket, with permission to use the key, and starts a CloudFormation deployment. CloudFormation creates the resources with its own execution role in the target account. The bucket policy and the key policy must allow each cross-account role to read the artifacts, and an AWS managed key can't be shared, so a cross-account pipeline needs a customer managed key.</desc>
+<style>
+.awscpx-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awscpx-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awscpx-role { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awscpx-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awscpx-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awscpx-rn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awscpx-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awscpx-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awscpx-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="awscpx-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awscpx-pan" x="20" y="20" width="420" height="360" rx="8"/>
+<text class="awscpx-h" x="35" y="42">Tooling account</text>
+
+<rect class="awscpx-box" x="250" y="60" width="175" height="56" rx="6"/>
+<text class="awscpx-n" x="337" y="84" text-anchor="middle">Artifact bucket</text>
+<text class="awscpx-k" x="337" y="102" text-anchor="middle">[customer managed KMS key]</text>
+
+<rect class="awscpx-box" x="40" y="150" width="180" height="56" rx="6"/>
+<text class="awscpx-n" x="130" y="174" text-anchor="middle">CodePipeline</text>
+<text class="awscpx-k" x="130" y="192" text-anchor="middle">[runs as its service role]</text>
+
+<rect class="awscpx-box" x="40" y="290" width="180" height="56" rx="6"/>
+<text class="awscpx-n" x="130" y="314" text-anchor="middle">CodeBuild</text>
+<text class="awscpx-k" x="130" y="332" text-anchor="middle">[build and test]</text>
+
+<path class="awscpx-ln" d="M130,150 L130,88 L248,88" marker-end="url(#awscpx-a)"/>
+<text class="awscpx-lab" x="140" y="80">stores artifacts</text>
+<path class="awscpx-ln" d="M130,206 L130,288" marker-end="url(#awscpx-a)"/>
+<text class="awscpx-lab" x="140" y="252">runs builds</text>
+
+<rect class="awscpx-pan" x="520" y="20" width="460" height="170" rx="8"/>
+<text class="awscpx-h" x="535" y="42">Staging account</text>
+<rect class="awscpx-role" x="540" y="65" width="200" height="70" rx="6"/>
+<text class="awscpx-rn" x="640" y="89" text-anchor="middle">Cross-account role</text>
+<text class="awscpx-k" x="640" y="107" text-anchor="middle">[trusts the pipeline's role,</text>
+<text class="awscpx-k" x="640" y="123" text-anchor="middle">reads artifacts, uses the key]</text>
+<rect class="awscpx-box" x="800" y="65" width="160" height="70" rx="6"/>
+<text class="awscpx-n" x="880" y="89" text-anchor="middle">CloudFormation</text>
+<text class="awscpx-k" x="880" y="107" text-anchor="middle">[deploys with its</text>
+<text class="awscpx-k" x="880" y="123" text-anchor="middle">execution role]</text>
+<path class="awscpx-ln" d="M740,100 L798,100" marker-end="url(#awscpx-a)"/>
+<text class="awscpx-lab" x="769" y="92" text-anchor="middle">starts</text>
+
+<rect class="awscpx-pan" x="520" y="210" width="460" height="170" rx="8"/>
+<text class="awscpx-h" x="535" y="232">Production account</text>
+<rect class="awscpx-role" x="540" y="255" width="200" height="70" rx="6"/>
+<text class="awscpx-rn" x="640" y="279" text-anchor="middle">Cross-account role</text>
+<text class="awscpx-k" x="640" y="297" text-anchor="middle">[trusts the pipeline's role,</text>
+<text class="awscpx-k" x="640" y="313" text-anchor="middle">reads artifacts, uses the key]</text>
+<rect class="awscpx-box" x="800" y="255" width="160" height="70" rx="6"/>
+<text class="awscpx-n" x="880" y="279" text-anchor="middle">CloudFormation</text>
+<text class="awscpx-k" x="880" y="297" text-anchor="middle">[deploys with its</text>
+<text class="awscpx-k" x="880" y="313" text-anchor="middle">execution role]</text>
+<path class="awscpx-ln" d="M740,290 L798,290" marker-end="url(#awscpx-a)"/>
+<text class="awscpx-lab" x="769" y="282" text-anchor="middle">starts</text>
+
+<path class="awscpx-ln" d="M220,170 L470,170 L470,100 L538,100" marker-end="url(#awscpx-a)"/>
+<path class="awscpx-ln" d="M220,186 L470,186 L470,290 L538,290" marker-end="url(#awscpx-a)"/>
+<text class="awscpx-lab" x="345" y="162" text-anchor="middle">assumes a role in each account</text>
+
+<text class="awscpx-lab" x="20" y="406">Each cross-account role reads its artifacts from the tooling account's bucket, which the bucket policy and the key policy must allow.</text>
+<text class="awscpx-lab" x="20" y="424">An AWS managed key can't be shared with other accounts, so a cross-account pipeline needs a customer managed key.</text>
+</g>
+</svg>

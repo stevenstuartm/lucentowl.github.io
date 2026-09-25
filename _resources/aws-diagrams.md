@@ -41,6 +41,17 @@ figures:
   - aws-sqs-message-lifecycle
   - aws-sns-sqs-fanout
   - aws-eventbridge-bus-ownership
+  - aws-sfn-order-workflow
+  - aws-sfn-callback
+  - aws-kds-shards-consumers
+  - aws-cfn-stackset-rollout
+  - aws-cfn-custom-resource
+  - aws-cdk-synth-deploy
+  - aws-sam-transform
+  - aws-codepipeline-cross-account
+  - aws-codepipeline-execution-modes
+  - aws-codedeploy-inplace-hooks
+  - aws-cognito-token-flow
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -63,4 +74,12 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-database-selection.html
   - /study-guides/infrastructure/aws/aws-sqs-sns.html
   - /study-guides/infrastructure/aws/aws-eventbridge.html
+  - /study-guides/infrastructure/aws/aws-step-functions.html
+  - /study-guides/infrastructure/aws/aws-kinesis.html
+  - /study-guides/infrastructure/aws/cloudformation-advanced.html
+  - /study-guides/infrastructure/aws/aws-cdk.html
+  - /study-guides/infrastructure/aws/aws-sam.html
+  - /study-guides/infrastructure/aws/aws-codepipeline-codebuild.html
+  - /study-guides/infrastructure/aws/aws-codedeploy.html
+  - /study-guides/infrastructure/aws/aws-cognito.html
 ---

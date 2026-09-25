@@ -3,7 +3,7 @@ layout: guide
 title: "Service-Based Architecture"
 category: Architecture
 subcategory: Styles
-description: "The pragmatic distributed style built from a handful of coarse-grained, separately deployed domain services: its topology, why services often share a database and keep ACID transactions, the three data topology options, and when it beats both monoliths and microservices."
+description: "The pragmatic distributed style built from a handful of coarse-grained, separately deployed domain services: its topology, why services often share a database and keep ACID transactions, how much of the database services share, and when it beats both monoliths and microservices."
 tags: [practical, service-based-architecture, domain-services, coarse-grained-services, shared-database, data-topology]
 ---
 
@@ -11,11 +11,11 @@ tags: [practical, service-based-architecture, domain-services, coarse-grained-se
 <p>Service-based architecture distributes a system into a few large services, and keeps enough in common that the system stays simple to run.</p>
 </blockquote>
 
-Service-based architecture organizes a system into a small number of coarse-grained domain services, typically somewhere between four and twelve, sitting between a user interface and a data layer. Each service covers a significant business capability, such as catalog, checkout, or inventory, rather than a single fine-grained function. Services deploy separately, and they often share a database.
+Service-based architecture organizes a system into a handful of coarse-grained domain services sitting between a user interface and a data layer. Each service covers a significant business capability, such as catalog, checkout, or inventory, rather than a single fine-grained function. Services deploy separately, and they often share a database.
 
 ## How It Works
 
-Each domain service is a separately deployed unit with its own internal layers: an API facade, business logic, and persistence. A user interface, sometimes behind an API gateway or reverse proxy, routes requests to the service that owns the requested capability. Services communicate remotely, usually through REST or gRPC, and sometimes through messaging.
+Each domain service is a separately deployed unit containing everything its capability needs, from the API it exposes down to its data access code. A user interface, sometimes behind an API gateway or reverse proxy, routes requests to the service that owns the requested capability. Services communicate remotely, usually through REST or gRPC, and sometimes through messaging.
 
 The coarse grain is deliberate. Fewer, larger services mean less communication between services and simpler deployment than microservices. A single service often handles a whole business workflow, such as placing an order, from start to finish.
 
@@ -39,87 +39,26 @@ Because each service covers a whole business capability, most workflows start an
 
 ### The User Interface Routes, Services Coordinate
 
-The user interface presents a unified experience and routes each request to the right service. It can take several forms: a single user interface for the whole system, one per domain, or one per service. Business workflows belong inside the services. When the user interface starts coordinating steps across several services, it becomes the place where every workflow change lands, which erodes the independence of the services behind it.
+The user interface presents a unified experience and routes each request to the service that owns it. Business workflows belong inside the services. When the user interface starts coordinating steps across several services, it becomes the place where every workflow change lands, which erodes the independence of the services behind it.
 
-## Data Topology Options
+## How Much of the Database Services Share
 
-The data topology is one of the most consequential decisions in this style, because it sets how coupled the services are, how complex transactions become, and how much there is to operate.
+The data topology is one of the most consequential decisions in this style, because it sets how coupled the services are, how complex transactions become, and how much there is to operate. It also decides how many architecture quanta the system has. Services that share a database depend on it to run, so a system with one shared database usually remains a single quantum even though its services deploy separately.
 
-It also decides how many architecture quanta the system has. Services that share a database depend on it to run, so a system with one shared database usually remains a single quantum even though its services deploy separately. Separate databases are what give services separate quanta.
+The choice is a spectrum. At one end every service uses one database. At the other, every service owns its own. In between, services that belong to the same business domain share a database with each other and with no one else, so Cart and Checkout might share an orders database while Inventory and Fulfillment share a logistics one.
 
 {% include figure.html id="arch-sba-data-topologies" %}
 
-### Shared Database
+| | One shared database | A database per domain | A database per service |
+| --- | --- | --- | --- |
+| **Transactions** | ACID across everything | ACID within a domain, sagas or eventual consistency across domains | ACID within a service only, sagas or eventual consistency everywhere else |
+| **Queries across domains** | Plain joins | Service calls or synchronized copies | Aggregation in application code |
+| **Schema coupling** | A table change can break several services | Only services in the same domain are coupled | None |
+| **Boundaries** | Easy to bypass, since any service can query any table | Enforced between domains | Enforced everywhere |
+| **Operations** | One database, which is also a single point of failure and a likely bottleneck | A few databases | The most databases, and some duplicated data |
+| **Suits** | Most systems at the start, until the database becomes the limit | Clear domains with rare cross-domain transactions | Critical independence, a likely move to microservices, or different database technologies per service |
 
-All services share one database, and each service works with the tables for its own domain.
-
-**Advantages**:
-- Transactions stay simple, with ACID guarantees inside the database
-- Queries that span domains are straightforward
-- Development patterns stay familiar
-- There is one database to operate
-- Data integrity constraints are easy to enforce
-
-**Trade-offs**:
-- Services are coupled through the schema, so a table change can break several services
-- The database can become a performance bottleneck and a single point of failure
-- Service boundaries are harder to enforce, since querying another domain's tables is always possible
-
-**Reducing schema coupling:** Split the data access code into libraries per domain, such as a catalog entity library and an orders entity library, plus a small common library for tables that genuinely everyone uses. A change to the orders tables then only affects the services that depend on the orders library, rather than every service that shares the database.
-
-**When to use:** Many service-based systems start here. The simplicity outweighs the coupling until the database becomes a bottleneck or service independence becomes critical.
-
-### Domain Databases
-
-Each business domain gets its own database. Services within a domain share it, and services in different domains don't. Catalog and Search might share a catalog database, Cart and Checkout an orders database, and Inventory and Fulfillment a logistics database.
-
-**Advantages**:
-- Each domain can evolve its data independently
-- Related services can still share transactions within their domain
-- Each database is smaller and simpler than one shared database
-- Ownership and boundaries are clearer
-
-**Trade-offs**:
-- Cross-domain queries need service calls or data synchronization
-- Transactions that span domains need sagas or eventual consistency
-- There are more databases to operate
-- Services within a domain remain coupled through their shared schema
-
-**When to use:** When domain boundaries are clear and cross-domain transactions are rare.
-
-### Service-Owned Databases
-
-Each service owns its own database, which mirrors the microservices approach to data.
-
-**Advantages**:
-- Services are fully independent at the data level
-- Each service evolves its data model without affecting others
-- Ownership is unambiguous
-- Each service can choose the database technology that suits it
-
-**Trade-offs**:
-- It is the most complex option
-- No transaction can span services, so cross-service consistency needs sagas or eventual consistency
-- Cross-service queries need aggregation in application code
-- Some data gets duplicated across services
-- Operational overhead is highest
-
-**When to use:** When service independence is critical, when a later move to microservices is likely, or when services genuinely need different database technologies.
-
-## Characteristics
-
-Ratings are relative to other architecture styles, not measurements.
-
-| Characteristic | Rating | Notes |
-|----------------|--------|-------|
-| **Deployability** | ⭐⭐⭐⭐ | Services deploy independently |
-| **Evolvability** | ⭐⭐⭐⭐ | Services change independently within their domains |
-| **Modularity** | ⭐⭐⭐⭐ | Clear, domain-aligned service boundaries |
-| **Fault tolerance** | ⭐⭐⭐⭐ | A failing service doesn't take down the others, unless the shared database fails |
-| **Scalability** | ⭐⭐⭐ | Services scale independently, but a shared database limits how far |
-| **Simplicity** | ⭐⭐⭐ | More complex than a monolith, simpler than microservices |
-| **Testability** | ⭐⭐⭐ | Services test independently, and integration testing gets harder |
-| **Cost** | ⭐⭐⭐ | Higher than a monolith, lower than microservices |
+Many service-based systems start with one shared database and move along the spectrum only where the coupling starts to cost something. Richards and Ford suggest a way to limit schema coupling before that point: split the data access code into a library per domain, such as a catalog entity library and an orders entity library, plus a small common library for tables everyone genuinely uses. A change to the orders tables then affects only the services that depend on the orders library.
 
 ## When Service-Based Architecture Fits
 
@@ -136,6 +75,8 @@ Ratings are relative to other architecture styles, not measurements.
 ## When to Avoid Service-Based Architecture
 
 **Workflows that constantly span services transactionally.** If most workflows need atomic transactions across several services, the service boundaries are probably wrong. Redraw them, or keep the data in a monolithic topology.
+
+**Scale or availability beyond what a shared database allows.** When services share one database, it caps how far they scale together and remains a single point of failure for all of them. If the system needs more than that, split the data or choose a style whose services own it.
 
 **Simple domains.** If a modular monolith delivers enough modularity, adding distribution adds cost without benefit.
 

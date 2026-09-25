@@ -3,972 +3,294 @@ title: "AWS CodePipeline & CodeBuild for System Architects"
 layout: guide
 category: AWS
 subcategory: Developer Tools & CI/CD
-description: "Comprehensive guide to AWS CodePipeline and CodeBuild covering pipeline orchestration, build automation, cross-account deployments, integration patterns, cost optimization, and CI/CD best practices"
-tags: [aws, cicd, codepipeline, codebuild, automation, devops, deployment, fundamentals]
+description: "How CodePipeline orchestrates releases and CodeBuild runs builds: stages, actions, artifacts, and variables; V2 triggers, execution modes, stage conditions, and rollback; build compute, the buildspec, caching, and Docker builds; cross-account and cross-Region pipelines; and when to use them over another CI/CD system."
+tags: [codepipeline, codebuild, buildspec, cross-account, cicd, practical]
 ---
 
-## What Problems CodePipeline & CodeBuild Solve
+## What CodePipeline and CodeBuild Do
 
-AWS CodePipeline and CodeBuild automate software delivery from code commit to production deployment:
+**AWS CodePipeline** orchestrates a release. It watches a source, such as a Git repository, and moves each change through an ordered set of steps, such as building, testing, approving, and deploying, recording what happened at each. It doesn't compile code or run tests itself. It calls other services to do the work.
 
-**Eliminate manual deployments**: Before CI/CD, deploying code requires 15 manual steps: pull code, run tests, build artifacts, SSH into servers, copy files, restart services. One missed step causes production outage. CodePipeline automates all steps, ensuring consistency and reducing human error.
+**AWS CodeBuild** is one of those services, and the most common. It runs each build in a fresh, managed environment. It fetches the source, runs the commands in a **buildspec** file, and uploads the results. It runs on its own too, triggered by a repository webhook, or as the runner for another CI system's jobs.
 
-**Accelerate release cycles**: Manual testing and deployment take 4 hours. Developers hesitate to deploy frequently, batching changes into risky monthly releases. CodePipeline reduces deployment to 15 minutes, enabling multiple daily deployments with smaller, safer changes.
+Together they form AWS's managed CI/CD. Both are pay-per-use with no servers to run, and both act through IAM roles, which is what makes them a natural fit for deploying into AWS accounts.
 
-**Consistent build environments**: "It works on my machine" problems arise from environment differences. Developer has Node 18, production has Node 16. CodeBuild provides consistent Docker-based build environments, eliminating environment drift.
+---
 
-<div class="callout callout--tip">
-<p class="callout__title">Docker-Based Consistency</p>
-<p>CodeBuild runs every build in a fresh Docker container, ensuring identical environments across all builds. No more environment drift between developer machines and production.</p>
-</div>
+## CodePipeline
 
-**Multi-environment deployment**: Deploying to dev, staging, and production requires repeating deployment steps three times. CodePipeline orchestrates sequential deployments with approval gates, ensuring changes flow through all environments consistently.
+### Pipelines, stages, and actions
 
-**Cross-account isolation**: Security requires separating development, staging, and production in different AWS accounts. CodePipeline supports cross-account deployments, maintaining account isolation while automating the delivery pipeline.
+A **pipeline** is a sequence of **stages**, such as Source, Build, Staging, and Production. Each stage holds one or more **actions**. Actions with the same run order run in parallel, and higher run orders wait for lower ones, so a stage can run unit tests and a security scan side by side and then deploy. Each action belongs to a category and has a provider:
 
-**Testing automation**: Manual QA testing finds bugs days after code commit. CodePipeline integrates automated tests (unit, integration, E2E) that run on every commit, catching bugs within minutes.
+| Category | Common providers |
+| --- | --- |
+| Source | GitHub, GitLab, and Bitbucket through CodeConnections; CodeCommit; S3; ECR |
+| Build and test | CodeBuild, `ECRBuildAndPublish` (V2), Jenkins, Device Farm |
+| Compute | `Commands` (V2), shell commands run on CodeBuild compute without a build project |
+| Deploy | CloudFormation and StackSets, CodeDeploy, ECS, S3, Elastic Beanstalk, AppConfig, and EKS, Lambda, and EC2 (V2) |
+| Approval | Manual approval |
+| Invoke | Lambda, Step Functions, Amazon Inspector scan, another pipeline |
 
-**Artifact management**: Build artifacts scattered across developer machines and build servers. CodePipeline stores artifacts in S3, providing single source of truth for deployments and rollbacks.
+**AWS CodeConnections**, formerly CodeStar Connections, is how CodePipeline and CodeBuild reach third-party Git hosts. A connection is an AWS resource authorized once through the provider's app installation, so no personal access token sits in the pipeline. The source action that uses a connection keeps the old name, `CodeStarSourceConnection`.
 
-## Service Fundamentals
+A stage is also the unit of locking. Except in the `PARALLEL` execution mode described below, only one execution can be inside a stage at a time, so actions grouped in one stage are guaranteed to act on the same change. Deploying to an environment and then testing it belongs in one stage for that reason, and each environment gets its own stage.
 
-### CodePipeline Overview
+### Artifacts and variables
 
-CodePipeline orchestrates the software release process:
+Actions pass files to each other as **artifacts**, zip files stored in an S3 bucket that the pipeline owns. A source action outputs the repository contents, a build action takes that as input and outputs its build results, and a deploy action takes the build output. Artifacts are named, and an action lists the ones it consumes and produces.
 
-**Pipeline**: Workflow consisting of stages executed sequentially
-**Stage**: Logical grouping of actions (e.g., Source, Build, Test, Deploy)
-**Action**: Individual task within a stage (e.g., pull code from GitHub, run CodeBuild, deploy to EC2)
-**Transition**: Connection between stages (can be disabled for manual control)
-**Artifact**: File or set of files passed between stages (source code, build output, test results)
+Actions also pass values as **variables**. An action that sets a `Namespace` exports its variables under that name, and later actions reference them with `#{namespace.name}` syntax, such as `#{SourceVariables.CommitId}` for a source action whose namespace is `SourceVariables`. A CodeBuild action exports the environment variables listed under `exported-variables` in its buildspec. V2 pipelines also have **pipeline-level variables**, set when an execution starts, which suit values like a target version or a feature flag for the run.
 
-**Execution**: Single run of the pipeline from start to finish, triggered by source change or manual trigger.
+### Triggers
 
-### CodeBuild Overview
+A V2 pipeline with a CodeConnections source starts on **triggers** filtered by Git event. A push trigger can filter on branches, file paths, and tags. A pull request trigger fires when a pull request is opened, updated, or merged, filtered by destination branch and file path. File path filters let several pipelines share one repository, each starting only when its own directory changes. V1 pipelines can only start on every push to the one branch the source action names.
 
-CodeBuild compiles source code, runs tests, and produces deployable artifacts:
+A pipeline can also start manually, or from Amazon EventBridge, AWS's event bus, on a schedule or when a matching event occurs. ECR and S3 sources start through EventBridge events when an image is pushed or an object changes.
 
-**Build project**: Configuration defining how to build code (source, environment, build commands)
-**Build environment**: Docker container where build executes (compute type, OS, runtime)
-**Buildspec**: YAML file defining build commands and artifacts
-**Build phase**: Section of build (install, pre_build, build, post_build)
-**Artifact**: Output produced by build (JAR file, Docker image, static website)
+### Execution modes
 
-### How They Work Together
+When a new change arrives while an earlier execution is still running, the **execution mode** decides what happens:
 
-**Typical pipeline flow**:
-1. **Source stage**: CodePipeline detects code change in GitHub/CodeCommit
-2. **Build stage**: CodePipeline triggers CodeBuild project
-3. **CodeBuild**: Pulls source code, runs buildspec commands, uploads artifacts to S3
-4. **Test stage**: CodePipeline runs tests (unit, integration, E2E)
-5. **Deploy stage**: CodePipeline deploys artifacts to EC2, Lambda, ECS, etc.
+| Mode | Behavior | Suits |
+| --- | --- | --- |
+| `SUPERSEDED` (default) | A newer execution waiting at a stage replaces the older one waiting there. Running stages are never interrupted. | Most release pipelines, where only the latest change matters |
+| `QUEUED` (V2) | Executions wait in order and none is skipped. | Pipelines where every change must be deployed and verified in turn |
+| `PARALLEL` (V2) | Executions run independently, without locking stages. | Feature-branch pipelines that deploy to separate targets |
 
-**Artifact flow**: Source code → Build artifact → Test results → Deployment package
+Superseding happens only between stages, so a running stage is never interrupted, and it loses no code, because the newer execution contains the older commits. What's lost is testing each change on its own. Two changes that arrive close together reach staging and production as one. `PARALLEL` pipelines can't use stage rollback.
 
-## CodePipeline Deep Dive
+{% include figure.html id="aws-codepipeline-execution-modes" %}
 
-### Pipeline Structure
+### Approvals, conditions, and rollback
 
-**Source stage**:
-- Source provider: GitHub, Bitbucket, CodeCommit, S3, ECR
-- Trigger: Webhook (push to branch), polling (deprecated), EventBridge
-- Output: Source code as artifact
+A **manual approval** action stops the pipeline until someone with permission approves or rejects it, optionally notifying an SNS topic. The stage stays locked while it waits, and an approval that gets no answer in seven days fails.
 
-**Build stage**:
-- Build provider: CodeBuild, Jenkins, CloudBees
-- Input: Source artifact
-- Output: Build artifact (compiled code, Docker image, etc.)
+V2 pipelines add **stage conditions**, automated checks that run at a stage's boundaries. Each condition holds rules, such as a CloudWatch alarm check, a deployment window defined by a cron expression, a variable check, a Lambda function, or shell commands:
 
-**Test stage**:
-- Test provider: CodeBuild (running tests), third-party testing tools
-- Input: Build artifact
-- Output: Test results
+- An **entry condition** runs before the stage starts, and fails or skips the stage if a rule fails. Blocking a production deployment while production alarms are firing is the usual use.
+- An **on-success condition** runs after the stage succeeds, and can fail it or roll it back, for example if an alarm fires within an hour of deploying.
+- An **on-failure condition** runs when the stage fails, and can roll it back or retry it.
 
-**Deploy stage**:
-- Deploy provider: CodeDeploy, ECS, Lambda, S3, CloudFormation, Elastic Beanstalk
-- Input: Build artifact
-- Output: Deployed application
+**Stage rollback** reruns a stage's actions with the artifacts and variables of an earlier execution that completed it successfully. It helps most where the actions redeploy cleanly from artifacts, such as CloudFormation and ECS deployments. A source stage can't be rolled back, and the target execution must have run on the current version of the pipeline's structure. A stage can also retry failed actions automatically.
 
-**Approval stage**:
-- Manual approval action
-- SNS notification sent to approvers
-- Pipeline waits until approved or rejected
+### Pipeline types and pricing
 
-### Actions
+New pipelines are **V2** unless you choose otherwise. Triggers, pipeline variables, the `QUEUED` and `PARALLEL` modes, stage conditions, rollback, automatic retry, and the actions marked V2 above are V2 only. The two types are priced differently:
 
-**Action types**:
-- **Source**: Pull code from repository
-- **Build**: Execute CodeBuild project or Jenkins job
-- **Test**: Run tests via CodeBuild or third-party
-- **Deploy**: Deploy to target environment
-- **Approval**: Manual approval gate
-- **Invoke**: Trigger Lambda function or Step Functions workflow
+- **V1** costs $1 per active pipeline per month, where active means it has existed for more than 30 days and ran a change that month. One active V1 pipeline a month is free.
+- **V2** costs $0.002 per action execution minute, rounded up per action, with manual approval and custom actions free. The first 100 minutes each month, shared across all V2 pipelines, are free.
 
-**Action configuration**:
+A V2 pipeline that runs a few short actions a few times a day costs pennies. Long-running actions change that. A deployment action that bakes for an hour costs $0.12 per run, so nine or more such runs a month cost more than V1's $1, once the free minutes are used. CodeBuild and the other services the actions call are billed separately.
+
+A V2 pipeline defined in CloudFormation, with a filtered trigger, queued executions, and an entry condition guarding production:
+
 ```yaml
-ActionTypeId:
-  Category: Build
-  Owner: AWS
-  Provider: CodeBuild
-  Version: '1'
-Configuration:
-  ProjectName: my-build-project
-InputArtifacts:
-  - Name: SourceOutput
-OutputArtifacts:
-  - Name: BuildOutput
+Pipeline:
+  Type: AWS::CodePipeline::Pipeline
+  Properties:
+    PipelineType: V2
+    ExecutionMode: QUEUED
+    RoleArn: !GetAtt PipelineRole.Arn
+    ArtifactStore:
+      Type: S3
+      Location: !Ref ArtifactBucket
+      EncryptionKey:
+        Id: !GetAtt ArtifactKey.Arn
+        Type: KMS
+    Triggers:
+      - ProviderType: CodeStarSourceConnection
+        GitConfiguration:
+          SourceActionName: Source
+          Push:
+            - Branches:
+                Includes: [main]
+              FilePaths:
+                Includes: ['services/orders/**']
+    Stages:
+      - Name: Source
+        Actions:
+          - Name: Source
+            ActionTypeId: { Category: Source, Owner: AWS, Provider: CodeStarSourceConnection, Version: '1' }
+            Configuration:
+              ConnectionArn: !Ref GitHubConnectionArn
+              FullRepositoryId: example-org/platform
+              BranchName: main
+            OutputArtifacts: [{ Name: SourceOutput }]
+      - Name: Build
+        Actions:
+          - Name: Build
+            ActionTypeId: { Category: Build, Owner: AWS, Provider: CodeBuild, Version: '1' }
+            Configuration:
+              ProjectName: !Ref OrdersBuild
+            InputArtifacts: [{ Name: SourceOutput }]
+            OutputArtifacts: [{ Name: BuildOutput }]
+      - Name: Production
+        BeforeEntry:
+          Conditions:
+            - Result: FAIL
+              Rules:
+                - Name: ProductionHealthy
+                  RuleTypeId: { Category: Rule, Owner: AWS, Provider: CloudWatchAlarm, Version: '1' }
+                  Configuration:
+                    AlarmName: orders-prod-errors
+        Actions:
+          - Name: Deploy
+            ActionTypeId: { Category: Deploy, Owner: AWS, Provider: CloudFormation, Version: '1' }
+            RoleArn: arn:aws:iam::111122223333:role/PipelineDeployRole
+            Configuration:
+              ActionMode: CREATE_UPDATE
+              StackName: orders
+              TemplatePath: BuildOutput::template.yaml
+              Capabilities: CAPABILITY_IAM
+              RoleArn: arn:aws:iam::111122223333:role/CloudFormationExecutionRole
+            InputArtifacts: [{ Name: BuildOutput }]
 ```
 
-### Parallel Actions
+The pipeline's top-level `RoleArn` is its **service role**, which it runs as. The deploy action has two more role ARNs. The action's own `RoleArn` is the role the pipeline assumes in the target account to run the action. The `RoleArn` inside `Configuration` is the execution role that CloudFormation uses to create the stack's resources. The sample assumes a build that outputs the stack's `template.yaml`, which the buildspec below doesn't produce.
 
-Execute multiple actions simultaneously within a stage:
+---
 
-**Use case**: Run unit tests and integration tests in parallel
-```
-Stage: Test
-  Action 1: Unit tests (CodeBuild project A)
-  Action 2: Integration tests (CodeBuild project B)
-  Action 3: Security scan (CodeBuild project C)
-```
+## CodeBuild
 
-All three run simultaneously, reducing stage duration from 30 minutes (sequential) to 10 minutes (parallel, longest action).
+### Build environments
 
-### Manual Approvals
+A **build project** defines where the source comes from, which environment runs the build, which buildspec to use, the service role the build runs as, and optionally a VPC to run in. Each build runs in a new container, so nothing carries over between builds except what a cache restores. Builds can run on three kinds of compute:
 
-Approval actions pause pipeline for manual review:
+| Compute | What it is | Suits |
+| --- | --- | --- |
+| On-demand EC2 | Predefined sizes, from `BUILD_GENERAL1_SMALL` (2 vCPUs, 4 GiB) to `2XLARGE` (72 vCPUs, 144 GiB), on Linux x86, Arm, Windows, and GPU | Most builds, and anything needing Docker, root, or a VPC |
+| Lambda | 1 to 10 GiB of memory, starting in seconds and billed per second | Short builds of interpreted or managed-runtime code, such as linting, unit tests, and packaging |
+| Reserved capacity fleet | Instances CodeBuild keeps provisioned for your builds, including macOS, sized by vCPU, memory, and disk | High build volume, no queueing or startup wait, and builds that benefit from a warm host |
 
-**Configuration**:
-```yaml
-ActionTypeId:
-  Category: Approval
-  Owner: AWS
-  Provider: Manual
-  Version: '1'
-Configuration:
-  NotificationArn: arn:aws:sns:us-east-1:123456789012:approvals
-  CustomData: 'Please review staging deployment before production'
-```
+Lambda compute is fast to start but restricted. It can't build or run Docker images, use root, run in a VPC, use a cache, or run longer than 15 minutes. On-demand EC2 builds can run for up to 36 hours.
 
-**Workflow**:
-1. Pipeline reaches approval action
-2. SNS notification sent to approvers (email, Slack via Lambda)
-3. Approver reviews staging environment
-4. Approver clicks "Approve" or "Reject" in console or via API
-5. If approved, pipeline continues; if rejected, execution stops
+On-demand Linux builds cost from $0.005 per minute for `BUILD_GENERAL1_SMALL`, rising with size, and the free tier includes 100 minutes a month on the small x86 or Arm instance. Reserved fleets are billed per instance-minute from provisioning until termination, whether or not builds are running, with a 60-minute minimum per instance, or 24 hours for macOS. The default concurrent build quota is low, often one build per compute type, and zero for `2XLARGE` and GPU, which can't run at all until the quota is raised. Parallel actions and batch builds wait behind it, so request an increase before relying on them.
 
-### Variables
+CodeBuild provides curated images with common runtimes preinstalled. Pin the major image version, such as `aws/codebuild/amazonlinux-x86_64-standard:6.0`, rather than a patch version, because CodeBuild caches the latest patch of each major version on its hosts and other versions must be downloaded at the start of each build. A custom image from ECR suits builds that need tools the curated images lack.
 
-Pipeline variables pass data between actions:
+### The buildspec
 
-**Example**: Extract commit ID from source action, use in build
-```yaml
-# Source action outputs commitId variable
-Variables:
-  commitId: #{SourceVariables.CommitId}
+The **buildspec** is a YAML file, usually `buildspec.yml` at the repository root, that tells CodeBuild what to run. A build for a .NET service that restores, builds, tests, and publishes looks like this:
 
-# Build action uses variable
-Configuration:
-  EnvironmentVariables:
-    - name: COMMIT_ID
-      value: '#{variables.commitId}'
-      type: PLAINTEXT
-```
-
-**Built-in variables**:
-- `#{SourceVariables.CommitId}`: Commit hash
-- `#{SourceVariables.BranchName}`: Branch name
-- `#{SourceVariables.RepositoryName}`: Repository name
-
-### Execution Modes
-
-**Superseded**: New execution supersedes previous running execution (default)
-**Queued**: New executions queue if pipeline already running
-**Parallel**: Multiple executions run simultaneously
-
-**Use case for Queued**: Deployment pipelines where deployments must happen sequentially to avoid conflicts.
-
-## CodeBuild Deep Dive
-
-### Build Projects
-
-Build project configuration:
-
-**Source**: GitHub, Bitbucket, CodeCommit, S3
-**Environment**: Compute type, OS, runtime, Docker image
-**Buildspec**: Inline or file in repository
-**Service role**: IAM role CodeBuild assumes
-**Timeout**: Max build duration (5 minutes to 8 hours)
-**VPC**: Optional VPC placement for private resource access
-
-### Build Environments
-
-**Compute types**:
-- `BUILD_GENERAL1_SMALL`: 3 GB RAM, 2 vCPUs - $0.005/minute
-- `BUILD_GENERAL1_MEDIUM`: 7 GB RAM, 4 vCPUs - $0.01/minute
-- `BUILD_GENERAL1_LARGE`: 15 GB RAM, 8 vCPUs - $0.02/minute
-- `BUILD_GENERAL1_2XLARGE`: 144 GB RAM, 72 vCPUs - $0.15/minute (Linux only)
-
-**Operating systems**:
-- Amazon Linux 2
-- Ubuntu
-- Windows Server 2019
-
-**Runtimes**: Node.js, Python, Java, Ruby, Go, .NET, PHP, Docker
-
-**Custom images**: Use custom Docker images from ECR or Docker Hub for specialized environments.
-
-### Buildspec
-
-Buildspec.yml defines build commands:
-
-**Example**:
 ```yaml
 version: 0.2
 
 env:
   variables:
-    NODE_ENV: production
-  parameter-store:
-    DB_PASSWORD: /myapp/prod/db-password
+    CONFIGURATION: Release
+  secrets-manager:
+    NUGET_TOKEN: build/nuget-feed:token
+  exported-variables:
+    - BUILD_VERSION
 
 phases:
   install:
     runtime-versions:
-      nodejs: 18
-    commands:
-      - npm install -g yarn
-
+      dotnet: 10.0
   pre_build:
     commands:
-      - echo "Running tests..."
-      - yarn install
-      - yarn test
-
+      - dotnet restore
   build:
     commands:
-      - echo "Building application..."
-      - yarn build
-
+      - dotnet build --no-restore -c $CONFIGURATION
+      - dotnet test --no-build -c $CONFIGURATION --logger trx --results-directory ./TestResults
+      - dotnet publish src/Orders.Api --no-build -c $CONFIGURATION -o ./publish
   post_build:
     commands:
-      - echo "Build completed"
+      - export BUILD_VERSION=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-8)
+
+reports:
+  unit-tests:
+    files: ['**/*.trx']
+    file-format: VisualStudioTrx
 
 artifacts:
-  files:
-    - '**/*'
-  base-directory: dist
-  name: BuildArtifact-$(date +%Y%m%d-%H%M%S)
+  base-directory: publish
+  files: ['**/*']
 
 cache:
   paths:
-    - node_modules/**/*
+    - '/root/.nuget/packages/**/*'
 ```
 
-**Phases**:
-- `install`: Install runtimes and tools
-- `pre_build`: Commands before build (install dependencies, run tests)
-- `build`: Build commands (compile, bundle, package)
-- `post_build`: Commands after build (create deployment package, push Docker image)
+The phases run in order, `install`, `pre_build`, `build`, then `post_build`. A failing command fails its phase. A failure in `install` or `pre_build` skips the later phases, but `post_build` still runs after a failed `build` phase. The `env` section reads values from Secrets Manager and Parameter Store at the start of the build. CodeBuild masks those values in the logs, but only where they appear exactly as stored, so an encoded or transformed secret prints in full. The `reports` section turns test result files into test reports in the console, and `artifacts` defines what the build uploads for the next pipeline action.
 
-**Artifacts**: Specifies files to upload to S3 as build output.
+For large test suites or multi-platform builds, **batch builds** run several builds from one buildspec, as a list, a matrix of environment and variable combinations, a dependency graph, or a fanout that splits the test suite across parallel builds.
 
-**Cache**: Specifies files to cache between builds (dependencies, build tools) to speed up subsequent builds.
+### Caching
 
-### Environment Variables
+A cache keeps downloaded dependencies and intermediate output between builds. There are two kinds, set on the build project:
 
-**Plain text**:
-```yaml
-env:
-  variables:
-    NODE_ENV: production
-    API_URL: https://api.example.com
-```
+- An **S3 cache** stores the paths listed under `cache` in the buildspec as an archive in an S3 bucket, and downloads it at the start of the next build. It's available to every build, at the cost of the transfer time.
+- A **local cache** keeps data on the build host, which is faster, but a later build only finds it if it lands on the same host. It has three modes: source cache for the Git metadata, Docker layer cache for image builds, and custom cache for the buildspec's paths. Local caching suits frequent builds, where hosts get reused. It isn't available for builds in a VPC or on `2XLARGE` and GPU compute.
 
-**Parameter Store**:
-```yaml
-env:
-  parameter-store:
-    DB_PASSWORD: /myapp/prod/db-password
-```
+### Docker builds
 
-**Secrets Manager**:
-```yaml
-env:
-  secrets-manager:
-    API_KEY: myapp/prod/api:key
-```
+Building Docker images on on-demand EC2 compute needs the project's **privileged mode**, because the build runs a Docker daemon inside its container. Privileged mode gives the build container access to the host's devices, so enable it only on projects that build images. Pushing to ECR also needs `ecr:GetAuthorizationToken` and the push permissions on the service role. For faster repeated image builds, CodeBuild can run a dedicated **Docker server** for the project, which keeps its layer cache between builds and is recycled after a month. In a pipeline, the `ECRBuildAndPublish` action builds and pushes an image without a buildspec at all.
 
-**Build-time variables** (passed from CodePipeline):
-```yaml
-env:
-  exported-variables:
-    - IMAGE_TAG
-```
+### CodeBuild as a runner
 
-### Docker Support
+CodeBuild can run another CI system's jobs on its compute. A project configured as a **GitHub Actions runner** or a **GitLab runner** receives jobs from that system, runs each on a fresh CodeBuild host, and reports back. The workflow stays in GitHub or GitLab, while the jobs run inside AWS with an IAM role, VPC access, and CodeBuild's compute types, including Arm, GPU, and Lambda. It suits teams that keep their workflows in GitHub Actions or GitLab CI but need their builds to reach private AWS resources without long-lived credentials.
 
-**Build Docker images**:
-```yaml
-phases:
-  build:
-    commands:
-      - docker build -t myapp:latest .
-      - docker tag myapp:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp:latest
+---
 
-  post_build:
-    commands:
-      - aws ecr get-login-password | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
-      - docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp:latest
-```
+## Cross-Account and Cross-Region Pipelines
 
-**Privileged mode**: Required for building Docker images (`privileged_mode: true` in build project).
+The usual layout keeps the pipeline and its builds in a **tooling account** and deploys into separate accounts for each environment. The pipeline's service role assumes a role in each target account, and that role starts the deployment there:
 
-### Build Caching
+{% include figure.html id="aws-codepipeline-cross-account" %}
 
-Cache dependencies to speed up builds:
+Making it work takes four pieces:
 
-**Local caching**: Cache Docker layers and custom directories (faster but costs more)
-**S3 caching**: Cache dependencies in S3 (slower than local but cheaper)
+1. **A customer managed KMS key** encrypting the artifact bucket, with a key policy that lets each target account's role decrypt. The default AWS managed key can't be shared across accounts, so a cross-account pipeline can't use it.
+2. **A bucket policy** on the artifact bucket letting each target account's role read artifacts, and write them where an action in that account produces output.
+3. **A cross-account role in each target account**, trusted only by the pipeline's service role, with permission to start deployments, read the artifacts, and pass the deployment execution role.
+4. **A deployment execution role in each target account**, such as the CloudFormation execution role, holding the permissions to create the actual resources.
 
-**Example** (caching node_modules):
-```yaml
-cache:
-  paths:
-    - node_modules/**/*
-```
+An action in another account can only use artifacts produced in the pipeline account, or by an earlier action in its own account. Artifacts never pass directly between two target accounts.
 
-First build: Downloads dependencies (2 minutes)
-Subsequent builds: Restores from cache (10 seconds)
+A pipeline can also run actions in other Regions. It needs an artifact bucket in each Region where it runs actions, and CodePipeline copies artifacts to those buckets automatically. Each action names its Region in its `Region` field. In CloudFormation, a cross-Region pipeline lists its buckets under `ArtifactStores`, one per Region, in place of the single `ArtifactStore` in the sample above. Jenkins actions can't run in another account.
 
-### Build Badges
+---
 
-CodeBuild provides build status badges for README files:
+## Security
 
-```markdown
-![Build Status](https://codebuild.us-east-1.amazonaws.com/badges?uuid=XXXXXX)
-```
+**Scope the service roles.** The pipeline's service role needs to read and write its artifact bucket, use the key, start its actions, and assume the cross-account roles, and nothing more. The CodeBuild service role needs its logs, its artifacts, and whatever the build itself calls. Console-created roles are broader than this, so review them before production use.
 
-Shows: Passing, Failing, In Progress
+**Keep secrets out of buildspecs and environment variables.** Reference them from Secrets Manager or Parameter Store in the buildspec's `env` section. Anyone who can edit a buildspec or a pipeline can still print a secret the build can read, so treat edit access to build definitions as access to their secrets, and give production deployment credentials only to the roles that deploy to production.
 
-## Pipeline Patterns
+**Run builds that need private resources in a VPC.** A project with a VPC configuration runs in your subnets and can reach private databases and internal package feeds. It then has no internet access of its own, so it needs a NAT gateway or VPC endpoints for S3, ECR, CloudWatch Logs, and anything else the build calls.
 
-### Basic CI/CD Pipeline
+**Pull request builds run untrusted code.** A build triggered by a pull request from a fork runs code anyone can write. CodeBuild's **pull request comment approval**, on by default for new projects, holds such builds until a contributor with an approver role in the repository comments to allow them. Keep it on, run pull request builds in a separate project with a role that can't reach deployment credentials or production resources, and anchor any webhook filter patterns with `^` and `$` so they can't be matched by a longer name.
 
-```
-Source (GitHub) → Build (CodeBuild) → Deploy (CodeDeploy)
-```
-
-**Trigger**: Push to main branch
-**Build**: Compile code, run tests
-**Deploy**: Deploy to production EC2 instances
-
-### Multi-Environment Pipeline
-
-```
-Source → Build → Deploy (Dev) → Approval → Deploy (Staging) → Approval → Deploy (Production)
-```
-
-**Flow**:
-1. Code pushed to main
-2. CodeBuild compiles and tests
-3. Auto-deploy to dev environment
-4. Manual approval after dev testing
-5. Deploy to staging
-6. Manual approval after staging validation
-7. Deploy to production
-
-### Parallel Testing Pipeline
-
-```
-Source → Build → [Unit Tests || Integration Tests || Security Scan] → Deploy
-```
-
-**Benefit**: Runs tests in parallel, reducing pipeline duration.
-
-### Blue/Green Deployment Pipeline
-
-```
-Source → Build → Deploy (Blue) → Traffic Shift (10% → 50% → 100%) → Terminate (Green)
-```
-
-**Integration with CodeDeploy**: CodePipeline triggers CodeDeploy blue/green deployment with gradual traffic shifting.
-
-### Infrastructure and Application Pipeline
-
-```
-Source → Build App → Build Infra → Deploy Infra (CloudFormation) → Deploy App (CodeDeploy)
-```
-
-**Use case**: Infrastructure as code (CloudFormation) deployed before application code.
-
-### Multi-Repository Pipeline
-
-**Trigger**: EventBridge rule detects changes in any of 3 repositories
-**Action**: Pipeline pulls from all 3 repositories, combines artifacts, deploys
-
-**Use case**: Microservices where services in separate repositories must deploy together.
-
-## Cross-Account Pipelines
-
-CodePipeline supports deployments across AWS accounts:
-
-### Architecture
-
-**Shared Services Account**: CodePipeline, CodeBuild, artifact S3 bucket
-**Dev Account**: Development environment
-**Staging Account**: Staging environment
-**Production Account**: Production environment
-
-**Pipeline flow**:
-1. CodePipeline in Shared Services account
-2. Build in CodeBuild (Shared Services)
-3. Deploy to Dev account
-4. Approval
-5. Deploy to Staging account
-6. Approval
-7. Deploy to Production account
-
-### Cross-Account Permissions
-
-**Artifact bucket policy** (Shared Services account):
-```json
-{
-  "Effect": "Allow",
-  "Principal": {
-    "AWS": [
-      "arn:aws:iam::111111111111:root",  // Dev account
-      "arn:aws:iam::222222222222:root",  // Staging account
-      "arn:aws:iam::333333333333:root"   // Production account
-    ]
-  },
-  "Action": [
-    "s3:GetObject",
-    "s3:PutObject"
-  ],
-  "Resource": "arn:aws:s3:::my-artifact-bucket/*"
-}
-```
-
-**KMS key policy** (for encrypted artifacts):
-```json
-{
-  "Effect": "Allow",
-  "Principal": {
-    "AWS": [
-      "arn:aws:iam::111111111111:root",
-      "arn:aws:iam::222222222222:root",
-      "arn:aws:iam::333333333333:root"
-    ]
-  },
-  "Action": [
-    "kms:Decrypt",
-    "kms:DescribeKey"
-  ],
-  "Resource": "*"
-}
-```
-
-**IAM roles in target accounts**:
-- CodePipeline assumes role in target account
-- Role has permissions to deploy (CloudFormation, CodeDeploy, Lambda, etc.)
-
-**Example role** (Production account):
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::000000000000:role/CodePipelineServiceRole"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
-
-### Cross-Account Deployment Action
-
-```yaml
-ActionTypeId:
-  Category: Deploy
-  Owner: AWS
-  Provider: CloudFormation
-  Version: '1'
-Configuration:
-  StackName: my-application-stack
-  RoleArn: arn:aws:iam::333333333333:role/CloudFormationDeploymentRole
-  ActionMode: CREATE_UPDATE
-```
-
-CodePipeline assumes `CloudFormationDeploymentRole` in Production account to execute deployment.
-
-## Integration Patterns
-
-### GitHub Integration
-
-**Trigger**: GitHub webhook triggers pipeline on push
-**Authentication**: GitHub connection or personal access token
-**Source action**: Pulls code from GitHub repository
-
-**Setup**:
-1. Create GitHub connection in CodePipeline (OAuth)
-2. Configure source action with repository and branch
-3. Pipeline triggers automatically on push
-
-### CodeCommit Integration
-
-**Native integration**: CodeCommit is AWS-native, no authentication configuration needed
-**Trigger**: CloudWatch Events/EventBridge detects commits
-**Branches**: Pipeline can monitor specific branch (main, develop, etc.)
-
-### ECR Integration
-
-**Trigger**: Pipeline triggers on new Docker image push to ECR
-**Use case**: Deploy containerized applications when new image available
-
-**EventBridge rule**:
-```json
-{
-  "source": ["aws.ecr"],
-  "detail-type": ["ECR Image Action"],
-  "detail": {
-    "action-type": ["PUSH"],
-    "image-tag": ["latest"],
-    "repository-name": ["my-app"]
-  }
-}
-```
-
-### Lambda Integration
-
-**Invoke Lambda function** as pipeline action:
-
-**Use cases**:
-- Custom validation logic
-- Integration with third-party systems
-- Slack/Teams notifications
-- Database migrations
-- Complex approval workflows
-
-**Example**:
-```yaml
-ActionTypeId:
-  Category: Invoke
-  Owner: AWS
-  Provider: Lambda
-  Version: '1'
-Configuration:
-  FunctionName: SendDeploymentNotification
-  UserParameters: '{"environment": "production"}'
-```
-
-### SNS Integration
-
-**Notifications**:
-- Pipeline execution started/succeeded/failed
-- Manual approval needed
-- Stage execution started/failed
-
-**EventBridge rule** (pipeline failure notification):
-```json
-{
-  "source": ["aws.codepipeline"],
-  "detail-type": ["CodePipeline Pipeline Execution State Change"],
-  "detail": {
-    "state": ["FAILED"]
-  }
-}
-```
-
-Target: SNS topic → Email, Lambda, Slack
-
-### Third-Party Integrations
-
-**Jenkins**: CodePipeline can trigger Jenkins jobs as build/test actions
-**GitHub Actions**: Hybrid approach (GitHub Actions for build, CodePipeline for deployment)
-**Jira**: Lambda function creates Jira deployment ticket when pipeline deploys to production
-**Slack**: Lambda function posts deployment status to Slack channel
-
-## Performance Optimization
-
-### Build Performance
-
-**Use caching**:
-```yaml
-cache:
-  paths:
-    - node_modules/**/*
-    - .gradle/caches/**/*
-```
-
-Savings: 2-minute dependency download reduced to 10-second cache restore.
-
-**Parallel builds**: Split test suites across multiple CodeBuild projects running in parallel.
-
-**Compute type selection**: Use larger compute type for build-heavy projects (BUILD_GENERAL1_LARGE for Java/Gradle builds).
-
-**Local Docker layer caching**: Enable for Docker image builds (reduces image build time by 50-80%).
-
-### Pipeline Performance
-
-**Parallel actions**: Run tests, security scans, and code quality checks simultaneously.
-
-**Conditional actions**: Skip non-essential stages for non-production branches.
-
-**Optimize artifact size**: Only include necessary files in artifacts (reduces S3 upload/download time).
-
-**Regional resources**: Keep pipeline, build projects, and artifact bucket in same region (reduces cross-region transfer time and cost).
-
-### Build Optimization Strategies
-
-**Multi-stage Docker builds**: Reduce final image size, faster push to ECR.
-
-**Incremental builds**: Use build tools that support incremental compilation (Gradle, Webpack).
-
-**Dependency pre-caching**: Create base Docker image with dependencies pre-installed.
-
-**Concurrent test execution**: Configure test framework for parallel test execution (Jest, pytest-xdist).
-
-## Cost Optimization Strategies
-
-### CodePipeline Pricing
-
-**Cost**: $1 per active pipeline per month (pipeline with at least one execution)
-**Free tier**: First pipeline per account per month is free
-
-**Optimization**: Consolidate multiple low-frequency pipelines into single pipeline with conditional stages based on input parameters.
-
-### CodeBuild Pricing
-
-**Compute charges**: Per-minute pricing based on compute type
-- Small: $0.005/minute = $0.30/hour
-- Medium: $0.01/minute = $0.60/hour
-- Large: $0.02/minute = $1.20/hour
-
-**Optimization strategies**:
-
-**Right-size compute type**: Use smallest compute type that meets performance needs. Over-provisioned builds waste money.
-
-**Example**: Node.js application build on BUILD_GENERAL1_LARGE (15 GB RAM) when BUILD_GENERAL1_SMALL (3 GB RAM) sufficient. Waste: $0.015/minute × 10 minutes × 100 builds/month = $150/month.
-
-**Reduce build time**:
-- Enable caching (reduces build from 5 minutes to 2 minutes = 60% cost reduction)
-- Optimize Dockerfile layers
-- Use parallel testing
-
-**Scheduled builds**: Avoid unnecessary builds. Use webhooks instead of scheduled triggers.
-
-**Build batching**: Batch commits if multiple developers push rapidly (combine 5 commits into 1 build instead of 5 builds).
-
-### Artifact Storage Costs
-
-**S3 storage**: $0.023/GB/month (Standard tier)
-
-**Optimization**:
-- Lifecycle policy: Delete artifacts older than 30 days
-- Compress artifacts (reduces size by 50-80%)
-- Store only necessary files in artifacts
-
-**Example**: 100 builds/day × 500 MB/artifact × 30-day retention = 1.5 TB = $34.50/month
-
-With compression and lifecycle: 100 builds/day × 100 MB/artifact × 7-day retention = 70 GB = $1.61/month
-
-### Data Transfer Costs
-
-**Cross-region transfer**: $0.02/GB
-
-**Optimization**: Keep all resources (CodePipeline, CodeBuild, S3, deployment targets) in same region.
-
-## Security Best Practices
-
-<div class="callout callout--warning">
-<p class="callout__title">Never Hardcode Secrets</p>
-<p>Database passwords or API keys hardcoded in buildspec.yml risk accidental exposure if committed to source control. Use Parameter Store or Secrets Manager for all sensitive values.</p>
-</div>
-
-### IAM Permissions
-
-**Principle of least privilege**:
-
-**CodePipeline service role**:
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "s3:GetObject",
-    "s3:PutObject"
-  ],
-  "Resource": "arn:aws:s3:::my-artifact-bucket/*"
-},
-{
-  "Effect": "Allow",
-  "Action": [
-    "codebuild:StartBuild",
-    "codebuild:BatchGetBuilds"
-  ],
-  "Resource": "arn:aws:codebuild:us-east-1:123456789012:project/my-build-project"
-}
-```
-
-**CodeBuild service role**:
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "logs:CreateLogGroup",
-    "logs:CreateLogStream",
-    "logs:PutLogEvents"
-  ],
-  "Resource": "*"
-},
-{
-  "Effect": "Allow",
-  "Action": [
-    "s3:GetObject",
-    "s3:PutObject"
-  ],
-  "Resource": "arn:aws:s3:::my-artifact-bucket/*"
-}
-```
-
-### Secrets Management
-
-**Never hardcode secrets in buildspec or source code**:
-
-**Use Parameter Store**:
-```yaml
-env:
-  parameter-store:
-    DB_PASSWORD: /myapp/prod/db-password
-    API_KEY: /myapp/prod/api-key
-```
-
-**Use Secrets Manager**:
-```yaml
-env:
-  secrets-manager:
-    DATABASE_URL: myapp/prod/database:url
-```
-
-**GitHub tokens**: Store in Secrets Manager, reference in CodePipeline connection.
-
-### Artifact Encryption
-
-**Encrypt artifacts at rest**:
-- S3 bucket encryption (SSE-S3 or SSE-KMS)
-- CodePipeline encryption key (customer-managed KMS key)
-
-**Benefits**:
-- Compliance with data protection regulations
-- Access control via KMS key policies
-- Audit trail via CloudTrail
-
-### VPC Placement
-
-**CodeBuild in VPC**:
-- Access private resources (RDS, ElastiCache, internal APIs)
-- Restrict internet access
-
-**Configuration**:
-```yaml
-VpcConfig:
-  VpcId: vpc-12345678
-  Subnets:
-    - subnet-12345678
-    - subnet-87654321
-  SecurityGroupIds:
-    - sg-12345678
-```
-
-**Considerations**:
-- Requires NAT gateway for internet access (S3, ECR)
-- Use VPC endpoints to reduce NAT gateway costs
-
-### Code Scanning
-
-**Integrate security scanning in pipeline**:
-
-**Static analysis** (CodeBuild action):
-```yaml
-phases:
-  pre_build:
-    commands:
-      - npm audit  # Check npm dependencies for vulnerabilities
-      - bandit -r src/  # Python security linter
-```
-
-**Container scanning** (ECR image scanning):
-```yaml
-post_build:
-  commands:
-    - docker push $ECR_REPO:latest
-    - aws ecr start-image-scan --repository-name myapp --image-id imageTag=latest
-```
-
-**Fail build on critical vulnerabilities**:
-```yaml
-post_build:
-  commands:
-    - SCAN_FINDINGS=$(aws ecr describe-image-scan-findings --repository-name myapp --image-id imageTag=latest --query 'imageScanFindings.findingSeverityCounts.CRITICAL' --output text)
-    - if [ "$SCAN_FINDINGS" -gt 0 ]; then exit 1; fi
-```
-
-## When to Use CodePipeline vs Alternatives
-
-### CodePipeline Strengths
-
-**Use CodePipeline when**:
-- AWS-centric deployments (Lambda, ECS, EC2, CloudFormation)
-- Cross-account deployments within AWS Organizations
-- Integration with AWS services (CodeBuild, CodeDeploy, S3, ECR)
-- Simple to moderate pipeline complexity
-- Budget-conscious ($1/pipeline/month)
-
-### GitHub Actions
-
-**Consider GitHub Actions when**:
-- GitHub-native workflows (pull requests, issues, releases)
-- Open-source projects (free for public repositories)
-- Complex matrix builds (test multiple OS/language versions)
-- Rich marketplace of community actions
-- Multi-cloud deployments
-
-**Cost comparison**:
-- CodePipeline: $1/pipeline/month + CodeBuild compute
-- GitHub Actions: Free for public repos, $0.008/minute for private repos (2,000 free minutes/month)
-
-### GitLab CI/CD
-
-**Consider GitLab CI/CD when**:
-- GitLab as source control
-- Self-hosted runners for cost control
-- Integrated container registry
-- Advanced DevOps features (auto-deploy, review apps)
-
-### Jenkins
-
-**Consider Jenkins when**:
-- Complex, custom pipeline logic
-- Extensive plugin ecosystem (8,000+ plugins)
-- Self-hosted control and customization
-- Multi-cloud and on-premises deployments
-- Existing Jenkins investment
-
-**Trade-offs**: Requires infrastructure and maintenance (EC2 instances, plugins, upgrades). CodePipeline is fully managed.
-
-### CircleCI, Travis CI, etc.
-
-**Third-party SaaS CI/CD**: Faster setup, richer features, but vendor lock-in and potentially higher costs at scale.
-
-### Hybrid Approach
-
-**Common pattern**: GitHub Actions for build/test, CodePipeline for AWS deployment.
-
-**Why**: Leverage GitHub's workflow features while using CodePipeline's cross-account deployment capabilities.
+---
 
 ## Common Pitfalls
 
-### Artifact Bucket Not Cross-Region Replicated
+- **`post_build` pushes after failed tests.** A `post_build` step that pushes an image or publishes a package runs even when the tests in `build` failed. Check `$CODEBUILD_BUILD_SUCCEEDING` in the step. Setting `on-failure: ABORT` on the build phase also works, but not on Lambda compute or reserved fleets.
+- **Superseded executions batch changes.** In `SUPERSEDED` mode, a change that was superseded is never verified on its own in staging, because it arrives there bundled with the change that replaced it. When staging shows a regression, the culprit can be any of the bundled commits. Use `QUEUED` mode where each change must be verified alone.
+- **Stop and abandon leaves work running.** Stopping an execution with the abandon option marks its in-progress actions abandoned, but the services doing the work carry on. A CloudFormation update keeps going, and the next execution can collide with it. Prefer stop and wait.
+- **Moving a build into a VPC.** A build moved into a VPC loses its internet access, so dependency downloads, ECR pulls, and log delivery fail until NAT or endpoints are added, and it loses local caching, so it also slows down.
 
-**Problem**: Pipeline in us-east-1 deploys to us-west-2. Artifact bucket only in us-east-1. Cross-region artifact retrieval is slow and expensive.
+---
 
-**Cause**: Didn't configure cross-region artifact replication.
+## CodePipeline or Another CI/CD System
 
-**Solution**: Use S3 cross-region replication or create artifact buckets in all regions where pipeline deploys.
+CodePipeline's advantage is that it lives in AWS. It deploys through IAM roles rather than stored credentials, reaches across accounts and Regions natively, integrates with CloudFormation, CodeDeploy, ECS, and Lambda without plug-ins, and gates on CloudWatch alarms. It fits organizations whose releases are mostly AWS deployments and that want the pipeline governed like any other AWS resource. The CDK's CDK Pipelines construct builds one for a CDK app.
 
-### Build Timing Out
+Its disadvantage is the developer experience around the code. Hosted CI systems such as GitHub Actions and GitLab CI keep workflows next to the code, with pull request checks and large ecosystems of reusable steps that CodePipeline doesn't replicate. They reach AWS through OIDC federation, where the CI system issues a short-lived identity token that IAM exchanges for a role's credentials, which removes the stored-credential argument for CodePipeline.
 
-**Problem**: CodeBuild builds timeout after 60 minutes (default). Complex builds take longer.
+The choice is often a split rather than one or the other. Teams run pull request checks and builds in their Git host's CI, optionally on CodeBuild runners for AWS network access, and use CodePipeline, or the Git host's own deployment workflows, for promotion through accounts. Choose by where the release logic is easiest to govern. A pipeline that must enforce alarms, approvals, and account boundaries for many teams suits CodePipeline, and a team-owned service that deploys to one account suits the Git host's CI.
 
-**Cause**: Insufficient build timeout configuration.
-
-**Solution**: Increase timeout in build project settings (max 8 hours). Optimize build to reduce duration (caching, parallel tests, larger compute type).
-
-### Missing VPC Endpoints
-
-**Problem**: CodeBuild in VPC without internet access fails to download dependencies from npm, pip, Maven Central.
-
-**Cause**: No NAT gateway or VPC endpoints configured.
-
-**Solution**:
-- Add NAT gateway (costs $0.045/hour + data processing)
-- Or use VPC endpoints for S3, ECR, Systems Manager (free, pay only for data transfer)
-
-### Not Using Build Caching
-
-**Problem**: Every build downloads dependencies from scratch (2-5 minutes wasted per build).
-
-**Cause**: Caching not configured in buildspec.
-
-**Solution**: Enable S3 or local caching for node_modules, pip packages, Maven dependencies, etc.
-
-Savings: 100 builds/day × 3 minutes saved × $0.01/minute = $30/day = $900/month.
-
-### Hardcoded Secrets in Buildspec
-
-**Problem**: Database password hardcoded in buildspec.yml. Accidentally committed to public GitHub repository. Database compromised.
-
-**Cause**: Lack of secrets management awareness.
-
-**Solution**: Use Parameter Store or Secrets Manager for all secrets. Never commit secrets to source control.
-
-### Over-Provisioned Compute Type
-
-**Problem**: Using BUILD_GENERAL1_LARGE (15 GB RAM, $0.02/minute) for simple Node.js builds that only need 1 GB RAM.
-
-**Cause**: Default to large compute type without analysis.
-
-**Solution**: Test builds on BUILD_GENERAL1_SMALL. If builds fail due to memory, incrementally increase. Most Node.js/Python/Ruby builds work on SMALL.
-
-Savings: $0.02/minute → $0.005/minute = 75% cost reduction.
-
-### No Approval Gates Before Production
-
-**Problem**: Code automatically deploys to production without human review. Bug deployed to production, affects users.
-
-**Cause**: No manual approval stage before production deployment.
-
-**Solution**: Add approval action between staging and production. Require QA sign-off before production deployment.
-
-### Pipeline Superseding Itself
-
-**Problem**: Multiple developers push rapidly. Pipeline execution 1 superseded by execution 2 before deployment completes. Execution 1 changes never deployed.
-
-**Cause**: Default pipeline execution mode is "superseded."
-
-**Solution**: Change execution mode to "queued" for deployment pipelines. Ensures all commits are deployed sequentially.
+---
 
 ## Key Takeaways
 
-<div class="callout callout--tip">
-<p class="callout__title">Cost Optimization Quick Wins</p>
-<p>Right-size compute types (most builds work on SMALL), enable build caching, and set artifact lifecycle policies. These three changes can reduce CI/CD costs by 50-75%.</p>
-</div>
-
-**CodePipeline orchestrates the complete software delivery workflow**: Source → Build → Test → Deploy, automating manual steps and ensuring consistency across environments.
-
-**CodeBuild provides consistent, isolated build environments**: Docker-based build environments eliminate "works on my machine" problems. Builds run in fresh containers every time.
-
-**Cross-account pipelines enable secure multi-environment deployments**: Single pipeline in shared services account deploys to dev, staging, and production accounts while maintaining account isolation.
-
-**Parallel actions reduce pipeline duration**: Run unit tests, integration tests, and security scans simultaneously instead of sequentially, cutting pipeline time by 50-70%.
-
-**Build caching dramatically improves performance and reduces costs**: Caching node_modules or .gradle/caches reduces build time from 5 minutes to 2 minutes, saving 60% on build costs.
-
-**Right-sizing compute types optimizes costs**: Most builds don't need BUILD_GENERAL1_LARGE. Use SMALL or MEDIUM compute types unless builds actually require more resources. Potential 75% cost savings.
-
-**Secrets management is critical**: Use Parameter Store or Secrets Manager for database passwords, API keys, and tokens. Never hardcode secrets in buildspec or source code.
-
-**Manual approvals prevent unauthorized production deployments**: Approval gates between staging and production ensure human review before production changes, reducing risk of bugs reaching users.
-
-**Artifact encryption and least-privilege IAM protect sensitive code**: Encrypt artifacts with KMS, grant minimal IAM permissions to CodePipeline and CodeBuild service roles.
-
-**Integration with AWS services simplifies deployment**: Native integration with CodeDeploy, Lambda, ECS, CloudFormation, and S3 makes AWS deployments straightforward.
-
-**Pipeline-as-code enables version control and reproducibility**: Define pipelines in CloudFormation or CDK, track changes in source control, reproduce pipelines across environments.
-
-**Monitoring and notifications keep teams informed**: EventBridge rules trigger Lambda functions for Slack notifications, create metrics for pipeline success rates, alert on failures.
-
-**CodePipeline cost is predictable**: $1 per active pipeline per month makes budgeting straightforward. CodeBuild costs scale with usage but are optimizable through caching and right-sizing.
+- CodePipeline orchestrates releases and CodeBuild runs builds. A pipeline is stages of actions, passing artifacts through S3 and values through variables.
+- Use V2 pipelines for triggers with branch, tag, and path filters, queued or parallel execution, pipeline variables, stage conditions, and rollback. V2 is billed per action minute, so long-waiting actions cost more.
+- Choose the execution mode deliberately. `SUPERSEDED` batches changes that arrive close together, and `QUEUED` verifies and deploys each change in order.
+- Use entry conditions on production stages to block deployments while alarms fire, and on-success or on-failure conditions to roll back automatically.
+- Choose CodeBuild compute by the build. Lambda for short builds without Docker, on-demand EC2 for most builds, and reserved fleets for high volume, remembering that fleets bill while idle. Raise the concurrent build quota early.
+- In buildspecs, pull secrets from Secrets Manager or Parameter Store, guard `post_build` steps against failed builds, and cache dependencies.
+- Deploy across accounts from a tooling account, with a customer managed key on the artifact bucket and a narrowly trusted role in each target account.

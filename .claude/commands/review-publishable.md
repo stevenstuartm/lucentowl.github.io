@@ -125,6 +125,8 @@ This is the highest bar. Assess the following qualities that separate substantiv
 
 **Sources for statistics**: Any market data, survey results, or industry statistics must cite a source. Flag any unsourced data claims.
 
+**Derivation**: Run `.claude/content/derivation-check.md` over the draft. Borrowed content (a coined term, technique, or rule) must be credited in prose at the specific point and listed in `sources`. Borrowed form (a counted taxonomy, scoring scheme, structure, or signature example set) must be restructured in the author's own reasoning, because a credit doesn't fix form. A hit is a FIX, and a source you can't confirm by search is an ASK.
+
 ### Step 8 — Length and scope discipline
 
 Assess:
@@ -237,7 +239,7 @@ Pass / Fail — [1-2 sentences explaining why. On a fail, raise it as `O1`: a he
 [Numbered list. Each item: ID, class, section name, quoted passage or description of the problem, and what is unclear and why. If none, say "None found."]
 
 **SCHOLARLY QUALITY ISSUES**
-[Numbered list. Each item: ID, class, which quality (Precision / Distinct Contribution / Intellectual Honesty / Grounding / Fabricated Experience / Unsourced Claim), the specific instance, and what would fix it. If none, say "None found."]
+[Numbered list. Each item: ID, class, which quality (Precision / Distinct Contribution / Intellectual Honesty / Grounding / Fabricated Experience / Unsourced Claim / Derivation), the specific instance, and what would fix it. If none, say "None found."]
 
 **LENGTH AND SCOPE**
 [Assessment, plus numbered `L#` findings for any padding, underdevelopment, repetition, or missing material.]

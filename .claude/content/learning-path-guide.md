@@ -25,7 +25,7 @@ A path points to pages. No page points back.
 
 - Never add path links or path mentions to guides, resources, case studies, or essays.
 - Never add a feature to a content layout that looks up paths: no "part of this path" note and no path-aware prev/next. Only `_layouts/learning-path.html`, `_layouts/learning-paths.html`, and the home page band read the `learning_paths` collection.
-- The path page is the reader's whole navigation. They read a step, come back, and take the next one.
+- The path page is the reader's whole navigation. Step and "go deeper" links open in a new tab, so the path page never navigates away. A step page's own prev/next, breadcrumbs, and back links then can't strand the reader, because the path is still one tab over. Don't answer that confusion by hiding or rewriting navigation on content pages.
 
 ---
 

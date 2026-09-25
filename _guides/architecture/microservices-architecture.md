@@ -3,7 +3,7 @@ layout: guide
 title: "Microservices Architecture"
 category: Architecture
 subcategory: Styles
-description: "The fine-grained distributed style where each service owns its data and deploys independently: core principles, how to size services by purpose, transactions, and choreography, how user interfaces and operational concerns fit, and the anti-patterns that turn microservices into a distributed monolith."
+description: "The fine-grained distributed style where each service owns its data and deploys independently: core principles, the signs that services are too coarse or too fine, how user interfaces and operational concerns fit, and the anti-patterns that turn microservices into a distributed monolith."
 tags: [practical, microservices, service-granularity, database-per-service, bounded-context, grains-of-sand]
 ---
 
@@ -35,21 +35,23 @@ Independent deployability is the point. A team can release a change to its servi
 
 ## Service Granularity
 
-No formula decides how fine-grained a service should be. Three factors guide the decision, and each one pushes in a direction.
+No formula decides how fine-grained a service should be. What works in practice is watching for the signs that a boundary is in the wrong place, and those signs point one of two ways.
 
-### Purpose
+### Signs a Service Is Too Coarse
 
-A service should represent a cohesive business capability that one team can understand and own. If it does too much, split it. A "Customer Service" that handles registration, authentication, preferences, orders, and invoicing is too broad, and it splits naturally into authentication, customer profile, and order history services.
+**One team can't hold it.** A "Customer Service" that handles registration, authentication, preferences, orders, and invoicing covers more than one team can understand and own, and it splits naturally into authentication, customer profile, and order history services.
 
-The opposite mistake is just as common. Separate services for "calculate tax," "apply discount," and "update total" that must coordinate on every cart operation are too granular and belong together in one cart service.
+**Its parts change for unrelated reasons.** When a change to invoicing has to wait for a release that also carries unrelated preference changes, the service is bundling work that would move faster apart.
 
-### Transactions
+**Its parts need different operational treatment.** A service can only be scaled, deployed, and made available as a whole, so a part with heavy load or strict availability needs forces those costs onto everything else in it.
 
-Microservices avoid distributed transactions such as two-phase commit, because those couple services together and reduce availability. If two services constantly need to change data atomically together, that is strong evidence they belong in one service. A workflow that genuinely spans services has to accept eventual consistency, with compensating steps to undo work when a later step fails.
+### Signs Services Are Too Fine
 
-### Choreography
+**They keep changing data together.** Microservices avoid distributed transactions such as two-phase commit, because those couple services together and reduce availability. If two services constantly need to change data atomically, that is strong evidence they belong in one service. A workflow that genuinely spans services has to accept eventual consistency, with compensating steps to undo work when a later step fails.
 
-Every call between services adds latency and another way for a request to fail. If completing a single business operation takes a long chain of service-to-service calls, the services are probably too fine-grained or split along the wrong lines. Services should mostly work independently, not collaborate constantly.
+**One operation needs a long chain of calls.** Every call between services adds latency and another way for a request to fail. If completing a single business operation takes a chain of service-to-service calls, the services are probably split too finely or along the wrong lines.
+
+**None of them makes sense alone.** Separate services for "calculate tax," "apply discount," and "update total" that must coordinate on every cart operation can't be understood or changed independently, and they belong together in one cart service.
 
 <blockquote class="pull-quote">
 <p>If two services keep needing to change data together, they are one service.</p>
@@ -71,49 +73,36 @@ A single user interface can sit in front of all the services, calling them throu
 
 Every service needs logging, monitoring, service discovery, retries, and timeouts, and implementing them separately in each service invites drift. Moving those concerns into a sidecar proxy deployed beside each service keeps them consistent across services written in different languages. A service mesh manages those sidecars centrally once the number of services makes managing them individually impractical.
 
-## Characteristics
+## When Microservices Fit
 
-Ratings are relative to other architecture styles, not measurements.
+**Large systems whose parts need different operational characteristics.** One capability might need far higher availability than the rest, or a different release cadence. Separate services give it that without imposing it on everything else, and a failure in a well-isolated service stays within it.
 
-| Characteristic | Rating | Notes |
-|----------------|--------|-------|
-| **Scalability** | ⭐⭐⭐⭐⭐ | Each service scales independently |
-| **Evolvability** | ⭐⭐⭐⭐⭐ | Services change independently |
-| **Deployability** | ⭐⭐⭐⭐⭐ | Continuous, independent deployment |
-| **Fault tolerance** | ⭐⭐⭐⭐ | Failures stay within a service when services are properly isolated |
-| **Testability** | ⭐⭐ | Each service tests easily, while end-to-end testing is complex |
-| **Simplicity** | ⭐ | Distributed complexity is high |
-| **Cost** | ⭐ | High operational and infrastructure cost |
+**High-scale applications with uneven load.** When capabilities have very different scaling needs, each service scales on its own instead of the whole system scaling for its busiest part.
 
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>When Microservices Fit</h4>
-<ul>
-<li><strong>Large systems</strong> where different parts need different operational characteristics</li>
-<li><strong>Mature DevOps practices</strong> with automated pipelines, observability, and container orchestration in place</li>
-<li><strong>Teams organized by business domain</strong> that need to release independently</li>
-<li><strong>Evolvability that matters more than simplicity</strong></li>
-<li><strong>High-scale applications</strong> whose capabilities have very different scaling needs</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-warning">
-<h4>When to Avoid Microservices</h4>
-<ul>
-<li><strong>Simple domains</strong> where a modular monolith would do</li>
-<li><strong>Limited operational maturity</strong>, without reliable CI/CD, observability, or incident response</li>
-<li><strong>Small teams</strong> that would spend more time on infrastructure than on features</li>
-<li><strong>Workflows that frequently need atomic changes</strong> across what would be separate services</li>
-<li><strong>Tight deadlines</strong> that leave no room to build the operational foundation</li>
-</ul>
-</div>
-</div>
+**Mature DevOps practices.** Automated pipelines, observability, and container orchestration are already in place, so running many services is routine rather than a new burden.
+
+**Teams organized by business domain that need to release independently.** Each team owns its services and deploys continuously without coordinating releases with the others.
+
+**Evolvability that matters more than simplicity.** The system is expected to change for years, and the organization accepts distributed complexity as the price of changing each part on its own.
+
+## When to Avoid Microservices
+
+**Simple domains.** A modular monolith delivers enough modularity without the network, the operational tooling, or the cost of running many services.
+
+**Limited operational maturity.** Without reliable CI/CD, observability, and incident response, every service is another thing to deploy and watch by hand. A failure that crosses several services also takes far longer to trace than one inside a single process, and end-to-end tests across services are slow to build and brittle to run.
+
+**Small teams.** A few people running many services spend more time on infrastructure than on features.
+
+**Workflows that frequently need atomic changes across services.** Each service owns its data, so those workflows fall back on sagas and eventual consistency. If that describes most workflows, the boundaries are drawn in the wrong place.
+
+**Tight deadlines.** Building the operational foundation takes time that a deadline leaves no room for.
 
 ## Common Anti-Patterns
 
 <div class="card-group">
 <div class="content-card content-card--accent-warning">
 <h4>Grains of Sand</h4>
-<p>Services become so fine-grained that the overhead of running and coordinating them drowns out their benefits.</p>
+<p>Services become so fine-grained that the overhead of running and coordinating them drowns out their benefits. Mark Richards named this pitfall in <em>Microservices AntiPatterns and Pitfalls</em> (2016).</p>
 <p><em>Example: separate services for "calculate tax," "validate address," and "format phone number."</em></p>
 <p><strong>Fix:</strong> Size services around cohesive business capabilities, not individual functions.</p>
 </div>

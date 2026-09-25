@@ -3,1691 +3,254 @@ title: "AWS Step Functions for System Architects"
 layout: guide
 category: AWS
 subcategory: Application Integration & Messaging
-description: "Comprehensive guide to AWS Step Functions covering Standard and Express workflows, state types, error handling, orchestration vs choreography patterns, service integrations, and cost optimization for building resilient distributed applications"
-tags: [aws, step-functions, orchestration, workflows, serverless, integration, architecture, cost-optimization, fundamentals]
+description: "How Step Functions runs multi-step workflows as state machines: Standard versus Express workflows, defining states in Amazon States Language with JSONata and variables, calling AWS services and HTTPS APIs, retries, catches, and compensation, Map and Distributed Map, callbacks, security, monitoring, and cost."
+tags: [step-functions, state-machines, orchestration, express-workflows, distributed-map, jsonata, fundamentals]
 ---
+{% raw %}
 
-## What Problems Step Functions Solves
+## What Step Functions Does
 
-### Without Step Functions
+Many processes take several steps across several services, such as reserving stock, charging a card, saving the order, and emailing the customer. Each step can fail, some need retrying, some take hours, and a failure halfway through may mean undoing the earlier steps. Written as code in one function, that coordination is hard to get right and hard to see. Spread across services that trigger each other, nobody can see where a given order is.
 
-**Coordination Challenges:**
-- Workflow logic scattered across Lambda functions
-- Each Lambda handles retries, error handling, state management
-- Difficult to visualize workflow across distributed services
-- Complex coordination logic embedded in application code
-- No built-in support for long-running workflows (Lambda 15-minute limit)
-- Manual implementation of wait states, parallel execution, conditional branching
+**AWS Step Functions** runs that coordination for you. You describe the process as a **state machine**, a set of named steps called **states** with the transitions between them, and Step Functions runs each **execution** of it. It calls each service, waits for results, retries failures, branches on data, runs steps in parallel, and records every step as it goes, so the progress of any execution is visible in the console. This is **orchestration**, a central workflow directing the steps, as opposed to services reacting to each other's events with no coordinator.
 
-**Real-World Impact:**
-- Order processing workflow spans 8 Lambda functions with custom error handling in each
-- Team spends days debugging workflow failures with no visibility into execution history
-- Implementing retry logic with exponential backoff duplicated across 20+ functions
-- Long-running document processing fails when Lambda times out after 15 minutes
-- Adding approval step to workflow requires rewriting coordination code across services
+A state machine is a Regional resource, and quotas are per account per Region. Each state machine runs with an IAM **execution role** that grants the calls its states make.
 
-### With Step Functions
-
-**Visual Workflow Orchestration:**
-- **State machine**: Define workflow as declarative JSON (Amazon States Language)
-- **Visual designer**: See workflow execution in real-time
-- **Built-in error handling**: Automatic retries, catch blocks, fallback states
-- **Execution history**: Complete audit trail for every workflow execution
-- **Long-running workflows**: Standard workflows run up to 1 year
-- **Service integrations**: Call 220+ AWS services directly (no Lambda glue code)
-
-**Problem-Solution Mapping:**
-
-| Problem | Step Functions Solution |
-|---------|------------------------|
-| Workflow logic scattered across code | State machine defines workflow declaratively in ASL JSON |
-| No visibility into execution | Visual execution graph shows real-time progress and history |
-| Custom retry logic in every function | Built-in retry with exponential backoff, max attempts, backoff rate |
-| Lambda 15-minute timeout for long tasks | Standard workflows run up to 1 year; Express workflows 5 minutes |
-| Manual parallel execution coordination | Parallel state executes branches concurrently, waits for all |
-| Error handling boilerplate in code | Catch blocks define fallback behavior declaratively |
-| Calling AWS services requires Lambda | Service integrations call DynamoDB, SNS, SQS, ECS, Batch directly |
-| Hard to implement human approval steps | Task state with `.waitForTaskToken` pauses until callback received |
+Step Functions isn't the only way to write a long-running process on AWS. Lambda durable functions express the same kind of workflow as ordinary code, with checkpoints and waits handled by Lambda. Step Functions fits better when the workflow mostly calls AWS services, which it can do with no function in between, when a visual definition and execution history help operators and reviewers, or when parallel fan-out over large datasets is needed. Durable functions fit better when the steps are mostly business logic that reads naturally as code.
 
 ---
 
-## Step Functions Fundamentals
+## Standard and Express Workflows
 
-### What is Step Functions?
+A state machine has one of two types, chosen when it's created and fixed after that:
 
-**AWS Step Functions** is a serverless workflow orchestration service that coordinates distributed applications and microservices using visual workflows.
+| | Standard | Express |
+|---|---|---|
+| **Maximum duration** | 1 year | 5 minutes |
+| **Execution semantics** | Exactly once. A step runs once unless you ask for retries. | Asynchronous: at least once. Synchronous: at most once. |
+| **Start rate** (us-east-1) | 300 per second sustained, bursts to 1,300 | 6,000 per second |
+| **State transitions** | 5,000 per second in the largest Regions, 800 elsewhere (raisable) | No limit |
+| **History** | Kept by Step Functions for 90 days after the execution ends | Only what you send to CloudWatch Logs |
+| **Waiting for jobs and callbacks** (`.sync`, `.waitForTaskToken`) | Supported | Not supported |
+| **Distributed Map and redrive** | Supported | Not supported |
+| **Price** | $0.025 per 1,000 state transitions | $1.00 per million executions, plus duration and memory |
 
-<div class="callout callout--note">
-<p class="callout__title">Core Concept</p>
-<p>Define workflow as state machine in Amazon States Language (ASL); Step Functions executes states, handles errors, and tracks execution history.</p>
-</div>
+**Standard workflows** suit business processes that must not repeat steps, like charging a card, and anything that waits for a person or a long job. Step Functions never runs a Standard step twice on its own, which makes it the place for steps that aren't **idempotent**, meaning safe to repeat. Only the retries you configure, and redrive (see Handling Failures), run a step again.
 
-```
-Start → State 1 → State 2 → State 3 → End
-```
+**Express workflows** suit high-volume, short work such as processing IoT messages, transforming records from a stream, or orchestrating a few calls behind an API. They run at least once when started asynchronously, so every step must be idempotent. Started synchronously, for example from API Gateway, they run at most once and return the result to the caller.
 
-### Amazon States Language (ASL)
+A common design uses both, with a Standard workflow for the overall process calling Express workflows for the high-volume inner steps.
 
-Step Functions workflows are defined in Amazon States Language, a JSON-based language.
+---
 
-**Simple Workflow Example:**
+## Defining a Workflow
+
+State machines are written in **Amazon States Language** (ASL), a JSON format, or drawn in **Workflow Studio**, the console's visual editor, which produces the same JSON. Data moves between states as JSON, and each state's input, the value it passes to a service, and its output can be shaped with expressions.
+
+Since late 2024, those expressions can use **JSONata**, a query and transformation language, and AWS recommends it for new state machines. A state machine sets `"QueryLanguage": "JSONata"`, and any string wrapped in `{% %}` is evaluated as an expression. `$states.input` is the state's input and `$states.result` is the result of its service call. **Variables**, set with a state's `Assign` field, hold values for any later state to read, so data no longer has to be threaded through every state's output. Older state machines use JSONPath with fields like `InputPath`, `Parameters`, and `ResultPath`, and both styles can coexist state by state.
+
+This state machine reserves stock, charges a card, and saves the order, releasing the reservation if the card is declined:
 
 ```json
 {
-  "Comment": "Order processing workflow",
-  "StartAt": "ValidateOrder",
+  "Comment": "Place an order",
+  "QueryLanguage": "JSONata",
+  "StartAt": "ReserveInventory",
   "States": {
-    "ValidateOrder": {
-      "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:ValidateOrder",
-      "Next": "ProcessPayment"
-    },
-    "ProcessPayment": {
-      "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:ProcessPayment",
-      "Next": "FulfillOrder"
-    },
-    "FulfillOrder": {
-      "Type": "Task",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:FulfillOrder",
-      "End": true
-    }
-  }
-}
-```
-
-**Key Fields:**
-- `StartAt`: Name of first state to execute
-- `States`: Map of state names to state definitions
-- `Type`: State type (Task, Choice, Parallel, Wait, etc.)
-- `Resource`: ARN of service to invoke (Lambda, ECS, Batch, etc.)
-- `Next`: Name of next state to transition to
-- `End`: Boolean indicating if this is terminal state
-
-### State Machine Execution Model
-
-**1. Execution Starts**
-- Triggered manually, via API, EventBridge, API Gateway, etc.
-- Input JSON passed to first state
-
-**2. State Execution**
-- State receives input
-- Processes according to state type
-- Produces output
-- Transitions to next state or ends
-
-**3. Execution Completes**
-- Final state produces output
-- Execution marked as succeeded, failed, timed out, or aborted
-
-**Execution History:**
-- Every state transition recorded
-- Input/output for each state logged
-- Error details captured
-- Execution timeline visualized
-
----
-
-## Standard vs Express Workflows
-
-Step Functions offers two workflow types optimized for different use cases.
-
-### Feature Comparison
-
-| Feature | Standard Workflows | Express Workflows |
-|---------|-------------------|-------------------|
-| **Max Duration** | 1 year | 5 minutes |
-| **Execution Start Rate** | 2,000 per second | 100,000 per second |
-| **State Transition Rate** | 4,000 per second per account | Nearly unlimited |
-| **Pricing Model** | Per state transition ($0.025/1000 transitions) | Per execution duration + memory ($1.00/1M requests + $0.00001667/GB-sec) |
-| **Execution History** | Full history (90 days) | CloudWatch Logs only (optional) |
-| **Exactly-Once Execution** | Yes (guaranteed) | At-least-once (may execute multiple times) |
-| **Use Cases** | Long-running, auditable workflows | High-volume, short-duration, event processing |
-
-### Standard Workflows
-
-**When to Use:**
-✅ Workflows needing execution history for audit/compliance
-✅ Long-running processes (hours, days, weeks)
-✅ Workflows requiring exactly-once execution semantics
-✅ Human approval steps (wait for callback)
-✅ Complex error handling with retries spanning hours
-
-**Examples:**
-- Document processing with human review (days)
-- Multi-step ETL pipelines
-- Order fulfillment with inventory checks, payment, shipping
-- Video transcoding with approval workflow
-
-**Cost Model:**
-- $0.025 per 1,000 state transitions
-- First 4,000 state transitions per month free
-
-**Cost Example:**
-- Workflow with 10 states, 1M executions/month
-- State transitions: 10M
-- Cost: (10M - 4,000) × $0.025/1,000 = $249.90/month
-
-### Express Workflows
-
-**When to Use:**
-✅ High-volume event processing (IoT, streaming, mobile backends)
-✅ Short-duration workflows (<5 minutes)
-✅ Cost-sensitive at high volumes
-✅ At-least-once execution acceptable
-
-**Express Workflow Types:**
-
-| Type | Execution Guarantee | Use Case |
-|------|-------------------|----------|
-| **Synchronous** | At-least-once | Request/response (API Gateway, Lambda) |
-| **Asynchronous** | At-least-once | Fire-and-forget (EventBridge, Lambda async) |
-
-**Examples:**
-- IoT data processing (100,000 events/sec)
-- Mobile backend API orchestration
-- Real-time stream processing
-- E-commerce product search aggregation
-
-**Cost Model:**
-- $1.00 per million requests
-- $0.00001667 per GB-second (memory × duration)
-
-**Cost Example:**
-- 10M executions/month, 512 MB, 2 seconds average
-- Requests: 10M × $1.00/M = $10.00
-- Duration: 10M × 0.5 GB × 2 sec × $0.00001667 = $166.70
-- **Total: $176.70/month**
-
-<div class="callout callout--tip">
-<p class="callout__title">Cost Savings with Express</p>
-<p>Standard: 10M executions × 10 states = 100M transitions = $2,499/month. Express: $176.70/month. <strong>Savings: 93%</strong> for high-volume short workflows.</p>
-</div>
-
-### Decision Matrix
-
-| Scenario | Workflow Type |
-|----------|--------------|
-| Execution duration >5 minutes | Standard |
-| Need exactly-once execution | Standard |
-| Need execution history for audit | Standard |
-| Human approval steps | Standard |
-| High-volume event processing (>2,000/sec) | Express |
-| Cost-sensitive at high volume | Express |
-| API Gateway synchronous response | Express (Synchronous) |
-| EventBridge async processing | Express (Asynchronous) |
-
----
-
-## State Types
-
-Step Functions provides 8 state types for workflow control.
-
-### 1. Task State
-
-**Purpose:** Execute work (invoke Lambda, run ECS task, call API, etc.)
-
-**Example: Lambda Invocation**
-
-```json
-{
-  "ValidateOrder": {
-    "Type": "Task",
-    "Resource": "arn:aws:states:::lambda:invoke",
-    "Parameters": {
-      "FunctionName": "ValidateOrder",
-      "Payload.$": "$"
-    },
-    "Next": "ProcessPayment"
-  }
-}
-```
-
-**Service Integrations:**
-- Lambda (invoke function)
-- ECS/Fargate (run task)
-- Batch (submit job)
-- DynamoDB (put/get/update/delete item)
-- SNS (publish message)
-- SQS (send message)
-- 220+ AWS services via SDK integrations
-
-### 2. Choice State
-
-**Purpose:** Conditional branching (if/else logic)
-
-**Example: Route Based on Order Amount**
-
-```json
-{
-  "CheckOrderValue": {
-    "Type": "Choice",
-    "Choices": [
-      {
-        "Variable": "$.orderAmount",
-        "NumericGreaterThan": 1000,
-        "Next": "ManagerApproval"
-      },
-      {
-        "Variable": "$.orderAmount",
-        "NumericGreaterThan": 100,
-        "Next": "AutoApprove"
-      }
-    ],
-    "Default": "AutoApprove"
-  }
-}
-```
-
-**Supported Comparisons:**
-- String: `StringEquals`, `StringLessThan`, `StringGreaterThan`, `StringMatches` (regex)
-- Numeric: `NumericEquals`, `NumericLessThan`, `NumericGreaterThan`
-- Boolean: `BooleanEquals`
-- Timestamp: `TimestampEquals`, `TimestampLessThan`, `TimestampGreaterThan`
-- Presence: `IsPresent`, `IsNull`, `IsString`, `IsNumeric`, `IsBoolean`
-
-### 3. Parallel State
-
-**Purpose:** Execute multiple branches concurrently
-
-**Example: Process Payment and Reserve Inventory Simultaneously**
-
-```json
-{
-  "ProcessOrderSteps": {
-    "Type": "Parallel",
-    "Branches": [
-      {
-        "StartAt": "ProcessPayment",
-        "States": {
-          "ProcessPayment": {
-            "Type": "Task",
-            "Resource": "arn:aws:lambda:...:function:ProcessPayment",
-            "End": true
-          }
-        }
-      },
-      {
-        "StartAt": "ReserveInventory",
-        "States": {
-          "ReserveInventory": {
-            "Type": "Task",
-            "Resource": "arn:aws:lambda:...:function:ReserveInventory",
-            "End": true
-          }
-        }
-      }
-    ],
-    "Next": "FulfillOrder"
-  }
-}
-```
-
-**Behavior:**
-- All branches execute concurrently
-- Waits for all branches to complete before proceeding
-- If any branch fails, entire Parallel state fails (unless caught)
-- Output is array of outputs from each branch
-
-### 4. Map State
-
-**Purpose:** Process array elements in parallel (dynamic parallelism)
-
-**Example: Process Each Order Item**
-
-```json
-{
-  "ProcessItems": {
-    "Type": "Map",
-    "ItemsPath": "$.order.items",
-    "MaxConcurrency": 10,
-    "Iterator": {
-      "StartAt": "ProcessItem",
-      "States": {
-        "ProcessItem": {
-          "Type": "Task",
-          "Resource": "arn:aws:lambda:...:function:ProcessItem",
-          "End": true
-        }
-      }
-    },
-    "Next": "CompleteOrder"
-  }
-}
-```
-
-**Configuration:**
-- `ItemsPath`: JSONPath to array in input
-- `MaxConcurrency`: Max parallel iterations (default: 0 = unlimited)
-- `Iterator`: State machine to execute for each item
-
-**Distributed Map (2022):**
-- Process large datasets (millions of items)
-- Read from S3, DynamoDB, or array
-- Write results to S3
-- Scale to 10,000 concurrent executions
-
-### 5. Wait State
-
-**Purpose:** Delay workflow execution
-
-**Wait Types:**
-
-**1. Fixed Duration:**
-
-```json
-{
-  "WaitTenSeconds": {
-    "Type": "Wait",
-    "Seconds": 10,
-    "Next": "NextState"
-  }
-}
-```
-
-**2. Timestamp:**
-
-```json
-{
-  "WaitUntilDeadline": {
-    "Type": "Wait",
-    "Timestamp": "2025-12-25T09:00:00Z",
-    "Next": "NextState"
-  }
-}
-```
-
-**3. Dynamic (from input):**
-
-```json
-{
-  "WaitDynamic": {
-    "Type": "Wait",
-    "SecondsPath": "$.waitSeconds",
-    "Next": "NextState"
-  }
-}
-```
-
-**Use Cases:**
-- Polling with delays
-- Rate limiting API calls
-- Scheduled workflows
-- Retry with exponential backoff
-
-### 6. Succeed State
-
-**Purpose:** Terminate execution successfully
-
-```json
-{
-  "Success": {
-    "Type": "Succeed"
-  }
-}
-```
-
-### 7. Fail State
-
-**Purpose:** Terminate execution with failure
-
-```json
-{
-  "OrderValidationFailed": {
-    "Type": "Fail",
-    "Error": "ValidationError",
-    "Cause": "Order amount exceeds customer limit"
-  }
-}
-```
-
-### 8. Pass State
-
-**Purpose:** Pass input to output, optionally transforming
-
-**Use Cases:**
-- Inject fixed values
-- Transform data
-- Debugging (no-op state)
-
-**Example: Add Metadata**
-
-```json
-{
-  "AddMetadata": {
-    "Type": "Pass",
-    "Result": {
-      "status": "processing",
-      "timestamp": "2025-01-14T12:00:00Z"
-    },
-    "ResultPath": "$.metadata",
-    "Next": "ProcessOrder"
-  }
-}
-```
-
----
-
-## Error Handling and Retry Strategies
-
-Step Functions provides declarative error handling without custom code.
-
-### Error Types
-
-**1. Predefined Errors:**
-- `States.ALL`: Matches all errors
-- `States.Timeout`: Task exceeded timeout
-- `States.TaskFailed`: Task execution failed
-- `States.Permissions`: IAM permission denied
-
-**2. Custom Errors:**
-- Lambda throws error: `MyCustomError`
-- Service returns error: `DynamoDB.ConditionalCheckFailedException`
-
-### Retry Configuration
-
-**Automatic Retry with Exponential Backoff:**
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "arn:aws:lambda:...:function:ProcessPayment",
-    "Retry": [
-      {
-        "ErrorEquals": ["PaymentGatewayTimeout"],
-        "IntervalSeconds": 2,
-        "MaxAttempts": 3,
-        "BackoffRate": 2.0
-      },
-      {
-        "ErrorEquals": ["States.TaskFailed"],
-        "IntervalSeconds": 1,
-        "MaxAttempts": 2,
-        "BackoffRate": 1.5
-      }
-    ],
-    "Next": "FulfillOrder"
-  }
-}
-```
-
-**Retry Parameters:**
-- `ErrorEquals`: Array of error names to match
-- `IntervalSeconds`: Initial wait before first retry
-- `MaxAttempts`: Max number of retries (default: 3)
-- `BackoffRate`: Multiplier for wait interval (default: 2.0)
-
-**Example Timeline:**
-- Attempt 1 fails at 0s
-- Retry 1 at 2s (IntervalSeconds)
-- Retry 2 at 6s (2s × 2.0 backoff rate)
-- Retry 3 at 14s (4s × 2.0 backoff rate)
-
-### Catch Configuration
-
-**Handle Errors After Retries Exhausted:**
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "arn:aws:lambda:...:function:ProcessPayment",
-    "Retry": [
-      {
-        "ErrorEquals": ["PaymentGatewayTimeout"],
-        "MaxAttempts": 3
-      }
-    ],
-    "Catch": [
-      {
-        "ErrorEquals": ["PaymentGatewayTimeout"],
-        "ResultPath": "$.error",
-        "Next": "RefundCustomer"
-      },
-      {
-        "ErrorEquals": ["States.ALL"],
-        "ResultPath": "$.error",
-        "Next": "NotifyAdmin"
-      }
-    ],
-    "Next": "FulfillOrder"
-  }
-}
-```
-
-**Catch Parameters:**
-- `ErrorEquals`: Array of error names to catch
-- `ResultPath`: Where to store error info in state output
-- `Next`: State to transition to when error caught
-
-**Error Object Structure:**
-
-```json
-{
-  "Error": "PaymentGatewayTimeout",
-  "Cause": "{\"errorMessage\": \"Gateway timeout after 10 seconds\"}"
-}
-```
-
-### Error Handling Best Practices
-
-**1. Specific Errors First, Generic Last:**
-
-```json
-"Catch": [
-  {"ErrorEquals": ["InventoryOutOfStock"], "Next": "BackorderItem"},
-  {"ErrorEquals": ["PaymentDeclined"], "Next": "NotifyCustomer"},
-  {"ErrorEquals": ["States.ALL"], "Next": "GenericErrorHandler"}
-]
-```
-
-**2. Use ResultPath to Preserve Original Input:**
-
-```json
-"Catch": [
-  {
-    "ErrorEquals": ["States.ALL"],
-    "ResultPath": "$.errorInfo",
-    "Next": "ErrorHandler"
-  }
-]
-```
-
-**Output:**
-
-```json
-{
-  "orderId": "12345",
-  "amount": 99.99,
-  "errorInfo": {
-    "Error": "PaymentDeclined",
-    "Cause": "Insufficient funds"
-  }
-}
-```
-
-**3. Set Appropriate Timeouts:**
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "...",
-    "TimeoutSeconds": 30,
-    "HeartbeatSeconds": 10
-  }
-}
-```
-
-- `TimeoutSeconds`: Max time for state to complete
-- `HeartbeatSeconds`: Max time between heartbeat signals (for long tasks)
-
----
-
-## Service Integrations
-
-Step Functions integrates with 220+ AWS services without Lambda glue code.
-
-### Integration Patterns
-
-**1. Request-Response (Default)**
-
-```json
-{
-  "Resource": "arn:aws:states:::dynamodb:putItem",
-  "Parameters": {
-    "TableName": "Orders",
-    "Item": {
-      "orderId": {"S.$": "$.orderId"}
-    }
-  }
-}
-```
-
-- Starts task, waits for completion
-- Returns response immediately
-- Use for: Lambda, API calls, DynamoDB operations
-
-**2. Run a Job (.sync)**
-
-```json
-{
-  "Resource": "arn:aws:states:::ecs:runTask.sync",
-  "Parameters": {
-    "Cluster": "my-cluster",
-    "TaskDefinition": "process-order"
-  }
-}
-```
-
-- Starts task, waits until job completes
-- Use for: ECS tasks, Batch jobs, Glue jobs, SageMaker training
-
-**3. Wait for Callback (.waitForTaskToken)**
-
-```json
-{
-  "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
-  "Parameters": {
-    "QueueUrl": "https://sqs.us-east-1.amazonaws.com/123456789012/approval-queue",
-    "MessageBody": {
-      "orderId.$": "$.orderId",
-      "taskToken.$": "$$.Task.Token"
-    }
-  }
-}
-```
-
-- Generates unique task token
-- Pauses until `SendTaskSuccess` or `SendTaskFailure` API called with token
-- Use for: Human approvals, external system integration, asynchronous callbacks
-
-### Common Service Integrations
-
-| Service | Integration Type | Use Case |
-|---------|-----------------|----------|
-| **Lambda** | `lambda:invoke` | Execute business logic |
-| **DynamoDB** | `dynamodb:putItem`, `getItem`, `updateItem`, `deleteItem` | Direct database operations |
-| **SQS** | `sqs:sendMessage` | Queue message for processing |
-| **SNS** | `sns:publish` | Publish notification |
-| **ECS/Fargate** | `ecs:runTask.sync` | Run containerized task, wait for completion |
-| **Batch** | `batch:submitJob.sync` | Submit batch job, wait for completion |
-| **Glue** | `glue:startJobRun.sync` | Start ETL job, wait for completion |
-| **SageMaker** | `sagemaker:createTrainingJob.sync` | Train ML model, wait for completion |
-| **EventBridge** | `events:putEvents` | Publish event to event bus |
-| **API Gateway** | `apigateway:invoke` | Call API Gateway endpoint |
-
-### Optimized Integrations (No Lambda Required)
-
-**Without Step Functions:**
-
-```
-Lambda 1 (validate) → Lambda 2 (write to DynamoDB) → Lambda 3 (send SNS) → Lambda 4 (send SQS)
-
-Costs:
-- 4 Lambda invocations
-- 4 Lambda execution durations
-- Development/maintenance of 4 functions
-```
-
-**With Step Functions:**
-
-```json
-{
-  "StartAt": "ValidateOrder",
-  "States": {
-    "ValidateOrder": {
+    "ReserveInventory": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {"FunctionName": "ValidateOrder"},
+      "Arguments": {
+        "FunctionName": "reserve-inventory",
+        "Payload": "{% $states.input %}"
+      },
+      "Assign": { "reservationId": "{% $states.result.Payload.reservationId %}" },
+      "Output": "{% $states.input %}",
+      "Retry": [{
+        "ErrorEquals": ["Lambda.ClientExecutionTimeoutException", "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+        "IntervalSeconds": 2,
+        "MaxAttempts": 6,
+        "BackoffRate": 2,
+        "JitterStrategy": "FULL"
+      }],
+      "Next": "ChargeCard"
+    },
+    "ChargeCard": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "charge-card",
+        "Payload": "{% $states.input %}"
+      },
+      "Output": "{% $states.input %}",
+      "Catch": [{ "ErrorEquals": ["PaymentDeclined"], "Next": "ReleaseInventory" }],
       "Next": "SaveOrder"
     },
     "SaveOrder": {
       "Type": "Task",
       "Resource": "arn:aws:states:::dynamodb:putItem",
-      "Parameters": {
+      "Arguments": {
         "TableName": "Orders",
-        "Item": {"orderId.$": "$.orderId"}
-      },
-      "Next": "NotifyCustomer"
-    },
-    "NotifyCustomer": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::sns:publish",
-      "Parameters": {
-        "TopicArn": "arn:aws:sns:...:customer-notifications",
-        "Message.$": "$.confirmationMessage"
-      },
-      "Next": "QueueFulfillment"
-    },
-    "QueueFulfillment": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::sqs:sendMessage",
-      "Parameters": {
-        "QueueUrl": "https://sqs.../fulfillment-queue",
-        "MessageBody.$": "$"
+        "Item": {
+          "orderId": { "S": "{% $states.input.orderId %}" },
+          "status": { "S": "PLACED" }
+        }
       },
       "End": true
-    }
-  }
-}
-```
-
-**Costs:**
-- 1 Lambda invocation (validation only)
-- 4 state transitions ($0.0001)
-- No Lambda glue code maintenance
-
----
-
-## Orchestration vs Choreography
-
-### Orchestration (Step Functions)
-
-**Pattern:** Central coordinator (state machine) explicitly controls workflow.
-
-```
-[Step Functions State Machine]
-    ↓
-Invoke Lambda 1 (Validate)
-    ↓
-Invoke Lambda 2 (Payment)
-    ↓
-Invoke Lambda 3 (Fulfillment)
-```
-
-**Characteristics:**
-- ✅ Central visibility into workflow state
-- ✅ Easy to understand flow
-- ✅ Built-in error handling and retries
-- ✅ Execution history for debugging
-- ❌ Central point of failure (mitigated by AWS SLA)
-- ❌ State machine must know about all steps
-
-**When to Use:**
-- Complex workflows with conditional logic
-- Need audit trail for compliance
-- Human approval steps
-- Long-running processes
-- Workflows requiring exactly-once execution
-
-### Choreography (EventBridge)
-
-**Pattern:** Services react to events independently; no central coordinator.
-
-```
-Order Service → Publishes: OrderPlaced
-    ↓
-[EventBridge]
-    ↓
-    ├→ Inventory Service (listens) → Publishes: InventoryReserved
-    ├→ Payment Service (listens) → Publishes: PaymentProcessed
-    └→ Fulfillment Service (listens) → Publishes: OrderShipped
-```
-
-**Characteristics:**
-- ✅ Services completely decoupled
-- ✅ Easy to add new consumers
-- ✅ No single point of failure
-- ❌ Hard to track overall workflow state
-- ❌ Difficult to debug failures
-- ❌ No built-in compensation logic
-
-**When to Use:**
-- Loosely coupled event-driven architectures
-- Simple workflows (few steps)
-- Independent services that don't need coordination
-- High-volume event processing
-
-### Hybrid Approach
-
-**Combine Step Functions (orchestration) with EventBridge (choreography):**
-
-```
-EventBridge: OrderPlaced event
-    ↓
-Step Functions: Order Processing Workflow
-    ├→ Validate Order
-    ├→ Process Payment
-    ├→ Reserve Inventory
-    └→ Publish: OrderCompleted event
-         ↓
-    EventBridge: Distribute to downstream services
-         ↓
-    ├→ Email Service
-    ├→ Analytics Service
-    └→ Recommendation Service
-```
-
-**Benefits:**
-- Step Functions coordinates critical path (payment, inventory)
-- EventBridge distributes completion events to independent consumers
-- Clear ownership: Step Functions owns workflow, EventBridge owns event distribution
-
----
-
-## Workflow Patterns
-
-### Pattern 1: Sequential Processing
-
-**Use Case:** Multi-step process where each step depends on previous.
-
-```
-Validate → Process Payment → Reserve Inventory → Ship Order
-```
-
-**Implementation:** Chain Task states.
-
----
-
-### Pattern 2: Parallel Processing
-
-**Use Case:** Execute independent tasks concurrently.
-
-```
-Order Placed
-    ├→ Send Confirmation Email
-    ├→ Update Analytics
-    └→ Trigger Recommendation Engine
-```
-
-**Implementation:** Parallel state.
-
-**Benefit:** Reduce total execution time (3 tasks at 2s each = 2s total vs 6s sequential).
-
----
-
-### Pattern 3: Dynamic Parallel (Map State)
-
-**Use Case:** Process variable-length array.
-
-```
-Order with 5 items
-    ├→ Process Item 1
-    ├→ Process Item 2
-    ├→ Process Item 3
-    ├→ Process Item 4
-    └→ Process Item 5
-```
-
-**Implementation:** Map state with `MaxConcurrency`.
-
-**Benefit:** Automatic parallelization; works with any array size.
-
----
-
-### Pattern 4: Human Approval (Callback)
-
-**Use Case:** Pause workflow until human approves.
-
-```
-Submit Request → Wait for Approval → Process Request
-                     ↑
-              (Manual approval via API call)
-```
-
-**Implementation:**
-
-```json
-{
-  "WaitForApproval": {
-    "Type": "Task",
-    "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
-    "Parameters": {
-      "QueueUrl": "...",
-      "MessageBody": {
-        "taskToken.$": "$$.Task.Token"
-      }
     },
-    "TimeoutSeconds": 86400,
-    "Next": "ProcessApproval"
-  }
-}
-```
-
-**Approval via API:**
-
-```bash
-aws stepfunctions send-task-success \
-  --task-token "TASK_TOKEN" \
-  --task-output '{"approved": true}'
-```
-
----
-
-### Pattern 5: Saga Pattern (Distributed Transactions)
-
-**Use Case:** Multi-step transaction with compensating actions on failure.
-
-```
-Reserve Inventory → Process Payment → Ship Order
-                         ↓ (failure)
-                   Refund Payment
-                         ↓
-              Release Inventory Reservation
-```
-
-**Implementation:** Catch blocks trigger compensating states.
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "...",
-    "Catch": [
-      {
-        "ErrorEquals": ["PaymentFailed"],
-        "Next": "ReleaseInventory"
-      }
-    ]
-  }
-}
-```
-
-**Benefit:** Maintain consistency across distributed services without 2PC.
-
----
-
-### Pattern 6: Polling with Exponential Backoff
-
-**Use Case:** Wait for external system to reach desired state.
-
-```
-Submit Job → Wait 5s → Check Status → (Not Ready) → Wait 10s → Check Status → (Ready) → Continue
-```
-
-**Implementation:** Choice + Wait states.
-
-```json
-{
-  "CheckJobStatus": {
-    "Type": "Task",
-    "Resource": "arn:aws:lambda:...:function:CheckJobStatus",
-    "Next": "JobComplete?"
-  },
-  "JobComplete?": {
-    "Type": "Choice",
-    "Choices": [
-      {
-        "Variable": "$.status",
-        "StringEquals": "COMPLETE",
-        "Next": "ProcessResults"
-      }
-    ],
-    "Default": "WaitAndRetry"
-  },
-  "WaitAndRetry": {
-    "Type": "Wait",
-    "Seconds": 5,
-    "Next": "CheckJobStatus"
-  }
-}
-```
-
----
-
-### Pattern 7: Batch Processing with Checkpointing
-
-**Use Case:** Process large dataset; resume from last checkpoint on failure.
-
-**Implementation:**
-1. Distributed Map reads items from S3
-2. Each batch updates DynamoDB checkpoint
-3. On failure, resume from last checkpoint
-
-**Benefit:** Handle datasets with millions of items; automatic recovery.
-
----
-
-## Cost Optimization Strategies
-
-### Pricing Overview (us-east-1, 2025)
-
-**Standard Workflows:**
-- $0.025 per 1,000 state transitions
-- First 4,000 state transitions per month free
-
-**Express Workflows:**
-- $1.00 per million requests
-- $0.00001667 per GB-second
-
-### 1. Choose Correct Workflow Type
-
-**High-Volume, Short Workflows: Use Express**
-
-**Example:** 10M executions/month, 5 states, 1 second duration
-
-**Standard Cost:**
-- State transitions: 10M × 5 = 50M
-- Cost: 50M × $0.025/1,000 = $1,250/month
-
-**Express Cost:**
-- Requests: 10M × $1.00/M = $10
-- Duration: 10M × 0.256 GB × 1s × $0.00001667 = $42.68
-- **Total: $52.68/month**
-- **Savings: 96%**
-
----
-
-### 2. Minimize State Transitions
-
-**Problem:** Each state transition costs $0.025 per 1,000.
-
-**Without Optimization:**
-
-```json
-{
-  "States": {
-    "GetOrder": {"Type": "Task", "Resource": "...", "Next": "Transform1"},
-    "Transform1": {"Type": "Pass", "Next": "Transform2"},
-    "Transform2": {"Type": "Pass", "Next": "Transform3"},
-    "Transform3": {"Type": "Pass", "Next": "SaveOrder"},
-    "SaveOrder": {"Type": "Task", "Resource": "..."}
-  }
-}
-```
-
-**5 states × 1M executions = 5M transitions = $125/month**
-
-**With Optimization (consolidate transforms in Lambda):**
-
-```json
-{
-  "States": {
-    "GetOrder": {"Type": "Task", "Resource": "...", "Next": "TransformAndSave"},
-    "TransformAndSave": {"Type": "Task", "Resource": "..."}
-  }
-}
-```
-
-**2 states × 1M executions = 2M transitions = $50/month**
-**Savings: 60%**
-
-**Guideline:** Use Lambda for complex transformations instead of multiple Pass states.
-
----
-
-### 3. Use Service Integrations (Avoid Lambda Glue Code)
-
-**Without Service Integration:**
-
-```
-State 1 (Lambda: write to DynamoDB)
-State 2 (Lambda: send SNS)
-State 3 (Lambda: send SQS)
-
-Costs:
-- 3 state transitions
-- 3 Lambda invocations ($0.20/M)
-- 3 Lambda executions (duration)
-```
-
-**With Service Integration:**
-
-```
-State 1 (DynamoDB putItem)
-State 2 (SNS publish)
-State 3 (SQS sendMessage)
-
-Costs:
-- 3 state transitions
-- No Lambda costs
-```
-
-**Savings:** Eliminate Lambda invocation and duration costs.
-
----
-
-### 4. Set Appropriate Timeouts
-
-**Problem:** Long timeout on stuck state wastes cost (Standard workflows).
-
-**Without Timeout:**
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "..."
-  }
-}
-```
-
-**Default timeout: 99,999,999 seconds (execution continues indefinitely if stuck)**
-
-**With Timeout:**
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "...",
-    "TimeoutSeconds": 30,
-    "Catch": [
-      {"ErrorEquals": ["States.Timeout"], "Next": "HandleTimeout"}
-    ]
-  }
-}
-```
-
-**Benefit:** Fail fast; prevent runaway executions.
-
----
-
-### 5. Use Distributed Map for Large Datasets
-
-**Standard Map:**
-- Limited to 40 concurrent iterations (per account limit)
-- Payload passed inline
-
-**Distributed Map:**
-- 10,000 concurrent child executions
-- Read from S3 (no payload size limits)
-
-**Cost Benefit:** Parallel processing reduces total execution time; finish job faster.
-
----
-
-### Cost Example: Order Processing Workflow
-
-**Scenario:** 1M orders/month, 8-state workflow
-
-**Standard Workflow Cost:**
-- State transitions: 1M × 8 = 8M
-- Cost: (8M - 4,000) × $0.025/1,000 = $199.90/month
-
-**Additional Costs (same for all approaches):**
-- Lambda invocations: 1M × 3 functions = 3M invocations = $0.60
-- Lambda duration: Depends on function execution time
-- DynamoDB, SNS, SQS: Service-specific costs
-
-**Total Step Functions Cost: ~$200/month for 1M complex workflows**
-
----
-
-## Performance and Scalability
-
-### Execution Limits
-
-| Limit | Standard | Express | Notes |
-|-------|----------|---------|-------|
-| **Max execution time** | 1 year | 5 minutes | Express hard limit |
-| **Max execution history** | 25,000 events | N/A (CloudWatch only) | Events = state transitions × 2 |
-| **Execution start rate** | 2,000/sec | 100,000/sec | Can request increase |
-| **State transition rate** | 4,000/sec per account | Nearly unlimited | Throttling at account level |
-
-### Concurrency
-
-**Standard Workflows:**
-- No built-in concurrency limit
-- Throttled by execution start rate (2,000/sec)
-- Can have millions of concurrent executions
-
-**Express Workflows:**
-- Synchronous: Scales with API Gateway/Lambda concurrency
-- Asynchronous: 100,000 requests/sec
-
-### Parallel State Performance
-
-**Parallel branches execute concurrently:**
-
-**Sequential:**
-
-```
-Task A (2s) → Task B (2s) → Task C (2s) = 6 seconds total
-```
-
-**Parallel:**
-
-```
-Parallel State
-  ├→ Task A (2s)
-  ├→ Task B (2s)
-  └→ Task C (2s)
-= 2 seconds total (all complete when slowest finishes)
-```
-
-**Performance Gain:** 3× faster for independent tasks.
-
-### Map State Concurrency
-
-**Control parallelism with MaxConcurrency:**
-
-```json
-{
-  "ProcessItems": {
-    "Type": "Map",
-    "MaxConcurrency": 10,
-    "ItemsPath": "$.items",
-    "Iterator": {...}
-  }
-}
-```
-
-**0 = Unlimited concurrency (default)**
-**N = Process N items concurrently**
-
-**Trade-Off:**
-- Higher concurrency = faster completion
-- Lower concurrency = avoid overwhelming downstream services
-
----
-
-## Security Best Practices
-
-### 1. IAM Roles for Execution
-
-**Step Functions assumes IAM role to execute state machine.**
-
-**Principle of Least Privilege:**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "lambda:InvokeFunction",
-      "Resource": "arn:aws:lambda:us-east-1:123456789012:function:ValidateOrder"
+    "ReleaseInventory": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "release-inventory",
+        "Payload": { "reservationId": "{% $reservationId %}" }
+      },
+      "Retry": [{
+        "ErrorEquals": ["Lambda.ClientExecutionTimeoutException", "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+        "IntervalSeconds": 2,
+        "MaxAttempts": 6,
+        "BackoffRate": 2,
+        "JitterStrategy": "FULL"
+      }],
+      "Next": "OrderFailed"
     },
-    {
-      "Effect": "Allow",
-      "Action": "dynamodb:PutItem",
-      "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/Orders"
-    }
-  ]
-}
-```
-
-**Best Practice:** Separate IAM role per state machine (not shared).
-
----
-
-### 2. Encryption at Rest
-
-**Standard Workflows:**
-- Execution history encrypted at rest with AWS-managed keys (automatic)
-- Use customer-managed KMS key for additional security
-
-**Express Workflows:**
-- CloudWatch Logs encrypted at rest (configure log group encryption)
-
----
-
-### 3. Encryption in Transit
-
-All communication between Step Functions and integrated services encrypted with TLS.
-
----
-
-### 4. Resource Policies
-
-**Control who can execute state machine:**
-
-```json
-{
-  "Effect": "Allow",
-  "Principal": {
-    "Service": "events.amazonaws.com"
-  },
-  "Action": "states:StartExecution",
-  "Resource": "arn:aws:states:us-east-1:123456789012:stateMachine:OrderProcessing",
-  "Condition": {
-    "ArnEquals": {
-      "aws:SourceArn": "arn:aws:events:us-east-1:123456789012:rule/OrderPlaced"
+    "OrderFailed": {
+      "Type": "Fail",
+      "Error": "PaymentDeclined",
+      "Cause": "The card was declined, and the reservation was released."
     }
   }
 }
 ```
 
----
+{% endraw %}
+{% include figure.html id="aws-sfn-order-workflow" %}
+{% raw %}
 
-### 5. Sensitive Data Handling
+The Lambda integration wraps each function's return value in a `Payload` field, which is why the reservation ID is read from `$states.result.Payload`. `ReserveInventory` stores it in a variable, so `ReleaseInventory` can read it later even though the error handler replaced the state data in between. The `Output` fields pass each state's original input forward, so later states still see the order. A Lambda function signals `PaymentDeclined` by failing with an error whose type is `PaymentDeclined`, which Step Functions uses as the error name.
 
-**Problem:** Execution history logs input/output for each state (may contain PII, secrets).
+`ChargeCard` has no retrier on purpose. A retry after a timeout could charge a card that was already charged, so a failed charge goes to a person or a reconciliation job instead. The other two Lambda tasks retry the service errors that AWS documents as transient, with growing, randomized waits.
 
-**Solutions:**
+ASL has eight state types:
 
-**1. Use ResultPath to exclude sensitive data from output:**
+| State | What it does |
+|---|---|
+| **Task** | Calls a service, a Lambda function, an HTTPS API, or an activity (a worker process you host that polls Step Functions for work), and waits for the result |
+| **Choice** | Branches on a condition over the data, such as an order total above $1,000 |
+| **Parallel** | Runs several fixed branches at once and waits for all of them |
+| **Map** | Runs the same steps for each item in a collection (see below) |
+| **Wait** | Pauses for a duration or until a timestamp |
+| **Pass** | Passes or reshapes data without calling anything |
+| **Succeed** and **Fail** | End the execution, successfully or with an error name and cause |
 
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "...",
-    "ResultPath": null
-  }
-}
-```
-
-**2. Reference sensitive data in Parameter Store/Secrets Manager:**
-
-```json
-{
-  "Parameters": {
-    "ApiKey.$": "States.JsonToString($.secretArn)"
-  }
-}
-```
-
-**3. Redact sensitive fields in Lambda before returning:**
-
-```python
-def handler(event, context):
-    result = process_payment(event['creditCard'])
-    # Redact before returning to Step Functions
-    return {'status': 'success', 'transactionId': result['id']}
-```
+Each state's input and output is limited to 256 KiB. Larger data belongs in S3, with the state carrying its location.
 
 ---
 
-## Observability and Monitoring
+## Calling Services
 
-### Execution History (Standard Workflows)
+A Task state reaches other services in three ways:
 
-**Every state transition recorded:**
-- State entered
-- Input received
-- Output produced
-- Errors encountered
-- Timestamp
+- **Optimized integrations** cover the most common services, such as Lambda, DynamoDB, SQS, SNS, ECS, Batch, Glue, EventBridge, and nested Step Functions executions, with conveniences like parsing a Lambda function's JSON response.
+- **AWS SDK integrations** call more than 9,000 API actions across more than 200 services directly, such as `s3:copyObject`. A step that only moves data between AWS services needs no Lambda function.
+- **HTTP Tasks** call any HTTPS API, public or private. An EventBridge connection, a stored authorization such as an API key or OAuth client credentials, holds the credentials. A call must finish within 60 seconds.
 
-**Retention:** 90 days
+How the Task waits depends on the **integration pattern**, chosen with a suffix on the resource ARN:
 
-**Benefit:** Full audit trail; debug failures by replaying execution history.
+| Pattern | Behavior | Use for |
+|---|---|---|
+| **Request response** (default) | Makes the call and moves on when it returns | Quick calls: invoking a function, writing an item |
+| **Run a job** (`.sync`) | Starts a job and waits until it finishes | ECS tasks, Batch jobs, Glue jobs, nested executions |
+| **Wait for callback** (`.waitForTaskToken`) | Sends a task token with the call and pauses until something returns the token | Human approvals, external systems, anything that finishes later |
 
----
+The callback pattern is how a Standard workflow waits days for a person. The Task sends a message containing the token, for example to an SQS queue or in an approval email, and the execution sits paused, costing nothing while it waits, until a system calls `SendTaskSuccess` or `SendTaskFailure` with the token. For long tasks, set `HeartbeatSeconds` and have the worker call `SendTaskHeartbeat` more often than that, so a worker that dies silently is detected when its heartbeats stop. Set a timeout too, so an approval nobody answers eventually fails.
 
-### CloudWatch Metrics
-
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `ExecutionsStarted` | Number of executions started | Monitor trends |
-| `ExecutionsSucceeded` | Successful completions | Compare to started |
-| `ExecutionsFailed` | Failed executions | >0 (investigate) |
-| `ExecutionsTimedOut` | Executions exceeding timeout | >0 (adjust timeout or fix logic) |
-| `ExecutionTime` | Duration of executions | P99 exceeds SLA |
-
-### CloudWatch Alarms
-
-**1. High Failure Rate**
-
-```
-Metric: ExecutionsFailed
-Threshold: >10
-Duration: 5 minutes
-Action: Alert on-call
-```
-
-**2. Execution Duration SLA**
-
-```
-Metric: ExecutionTime (P99)
-Threshold: >60 seconds
-Duration: 10 minutes
-Action: Alert development team
-```
+{% endraw %}
+{% include figure.html id="aws-sfn-callback" %}
+{% raw %}
 
 ---
 
-### CloudWatch Logs (Express Workflows)
+## Handling Failures
 
-**Express workflows don't have execution history; use CloudWatch Logs.**
+When a state fails and nothing handles the error, the whole execution fails. Two fields on Task, Parallel, and Map states handle errors declaratively.
 
-**Log Levels:**
-- `ALL`: All events
-- `ERROR`: Failed executions only
-- `FATAL`: Fatal errors only
-- `OFF`: No logging
+**Retry** lists retriers, each matching error names and setting how to try again:
 
-**Enable Logging:**
+- `IntervalSeconds` is the wait before the first retry (1 by default), and `BackoffRate` multiplies it after each attempt (2.0 by default).
+- `MaxAttempts` caps the retries (3 by default, and 0 turns retrying off for that error).
+- `MaxDelaySeconds` caps how long the growing wait can get.
+- `JitterStrategy` set to `FULL` randomizes each wait, so many executions failing together don't retry in lockstep.
 
-```json
-{
-  "LoggingConfiguration": {
-    "Level": "ALL",
-    "IncludeExecutionData": true,
-    "Destinations": [
-      {
-        "CloudWatchLogsLogGroup": {
-          "LogGroupArn": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/stepfunctions/MyStateMachine"
-        }
-      }
-    ]
-  }
-}
-```
+**Catch** lists catchers that send the execution to another state once retries are exhausted, as `ChargeCard` does above. Order both lists from specific errors to general ones. `States.ALL` matches any error and must come last. `States.TaskFailed` matches anything except a timeout. `States.Timeout` is raised when a task exceeds `TimeoutSeconds` or misses a heartbeat. A few errors can't be caught at all, such as `States.Runtime`, which means the definition itself did something invalid.
 
-**Cost:** CloudWatch Logs ingestion and storage charges apply.
+Retry transient errors and catch errors that retrying won't fix. AWS documents four Lambda service errors as transient, `Lambda.ClientExecutionTimeoutException`, `Lambda.ServiceException`, `Lambda.AWSLambdaException`, and `Lambda.SdkClientException`, and a Lambda task whose function is safe to repeat should retry them. Retry throttling (`Lambda.TooManyRequestsException`) as well. Give every callback, job (`.sync`), and activity task a `TimeoutSeconds`. Without one, such a task waits as long as the execution is allowed to run, up to a year on a Standard workflow, for a response that may never come. A plain Lambda call is bounded by the function's own timeout.
+
+**Compensation** is the pattern in the example, where a catcher runs steps that undo earlier ones, releasing a reservation or refunding a charge. It's how a workflow keeps several services consistent without a distributed transaction. Each compensating step must be safe to run even if the step it undoes only partly happened.
+
+When a Standard execution fails anyway, perhaps because a downstream service was down for longer than the retries lasted, **redrive** restarts it from the failed state within 14 days of its end, without repeating the steps that succeeded.
+
+Failures before the workflow starts matter too. A caller that times out and retries `StartExecution` could start the same order twice. Give each Standard execution a name derived from the business key, such as the order ID. Names are unique per state machine until 90 days after the execution closes, so a retried start with the same name can't create a second execution. If the first execution is still running and the input matches, the retry returns the original response. If the input differs or the first execution has already finished, the retry fails with `ExecutionAlreadyExists`, which the caller should treat as "already started" rather than as an error.
 
 ---
 
-### AWS X-Ray Tracing
+## Processing Collections with Map
 
-**Visualize execution across distributed services:**
+A **Map** state runs the same steps for each item in an array. It has two modes.
 
-```
-Step Functions → Lambda → DynamoDB → SNS → SQS
-```
+**Inline** mode runs the iterations inside the parent execution, up to 40 at a time. Every iteration's steps count toward the parent's history and its 256 KiB data limit, which suits dozens or hundreds of small items, like the lines of one order.
 
-**Enable X-Ray on state machine:**
+**Distributed** mode runs each iteration, or each batch of items, as a separate **child execution** with its own history, up to 10,000 at a time. It reads its items directly from S3, such as a large CSV or JSON Lines file or all the objects under a prefix, and can write its results back to S3. **ItemBatcher** groups items so that each child execution handles a batch. A tolerated failure count or percentage lets a large job finish when a few items fail, instead of failing the whole run. Distributed mode needs a Standard parent workflow, and its children can be Standard or Express.
 
-```json
-{
-  "TracingConfiguration": {
-    "Enabled": true
-  }
-}
-```
-
-**Benefit:** Identify latency bottlenecks; correlate Step Functions execution with downstream service calls.
+Use Distributed Map when the dataset is larger than 256 KiB, when the iterations would exceed the parent's history limit of 25,000 events, or when more than 40 iterations should run at once. The S3 bucket it reads must be in the same account and Region as the state machine. The Map state's `MaxConcurrency` field caps how many iterations run at once, so set it to what the downstream services can absorb. Ten thousand concurrent Lambda invocations will exceed most accounts' concurrency quota.
 
 ---
 
-## Integration with Other AWS Services
+## Security
 
-### Triggering State Machines
-
-| Trigger | Use Case |
-|---------|----------|
-| **EventBridge** | Event-driven (S3 upload, DynamoDB change, custom event) |
-| **API Gateway** | HTTP API endpoint (synchronous response with Express workflows) |
-| **Lambda** | Programmatic invocation from application code |
-| **SDK/CLI** | Manual testing, CI/CD pipelines |
-| **Step Functions** | Nested workflows (parent state machine starts child) |
-
-### EventBridge → Step Functions
-
-**Use Case:** S3 upload triggers processing workflow.
-
-**EventBridge Rule:**
-
-```json
-{
-  "source": ["aws.s3"],
-  "detail-type": ["Object Created"],
-  "detail": {
-    "bucket": {"name": ["my-uploads-bucket"]}
-  }
-}
-```
-
-**Target:** Step Functions state machine
-
-**Benefit:** Event-driven workflows; no polling.
+- **Execution role.** Grant it exactly the actions its states call, on specific resources. A state machine that starts child executions, as Distributed Map does, also needs `states:StartExecution` on itself.
+- **Who can start executions.** IAM policies grant `states:StartExecution`. EventBridge, API Gateway, and EventBridge Scheduler start executions through their own roles.
+- **Data in history and logs.** A Standard workflow's history records the input, result, and output of every state, and logging with execution data does the same. Keep secrets out of state data entirely. A state that fetches a secret records it in its own result, even if it never passes it on, so let the service that needs a secret fetch it itself, and let HTTP Tasks use a connection.
+- **Encryption.** History and definitions are encrypted with AWS owned keys by default. Since July 2024, a state machine or activity can use a customer managed KMS key instead.
 
 ---
 
-### API Gateway → Step Functions (Express Synchronous)
+## Monitoring
 
-**Use Case:** REST API orchestrates multiple backend services, returns response.
+| Metric | What it shows |
+|---|---|
+| `ExecutionsFailed` and `ExecutionsTimedOut` | Executions that ended badly. Alarm on both. |
+| `ExecutionThrottled` | State transitions throttled by the state-transition quota |
+| `ExecutionTime` | How long executions take end to end |
 
-**API Gateway Integration:**
-
-```
-POST /orders → Step Functions (Express Synchronous) → Returns order confirmation
-```
-
-**Workflow:**
-
-1. Validate order
-2. Process payment
-3. Reserve inventory
-4. Return confirmation
-
-**Response Time:** <5 seconds (Express 5-minute limit)
-
-**Benefit:** No Lambda orchestration code; visual workflow designer.
+For a single failed Standard execution, the console's graph and history show which state failed, with what input and error. Express workflows have no stored history, so turn on logging to CloudWatch Logs, at the `ERROR` level at least, before you need it. Logging costs CloudWatch Logs ingestion and storage, and at the `ALL` level with execution data included, the logs of a busy Express workflow can rival or exceed the cost of the workflow itself. The **TestState** API runs one state in isolation with a given input, which makes testing JSONata expressions and permissions quick.
 
 ---
 
-### Step Functions → Step Functions (Nested)
+## Where the Money Goes
 
-**Use Case:** Reusable sub-workflows.
+| Charge (us-east-1) | Price |
+|---|---|
+| Standard state transitions | $0.025 per 1,000, with 4,000 free each month |
+| Express executions | $1.00 per million |
+| Express duration | $0.06 per GB-hour for the first 1,000 GB-hours a month, less beyond, billed in 64 MB memory steps and 100 ms increments |
 
-**Parent Workflow:**
+A Standard workflow's cost is its number of steps. Starting and ending the execution each count as a transition, and so does every retry. The order workflow above takes five transitions on the happy path (start, three tasks, end), so a million orders a month cost about $125. Services the workflow calls, such as Lambda and DynamoDB, bill separately.
 
-```json
-{
-  "ProcessOrder": {
-    "Type": "Task",
-    "Resource": "arn:aws:states:::states:startExecution.sync",
-    "Parameters": {
-      "StateMachineArn": "arn:aws:states:...:stateMachine:InventoryCheck",
-      "Input": {"orderId.$": "$.orderId"}
-    },
-    "Next": "FulfillOrder"
-  }
-}
-```
+An Express workflow's cost is its volume and duration. Its memory is 50 MB plus the definition's size plus the payload size times the number of Parallel or Map steps, so small workflows bill at the smallest 64 MB step, and large fan-outs cost more. The same million three-step orders, each finishing within a second, would cost about $1 in executions plus about $1 in duration on Express.
 
-**Benefit:** Modular workflows; separate concerns.
-
----
-
-## Common Pitfalls
-
-### Pitfall 1: Using Standard for High-Volume Short Workflows
-
-**Problem:** Standard workflows cost more for high-volume, short-duration executions.
-
-**Example:** 10M executions, 5 states, 1 second
-- Standard: $1,250/month
-- Express: $52.68/month
-
-**Solution:** Use Express workflows for high-volume event processing.
-
-**Cost Impact:** 96% savings.
-
----
-
-### Pitfall 2: Not Setting Timeouts
-
-**Problem:** State waits indefinitely if Lambda hangs or external API never responds.
-
-**Solution:** Set `TimeoutSeconds` on all Task states.
-
-```json
-{
-  "ProcessPayment": {
-    "Type": "Task",
-    "Resource": "...",
-    "TimeoutSeconds": 30
-  }
-}
-```
-
-**Cost Impact:** Runaway executions waste Standard workflow costs; hard to debug.
-
----
-
-### Pitfall 3: Logging Sensitive Data
-
-**Problem:** Execution history logs input/output for all states; may contain PII, secrets.
-
-**Solution:**
-- Use `ResultPath: null` to exclude output from history
-- Reference secrets from Parameter Store/Secrets Manager
-- Redact sensitive fields before returning from Lambda
-
-**Cost Impact:** Compliance violations; security incidents.
-
----
-
-### Pitfall 4: Not Using Service Integrations
-
-**Problem:** Writing Lambda functions to call DynamoDB, SNS, SQS when Step Functions can call directly.
-
-**Solution:** Use optimized integrations for DynamoDB, SNS, SQS, etc.
-
-**Cost Impact:**
-- Unnecessary Lambda invocation costs
-- Increased development/maintenance burden
-- Additional latency
-
----
-
-### Pitfall 5: Not Handling Errors
-
-**Problem:** No retry or catch blocks; workflow fails on first transient error.
-
-**Solution:** Add retry logic for transient errors; catch blocks for fallback behavior.
-
-```json
-{
-  "Retry": [
-    {
-      "ErrorEquals": ["States.TaskFailed"],
-      "MaxAttempts": 3,
-      "BackoffRate": 2.0
-    }
-  ],
-  "Catch": [
-    {
-      "ErrorEquals": ["States.ALL"],
-      "Next": "ErrorHandler"
-    }
-  ]
-}
-```
-
-**Cost Impact:** Workflow failures require manual intervention; lost business.
-
----
-
-### Pitfall 6: Exceeding Execution History Limit (Standard)
-
-**Problem:** Standard workflows limited to 25,000 events in execution history.
-
-**Example:** Map state processing 10,000 items with 3 states each = 30,000 events (exceeds limit).
-
-**Solution:** Use Distributed Map (child executions have separate history).
-
-**Cost Impact:** Execution fails; data processing incomplete.
-
----
-
-### Pitfall 7: Not Monitoring Failed Executions
-
-**Problem:** Executions fail silently; no alerts.
-
-**Solution:** CloudWatch alarm on `ExecutionsFailed` metric.
-
-**Cost Impact:** Business impact from undetected failures.
+That gap is why high-volume, short, repeatable work belongs on Express, while Standard's per-step price buys exactly-once steps, long waits, and history. A Standard execution waiting a week for an approval costs no more than one that finishes in a second, since waiting isn't a transition.
 
 ---
 
 ## Key Takeaways
 
-1. **Step Functions orchestrates distributed workflows with visual state machines.** Define workflows declaratively in Amazon States Language; Step Functions handles execution, error handling, retries.
-
-2. **Choose Standard for long-running, auditable workflows.** Standard supports up to 1 year, exactly-once execution, and full history. Choose Express for high-volume, short-duration workflows. Express supports up to 5 minutes, 100,000 requests/sec, and at-least-once execution.
-
-3. **Step Functions provides 8 state types for workflow control.** Task (invoke service), Choice (conditional), Parallel (concurrent branches), Map (iterate array), Wait (delay), Pass (transform), Succeed/Fail (terminal states).
-
-4. **Built-in error handling eliminates custom retry logic.** Retry with exponential backoff, max attempts, backoff rate. Catch blocks define fallback states for errors.
-
-5. **Service integrations call 220+ AWS services without Lambda glue code.** DynamoDB, SNS, SQS, ECS, Batch, Glue, and SageMaker are all callable directly from state machine.
-
-6. **Use .sync pattern for long-running jobs (ECS, Batch, Glue).** Step Functions waits for job completion; no polling required.
-
-7. **Use .waitForTaskToken for human approvals and external callbacks.** State machine pauses until external system calls SendTaskSuccess/SendTaskFailure API.
-
-8. **Orchestration (Step Functions) provides central visibility; choreography (EventBridge) provides loose coupling.** Use Step Functions for complex workflows with conditional logic. Use EventBridge for event distribution to independent services. Combine both for hybrid approach.
-
-9. **Standard workflows cost $0.025 per 1,000 state transitions; Express costs based on requests and duration.** For high-volume short workflows, Express saves 90%+ vs Standard.
-
-10. **Set timeouts on all Task states to prevent runaway executions.** Default timeout is 99,999,999 seconds; set appropriate timeout based on expected duration.
-
-11. **Use service integrations instead of Lambda glue code to reduce costs.** DynamoDB putItem, SNS publish, SQS sendMessage callable directly; eliminates Lambda invocation and duration costs.
-
-12. **Standard workflows provide full execution history for 90 days.** Express workflows use CloudWatch Logs instead. Execution history shows every state transition, input/output, and errors. This is critical for debugging and compliance.
-
-13. **Use Distributed Map for large datasets (millions of items).** Standard Map limited to 40 concurrent iterations; Distributed Map scales to 10,000 child executions, reads from S3.
-
-14. **Monitor ExecutionsFailed metric and set CloudWatch alarms.** Failed executions indicate workflow issues; alert on-call for investigation.
-
-15. **Use Parallel state for concurrent execution of independent tasks.** Reduces total workflow duration; all branches execute simultaneously.
-
-**AWS Step Functions is the strategic service for orchestrating distributed workflows on AWS, providing visual workflow designer, built-in error handling, service integrations, and execution history that enable complex business processes without custom coordination code. Choose Standard for long-running, auditable workflows and Express for high-volume, cost-sensitive event processing.**
+- Step Functions runs multi-step processes as state machines, calling services, retrying, branching, and recording each step, so failures are handled declaratively and every execution is visible.
+- Choose Standard for business processes, long waits, and steps that must run exactly once. Choose Express for high-volume work under 5 minutes whose steps are safe to repeat.
+- Write new state machines with JSONata and variables, and call AWS services through SDK integrations rather than Lambda functions that only pass data along.
+- Retry transient errors with backoff and jitter, catch the rest, give every task a timeout, and use compensating steps to undo work when a later step fails.
+- Use the callback pattern to wait for people and external systems, and Distributed Map to process large datasets in S3 with up to 10,000 parallel child executions.
+- Standard workflows bill per state transition and Express per execution and duration, so the same workload can differ in cost by more than an order of magnitude.
+{% endraw %}

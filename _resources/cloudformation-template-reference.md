@@ -3,637 +3,320 @@ title: "CloudFormation Template Reference"
 layout: resource
 type: cheatsheet
 category: "AWS"
-description: "CloudFormation intrinsic functions, parameter types and constraints, mappings, conditions, and pseudo parameters, each with a YAML example."
-last_updated: 2026-09-24
+description: "CloudFormation intrinsic functions (including cross-stack references), parameter types and constraints, mappings, conditions, rules, dynamic references, and pseudo parameters, each with a YAML example."
+last_updated: 2026-09-25
 tags: [cloudformation, intrinsic-functions, yaml, iac, templates]
 related_guides:
   - /study-guides/infrastructure/aws/cloudformation-fundamentals.html
   - /study-guides/infrastructure/aws/cloudformation-advanced.html
 ---
+{% raw %}
 
 ## Intrinsic Functions
 
-**Intrinsic functions** are built-in functions that help manage stacks, evaluated at stack creation/update time.
+Functions CloudFormation evaluates while it deploys the stack. Each has a short YAML form (`!Ref`) and a full form (`Ref:` or `Fn::GetAtt:`).
 
 ### Ref
 
-Returns the value of a parameter or resource.
-
-**For parameters:** Returns parameter value
-**For resources:** Returns resource ID (varies by type)
+A parameter's value, or a resource's main identifier (which one depends on the type, such as an instance ID or a queue URL).
 
 ```yaml
-Parameters:
-  KeyName:
-    Type: String
-
 Resources:
   WebServer:
     Type: AWS::EC2::Instance
     Properties:
-      KeyName: !Ref KeyName  # Returns parameter value
-      SubnetId: !Ref PublicSubnet  # Returns subnet ID
+      InstanceType: !Ref InstanceType   # parameter value
+      SubnetId: !Ref PublicSubnet       # subnet ID
 ```
 
-**Short form:** `!Ref LogicalName`
-**Full form:** `Fn::Ref: LogicalName`
+Full form: `Ref: LogicalName`.
 
 ### GetAtt
 
-Returns attribute of a resource.
+Another attribute of a resource. Each type's reference page lists its attributes.
 
 ```yaml
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-0c55b159cbfafe1f0
-
 Outputs:
-  PublicIP:
-    Value: !GetAtt WebServer.PublicIp
-  PrivateIP:
-    Value: !GetAtt WebServer.PrivateIp
-  AvailabilityZone:
-    Value: !GetAtt WebServer.AvailabilityZone
+  QueueArn:
+    Value: !GetAtt OrdersQueue.Arn
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
 ```
 
-**Short form:** `!GetAtt LogicalName.AttributeName`
-**Full form:** `Fn::GetAtt: [LogicalName, AttributeName]`
-
-**Common attributes by resource:**
-- EC2 Instance: `PublicIp`, `PrivateIp`, `AvailabilityZone`
-- S3 Bucket: `Arn`, `DomainName`, `WebsiteURL`
-- RDS: `Endpoint.Address`, `Endpoint.Port`
+Full form: `Fn::GetAtt: [LogicalName, AttributeName]`.
 
 ### Sub
 
-Substitutes variables in a string.
+A string with `${...}` values substituted from parameters, resource IDs, attributes, and pseudo parameters.
 
 ```yaml
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-WebServer-${AWS::Region}
-        - Key: Description
-          Value: !Sub |
-            Web server for ${EnvironmentName} environment
-            Deployed in ${AWS::Region}
+Tags:
+  - Key: Name
+    Value: !Sub ${Environment}-web-${AWS::Region}
+
+# With explicit variables
+Value: !Sub
+  - 'arn:${AWS::Partition}:s3:::${BucketName}/*'
+  - BucketName: !Ref ArchiveBucket
 ```
 
-**Variables:**
-- Template parameters: `${ParameterName}`
-- Resources: `${LogicalName}`
-- Pseudo-parameters: `${AWS::Region}`, `${AWS::AccountId}`, etc.
+### Join and Split
 
-**With explicit mapping:**
+Join a list into one string, or split a string into a list.
+
 ```yaml
-!Sub
-  - 'arn:aws:ec2:${Region}:${Account}:vpc/${VpcId}'
-  - Region: !Ref AWS::Region
-    Account: !Ref AWS::AccountId
-    VpcId: !Ref VPC
+!Join [',', [!Ref SubnetA, !Ref SubnetB]]   # "subnet-1,subnet-2"
+!Split [',', 'subnet-1,subnet-2']            # [subnet-1, subnet-2]
 ```
 
-### Join
+### Select, GetAZs, and Cidr
 
-Joins array elements with delimiter.
-
-```yaml
-!Join
-  - ','
-  - - !Ref PublicSubnet1
-    - !Ref PublicSubnet2
-    - !Ref PublicSubnet3
-
-# Returns: subnet-123,subnet-456,subnet-789
-```
-
-### Split
-
-Splits string into array.
+Pick an element from a list, list the Region's Availability Zones, or carve a CIDR block into subnets.
 
 ```yaml
-!Split
-  - ','
-  - 'subnet-123,subnet-456,subnet-789'
-
-# Returns: [subnet-123, subnet-456, subnet-789]
-```
-
-### Select
-
-Returns single element from array.
-
-```yaml
-!Select
-  - 0  # Index
-  - !GetAZs ''  # Array
-
-# Returns first AZ
-```
-
-### GetAZs
-
-Returns list of Availability Zones.
-
-```yaml
-!GetAZs ''  # Current region
-!GetAZs 'us-east-1'  # Specific region
-
-# Returns: [us-east-1a, us-east-1b, us-east-1c, ...]
+AvailabilityZone: !Select [0, !GetAZs '']            # first AZ in this Region
+CidrBlock: !Select [0, !Cidr [!GetAtt VPC.CidrBlock, 6, 8]]
+# !Cidr [base, count, host bits]: 6 blocks with 8 host bits (/24s from a /16)
 ```
 
 ### FindInMap
 
-Returns value from Mappings section.
+A value from the `Mappings` section, by top-level key and second-level key.
 
 ```yaml
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c55b159cbfafe1f0
-    us-west-2:
-      AMI: ami-0d1cd67c26f5fca19
-
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+InstanceType: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
 ```
 
 ### ImportValue
 
-Returns value exported by another stack.
+A value another stack in the same account and Region exported from its `Outputs`.
 
 ```yaml
-# Stack 1: Export value
+# Exporting stack
 Outputs:
-  VPCId:
+  VpcId:
     Value: !Ref VPC
     Export:
-      Name: MyVPC-ID
+      Name: !Sub ${AWS::StackName}-VpcId
 
-# Stack 2: Import value
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      SubnetId: !ImportValue MyVPC-PublicSubnet
+# Importing stack
+Properties:
+  VpcId: !ImportValue network-prod-VpcId
 ```
+
+### GetStackOutput
+
+An output of another stack, read directly without an export, in the same or another account and Region (since May 2026). The reference is weak, so the producer can still change or delete the output.
+
+```yaml
+SubnetId:
+  Fn::GetStackOutput:
+    StackName: network-prod
+    OutputName: PrivateSubnetA
+    Region: us-west-2                                             # optional
+    RoleArn: arn:aws:iam::111111111111:role/ReadNetworkOutputs    # optional, for another account
+```
+
+Use the full `Fn::GetStackOutput:` form whenever a parameter value uses another short form such as `!Ref`.
 
 ### If
 
-Conditional return based on condition evaluation.
+One of two values depending on a condition. `AWS::NoValue` removes the property instead.
 
 ```yaml
-Conditions:
-  IsProduction: !Equals [!Ref EnvironmentName, prod]
-
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: !If [IsProduction, t2.large, t2.micro]
-```
-
-### Cidr
-
-Generates CIDR blocks.
-
-```yaml
-!Cidr
-  - !GetAtt VPC.CidrBlock  # Base CIDR
-  - 6  # Number of subnets
-  - 8  # Subnet bits
-
-# For VPC 10.0.0.0/16, returns:
-# [10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24, ...]
+MultiAZ: !If [IsProd, true, false]
+SnapshotIdentifier: !If [RestoreFromSnapshot, !Ref SnapshotId, !Ref AWS::NoValue]
 ```
 
 ### Base64
 
-Encodes string to Base64.
+Base64-encodes a string, as EC2 user data requires.
 
 ```yaml
+UserData:
+  Fn::Base64: !Sub |
+    #!/bin/bash
+    echo "Environment: ${Environment}" > /etc/app-environment
+```
+
+### Language Extensions
+
+The `AWS::LanguageExtensions` transform adds `Fn::ForEach` (repeat a resource for each item in a list), `Fn::Length`, `Fn::ToJsonString`, and a default value for `Fn::FindInMap`. These functions have no short YAML forms, so write `Fn::Length:`, not `!Length`.
+
+```yaml
+Transform: AWS::LanguageExtensions
 Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          echo "Environment: ${EnvironmentName}" > /etc/environment
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
+  Fn::ForEach::Topics:
+    - TopicName
+    - [Orders, Payments, Refunds]
+    - ${TopicName}Topic:
+        Type: AWS::SNS::Topic
 ```
 
 ---
 
 ## Parameters
 
-**Parameters** allow users to input custom values when creating/updating stacks.
+Values supplied at deployment. The type determines what's accepted and how the console prompts for it.
 
-### Parameter Types
+| Type | Accepts |
+|---|---|
+| `String`, `Number` | Plain values |
+| `CommaDelimitedList`, `List<Number>` | Lists |
+| `AWS::EC2::VPC::Id`, `AWS::EC2::Subnet::Id`, `List<AWS::EC2::Subnet::Id>`, `AWS::EC2::SecurityGroup::Id`, and similar | Existing resource IDs, validated against the account |
+| `AWS::SSM::Parameter::Value<String>`, `AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>`, and similar | The name of a Parameter Store parameter, whose current value is read at deployment |
 
-**String:**
 ```yaml
 Parameters:
-  EnvironmentName:
+  Environment:
     Type: String
+    AllowedValues: [dev, staging, prod]
     Default: dev
-    Description: Environment name (dev, staging, prod)
-```
 
-**Number:**
-```yaml
-Parameters:
   InstanceCount:
     Type: Number
     Default: 2
     MinValue: 1
     MaxValue: 10
-```
 
-**List:**
-```yaml
-Parameters:
-  AvailabilityZones:
-    Type: List<AWS::EC2::AvailabilityZone::Name>
-    Description: Select at least 2 AZs
-```
+  LatestAmiId:   # always the latest Amazon Linux 2023 AMI for this Region
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
-**CommaDelimitedList:**
-```yaml
-Parameters:
-  SubnetIds:
-    Type: CommaDelimitedList
-    Description: List of subnet IDs (comma-separated)
-```
-
-**AWS-Specific Types:**
-```yaml
-Parameters:
-  KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
-
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC for deployment
-
-  SubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnets for load balancer
-
-  SecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Security group
-```
-
-### Parameter Constraints
-
-```yaml
-Parameters:
-  InstanceType:
-    Type: String
-    Default: t2.micro
-    AllowedValues:
-      - t2.micro
-      - t2.small
-      - t2.medium
-      - t2.large
-    Description: EC2 instance type
-
-  DatabasePassword:
-    Type: String
-    NoEcho: true  # Hide value in console/CLI
-    MinLength: 8
-    MaxLength: 64
-    AllowedPattern: ^[a-zA-Z0-9]*$
-    ConstraintDescription: Must be 8-64 alphanumeric characters
-
-  CIDR:
+  VpcCidr:
     Type: String
     Default: 10.0.0.0/16
     AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
-    ConstraintDescription: Must be valid CIDR notation
+    ConstraintDescription: Must be a CIDR block such as 10.0.0.0/16
 ```
 
-### Parameter Groups (Console UI)
+`NoEcho: true` masks a parameter's value in the console and API output, but the value can still appear elsewhere, so pass secrets with a dynamic reference instead (below).
+
+### Parameter Groups
+
+How the console groups and labels parameters, set in `Metadata`.
 
 ```yaml
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: "Network Configuration"
-        Parameters:
-          - VpcCIDR
-          - PublicSubnet1CIDR
-          - PublicSubnet2CIDR
+          default: Network
+        Parameters: [VpcCidr]
       - Label:
-          default: "Instance Configuration"
-        Parameters:
-          - InstanceType
-          - KeyName
-          - SSHLocation
+          default: Compute
+        Parameters: [InstanceCount, LatestAmiId]
     ParameterLabels:
-      VpcCIDR:
-        default: "VPC CIDR Block"
-      InstanceType:
-        default: "Instance Type"
+      VpcCidr:
+        default: VPC CIDR block
 ```
 
 ---
 
 ## Mappings
 
-**Mappings** are fixed lookup tables for values based on keys.
+Fixed lookup tables, two levels deep, read with `!FindInMap`.
 
 ```yaml
 Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c55b159cbfafe1f0
-      InstanceType: t2.micro
-    us-west-2:
-      AMI: ami-0d1cd67c26f5fca19
-      InstanceType: t2.small
-    eu-west-1:
-      AMI: ami-0ea3405d2d2522162
-      InstanceType: t2.micro
-
   EnvironmentConfig:
     dev:
-      InstanceType: t2.micro
+      InstanceType: t4g.small
       MinSize: 1
-      MaxSize: 2
     prod:
-      InstanceType: t2.large
-      MinSize: 2
-      MaxSize: 10
-
-Resources:
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: !FindInMap
-        - EnvironmentConfig
-        - !Ref EnvironmentName
-        - InstanceType
+      InstanceType: m7g.large
+      MinSize: 3
 ```
 
 ---
 
 ## Conditions
 
-**Conditions** control whether resources are created or properties are defined.
-
-### Defining Conditions
+Named true-or-false expressions, built from `!Equals`, `!And`, `!Or`, `!Not`, and references to other conditions, with `!Ref` and `!FindInMap` usable inside them.
 
 ```yaml
-Parameters:
-  EnvironmentName:
-    Type: String
-    AllowedValues: [dev, staging, prod]
-
-  CreateBackup:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-
 Conditions:
-  IsProduction: !Equals [!Ref EnvironmentName, prod]
-  IsNotProduction: !Not [!Equals [!Ref EnvironmentName, prod]]
-  IsDevelopment: !Equals [!Ref EnvironmentName, dev]
-
-  CreateBackupResources: !And
-    - !Equals [!Ref CreateBackup, 'true']
-    - !Equals [!Ref EnvironmentName, prod]
-
-  CreateMultiAZ: !Or
-    - !Equals [!Ref EnvironmentName, prod]
-    - !Equals [!Ref EnvironmentName, staging]
+  IsProd: !Equals [!Ref Environment, prod]
+  IsNotDev: !Not [!Equals [!Ref Environment, dev]]
+  NeedsReplica: !And
+    - Condition: IsProd
+    - !Equals [!Ref CreateReplica, 'true']
 ```
 
-### Condition Functions
+Conditions apply to whole resources, to individual properties through `!If`, and to outputs.
 
-**Equals:**
-```yaml
-!Equals [!Ref EnvironmentName, prod]
-```
-
-**Not:**
-```yaml
-!Not [!Equals [!Ref EnvironmentName, dev]]
-```
-
-**And:**
-```yaml
-!And
-  - !Equals [!Ref EnvironmentName, prod]
-  - !Equals [!Ref CreateBackup, 'true']
-```
-
-**Or:**
-```yaml
-!Or
-  - !Equals [!Ref EnvironmentName, prod]
-  - !Equals [!Ref EnvironmentName, staging]
-```
-
-### Using Conditions
-
-**Conditional resources:**
 ```yaml
 Resources:
-  # Only create in production
-  BackupVault:
-    Type: AWS::Backup::BackupVault
-    Condition: IsProduction
+  ReadReplica:
+    Type: AWS::RDS::DBInstance
+    Condition: NeedsReplica
     Properties:
-      BackupVaultName: ProductionBackup
+      SourceDBInstanceIdentifier: !Ref Database
+      DBInstanceClass: db.r8g.large
 
-  # Create in all environments except dev
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: IsNotProduction
-    Properties:
-      Name: MyALB
-```
-
-**Conditional properties:**
-```yaml
-Resources:
   Database:
     Type: AWS::RDS::DBInstance
     Properties:
-      Engine: postgres
-      MultiAZ: !If [CreateMultiAZ, true, false]
-      BackupRetentionPeriod: !If [IsProduction, 30, 7]
-      StorageEncrypted: !If [IsProduction, true, false]
+      MultiAZ: !If [IsProd, true, false]
+      BackupRetentionPeriod: !If [IsProd, 30, 7]
+
+Outputs:
+  ReplicaEndpoint:
+    Condition: NeedsReplica
+    Value: !GetAtt ReadReplica.Endpoint.Address
 ```
 
-**Conditional outputs:**
+---
+
+## Rules
+
+Checks on parameter values that run before CloudFormation touches any resource, failing the operation with a message. Rule-specific functions such as `Fn::Contains` have no short YAML form.
+
 ```yaml
-Outputs:
-  ProductionURL:
-    Condition: IsProduction
-    Value: !Sub https://prod.example.com
-    Description: Production URL
+Rules:
+  ProdUsesLargeInstances:
+    RuleCondition: !Equals [!Ref Environment, prod]
+    Assertions:
+      - Assert:
+          Fn::Contains: [[m7g.large, m7g.xlarge], !Ref InstanceType]
+        AssertDescription: Production needs m7g.large or m7g.xlarge
+```
+
+---
+
+## Dynamic References
+
+Values CloudFormation reads from Parameter Store or Secrets Manager at deployment, without them appearing in the template or in parameter values. A template can hold 60, and they can't be used in EC2 `UserData` or `AWS::CloudFormation::Init`.
+
+```yaml
+# Parameter Store String or StringList (a specific version with :version)
+QueueUrl: '{{resolve:ssm:/orders/prod/queue-url}}'
+
+# Parameter Store SecureString (only on a short list of properties, such as RDS MasterUserPassword)
+MasterUserPassword: '{{resolve:ssm-secure:/orders/prod/db-password}}'
+
+# Secrets Manager (secret, then SecretString and a JSON key), usable on any property
+MasterUserPassword: '{{resolve:secretsmanager:prod/db:SecretString:password}}'
 ```
 
 ---
 
 ## Pseudo Parameters
 
-**Pseudo parameters** are predefined by CloudFormation and can be referenced like regular parameters.
+Values CloudFormation always provides, used with `!Ref` or inside `!Sub`.
+
+| Pseudo parameter | Value |
+|---|---|
+| `AWS::AccountId` | The account ID |
+| `AWS::Region` | The Region, such as `us-east-1` |
+| `AWS::Partition` | The partition, such as `aws`, `aws-cn`, or `aws-us-gov`, for building ARNs that work in every partition |
+| `AWS::URLSuffix` | The domain suffix, usually `amazonaws.com` |
+| `AWS::StackName`, `AWS::StackId` | The stack's name and ID |
+| `AWS::NotificationARNs` | The stack's SNS notification topics |
+| `AWS::NoValue` | Removes a property when returned by `!If` |
 
 ```yaml
-AWS::AccountId       # AWS account ID
-AWS::NotificationARNs  # Notification ARNs
-AWS::NoValue         # Removes corresponding property
-AWS::Partition       # AWS partition (aws, aws-cn, aws-us-gov)
-AWS::Region          # AWS region
-AWS::StackId         # Stack ID
-AWS::StackName       # Stack name
-AWS::URLSuffix       # Domain suffix (amazonaws.com, amazonaws.com.cn)
+BucketName: !Sub archive-${AWS::AccountId}-${AWS::Region}
+Resource: !Sub arn:${AWS::Partition}:s3:::${ArchiveBucket}/*
 ```
-
-**Examples:**
-```yaml
-Resources:
-  MyBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub data-${AWS::AccountId}-${AWS::Region}
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-
-  MyRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: !Sub ec2.${AWS::URLSuffix}
-            Action: sts:AssumeRole
-```
-
----
-
-## Complete Example
-
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Multi-environment VPC with web server
-
-Parameters:
-  EnvironmentName:
-    Type: String
-    Default: dev
-    AllowedValues: [dev, staging, prod]
-    Description: Environment name
-
-  VpcCIDR:
-    Type: String
-    Default: 10.0.0.0/16
-    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
-
-Mappings:
-  EnvironmentConfig:
-    dev:
-      InstanceType: t2.micro
-      MultiAZ: false
-    staging:
-      InstanceType: t2.small
-      MultiAZ: true
-    prod:
-      InstanceType: t2.large
-      MultiAZ: true
-
-Conditions:
-  IsProduction: !Equals [!Ref EnvironmentName, prod]
-  CreateMultiAZ: !FindInMap [EnvironmentConfig, !Ref EnvironmentName, MultiAZ]
-
-Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCIDR
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-VPC
-
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 6, 8]]
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-Public-1
-
-  WebServer:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-0c55b159cbfafe1f0
-      InstanceType: !FindInMap [EnvironmentConfig, !Ref EnvironmentName, InstanceType]
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-WebServer
-        - Key: Environment
-          Value: !Ref EnvironmentName
-
-  ProductionAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub ${EnvironmentName}-HighCPU
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-
-Outputs:
-  VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
-    Export:
-      Name: !Sub ${AWS::StackName}-VPCID
-
-  WebServerIP:
-    Description: Web server public IP
-    Value: !GetAtt WebServer.PublicIp
-
-  WebServerURL:
-    Description: Web server URL
-    Value: !Sub http://${WebServer.PublicDnsName}
-
-  EnvironmentInfo:
-    Description: Environment information
-    Value: !Sub |
-      Environment: ${EnvironmentName}
-      Region: ${AWS::Region}
-      Account: ${AWS::AccountId}
-      Stack: ${AWS::StackName}
-```
-
----
-
+{% endraw %}

@@ -3,7 +3,7 @@ layout: guide
 title: "Microkernel Architecture"
 category: Architecture
 subcategory: Styles
-description: "The plug-in style that separates a minimal core system from independent plug-ins: the core, registry, and plug-in contracts, in-process versus remote plug-ins, when the style fits product platforms, and how it goes wrong."
+description: "The plug-in style that separates a minimal core system from independent plug-ins: what belongs in the core, how the core finds and calls plug-ins through contracts, in-process versus remote plug-ins, when the style fits product platforms, and how it goes wrong."
 tags: [practical, microkernel-architecture, plug-in-architecture, extensibility, plug-in-contracts, product-platforms]
 ---
 
@@ -17,27 +17,23 @@ The style shows up in products sold to many customers with different needs, in e
 
 ## How It Works
 
-The topology has three parts: a core system, a registry of plug-ins, and the plug-ins themselves. When the core needs extended behavior, it looks up the right plug-in in the registry and invokes it through a contract.
+The core runs the workflow every customer shares. Wherever behavior varies, it looks up which plug-in handles the case at hand and calls that plug-in through a contract the core defines. An invoicing product shows the shape. The core creates, numbers, stores, and sends invoices for every customer, while each country's e-invoicing rules, such as the format its tax authority requires and how an invoice must be submitted, live in a plug-in for that country.
 
 {% include figure.html id="arch-microkernel" %}
 
-### Core System
+### Deciding What the Core Owns
 
-The core implements the minimum functionality the system needs to work, the part that applies to every use case. In a tax preparation product, the core handles the common calculations, form generation, and filing, and each state's rules live in a plug-in.
+The core holds only what applies to every use of the product. Everything that differs between customers, markets, or regulations is a candidate for a plug-in.
 
-The core must stay stable, because frequent changes to its interfaces break plug-ins. Design it carefully up front. Some extra upfront design is justified here, since a more deliberate core costs less than repeatedly changing the contracts every plug-in depends on.
+The core must stay stable, because a change to how it calls plug-ins is a change to every plug-in. That justifies more upfront design than usual. Getting the core's boundaries right the first time costs less than repeatedly changing the contracts every plug-in depends on.
 
-### Registry
+### Finding the Right Plug-in
 
-The registry tracks which plug-ins exist and what each one handles. A simple registry is a configuration file listing plug-in names and locations. A more sophisticated one supports runtime discovery, where plug-ins register themselves when they load.
+The core needs a way to answer three questions at runtime: which plug-ins are installed, which one handles this case, and what happens when two of them claim the same case. The simplest answer is a configuration file listing each plug-in, its location, and what it handles. More capable systems let plug-ins register themselves as they load, so installing one requires no change to the core's configuration.
 
-The registry answers the core's questions: which plug-ins are available, which one handles California tax rules, and what happens when two plug-ins claim the same capability.
+### Calling Through a Contract
 
-### Plug-ins and Their Contracts
-
-Plug-ins implement specific functionality against contracts the core defines. A contract specifies the data a plug-in receives, the behavior it provides, and what it returns. Each plug-in knows how to work with the core and stays independent of every other plug-in.
-
-Most systems define a **standard contract** that all plug-ins of a kind implement. When a plug-in comes from a third party with its own interface, an **adapter** translates between that interface and the standard contract, so the core never needs special cases for individual plug-ins.
+The core defines a contract for each kind of plug-in, specifying the data a plug-in receives, the behavior it provides, and what it returns. Every plug-in of that kind implements the same contract, so the core calls an Italian e-invoicing plug-in exactly as it calls a German one. When a plug-in comes from a third party with its own interface, an adapter translates between that interface and the contract, and the core never needs a special case.
 
 <div class="callout callout--warning">
 <p class="callout__title">Plug-ins Don't Depend on Each Other</p>
@@ -65,29 +61,15 @@ Some ecosystems do support plug-in dependencies with explicit dependency managem
 
 Remote plug-ins don't turn the style into a fully distributed architecture. Every plug-in still depends on the core to do anything useful, so the system usually remains a single architecture quantum, with the core as its center.
 
-## Characteristics
-
-Ratings are relative to other architecture styles, not measurements.
-
-| Characteristic | Rating | Notes |
-|----------------|--------|-------|
-| **Simplicity** | ⭐⭐⭐⭐ | Clear separation between core and plug-ins |
-| **Evolvability** | ⭐⭐⭐⭐⭐ | New features arrive as plug-ins without changing the core |
-| **Modularity** | ⭐⭐⭐⭐⭐ | Each variation lives in its own plug-in |
-| **Testability** | ⭐⭐⭐⭐ | Plug-ins can be tested independently against the contract |
-| **Deployability** | ⭐⭐⭐ | Depends on whether plug-ins are in-process or remote |
-| **Cost** | ⭐⭐⭐ | More design effort than a layered system, less infrastructure than a distributed one |
-| **Scalability** | ⭐⭐ | The core often becomes a bottleneck |
-
 ## Real-World Examples
 
-### IDEs
+### Code Editors
 
-The Eclipse platform is built almost entirely from plug-ins on a small runtime, with language support, refactoring tools, debuggers, and version control integration all delivered as plug-ins. Developers install only what they need.
+Visual Studio Code keeps a comparatively small core for editing, file management, and the user interface, and delivers language support, debuggers, linters, and themes as extensions. Developers install only what they work with.
 
-### Tax Preparation Software
+### E-Invoicing
 
-The core implements federal tax rules and form generation, and state-specific plug-ins handle each state's requirements. A customer in California gets the California plug-in, and a customer in Texas never pays for it. The core stays stable while state rules change independently.
+Governments increasingly require invoices in a mandated electronic format submitted through a national platform, and the requirements differ by country and change on each country's schedule. An invoicing product that keeps each country's rules in a plug-in can ship a new mandate without touching the core, and a customer who trades in one country never loads the others.
 
 ### Content Management Systems
 
@@ -103,7 +85,7 @@ The browser core handles rendering, security, and navigation, and extensions add
 
 **A stable core with well-understood variation points.** The team can tell what changes often, which belongs in plug-ins, from what stays stable, which belongs in the core. That takes domain understanding.
 
-**Customers or third parties who extend the product.** Plug-in APIs let others add functionality without modifying the base product.
+**Customers or third parties who extend the product.** Plug-in APIs let others add functionality without modifying the base product, and each plug-in can be tested on its own against the contract.
 
 **Geographic or regulatory variation.** Core business logic stays consistent while rules vary by location, jurisdiction, or regulation, as in tax, healthcare, and compliance software.
 

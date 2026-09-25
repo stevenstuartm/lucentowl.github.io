@@ -1,0 +1,75 @@
+---
+title: "Superseded and Queued Executions"
+kind: dynamic
+system: aws
+summary: "In SUPERSEDED mode a newer waiting execution replaces an older one; in QUEUED mode both wait their turn."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" role="img" aria-labelledby="awscpm-title awscpm-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awscpm-title">How SUPERSEDED and QUEUED execution modes handle waiting executions</title>
+<desc id="awscpm-desc">Two copies of a pipeline with Build, Staging, and Production stages. In both, execution 1 is inside the Staging stage, which is locked, and executions 2 and 3 have finished Build and are waiting in front of Staging. In SUPERSEDED mode, the default, execution 3 replaces execution 2, which never enters Staging; when execution 1 finishes, execution 3 goes next, carrying execution 2's commits with it. In QUEUED mode, executions 2 and 3 wait in order, and each enters Staging and then Production in turn.</desc>
+<style>
+.awscpm-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awscpm-lock { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awscpm-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awscpm-ln2 { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awscpm-mode { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awscpm-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awscpm-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awscpm-tok { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awscpm-gone { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.awscpm-tt { font-size: 11px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awscpm-tg { font-size: 11px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awscpm-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awscpm-rep { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.3; }
+</style>
+<defs>
+<marker id="awscpm-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awscpm-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awscpm-mode" x="20" y="80">SUPERSEDED</text>
+<text class="awscpm-k" x="20" y="96">(default)</text>
+
+<rect class="awscpm-box" x="150" y="50" width="170" height="60" rx="6"/>
+<text class="awscpm-n" x="235" y="85" text-anchor="middle">Build</text>
+<rect class="awscpm-lock" x="470" y="50" width="170" height="60" rx="6"/>
+<text class="awscpm-ln2" x="530" y="78" text-anchor="middle">Staging</text>
+<text class="awscpm-k" x="530" y="95" text-anchor="middle">[locked]</text>
+<circle class="awscpm-tok" cx="605" cy="80" r="14"/>
+<text class="awscpm-tt" x="605" y="84" text-anchor="middle">#1</text>
+<rect class="awscpm-box" x="790" y="50" width="170" height="60" rx="6"/>
+<text class="awscpm-n" x="875" y="85" text-anchor="middle">Production</text>
+
+<path class="awscpm-ln" d="M320,98 L468,98" marker-end="url(#awscpm-a)"/>
+<path class="awscpm-ln" d="M640,80 L788,80" marker-end="url(#awscpm-a)"/>
+<circle class="awscpm-gone" cx="365" cy="68" r="14"/>
+<text class="awscpm-tg" x="365" y="72" text-anchor="middle">#2</text>
+<circle class="awscpm-tok" cx="430" cy="68" r="14"/>
+<text class="awscpm-tt" x="430" y="72" text-anchor="middle">#3</text>
+<path class="awscpm-rep" d="M414,60 L383,60" marker-end="url(#awscpm-b)"/>
+
+<text class="awscpm-lab" x="150" y="140">#3 replaces #2, which never enters Staging. When #1 finishes, #3 goes next, carrying #2's commits with it.</text>
+
+<text class="awscpm-mode" x="20" y="240">QUEUED</text>
+
+<rect class="awscpm-box" x="150" y="210" width="170" height="60" rx="6"/>
+<text class="awscpm-n" x="235" y="245" text-anchor="middle">Build</text>
+<rect class="awscpm-lock" x="470" y="210" width="170" height="60" rx="6"/>
+<text class="awscpm-ln2" x="530" y="238" text-anchor="middle">Staging</text>
+<text class="awscpm-k" x="530" y="255" text-anchor="middle">[locked]</text>
+<circle class="awscpm-tok" cx="605" cy="240" r="14"/>
+<text class="awscpm-tt" x="605" y="244" text-anchor="middle">#1</text>
+<rect class="awscpm-box" x="790" y="210" width="170" height="60" rx="6"/>
+<text class="awscpm-n" x="875" y="245" text-anchor="middle">Production</text>
+
+<path class="awscpm-ln" d="M320,258 L468,258" marker-end="url(#awscpm-a)"/>
+<path class="awscpm-ln" d="M640,240 L788,240" marker-end="url(#awscpm-a)"/>
+<circle class="awscpm-tok" cx="365" cy="228" r="14"/>
+<text class="awscpm-tt" x="365" y="232" text-anchor="middle">#3</text>
+<circle class="awscpm-tok" cx="430" cy="228" r="14"/>
+<text class="awscpm-tt" x="430" y="232" text-anchor="middle">#2</text>
+
+<text class="awscpm-lab" x="150" y="300">#2 and #3 wait in the order they arrived. Each enters Staging, and then Production, in turn.</text>
+</g>
+</svg>

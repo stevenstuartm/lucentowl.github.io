@@ -1,0 +1,78 @@
+---
+title: "From CDK Code to Deployed Resources"
+kind: flow
+system: aws
+summary: "Synthesis produces templates and assets; bootstrap roles deploy them."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 360" role="img" aria-labelledby="awscd-title awscd-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awscd-title">How a CDK app is synthesized and deployed</title>
+<desc id="awscd-desc">On a developer machine or in a pipeline, cdk synth runs the CDK app and writes a cloud assembly to cdk.out, containing a CloudFormation template per stack and the assets, such as Lambda code and container images. cdk deploy then uploads the assets to the bootstrap bucket and ECR repository using the file and image publishing roles, and hands the template to CloudFormation using the deployment role. CloudFormation creates the resources using the CloudFormation execution role, and resources such as Lambda functions reference their assets in the bucket. The bucket, repository, and roles belong to the bootstrap stack, CDKToolkit, deployed once per account and Region.</desc>
+<style>
+.awscd-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awscd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awscd-boot { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awscd-res { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awscd-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awscd-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awscd-bn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awscd-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awscd-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awscd-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awscd-cmd { font-size: 11px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awscd-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awscd-ref { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+</style>
+<defs>
+<marker id="awscd-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awscd-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awscd-pan" x="20" y="20" width="270" height="280" rx="8"/>
+<text class="awscd-h" x="35" y="40">Developer machine or pipeline</text>
+
+<rect class="awscd-box" x="45" y="60" width="230" height="56" rx="6"/>
+<text class="awscd-n" x="160" y="84" text-anchor="middle">CDK app</text>
+<text class="awscd-k" x="160" y="102" text-anchor="middle">[constructs in TypeScript, C#, ...]</text>
+
+<path class="awscd-ln" d="M160,116 L160,198" marker-end="url(#awscd-a)"/>
+<text class="awscd-cmd" x="170" y="160">cdk synth</text>
+
+<rect class="awscd-box" x="45" y="200" width="230" height="70" rx="6"/>
+<text class="awscd-n" x="160" y="224" text-anchor="middle">Cloud assembly</text>
+<text class="awscd-k" x="160" y="242" text-anchor="middle">[cdk.out]</text>
+<text class="awscd-lab" x="160" y="258" text-anchor="middle">a template per stack, plus assets</text>
+
+<rect class="awscd-pan" x="400" y="20" width="560" height="280" rx="8"/>
+<text class="awscd-h" x="415" y="40">Target account and Region (bootstrapped)</text>
+
+<rect class="awscd-boot" x="490" y="60" width="230" height="56" rx="6"/>
+<text class="awscd-bn" x="605" y="84" text-anchor="middle">Asset bucket and ECR repository</text>
+<text class="awscd-k" x="605" y="102" text-anchor="middle">[from the CDKToolkit stack]</text>
+
+<rect class="awscd-res" x="490" y="210" width="230" height="56" rx="6"/>
+<text class="awscd-t" x="605" y="234" text-anchor="middle">CloudFormation</text>
+<text class="awscd-k" x="605" y="252" text-anchor="middle">[deploys each stack]</text>
+
+<rect class="awscd-res" x="780" y="210" width="160" height="56" rx="6"/>
+<text class="awscd-t" x="860" y="243" text-anchor="middle">Your resources</text>
+
+<path class="awscd-ln" d="M275,215 L320,215 L320,88 L488,88" marker-end="url(#awscd-a)"/>
+<text class="awscd-cmd" x="327" y="150">cdk deploy</text>
+<text class="awscd-lab" x="445" y="80" text-anchor="middle">assets</text>
+
+<path class="awscd-ln" d="M275,250 L488,250" marker-end="url(#awscd-a)"/>
+<text class="awscd-lab" x="445" y="242" text-anchor="middle">template</text>
+
+<path class="awscd-ln" d="M720,238 L778,238" marker-end="url(#awscd-a)"/>
+<text class="awscd-lab" x="749" y="200" text-anchor="middle">execution</text>
+<text class="awscd-lab" x="749" y="214" text-anchor="middle">role</text>
+
+<path class="awscd-ref" d="M860,210 L860,88 L722,88" marker-end="url(#awscd-b)"/>
+<text class="awscd-lab" x="852" y="150" text-anchor="end">resources reference</text>
+<text class="awscd-lab" x="852" y="164" text-anchor="end">their assets</text>
+
+<text class="awscd-lab" x="20" y="326">Assets are uploaded with the file and image publishing roles, the template with the deployment role, and CloudFormation acts with the execution role.</text>
+<text class="awscd-lab" x="20" y="344">All belong to the bootstrap stack, deployed once per account and Region. The execution role has AdministratorAccess unless bootstrapped with narrower policies.</text>
+</g>
+</svg>

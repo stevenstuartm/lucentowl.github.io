@@ -1,0 +1,118 @@
+---
+title: "Shards, Partition Keys, and Consumer Positions"
+kind: structure
+system: aws
+summary: "Records ordered within a shard, read by consumers at their own pace."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 380" role="img" aria-labelledby="awsks-title awsks-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsks-title">A Kinesis data stream with three shards and two consumers</title>
+<desc id="awsks-desc">Producers write records with a partition key. A hash of the key picks the shard, so every record with key A lands in shard 1, and keys B and D share shard 2 while C and E share shard 3. Within each shard, records are stored in order of their sequence numbers, oldest on the left. Two consumers read the same records independently, each keeping its own position in every shard, marked by short dashed lines. Consumer A has read almost to the newest records; consumer B is further behind. Records stay in the stream for the retention period, 24 hours by default and up to 365 days, whether or not anyone has read them, and expire after it.</desc>
+<style>
+.awsks-lane { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsks-rec { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.2; }
+.awsks-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsks-rk { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsks-sh { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsks-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsks-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsks-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsks-la { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsks-lb { font-size: 11px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsks-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awsks-ca { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2; stroke-dasharray: 6 4; }
+.awsks-cb { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; stroke-dasharray: 6 4; }
+.awsks-br { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; }
+</style>
+<defs>
+<marker id="awsks-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsks-app" x="20" y="150" width="140" height="64" rx="6"/>
+<text class="awsks-t" x="90" y="176" text-anchor="middle">Producers</text>
+<text class="awsks-k" x="90" y="194" text-anchor="middle">[record + partition key]</text>
+<path class="awsks-ln" d="M160,182 L180,182"/>
+<path class="awsks-ln" d="M180,102 L180,262"/>
+<path class="awsks-ln" d="M180,102 L188,102" marker-end="url(#awsks-a)"/>
+<path class="awsks-ln" d="M180,182 L188,182" marker-end="url(#awsks-a)"/>
+<path class="awsks-ln" d="M180,262 L188,262" marker-end="url(#awsks-a)"/>
+<text class="awsks-lab" x="90" y="240" text-anchor="middle">hash of the key</text>
+<text class="awsks-lab" x="90" y="254" text-anchor="middle">picks the shard</text>
+
+<text class="awsks-lab" x="262" y="66">oldest</text>
+<text class="awsks-lab" x="880" y="66" text-anchor="end">newest (sequence numbers increase)</text>
+
+<rect class="awsks-lane" x="240" y="80" width="640" height="44" rx="6"/>
+<text class="awsks-sh" x="232" y="107" text-anchor="end">Shard 1</text>
+<rect class="awsks-rec" x="262" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="274" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="332" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="344" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="402" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="414" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="472" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="484" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="542" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="554" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="612" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="624" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="682" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="694" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="752" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="764" y="107" text-anchor="middle">A</text>
+<rect class="awsks-rec" x="822" y="90" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="834" y="107" text-anchor="middle">A</text>
+<rect class="awsks-lane" x="240" y="160" width="640" height="44" rx="6"/>
+<text class="awsks-sh" x="232" y="187" text-anchor="end">Shard 2</text>
+<rect class="awsks-rec" x="262" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="274" y="187" text-anchor="middle">B</text>
+<rect class="awsks-rec" x="332" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="344" y="187" text-anchor="middle">D</text>
+<rect class="awsks-rec" x="402" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="414" y="187" text-anchor="middle">B</text>
+<rect class="awsks-rec" x="472" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="484" y="187" text-anchor="middle">B</text>
+<rect class="awsks-rec" x="542" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="554" y="187" text-anchor="middle">D</text>
+<rect class="awsks-rec" x="612" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="624" y="187" text-anchor="middle">B</text>
+<rect class="awsks-rec" x="682" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="694" y="187" text-anchor="middle">D</text>
+<rect class="awsks-rec" x="752" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="764" y="187" text-anchor="middle">D</text>
+<rect class="awsks-rec" x="822" y="170" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="834" y="187" text-anchor="middle">B</text>
+<rect class="awsks-lane" x="240" y="240" width="640" height="44" rx="6"/>
+<text class="awsks-sh" x="232" y="267" text-anchor="end">Shard 3</text>
+<rect class="awsks-rec" x="262" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="274" y="267" text-anchor="middle">C</text>
+<rect class="awsks-rec" x="332" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="344" y="267" text-anchor="middle">E</text>
+<rect class="awsks-rec" x="402" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="414" y="267" text-anchor="middle">E</text>
+<rect class="awsks-rec" x="472" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="484" y="267" text-anchor="middle">C</text>
+<rect class="awsks-rec" x="542" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="554" y="267" text-anchor="middle">E</text>
+<rect class="awsks-rec" x="612" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="624" y="267" text-anchor="middle">C</text>
+<rect class="awsks-rec" x="682" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="694" y="267" text-anchor="middle">C</text>
+<rect class="awsks-rec" x="752" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="764" y="267" text-anchor="middle">E</text>
+<rect class="awsks-rec" x="822" y="250" width="24" height="24" rx="3"/>
+<text class="awsks-rk" x="834" y="267" text-anchor="middle">C</text>
+
+<path class="awsks-cb" d="M514,74 L514,130"/>
+<path class="awsks-cb" d="M444,154 L444,210"/>
+<path class="awsks-cb" d="M584,234 L584,290"/>
+<path class="awsks-ca" d="M744,74 L744,130"/>
+<path class="awsks-ca" d="M674,154 L674,210"/>
+<path class="awsks-ca" d="M814,234 L814,290"/>
+<text class="awsks-lb" x="514" y="312" text-anchor="middle">Consumer B's positions</text>
+<text class="awsks-la" x="744" y="312" text-anchor="middle">Consumer A's positions</text>
+
+<path class="awsks-br" d="M240,332 L240,340 L880,340 L880,332"/>
+<text class="awsks-lab" x="560" y="360" text-anchor="middle">Retention window, 24 hours by default and up to 365 days. Records expire from the oldest end, read or not.</text>
+</g>
+</svg>

@@ -92,21 +92,6 @@ A modular monolith's boundaries exist only in code, so they erode unless somethi
 
 **Data ownership rules.** Per-module database schemas and permissions stop modules from reaching into each other's tables even when the code would allow it.
 
-## Characteristics
-
-Ratings are relative to other architecture styles, not measurements.
-
-| Characteristic | Rating | Notes |
-|----------------|--------|-------|
-| **Modularity** | ⭐⭐⭐⭐⭐ | Domain-based modules with explicit interfaces |
-| **Cost** | ⭐⭐⭐⭐⭐ | One application to run, with no distributed infrastructure |
-| **Simplicity** | ⭐⭐⭐⭐ | Simpler than microservices, more structured than layered |
-| **Evolvability** | ⭐⭐⭐⭐ | Modules change internally without affecting each other |
-| **Testability** | ⭐⭐⭐⭐ | Modules can be tested behind their interfaces |
-| **Deployability** | ⭐⭐⭐ | One deployment is simple, but every change ships the whole application |
-| **Scalability** | ⭐⭐ | The application scales as a unit, not per module |
-| **Fault tolerance** | ⭐⭐ | A failing module can take down the shared process |
-
 ## When a Modular Monolith Fits
 
 **New systems whose domain is still being learned.** Boundaries can be discovered and adjusted while refactoring stays cheap. If services become necessary later, well-defined modules make extraction easier.
@@ -121,7 +106,7 @@ Ratings are relative to other architecture styles, not measurements.
 
 ## When to Avoid a Modular Monolith
 
-**Modules need different operational characteristics.** If one module needs much higher availability than the rest, or a very different scaling profile, a single deployment can't provide it without providing it to everything.
+**Modules need different operational characteristics.** If one module needs much higher availability than the rest, or a very different scaling profile, a single deployment can't provide it without providing it to everything. A failing module can also take down the process every other module shares.
 
 **Independent deployment is critical.** If teams must release changes without coordinating with the rest of the codebase, separately deployed services earn their operational cost.
 

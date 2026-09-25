@@ -2,11 +2,11 @@
 title: "Microkernel Core and Plug-ins"
 kind: component
 system: architecture-styles
-summary: "A core with a registry, and plug-ins reached through contracts."
+summary: "A core that looks up the right plug-in and calls it through a contract."
 ---
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" role="img" aria-labelledby="amk-title amk-desc" style="width:100%; min-width:680px; height:auto; display:block;">
-<title id="amk-title">Microkernel architecture: core system, registry, and plug-ins</title>
-<desc id="amk-desc">A core system holds the minimal shared behavior and a registry of plug-ins. It reaches three state tax plug-ins, California, Texas, and New York, each through a contract. Plug-ins talk to the core through contracts and never to each other.</desc>
+<title id="amk-title">Microkernel architecture: a core that finds plug-ins and calls them through contracts</title>
+<desc id="amk-desc">A core runs the workflow every customer shares and keeps a registry of plug-ins. It reaches three country e-invoicing plug-ins, Italy, Germany, and France, each through a contract. Plug-ins talk to the core through contracts and never to each other.</desc>
 <style>
 .amk-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
 .amk-mute { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
@@ -28,8 +28,8 @@ summary: "A core with a registry, and plug-ins reached through contracts."
 
 <g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
 <rect class="amk-box" x="190" y="24" width="520" height="150" rx="6"/>
-<text class="amk-n" x="204" y="48">Core system</text>
-<text class="amk-k" x="204" y="66">[minimal shared behavior]</text>
+<text class="amk-n" x="204" y="48">Core</text>
+<text class="amk-k" x="204" y="66">[workflow every customer shares]</text>
 <text class="amk-s" x="204" y="83">looks up the right plug-in, then invokes it</text>
 <text class="amk-s" x="204" y="100">through its contract</text>
 <rect class="amk-mute" x="470" y="44" width="220" height="110" rx="6"/>
@@ -38,17 +38,17 @@ summary: "A core with a registry, and plug-ins reached through contracts."
 <text class="amk-s" x="484" y="103">and what each handles</text>
 <rect class="amk-box" x="190" y="250" width="140" height="70" rx="6"/>
 <text class="amk-n" x="260.0" y="280.5" text-anchor="middle">Plug-in</text>
-<text class="amk-k" x="260.0" y="298.5" text-anchor="middle">[California rules]</text>
+<text class="amk-k" x="260.0" y="298.5" text-anchor="middle">[Italy e-invoicing]</text>
 <path class="amk-flow" d="M 260,174 L 260,244" marker-end="url(#amk-a)"/>
 <text class="amk-lab" x="268" y="214">contract</text>
 <rect class="amk-box" x="380" y="250" width="140" height="70" rx="6"/>
 <text class="amk-n" x="450.0" y="280.5" text-anchor="middle">Plug-in</text>
-<text class="amk-k" x="450.0" y="298.5" text-anchor="middle">[Texas rules]</text>
+<text class="amk-k" x="450.0" y="298.5" text-anchor="middle">[Germany e-invoicing]</text>
 <path class="amk-flow" d="M 450,174 L 450,244" marker-end="url(#amk-a)"/>
 <text class="amk-lab" x="458" y="214">contract</text>
 <rect class="amk-box" x="570" y="250" width="140" height="70" rx="6"/>
 <text class="amk-n" x="640.0" y="280.5" text-anchor="middle">Plug-in</text>
-<text class="amk-k" x="640.0" y="298.5" text-anchor="middle">[New York rules]</text>
+<text class="amk-k" x="640.0" y="298.5" text-anchor="middle">[France e-invoicing]</text>
 <path class="amk-flow" d="M 640,174 L 640,244" marker-end="url(#amk-a)"/>
 <text class="amk-lab" x="648" y="214">contract</text>
 <path class="amk-redd" d="M 330,300 H 374"/>

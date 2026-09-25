@@ -6,7 +6,7 @@ summary: "Requests served from memory, with the database off the request path."
 ---
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" role="img" aria-labelledby="asp-title asp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
 <title id="asp-title">Space-based architecture topology</title>
-<desc id="asp-desc">Requests reach a messaging grid, which routes each one to a processing unit holding application code and in-memory data. A deployment manager starts and stops units as load changes. A data grid replicates changes between units asynchronously. A data pump carries changes asynchronously to a data writer, which applies them to the database. A data reader loads data from the database into units that start cold. No request waits on the database.</desc>
+<desc id="asp-desc">A router sends each request to a processing unit holding application code and in-memory data. An autoscaler starts and stops units as load changes. An in-memory data grid replicates changes between units asynchronously. Changes queue behind the requests, and a writer applies them to the database later. A loader fills units that start empty from the database. No request waits on the database.</desc>
 <style>
 .asp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
 .asp-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
@@ -36,11 +36,11 @@ summary: "Requests served from memory, with the database off the request path."
 <rect class="asp-ext" x="40" y="24" width="150" height="44" rx="6"/>
 <text class="asp-n-mute" x="115.0" y="50.0" text-anchor="middle">Requests</text>
 <rect class="asp-box" x="260" y="20" width="230" height="52" rx="6"/>
-<text class="asp-n" x="375.0" y="41.5" text-anchor="middle">Messaging grid</text>
-<text class="asp-k" x="375.0" y="59.5" text-anchor="middle">routes each request to a unit</text>
+<text class="asp-n" x="375.0" y="41.5" text-anchor="middle">Request router</text>
+<text class="asp-k" x="375.0" y="59.5" text-anchor="middle">sends each request to a unit</text>
 <path class="asp-flow" d="M 190,46 L 254,46" marker-end="url(#asp-a)"/>
 <rect class="asp-box" x="640" y="20" width="220" height="52" rx="6"/>
-<text class="asp-n" x="750.0" y="41.5" text-anchor="middle">Deployment manager</text>
+<text class="asp-n" x="750.0" y="41.5" text-anchor="middle">Autoscaler</text>
 <text class="asp-k" x="750.0" y="59.5" text-anchor="middle">starts and stops units on load</text>
 <rect class="asp-box" x="110" y="120" width="210" height="60" rx="6"/>
 <text class="asp-n" x="215.0" y="145.5" text-anchor="middle">Processing unit</text>
@@ -55,24 +55,24 @@ summary: "Requests served from memory, with the database off the request path."
 <path class="asp-flow" d="M 410,72 C 410,96 465,96 465,114" marker-end="url(#asp-a)"/>
 <path class="asp-mut" d="M 750,72 V 114" marker-end="url(#asp-m)"/>
 <rect class="asp-mute" x="110" y="214" width="710" height="32" rx="6"/>
-<text class="asp-s" x="465.0" y="234.5" text-anchor="middle">data grid: replicates changes between units, asynchronously</text>
+<text class="asp-s" x="465.0" y="234.5" text-anchor="middle">in-memory data grid: replicates changes between units, asynchronously</text>
 <path class="asp-ctl" d="M 215,186 V 208" marker-end="url(#asp-c)" marker-start="url(#asp-c)"/>
 <path class="asp-ctl" d="M 465,186 V 208" marker-end="url(#asp-c)" marker-start="url(#asp-c)"/>
 <path class="asp-ctl" d="M 715,186 V 208" marker-end="url(#asp-c)" marker-start="url(#asp-c)"/>
 <path class="asp-ctl" d="M 200,246 V 318" marker-end="url(#asp-c)"/>
-<text class="asp-labc" x="212" y="284">data pump (asynchronous)</text>
+<text class="asp-labc" x="212" y="284">write-behind queue (asynchronous)</text>
 <rect class="asp-box" x="110" y="324" width="180" height="44" rx="6"/>
-<text class="asp-n" x="200.0" y="350.0" text-anchor="middle">Data writer</text>
+<text class="asp-n" x="200.0" y="350.0" text-anchor="middle">Database writer</text>
 <path class="asp-flow" d="M 290,346 L 384,346" marker-end="url(#asp-a)"/>
 <rect class="asp-sys" x="390" y="324" width="180" height="44" rx="6"/>
 <text class="asp-n-inv" x="480.0" y="341.5" text-anchor="middle">Database</text>
 <text class="asp-k-inv" x="480.0" y="359.5" text-anchor="middle">durable storage</text>
 <path class="asp-flow" d="M 570,346 L 634,346" marker-end="url(#asp-a)"/>
 <rect class="asp-box" x="640" y="324" width="180" height="44" rx="6"/>
-<text class="asp-n" x="730.0" y="350.0" text-anchor="middle">Data reader</text>
+<text class="asp-n" x="730.0" y="350.0" text-anchor="middle">Cold-start loader</text>
 <path class="asp-ctl" d="M 820,346 H 856 V 150 H 826" marker-end="url(#asp-c)"/>
-<text class="asp-labc" x="846" y="292" text-anchor="end">loads data into units</text>
-<text class="asp-labc" x="846" y="308" text-anchor="end">that start cold</text>
+<text class="asp-labc" x="846" y="292" text-anchor="end">fills units</text>
+<text class="asp-labc" x="846" y="308" text-anchor="end">that start empty</text>
 <text class="asp-note" x="110" y="404">No request waits on the database.</text>
 <path class="asp-flow" d="M 110,428 H 144"/>
 <text class="asp-el" x="152" y="432">request or data access</text>

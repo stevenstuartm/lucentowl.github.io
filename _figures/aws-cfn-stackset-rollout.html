@@ -1,0 +1,72 @@
+---
+title: "A StackSet Rolling Out Across Accounts and Regions"
+kind: dynamic
+system: aws
+summary: "One template deployed to every account in an OU, a few at a time."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 380" role="img" aria-labelledby="awsss-title awsss-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsss-title">A service-managed StackSet deploying to an organizational unit</title>
+<desc id="awsss-desc">A StackSet in the administrator account holds one template and its parameters. It targets the Workloads organizational unit in two Regions. With maximum concurrent accounts set to two, a failure tolerance of one, and Regions deployed in sequence, stack instances are created in us-east-1 two accounts at a time, each next account starting as soon as one finishes, and eu-west-1 starts when us-east-1 is done. Failures within a Region count against the failure tolerance, which stops the operation if exceeded. With automatic deployment on, account E, added to the OU later, receives its stack instances without any change to the StackSet.</desc>
+<style>
+.awsss-ou { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 5 4; }
+.awsss-adm { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awsss-cell { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.3; }
+.awsss-newc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.awsss-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsss-col { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsss-acct { font-size: 12px; font-weight: 700; fill: var(--color-text, #2D3748); }
+.awsss-newl { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsss-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsss-ct { font-size: 11px; fill: var(--color-primary, #1A5F8A); }
+.awsss-newt { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsss-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsss-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsss-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="awsss-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsss-adm" x="20" y="150" width="210" height="76" rx="6"/>
+<text class="awsss-an" x="125" y="176" text-anchor="middle">StackSet</text>
+<text class="awsss-k" x="125" y="194" text-anchor="middle">[administrator account]</text>
+<text class="awsss-k" x="125" y="210" text-anchor="middle">one template + parameters</text>
+<path class="awsss-ln" d="M230,188 L298,188" marker-end="url(#awsss-a)"/>
+
+<rect class="awsss-ou" x="300" y="30" width="660" height="310" rx="8"/>
+<text class="awsss-h" x="315" y="47">Workloads OU (service-managed, automatic deployment on)</text>
+<text class="awsss-col" x="525" y="68" text-anchor="middle">us-east-1 (first)</text>
+<text class="awsss-k" x="525" y="83" text-anchor="middle">two accounts at a time</text>
+<text class="awsss-col" x="805" y="68" text-anchor="middle">eu-west-1 (second)</text>
+<text class="awsss-k" x="805" y="83" text-anchor="middle">starts when us-east-1 finishes</text>
+
+<text class="awsss-acct" x="330" y="115">Account A</text>
+<rect class="awsss-cell" x="440" y="93" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="525" y="114" text-anchor="middle">stack instance</text>
+<rect class="awsss-cell" x="720" y="93" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="805" y="114" text-anchor="middle">stack instance</text>
+<text class="awsss-acct" x="330" y="165">Account B</text>
+<rect class="awsss-cell" x="440" y="143" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="525" y="164" text-anchor="middle">stack instance</text>
+<rect class="awsss-cell" x="720" y="143" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="805" y="164" text-anchor="middle">stack instance</text>
+<text class="awsss-acct" x="330" y="215">Account C</text>
+<rect class="awsss-cell" x="440" y="193" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="525" y="214" text-anchor="middle">stack instance</text>
+<rect class="awsss-cell" x="720" y="193" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="805" y="214" text-anchor="middle">stack instance</text>
+<text class="awsss-acct" x="330" y="265">Account D</text>
+<rect class="awsss-cell" x="440" y="243" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="525" y="264" text-anchor="middle">stack instance</text>
+<rect class="awsss-cell" x="720" y="243" width="170" height="34" rx="5"/>
+<text class="awsss-ct" x="805" y="264" text-anchor="middle">stack instance</text>
+<text class="awsss-newl" x="330" y="315">Account E</text>
+<rect class="awsss-newc" x="440" y="293" width="170" height="34" rx="5"/>
+<text class="awsss-newt" x="525" y="314" text-anchor="middle">added when the account joins</text>
+<rect class="awsss-newc" x="720" y="293" width="170" height="34" rx="5"/>
+<text class="awsss-newt" x="805" y="314" text-anchor="middle">added when the account joins</text>
+
+<text class="awsss-lab" x="20" y="366">Maximum concurrent accounts is 2 and failure tolerance is 1, so strict mode also runs two at a time. Each account starts as soon as a slot frees up.</text>
+</g>
+</svg>

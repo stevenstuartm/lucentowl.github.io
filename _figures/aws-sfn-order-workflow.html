@@ -1,0 +1,71 @@
+---
+title: "An Order Workflow with a Compensating Step"
+kind: flow
+system: aws
+summary: "Three tasks in order, with retries and a catch that undoes the reservation."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 320" role="img" aria-labelledby="awssf-title awssf-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awssf-title">The order state machine from the example definition</title>
+<desc id="awssf-desc">The execution starts at ReserveInventory, a Lambda task that retries transient Lambda service errors up to six times. It moves on to ChargeCard, another Lambda task, then to SaveOrder, a DynamoDB putItem task that ends the execution. If ChargeCard fails with PaymentDeclined, its Catch sends the execution to ReleaseInventory, which undoes the reservation and retries the same errors, and then to OrderFailed, a Fail state that ends the execution as failed.</desc>
+<style>
+.awssf-st { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awssf-comp { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awssf-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awssf-cn { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awssf-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awssf-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awssf-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+.awssf-catch { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.awssf-dot { fill: var(--color-text, #2D3748); }
+.awssf-ring { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="awssf-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awssf-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<circle class="awssf-dot" cx="30" cy="95" r="8"/>
+<text class="awssf-lab" x="30" y="125" text-anchor="middle">start</text>
+
+<rect class="awssf-st" x="70" y="70" width="170" height="50" rx="6"/>
+<text class="awssf-n" x="155" y="91" text-anchor="middle">ReserveInventory</text>
+<text class="awssf-k" x="155" y="108" text-anchor="middle">[Task: Lambda]</text>
+
+<rect class="awssf-st" x="310" y="70" width="170" height="50" rx="6"/>
+<text class="awssf-n" x="395" y="91" text-anchor="middle">ChargeCard</text>
+<text class="awssf-k" x="395" y="108" text-anchor="middle">[Task: Lambda]</text>
+
+<rect class="awssf-st" x="550" y="70" width="170" height="50" rx="6"/>
+<text class="awssf-n" x="635" y="91" text-anchor="middle">SaveOrder</text>
+<text class="awssf-k" x="635" y="108" text-anchor="middle">[Task: DynamoDB putItem]</text>
+
+<circle class="awssf-ring" cx="790" cy="95" r="10"/>
+<circle class="awssf-dot" cx="790" cy="95" r="5"/>
+<text class="awssf-lab" x="790" y="125" text-anchor="middle">succeeded</text>
+
+<rect class="awssf-comp" x="310" y="200" width="170" height="50" rx="6"/>
+<text class="awssf-cn" x="395" y="221" text-anchor="middle">ReleaseInventory</text>
+<text class="awssf-k" x="395" y="238" text-anchor="middle">[Task: Lambda]</text>
+
+<rect class="awssf-comp" x="550" y="200" width="170" height="50" rx="6"/>
+<text class="awssf-cn" x="635" y="221" text-anchor="middle">OrderFailed</text>
+<text class="awssf-k" x="635" y="238" text-anchor="middle">[Fail]</text>
+
+<path class="awssf-ln" d="M38,95 L68,95" marker-end="url(#awssf-a)"/>
+<path class="awssf-ln" d="M240,95 L308,95" marker-end="url(#awssf-a)"/>
+<path class="awssf-ln" d="M480,95 L548,95" marker-end="url(#awssf-a)"/>
+<path class="awssf-ln" d="M720,95 L778,95" marker-end="url(#awssf-a)"/>
+
+<path class="awssf-ln" d="M125,70 C125,30 185,30 185,68" marker-end="url(#awssf-a)"/>
+<text class="awssf-lab" x="155" y="25" text-anchor="middle">Retry: Lambda service errors, up to 6 attempts</text>
+
+<path class="awssf-catch" d="M395,120 L395,198" marker-end="url(#awssf-b)"/>
+<text class="awssf-lab" x="405" y="163">Catch: PaymentDeclined</text>
+<path class="awssf-ln" d="M480,225 L548,225" marker-end="url(#awssf-a)"/>
+<path class="awssf-ln" d="M365,250 C365,284 425,284 425,252" marker-end="url(#awssf-a)"/>
+<text class="awssf-lab" x="440" y="280">Retry: same errors</text>
+
+<text class="awssf-lab" x="30" y="308">Solid arrows are each state's Next transition. The dashed arrow is the Catch path, taken only when ChargeCard fails with PaymentDeclined.</text>
+</g>
+</svg>

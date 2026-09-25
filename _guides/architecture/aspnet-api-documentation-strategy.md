@@ -50,9 +50,9 @@ API key management needs particular care. Customers should create, rotate, and r
 
 ### Deploying the Portal Apart from the API
 
-The portal deploys, scales, and updates independently of the API, so a documentation release can't take down the API and an API release can't break the docs. That independence comes from separate deployments, and it works whether the portal lives on its own subdomain (`developer.yourproduct.com`) or on a path routed to a separate site (`yourproduct.com/docs`). A subdomain adds one thing a path can't: a separate browser origin, so the portal's cookies and content security policy are isolated from the product's.
+The portal deploys, scales, and updates independently of the API, so a documentation release can't take down the API and an API release can't break the docs. That independence comes from separate deployments, and it works whether the portal lives on its own subdomain (`developer.yourproduct.com`) or on a path routed to a separate site (`yourproduct.com/docs`). A subdomain adds one thing a path can't. It gives the portal its own browser origin (the scheme, host, and port that browsers use to decide what a page's scripts may touch), so a script running on the portal can't read the product's host-only cookies or browser storage.
 
-The split also separates caching, CDN, and security configuration. Portal content is mostly static and caches aggressively at the CDN. The API needs different caching, different security headers, and different scaling. A typical setup builds the portal as a static site from the OpenAPI specs plus hand-written guides, serves it through a CDN, and lets it call the API only for interactive features such as the try-it console.
+The split also separates caching, CDN, and security configuration. Portal content is mostly static and caches aggressively at the CDN. The API needs different caching, different security headers, and different scaling. A typical setup builds the portal as a static site from the OpenAPI specs plus hand-written guides, serves it through a CDN, and lets it call the API only for interactive features such as the try-it console. On a separate origin, those calls are cross-origin requests, so the API (or its sandbox) has to allow the portal's origin through CORS, along with the `Authorization` header if the console sends the customer's API key or token.
 
 ## Separating Public and Internal API Surfaces
 
@@ -74,7 +74,7 @@ The other drift runs the dangerous way. Because an unassigned endpoint lands in 
 
 ## The OpenAPI Spec Pipeline
 
-Serving the spec from the production API exposes the surface to anyone who finds the endpoint and ties documentation to the API's availability. Generating it during the build instead turns the spec into an artifact of that build, a frozen record of exactly what the build exposes. In ASP.NET Core, `Microsoft.Extensions.ApiDescription.Server` writes the documents during `dotnet build`, and the versioning and OpenAPI guide linked above covers the mechanics. From there, each document goes through two checks before the public one reaches the portal.
+Serving the spec from the production API exposes the surface to anyone who finds the endpoint and ties documentation to the API's availability. Generating it during the build instead turns the spec into an artifact of that build, a frozen record of exactly what the build exposes. In ASP.NET Core, `Microsoft.Extensions.ApiDescription.Server` writes the documents during `dotnet build`, and the versioning and OpenAPI guide linked above covers the mechanics. From there, the public document goes through two checks before it reaches the portal.
 
 {% include figure.html id="des-spec-pipeline" %}
 

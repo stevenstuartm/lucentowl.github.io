@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | [`domain-map-guide.md`](.claude/content/domain-map-guide.md) | Writing or editing a domain component map — the resource recording how a domain's components wire together |
 | [`learning-path-guide.md`](.claude/content/learning-path-guide.md) | Writing or editing a learning path — what qualifies, the front matter format, "why" lines, isolation, validation |
 | [`figure-guide.md`](.claude/content/figure-guide.md) | Drawing a diagram as a figure, composing figures into a composite resource, or embedding one in a guide |
+| [`derivation-check.md`](.claude/content/derivation-check.md) | Checking any content for borrowed form: scores, grids, coined terms, or counted taxonomies that trace to one source without naming it. Runs as Quality Checklist item 10, in `guide-reviewer`, and in `/review-publishable` |
 | [`guide-presentation-standard.md`](.claude/content/guide-presentation-standard.md) | Cheap refinement of existing guides — form, tone, prose, tables, diagrams, tags — without re-verifying facts. Use when a standard changed or a guide reads badly |
 | [`guide-refinement-standard.md`](.claude/content/guide-refinement-standard.md) | Depth refinement of a block of study guides — factual verification, gaps, consolidation (Phase 0), the plan doc in `_drafts/`. Runs the presentation standard as its last step. Use when facts may be stale or the guide set is rough |
 
@@ -243,7 +244,7 @@ Ordered routes through existing content toward a goal, at `/learning-paths.html`
 - **Files:** `_learning_paths/<id>.md` (the whole path in front matter, sorted by `order`, no config file), `_layouts/learning-path.html`, `_layouts/learning-paths.html`, `_includes/learning-path-stats.html` (step count, reading time, categories crossed), `_sass/_learning-paths.scss`, `pages/learning-paths.md`.
 - **Paths are isolated.** A path points to pages; no page points back. Never add path links, "part of this path" notes, or path-aware navigation to guide, resource, case study, or post layouts or content.
 - **Moving or deleting content means running `python .pathcheck.py`.** It resolves every step URL and checks the authoring rules. A step that doesn't resolve also renders as a visible "Missing step".
-- **No reader state.** The path page is the navigation. Step anchors (`#step-7`) and the browser's own `:visited` color are the only "progress", and the site stores nothing.
+- **No reader state.** The path page is the navigation, and its step links open in a new tab so it stays open while the reader wanders. Step anchors (`#step-7`) and the browser's own `:visited` color are the only "progress", and the site stores nothing.
 - The design history and the candidate path catalogue are in `_drafts/learning-paths-plan.md`.
 
 ## What's New Stack

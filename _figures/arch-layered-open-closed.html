@@ -1,22 +1,21 @@
 ---
-title: "Closed and Open Layers"
+title: "Strict and Relaxed Layering"
 kind: layering
 system: architecture-styles
-summary: "Requests pass through closed layers and may skip an open one."
+summary: "Requests normally pass down one layer at a time, and a documented relaxed path may skip one."
 ---
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" role="img" aria-labelledby="alo-title alo-desc" style="width:100%; min-width:680px; height:auto; display:block;">
-<title id="alo-title">Closed and open layers in a layered architecture</title>
-<desc id="alo-desc">Presentation, business, persistence, and database layers are stacked. Presentation, business, and persistence are closed, so a request passes through each in turn. A shared services layer sits below business and is marked open. The business layer can call the shared services, which call persistence, or skip the open layer and call persistence directly.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="alo-title alo-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="alo-title">Strict and relaxed layering in a layered architecture</title>
+<desc id="alo-desc">Presentation, business, persistence, and database layers are stacked. On the strict path, a request passes down one layer at a time, from presentation to business to persistence to the database. On a relaxed path, reporting reads go from presentation straight to persistence, skipping the business layer. Each relaxed path is a dependency that crosses a layer boundary.</desc>
 <style>
 .alo-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
 .alo-sys { fill: var(--color-primary, #1A5F8A); stroke: var(--color-hover, #134C72); stroke-width: 1.5; }
-.alo-ext { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .alo-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
 .alo-n-inv { font-size: 12.5px; font-weight: 700; fill: #FFFFFF; }
-.alo-n-mute { font-size: 12.5px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
 .alo-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
 .alo-labr { font-size: 11.5px; font-weight: 600; fill: var(--color-accent, #A5486E); }
 .alo-note { font-size: 11.5px; fill: var(--color-text, #2C3E50); }
+.alo-el { font-size: 11px; fill: var(--color-text, #2C3E50); }
 .alo-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
 .alo-redd { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 4; }
 </style>
@@ -27,30 +26,28 @@ summary: "Requests pass through closed layers and may skip an open one."
 </defs>
 
 <g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-<rect class="alo-box" x="150" y="24" width="460" height="52" rx="6"/>
+<rect class="alo-box" x="150" y="24" width="380" height="52" rx="6"/>
 <text class="alo-n" x="164" y="46">Presentation</text>
-<text class="alo-k" x="164" y="64">closed: a request cannot skip it</text>
-<rect class="alo-box" x="150" y="110" width="460" height="52" rx="6"/>
-<text class="alo-n" x="164" y="132">Business</text>
-<text class="alo-k" x="164" y="150">closed</text>
-<rect class="alo-ext" x="150" y="196" width="300" height="52" rx="6"/>
-<text class="alo-n-mute" x="164" y="218">Shared services</text>
-<text class="alo-k" x="164" y="236">open: can be bypassed</text>
-<rect class="alo-box" x="150" y="282" width="460" height="52" rx="6"/>
-<text class="alo-n" x="164" y="304">Persistence</text>
-<text class="alo-k" x="164" y="322">closed</text>
-<rect class="alo-sys" x="150" y="368" width="460" height="52" rx="6"/>
-<text class="alo-n-inv" x="164" y="399">Database</text>
-<path class="alo-flow" d="M 380,76 L 380,104" marker-end="url(#alo-a)"/>
-<path class="alo-flow" d="M 260,162 L 260,190" marker-end="url(#alo-a)"/>
-<path class="alo-flow" d="M 260,248 L 260,276" marker-end="url(#alo-a)"/>
-<path class="alo-redd" d="M 540,162 V 276" marker-end="url(#alo-r)"/>
-<text class="alo-labr" x="552" y="224">skips the open layer</text>
-<path class="alo-flow" d="M 380,334 L 380,362" marker-end="url(#alo-a)"/>
-<text class="alo-note" x="640" y="60">Closed layers create layers of</text>
-<text class="alo-note" x="640" y="78">isolation: each layer knows only</text>
-<text class="alo-note" x="640" y="96">the interface beneath it.</text>
-<text class="alo-note" x="640" y="300">Every open layer adds a dependency</text>
-<text class="alo-note" x="640" y="318">that crosses layer boundaries.</text>
+<text class="alo-k" x="164" y="64">user interaction and API endpoints</text>
+<rect class="alo-box" x="150" y="124" width="380" height="52" rx="6"/>
+<text class="alo-n" x="164" y="146">Business</text>
+<text class="alo-k" x="164" y="164">domain rules and workflows</text>
+<rect class="alo-box" x="150" y="224" width="380" height="52" rx="6"/>
+<text class="alo-n" x="164" y="246">Persistence</text>
+<text class="alo-k" x="164" y="264">data access behind interfaces</text>
+<rect class="alo-sys" x="150" y="324" width="380" height="52" rx="6"/>
+<text class="alo-n-inv" x="164" y="355">Database</text>
+<path class="alo-flow" d="M 340,76 L 340,118" marker-end="url(#alo-a)"/>
+<path class="alo-flow" d="M 340,176 L 340,218" marker-end="url(#alo-a)"/>
+<path class="alo-flow" d="M 340,276 L 340,318" marker-end="url(#alo-a)"/>
+<path class="alo-redd" d="M 530,50 H 570 V 250 H 536" marker-end="url(#alo-r)"/>
+<text class="alo-labr" x="584" y="142">relaxed path: reporting reads</text>
+<text class="alo-labr" x="584" y="158">skip the business layer</text>
+<text class="alo-note" x="584" y="304">Each relaxed path is a dependency</text>
+<text class="alo-note" x="584" y="322">that crosses a layer boundary.</text>
+<path class="alo-flow" d="M 40,402 H 74"/>
+<text class="alo-el" x="82" y="406">strict path: one layer at a time</text>
+<path class="alo-redd" d="M 290,402 H 324"/>
+<text class="alo-el" x="332" y="406">relaxed path</text>
 </g>
 </svg>
