@@ -1,0 +1,59 @@
+---
+title: "Hosted Services Across the Host's Lifetime"
+kind: dynamic
+system: aspnet-core
+summary: "When two hosted services start, run, and stop, relative to the server."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" role="img" aria-labelledby="ahl-title ahl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ahl-title">The lifetime of two hosted services, A and B, registered in that order in an ASP.NET Core app</title>
+<desc id="ahl-desc">At startup the host calls StartAsync on service A, then on service B, in registration order, and only then starts the server, which begins accepting requests. Each BackgroundService's ExecuteAsync starts when its StartAsync runs and keeps running while the app serves requests. When a stop signal arrives, the host raises ApplicationStopping, the server stops accepting new connections and drains in-flight requests, and the hosted services are stopped in reverse order, B then A, each seeing its stopping token cancelled. The host waits up to the shutdown timeout, 30 seconds by default, for all of this; work still running when the timeout expires is abandoned.</desc>
+<style>
+.ahl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ahl-bar { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.ahl-srv { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.2; }
+.ahl-lane { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.ahl-n { font-size: 11.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ahl-t { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.ahl-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ahl-em { font-size: 10.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ahl-stop { stroke: var(--color-accent, #A5486E); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ahl-brk { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.ahl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 1.6; }
+</style>
+<defs>
+<marker id="ahl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="ahl-lane" x="20" y="80">Host</text>
+<text class="ahl-lane" x="20" y="146">Server</text>
+<text class="ahl-lane" x="20" y="196">Service A</text>
+<text class="ahl-lane" x="20" y="246">Service B</text>
+<rect class="ahl-box" x="100" y="58" width="95" height="38" rx="5"/>
+<text class="ahl-n" x="147" y="81" text-anchor="middle">A.StartAsync</text>
+<rect class="ahl-box" x="210" y="58" width="95" height="38" rx="5"/>
+<text class="ahl-n" x="257" y="81" text-anchor="middle">B.StartAsync</text>
+<path class="ahl-flow" d="M195,77 L208,77" marker-end="url(#ahl-a)"/>
+<path class="ahl-flow" d="M305,77 L318,77" marker-end="url(#ahl-a)"/>
+<text class="ahl-t" x="325" y="73">then the server starts</text>
+<text class="ahl-t" x="325" y="88">and ApplicationStarted fires</text>
+<rect class="ahl-box" x="620" y="58" width="130" height="38" rx="5"/>
+<text class="ahl-n" x="685" y="81" text-anchor="middle">ApplicationStopping</text>
+<rect class="ahl-box" x="815" y="58" width="135" height="38" rx="5"/>
+<text class="ahl-n" x="882" y="81" text-anchor="middle">ApplicationStopped</text>
+<rect class="ahl-srv" x="320" y="128" width="420" height="28" rx="4"/>
+<text class="ahl-t" x="340" y="146">accepting requests</text>
+<text class="ahl-k" x="630" y="146">drains in-flight</text>
+<rect class="ahl-bar" x="150" y="178" width="660" height="28" rx="4"/>
+<text class="ahl-t" x="170" y="196">A.ExecuteAsync running</text>
+<text class="ahl-k" x="690" y="196">stops second</text>
+<rect class="ahl-bar" x="260" y="228" width="470" height="28" rx="4"/>
+<text class="ahl-t" x="280" y="246">B.ExecuteAsync running</text>
+<text class="ahl-k" x="625" y="246">stops first</text>
+<line class="ahl-stop" x1="610" y1="40" x2="610" y2="270"/>
+<text class="ahl-em" x="560" y="34">stop signal</text>
+<path class="ahl-brk" d="M610,282 L610,292 L940,292 L940,282"/>
+<text class="ahl-em" x="620" y="310">ShutdownTimeout, 30 s by default.</text>
+<text class="ahl-em" x="620" y="325">Work still running at the end is abandoned.</text>
+<text class="ahl-k" x="100" y="310">Services start in registration order and stop in reverse.</text>
+</g>
+</svg>

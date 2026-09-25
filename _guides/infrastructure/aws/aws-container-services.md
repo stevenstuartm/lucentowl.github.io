@@ -1,726 +1,112 @@
 ---
-title: "AWS Container Services: ECS, EKS, and Fargate"
+title: "Choosing AWS Compute: EC2, Lambda, and Containers on ECS, EKS, and Fargate"
 layout: guide
 category: AWS
 subcategory: Compute Services
-description: "Comprehensive guide to AWS container orchestration covering ECS, EKS, Fargate, cost optimization, deployment patterns, and service selection frameworks"
-tags: [aws, containers, ecs, eks, fargate, kubernetes, orchestration, cost-optimization]
+description: "How to choose between EC2, Lambda, and containers, and how AWS runs containers: ECS task definitions, tasks, and services; Fargate, EC2, and ECS Managed Instances as capacity; EKS and when Kubernetes earns its cost; task roles, secrets, deployments, and container cost."
+tags: [decision-making, containers, ecs, eks, fargate, kubernetes, fundamentals]
 ---
 
-## What Problems Containers Solve
-
-Containers address several key challenges compared to traditional EC2 instances and serverless Lambda functions.
-
-### vs. EC2 Instances
-
-**Consistency across environments**: Containers package applications with all dependencies, eliminating "works on my machine" problems. The same container runs identically in development, staging, and production.
-
-**Resource efficiency**: Multiple containers share the host OS kernel, using less memory and CPU than separate virtual machines. A single EC2 instance can run dozens of containers.
-
-**Faster deployment**: Container startup takes seconds vs. minutes for EC2 instances. Immutable container images enable rapid rollbacks.
-
-**Portability**: Containers abstract infrastructure details. Move workloads between ECS, EKS, on-premises, and other cloud providers without code changes.
-
-### vs. Lambda
-
-**Longer execution times**: Lambda has a 15-minute maximum timeout. Containers run indefinitely for long-running services.
-
-**Language/framework flexibility**: Lambda supports specific runtimes. Containers support any language or framework that runs on Linux/Windows.
-
-**State management**: Containers handle stateful applications and long-running services better than Lambda's ephemeral execution model.
-
-**Larger package sizes**: Lambda limits deployment packages to 250 MB unzipped. Container images can be several GB.
-
-### When to Use Containers
-
-**Choose containers (ECS/EKS) when**:
-- Running long-running applications (web servers, microservices, APIs)
-- Need specific languages/frameworks not well-supported by Lambda
-- Application runs longer than 15 minutes
-- Require full control over runtime environment
-- Migrating existing Docker-based applications
-- Running stateful applications (databases, message queues)
-
-**Choose Lambda when**:
-- Event-driven workloads (S3 uploads, API Gateway requests)
-- Execution time under 15 minutes
-- Sporadic or variable traffic patterns
-- Want zero infrastructure management
-
-**Choose EC2 when**:
-- Need full infrastructure control (custom OS, kernel modules)
-- Running specialized databases or data stores
-- GPU-intensive workloads requiring specific drivers
-- Migrating legacy applications requiring specific server configurations
-
-## Amazon ECS (Elastic Container Service)
-
-### ECS Architecture
-
-ECS is AWS's native container orchestration service, designed for simplicity and deep AWS integration.
-
-**Core components**:
-
-**Cluster**: Logical grouping of services and tasks. Region-specific. Can contain EC2 instances, Fargate capacity, or both.
-
-**Task Definition**: JSON blueprint describing 1-10 containers that comprise your application. Specifies container images, CPU/memory requirements, port mappings, network modes, IAM roles, environment variables, and secrets.
-
-**Task**: Instantiation of a task definition (smallest unit of execution in ECS). Can contain one or more containers running together on the same host.
-
-**Service**: Manages desired number of tasks, ensuring they keep running. Handles scheduling, load balancer integration, auto scaling, and rolling deployments. Use services for long-running applications.
-
-### Launch Types: EC2 vs. Fargate
-
-**ECS on EC2**:
-- **Control**: Full control over instance types, OS, networking, storage
-- **Cost**: Most cost-effective for steady-state workloads (up to 3x cheaper than Fargate with Reserved Instances)
-- **Responsibility**: You manage patching, scaling, capacity planning
-- **Use case**: High-volume production workloads with predictable traffic
-
-**ECS on Fargate**:
-- **Management**: AWS handles all infrastructure—no servers to manage
-- **Cost**: Pay only for vCPU and memory used by tasks (per-second billing)
-- **Pricing**: $0.04048 per vCPU-hour, $0.004492 per GB-memory-hour (us-east-1, 2024)
-- **Use case**: Variable workloads, dev/test environments, microservices
-
-<div class="callout callout--tip">
-<p class="callout__title">ECS Managed Instances (2024 Recommendation)</p>
-<ul>
-<li>AWS fully manages EC2 instances (provisioning, patching, scaling)</li>
-<li>Best combination of performance, cost optimization, and operational simplicity</li>
-<li>Recommended for new workloads requiring EC2 launch type</li>
-</ul>
-</div>
-
-### Service Discovery and Load Balancing
-
-**AWS Cloud Map Service Discovery**:
-- Defines custom DNS names for services
-- Maintains updated locations of dynamically changing resources
-- DNS-based discovery with configurable TTL
-- Simpler but slower failover (depends on DNS TTL)
-
-**ECS Service Connect (2024 Feature)**:
-- Built on Cloud Map with Envoy-based sidecar proxy
-- API-based discovery (faster than DNS)
-- Automatic failover detection and traffic routing
-- Built-in observability (logs, metrics)
-- **Limitation**: Cannot use CodeDeploy (no blue/green deployments with CodeDeploy)
-- **Cost**: Additional resources for sidecar containers
-
-**Load Balancer Integration**:
-- **Application Load Balancer (ALB)**: Best for HTTP/HTTPS, advanced routing (path-based, host-based, header-based)
-- **Network Load Balancer (NLB)**: Best for TCP/UDP, ultra-low latency, high throughput, static IPs
-- **awsvpc network mode**: Use "ip" target type when tasks have elastic network interfaces
-
-### Auto Scaling
-
-**Target Tracking Scaling (Recommended)**:
-- Set target value for a metric (e.g., 70% CPU utilization)
-- ECS automatically creates CloudWatch alarms and adjusts task count
-- Metrics: CPU utilization, memory utilization, ALB request count per target
-
-**Step Scaling**:
-- Define specific thresholds and scaling actions
-- React quickly to demand spikes
-- Multiple steps for different alarm severity
-- Example: Add 2 tasks at 70% CPU, add 5 tasks at 85% CPU
-
-**Predictive Scaling (November 2024)**:
-- Uses machine learning to analyze historical patterns
-- Scales proactively before demand spikes
-- Combines with target tracking for real-time adjustments
-
-### When to Use ECS vs. EKS
-
-**Choose ECS when**:
-- Team has little/no Kubernetes experience
-- Deploying AWS-centric workloads
-- Want minimal operational overhead
-- Running simple to moderate complexity microservices
-- Prioritizing ease of use and deep AWS integration
-- Cost efficiency critical (no control plane costs)
-
-**Choose EKS when**:
-- Team already has Kubernetes expertise
-- Need multi-cloud or hybrid deployments
-- Require fine-grained control over orchestration
-- Want access to Kubernetes ecosystem (Helm, operators, CNCF tools)
-- Portability is important
-- Complex distributed systems requiring advanced orchestration
-
-**Not a binary decision**: Both services can coexist in the same AWS account. Containers ensure portability between them.
-
-## AWS Fargate
-
-### Serverless Container Execution
-
-Fargate is a serverless compute engine that runs containers without managing servers. You define CPU, memory, and networking requirements; AWS handles provisioning, scaling, and patching.
-
-### Fargate vs. EC2 Launch Type
-
-| Factor | Fargate | ECS on EC2 |
-|--------|---------|------------|
-| **Management** | Zero infrastructure management | Manage instances, patching, capacity |
-| **Cost (steady-state)** | 3-9x more than EC2 Reserved Instances | Most cost-effective with Reserved Instances |
-| **Cost (variable)** | Pay-per-second for task duration | Pay for instances even if underutilized |
-| **Startup time** | ~30-60 seconds | Seconds (if instances already running) |
-| **Control** | Limited (AWS-managed) | Full control over instances |
-| **Best for** | Variable workloads, batch jobs, dev/test | High-volume production, GPU workloads |
-
-**Real-world cost comparison**:
-- Fargate: $0.04048/vCPU-hour + $0.004492/GB-hour (us-east-1)
-- EC2 on-demand: ~3x cheaper
-- EC2 Reserved Instances (1-year): ~6x cheaper than Fargate
-- EC2 Reserved Instances (3-year): ~9x cheaper than Fargate
-
-### Fargate Pricing and Resource Configurations
-
-**Pricing (2024)**:
-- **vCPU**: $0.04048 per vCPU-hour (us-east-1)
-- **Memory**: $0.004492 per GB-hour
-- **Storage**: 20 GB ephemeral storage included; $0.000111 per GB-hour for additional storage (up to 200 GB)
-- **Billing**: Per-second billing with 1-minute minimum
-
-**Valid CPU/Memory Configurations**:
-- 0.25 vCPU: 0.5 GB, 1 GB, 2 GB memory
-- 0.5 vCPU: 1 GB to 4 GB (increments of 1 GB)
-- 1 vCPU: 2 GB to 8 GB
-- 2 vCPU: 4 GB to 16 GB
-- 4 vCPU: 8 GB to 30 GB
-- 8 vCPU: 16 GB to 60 GB
-- 16 vCPU: 32 GB to 120 GB
-
-### Fargate Spot
-
-**Discount**: Up to 70% off Fargate on-demand pricing
-
-**Interruption**: 2-minute warning before termination when AWS needs capacity back
-
-**Availability**: Capacity not guaranteed
-
-**Use cases**:
-- Fault-tolerant workloads
-- Batch processing
-- Stateless services with built-in resilience
-- CI/CD pipelines
-
-**Combining optimizations**:
-- **Graviton + Spot**: Up to 76% savings (20% from Graviton, 70% from Spot compounded)
-- **Graviton pricing**: ~20% cheaper than x86 (e.g., eu-west-1: $0.03238 vs. $0.04048 per vCPU-hour)
-- **Graviton + Spot announcement**: September 2024—Fargate Spot now supports Arm-based Graviton processors
-
-## Amazon EKS (Elastic Kubernetes Service)
-
-### Kubernetes Fundamentals on AWS
-
-EKS runs upstream Kubernetes, ensuring compatibility with standard Kubernetes tooling and APIs. AWS manages the Kubernetes control plane (high availability, patching, upgrades) across multiple Availability Zones.
-
-### EKS Architecture
-
-**Control Plane (AWS-Managed)**:
-- Kubernetes API server, etcd, scheduler, controller manager
-- Automatically scaled and distributed across 3 AZs
-- AWS handles patching, upgrades, high availability
-- **Cost**: $0.10 per cluster-hour (~$73/month per cluster)
-
-**Worker Nodes (Customer-Managed Options)**:
-
-**Self-Managed Nodes**:
-- Full control over EC2 instances
-- Manual scaling, patching, upgrades
-- Most flexible but highest operational burden
-
-**Managed Node Groups (Recommended)**:
-- AWS handles provisioning, scaling, patching
-- No extra cost (only pay for EC2 instances)
-- Automated updates with single operation
-- Integrates with Auto Scaling Groups
-
-**Fargate**:
-- Serverless compute for pods
-- No node management
-- Per-pod pricing
-- Limited features (no DaemonSets, no hostPort)
-
-**Karpenter (Advanced)**:
-- Group-less autoscaling—works directly with EC2 Fleet API
-- Responds to workload demands in under 1 minute
-- Optimizes instance selection based on pod requirements
-- More flexible and faster than Cluster Autoscaler
-
-**EKS Auto Mode (December 2024)**:
-- Fully automates Kubernetes cluster management
-- Handles compute, storage, networking with a single click
-- Built on Karpenter
-- One-click migration from Managed Node Groups or Fargate
-
-### EKS vs. ECS Decision Framework
-
-| Factor | ECS | EKS |
-|--------|-----|-----|
-| **Learning curve** | Low | High (requires Kubernetes knowledge) |
-| **Operational complexity** | Minimal | Moderate to high |
-| **Control plane cost** | Free | $73/month per cluster |
-| **AWS integration** | Deep (native AWS service) | Standard Kubernetes integration |
-| **Ecosystem** | Limited | Rich (Helm, operators, CNCF tools) |
-| **Portability** | AWS-only | Multi-cloud, hybrid, on-premises |
-| **Use case** | AWS-centric microservices | Complex distributed systems, multi-cloud |
-
-### When Kubernetes Complexity is Justified
-
-**Use EKS when**:
-- Existing Kubernetes expertise in the team
-- Need for multi-cloud or hybrid deployments (EKS Hybrid Nodes GA December 2024)
-- Require advanced orchestration features (custom controllers, operators, StatefulSets)
-- Want vibrant ecosystem and community support (Helm, Prometheus, Istio)
-- Migrating from on-premises Kubernetes
-- Running complex stateful applications requiring persistent volumes
-
-**Example**: A company running 100+ microservices with complex service mesh requirements, custom operators, and plans to migrate workloads to on-premises data centers benefits from EKS. A startup deploying 5 microservices exclusively on AWS is better served by ECS.
-
-## Container Networking
-
-### VPC Networking Modes
-
-**awsvpc (Recommended)**:
-- Each task/pod gets its own elastic network interface (ENI)
-- Tasks have their own private IP address
-- Full VPC networking features (security groups, NACLs)
-- Required for Fargate
-- **Limitation**: ENI limits per instance (e.g., m5.large supports 10 ENIs)
-
-**bridge (Docker Default)**:
-- Uses Docker's virtual network bridge
-- Port mapping required (host port → container port)
-- Reduced security isolation
-- Not available on Fargate
-
-**host**:
-- Container uses host's network directly
-- No port mapping needed
-- Least isolation
-- Not available on Fargate
-
-### Service Mesh
-
-**ECS Service Connect (2024)**:
-- Managed Envoy sidecar
-- Faster failover than DNS-based service discovery
-- Observability built-in (CloudWatch Logs, metrics)
-- Only for ECS-to-ECS communication
-- Incompatible with blue/green deployments using CodeDeploy
-
-**Amazon VPC Lattice (2024 General Service Mesh)**:
-- Eliminates sidecar proxies
-- Works across ECS, EKS, Lambda, EC2
-- Simplified application networking with consistent connectivity, security, and monitoring
-- Preferred for cross-service communication
-
-**AWS App Mesh (Legacy)**:
-- New onboarding stopped September 2024
-- Migration paths: ECS Service Connect (ECS) or VPC Lattice (general)
-
-### Load Balancing
-
-**Application Load Balancer (ALB)**:
-- Layer 7 (HTTP/HTTPS)
-- Advanced routing (path-based, host-based, query string, header-based)
-- WebSocket support
-- SSL/TLS termination
-- Native integration with ECS/EKS
-
-**Network Load Balancer (NLB)**:
-- Layer 4 (TCP/UDP)
-- Ultra-low latency (microseconds)
-- Static IP addresses
-- Millions of requests per second
-- Preserves source IP
-
-**Multiple Target Groups (2024)**:
-- ECS services can attach to multiple target groups
-- Example: Internal NLB for private traffic + internet-facing ALB for public traffic
-
-## Storage for Containers
-
-### Ephemeral Storage
-
-**ECS on Fargate**:
-- **Default**: 20 GB included (free)
-- **Maximum**: 200 GB configurable
-- **Cost**: $0.000111 per GB-hour for additional storage
-- **Encryption**: AES-256 for tasks launched on platform version 1.4.0+ (May 28, 2020 or later)
-
-**EKS on Fargate**:
-- **Default**: 20 GB
-- **Maximum**: 175 GB per pod
-
-**ECS on EC2**:
-- Depends on instance storage (typically 10-30 GB root volume)
-
-### EBS Volumes for ECS Tasks
-
-**Major 2024 Update**: ECS now supports native EBS volume integration (announced January 2024).
-
-**Use cases**:
-- Data-intensive workloads requiring high performance, low latency
-- Block storage within a single Availability Zone
-- Applications needing persistent storage that doesn't span tasks
-
-**Availability**: US East (Ohio, N. Virginia), US West (Oregon), Asia Pacific (Singapore, Sydney, Tokyo), Europe (Frankfurt, Ireland, Stockholm)
-
-### EFS for Shared Persistent Storage
-
-**Amazon EFS (Elastic File System)**:
-- **Use case**: Applications spanning many tasks needing concurrent access
-- **Availability**: Multi-AZ Regional availability
-- **Access modes**: ReadWriteMany (multiple pods/tasks can mount simultaneously)
-- **Supported on**: ECS (EC2 and Fargate), EKS
-
-**EBS vs. EFS**:
-- **EBS**: Single-AZ, ReadWriteOnce, lower latency, higher IOPS
-- **EFS**: Multi-AZ, ReadWriteMany, regional availability, shared access
-
-**Best practice for EKS**: Deploy Amazon EBS CSI driver or Amazon EFS CSI driver via EKS add-ons for security and efficiency.
-
-## Security Best Practices
-
-### IAM Roles for Tasks and Pods
-
-**ECS Task Roles**:
-- **Task Execution Role**: Grants ECS agent permission to pull images from ECR and write logs to CloudWatch
-- **Task IAM Role**: Grants application code access to AWS services
-- **Best practice**: Separate roles for execution vs. application; apply least privilege
-
-**EKS IRSA (IAM Roles for Service Accounts)**:
-- Assigns IAM roles to Kubernetes service accounts
-- Pod-level permissions without sharing credentials
-- Leverages AWS STS for temporary credentials (auto-rotated)
-- **2024 Update**: Continues to be supported alongside EKS Pod Identity
-
-**EKS Pod Identity (2023+)**:
-- Assigns IAM roles directly to pods (decoupled from service accounts)
-- Simpler trust management than IRSA
-- More fine-grained control
-
-**Security warning**: Pods can still inherit instance profile permissions. Always block access to instance metadata when using IRSA or Pod Identity.
-
-### Secrets Management
-
-**AWS Secrets Manager and Parameter Store**:
-- Store sensitive data (database passwords, API keys)
-- Reference in task definitions via ARN
-- **Required permission**: `secretsmanager:GetSecretValue` in task execution role
-
-**Example (ECS Task Definition)**:
-```json
-"secrets": [
-  {
-    "name": "DB_PASSWORD",
-    "valueFrom": "arn:aws:secretsmanager:region:account:secret:db-password"
-  }
-]
+## Choosing Compute on AWS
+
+AWS offers several ways to run the same code, and they differ mainly in how much of the stack you operate and how you pay for it. At one end, an EC2 instance gives you a whole server to run and pay for by the second whether it's busy or not. At the other, a Lambda function gives you no server at all and charges only while your code runs. Containers sit between them. They run on an **orchestrator**, either **Amazon ECS** (AWS's own) or **Amazon EKS** (managed Kubernetes), and on capacity that is either your own instances, instances AWS manages for you, or **AWS Fargate**, which runs each container workload on isolated compute with no instances in view.
+
+| Option | You manage | Idle capacity billed | Fits |
+|---|---|---|---|
+| **EC2 instances** | The operating system, patches, software, and scaling | Yes, for every running instance | Software that needs OS control, licensed or legacy applications, anything that can't be containerized |
+| **Containers on EC2** (ECS or EKS) | Container images, plus the instances under them | Yes, for instances left running. Managed scaling can shrink an idle fleet to zero | High, steady container workloads where packing containers onto instances you choose is cheapest |
+| **Containers on managed instances** (ECS Managed Instances, EKS Auto Mode) | Container images and instance requirements. AWS provisions, patches, and replaces the instances | Yes, for instances left running, plus a per-instance management fee | Steady workloads that want EC2 pricing and instance choice, including GPUs, without running the fleet |
+| **Fargate** | Container images and the size of each workload | No. You pay per second for each running task's requested size | Long-running services and jobs with no servers to operate |
+| **Lambda** | Function code | No. You pay per request and per millisecond of execution | Event-driven and request-driven work, spiky or idle traffic, short invocations |
+
+Lambda can also package a function as a container image of up to 10 GB, so "containers" here means a long-running container on an orchestrator, not the packaging format. And **Lambda Managed Instances** run Lambda functions on EC2 instances in your account at EC2 prices plus a fee, for steady, high-volume function traffic.
+
+Three questions narrow the choice:
+
+- **How does the work run?** Short invocations triggered by an event or a request suit Lambda. Long-running processes, persistent connections, and invocations over 15 minutes suit containers or instances.
+- **How steady is the load?** Per-use pricing wins when capacity would otherwise sit idle. Instance pricing wins when utilization stays high, because an instance you keep busy costs less per unit of work than paying per request or per task.
+- **How fast must it react?** Lambda adds capacity in milliseconds to seconds. A new Fargate task takes tens of seconds, longer for large images, and container capacity on EC2 may first have to launch an instance. Spiky traffic on containers needs headroom or scaling that starts early.
+
+```
+Does the work need OS-level control, or software that can't run in a container?
+├── Yes → EC2 instances
+└── No → Is it event- or request-driven, with each unit of work finishing well inside 15 minutes?
+    ├── Yes → Lambda
+    │         (steady, high volume that would suit EC2 pricing → Lambda Managed Instances)
+    └── No → Containers. Does the team already run Kubernetes, or need its ecosystem or portability?
+        ├── Yes → EKS
+        └── No → ECS
+        Then, for either one, choose capacity: Fargate by default; EC2 or managed instances
+        when load is steady enough that instance pricing wins, or workloads need GPUs
 ```
 
-**Best practices**:
-- Never hardcode secrets in container images or environment variables
-- Use Secrets Manager for secrets requiring rotation
-- Use Parameter Store (SecureString) for static configuration
-- Grant minimal IAM permissions for secret access
-
-### Image Scanning
-
-**Amazon Inspector (ECR Integration)**:
-- Automatically scans images on push
-- Detects vulnerabilities in OS packages and application dependencies
-- Maps images to running containers (ECS tasks, EKS pods)
-- Prioritizes vulnerabilities based on whether images are currently running
-
-**Best practices**:
-- Enable image tag immutability to prevent malicious overwrites
-- Use EventBridge to trigger actions (delete insecure images, trigger rebuilds)
-- Scan on every push
-- Block deployment of images with critical vulnerabilities
-
-### Network Security
-
-**Security Groups**:
-- awsvpc mode: Assign security groups directly to tasks/pods
-- Control inbound/outbound traffic at task level
-- Stateful (return traffic automatically allowed)
-
-**NACLs (Network Access Control Lists)**:
-- Subnet-level firewall rules
-- Stateless (must configure inbound and outbound separately)
-- Defense-in-depth layer
-
-**GuardDuty Runtime Monitoring (2023)**:
-- Detects runtime security threats in ECS (EC2 and Fargate) and EKS
-- Identifies suspicious activity, malware, unauthorized access
-
-### Runtime Security
-
-**Pod Security Standards (EKS)**:
-- Kubernetes-native security policies (Restricted, Baseline, Privileged)
-- Enforce via admission controllers (OPA Gatekeeper, Kyverno)
-- Limit privileged containers (needed for system components like VPC CNI, but not application pods)
-
-**Container-Optimized OS**:
-- **Bottlerocket**: AWS-managed, immutable, minimal attack surface
-- Automatically patched via managed node groups
-
-**CIS Benchmark Compliance**:
-- Verify EKS/ECS configurations against CIS benchmarks
-- Tools: AWS Security Hub, third-party scanners
-
-## Observability
-
-### CloudWatch Container Insights
-
-**Features**:
-- Collects, aggregates, and summarizes metrics and logs
-- Instance-level, cluster-level, and task/pod-level metrics
-- Pre-built dashboards (CPU, memory, network, disk)
-
-**Enhanced ECS Observability (December 2024)**:
-- Granular visibility into container workloads
-- Proactive monitoring and faster troubleshooting
-
-**Requirements**:
-- ECS on EC2: Container agent 1.4.0+ (latest recommended)
-- EKS: Deploy CloudWatch agent via DaemonSet or Fargate logging
-
-### Logging
-
-**awslogs Log Driver**:
-- Forwards stdout/stderr to CloudWatch Logs
-- Simple configuration in task definition
-
-```json
-"logConfiguration": {
-  "logDriver": "awslogs",
-  "options": {
-    "awslogs-group": "/ecs/my-app",
-    "awslogs-region": "us-east-1",
-    "awslogs-stream-prefix": "ecs"
-  }
-}
-```
-
-**FireLens (Fluent Bit/Fluentd)**:
-- Routes logs to third-party services (Datadog, Splunk, Elasticsearch)
-- Flexible log transformation and routing
-- Sidecar container pattern
-
-### Distributed Tracing
-
-**AWS X-Ray**:
-- Traces requests across microservices
-- Identifies performance bottlenecks, errors
-- Integrates with ECS and EKS via sidecar container or daemon
-
-**ADOT (AWS Distro for OpenTelemetry)**:
-- Collects traces and metrics using OpenTelemetry
-- Sends data to CloudWatch, X-Ray, Prometheus
-- Vendor-neutral instrumentation
-
-### Prometheus and Grafana (EKS)
+Two other services come up in this choice. **AWS Batch** schedules queued batch jobs onto Fargate or EC2 and suits large job queues better than building a scheduler yourself. **AWS App Runner** stopped accepting new customers on April 30, 2026, and AWS points new users to ECS Express Mode (below) instead.
 
-**Amazon Managed Service for Prometheus**:
-- Fully managed Prometheus-compatible monitoring
-- Agentless metric collection for EKS (2023)
-- Integrates with Grafana for visualization
+---
 
-**Amazon Managed Grafana**:
-- Fully managed Grafana for dashboards
-- Pre-built dashboards for EKS, ECS
-
-## Deployment Patterns
-
-### Blue/Green Deployments
+## What a Container Adds
 
-**ECS Native Blue/Green (2025)**:
-- Built-in blue/green without CodeDeploy
-- Can change deployment controller after service creation
-- Requires ALB
-- Validates new revision before routing production traffic
-- Instant rollback capability
-
-**EKS Blue/Green**:
-- Use separate Kubernetes deployments or namespaces
-- Shift traffic via service selector or ingress controller
-- Tools: Flagger, Argo Rollouts
-
-### Rolling Updates
-
-**ECS Rolling Update**:
-- Default deployment type
-- Gradually replaces tasks with new version
-- Configurable: `minimumHealthyPercent` and `maximumPercent`
-- Example: 50% minimum, 200% maximum = deploy new tasks before stopping old ones
+A **container image** packages an application with its runtime and dependencies into one versioned artifact, so the same image runs the same way on a laptop, in a test environment, and in production. A container shares the host's operating system kernel instead of booting its own, so it starts in seconds and many containers can share one machine. The image is immutable, so a rollback means running the previous image rather than undoing changes on a server. An image is built for one processor architecture, x86 or Arm, unless it's built as a multi-architecture image.
 
-**EKS Rolling Update**:
-- Kubernetes-native via Deployment resources
-- Configurable: `maxUnavailable`, `maxSurge`
-
-### Canary Deployments
-
-**ECS Native Canary (October 2025)**:
-- Route small percentage of traffic to new revision
-- Monitor metrics during bake time
-- Gradually increase traffic
-- Automatic rollback on CloudWatch alarm breach
-
-**EKS Canary**:
-- Use Flagger (progressive delivery tool)
-- Argo Rollouts (GitOps-based canary)
-
-### CircuitBreaker Deployment (ECS)
-
-**Deployment Circuit Breaker**:
-- Monitors deployment health
-- Stops launching new tasks if service cannot reach steady state
-- Optionally rolls back to last successful deployment
-- Only works with rolling update deployment type
-
-```json
-"deploymentConfiguration": {
-  "deploymentCircuitBreaker": {
-    "enable": true,
-    "rollback": true
-  }
-}
-```
+Running containers in production needs the orchestrator. It places containers on capacity, restarts them when they fail, keeps the right number running, connects them to load balancers, and replaces them during a deployment. The part of an orchestrator that makes those decisions is its **control plane**.
 
-## Cost Optimization
+---
 
-### EC2 vs. Fargate Cost Comparison
+## Amazon ECS
 
-**Scenario: Running 10 tasks, 1 vCPU, 2 GB memory each, 24/7**
+ECS has no control plane for you to run or pay for. AWS operates it, and you configure everything through AWS APIs, IAM, and the resources ECS integrates with.
 
-| Launch Type | Configuration | Monthly Cost | Annual Cost |
-|-------------|---------------|--------------|-------------|
-| **Fargate On-Demand** | 10 vCPU, 20 GB | $356 | $4,272 |
-| **Fargate Spot** | 10 vCPU, 20 GB | $107 (70% savings) | $1,284 |
-| **Fargate Graviton** | 10 vCPU, 20 GB | $285 (20% savings) | $3,420 |
-| **Fargate Graviton + Spot** | 10 vCPU, 20 GB | $86 (76% savings) | $1,032 |
-| **EC2 Reserved (1-year)** | m5.large × 5 instances | $284 (35% savings vs On-Demand) | $3,408 |
-| **EC2 Reserved (3-year)** | m5.large × 5 instances | $189 (57% savings vs On-Demand) | $2,268 |
+### Clusters, Task Definitions, Tasks, and Services
 
-**Key takeaways**:
-- **Fargate Spot + Graviton**: Most cost-effective for fault-tolerant workloads ($86/month)
-- **EC2 Reserved (3-year)**: Best for steady-state, long-term workloads ($189/month)
-- **Fargate On-Demand**: Most expensive but simplest ($356/month)
+ECS has four objects, and most confusion about it comes from mixing them up:
 
-### Savings Plans
+- A **cluster** is a Regional grouping of capacity and the workloads that run on it.
+- A **task definition** is the blueprint: one or more container images, the CPU and memory for each, ports, environment variables, secrets, log settings, and the IAM roles to use. Each change creates a new numbered **revision**, and old revisions stay available for rollback.
+- A **task** is one running copy of a task definition revision. Its containers run together on the same capacity.
+- A **service** keeps a chosen number of tasks running. It replaces tasks that stop or fail health checks, spreads them across Availability Zones, and runs deployments when you point it at a new revision. With a load balancer attached, it registers each task in a **target group**, the list of destinations the load balancer sends requests to.
 
-**Compute Savings Plans**:
-- 1-year: Up to 50% savings
-- 3-year: Up to 66% savings
-- Applies across EC2, Fargate, Lambda
-- Flexible across instance families, sizes, regions
+A task started without a service runs once and stops, which suits batch jobs and scheduled work. Anything long-running belongs in a service.
 
-**Best practice**: Use Compute Savings Plans for baseline capacity, Spot for fault-tolerant workloads, On-Demand for unpredictable spikes.
+{% include figure.html id="aws-ecs-service-anatomy" %}
 
-### Right-Sizing Containers
+### Where Tasks Run
 
-**AWS Compute Optimizer**:
-- Uses machine learning to analyze utilization
-- Recommends optimal CPU and memory configurations
-- Customizable thresholds (CPU headroom, memory headroom)
-- Lookback periods: 14, 32, or 93 days
+A cluster gets capacity through **capacity providers**, each naming one source of capacity, and a service's **capacity provider strategy** says how to split its tasks among them. There are three kinds:
 
-**Best practices**:
-- Monitor for 30 days to establish baseline
-- Rightsize if max memory utilization < 40% over 4 weeks
-- Use CloudWatch Container Insights for granular metrics
-- EKS: Use Vertical Pod Autoscaler (VPA) for automated rightsizing
+| Capacity | What it is | Trade-off |
+|---|---|---|
+| **Fargate** | AWS runs each task on its own isolated compute, sized to the task | Nothing to operate and per-task pricing, but no GPUs or privileged containers, and slower task starts |
+| **EC2 instances** | Your own Auto Scaling group of instances, each running the **ECS agent** that starts and stops tasks on it | Cheapest at high, steady utilization, but you patch, size, and scale the instances |
+| **ECS Managed Instances** | EC2 instances in your account that ECS selects, launches, patches every 14 days, and replaces. They run Bottlerocket, AWS's minimal operating system for containers | EC2 pricing, instance choice, and GPUs without running the fleet, for a per-instance management fee and less control over the OS |
 
-### Graviton Processors
+ECS Managed Instances, launched in September 2025, fill the gap that used to force a choice between Fargate's simplicity and EC2's pricing and hardware options. At large, steady scale, the management fee is the price of not running the fleet yourself.
 
-**AWS Graviton2/Graviton3**:
-- ~20% lower cost than x86 (Intel/AMD)
-- Better performance per dollar
-- Supported by most popular software packages
+**ECS Express Mode** (November 2025) is a shortcut for the common case of a web service. Given a container image, it creates a Fargate-backed service with an Application Load Balancer, HTTPS, an AWS-provided domain name, auto scaling, and canary deployments. It costs nothing beyond the resources it creates, and every resource stays in your account to modify later.
 
-**Migration**:
-- Rebuild container images for ARM64 architecture
-- Test compatibility (most modern software supports ARM)
-- Potential effort: Moderate (rebuilding images, testing)
+### Networking
 
-**Fargate Graviton + Spot (September 2024)**:
-- Combine 20% Graviton savings with 70% Spot discount
-- Total: Up to 76% savings vs. Fargate On-Demand
+Fargate tasks always use the **awsvpc** network mode, and it's the recommended mode on instances too. Each task gets its own elastic network interface and private IP address in your subnet, which its containers share, so security groups apply per task and load balancers register tasks by IP address. On instances, the older **bridge** mode shares the instance's interface and maps container ports to host ports, and **host** mode puts containers directly on the host's network. Both give up per-task security groups.
 
-## Service Selection Framework
+A task in a private subnet still needs a path to pull its image, either through a NAT gateway or through VPC endpoints for ECR and S3. For calls between services, **ECS Service Connect** gives each service a short name that other services in the same namespace (a shared registry of service names) can call, with a proxy in each task that handles discovery, retries, and traffic metrics.
 
-### Decision Matrix
+### Scaling a Service
 
-| Use Case | Recommended Service | Rationale |
-|----------|---------------------|-----------|
-| Simple microservices, AWS-centric | **ECS on Fargate** | Minimal management, deep AWS integration |
-| High-volume production, cost-critical | **ECS on EC2 with Reserved Instances** | Most cost-effective for steady-state |
-| Kubernetes ecosystem required | **EKS with Managed Node Groups** | Standard Kubernetes, rich tooling |
-| Multi-cloud, hybrid deployments | **EKS with Hybrid Nodes** | Portability, unified management |
-| Variable workloads, dev/test | **ECS on Fargate** | Pay only for usage, no idle costs |
-| Batch processing, fault-tolerant | **Fargate Spot** or **EC2 Spot** | Up to 70-90% cost savings |
-| GPU workloads, custom kernels | **ECS on EC2** or **EKS on EC2** | Full control over instances |
+A service's task count scales through **Application Auto Scaling**, the AWS service that scales resources other than EC2 instances. **Target tracking** holds a metric near a target, such as average CPU at 60% or requests per task from the load balancer. **Step scaling** adds or removes set numbers of tasks at alarm thresholds, and **predictive scaling** forecasts from past traffic and scales ahead of it. On Fargate that's the whole story. On instance capacity, the instances also have to scale to fit the tasks, which the capacity provider's managed scaling handles.
 
-### Specific Scenarios
+### Deployments
 
-**E-commerce platform (200 tasks running 24/7)**:
-- **Recommendation**: ECS on EC2 with Reserved Instances
-- **Rationale**: Steady-state workload; EC2 Reserved (3-year) saves ~$20,000/year vs. Fargate
+Pointing a service at a new task definition revision starts a deployment. ECS supports four strategies natively:
 
-**Startup with 10 microservices, unpredictable traffic**:
-- **Recommendation**: ECS on Fargate
-- **Rationale**: No capacity planning, automatic scaling, pay only for usage
+| Strategy | How traffic moves | Works with |
+|---|---|---|
+| **Rolling update** | Tasks are replaced in batches, bounded by `minimumHealthyPercent` (how far below the desired count the service may drop) and `maximumPercent` (how far above it may run during the swap) | Any service |
+| **Blue/green** (July 2025) | A full set of new tasks starts beside the old ones, then all traffic shifts at once | Application or Network Load Balancer, Service Connect |
+| **Linear** (October 2025) | Traffic shifts to the new tasks in equal steps over a set time | Application Load Balancer, Service Connect |
+| **Canary** (October 2025) | A small share of traffic goes to the new tasks first, then the rest after a wait | Application Load Balancer, Service Connect |
 
-**Financial services (300+ microservices, multi-cloud strategy)**:
-- **Recommendation**: EKS
-- **Rationale**: Kubernetes provides consistent experience across AWS, Azure, on-premises
+A rolling update can stop itself when new tasks keep failing, through the **deployment circuit breaker**, or when a chosen CloudWatch alarm fires, and either can roll back to the last working revision. The other three strategies keep the old tasks running through a **bake time** after traffic moves, so rollback is immediate. Their **lifecycle hooks** can run a Lambda function or pause for approval at each stage, and CloudWatch alarms can trigger rollback. Before these were built in, blue/green on ECS required CodeDeploy, which remains available as a separate deployment controller.
 
-**Data processing pipeline (batch jobs)**:
-- **Recommendation**: Fargate Spot
-- **Rationale**: 70% cost savings, fault-tolerant workloads
-
-## Common Pitfalls
-
-### Over-Provisioning Resources
-
-**Problem**: Allocating too much CPU/memory wastes money.
-
-**Example**: Task configured with 2 vCPU but only using 0.5 vCPU wastes $0.03/hour ($22/month per task).
-
-**Solution**:
-- Use AWS Compute Optimizer for rightsizing recommendations
-- Monitor actual utilization for 30 days
-- Start conservative, scale up as needed
-
-### Not Using Fargate Spot
-
-**Problem**: Running fault-tolerant workloads on Fargate On-Demand pays 3x more than necessary.
-
-**Solution**:
-- Identify workloads that tolerate interruptions (batch jobs, CI/CD, stateless services)
-- Use Fargate Spot for up to 70% savings
-- Implement retry logic for interrupted tasks
-
-**Gotcha**: Fargate Spot capacity not guaranteed; have fallback to On-Demand if Spot unavailable.
-
-### Improper Health Checks
-
-**Problem**: Missing or misconfigured health checks cause endless restart loops.
-
-**Common issues**:
-- Health check command not included in container image
-- Timeout too short (check executing longer than timeout allows)
-- Retry count too low (transient failures mark container unhealthy)
-
-**Best practices**:
-- Test health check commands locally
-- Set `interval` to 30 seconds, `timeout` to 5 seconds, `retries` to 3
-- Use `/health` or `/healthz` endpoints for HTTP-based checks
+Deployments depend on health checks, and a check that's too strict turns a slow start into a restart loop. The check command has to exist in the image, the timeout has to cover a slow response, and a start period has to cover application startup:
 
 ```json
 "healthCheck": {
@@ -732,93 +118,115 @@ EKS runs upstream Kubernetes, ensuring compatibility with standard Kubernetes to
 }
 ```
 
-### Missing Auto-Scaling Configuration
+This check fails if the image has no `curl`, which minimal and distroless images often don't. When a load balancer also checks the tasks, set the service's health check grace period to cover startup, so the load balancer's checks don't fail tasks that are still starting.
 
-**Problem**: Services cannot handle traffic spikes or waste resources during low traffic.
+---
 
-**Example**: Service configured with 10 tasks constantly, but traffic varies 5x throughout the day. Auto-scaling (min 2, max 20) saves $150/month.
+## AWS Fargate
 
-**Solution**:
-- Configure target tracking scaling (70% CPU utilization)
-- Set reasonable min/max task counts
-- Test scaling behavior under load
+**Fargate** runs each ECS task, or each EKS pod (Kubernetes' unit of one or more containers), on its own isolated compute that doesn't share a kernel, CPU, memory, or network interface with other workloads. You choose a size, and Fargate supplies exactly that. Most of the options are ECS-only:
 
-### Kubernetes Over-Engineering
+| | Fargate for ECS | Fargate for EKS |
+|---|---|---|
+| **Sizes** | 0.25 vCPU with 512 MiB up to 16 vCPU with 120 GB in fixed combinations, plus 32 vCPU with 60, 120, or 244 GB | Chosen from the pod's resource requests |
+| **Operating systems and processors** | Linux on x86 or Arm (AWS Graviton), and Windows on x86 with at least 1 vCPU | Linux on x86 only |
+| **Storage** | 20 GiB of ephemeral storage by default, up to 200 GiB, plus an EBS volume per task or an EFS file system | Ephemeral storage and EFS. No EBS volumes |
+| **Spot** | Fargate Spot, on x86 and Arm | Not available |
 
-**Problem**: Choosing EKS for simple workloads adds unnecessary complexity and cost.
+Neither supports GPUs, privileged containers, or host networking, all of which need instance capacity.
 
-**Costs of EKS**:
-- Control plane: $73/month per cluster
-- Operational burden: Managing Kubernetes manifests, namespaces, RBAC, CRDs
-- Learning curve: Requires Kubernetes expertise
+Fargate bills per second, with a one-minute minimum for Linux and five minutes for Windows, for the vCPU and memory a workload requests, from the start of the image pull until it stops. In US East (N. Virginia), Linux on x86 costs about $0.0405 per vCPU-hour and $0.0044 per GB-hour, and Linux on Arm about 20% less. Billing follows the requested size, not what the task uses.
 
-**When to avoid EKS**:
-- Team has no Kubernetes experience
-- Running simple microservices (fewer than 20 services)
-- No need for Kubernetes ecosystem
-- AWS-only deployment
+**Fargate Spot** runs ECS tasks on spare capacity for up to 70% off, in exchange for interruption. A task gets a two-minute warning, delivered to its containers as a `SIGTERM`, before it stops, and Spot capacity isn't guaranteed to come back right away. It suits work that can be retried or that has spare tasks to absorb a loss, such as batch jobs, queue workers, and the extra tasks of a stateless service. A capacity provider strategy can keep a base of regular Fargate tasks and add Spot tasks on top, so an interruption never takes the whole service down.
 
-**Example**: Team of 3 developers deploying 5 microservices chose EKS because "Kubernetes is the industry standard." Spent 6 months learning Kubernetes, fighting YAML configuration errors, debugging networking issues. ECS would have taken 1 week to set up.
+---
 
-### Not Blocking Instance Metadata Access
+## Amazon EKS
 
-**Problem**: Pods/tasks inherit instance profile permissions, violating least privilege.
+**Amazon EKS** runs upstream Kubernetes. In Kubernetes, you describe the desired state of your workloads in **manifests**, and controllers keep the cluster matching them. Workloads run as pods on **nodes**, the machines that make up the cluster's **data plane**. AWS operates the control plane, which is the Kubernetes API server, the scheduler that places pods on nodes, and etcd, the database that stores cluster state. It runs across three Availability Zones in an AWS-managed account and connects to your VPC through network interfaces. The data plane runs in your VPC.
 
-**Solution**:
-- Use IRSA (EKS) or Task IAM Roles (ECS) for fine-grained permissions
-- Block IMDS access via network policy or firewall rules
-- ECS: Set `"disableNetworking": true` for task definition
-- EKS: Use network policies to block 169.254.169.254
+{% include figure.html id="aws-eks-control-data-plane" %}
 
-### Using Untagged Images
+The control plane costs $0.10 per cluster-hour, about $73 a month, while a Kubernetes version is in standard support (14 months). A cluster left on a version in extended support pays $0.60 per hour for another 12 months, which makes staying current a cost question as well as a security one. Larger clusters can buy a provisioned control plane tier with more capacity.
 
-**Problem**: Untagged images accumulate, wasting ECR storage costs.
+The data plane can be any mix of:
 
-**Solution**:
-- Implement ECR lifecycle policies
-- Expire untagged images after 30 days
-- Keep last 30 tagged images per repository
+| Node option | What AWS manages |
+|---|---|
+| **Managed node groups** | Provisioning and updating EC2 nodes in an Auto Scaling group. You choose the instance types and trigger updates |
+| **EKS Auto Mode** | Choosing, launching, patching, and replacing nodes, plus the cluster's core networking, storage, and load balancing components. Charged as a per-instance fee on top of EC2, with less control over the nodes |
+| **Fargate** | One isolated compute unit per pod, with no nodes to see. Pods can't be DaemonSets (a copy of a pod on every node) and can't use GPUs or host networking |
+| **Self-managed nodes** | Nothing. You run the nodes yourself |
+| **Hybrid nodes** | Nothing on the node. On-premises or edge machines join the cluster and are charged per vCPU-hour |
+
+### ECS or EKS
+
+| | ECS | EKS |
+|---|---|---|
+| **Control plane cost** | None | $73 a month per cluster in standard support |
+| **Configuration model** | AWS APIs, IAM, CloudFormation, CDK | Kubernetes manifests and controllers, plus AWS resources for the cluster |
+| **Skills needed** | AWS | Kubernetes, and AWS for everything around it |
+| **Ecosystem** | AWS services | Helm charts (packaged applications), operators (controllers that deploy, scale, and repair specific software), and the wider Kubernetes tooling |
+| **Where it runs** | AWS, and your own servers through ECS Anywhere | AWS, hybrid nodes, and any other Kubernetes cluster, with care over cloud-specific pieces |
+| **Upgrades** | None for the orchestrator | A Kubernetes version upgrade at least every 14 months to stay in standard support |
+
+ECS is the simpler default for teams building on AWS, including teams that also run containers on their own servers. EKS earns its extra cost and operational load when a team already runs Kubernetes, depends on tools that only exist for it, or needs the same platform across clouds. Choosing EKS for a handful of services because Kubernetes is the industry default tends to trade feature work for platform work nobody needed.
+
+---
+
+## Identity and Secrets for Tasks
+
+An ECS task uses two IAM roles for two different callers:
+
+| Role | Used by | Grants |
+|---|---|---|
+| **Task execution role** | ECS itself, while starting and running the task | Pulling the image from ECR, writing logs, and fetching secrets referenced in the task definition |
+| **Task role** | Your application code, through the AWS SDK | Whatever the application calls: tables, buckets, queues |
+
+Keep them separate and scope each to one task definition or service. On EKS, pods get AWS permissions through EKS Pod Identity or IAM roles for service accounts, which map a Kubernetes service account to an IAM role.
+
+The isolation behind those roles depends on the capacity. Each Fargate task or pod has its own isolation boundary, and its containers can't reach the instance metadata service. On EC2 instances and ECS Managed Instances, containers are not a security boundary. A container can reach the instance metadata service and use the **instance role**, and it may reach data from other tasks on the same instance. On EC2 instances you run, block that path with the ECS agent's `ECS_AWSVPC_BLOCK_IMDS` option for awsvpc tasks, or an iptables rule dropping traffic to `169.254.169.254` for bridge-mode tasks, and keep the instance role limited to what the agent needs. Workloads that must not share a host belong on Fargate, or in separate clusters.
+
+Secrets referenced in a task definition are injected as environment variables when each container starts. The task execution role needs permission to read them:
 
 ```json
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Expire untagged images after 30 days",
-      "selection": {
-        "tagStatus": "untagged",
-        "countType": "sinceImagePushed",
-        "countUnit": "days",
-        "countNumber": 30
-      },
-      "action": {
-        "type": "expire"
-      }
-    }
-  ]
-}
+"secrets": [
+  {
+    "name": "DB_PASSWORD",
+    "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/orders/db-AbCdEf"
+  }
+]
 ```
+
+A running container never sees a later change to the secret. After a rotation, running tasks keep the old value until they're replaced, so force a new deployment of the service, or have the application fetch the secret itself at runtime.
+
+---
+
+## Storage, Logs, and Metrics
+
+A container's own storage is ephemeral and disappears with the task. ECS can attach one new **EBS volume** to each task for fast block storage, optionally created from a snapshot, but a service's task volumes are always deleted when their tasks stop. Data that has to outlive tasks goes in an **EFS** file system, which many tasks can mount at once, or in a database or S3. EKS reaches the same storage through CSI drivers, the Kubernetes plugins for storage systems.
+
+Containers write logs to standard output, and the task definition's log configuration decides where they go. The `awslogs` driver sends them to CloudWatch Logs, and **FireLens** runs Fluent Bit as a **sidecar**, a helper container in the same task, which can route logs anywhere, including third-party services. CloudWatch Container Insights adds per-task and per-service CPU, memory, and network metrics.
+
+---
+
+## Cost
+
+Container cost comes down to two decisions: the capacity type, and how closely workload sizes match what they use.
+
+Consider 10 tasks of 1 vCPU and 2 GB running all month in US East (N. Virginia). On Fargate that's 10 vCPU and 20 GB for about 730 hours, or roughly $295 for vCPU and $65 for memory, about $360 a month. Fargate Spot can cut up to 70% of that for tasks that tolerate interruption, and Arm about 20%, once the images are built for Arm. The same tasks on instance capacity cost whatever the instances under them cost. If the tasks pack tightly onto a few instances that stay busy, and those instances are covered by a pricing commitment, EC2 is cheaper. If the instances run half empty, the idle capacity usually erases the difference. Compute Savings Plans, a commitment to an hourly spend, cover Fargate at up to 50% off as well as EC2 and Lambda, so a commitment doesn't lock in a capacity choice.
+
+Right-size before optimizing the pricing model. Task sizes set at first deployment tend to stay unchanged, and a task that requests 2 vCPU and uses 0.5 pays for the other 1.5 every hour on Fargate, and crowds out other tasks on instances. Container Insights shows each service's real CPU and memory use, and AWS Compute Optimizer recommends task sizes for ECS services on Fargate.
+
+---
 
 ## Key Takeaways
 
-**1. Choose the right service based on expertise and requirements**: ECS for simplicity and AWS integration ($0 control plane cost). EKS for Kubernetes ecosystem and portability ($73/month per cluster). Let team expertise and portability needs guide the decision.
-
-**2. Fargate vs EC2 depends on workload patterns**: Fargate excels at variable workloads and eliminates infrastructure management (pay-per-second). EC2 with Reserved Instances is 3-9x cheaper for steady-state workloads. Use Fargate Spot + Graviton for up to 76% savings on fault-tolerant workloads.
-
-**3. Container networking matters for security and performance**: Use awsvpc mode for task-level security groups (required for Fargate). Use ECS Service Connect or VPC Lattice for service-to-service communication. ALB for HTTP/HTTPS, NLB for TCP/UDP ultra-low latency.
-
-**4. Storage depends on access patterns and availability needs**: Ephemeral storage (20-200 GB) for temporary data. EBS for high-performance single-AZ persistent storage. EFS for shared multi-AZ persistent storage accessible by multiple tasks.
-
-**5. Security requires multiple layers**: Use IAM roles for tasks/pods (not instance profiles). Store secrets in Secrets Manager or Parameter Store (not environment variables). Enable ECR image scanning with Amazon Inspector. Block instance metadata access. Use GuardDuty Runtime Monitoring for threat detection.
-
-**6. Observability is critical for troubleshooting**: Enable CloudWatch Container Insights for metrics. Use awslogs or FireLens for centralized logging. Use X-Ray or ADOT for distributed tracing. For EKS, integrate Amazon Managed Prometheus and Grafana.
-
-**7. Deployment patterns enable zero-downtime releases**: Use ECS native blue/green or canary deployments (2025 features). Enable CircuitBreaker for automatic rollback on failures. Configure rolling updates with appropriate minimumHealthyPercent and maximumPercent.
-
-**8. Cost optimization requires multiple strategies**: Use Compute Savings Plans (up to 66% savings) for baseline capacity. Use Fargate Spot (70% savings) or EC2 Spot (90% savings) for fault-tolerant workloads. Use Graviton processors (20% cheaper). Rightsize containers with Compute Optimizer. Implement ECR lifecycle policies.
-
-**9. Auto-scaling prevents both under-provisioning and waste**: Use target tracking scaling (70% CPU recommended). Enable Predictive Scaling (November 2024) for machine learning-based forecasting. Test scaling behavior under load. Set reasonable min/max task counts.
-
-**10. Avoid common pitfalls**: Don't over-provision resources (use Compute Optimizer). Don't ignore Fargate Spot for fault-tolerant workloads (70% savings). Don't use shallow health checks (verify application health, not just instance responsiveness). Don't choose EKS for simple workloads when ECS suffices. Don't forget to block instance metadata access when using task/pod IAM roles.
-
-**Recent 2024-2025 improvements**: ECS Managed Instances (recommended for new workloads). EKS Auto Mode (December 2024). ECS native blue/green and canary deployments (October 2025). Fargate Spot with Graviton support (September 2024). Enhanced ECS Observability (December 2024). EBS volume support for ECS tasks (January 2024). VPC Lattice general availability (cross-service networking).
+1. **Choose compute by how work runs, how steady load is, and how fast it must react.** Short event- or request-driven work suits Lambda. Long-running processes suit containers. Steady, high utilization favors instance pricing, and idle or spiky load favors per-use pricing.
+2. **ECS is four objects.** A task definition is the blueprint, a task is one running copy, a service keeps a count of tasks running behind a load balancer, and a cluster groups them with capacity.
+3. **Capacity is a separate choice from the orchestrator.** Fargate removes servers entirely, instance capacity is cheapest when packed and busy, and ECS Managed Instances or EKS Auto Mode give EC2 pricing without running the fleet, for a fee.
+4. **Fargate for EKS is narrower than Fargate for ECS.** It's Linux on x86 only, with no EBS volumes and no Spot.
+5. **EKS earns its cost with Kubernetes skills or needs.** It adds a control plane fee, version upgrades, and Kubernetes itself. ECS is the simpler default otherwise.
+6. **Two roles, two callers.** The execution role serves ECS and the task role serves your code. On instance capacity, containers can reach the instance role unless you block it.
+7. **ECS deploys safely on its own.** Rolling updates with the circuit breaker or alarms, and blue/green, linear, and canary deployments with bake time and alarm-driven rollback.
+8. **Right-size before choosing a pricing model.** Fargate bills for requested size, so oversized tasks cost money directly, and Spot, Arm, and Savings Plans then cut from a correct baseline.

@@ -3,319 +3,215 @@ title: "Security and Credential Management"
 layout: guide
 category: "WinUI 3"
 subcategory: "Advanced Features"
-description: "Securing WinUI 3 applications with the Windows Credential Locker, OAuth authentication flows, MSIX code signing, and data protection best practices."
-tags: [winui, winui-3, security, authentication, credentials, oauth, desktop, practical]
+description: "What a WinUI 3 desktop app can and can't protect on the user's machine, and the Windows APIs for it: the Credential Locker, DPAPI, signing users in with OAuth2Manager or MSAL and WAM, Windows Hello consent and key credentials, and keeping secrets out of the binary and the logs."
+tags: [credential-locker, dpapi, windows-hello, oauth2manager, msal, practical]
 ---
 
-## Security in WinUI 3 Desktop Applications
+## Table of Contents
 
-WinUI 3 applications run as trusted desktop processes with access to the full Windows API surface and the user's file system. This is an advantage for capability but shifts responsibility toward the developer for protecting sensitive data. Unlike a web application where secrets live on a server the user never touches, a desktop application runs on the user's machine, where a determined attacker with local access can inspect memory, read configuration files, and examine the executable itself.
-
-The Windows platform provides several purpose-built mechanisms to address this: the Credential Locker for secure secret storage, the Data Protection API for encrypting data at rest, Windows Hello for passwordless authentication, and the Windows authentication broker for handling OAuth flows without exposing tokens to application code. These APIs exist because storing secrets in `ApplicationData.Current.LocalSettings`, configuration files, or hardcoded in the binary is insufficient and commonly exploited.
-
-This guide covers the practical application of each mechanism and the patterns that keep tokens and credentials out of plain text storage.
+- [What a Desktop App Can Protect](#what-a-desktop-app-can-protect)
+- [Choosing Where a Secret Lives](#choosing-where-a-secret-lives)
+- [The Credential Locker](#the-credential-locker)
+- [Encrypting Data with DPAPI](#encrypting-data-with-dpapi)
+- [Signing Users In](#signing-users-in)
+- [Windows Hello](#windows-hello)
+- [Secrets That Don't Belong on the Client](#secrets-that-dont-belong-on-the-client)
 
 ---
 
-## Credential Management with PasswordVault
+## What a Desktop App Can Protect
 
-The [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/uwp/security/credential-locker){:target="_blank" rel="noopener noreferrer"} is an encrypted credential store managed by Windows and scoped to the current user's account. Credentials stored here are inaccessible to other users on the machine and are protected by the operating system's key management infrastructure. For a WinUI 3 application that needs to persist authentication tokens, API keys, or passwords between sessions, `PasswordVault` is the correct storage mechanism.
+A WinUI 3 app is a full-trust desktop process. Whether it's packaged or unpackaged, it runs with the signed-in user's rights: it can read the user's files, the registry keys the user can read, and the memory of other processes the user owns. MSIX packaging gives the app an identity and a clean install and uninstall, but it isn't a sandbox. (Microsoft's Win32 app isolation can run a packaged app inside an AppContainer, Windows' restricted-rights sandbox, but it has been in preview, so check its release status before depending on it.)
 
-The API is straightforward. A credential has three components: a resource name (typically your application or service name), a username, and a password field that holds the secret value. The "password" field is not limited to passwords; tokens, API keys, and other secrets fit equally well.
+That sets the threat model. Anything the app can read, other code running as the same user can read too, so no client-side API hides a secret from malware running in the user's session. What the Windows APIs protect against is narrower, and each piece still closes a common leak:
+
+- **Other users on the same machine.** Per-user storage and per-user encryption keep one account's secrets away from another.
+- **Offline access to the disk.** A stolen laptop or a copied profile folder yields encrypted data, not readable tokens.
+- **Casual exposure.** Secrets that aren't in plain-text files, logs, or crash dumps don't leak through backups, support tickets, or a colleague looking over a shoulder.
+
+Everything else in this guide follows from that: store secrets where Windows encrypts them per user, keep the ones that can't be protected off the client entirely, and let the operating system handle sign-in.
+
+---
+
+## Choosing Where a Secret Lives
+
+| What | Where | Why |
+| --- | --- | --- |
+| A password or other short secret the user chose to save | Credential Locker (`PasswordVault`) | Encrypted per user by Windows, with add, find, and remove built in |
+| An OAuth token cache or other larger blob | A file encrypted with DPAPI, or MSAL's own cache helper | Microsoft reserves the locker for passwords, and a cache outgrows it |
+| Settings and preferences that aren't secret | App settings or a plain file | No protection needed, and no reason to pay for it |
+| A client secret, API key with broad rights, or signing key | A backend service, never the app | A desktop binary can't keep anything from its own users |
+
+App settings deserve one warning. `ApplicationData` settings and local files are stored unencrypted in the user's profile, so a token written there is readable by anyone who can read that profile.
+
+---
+
+## The Credential Locker
+
+The Credential Locker is Windows' per-user store for credentials, reached through `PasswordVault` in `Windows.Security.Credentials`. It works in WinUI 3 apps packaged or unpackaged. Each `PasswordCredential` has a resource name (usually the app or service), a user name, and a password field that holds the secret.
 
 ```csharp
 using Windows.Security.Credentials;
 
-public class CredentialStore
+public sealed class CredentialStore
 {
-    private const string ResourceName = "MyApp.AuthToken";
+    private const string Resource = "Contoso.Sync";
+    private const int ElementNotFound = unchecked((int)0x80070490);
     private readonly PasswordVault _vault = new();
 
-    public void SaveToken(string username, string token)
+    public void Save(string userName, string secret)
     {
-        // Remove any existing credential for this resource/user before saving
-        // to prevent duplicate entries accumulating over time
-        RemoveToken(username);
-
-        var credential = new PasswordCredential(ResourceName, username, token);
-        _vault.Add(credential);
+        Remove(userName);   // Keep exactly one entry per user
+        _vault.Add(new PasswordCredential(Resource, userName, secret));
     }
 
-    public string? RetrieveToken(string username)
+    public string? Retrieve(string userName)
     {
         try
         {
-            var credential = _vault.Retrieve(ResourceName, username);
+            PasswordCredential credential = _vault.Retrieve(Resource, userName);
             credential.RetrievePassword();
             return credential.Password;
         }
-        catch (Exception ex) when (ex.HResult == -2147023728) // ELEMENT_NOT_FOUND
+        catch (Exception ex) when (ex.HResult == ElementNotFound)
         {
             return null;
         }
     }
 
-    public void RemoveToken(string username)
+    public void Remove(string userName)
     {
         try
         {
-            var credential = _vault.Retrieve(ResourceName, username);
-            _vault.Remove(credential);
+            _vault.Remove(_vault.Retrieve(Resource, userName));
         }
-        catch (Exception ex) when (ex.HResult == -2147023728)
+        catch (Exception ex) when (ex.HResult == ElementNotFound)
         {
-            // Credential did not exist; nothing to remove
-        }
-    }
-
-    public IReadOnlyList<PasswordCredential> GetAllCredentials()
-    {
-        try
-        {
-            return _vault.FindAllByResource(ResourceName);
-        }
-        catch (Exception ex) when (ex.HResult == -2147023728)
-        {
-            return Array.Empty<PasswordCredential>();
         }
     }
 }
 ```
 
-One subtlety worth noting: `Retrieve` returns a `PasswordCredential` object with the password field blank until you call `RetrievePassword()`. This lazy loading is intentional, allowing you to enumerate credentials by resource or username without fetching the secret until you actually need it.
+The locker's API has a few habits that surprise people:
 
-A common gotcha is that `FindAllByResource` and `FindAllByUserName` throw rather than returning an empty collection when no matching credentials exist. Catching the `ELEMENT_NOT_FOUND` HRESULT keeps this from becoming an unhandled exception during first launch.
+- **Lookups throw when nothing matches.** `Retrieve`, `FindAllByResource`, and `FindAllByUserName` throw an exception with `ELEMENT_NOT_FOUND` (0x80070490) instead of returning nothing, which happens on every first launch.
+- **The password is fetched on request.** `RetrievePassword()` fills in the `Password` property, and Microsoft's own sample calls it before reading the password, whichever method found the credential.
+- **The 20-credential limit doesn't apply here.** `PasswordVault.Add` throws past 20 credentials per app, but only for UWP apps and desktop apps running in an AppContainer. A full-trust WinUI 3 app isn't bound by it, though an app that later moves into Win32 app isolation would be.
+- **It's for passwords.** Microsoft's guidance is to store passwords in the locker, not larger blobs, and to save one only after the user has signed in successfully and chosen to be remembered.
+
+Microsoft's documentation also says locker credentials roam to the user's other devices with their Microsoft account, except credentials added while signed in with a domain account. A secret saved on one machine may therefore appear on another.
 
 ---
 
-## OAuth and Authentication Flows
+## Encrypting Data with DPAPI
 
-Authenticating against external identity providers like Microsoft, Google, or a custom OAuth 2.0 server involves a browser-based flow where the user signs in and the provider redirects back to the application with an authorization code. Handling this correctly in a desktop application requires keeping the browser interaction separate from your application code and exchanging the authorization code for tokens without ever exposing those tokens in a URL or log.
-
-### WebAuthenticationBroker
-
-The [WebAuthenticationBroker](https://learn.microsoft.com/en-us/uwp/api/windows.security.authentication.web.webauthenticationbroker){:target="_blank" rel="noopener noreferrer"} is a Windows API that opens a controlled browser experience for OAuth flows. It handles the redirect capture automatically, returning control to your application once the authorization code arrives at the callback URI.
-
-```csharp
-using Windows.Security.Authentication.Web;
-
-public async Task<string?> AuthenticateWithOAuthAsync(
-    string authorizationEndpoint,
-    string clientId,
-    string redirectUri,
-    string scope)
-{
-    var requestUri = new Uri(
-        $"{authorizationEndpoint}" +
-        $"?client_id={Uri.EscapeDataString(clientId)}" +
-        $"&response_type=code" +
-        $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
-        $"&scope={Uri.EscapeDataString(scope)}" +
-        $"&code_challenge={GeneratePkceChallenge()}" +
-        $"&code_challenge_method=S256");
-
-    var callbackUri = new Uri(redirectUri);
-
-    var result = await WebAuthenticationBroker.AuthenticateAsync(
-        WebAuthenticationOptions.None,
-        requestUri,
-        callbackUri);
-
-    if (result.ResponseStatus != WebAuthenticationStatus.Success)
-        return null;
-
-    // The response data contains the full redirect URI with the code as a query parameter
-    var responseUri = new Uri(result.ResponseData);
-    var query = System.Web.HttpUtility.ParseQueryString(responseUri.Query);
-    return query["code"];
-}
-```
-
-Always use [PKCE (Proof Key for Code Exchange)](https://oauth.net/2/pkce/){:target="_blank" rel="noopener noreferrer"} for public clients. A desktop application cannot keep a client secret truly secret since the binary ships to the user's machine, so PKCE provides the equivalent protection without requiring a secret by binding the authorization code to a verifier known only to the initiating client.
-
-### Microsoft Identity with MSAL
-
-For applications that authenticate against Microsoft Entra ID (Azure AD) or Microsoft personal accounts, [MSAL.NET](https://learn.microsoft.com/en-us/entra/identity-platform/msal-overview){:target="_blank" rel="noopener noreferrer"} is the recommended library. It handles the OAuth flow, token caching, silent refresh, and the interaction with the WAM (Windows Authentication Manager) broker, which provides single sign-on across applications using the user's Windows account.
-
-```csharp
-using Microsoft.Identity.Client;
-
-public class MsalAuthService
-{
-    private readonly IPublicClientApplication _app;
-    private readonly string[] _scopes = ["User.Read"];
-
-    public MsalAuthService(string clientId, string tenantId)
-    {
-        _app = PublicClientApplicationBuilder
-            .Create(clientId)
-            .WithAuthority($"https://login.microsoftonline.com/{tenantId}")
-            .WithDefaultRedirectUri()
-            .Build();
-    }
-
-    public async Task<AuthenticationResult?> AcquireTokenAsync(IntPtr windowHandle)
-    {
-        // Try silent acquisition first using a cached token
-        try
-        {
-            var accounts = await _app.GetAccountsAsync();
-            return await _app
-                .AcquireTokenSilent(_scopes, accounts.FirstOrDefault())
-                .ExecuteAsync();
-        }
-        catch (MsalUiRequiredException)
-        {
-            // No cached token; prompt the user interactively
-        }
-
-        // Fall through to interactive acquisition
-        return await _app
-            .AcquireTokenInteractive(_scopes)
-            .WithParentActivityOrWindow(windowHandle)
-            .ExecuteAsync();
-    }
-}
-```
-
-MSAL caches tokens in memory by default. For persistent caching between sessions, attach a [token cache serializer](https://learn.microsoft.com/en-us/entra/msal/dotnet/how-to/token-cache-serialization){:target="_blank" rel="noopener noreferrer"} that stores the encrypted cache to a file or to `PasswordVault`. MSAL encrypts the cache using DPAPI before writing, so the cached tokens on disk are not readable without the user's credentials.
-
----
-
-## Data Protection with DPAPI
-
-The [Data Protection API](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.protecteddata){:target="_blank" rel="noopener noreferrer"} provides symmetric encryption tied to either the current user's credentials or the current machine. Data encrypted with `DataProtectionScope.CurrentUser` can only be decrypted by the same user on any machine where they are authenticated. Data encrypted with `DataProtectionScope.LocalMachine` can be decrypted by any user on the same machine.
-
-The `ProtectedData` class in `System.Security.Cryptography` wraps DPAPI with a simple byte-array interface.
+The Data Protection API (DPAPI) encrypts arbitrary bytes with a key Windows derives from the user's credentials, so the app never manages a key itself. .NET exposes it as `ProtectedData` in the `System.Security.Cryptography.ProtectedData` package, which works only on Windows.
 
 ```csharp
 using System.Security.Cryptography;
 
-public class LocalDataProtection
+public static class LocalProtection
 {
-    // Optional entropy adds an application-specific secret to the key derivation,
-    // preventing other applications from decrypting your data even on the same machine
-    private static readonly byte[] Entropy = [0x4A, 0x8F, 0x2C, 0x91, 0xE3, 0x57, 0xB4, 0x0D];
+    // Entropy makes this app's ciphertext useless to a caller that doesn't know the value.
+    // It ships in the binary, so it isn't a secret from anyone who inspects the app.
+    private static readonly byte[] Entropy = "Contoso.Sync.v1"u8.ToArray();
 
-    public static byte[] Protect(byte[] plaintext)
-    {
-        return ProtectedData.Protect(
-            plaintext,
-            Entropy,
-            DataProtectionScope.CurrentUser);
-    }
+    public static byte[] Protect(byte[] plaintext) =>
+        ProtectedData.Protect(plaintext, Entropy, DataProtectionScope.CurrentUser);
 
-    public static byte[] Unprotect(byte[] ciphertext)
-    {
-        return ProtectedData.Unprotect(
-            ciphertext,
-            Entropy,
-            DataProtectionScope.CurrentUser);
-    }
-
-    public static string ProtectString(string value)
-    {
-        var plainBytes = Encoding.UTF8.GetBytes(value);
-        var cipherBytes = Protect(plainBytes);
-        return Convert.ToBase64String(cipherBytes);
-    }
-
-    public static string UnprotectString(string base64Ciphertext)
-    {
-        var cipherBytes = Convert.FromBase64String(base64Ciphertext);
-        var plainBytes = Unprotect(cipherBytes);
-        return Encoding.UTF8.GetString(plainBytes);
-    }
+    public static byte[] Unprotect(byte[] ciphertext) =>
+        ProtectedData.Unprotect(ciphertext, Entropy, DataProtectionScope.CurrentUser);
 }
 ```
 
-DPAPI is appropriate for data that needs to persist to disk in encrypted form, such as cached OAuth tokens written to a file, application-level secrets like encryption keys, or any configuration value that would expose sensitive information if read as plain text. The Windows Credential Locker is better for individual credentials because it manages the lifecycle (add, retrieve, remove) more cleanly, but DPAPI handles arbitrary binary or structured data that does not fit the username/password model.
+The scope decides who can decrypt. `CurrentUser` limits it to code running as the same user, and because the key material lives in the user's profile, the data generally can't be decrypted on another machine unless the profile goes with it. `LocalMachine` lets any user on the machine decrypt, which rarely fits a secret. The optional entropy is an extra input the caller must supply, so another program running as the same user can't decrypt the app's data by calling DPAPI blindly. It stops only programs that don't know the value, and anyone who reads the app's binary does.
 
-One limitation is that DPAPI ties decryption to the user's credentials. If a user's profile is migrated to a new machine or the profile is corrupted, previously encrypted data becomes permanently inaccessible. Applications should handle decryption failures gracefully by prompting reauthentication rather than surfacing an unhandled exception.
+DPAPI fits the blobs the locker doesn't: a serialized token cache, a local encryption key for a database, or a structured settings file with secrets in it. Decryption can fail when the user's profile is rebuilt, moved to a new machine, or has its keys reset, so code that unprotects on startup treats a `CryptographicException` as "sign in again" rather than letting it crash the app.
 
 ---
 
-## Windows Hello and Biometric Authentication
+## Signing Users In
 
-[Windows Hello](https://learn.microsoft.com/en-us/windows/apps/develop/security/windows-hello){:target="_blank" rel="noopener noreferrer"} provides passwordless authentication through biometrics like fingerprint or facial recognition, or a PIN, backed by a Trusted Platform Module (TPM). For a WinUI 3 application, Windows Hello can serve as a second factor to unlock locally stored credentials without requiring the user to re-enter a password.
+The protocol side of signing in (OAuth 2.0, the authorization code flow, and PKCE) is the same for every native app. What's specific to WinUI 3 is which Windows API runs it.
 
-The `UserConsentVerifier` API checks whether the device supports biometric verification and prompts the user when verification is needed.
+**`WebAuthenticationBroker` doesn't work in desktop apps.** It's a UWP API that depends on the UWP app model, and Microsoft lists it among the WinRT APIs that desktop apps can't use, with no workaround. Code carried over from UWP that calls it fails at run time.
+
+**`OAuth2Manager`**, in `Microsoft.Security.Authentication.OAuth` (Windows App SDK 1.7 and later), is the replacement for any OAuth 2.0 provider, such as GitHub, Google, or the app's own identity server. It follows RFC 8252, the IETF's guidance for native apps. It opens the authorization page in the user's default browser rather than an embedded one, and it supports only the authorization code grant with PKCE. Microsoft's sample never computes a PKCE challenge itself: the token request is built from the authorization response, so the API carries the verifier from one step to the next. It takes the window's `WindowId` so the browser prompt is tied to the app:
+
+```csharp
+var request = AuthRequestParams.CreateForAuthorizationCodeRequest(
+    "contoso-desktop", new Uri("contoso-app:/oauth-callback/"));
+request.Scope = "read:profile";
+
+AuthRequestResult result = await OAuth2Manager.RequestAuthWithParamsAsync(
+    this.AppWindow.Id, new Uri("https://id.contoso.example/authorize"), request);
+
+if (result.Response is AuthResponse response)
+{
+    TokenRequestResult tokens = await OAuth2Manager.RequestTokenAsync(
+        new Uri("https://id.contoso.example/token"),
+        TokenRequestParams.CreateForAuthorizationCodeRequest(response));
+}
+```
+
+The provider redirects to the app's `contoso-app:` protocol, so the app registers that protocol and passes the activation URI to `OAuth2Manager.CompleteAuthRequest`. When Windows starts a second instance for the redirect, that instance hands the URI over this way and exits, as Microsoft's sample does, and the original instance's `RequestAuthWithParamsAsync` returns.
+
+{% include figure.html id="winui-oauth2-redirect" %} The token request carries no client secret, because a desktop app is a public client.
+
+**MSAL with the Web Account Manager (WAM)** is the choice for Microsoft Entra ID and personal Microsoft accounts. WAM is the Windows sign-in broker, so the user can pick the account they're already signed in to Windows with. Refresh tokens are bound to the device, and Windows Hello and Conditional Access work without extra code. WAM needs the `Microsoft.Identity.Client.Broker` package, a redirect URI of the form `ms-appx-web://microsoft.aad.brokerplugin/{client_id}` in the app registration, and the window handle to parent its dialog:
+
+```csharp
+IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+
+IPublicClientApplication msal = PublicClientApplicationBuilder
+    .Create(clientId)
+    .WithParentActivityOrWindow(() => hwnd)
+    .WithBroker(new BrokerOptions(BrokerOptions.OperatingSystems.Windows))
+    .Build();
+```
+
+MSAL keeps its token cache in memory unless the app persists it. For desktop apps Microsoft recommends the `Microsoft.Identity.Client.Extensions.Msal` package, whose `MsalCacheHelper` stores the cache in a file encrypted with DPAPI on Windows. Without it, the user signs in again on every launch.
+
+Either way, sign-in happens in the browser or the broker, never in the app's own UI. Collecting the password in a XAML form, or showing the provider's page in a WebView2 and reading tokens out of it, is the embedded-browser pattern that providers block and that exposes the password to the app.
+
+---
+
+## Windows Hello
+
+Windows Hello offers two different things, and they protect different amounts.
+
+**A consent prompt.** `UserConsentVerifier` asks the user to confirm with their face, fingerprint, or PIN, and reports whether they did. In a desktop app the prompt has to be parented to a window, so a WinUI 3 app calls the interop version, `UserConsentVerifierInterop.RequestVerificationForWindowAsync(hwnd, message)`, instead of `RequestVerificationAsync`:
 
 ```csharp
 using Windows.Security.Credentials.UI;
 
-public class WindowsHelloService
-{
-    public static async Task<bool> IsAvailableAsync()
-    {
-        var availability = await UserConsentVerifier.CheckAvailabilityAsync();
-        return availability == UserConsentVerifierAvailability.Available;
-    }
+IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
 
-    public static async Task<bool> RequestVerificationAsync(string message)
+if (await UserConsentVerifier.CheckAvailabilityAsync() == UserConsentVerifierAvailability.Available)
+{
+    UserConsentVerificationResult result =
+        await UserConsentVerifierInterop.RequestVerificationForWindowAsync(
+            hwnd, "Confirm it's you to show saved passwords.");
+
+    if (result != UserConsentVerificationResult.Verified)
     {
-        var result = await UserConsentVerifier.RequestVerificationAsync(message);
-        return result == UserConsentVerificationResult.Verified;
+        return;
     }
 }
 ```
 
-A practical pattern is to protect access to credentials stored in `PasswordVault` with Windows Hello verification. When the application starts, check whether Windows Hello is available and whether the user has opted into biometric protection. If so, call `RequestVerificationAsync` before retrieving credentials from the vault. This prevents credentials from being accessible if someone else sits down at an unlocked machine, without requiring the user to type a password.
+The prompt is a check in the app's own code, not a lock on the data. It stops someone at an unlocked machine from using the app's UI to reveal a saved secret, and nothing more. The secret stays in the locker or the DPAPI file whether or not the prompt succeeds, readable by any code running as that user. Microsoft suggests this prompt for confirming a sensitive action, such as a banking app re-checking before it sends a transfer.
 
-```csharp
-public async Task<string?> GetTokenWithBiometricGuardAsync(string username)
-{
-    if (await WindowsHelloService.IsAvailableAsync())
-    {
-        var verified = await WindowsHelloService.RequestVerificationAsync(
-            "Verify your identity to access saved credentials.");
-
-        if (!verified)
-            return null;
-    }
-
-    return _credentialStore.RetrieveToken(username);
-}
-```
+**A key credential.** `KeyCredentialManager` creates a key pair for an account. Windows keeps the private key in the TPM when the device has one, and the app never sees it. The app sends the public key to its backend at registration. At sign-in, the server sends a challenge, `KeyCredential.RequestSignAsync` prompts for Windows Hello and signs it, and the server checks the signature. Only the user's gesture can release that key, so the server learns that this user on this device approved the request. It replaces a password rather than guarding one. It needs a backend that stores public keys and issues challenges, which is the price of the stronger guarantee.
 
 ---
 
-## Secure Storage Best Practices
+## Secrets That Don't Belong on the Client
 
-Several common mistakes repeatedly appear in desktop application security, and they are worth addressing directly.
+Some secrets can't be protected on a user's machine by any API, because the app itself has to read them.
 
-`ApplicationData.Current.LocalSettings` stores values as plain text in a registry hive under the user's profile. Anyone with access to the machine and the user's registry hive can read these values. Tokens, API keys, and passwords must never go into `LocalSettings`. Use `PasswordVault` for individual credentials and DPAPI-encrypted files for structured data.
+- **Anything compiled into the binary.** .NET assemblies decompile readily, and configuration files ship as plain text. A key in either is public. A client secret for an OAuth provider falls in this group, which is why desktop apps use public-client flows with PKCE, and why a token exchange that needs a secret runs on a backend.
+- **Keys with broad rights.** A key the app must hold should be scoped to the least it needs, rotatable without shipping a new build, and monitored for abuse, on the assumption that someone has already extracted it.
+- **Tokens in logs.** A logged `Authorization` header, a URL with credentials in its query string, or an exception message that includes a token turns the log file into a credential store with no encryption. Log the failure's type and a redacted message instead.
 
-Hardcoded secrets in source code or configuration files shipped with the application are not secrets. The binary can be decompiled with tools like dnSpy, and configuration files are readable as plain text. If a secret is burned into the application, assume it is compromised. Secrets that cannot be avoided on the client side should be scoped to minimum permissions, rotatable without shipping a new binary, and monitored for abuse.
-
-Logging frameworks should never receive raw token values. It is easy to accidentally include an authorization header or a credential in an exception message that gets written to a log file. When catching authentication exceptions, log only the exception type and a sanitized message; never log the token, the full URL if it contains query-parameter credentials, or the request headers.
-
-For network calls, use HTTPS exclusively. WinUI 3 does not impose the network capability model that UWP did, so there is no automatic enforcement. Configure `HttpClient` with a base address that uses `https://`, and reject self-signed certificates in production by not overriding the certificate validation callback. If integration testing requires bypassing certificate validation, scope that override to a named client registered in development only, not to the production configuration.
-
----
-
-## HTTPS and Certificate Pinning
-
-For applications that communicate with a known server whose certificate is under your control, certificate pinning provides an additional layer of protection against man-in-the-middle attacks. Instead of trusting any certificate signed by a CA in the Windows trust store, pinning validates that the server's certificate (or its public key) matches a specific expected value.
-
-```csharp
-public static HttpClientHandler CreatePinnedHandler(string expectedThumbprint)
-{
-    return new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
-        {
-            if (errors != System.Net.Security.SslPolicyErrors.None)
-                return false;
-
-            // Compare the server's certificate thumbprint to the expected value
-            return string.Equals(
-                cert?.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256),
-                expectedThumbprint,
-                StringComparison.OrdinalIgnoreCase);
-        }
-    };
-}
-```
-
-Pinning introduces an operational cost: when the server's certificate is renewed, the application must ship a new expected thumbprint before the old certificate expires. Public key pinning mitigates this by pinning the public key rather than the full certificate, which can remain stable across certificate renewals if the same key pair is reused. For most WinUI 3 applications communicating with first-party APIs, standard CA validation combined with HTTPS is sufficient. Pinning is most justified for applications handling financial data, medical records, or credentials where MITM attacks carry significant consequences.
+Traffic to the app's services goes over HTTPS with the platform's normal certificate validation. Turning off validation for testing belongs only in debug configurations, and certificate pinning, which trusts only a specific certificate or key, trades protection against a compromised certificate authority for an app update every time the pinned certificate changes.

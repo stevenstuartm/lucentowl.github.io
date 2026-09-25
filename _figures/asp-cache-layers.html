@@ -1,0 +1,68 @@
+---
+title: "Where a Response Can Be Reused"
+kind: flow
+system: aspnet-core
+summary: "The caches a GET passes, and what controls each one."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 285" role="img" aria-labelledby="acl-title acl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="acl-title">The caches a GET request passes on its way to an ASP.NET Core API's data</title>
+<desc id="acl-desc">A GET request passes four points where an earlier answer can be reused. The client's own cache and a shared cache such as a CDN or proxy sit outside the app; both obey the Cache-Control and Vary headers the app sends and use its ETag to revalidate, a shared cache never stores a private response, and a fresh hit there never reaches the server. Inside the app, the output cache middleware sits in front of the endpoint; its policies are set in code, the client's Cache-Control request header can't override them, and a hit skips the endpoint entirely. Inside the endpoint, a data cache such as HybridCache holds objects rather than responses, and a hit there still runs the endpoint but skips the database.</desc>
+<style>
+.acl-band { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.acl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.acl-db { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.acl-bl { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.acl-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.acl-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.acl-c { font-size: 10.5px; fill: var(--color-text, #1F2937); }
+.acl-hit { font-size: 10.5px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.acl-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="acl-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<text class="acl-bl" x="30" y="36">Outside the app: HTTP caching</text>
+<text class="acl-bl" x="420" y="36">Inside the app</text>
+<rect class="acl-band" x="410" y="48" width="400" height="222" rx="8"/>
+<rect class="acl-box" x="30" y="70" width="160" height="70" rx="6"/>
+<text class="acl-n" x="110" y="96" text-anchor="middle">Client cache</text>
+<text class="acl-k" x="110" y="114" text-anchor="middle">browser or HTTP client</text>
+<rect class="acl-box" x="220" y="70" width="160" height="70" rx="6"/>
+<text class="acl-n" x="300" y="96" text-anchor="middle">Shared cache</text>
+<text class="acl-k" x="300" y="114" text-anchor="middle">CDN or proxy</text>
+<rect class="acl-box" x="430" y="70" width="170" height="70" rx="6"/>
+<text class="acl-n" x="515" y="96" text-anchor="middle">Output cache</text>
+<text class="acl-k" x="515" y="114" text-anchor="middle">middleware</text>
+<rect class="acl-box" x="630" y="70" width="160" height="70" rx="6"/>
+<text class="acl-n" x="710" y="96" text-anchor="middle">Endpoint</text>
+<text class="acl-k" x="710" y="114" text-anchor="middle">with a data cache</text>
+<rect class="acl-db" x="840" y="70" width="100" height="70" rx="6"/>
+<text class="acl-n" x="890" y="96" text-anchor="middle">Database</text>
+<text class="acl-k" x="890" y="114" text-anchor="middle">or service</text>
+<path class="acl-flow" d="M190,105 L218,105" marker-end="url(#acl-a)"/>
+<path class="acl-flow" d="M380,105 L428,105" marker-end="url(#acl-a)"/>
+<path class="acl-flow" d="M600,105 L628,105" marker-end="url(#acl-a)"/>
+<path class="acl-flow" d="M790,105 L838,105" marker-end="url(#acl-a)"/>
+<text class="acl-c" x="30" y="170">Controlled by response</text>
+<text class="acl-c" x="30" y="186">Cache-Control and Vary;</text>
+<text class="acl-c" x="30" y="202">ETag to revalidate.</text>
+<text class="acl-hit" x="30" y="232">A fresh hit never</text>
+<text class="acl-hit" x="30" y="248">reaches the server.</text>
+<text class="acl-c" x="220" y="170">Same headers; also</text>
+<text class="acl-c" x="220" y="186">obeys s-maxage. Never</text>
+<text class="acl-c" x="220" y="202">stores private responses.</text>
+<text class="acl-hit" x="220" y="232">A fresh hit never</text>
+<text class="acl-hit" x="220" y="248">reaches the server.</text>
+<text class="acl-c" x="430" y="170">Controlled by policies</text>
+<text class="acl-c" x="430" y="186">in code. The client&#8217;s</text>
+<text class="acl-c" x="430" y="202">Cache-Control can't override.</text>
+<text class="acl-hit" x="430" y="232">A hit skips the</text>
+<text class="acl-hit" x="430" y="248">endpoint.</text>
+<text class="acl-c" x="630" y="170">HybridCache or</text>
+<text class="acl-c" x="630" y="186">IMemoryCache holds</text>
+<text class="acl-c" x="630" y="202">objects, not responses.</text>
+<text class="acl-hit" x="630" y="232">A hit runs the endpoint</text>
+<text class="acl-hit" x="630" y="248">but skips the database.</text>
+</g>
+</svg>

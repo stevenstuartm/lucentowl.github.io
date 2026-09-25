@@ -1,0 +1,102 @@
+---
+title: "Lambda's Three Invocation Models"
+kind: flow
+system: aws
+summary: "Who waits, where retries happen, and where failed events go."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="awsq-title awsq-desc" style="width:100%; min-width:700px; height:auto; display:block;">
+<title id="awsq-title">Synchronous, asynchronous, and event source mapping invocation of a Lambda function</title>
+<desc id="awsq-desc">Synchronous: a caller such as API Gateway, an Application Load Balancer, a function URL, or the SDK sends an event and waits for the function's response or error. Lambda does not retry; the caller decides. Asynchronous: an event source such as S3, SNS, or EventBridge hands the event to Lambda's internal queue and gets a 202 acknowledgment at once. Lambda invokes the function from the queue, retries function errors twice and throttles until the maximum event age, and sends events that exhaust retries or age out to an on-failure destination. Event source mapping: a Lambda-managed poller reads batches from a queue or stream such as SQS, Kinesis, DynamoDB Streams, or Kafka and invokes the function synchronously with each batch. A failed batch is retried: SQS messages reappear after the visibility timeout, and a stream retries from the failed record while its shard waits. For streams, records that exhaust retries or age out go to an on-failure destination set on the mapping.</desc>
+<style>
+.awsq-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsq-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsq-t { font-size: 13px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.awsq-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsq-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsq-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsq-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsq-ack { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.awsq-fail { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.75; stroke-dasharray: 6 3; }
+</style>
+<defs>
+<marker id="awsq-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsq-g" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+<marker id="awsq-f" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-accent, #A5486E)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Synchronous -->
+<rect class="awsq-band" x="10" y="10" width="940" height="120" rx="8"/>
+<text class="awsq-t" x="24" y="32">Synchronous</text>
+<rect class="awsq-box" x="150" y="50" width="200" height="56" rx="6"/>
+<text class="awsq-n" x="250" y="73" text-anchor="middle">Caller</text>
+<text class="awsq-k" x="250" y="91" text-anchor="middle">[API Gateway, ALB, URL, SDK]</text>
+<rect class="awsq-box" x="560" y="50" width="160" height="56" rx="6"/>
+<text class="awsq-n" x="640" y="82" text-anchor="middle">Function</text>
+<path class="awsq-flow" d="M350,66 L558,66" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="455" y="58" text-anchor="middle">event; the caller waits</text>
+<path class="awsq-flow" d="M560,92 L352,92" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="455" y="112" text-anchor="middle">response or error</text>
+<text class="awsq-lab" x="740" y="74">No retries by Lambda.</text>
+<text class="awsq-lab" x="740" y="90">The caller decides.</text>
+
+<!-- Asynchronous -->
+<rect class="awsq-band" x="10" y="145" width="940" height="165" rx="8"/>
+<text class="awsq-t" x="24" y="167">Asynchronous</text>
+<rect class="awsq-box" x="30" y="190" width="170" height="56" rx="6"/>
+<text class="awsq-n" x="115" y="213" text-anchor="middle">Event source</text>
+<text class="awsq-k" x="115" y="231" text-anchor="middle">[S3, SNS, EventBridge]</text>
+<rect class="awsq-box" x="270" y="190" width="150" height="56" rx="6"/>
+<text class="awsq-n" x="345" y="213" text-anchor="middle">Lambda's queue</text>
+<text class="awsq-k" x="345" y="231" text-anchor="middle">[internal]</text>
+<rect class="awsq-box" x="490" y="190" width="140" height="56" rx="6"/>
+<text class="awsq-n" x="560" y="222" text-anchor="middle">Function</text>
+<rect class="awsq-box" x="720" y="190" width="220" height="56" rx="6"/>
+<text class="awsq-n" x="830" y="213" text-anchor="middle">On-failure destination</text>
+<text class="awsq-k" x="830" y="231" text-anchor="middle">[SQS, SNS, S3, Lambda, EventBridge]</text>
+<path class="awsq-flow" d="M200,206 L268,206" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="234" y="199" text-anchor="middle">event</text>
+<path class="awsq-ack" d="M270,228 L202,228" marker-end="url(#awsq-g)"/>
+<text class="awsq-lab" x="236" y="244" text-anchor="middle">202 at once</text>
+<path class="awsq-flow" d="M420,218 L488,218" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="454" y="211" text-anchor="middle">invoke</text>
+<path class="awsq-fail" d="M560,246 L560,280 L345,280 L345,248" marker-end="url(#awsq-f)"/>
+<text class="awsq-lab" x="452" y="298" text-anchor="middle">error: 2 retries · throttle: retried until the maximum age</text>
+<path class="awsq-fail" d="M345,190 L345,176 L830,176 L830,188" marker-end="url(#awsq-f)"/>
+<text class="awsq-lab" x="587" y="170" text-anchor="middle">retries or maximum age used up</text>
+
+<!-- Event source mapping -->
+<rect class="awsq-band" x="10" y="325" width="940" height="175" rx="8"/>
+<text class="awsq-t" x="24" y="347">Event source mapping</text>
+<rect class="awsq-box" x="30" y="370" width="230" height="56" rx="6"/>
+<text class="awsq-n" x="145" y="393" text-anchor="middle">Queue or stream</text>
+<text class="awsq-k" x="145" y="411" text-anchor="middle">[SQS, Kinesis, DynamoDB, Kafka]</text>
+<rect class="awsq-box" x="340" y="370" width="180" height="56" rx="6"/>
+<text class="awsq-n" x="430" y="393" text-anchor="middle">Event source mapping</text>
+<text class="awsq-k" x="430" y="411" text-anchor="middle">[Lambda-managed poller]</text>
+<rect class="awsq-box" x="600" y="370" width="140" height="56" rx="6"/>
+<text class="awsq-n" x="670" y="402" text-anchor="middle">Function</text>
+<path class="awsq-flow" d="M340,386 L262,386" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="301" y="379" text-anchor="middle">poll</text>
+<path class="awsq-flow" d="M262,410 L338,410" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="301" y="424" text-anchor="middle">batch</text>
+<path class="awsq-flow" d="M520,398 L598,398" marker-end="url(#awsq-a)"/>
+<text class="awsq-lab" x="559" y="391" text-anchor="middle">sync invoke</text>
+<rect class="awsq-box" x="780" y="370" width="160" height="56" rx="6"/>
+<text class="awsq-n" x="860" y="393" text-anchor="middle">On-failure destination</text>
+<text class="awsq-k" x="860" y="411" text-anchor="middle">[streams: SQS, SNS, S3]</text>
+<path class="awsq-fail" d="M430,370 L430,360 L860,360 L860,368" marker-end="url(#awsq-f)"/>
+<text class="awsq-lab" x="645" y="354" text-anchor="middle">streams: retries or record age used up</text>
+<path class="awsq-fail" d="M670,426 L670,452 L145,452 L145,428" marker-end="url(#awsq-f)"/>
+<text class="awsq-lab" x="407" y="470" text-anchor="middle">failed batch retried: SQS messages reappear after the visibility timeout,</text>
+<text class="awsq-lab" x="407" y="485" text-anchor="middle">and a stream retries from the failed record while its shard waits</text>
+
+<!-- Legend -->
+<path class="awsq-flow" d="M30,523 L70,523"/>
+<text class="awsq-lab" x="78" y="527">event flow</text>
+<path class="awsq-ack" d="M170,523 L210,523"/>
+<text class="awsq-lab" x="218" y="527">acknowledgment</text>
+<path class="awsq-fail" d="M340,523 L380,523"/>
+<text class="awsq-lab" x="388" y="527">retry or failure path</text>
+</g>
+</svg>

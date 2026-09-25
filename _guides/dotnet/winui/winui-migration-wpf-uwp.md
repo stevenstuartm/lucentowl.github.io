@@ -54,8 +54,7 @@ WinUI 3 covers most of what UWP offered, but not all of it. Microsoft's migratio
 | `CameraCaptureUI` | Available since 1.7 |
 | `WebView` | `WebView2`, which needs the WebView2 Runtime |
 | `PrintManager` | Windows 11 only |
-| `InkCanvas` | Experimental channel only, the preview releases not meant for production. Referencing it in a stable build fails with an unknown-type error |
-| `InkToolbar` | Not available on any channel. Build a custom toolbar |
+| `InkCanvas`, `InkToolbar` | Experimental channel only, the preview releases not meant for production. `InkToolbar` joined `InkCanvas` there in 2.4. Referencing either in a stable build fails with an unknown-type error |
 | `CaptureElement` | Not available. Use `MediaPlayerElement` with a frame source for camera preview |
 | `DisplayRequest` | Not available. Use Win32 `SetThreadExecutionState` |
 | `DataGrid` | No first-party control, and the Community Toolkit's is UWP-only |

@@ -3,27 +3,26 @@ title: "Media, Graphics, and the Visual Layer"
 layout: guide
 category: "WinUI 3"
 subcategory: "Advanced Features"
-description: "Working with media playback, digital inking, vector shapes, the composition visual layer, and printing in WinUI 3 for rich visual experiences."
-tags: [winui, winui-3, xaml, media, graphics, composition, inking, desktop]
+description: "Playing audio and video with MediaPlayerElement, sizing image decodes, drawing with XAML shapes, adding effects and shadows through the composition visual layer, choosing between Win2D and SkiaSharp, the state of inking, and printing from a WinUI 3 app."
+tags: [mediaplayerelement, image-decoding, composition, win2d, skiasharp, printing, practical]
 ---
 
 ## Table of Contents
 
-- [MediaPlayerElement](#mediaplayerelement)
-- [InkCanvas and Digital Inking](#inkcanvas-and-digital-inking)
-- [XAML Shapes](#xaml-shapes)
+- [Playing Audio and Video](#playing-audio-and-video)
 - [Images and Bitmaps](#images-and-bitmaps)
+- [XAML Shapes](#xaml-shapes)
 - [The Composition Visual Layer](#the-composition-visual-layer)
+- [Win2D and SkiaSharp](#win2d-and-skiasharp)
+- [Inking](#inking)
 - [Printing](#printing)
-- [Choosing the Right Drawing Approach](#choosing-the-right-drawing-approach)
+- [Choosing a Drawing Approach](#choosing-a-drawing-approach)
 
 ---
 
-## MediaPlayerElement
+## Playing Audio and Video
 
-`MediaPlayerElement` is the primary control for audio and video playback in WinUI 3. It wraps the underlying `Windows.Media.Playback.MediaPlayer` and surfaces a XAML-friendly interface with built-in transport controls, poster image support, and closed caption rendering. For most playback scenarios you assign a source and optionally configure the control; the runtime handles buffering, format negotiation, and hardware decoding.
-
-Setting up basic video playback requires a source and, typically, transport controls:
+`MediaPlayerElement`, in the Windows App SDK since 1.2, is the XAML front end for a `Windows.Media.Playback.MediaPlayer`. The player does the work: it opens the source, buffers it, decodes it (on the GPU for formats the hardware supports), and keeps the playback position. The element draws the video frame, a poster image before playback starts, the transport controls, and captions.
 
 ```xml
 <MediaPlayerElement x:Name="Player"
@@ -33,66 +32,111 @@ Setting up basic video playback requires a source and, typically, transport cont
 ```
 
 ```csharp
-Player.Source = MediaSource.CreateFromUri(new Uri("ms-appx:///Assets/clip.mp4"));
+Player.Source = MediaSource.CreateFromUri(new Uri("https://example.com/media/intro.mp4"));
 ```
 
-`MediaSource.CreateFromUri` accepts local package URIs, file paths via `StorageFile`, and remote HTTPS addresses. For content that requires adaptive streaming or DRM, the `MediaPlaybackItem` and `AdaptiveMediaSource` types build on top of `MediaSource` and are accessible through the same `Source` property chain.
+A `MediaSource` describes where the media comes from, with one factory per origin: `CreateFromUri` for a web or package address, `CreateFromStorageFile` for a file the user picked, `CreateFromStream` for bytes the app already holds, and `CreateFromAdaptiveMediaSource` for HLS or DASH, the two common streaming formats that switch quality to match bandwidth. The element's `Source` takes any of three playback sources, each wrapping the one before:
 
-`AreTransportControlsEnabled` toggles the default overlay that includes play/pause, seek, volume, and full-screen buttons. When set to `True`, the control renders a `MediaTransportControls` instance that you can replace or extend through the `TransportControls` property. If you need a custom playback UI, set `AreTransportControlsEnabled` to `False` and drive the underlying `MediaPlayer` directly through `Player.MediaPlayer`.
+- **`MediaSource`**: one piece of media, from any of the origins above.
+- **`MediaPlaybackItem`**: wraps a `MediaSource` and exposes its audio, video, and caption tracks, so the user can switch between them.
+- **`MediaPlaybackList`**: holds several items and plays them in sequence without gaps.
 
-Subtitles and closed captions attach through `TimedMetadataTracks` on a `MediaPlaybackItem`. When the track type is `TimedMetadataKind.Subtitle` or `TimedMetadataKind.Caption`, the `MediaPlayerElement` renders them automatically in the standard position. For external SRT files you load the file as a `TimedTextSource` and add it to the item before assigning the source to the element.
+A `MediaSource` can belong to only one `MediaPlaybackItem`. Once it's wrapped, the app sets the item as the source rather than the `MediaSource`.
+
+`AreTransportControlsEnabled` shows the built-in `MediaTransportControls` (play and pause, seek bar, volume, full window), and the `TransportControls` property holds that instance for customization. An app with its own playback UI turns the built-in controls off and drives `Player.MediaPlayer` directly: `Play()`, `Pause()`, and `PlaybackSession.Position` for seeking. `Position` isn't a bindable property, so a custom seek bar polls it on a timer, and polling faster than every 250 milliseconds gains nothing because `Position` updates at that rate during playback.
+
+Captions in a separate file, such as an SRT file per language, load through a `TimedTextSource`. Each one is added to the `MediaSource`'s `ExternalTimedTextSources`, not to the playback item, and each becomes a track on the item. A caption track is disabled until the app sets its presentation mode. `PlatformPresented` has the element draw the text itself:
+
+```csharp
+var source = MediaSource.CreateFromUri(videoUri);
+source.ExternalTimedTextSources.Add(TimedTextSource.CreateFromUri(captionsUri));
+
+var item = new MediaPlaybackItem(source);
+item.TimedMetadataTracksChanged += (sender, args) =>
+{
+    if (args.CollectionChange == CollectionChange.ItemInserted)
+    {
+        sender.TimedMetadataTracks.SetPresentationMode(
+            args.Index, TimedMetadataTrackPresentationMode.PlatformPresented);
+    }
+};
+
+Player.Source = item;
+```
+
+Playback events such as `TimedMetadataTracksChanged` and `MediaPlaybackList.CurrentItemChanged` arrive on a background thread, so a handler that updates the UI dispatches to the UI thread first.
+
+Video is expensive, and Microsoft's performance guidance for it comes down to a few habits:
+
+- **Set `Source` only when the user is ready to play.** The element loads the media engine when its source is set, so a page with an unplayed video pays nothing until then.
+- **Set `PosterSource`.** Showing the poster lets XAML release GPU resources that an idle video surface would hold.
+- **Keep XAML off the video.** Playback is most efficient when the video is the only thing drawn, so full-window playback goes through `IsFullWindow`, embedded video keeps its controls beside it rather than on top, and even a border around the element costs extra composition work.
+- **Don't animate the element.** Moving or scaling a playing `MediaPlayerElement` costs performance and can tear the video.
 
 ---
 
-## InkCanvas and Digital Inking
+## Images and Bitmaps
 
-`InkCanvas` is a transparent overlay control that captures pen, touch, and mouse input as vector stroke data. It does not replace the controls beneath it; instead, it sits in the XAML tree like any other element, receiving pointer events and converting them to `InkStroke` objects managed by its `InkPresenter`. The strokes render in real time on the canvas surface and can be saved, loaded, analyzed, or manipulated programmatically.
+The `Image` control displays an `ImageSource`, and the source type depends on where the pixels come from:
 
-A minimal inking setup pairs `InkCanvas` with `InkToolbar`:
+| Source | Holds | Typical use |
+| --- | --- | --- |
+| `BitmapImage` | An encoded file (PNG, JPEG, GIF, and other formats) decoded by the platform | Photos, icons, anything loaded from a URI or stream |
+| `SvgImageSource` | An SVG file, rasterized by Direct2D (Windows' GPU-accelerated 2D drawing API) at the size layout gives it | Vector art that has to stay sharp at any size |
+| `SoftwareBitmapSource` | A `SoftwareBitmap`, the uncompressed image type in `Windows.Graphics.Imaging` | Camera frames, `BitmapDecoder` output |
+| `WriteableBitmap` | A pixel buffer the app writes itself | Procedurally generated images |
+
+### Decode Size
+
+Decoding is where images cost memory. A decoded bitmap takes about four bytes per pixel, so a 4000 × 3000 photo occupies roughly 48 MB once decoded, whatever size it's drawn at. XAML avoids most of that on its own. When the app doesn't set a decode size, it decodes the image at the size the element takes in the page's first layout, which Microsoft calls right-sized decoding.
+
+Right-sized decoding turns off in several common situations, and then the image decodes at full resolution:
+
+- The `BitmapImage` got its `UriSource` or `SetSourceAsync` stream before it was attached to the live tree, the element tree a window is currently showing. An image declared in markup is always attached first, and in code the order is to set `Image.Source` to the new `BitmapImage`, then set its `UriSource`.
+- The source was set with the synchronous `SetSource`.
+- The image or an ancestor is hidden with `Opacity="0"` or `Visibility="Collapsed"`.
+- The image uses `Stretch="None"`, a `NineGrid` (which stretches an image around fixed-size edges), or `CacheMode="BitmapCache"` (which caches rendered content as a bitmap) on itself or an ancestor.
+- The image paints a non-rectangular area, such as an `ImageBrush` on an ellipse or on text.
+
+In those cases, or whenever the display size is known ahead of time, the app sets the decode size itself. `DecodePixelWidth` and `DecodePixelHeight` are in physical pixels by default, the display's actual pixels, while layout sizes are in effective pixels that Windows scales to the display. On a display at 150% scaling, 300 physical pixels fill only 200 effective pixels. `DecodePixelType="Logical"` makes them the same units as layout, which is usually what the app means:
 
 ```xml
-<Grid>
-    <Image Source="Assets/background.png" />
-    <InkCanvas x:Name="MyInkCanvas" />
-    <InkToolbar TargetInkCanvas="{x:Bind MyInkCanvas}"
-                VerticalAlignment="Top" />
-</Grid>
+<Image Width="300" Height="200" Stretch="UniformToFill">
+    <Image.Source>
+        <BitmapImage UriSource="ms-appx:///Assets/photo.jpg"
+                     DecodePixelType="Logical"
+                     DecodePixelWidth="300" />
+    </Image.Source>
+</Image>
 ```
 
-`InkToolbar` provides a pre-built palette with ballpoint pen, pencil, and highlighter tools, color pickers, size sliders, and an eraser, all wired to the target canvas without additional code. The `TargetInkCanvas` binding connects the toolbar to the canvas so tool selections immediately influence how new strokes are drawn.
+A decode size smaller than the drawn size makes the image look pixelated, and a larger one wastes memory and can blur it on the way down. XAML can reuse one decoded image for every element that loads the same URI, though it doesn't guarantee to, and it never shares one between separate streams holding identical bytes, so repeated images should load by URI. For thumbnails of the user's files, `StorageFile.GetThumbnailAsync` is cheaper still, because it returns a thumbnail the shell has already cached.
 
-For programmatic control, `InkCanvas.InkPresenter` is the gateway. You configure accepted input types through `InputDeviceTypes`:
+### Writing Pixels
+
+A `WriteableBitmap` holds a BGRA8 pixel buffer, four bytes per pixel in blue, green, red, alpha order. C# code writes to it through the `AsStream` extension in `System.Runtime.InteropServices.WindowsRuntime`, then calls `Invalidate` to have it redrawn:
 
 ```csharp
-MyInkCanvas.InkPresenter.InputDeviceTypes =
-    CoreInputDeviceTypes.Pen |
-    CoreInputDeviceTypes.Mouse |
-    CoreInputDeviceTypes.Touch;
+var bitmap = new WriteableBitmap(width, height);
+using (Stream stream = bitmap.PixelBuffer.AsStream())
+{
+    stream.Write(pixels, 0, pixels.Length);
+}
+bitmap.Invalidate();
+MyImage.Source = bitmap;
 ```
 
-By default only pen input is captured, so enabling mouse and touch input requires this explicit assignment. The `InkPresenter` also exposes `CopyDefaultDrawingAttributes` and `UpdateDefaultDrawingAttributes` for setting stroke color, size, and rendering hints outside the toolbar.
+When the pixels come from another WinRT API, such as a camera frame or a `BitmapDecoder`, Microsoft recommends `SoftwareBitmapSource` instead, because it takes the `SoftwareBitmap` directly and skips the copy into a `WriteableBitmap`. Going the other way, `RenderTargetBitmap` renders a XAML element into an image, for export or a thumbnail of the app's own UI.
 
-Saving and loading ink uses the `InkSerializer` API from `Windows.UI.Input.Inking.InkManager` or, more directly, the `GetStrokes` method on `InkPresenter.StrokeContainer` combined with `SaveAsync` and `LoadAsync`:
+### SVG
 
-```csharp
-// Save to a stream
-using var stream = await file.OpenAsync(FileAccessMode.ReadWrite);
-await MyInkCanvas.InkPresenter.StrokeContainer.SaveAsync(stream);
-
-// Load from a stream
-using var readStream = await file.OpenReadAsync();
-await MyInkCanvas.InkPresenter.StrokeContainer.LoadAsync(readStream);
-```
-
-The serialized format is Ink Serialized Format (ISF), a compact binary representation. For scenarios that need strokes in another format, such as SVG or a custom data model, you iterate `StrokeContainer.GetStrokes()` and process the `InkStroke` and `InkPoint` collections directly.
+`SvgImageSource` renders SVG in the specification's secure static mode, with no animation, scripting, or interaction. Direct2D supplies the rendering and supports a documented subset of SVG elements and attributes, so a file exported from a design tool can render differently than it does in a browser. Without `RasterizePixelWidth` or `RasterizePixelHeight`, layout sets the rasterization size and the aspect ratio is kept.
 
 ---
 
 ## XAML Shapes
 
-XAML includes a set of vector shape primitives in the `Microsoft.UI.Xaml.Shapes` namespace: `Rectangle`, `Ellipse`, `Line`, `Polyline`, `Polygon`, and `Path`. These are full `UIElement` subclasses, meaning they participate in layout, hit testing, and the visual tree just like any other control. Unlike images or bitmaps, shapes scale without quality loss because they are defined mathematically.
-
-`Fill` sets the interior brush and `Stroke` sets the outline brush, with `StrokeThickness` controlling the outline width:
+The `Microsoft.UI.Xaml.Shapes` namespace holds vector shapes: `Rectangle`, `Ellipse`, `Line`, `Polyline`, `Polygon`, and `Path`. Each is a full `UIElement`, so it takes part in layout, hit testing, styling, and data binding like any control, and it stays sharp at any scale because it's drawn from geometry rather than pixels. `Fill` paints the interior, `Stroke` the outline, and `StrokeThickness` sets the outline width:
 
 ```xml
 <Rectangle Width="120" Height="60"
@@ -101,145 +145,131 @@ XAML includes a set of vector shape primitives in the `Microsoft.UI.Xaml.Shapes`
            StrokeThickness="2"
            RadiusX="8" RadiusY="8" />
 
-<Ellipse Width="80" Height="80"
-         Fill="SteelBlue" />
+<Ellipse Width="80" Height="80" Fill="SteelBlue" />
 
-<Line X1="0" Y1="0" X2="200" Y2="100"
-      Stroke="DarkGray" StrokeThickness="1" />
+<Line X1="0" Y1="0" X2="200" Y2="100" Stroke="DarkGray" StrokeThickness="1" />
 ```
 
-`Polyline` and `Polygon` accept a `Points` collection and are suitable for irregular multi-segment shapes. `Polygon` automatically closes the last point back to the first, making it appropriate for filled regions, while `Polyline` leaves the shape open.
+`Polyline` and `Polygon` take a `Points` collection. `Polygon` draws a closing segment from the last point back to the first, and `Polyline` leaves the outline open.
 
-`Path` is the most expressive shape. Its `Data` property accepts a `Geometry` object or a path markup syntax string that describes curves, arcs, and compound figures. Path markup syntax compresses what would be several lines of C# into a compact string:
+`Path` draws any geometry. Its `Data` property takes a `Geometry` object or a compact string in path markup syntax:
 
 ```xml
-<!-- A simple arrow shape using path markup syntax -->
+<!-- An arrow pointing left -->
 <Path Fill="Gray"
       Data="M 0,10 L 30,0 L 30,7 L 60,7 L 60,13 L 30,13 L 30,20 Z" />
 ```
 
-The letters in the string are commands: `M` moves to a point, `L` draws a line to a point, and `Z` closes the path. Curves use `C` for cubic Bezier, `Q` for quadratic Bezier, and `A` for arcs. For complex paths generated by design tools, the markup string is typically copy-pasted directly from the SVG or Illustrator export.
+Each letter is a command: `M` moves to a point, `L` draws a line to one, and `Z` closes the figure. `C` and `Q` draw cubic and quadratic Bézier curves and `A` draws an arc. SVG path data uses nearly the same command set, so a path exported from a design tool usually pastes into `Data` unchanged.
 
-Shapes are appropriate when you need scalable, interactive vector content that participates in layout. For decorative backgrounds or textures, images are often more practical. For animated or composited visual effects, the composition layer offers more flexibility than shapes alone can provide.
-
----
-
-## Images and Bitmaps
-
-The `Image` control displays raster and vector image content. Its `Source` property accepts a `BitmapImage`, `WriteableBitmap`, or `SvgImageSource`, each suited to different scenarios.
-
-`BitmapImage` is the standard choice for static raster images:
-
-```xml
-<Image Width="300" Height="200" Stretch="UniformToFill">
-    <Image.Source>
-        <BitmapImage UriSource="ms-appx:///Assets/photo.jpg"
-                     DecodePixelWidth="300"
-                     DecodePixelHeight="200" />
-    </Image.Source>
-</Image>
-```
-
-`DecodePixelWidth` and `DecodePixelHeight` are among the most impactful performance properties available on `BitmapImage`. Without them, the runtime decodes the full image at its native resolution and then scales it down during rendering. A 4000-pixel-wide photo displayed at 300 pixels wide will consume memory proportional to the original size unless these properties are set. By specifying decode dimensions that match the display size, the decoder discards the excess data upfront, reducing working set significantly in image-heavy applications.
-
-`WriteableBitmap` provides a pixel buffer you can write to directly from C#. This suits scenarios like procedurally generated content, real-time image processing, or game-style rendering where frames change frequently:
-
-```csharp
-var bitmap = new WriteableBitmap(width, height);
-using (var buffer = bitmap.PixelBuffer.AsStream())
-{
-    // Write BGRA8 pixel data
-    buffer.Write(pixelData, 0, pixelData.Length);
-}
-bitmap.Invalidate();
-MyImage.Source = bitmap;
-```
-
-`SvgImageSource` renders SVG files through the platform's SVG parser, giving you crisp vector images at any size without managing path geometry manually in XAML. Assign it like a standard image source; the runtime handles rasterization at the appropriate resolution for the display.
+Every shape is an element in the visual tree, with the layout and memory cost of one. That's cheap for icons, a chart with dozens of points, or decorative geometry. Hundreds of shapes, or shapes rebuilt every frame, multiply that cost, and at that scale another drawing approach fits better (see [Choosing a Drawing Approach](#choosing-a-drawing-approach)).
 
 ---
 
 ## The Composition Visual Layer
 
-The composition visual layer, exposed through the `Microsoft.UI.Composition` namespace, is the rendering infrastructure beneath the XAML UI. Every XAML element maps to a composition `Visual` in the tree, but you can access and extend this layer directly to achieve effects that XAML properties cannot express, such as pixel-shader effects, spring-based animations, and layered brush compositing.
+XAML doesn't draw the screen itself. Each element is backed by a `Visual` in `Microsoft.UI.Composition`, and the compositor turns that tree of visuals into frames on its own thread. An app can work with that layer directly for effects XAML properties can't express: blur and frosted glass, color effects, shadows shaped like their content, and lighting. Composition animations also run on this layer, and they belong to the animation side of WinUI rather than to drawing.
 
-The entry point is `ElementCompositionPreview`, which bridges XAML and composition:
+`ElementCompositionPreview` connects the two trees in two directions. `GetElementVisual` returns the visual XAML created for an element, which Microsoft calls the handout visual. XAML keeps setting that visual's `Offset`, `Size`, and `Opacity` from layout and from the element's own properties, and a change the app makes to the visual isn't reflected back into the element's properties. An app reads the handout visual mostly for its `Compositor`, the factory for every other composition object, and for its `Size`.
 
-```csharp
-var compositor = ElementCompositionPreview.GetElementVisual(MyBorder).Compositor;
-var visual = ElementCompositionPreview.GetElementVisual(MyBorder);
-```
+`SetElementChildVisual` goes the other way. It attaches a visual the app built, called the hand-in visual, as the last child of an element's visual, so it draws on top of everything else in that element. The usual host is an empty `Canvas` placed where the effect should appear, over the content the effect works on. Content drawn this way gets none of XAML's accessibility or input handling, which is why Microsoft advises using it only for effects XAML can't produce.
 
-`GetElementVisual` returns the `ContainerVisual` backing the XAML element. From there you can add child visuals, apply effects, or offset and rotate the visual independently of XAML layout. The compositor is the factory for all composition objects, and each compositor is tied to a thread; you should always retrieve it from an existing visual rather than instantiating one independently.
-
-Blur and shadow effects illustrate the composition layer's strengths:
+The frosted-glass effect shows both directions. The hand-in `SpriteVisual` is painted by an effect brush, and the brush blurs whatever is behind it. The last three lines add an expression animation, which ties one property to another object's value and updates it on the compositor, so the sprite follows the host's size through every layout change:
 
 ```csharp
-var compositor = ElementCompositionPreview.GetElementVisual(MyPanel).Compositor;
+Visual hostVisual = ElementCompositionPreview.GetElementVisual(GlassHost);
+Compositor compositor = hostVisual.Compositor;
 
-// Gaussian blur on a sprite visual
-var graphicsEffect = new GaussianBlurEffect
+// Win2D describes the effect: blur what's behind the visual
+var blur = new GaussianBlurEffect
 {
-    Name = "Blur",
-    BlurAmount = 10f,
-    Source = new CompositionEffectSourceParameter("source")
+    BlurAmount = 15f,
+    BorderMode = EffectBorderMode.Hard,
+    Source = new CompositionEffectSourceParameter("backdrop")
 };
 
-var effectFactory = compositor.CreateEffectFactory(graphicsEffect);
-var effectBrush = effectFactory.CreateBrush();
+CompositionEffectBrush brush = compositor.CreateEffectFactory(blur).CreateBrush();
+brush.SetSourceParameter("backdrop", compositor.CreateBackdropBrush());
 
-var spriteVisual = compositor.CreateSpriteVisual();
-spriteVisual.Size = new Vector2(400, 300);
-spriteVisual.Brush = effectBrush;
+SpriteVisual glass = compositor.CreateSpriteVisual();
+glass.Brush = brush;
+ElementCompositionPreview.SetElementChildVisual(GlassHost, glass);
 
-ElementCompositionPreview.SetElementChildVisual(MyPanel, spriteVisual);
+// Keep the sprite the same size as its host as layout changes
+var sizeBinding = compositor.CreateExpressionAnimation("host.Size");
+sizeBinding.SetReferenceParameter("host", hostVisual);
+glass.StartAnimation("Size", sizeBinding);
 ```
 
-`DropShadow` is a first-class composition type that attaches to a visual and renders a shadow behind it, with controllable color, blur radius, and offset:
+{% include figure.html id="winui-composition-hand-in" %}
 
-```csharp
-var shadow = compositor.CreateDropShadow();
-shadow.Color = Colors.Black;
-shadow.BlurRadius = 16f;
-shadow.Offset = new Vector3(4, 4, 0);
-shadow.Opacity = 0.5f;
+The effect classes such as `GaussianBlurEffect` come from Win2D's `Microsoft.Graphics.Canvas.Effects` namespace, so this code needs the `Microsoft.Graphics.Win2D` package even though Win2D never draws anything here. `CreateEffectFactory` compiles the description into a form composition can run, so an app compiles each effect once and makes a brush from the factory for each visual that uses it. An effect source parameter gets its pixels from whatever brush is plugged into it: a backdrop brush for the content behind the visual, or a surface brush holding an image loaded with `LoadedImageSurface`. Composition can't run every Win2D effect, and Win2D's documentation marks the ones it can't with `[NoComposition]`.
 
-spriteVisual.Shadow = shadow;
-```
+For ordinary frosted glass inside a window, the hand-built graph isn't needed. WinUI's `AcrylicBrush` is a ready-made XAML brush that blurs, tints, and adds noise to the content behind an element, with a solid `FallbackColor` when the effect can't render. The composition route is for effect graphs acrylic can't express. Mica and acrylic behind a whole window are system backdrops set on the window, not brushes.
 
-Composition animations run on the render thread, independent of the UI thread. `ScalarKeyFrameAnimation` and `Vector3KeyFrameAnimation` drive property changes over time without blocking the application. Connecting an animation to a visual property that would normally require UI-thread marshaling, such as `Opacity` or `Offset`, moves the work entirely to the compositor, resulting in smoother motion even when the UI thread is busy.
+A shadow follows the same pattern. `Compositor.CreateDropShadow` makes a `DropShadow` with a color, blur radius, and offset, and assigning it to a hand-in sprite's `Shadow` draws it. By default a shadow is rectangular, or takes the shape of its `Mask` when one is set. `Image`, `TextBlock`, and the shapes each have a `GetAlphaMask` method that returns their outline as a brush, which gives a shadow shaped like an ellipse or like text. Setting `SourcePolicy` to `InheritFromVisualContent` instead shapes the shadow from the alpha of the sprite's own brush. For the standard elevation shadow on a card or flyout, XAML's `ThemeShadow` needs no composition code.
+
+When an effect should paint a XAML element directly, rather than a sprite on top of it, a class derived from `XamlCompositionBrushBase` wraps the effect brush as an ordinary XAML brush that any `Background` or `Fill` can use.
+
+---
+
+## Win2D and SkiaSharp
+
+Some drawing is too much for shapes and too specialized for the composition layer: thousands of primitives, a redraw every frame, geometry operations like unions and outlines, image processing. That's immediate-mode drawing, where code issues draw calls against a surface every time it paints and nothing is kept in a tree between frames. Two libraries bring it to WinUI 3.
+
+[Win2D](https://microsoft.github.io/Win2D/WinUI3/html/Introduction.htm){:target="_blank" rel="noopener noreferrer"} (the `Microsoft.Graphics.Win2D` package) is Microsoft's GPU-accelerated wrapper over Direct2D. A `CanvasControl` raises `Draw` whenever it needs repainting, and the handler draws through a `CanvasDrawingSession`. `CanvasVirtualControl` suits very large surfaces, asking the app to draw only the regions that need it. `CanvasAnimatedControl` runs a game-style loop on its own thread, and after being removed from the WinUI 3 version in 2021 it has been back and stable since Win2D 1.3.1, with a fix for excessive CPU use in 1.3.2. The WinUI 3 documentation is marked a work in progress, and some of its pages still describe the animated control as unsupported. Win2D also offers geometry operations (combining, widening, and outlining paths) and Direct2D's image effects.
+
+[SkiaSharp](https://github.com/mono/SkiaSharp){:target="_blank" rel="noopener noreferrer"} wraps Google's Skia engine, the renderer behind Chrome, for .NET. Its advantage is portability, since the same drawing code runs on Windows, macOS, Linux, Android, iOS, and in the browser. WinUI 3 hosts it in one of two controls from the `SkiaSharp.Views.WinUI` package, whose namespace is `SkiaSharp.Views.Windows`. `SKXamlCanvas` renders on the CPU and slows as its area grows, which shows on 4K displays. `SKSwapChainPanel` renders on the GPU through ANGLE, a layer that runs OpenGL ES drawing on Direct3D.
+
+The lowest-level option is WinUI's own `SwapChainPanel`, which hosts a DirectX swap chain, the set of buffers a Direct3D renderer draws into and presents. It's the host for a game engine or a custom GPU renderer that manages Direct3D itself, connected through native interop, and it takes the most code of any option here.
+
+---
+
+## Inking
+
+WinUI 3 has no stable inking control. `InkCanvas`, `InkToolbar`, and `InkPresenter` arrived in the Windows App SDK 2.4 experimental release on 25 August 2026, in the `Microsoft.UI.Xaml.Controls` namespace, and they aren't in any stable release. Experimental releases aren't meant for production, and their APIs can change before they ship.
+
+The experimental API follows UWP's shape. `InkCanvas` captures pen and touch strokes, `InkToolbar.TargetInkCanvas` connects the pre-built pen, highlighter, and eraser toolbar to it, and `InkCanvas.InkPresenter` configures input. `InkPresenter.StrokeContainer` stores the strokes, and its `SaveAsync` and `LoadAsync` write and read them in Ink Serialized Format. An overload of `SaveAsync` takes an `InkPersistenceFormat` to choose between plain ISF and ISF embedded in a GIF. An app that needs ink before these controls ship has to capture pointer input and render the strokes itself, for example with Win2D.
 
 ---
 
 ## Printing
 
-Printing in WinUI 3 is more constrained than in WPF or UWP. The `PrintManager` and `PrintDocument` APIs from the Windows Runtime are available, but the integration path requires P/Invoke to associate the print contract with the correct HWND. The `PrintManagerInterop` COM interface provides `GetForWindow` and `ShowPrintUIForWindowAsync` methods that accept a window handle:
+WinUI 3 prints through the same model as UWP. It works only on Windows 11, because the print manager isn't yet available to Windows App SDK apps on Windows 10. The one change from UWP is where the print manager comes from. UWP asked the current view for its `PrintManager`, and a desktop app has no current view, so it gets the print manager for a specific window by handle. `PrintManagerInterop` (in `Windows.Graphics.Printing`) takes the handle:
 
 ```csharp
-var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-var printManager = PrintManagerInterop.GetForWindow(hwnd);
+var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+PrintManager printManager = PrintManagerInterop.GetForWindow(hwnd);
 printManager.PrintTaskRequested += OnPrintTaskRequested;
-await PrintManagerInterop.ShowPrintUIForWindowAsync(hwnd);
+
+// Later, from a Print button
+if (PrintManager.IsSupported())
+{
+    await PrintManagerInterop.ShowPrintUIForWindowAsync(hwnd);
+}
 ```
 
-Building print pages involves creating XAML elements, measuring and arranging them to fit page dimensions, and handing them to a `PrintDocument` through its `Paginate` and `GetPreviewPage` event handlers. This is similar to the UWP printing model but requires the window-handle interop step first.
+The pages come from a `PrintDocument` in `Microsoft.UI.Xaml.Printing`. When the user opens the print dialog, the `PrintTaskRequested` handler creates a print task and hands the dialog the document's `DocumentSource`. The document then raises three events:
 
-For many scenarios, generating a PDF and then opening it in the system PDF viewer or Shell is a more practical alternative. Libraries like [QuestPDF](https://www.questpdf.com/){:target="_blank" rel="noopener noreferrer"} and [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore){:target="_blank" rel="noopener noreferrer"} build PDF documents from C# without requiring any HWND plumbing, and the result is shareable and archivable. This approach sidesteps the per-HWND registration complexity while giving users a print-ready file they can send to any printer or save permanently.
+1. **`Paginate`**: the app builds each page as a XAML element sized to the page description in the print options, then reports the page count. It fires again whenever the user changes settings such as paper size or orientation.
+2. **`GetPreviewPage`**: the app supplies the page the preview is showing.
+3. **`AddPages`**: after the user presses Print, the app adds the pages to print and calls `AddPagesComplete`.
 
-When printing is a core product requirement rather than an incidental feature, the direct `PrintManager` approach gives you full control over page layout and print preview. When printing is occasional, PDF generation typically delivers a better result with substantially less effort.
+A page registers in its `Loaded` handler, where the window handle is available, and unregisters when the user navigates away. A page that registers again without unregistering throws when the user comes back to it. `ShowPrintUIForWindowAsync` also throws when printing can't proceed, so the call belongs in a `try` block that tells the user what happened.
+
+Laying out XAML for paper takes a lot of code, because the app measures its content, splits it across pages, and reflows it whenever the settings change. When printing is occasional, generating a PDF is often less work and gives the user a file they can print, send, or keep. [QuestPDF](https://www.questpdf.com/){:target="_blank" rel="noopener noreferrer"} builds documents with a fluent C# layout API, and its free Community license covers individuals and organizations under USD 1 million in annual revenue. [PDFsharp](https://docs.pdfsharp.net/){:target="_blank" rel="noopener noreferrer"} is open source and draws PDF pages directly. Print dialog integration pays for itself when printing is central to the product, such as for invoices, labels, or reports with an exact page layout.
 
 ---
 
-## Choosing the Right Drawing Approach
+## Choosing a Drawing Approach
 
-WinUI 3 offers several distinct drawing models, and choosing between them affects performance, maintenance complexity, and what effects are achievable.
+| Approach | Fits | Costs |
+| --- | --- | --- |
+| XAML shapes and `Image` | Icons, simple charts, decorative geometry, anything that binds, styles, or needs hit testing | One visual-tree element per shape, so hundreds of shapes or per-frame changes get slow |
+| Composition visual layer | Blur, color effects, content-shaped shadows, lighting on existing XAML | Code only, and hand-in visuals get no accessibility or input |
+| Win2D | Many primitives, custom render loops, geometry operations, Direct2D effects, Windows only | A package dependency, immediate-mode code, no layout or hit testing |
+| SkiaSharp | Drawing code shared with other platforms | A package dependency, and CPU rendering in `SKXamlCanvas` |
+| `WriteableBitmap` or `SoftwareBitmapSource` | Pixels the app computes or receives, such as image processing or camera frames | Every pixel is the app's job, with no vector scaling |
+| `SwapChainPanel` | Game engines and custom Direct3D renderers | Native DirectX code and the most setup |
 
-XAML shapes work well for relatively small numbers of scalable vector figures that participate in layout. Icons, charts with modest data points, and decorative geometry fit this category. Shapes are easy to bind, style, and animate through XAML, and they hit-test correctly without additional configuration. When shape counts reach the hundreds or when shapes need frequent updates, the overhead of the visual tree becomes noticeable.
-
-The composition visual layer is appropriate when you need effects that XAML properties cannot express, such as blur, glow, or multi-layer blending, and when you want animations that run independently of the UI thread. It requires more boilerplate than XAML shapes but offers considerably more expressive power without leaving the Windows Runtime surface.
-
-[Win2D](https://microsoft.github.io/Win2D/WinUI3/html/Introduction.htm){:target="_blank" rel="noopener noreferrer"} is a higher-level 2D graphics API built on Direct2D that integrates with WinUI 3 through a `CanvasControl` or `CanvasAnimatedControl`. It suits scenarios involving large numbers of drawn primitives, custom rendering loops, image effects pipelines, or geometry operations like boolean unions and stroke widening. Win2D is a good fit for graph renderers, custom map overlays, and game-style 2D content.
-
-[SkiaSharp](https://github.com/mono/SkiaSharp){:target="_blank" rel="noopener noreferrer"} is a cross-platform 2D graphics library that wraps Google's Skia rendering engine. If your drawing code must run on multiple platforms like WinUI 3, MAUI, and Blazor, SkiaSharp provides a unified API across all of them. It requires a `SKXamlCanvas` or an `SKSwapChainPanel` host on WinUI 3, but the drawing code itself is platform-agnostic.
-
-The practical decision often flows in a predictable direction. Start with XAML shapes and the `Image` control for static or lightly animated content. Move to the composition layer for per-element effects and independent animations. Consider Win2D when you need a 2D rendering loop or complex geometry operations. Consider SkiaSharp when cross-platform consistency matters more than platform-native integration.
+The usual path starts with shapes and `Image`, adds composition for effects on existing elements, and moves drawing into Win2D once shape counts or redraw rates outgrow the visual tree. SkiaSharp is the choice when the same drawing code also has to run somewhere other than Windows.

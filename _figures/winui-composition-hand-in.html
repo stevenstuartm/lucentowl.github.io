@@ -1,0 +1,107 @@
+---
+title: "A Composition Effect on a XAML Element"
+kind: structure
+system: winui
+summary: "How a hand-in visual attaches to an element and gets its pixels."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="wch-title wch-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wch-title">How a frosted-glass composition effect attaches to a XAML element</title>
+<desc id="wch-desc">Three columns. The left column is the XAML tree: a Grid with two children, an Image and an empty Canvas named GlassHost. The middle column is the composition visuals: each XAML element is backed by a handout Visual that GetElementVisual returns, and XAML sets its Offset, Size, and Opacity. The composition visuals form the same tree as the XAML elements. Under the GlassHost visual, the app attaches a hand-in SpriteVisual with SetElementChildVisual, as the last child, so it draws on top of the element. The right column is the brush graph that paints the sprite. A CompositionBackdropBrush supplies the pixels behind the sprite. It plugs into the source parameter of a GaussianBlurEffect, a Win2D effect description. CreateEffectFactory compiles that description and CreateBrush makes a CompositionEffectBrush from it, which is the sprite's Brush. An expression animation keeps the sprite's Size equal to the host visual's Size.</desc>
+<defs>
+<marker id="wch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+<marker id="wch-arrow-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-text-light, #4A5568)"/>
+</marker>
+</defs>
+<style>
+.wch-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #CBD5E0); stroke-width: 1; }
+.wch-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wch-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #C0392B); stroke-width: 1.75; }
+.wch-tree { stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; fill: none; }
+.wch-back { stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+.wch-flow { stroke: var(--color-accent, #C0392B); stroke-width: 2; fill: none; }
+.wch-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wch-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wch-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wch-a { font-size: 11px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+.wch-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="wch-band" x="20" y="24" width="270" height="436" rx="6"/>
+<text class="wch-hd" x="40" y="50">XAML TREE</text>
+<rect class="wch-band" x="310" y="24" width="300" height="436" rx="6"/>
+<text class="wch-hd" x="330" y="50">COMPOSITION VISUALS</text>
+<rect class="wch-band" x="630" y="24" width="250" height="436" rx="6"/>
+<text class="wch-hd" x="650" y="50">BRUSH GRAPH</text>
+
+<rect class="wch-box" x="40" y="80" width="230" height="48" rx="4"/>
+<text class="wch-t" x="56" y="101">Grid</text>
+<text class="wch-k" x="56" y="118">layout root</text>
+
+<rect class="wch-box" x="70" y="180" width="200" height="48" rx="4"/>
+<text class="wch-t" x="86" y="201">Image</text>
+<text class="wch-k" x="86" y="218">the content to blur</text>
+
+<rect class="wch-box" x="70" y="280" width="200" height="48" rx="4"/>
+<text class="wch-t" x="86" y="301">Canvas "GlassHost"</text>
+<text class="wch-k" x="86" y="318">empty placeholder</text>
+
+<path class="wch-tree" d="M54,128 L54,304 L70,304 M54,204 L70,204"/>
+
+<rect class="wch-box" x="330" y="80" width="260" height="48" rx="4"/>
+<text class="wch-t" x="346" y="101">Visual (Grid)</text>
+<text class="wch-k" x="346" y="118">handout visual</text>
+
+<rect class="wch-box" x="360" y="180" width="230" height="48" rx="4"/>
+<text class="wch-t" x="376" y="201">Visual (Image)</text>
+<text class="wch-k" x="376" y="218">handout visual</text>
+
+<rect class="wch-box" x="360" y="280" width="230" height="48" rx="4"/>
+<text class="wch-t" x="376" y="301">Visual (GlassHost)</text>
+<text class="wch-k" x="376" y="318">XAML sets Offset, Size, Opacity</text>
+
+<path class="wch-tree" d="M344,128 L344,304 L360,304 M344,204 L360,204"/>
+
+<rect class="wch-app" x="400" y="392" width="190" height="48" rx="4"/>
+<text class="wch-t" x="416" y="413">SpriteVisual</text>
+<text class="wch-k" x="416" y="430">hand-in visual, drawn on top</text>
+
+<line class="wch-back" x1="270" y1="104" x2="328" y2="104" marker-end="url(#wch-arrow-g)"/>
+<line class="wch-back" x1="270" y1="204" x2="358" y2="204" marker-end="url(#wch-arrow-g)"/>
+<line class="wch-back" x1="270" y1="304" x2="358" y2="304" marker-end="url(#wch-arrow-g)"/>
+
+<path class="wch-flow" d="M376,328 L376,416 L398,416" marker-end="url(#wch-arrow)"/>
+<text class="wch-a" x="386" y="350">SetElementChildVisual</text>
+<text class="wch-k" x="386" y="365">attached as the last child</text>
+
+<rect class="wch-app" x="650" y="180" width="210" height="48" rx="4"/>
+<text class="wch-t" x="666" y="201">CompositionBackdropBrush</text>
+<text class="wch-k" x="666" y="218">the pixels behind the sprite</text>
+
+<rect class="wch-app" x="650" y="280" width="210" height="48" rx="4"/>
+<text class="wch-t" x="666" y="301">GaussianBlurEffect</text>
+<text class="wch-k" x="666" y="318">[Win2D effect description]</text>
+
+<rect class="wch-app" x="650" y="392" width="210" height="48" rx="4"/>
+<text class="wch-t" x="666" y="413">CompositionEffectBrush</text>
+<text class="wch-k" x="666" y="430">set as the sprite's Brush</text>
+
+<line class="wch-flow" x1="755" y1="228" x2="755" y2="278" marker-end="url(#wch-arrow)"/>
+<text class="wch-k" x="763" y="258">source parameter</text>
+
+<line class="wch-flow" x1="755" y1="328" x2="755" y2="390" marker-end="url(#wch-arrow)"/>
+<text class="wch-k" x="763" y="356">CreateEffectFactory,</text>
+<text class="wch-k" x="763" y="371">then CreateBrush</text>
+
+<line class="wch-flow" x1="650" y1="416" x2="592" y2="416" marker-end="url(#wch-arrow)"/>
+
+<line class="wch-back" x1="20" y1="490" x2="60" y2="490" marker-end="url(#wch-arrow-g)"/>
+<text class="wch-lg" x="70" y="494">backed by: GetElementVisual returns the visual XAML made</text>
+<line class="wch-flow" x1="470" y1="490" x2="510" y2="490" marker-end="url(#wch-arrow)"/>
+<text class="wch-lg" x="520" y="494">objects the app creates and connects</text>
+<text class="wch-k" x="20" y="522">An expression animation keeps the SpriteVisual's Size equal to the GlassHost visual's Size.</text>
+</g>
+</svg>

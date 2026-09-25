@@ -1,0 +1,71 @@
+---
+title: "A VPC-Attached Function's Network Paths"
+kind: deployment
+system: aws
+summary: "One Hyperplane ENI, and the three places traffic can go from it."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 390" role="img" aria-labelledby="awsk-title awsk-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsk-title">Network paths of a Lambda function attached to a VPC</title>
+<desc id="awsk-desc">The function runs in Lambda's own network and reaches your VPC through a Hyperplane ENI in a private subnet, one ENI per combination of subnet and security group. From the ENI, traffic goes to private resources such as an RDS database directly, to AWS services such as S3, DynamoDB, or Secrets Manager through a VPC endpoint, and to the internet only through a NAT gateway in a public subnet and the internet gateway. A function that is not attached to a VPC reaches the internet and public AWS endpoints directly, but no private resources.</desc>
+<style>
+.awsk-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsk-sub { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 2 3; }
+.awsk-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsk-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.awsk-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsk-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsk-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsk-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="awsk-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsk-box" x="30" y="150" width="170" height="56" rx="6"/>
+<text class="awsk-n" x="115" y="173" text-anchor="middle">Function</text>
+<text class="awsk-k" x="115" y="191" text-anchor="middle">[in Lambda's network]</text>
+
+<rect class="awsk-band" x="280" y="20" width="440" height="310" rx="8"/>
+<text class="awsk-t" x="294" y="40">Your VPC</text>
+
+<rect class="awsk-sub" x="300" y="55" width="400" height="167" rx="6"/>
+<text class="awsk-lab" x="312" y="73">Private subnet</text>
+<rect class="awsk-sub" x="300" y="235" width="400" height="82" rx="6"/>
+<text class="awsk-lab" x="312" y="253">Public subnet</text>
+
+<rect class="awsk-box" x="320" y="150" width="150" height="56" rx="6"/>
+<text class="awsk-n" x="395" y="173" text-anchor="middle">Hyperplane ENI</text>
+<text class="awsk-k" x="395" y="191" text-anchor="middle">[per subnet + SG]</text>
+
+<rect class="awsk-box" x="545" y="75" width="140" height="56" rx="6"/>
+<text class="awsk-n" x="615" y="98" text-anchor="middle">RDS database</text>
+<text class="awsk-k" x="615" y="116" text-anchor="middle">[private resource]</text>
+
+<rect class="awsk-box" x="545" y="150" width="140" height="56" rx="6"/>
+<text class="awsk-n" x="615" y="173" text-anchor="middle">VPC endpoint</text>
+<text class="awsk-k" x="615" y="191" text-anchor="middle">[gateway or interface]</text>
+
+<rect class="awsk-box" x="545" y="250" width="140" height="50" rx="6"/>
+<text class="awsk-n" x="615" y="280" text-anchor="middle">NAT gateway</text>
+
+<rect class="awsk-box" x="755" y="150" width="150" height="56" rx="6"/>
+<text class="awsk-n" x="830" y="173" text-anchor="middle">AWS services</text>
+<text class="awsk-k" x="830" y="191" text-anchor="middle">[S3, DynamoDB, ...]</text>
+
+<rect class="awsk-box" x="755" y="250" width="150" height="50" rx="6"/>
+<text class="awsk-n" x="830" y="271" text-anchor="middle">Internet</text>
+<text class="awsk-k" x="830" y="288" text-anchor="middle">[via internet gateway]</text>
+
+<path class="awsk-flow" d="M200,178 L318,178" marker-end="url(#awsk-a)"/>
+<text class="awsk-lab" x="240" y="170" text-anchor="middle">attached</text>
+<path class="awsk-flow" d="M470,162 L500,162 L500,103 L543,103" marker-end="url(#awsk-a)"/>
+<path class="awsk-flow" d="M470,178 L543,178" marker-end="url(#awsk-a)"/>
+<path class="awsk-flow" d="M470,194 L515,194 L515,275 L543,275" marker-end="url(#awsk-a)"/>
+<path class="awsk-flow" d="M685,178 L753,178" marker-end="url(#awsk-a)"/>
+<path class="awsk-flow" d="M685,275 L753,275" marker-end="url(#awsk-a)"/>
+
+<text class="awsk-lab" x="30" y="356">A function not attached to a VPC reaches the internet and public AWS endpoints directly, but no private resources.</text>
+<text class="awsk-lab" x="30" y="374">Attached, it has no internet route except through NAT, even when the ENI sits in a public subnet.</text>
+</g>
+</svg>

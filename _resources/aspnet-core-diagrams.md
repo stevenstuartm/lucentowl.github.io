@@ -20,6 +20,9 @@ figures:
   - asp-auth-challenge-forbid
   - asp-cors-preflight
   - asp-rate-limiter-burst
+  - asp-test-host
+  - asp-cache-layers
+  - asp-hosted-service-lifetime
 tags: [diagrams, request-pipeline, hosting]
 related_guides:
   - /study-guides/dotnet/asp/aspnet-core-fundamentals.html
@@ -33,4 +36,7 @@ related_guides:
   - /study-guides/dotnet/asp/aspnet-auth.html
   - /study-guides/dotnet/asp/aspnet-api-security.html
   - /study-guides/dotnet/asp/aspnet-rate-limiting-resilience.html
+  - /study-guides/dotnet/asp/aspnet-api-testing.html
+  - /study-guides/dotnet/asp/aspnet-caching-performance.html
+  - /study-guides/dotnet/asp/aspnet-background-services.html
 ---

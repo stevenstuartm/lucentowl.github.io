@@ -3,724 +3,401 @@ title: "Testing ASP.NET Core APIs"
 layout: guide
 category: "ASP.NET Core"
 subcategory: "Testing & Operations"
-description: "Comprehensive guide to testing ASP.NET Core APIs including integration testing with WebApplicationFactory, database testing strategies, authentication testing, snapshot testing, architecture testing, and performance testing approaches."
-tags: [asp-net-core, testing, integration-testing, testcontainers, performance, architecture]
+description: "Integration testing an ASP.NET Core API in memory with WebApplicationFactory: replacing services and configuration, asserting on responses, testing against a real database in a container with Respawn resets, a test authentication handler for 401 and 403 cases, snapshot testing with Verify, and SignalR hub tests."
+tags: [practical, testing, integration-testing, webapplicationfactory, testcontainers, snapshot-testing]
 ---
 
-## Testing ASP.NET Core APIs
+A unit test of an endpoint handler proves the handler's logic, but most API bugs live between the pieces: a route that doesn't match, a body that doesn't bind, middleware in the wrong order, an authorization policy that lets the wrong user through, JSON that serializes differently from what clients expect. An integration test catches those by running the whole application and sending it real HTTP requests. ASP.NET Core makes that cheap enough to do for every endpoint, because the application can run inside the test process with no network in between.
 
-Testing ASP.NET Core APIs requires multiple strategies working together. Unit tests validate individual components in isolation, but integration tests prove that routing, model binding, business logic, data access, and serialization work together correctly. Architecture tests enforce structural rules. Performance tests validate behavior under load. Each layer catches different failure modes.
+## How WebApplicationFactory Hosts the App
 
-This guide covers the full spectrum of testing approaches for ASP.NET Core APIs, from basic integration testing through advanced techniques like snapshot testing and containerized database testing. The focus remains on practical patterns that catch real bugs without creating maintenance burden.
+`WebApplicationFactory<TEntryPoint>`, in the `Microsoft.AspNetCore.Mvc.Testing` package, starts the application from its own `Program` and replaces Kestrel with `TestServer`, an in-memory server. `CreateClient()` returns an `HttpClient` whose handler passes each request straight to that server. Nothing listens on a port and no socket is opened, yet the request goes through the same middleware, routing, model binding, authorization, and serialization as it would in production.
 
-## Integration Testing Foundations
+{% include figure.html id="asp-test-host" %}
 
-Integration testing in ASP.NET Core means running your API in-memory and sending real HTTP requests through the complete request pipeline. Unlike unit tests that isolate components, integration tests verify that middleware, routing, model binding, controllers or endpoints, services, and response formatting all cooperate correctly.
-
-The in-memory test server executes your entire application without binding to network ports or deploying to IIS. Tests run quickly because there is no network overhead, but they still exercise production code paths. When an integration test fails, you know something broke in the interaction between components, not just in a single class.
-
-### WebApplicationFactory Basics
-
-WebApplicationFactory bootstraps your application for testing. It reads your application's startup configuration, builds the dependency injection container, and creates an in-memory test server. You get an HttpClient that sends requests to this test server.
+The test project references the package and uses the Web SDK (`<Project Sdk="Microsoft.NET.Sdk.Web">`). The type argument is the app's entry point, which in a top-level-statements app is the compiler-generated `Program` class. That class is internal by default, so apps before .NET 10 added `public partial class Program { }` to make it visible to the test project. Since .NET 10 a source generator makes it public, and the declaration is no longer needed.
 
 ```csharp
-public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+public class ProductsApiTests(WebApplicationFactory<Program> factory)
+    : IClassFixture<WebApplicationFactory<Program>>
 {
-    private readonly HttpClient _client;
-
-    public ApiIntegrationTests(WebApplicationFactory<Program> factory)
-    {
-        _client = factory.CreateClient();
-    }
+    private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task GetProducts_ReturnsSuccessStatusCode()
+    public async Task GetProducts_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/products");
-        response.EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }
 ```
 
-The test class uses xUnit's IClassFixture to share the factory across all tests in the class. The factory starts once and gets reused, which improves test performance. Each test still gets a fresh HttpClient, but the underlying application instance is shared.
+As an xUnit class fixture, the factory is created once per test class. It builds and starts the application on first use and disposes it after the class's last test, while each test gets its own `HttpClient` because xUnit constructs the test class once per test. One application instance serves every test in the class, so singletons and anything they hold, such as an in-memory cache or a fake's list of records, carry over from one test to the next. Fixture lifetimes and sharing across classes are ordinary xUnit mechanics, and the same ones apply here.
 
-WebApplicationFactory requires a reference to your application's entry point. The generic parameter points to the Program class, which represents your application's startup. For minimal APIs in .NET 6 and later, you may need to make the Program class visible to test projects by adding a partial class declaration.
+A few defaults shape what the tests see:
 
-### Customizing the Test Host
+- **The environment is Development** unless the factory sets another with `builder.UseEnvironment(...)`. Code that branches on the environment, such as the developer exception page, behaves as it does on a developer's machine.
+- **The client follows redirects and keeps cookies.** `CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false })` lets a test assert on a redirect instead of silently following it to a login page. The client's base address is `http://localhost`. `TestServer` has no HTTPS port, so an app that calls `UseHttpsRedirection` doesn't redirect but logs a warning on every request, which setting `BaseAddress` to `https://localhost` avoids.
+- **Hosted services start with the app.** A `BackgroundService` that polls a queue or sends email runs during the tests unless the test host removes its registration.
+- **The content root is found automatically**, from an attribute the package adds to the test assembly or, failing that, the solution directory. That is how the app finds its `appsettings.json`.
 
-Production configuration rarely works for tests. You need different connection strings, disabled authentication, or mock services. ConfigureWebHost and ConfigureTestServices let you override settings without modifying production code.
+## Replacing Services and Configuration
+
+Tests need predictable behavior from the app's dependencies: a payment gateway that doesn't charge anyone, an email sender that doesn't send, a database that starts empty. A subclass of the factory overrides `ConfigureWebHost` to swap them.
 
 ```csharp
-public class CustomWebApplicationFactory : WebApplicationFactory<Program>
+public class ApiFactory : WebApplicationFactory<Program>
 {
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IExternalApiClient>();
+            services.AddSingleton<IExternalApiClient, FakeExternalApiClient>();
+
+            // No queue polling during tests
+            services.Remove(services.Single(d => d.ImplementationType == typeof(QueueWorker)));
+
+            services.AddSingleton<TimeProvider>(
+                new FakeTimeProvider(new DateTimeOffset(2026, 1, 31, 0, 0, 0, TimeSpan.Zero)));
+        });
+    }
+}
+```
+
+`ConfigureTestServices` runs after the app's own registrations in `Program`, so its registrations are the last word. `RemoveAll<T>` removes every registration of that exact service type, and the replacement then resolves wherever the app injects the interface. A hosted service is removed by its implementation type instead, because `RemoveAll<IHostedService>()` would also remove hosted services that the framework and libraries registered, such as health check publishers and telemetry exporters. The rule for what to replace is to swap only what the test can't control or shouldn't touch, such as third-party APIs, email, and payment, and keep everything else real. A test that replaces most of the app's services is a unit test with extra setup.
+
+An app that reads the time through `TimeProvider` can be given a `FakeTimeProvider`, from `Microsoft.Extensions.TimeProvider.Testing`, whose clock stands still until the test advances it. Tests of expiry, scheduling, or month-end logic then control the date instead of depending on when they run.
+
+Third-party APIs are often called through a typed `HttpClient` from `IHttpClientFactory` rather than behind an interface the test can swap. The test host then keeps the typed client and replaces only its innermost handler, so the app's own client code, including serialization and error handling, still runs against a canned response:
+
+```csharp
+services.AddHttpClient<IPricingClient, PricingClient>()   // same registration as the app's
+    .ConfigurePrimaryHttpMessageHandler(() => new StubHttpHandler(
+        HttpStatusCode.OK, """{"price": 29.99}"""));
+```
+
+`StubHttpHandler` is a few lines of test code: an `HttpMessageHandler` whose `SendAsync` returns the given status and body. The last primary handler configured for a client wins, so the test's handler replaces the app's.
+
+For one test that needs a different setup, `WithWebHostBuilder` creates a new factory with further customization, and a new application instance with it:
+
+```csharp
+var client = factory
+    .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        services.AddSingleton<IExternalApiClient>(new FailingExternalApiClient())))
+    .CreateClient();
+```
+
+### Configuration Arrives When the App Is Built
+
+Overriding configuration has a timing trap. Under the minimal hosting model, the factory applies `ConfigureAppConfiguration` sources when `WebApplicationBuilder.Build()` runs. Code in `Program` that reads `builder.Configuration` before `Build()` sees the original values, so a connection string read on the line before `AddDbContext` ignores the test's override. Values read later, inside an options lambda or from `IOptions<T>` at run time, pick it up.
+
+Configuration the app reads before `Build()` needs to arrive earlier. Overriding the factory's `CreateHost` and calling `builder.ConfigureHostConfiguration(...)` enumerates the values before the entry point runs and passes them to it as command-line arguments, which works only if `Program` passes `args` to `WebApplication.CreateBuilder(args)`.
+
+## Asserting on Responses
+
+A useful integration test checks the status code, the headers that matter, and the body. The `System.Net.Http.Json` extensions, `PostAsJsonAsync` and `ReadFromJsonAsync`, serialize with the web defaults of camelCase names and case-insensitive reads, which match what ASP.NET Core sends unless the app changed its JSON options. The tests are identical whether the endpoints are minimal APIs or controllers, since the test sees only HTTP.
+
+```csharp
+[Fact]
+public async Task CreateProduct_ReturnsCreatedWithLocation()
+{
+    var response = await _client.PostAsJsonAsync("/api/products",
+        new { Name = "Widget", Price = 29.99m });
+
+    Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    Assert.NotNull(response.Headers.Location);
+
+    var created = await response.Content.ReadFromJsonAsync<ProductDto>();
+    Assert.Equal("Widget", created!.Name);
+
+    var fetched = await _client.GetFromJsonAsync<ProductDto>(response.Headers.Location);
+    Assert.Equal(created.Id, fetched!.Id);
+}
+
+[Fact]
+public async Task CreateProduct_WithInvalidData_ReturnsValidationProblem()
+{
+    var response = await _client.PostAsJsonAsync("/api/products",
+        new { Name = "", Price = -10m });
+
+    Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+    var problem = await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>();
+    Assert.Contains("Name", problem!.Errors.Keys);
+}
+```
+
+The second test pins down the error contract, which clients depend on as much as the success path. Following the `Location` header rather than assuming an ID keeps the first test independent of what other tests created before it. Check the error keys against a real response once, since their casing depends on the app's JSON naming policy and on whether the error came from a controller or from minimal API validation.
+
+## Testing Against a Database
+
+An API that uses EF Core has three common database choices for its tests, and Microsoft's EF Core testing guidance recommends the first.
+
+| Approach | What it catches | Why it falls short |
+|---|---|---|
+| **The real engine, in a container** | Everything: SQL translation, constraints, transactions, collation | Needs Docker, and tests must isolate their data |
+| **SQLite in memory** | Most relational behavior | A different engine: case sensitivity, SQL support, and provider-specific functions differ from SQL Server or PostgreSQL |
+| **The EF Core in-memory provider** | Little beyond basic CRUD | No transactions, no raw SQL, not relational. [EF Core's docs](https://learn.microsoft.com/ef/core/testing/choosing-a-testing-strategy){:target="_blank" rel="noopener noreferrer"} highly discourage it for testing |
+
+The EF Core docs also point out that tests against a local database are usually fast enough to run constantly, and that speed is rarely a good reason to reach for a fake. When a test genuinely can't use the database, they recommend stubbing a repository layer above EF Core over either fake engine. Testing against the production engine is the default here.
+
+### Replacing the DbContext Registration
+
+Pointing the app at a test database means replacing how its `DbContext` is configured, and the obvious code does nothing:
+
+```csharp
+services.RemoveAll<DbContext>();   // removes nothing: the app registered ApiDbContext, not DbContext
+```
+
+Since EF Core 9, `AddDbContext<T>` also registers an `IDbContextOptionsConfiguration<T>` holding the options lambda, and a second `AddDbContext<T>` call adds a second one rather than replacing the first. Both providers then apply, and EF Core throws when the context is first used, reporting that services for two database providers are registered. The test host removes the existing configuration before adding its own:
+
+```csharp
+services.RemoveAll<IDbContextOptionsConfiguration<ApiDbContext>>();   // Microsoft.EntityFrameworkCore.Infrastructure
+services.AddDbContext<ApiDbContext>(options => options.UseSqlServer(connectionString));
+```
+
+On EF Core 8 and earlier, the service to remove is `DbContextOptions<ApiDbContext>`.
+
+### A Real Database in a Container
+
+[Testcontainers for .NET](https://dotnet.testcontainers.org){:target="_blank" rel="noopener noreferrer"} starts a Docker container from a test fixture and removes it afterward. The version of `ApiFactory` below adds a container to the replacements shown earlier. It starts SQL Server, points the app at it, and applies the migrations once. It uses xUnit v3, where `IAsyncLifetime` methods return `ValueTask`:
+
+```csharp
+public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    private readonly MsSqlContainer _db =
+        new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04").Build();
+
+    public string ConnectionString => _db.GetConnectionString();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureTestServices(services =>
         {
-            // Remove the production database context
-            services.RemoveAll<DbContext>();
-
-            // Add an in-memory database for testing
-            services.AddDbContext<ApiDbContext>(options =>
-            {
-                options.UseInMemoryDatabase("TestDb");
-            });
-
-            // Replace external service dependencies
-            services.RemoveAll<IExternalApiClient>();
-            services.AddSingleton<IExternalApiClient, FakeExternalApiClient>();
+            // ...plus the replacements shown earlier
+            services.RemoveAll<IDbContextOptionsConfiguration<ApiDbContext>>();
+            services.AddDbContext<ApiDbContext>(options => options.UseSqlServer(ConnectionString));
         });
+    }
 
-        builder.ConfigureAppConfiguration((context, config) =>
+    public async ValueTask InitializeAsync()
+    {
+        await _db.StartAsync();
+
+        using var scope = Services.CreateScope();   // first access to Services builds and starts the app
+        await scope.ServiceProvider.GetRequiredService<ApiDbContext>().Database.MigrateAsync();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        await _db.DisposeAsync();
+    }
+}
+```
+
+The container has to be running before the app is built. Its connection string includes a port Docker assigns at start, and the migration, like any startup code that touches the database, connects straight away. Starting a container takes seconds, not milliseconds, so one container usually serves many test classes through an xUnit collection fixture rather than starting per class:
+
+```csharp
+[CollectionDefinition("Api")]
+public class ApiCollection : ICollectionFixture<ApiFactory>;
+```
+ The same builders exist for PostgreSQL, MySQL, Redis, and other engines, with the same lifecycle.
+
+### Resetting Data Between Tests
+
+Tests that share one database need it back in a known state before each test. [Respawn](https://github.com/jbogard/Respawn){:target="_blank" rel="noopener noreferrer"} reads the schema's foreign keys and deletes every table's rows in dependency order, which is far faster than recreating the database or restarting the container. Since Respawn 7 it takes an open `DbConnection` and infers the database type from it:
+
+```csharp
+[Collection("Api")]
+public class ProductPersistenceTests(ApiFactory factory) : IAsyncLifetime
+{
+    private readonly HttpClient _client = factory.CreateClient();
+
+    public async ValueTask InitializeAsync()
+    {
+        await using var connection = new SqlConnection(factory.ConnectionString);
+        await connection.OpenAsync();
+
+        var respawner = await Respawner.CreateAsync(connection, new RespawnerOptions
         {
-            config.AddInMemoryCollection(new Dictionary<string, string>
-            {
-                ["ConnectionStrings:Default"] = "InMemoryDatabase",
-                ["ExternalApi:BaseUrl"] = "http://localhost:5000"
-            });
+            TablesToIgnore = ["__EFMigrationsHistory"]
         });
+        await respawner.ResetAsync(connection);
+    }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    [Fact]
+    public async Task CreatedProduct_IsReturnedByList()
+    {
+        await _client.PostAsJsonAsync("/api/products", new { Name = "Widget", Price = 29.99m });
+
+        var products = await _client.GetFromJsonAsync<List<ProductDto>>("/api/products");
+
+        Assert.Single(products!);
     }
 }
 ```
 
-ConfigureTestServices runs after the application's normal service registration. This timing matters because it lets you remove services registered during startup and replace them with test doubles. ConfigureAppConfiguration runs earlier and lets you inject test-specific configuration values.
-
-Custom factories work best when you need consistent behavior across many tests. For one-off customization, WithWebHostBuilder provides inline configuration without creating a new factory class.
-
-```csharp
-var factory = new WebApplicationFactory<Program>()
-    .WithWebHostBuilder(builder =>
-    {
-        builder.ConfigureTestServices(services =>
-        {
-            services.AddSingleton<IEmailService, FakeEmailService>();
-        });
-    });
-
-var client = factory.CreateClient();
-```
-
-## Testing Controller-Based APIs
-
-Controller-based APIs expose endpoints through classes decorated with routing attributes. Integration tests verify that routing works, model binding succeeds, validation executes, and responses serialize correctly.
-
-A complete integration test sends an HTTP request, examines the status code, and validates the response body. Testing just the status code catches routing failures but misses serialization bugs. Testing just the model catches logic errors but misses HTTP-level issues.
-
-```csharp
-[Fact]
-public async Task CreateProduct_WithValidData_ReturnsCreatedProduct()
-{
-    var newProduct = new { Name = "Widget", Price = 29.99 };
-    var content = new StringContent(
-        JsonSerializer.Serialize(newProduct),
-        Encoding.UTF8,
-        "application/json");
-
-    var response = await _client.PostAsync("/api/products", content);
-
-    response.EnsureSuccessStatusCode();
-    Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-    var responseBody = await response.Content.ReadAsStringAsync();
-    var product = JsonSerializer.Deserialize<Product>(responseBody,
-        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-    Assert.NotNull(product);
-    Assert.Equal("Widget", product.Name);
-    Assert.Equal(29.99, product.Price);
-}
-```
-
-Model binding failures return 400 Bad Request. Validation failures also return 400 but include details in the response body. Testing these cases ensures your API communicates problems clearly.
-
-```csharp
-[Fact]
-public async Task CreateProduct_WithInvalidData_ReturnsBadRequest()
-{
-    var invalidProduct = new { Name = "", Price = -10 };
-    var content = new StringContent(
-        JsonSerializer.Serialize(invalidProduct),
-        Encoding.UTF8,
-        "application/json");
-
-    var response = await _client.PostAsync("/api/products", content);
-
-    Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-
-    var problemDetails = await response.Content
-        .ReadFromJsonAsync<ValidationProblemDetails>();
-    Assert.NotNull(problemDetails);
-    Assert.Contains("Name", problemDetails.Errors.Keys);
-}
-```
-
-Testing error responses matters as much as testing success paths. Clients need consistent error formats to handle failures gracefully. Integration tests catch breaking changes to error responses before they reach production.
-
-## Testing Minimal APIs
-
-Minimal APIs define endpoints as lambda expressions or local functions rather than controller methods. The testing approach remains similar, but endpoint definition affects how you structure tests.
-
-```csharp
-[Fact]
-public async Task GetWeatherForecast_ReturnsForecasts()
-{
-    var response = await _client.GetAsync("/weatherforecast");
-    response.EnsureSuccessStatusCode();
-
-    var forecasts = await response.Content
-        .ReadFromJsonAsync<List<WeatherForecast>>();
-
-    Assert.NotNull(forecasts);
-    Assert.NotEmpty(forecasts);
-}
-```
-
-Minimal APIs use route patterns directly in MapGet, MapPost, and related methods. Integration tests validate these route patterns work correctly, including route constraints and parameter binding.
-
-Testing route parameters and query strings follows the same pattern as controller testing. Build the URL with the parameters, send the request, and validate the response.
-
-```csharp
-[Fact]
-public async Task GetProductById_WithValidId_ReturnsProduct()
-{
-    var response = await _client.GetAsync("/api/products/123");
-    response.EnsureSuccessStatusCode();
-
-    var product = await response.Content.ReadFromJsonAsync<Product>();
-    Assert.NotNull(product);
-    Assert.Equal(123, product.Id);
-}
-
-[Fact]
-public async Task SearchProducts_WithQueryString_ReturnsFilteredResults()
-{
-    var response = await _client.GetAsync("/api/products?category=electronics");
-    response.EnsureSuccessStatusCode();
-
-    var products = await response.Content.ReadFromJsonAsync<List<Product>>();
-    Assert.NotNull(products);
-    Assert.All(products, p => Assert.Equal("electronics", p.Category));
-}
-```
-
-## Replacing Services for Testing
-
-Production services often depend on external systems like databases, APIs, or message queues. Integration tests need predictable behavior, which means replacing these dependencies with test doubles.
-
-Service replacement happens in ConfigureTestServices. Remove the production implementation and register a test implementation. The rest of the application uses dependency injection normally and receives the test implementation.
-
-```csharp
-public class FakeProductRepository : IProductRepository
-{
-    private readonly List<Product> _products = new()
-    {
-        new Product { Id = 1, Name = "Widget", Price = 29.99m },
-        new Product { Id = 2, Name = "Gadget", Price = 49.99m }
-    };
-
-    public Task<List<Product>> GetAllAsync()
-    {
-        return Task.FromResult(_products);
-    }
-
-    public Task<Product?> GetByIdAsync(int id)
-    {
-        return Task.FromResult(_products.FirstOrDefault(p => p.Id == id));
-    }
-
-    public Task<Product> CreateAsync(Product product)
-    {
-        product.Id = _products.Max(p => p.Id) + 1;
-        _products.Add(product);
-        return Task.FromResult(product);
-    }
-}
-```
-
-Fake implementations contain just enough logic to support test scenarios. They maintain in-memory state that resets between test runs. Unlike mocks, fakes implement the full interface and support any interaction pattern.
-
-Mocking frameworks work too but can make tests brittle. When you mock too many implementation details, tests break whenever you refactor. Fakes give you more flexibility to change how services interact while keeping tests focused on behavior.
-
-```csharp
-builder.ConfigureTestServices(services =>
-{
-    services.RemoveAll<IProductRepository>();
-    services.AddSingleton<IProductRepository, FakeProductRepository>();
-});
-```
-
-## Database Testing Strategies
-
-APIs that interact with databases need different testing approaches depending on isolation requirements and performance constraints. Three main strategies exist: in-memory databases, containerized real databases, and shared database instances with cleanup between tests.
-
-### In-Memory Databases
-
-In-memory databases work well for simple scenarios. They start quickly and reset automatically when the application closes. The downside is that in-memory databases often behave differently from production databases. Features like triggers, stored procedures, and database-specific SQL won't work.
-
-```csharp
-builder.ConfigureTestServices(services =>
-{
-    services.RemoveAll<DbContext>();
-    services.AddDbContext<ApiDbContext>(options =>
-        options.UseInMemoryDatabase("TestDatabase"));
-});
-```
-
-In-memory databases suit tests that focus on application logic rather than data access patterns. If your test validates business rules without complex queries, in-memory works fine. If your test depends on database-specific features or query optimization, you need a real database.
-
-### TestContainers for Real Databases
-
-TestContainers spins up Docker containers for integration tests. You get a real database instance that matches production behavior. Each test class can have its own container, or you can share containers across tests for better performance.
-
-```csharp
-public class DatabaseIntegrationTests : IAsyncLifetime
-{
-    private readonly MsSqlContainer _dbContainer = new MsSqlBuilder()
-        .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-        .Build();
-
-    private WebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
-
-    public async Task InitializeAsync()
-    {
-        await _dbContainer.StartAsync();
-
-        _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureTestServices(services =>
-                {
-                    services.RemoveAll<DbContext>();
-                    services.AddDbContext<ApiDbContext>(options =>
-                        options.UseSqlServer(_dbContainer.GetConnectionString()));
-                });
-            });
-
-        _client = _factory.CreateClient();
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _dbContainer.DisposeAsync();
-        await _factory.DisposeAsync();
-    }
-}
-```
-
-Container startup takes 15 to 30 seconds depending on your machine and the database engine. Sharing containers across test classes improves performance. xUnit's ICollectionFixture lets you start one container and reuse it for multiple test classes.
-
-TestContainers supports multiple database engines including SQL Server, PostgreSQL, MySQL, and MongoDB. The API remains consistent across database types. Switch database engines by changing the container builder without rewriting test logic.
-
-### Respawn for Database Cleanup
-
-When tests share a database instance, each test needs a clean slate. Deleting all rows manually is tedious and error-prone. Respawn examines foreign key relationships and generates delete statements in the correct order.
-
-```csharp
-private static readonly Respawner _respawner = Respawner.CreateAsync(
-    _dbContainer.GetConnectionString(),
-    new RespawnerOptions
-    {
-        DbAdapter = DbAdapter.SqlServer,
-        TablesToIgnore = new Respawn.Graph.Table[] { "__EFMigrationsHistory" }
-    }).GetAwaiter().GetResult();
-
-[Fact]
-public async Task CreateProduct_PersistsToDatabase()
-{
-    await _respawner.ResetAsync(_dbContainer.GetConnectionString());
-
-    var newProduct = new { Name = "Widget", Price = 29.99 };
-    var response = await _client.PostAsync("/api/products",
-        JsonContent.Create(newProduct));
-
-    response.EnsureSuccessStatusCode();
-
-    // Verify product exists in database
-    var getResponse = await _client.GetAsync("/api/products/1");
-    getResponse.EnsureSuccessStatusCode();
-}
-```
-
-Respawn typically completes in under 50 milliseconds. This is much faster than restarting a container between tests. Combine TestContainers with Respawn to get real database behavior with fast test execution.
+Creating the respawner reads the schema, so a suite with many classes builds it once in the shared fixture and calls only `ResetAsync` per test. Resetting at the start of each test rather than the end means a failed test leaves its data behind for inspection. Resetting a shared database also means those tests can't run in parallel with each other, which a shared collection already guarantees in xUnit's default mode.
 
 ## Testing Authentication and Authorization
 
-APIs protected by authentication need tests that verify both authorized and unauthorized access. Sending real credentials in tests creates coupling to authentication providers. Mock authentication handlers let you simulate different user contexts without external dependencies.
-
-A custom authentication handler authenticates requests without validating credentials. The handler extracts test user information from request headers and creates a claims principal.
+Real tokens make tests depend on an identity provider, and a test can't easily mint tokens for every role and claim combination it needs. A test authentication handler replaces the real scheme and builds a principal from request headers, so each test states who it is:
 
 ```csharp
-public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+public class TestAuthHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    public const string AuthenticationScheme = "TestScheme";
-
-    public TestAuthHandler(
-        IOptionsMonitor<AuthenticationSchemeOptions> options,
-        ILoggerFactory logger,
-        UrlEncoder encoder)
-        : base(options, logger, encoder)
-    {
-    }
+    public const string SchemeName = "Test";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.ContainsKey("X-Test-User"))
+        if (!Request.Headers.TryGetValue("X-Test-User", out var user))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            return Task.FromResult(AuthenticateResult.NoResult());   // anonymous
         }
 
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier,
-                Request.Headers["X-Test-User"].ToString()),
-            new Claim(ClaimTypes.Name,
-                Request.Headers["X-Test-User"].ToString()),
-            new Claim(ClaimTypes.Role,
-                Request.Headers["X-Test-Role"].ToString())
-        };
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, user.ToString()) };
+        claims.AddRange(Request.Headers["X-Test-Roles"].ToString()
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(role => new Claim(ClaimTypes.Role, role)));
 
-        var identity = new ClaimsIdentity(claims, AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, AuthenticationScheme);
-
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
     }
 }
 ```
 
-Register the test authentication handler in ConfigureTestServices and remove production authentication schemes. Tests set headers to control the authenticated user.
+The test host registers it and makes it the default for authenticating and challenging:
 
 ```csharp
-builder.ConfigureTestServices(services =>
+services.AddAuthentication(options =>
 {
-    services.AddAuthentication(TestAuthHandler.AuthenticationScheme)
-        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-            TestAuthHandler.AuthenticationScheme, options => { });
-});
-
-// In test
-_client.DefaultRequestHeaders.Add("X-Test-User", "testuser");
-_client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
-var response = await _client.GetAsync("/api/admin/users");
+    options.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+    options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+})
+.AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
 ```
 
-Testing authorization policies requires creating users with different claims or roles. Change the headers between requests to simulate different user contexts.
+Everything after authentication stays real: the authorization middleware, the policies, and any resource-based checks run exactly as in production. The tests cover each outcome, because 401 and 403 mean different things. Authorization challenges an anonymous request, and this handler's challenge is the default 401. It forbids an authenticated user who fails the policy with 403.
 
 ```csharp
-[Fact]
-public async Task GetAdminResource_WithAdminRole_ReturnsSuccess()
+[Theory]
+[InlineData(null, null, HttpStatusCode.Unauthorized)]
+[InlineData("alice", "User", HttpStatusCode.Forbidden)]
+[InlineData("alice", "Admin", HttpStatusCode.OK)]
+public async Task AdminReport_RequiresAdminRole(string? user, string? roles, HttpStatusCode expected)
 {
-    _client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
-    var response = await _client.GetAsync("/api/admin/resource");
-    response.EnsureSuccessStatusCode();
-}
+    using var request = new HttpRequestMessage(HttpMethod.Get, "/api/admin/report");
+    if (user is not null) request.Headers.Add("X-Test-User", user);
+    if (roles is not null) request.Headers.Add("X-Test-Roles", roles);
 
-[Fact]
-public async Task GetAdminResource_WithUserRole_ReturnsForbidden()
-{
-    _client.DefaultRequestHeaders.Add("X-Test-Role", "User");
-    var response = await _client.GetAsync("/api/admin/resource");
-    Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    var response = await _client.SendAsync(request);
+
+    Assert.Equal(expected, response.StatusCode);
 }
 ```
 
-## Snapshot Testing with Verify
+Setting the headers per request rather than on `DefaultRequestHeaders` keeps one test's identity from leaking into another that shares the client.
 
-Snapshot testing compares current output against previously approved output. Instead of writing assertions for every field in a response, you save a reference copy and compare future runs against it. This works well for complex responses where manual assertions become verbose.
-
-Verify is a snapshot testing tool that serializes test output and stores it in files. The first run creates the snapshot. Subsequent runs compare new output to the stored snapshot. When output changes, Verify shows a diff and lets you approve or reject the change.
+A policy or `[Authorize(AuthenticationSchemes = ...)]` that names a scheme, such as `JwtBearerDefaults.AuthenticationScheme`, bypasses the defaults. It authenticates and challenges with that named scheme, so the test handler never runs. Registering the test handler under the same name doesn't work, because adding a scheme whose name already exists throws. The test host instead points the existing scheme at the test handler:
 
 ```csharp
-[Fact]
-public async Task GetProducts_ReturnsExpectedStructure()
-{
-    var response = await _client.GetAsync("/api/products");
-    response.EnsureSuccessStatusCode();
-
-    var content = await response.Content.ReadAsStringAsync();
-    await Verify(content);
-}
+services.Configure<AuthenticationOptions>(options =>
+    options.SchemeMap[JwtBearerDefaults.AuthenticationScheme].HandlerType = typeof(TestAuthHandler));
 ```
 
-Verify stores snapshots in files next to your test class. The file name includes the test name and the output format. Verify supports JSON, XML, text, images, and binary formats.
+## Snapshot Testing Responses
 
-Dynamic values like timestamps or generated IDs break snapshot comparisons. Verify includes scrubbers to normalize these values before comparison.
+A response with dozens of fields makes a poor target for field-by-field assertions, and those assertions miss the field nobody thought to check. A snapshot test serializes the whole output, stores it as an approved file, and fails when a later run differs. [Verify](https://github.com/VerifyTests/Verify){:target="_blank" rel="noopener noreferrer"} is the common .NET library for it, with a package per test framework, such as `Verify.XunitV3`.
 
 ```csharp
 [Fact]
-public async Task GetProducts_ReturnsExpectedStructure()
+public async Task GetProduct_MatchesSnapshot()
 {
-    var response = await _client.GetAsync("/api/products");
-    response.EnsureSuccessStatusCode();
+    var json = await _client.GetStringAsync("/api/products/1");
 
-    var content = await response.Content.ReadAsStringAsync();
-
-    var settings = new VerifySettings();
-    settings.ScrubInlineDateTimes();
-    settings.ScrubMember("id");
-
-    await Verify(content, settings);
+    await VerifyJson(json)
+        .IgnoreMember("etag");
 }
 ```
 
-Snapshot tests catch unexpected changes to API contracts. When a field gets renamed or a property changes type, the snapshot comparison fails. This makes snapshot testing valuable for detecting breaking changes.
+The first run writes a `.received` file and fails, since nothing is approved yet. Approving it means renaming it to `.verified`, by hand or through Verify's diff tooling, and committing that file, which sits next to the test source file. Later runs compare against it and fail when they differ, opening a diff tool on a developer machine. `VerifyJson` parses the string rather than comparing raw text, so member-level settings apply to its keys. By default Verify replaces GUIDs and dates in the data with stable placeholders such as `Guid_1`. Other volatile values need handling, by key with `IgnoreMember` or inside strings with `ScrubInlineGuids` and `ScrubInlineDateTimes("yyyy-MM-dd")`.
 
-The tradeoff is that snapshot tests require manual review when legitimate changes occur. If you change your API intentionally, you must review the diff and approve the new snapshot. This works well when changes are infrequent. When your API changes constantly, snapshot testing creates review overhead.
-
-## Architecture Testing
-
-Architecture tests enforce structural rules about your codebase. Instead of reviewing code manually to check whether developers followed conventions, you write tests that verify the rules automatically. These tests catch violations during development rather than in code review.
-
-Two libraries provide architecture testing for .NET: NetArchTest and ArchUnitNET. Both let you query types in your assemblies and assert conditions about dependencies, naming conventions, and design patterns.
-
-### NetArchTest Basics
-
-NetArchTest provides a fluent API for selecting types and asserting rules. Load types from assemblies, filter by namespace or attributes, and check conditions.
-
-```csharp
-[Fact]
-public void Controllers_ShouldNotDependOnInfrastructure()
-{
-    var result = Types.InAssembly(typeof(Program).Assembly)
-        .That().ResideInNamespace("Api.Controllers")
-        .ShouldNot().HaveDependencyOn("Api.Infrastructure")
-        .GetResult();
-
-    Assert.True(result.IsSuccessful);
-}
-
-[Fact]
-public void Repositories_ShouldHaveRepositorySuffix()
-{
-    var result = Types.InAssembly(typeof(Program).Assembly)
-        .That().ResideInNamespace("Api.Data.Repositories")
-        .Should().HaveNameEndingWith("Repository")
-        .GetResult();
-
-    Assert.True(result.IsSuccessful);
-}
-```
-
-Common architecture rules include layering constraints, naming conventions, and marker interface usage. Tests verify that controllers don't reference infrastructure directly, that repositories follow naming patterns, or that domain entities remain independent of frameworks.
-
-### ArchUnitNET for Advanced Rules
-
-ArchUnitNET offers more sophisticated rules including cycle detection and custom predicates. The API is similar to NetArchTest but provides deeper analysis capabilities.
-
-```csharp
-[Fact]
-public void DomainLayer_ShouldNotDependOnApplicationLayer()
-{
-    var architecture = new ArchLoader()
-        .LoadAssemblies(typeof(Program).Assembly)
-        .Build();
-
-    var rule = Types()
-        .That().ResideInNamespace("Domain")
-        .Should().NotDependOnAny(Types()
-            .That().ResideInNamespace("Application"));
-
-    rule.Check(architecture);
-}
-```
-
-Architecture tests run fast because they analyze compiled assemblies without executing code. Include them in your continuous integration pipeline to catch violations immediately.
-
-## Performance Testing
-
-Integration tests prove correctness. Performance tests prove your API handles load. Performance testing measures throughput, latency, and resource usage under realistic traffic patterns.
-
-### K6 for Load Testing
-
-K6 is an open-source load testing tool that uses JavaScript to define test scenarios. You write scripts that simulate users making requests to your API and K6 measures response times and error rates.
-
-A basic K6 test sends requests and validates responses. K6 provides virtual users that execute the test scenario concurrently.
-
-```javascript
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-
-export const options = {
-    vus: 10,
-    duration: '30s',
-};
-
-export default function () {
-    const response = http.get('http://localhost:5000/api/products');
-
-    check(response, {
-        'status is 200': (r) => r.status === 200,
-        'response time < 200ms': (r) => r.timings.duration < 200,
-    });
-
-    sleep(1);
-}
-```
-
-K6 reports statistics including request rate, response times at different percentiles, and error rates. These metrics reveal how your API behaves under load. A test that passes with one user might fail with 100 users.
-
-Ramping tests gradually increase load to find breaking points. Start with a few users and add more every few seconds until the API stops responding or error rates increase.
-
-```javascript
-export const options = {
-    stages: [
-        { duration: '1m', target: 10 },
-        { duration: '2m', target: 50 },
-        { duration: '2m', target: 100 },
-        { duration: '1m', target: 0 },
-    ],
-};
-```
-
-Performance tests belong in a separate test suite from integration tests. They take longer to run and require a running application instance. Run performance tests periodically to catch performance regressions before they reach production.
-
-### Bombardier for Quick Benchmarks
-
-Bombardier is a command-line HTTP load testing tool that focuses on speed. It generates load quickly and reports basic metrics. Use Bombardier for quick spot checks during development.
-
-```bash
-bombardier -c 50 -d 30s http://localhost:5000/api/products
-```
-
-The command runs 50 concurrent connections for 30 seconds and reports requests per second, latency percentiles, and error rates. Bombardier runs faster than K6 but offers fewer features. It works well for simple throughput tests.
+A snapshot catches a renamed property, a changed type, or a field that appears or disappears, all of which break clients. The cost is review: every intentional change to the response fails the test until someone approves the new snapshot. That suits stable contracts, where an unreviewed change is exactly what should fail, and wears thin on an API still changing daily.
 
 ## Testing SignalR Hubs
 
-SignalR enables real-time communication between servers and clients. Testing SignalR hubs requires sending messages to the server and verifying that clients receive the correct responses.
-
-WebApplicationFactory works with SignalR, but you need to create a SignalR client connection instead of using HttpClient. The HubConnectionBuilder creates connections that communicate with your test server.
+A hub test connects a real SignalR client to the in-memory server. The client first sends an HTTP negotiate request, and the server's answer lists the transports it supports: WebSockets, Server-Sent Events, and long polling. The client tries them in that order, falling back to the next when one fails. So it makes two kinds of connections, and both have to be redirected. `HttpMessageHandlerFactory` routes the negotiate request and the HTTP-based transports through `TestServer`, and `WebSocketFactory` opens the WebSocket through `TestServer`'s WebSocket client instead of the network:
 
 ```csharp
-public class SignalRIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
-{
-    private readonly WebApplicationFactory<Program> _factory;
-
-    public SignalRIntegrationTests(WebApplicationFactory<Program> factory)
-    {
-        _factory = factory;
-    }
-
-    [Fact]
-    public async Task SendMessage_BroadcastsToAllClients()
-    {
-        var hubConnection = new HubConnectionBuilder()
-            .WithUrl($"{_factory.Server.BaseAddress}chathub",
-                options => options.HttpMessageHandlerFactory = _ =>
-                    _factory.Server.CreateHandler())
-            .Build();
-
-        var messageReceived = new TaskCompletionSource<string>();
-
-        hubConnection.On<string, string>("ReceiveMessage",
-            (user, message) => messageReceived.SetResult(message));
-
-        await hubConnection.StartAsync();
-        await hubConnection.InvokeAsync("SendMessage", "testuser", "Hello");
-
-        var receivedMessage = await messageReceived.Task
-            .WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal("Hello", receivedMessage);
-
-        await hubConnection.StopAsync();
-    }
-}
+private HubConnection CreateConnection() =>
+    new HubConnectionBuilder()
+        .WithUrl(new Uri(factory.Server.BaseAddress, "/hubs/chat"), options =>
+        {
+            options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+            options.WebSocketFactory = (context, ct) => new ValueTask<WebSocket>(
+                factory.Server.CreateWebSocketClient().ConnectAsync(context.Uri, ct));
+        })
+        .Build();
 ```
 
-The key difference from HTTP testing is using the test server's handler instead of creating a network connection. Setting the HttpMessageHandlerFactory routes SignalR traffic through the in-memory test server.
+Without the WebSocket factory, the client's WebSocket attempt goes to a real `localhost` address where nothing is listening, and the client falls back to Server-Sent Events, so the test passes while exercising a different transport from production.
 
-Testing hub methods that push messages to specific users or groups requires multiple client connections. Create several HubConnection instances, join them to groups, and verify that messages reach the correct clients.
+Messages arrive on a callback, so the test waits on a `TaskCompletionSource` with a timeout rather than a fixed delay:
 
 ```csharp
 [Fact]
-public async Task SendToGroup_OnlyGroupMembersReceiveMessage()
+public async Task GroupMessage_ReachesOnlyMembers()
 {
-    var connection1 = await CreateHubConnection();
-    var connection2 = await CreateHubConnection();
+    await using var member = CreateConnection();
+    await using var outsider = CreateConnection();
 
-    var message1Received = new TaskCompletionSource<string>();
-    var message2Received = new TaskCompletionSource<string>();
+    var memberGot = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var outsiderGot = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+    member.On<string>("ReceiveMessage", msg => memberGot.TrySetResult(msg));
+    outsider.On<string>("ReceiveMessage", msg => outsiderGot.TrySetResult(msg));
 
-    connection1.On<string>("ReceiveMessage",
-        msg => message1Received.SetResult(msg));
-    connection2.On<string>("ReceiveMessage",
-        msg => message2Received.SetResult(msg));
+    await member.StartAsync();
+    await outsider.StartAsync();
+    await member.InvokeAsync("JoinGroup", "ops");
+    await member.InvokeAsync("SendToGroup", "ops", "deploy started");
 
-    await connection1.InvokeAsync("JoinGroup", "testgroup");
-    await connection1.InvokeAsync("SendToGroup", "testgroup", "Hello Group");
-
-    var received1 = await message1Received.Task
-        .WaitAsync(TimeSpan.FromSeconds(5));
-    Assert.Equal("Hello Group", received1);
-
-    await Assert.ThrowsAsync<TimeoutException>(async () =>
-        await message2Received.Task.WaitAsync(TimeSpan.FromSeconds(1)));
+    Assert.Equal("deploy started", await memberGot.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    await Assert.ThrowsAsync<TimeoutException>(() => outsiderGot.Task.WaitAsync(TimeSpan.FromSeconds(1)));
 }
 ```
 
-## Test Organization Strategies
+`RunContinuationsAsynchronously` keeps the test's continuation off the SignalR client's receive loop. The negative check can only wait for a while and conclude nothing arrived, so it uses a short timeout and costs that second on every run.
 
-Large API projects need consistent test organization. Tests should be easy to find, run quickly, and provide clear feedback when they fail.
+## What the In-Memory Host Doesn't Cover
 
-Group tests by feature rather than by testing technique. All tests related to product management live together regardless of whether they are unit tests, integration tests, or database tests. This organization makes it easier to understand test coverage for a feature.
+`TestServer` skips the network, and some tests need it.
 
-```
-tests/
-  ProductTests/
-    ProductControllerTests.cs
-    ProductIntegrationTests.cs
-    ProductRepositoryTests.cs
-  OrderTests/
-    OrderWorkflowTests.cs
-    OrderIntegrationTests.cs
-```
+- **Browser tests** need a real address the browser can reach. Since .NET 10, `UseKestrel()` on the factory makes it host the app on Kestrel instead of `TestServer`, and `StartServer()` starts it without creating a client, so a tool like Playwright can drive the app while the test still controls its services.
+- **Load tests** measure the deployed system, including the network, the server, and the real database under concurrency. They run against a running environment on a schedule, separately from the integration suite.
+- **Server and proxy behavior**, such as Kestrel limits, HTTP/2 negotiation, TLS, and forwarded headers from a real proxy, isn't exercised in memory at all.
 
-Separate slow tests from fast tests using test categories or traits. Run fast unit tests on every build and slower integration tests less frequently. xUnit traits, NUnit categories, and MSTest TestCategory attributes all support this pattern.
+Integration tests are slower than unit tests, mostly because of the database. A trait on the database-backed classes lets a fast local run filter them out, while CI runs everything.
 
-```csharp
-[Fact]
-[Trait("Category", "Integration")]
-public async Task CreateOrder_ProcessesPayment()
-{
-    // Integration test that calls external payment service
-}
+## Key Takeaways
 
-[Fact]
-[Trait("Category", "Unit")]
-public void CalculateOrderTotal_SumsLineItems()
-{
-    // Fast unit test with no external dependencies
-}
-```
-
-Shared test fixtures reduce duplication but can couple tests together. Use class fixtures when tests need the same setup but don't interfere with each other. Use collection fixtures when multiple test classes need shared resources like databases or test servers.
-
-## Common Testing Pitfalls
-
-Several patterns make tests brittle or slow. Recognizing these patterns helps you write maintainable test suites.
-
-Testing implementation details instead of behavior creates fragile tests. When you assert that a method gets called with specific arguments, you couple the test to internal implementation choices. Refactoring breaks tests even when behavior remains correct. Test observable behavior through public interfaces instead.
-
-Shared mutable state between tests causes intermittent failures. If one test modifies global state or a shared database without cleaning up, subsequent tests might fail or pass depending on test execution order. Reset state between tests or use isolated test instances.
-
-Overly comprehensive test doubles defeat the purpose of integration testing. If you mock every dependency, you are writing unit tests with integration test infrastructure. Integration tests should exercise real interactions between components. Replace only external dependencies that you cannot control.
-
-Timeouts in async tests often indicate incorrect test structure. If you are waiting for background tasks to complete, your test depends on timing rather than behavior. Use synchronization primitives or task completion sources to wait for specific events instead of arbitrary delays.
-
-Tests that depend on external services running locally create barriers for other developers. Use TestContainers to provide dependencies automatically or configure tests to skip when dependencies are unavailable. Tests should work on any developer machine without manual setup.
-
-## Key Patterns for Effective Testing
-
-Start with integration tests that validate end-to-end behavior through public HTTP endpoints. Add unit tests for complex business logic that benefits from isolated testing. Include architecture tests to enforce structural rules automatically. Run performance tests periodically to catch regressions.
-
-Use WebApplicationFactory for all HTTP-based testing. Customize the test host to replace external dependencies while keeping the rest of your application intact. Let the framework handle test server lifecycle management.
-
-When you need real databases, combine TestContainers with Respawn. Containers provide production-like behavior while Respawn keeps tests fast by cleaning up between runs instead of restarting containers.
-
-Test authentication by replacing authentication handlers rather than using real credentials. This keeps tests fast and eliminates dependencies on external identity providers while still exercising authorization logic.
-
-Apply snapshot testing selectively to complex responses where manual assertions become tedious. Use scrubbers to handle dynamic values and review diffs carefully when approving changes.
-
-Write architecture tests for rules that matter to your project. Not every project needs the same architectural constraints. Focus on rules that prevent specific problems you have encountered or want to avoid.
-
-The goal is a test suite that catches bugs quickly, runs fast enough to execute frequently, and remains maintainable as your API evolves. Balance different testing techniques to achieve coverage without creating excessive maintenance burden.
+- `WebApplicationFactory` runs the real app in memory through `TestServer`, so integration tests exercise routing, binding, middleware, authorization, and serialization without a network. Since .NET 10 the `Program` class is public without a partial declaration.
+- One factory, and one app instance, serves every test in a class. Singletons and hosted services carry state across tests unless the test host replaces them.
+- `ConfigureTestServices` runs after the app's registrations. Replace only the dependencies the test can't control, and keep the rest real.
+- Configuration from `ConfigureAppConfiguration` arrives at `Build()`, so values `Program` reads before `Build()` need `ConfigureHostConfiguration` instead.
+- Test against the production database engine in a container, reset data with Respawn, and avoid the EF Core in-memory provider. On EF Core 9 and later, replacing a `DbContext` means removing its `IDbContextOptionsConfiguration<T>`.
+- A test authentication handler keeps authorization real. Test anonymous (401), unauthorized (403), and authorized cases for each protected endpoint. An endpoint that names its scheme needs that scheme's handler type swapped, since adding a second scheme with the same name throws.
+- Fake a third-party HTTP API at the primary handler of its typed client, so the app's client code still runs.
+- Snapshot tests with Verify guard response contracts, at the cost of reviewing every intentional change.
+- SignalR hub tests need both `HttpMessageHandlerFactory` and `WebSocketFactory` pointed at `TestServer`, or they silently test a fallback transport.

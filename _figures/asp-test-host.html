@@ -1,0 +1,71 @@
+---
+title: "An Integration Test Host"
+kind: deployment
+system: aspnet-core
+summary: "What runs in-process, what a test replaces, and what runs outside."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="ath-title ath-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="ath-title">The pieces of an ASP.NET Core integration test built on WebApplicationFactory</title>
+<desc id="ath-desc">Inside the test process, a test method sends requests through an HttpClient created by the factory. The client's handler hands each request straight to TestServer in memory, with no socket or port. TestServer runs the app built from its own Program: middleware, routing, authentication, endpoints, and any hosted services the test keeps. The app resolves services from its DI container, which holds the production registrations followed by the test's ConfigureTestServices registrations. One leaf, the external API client, is replaced by a fake. The DbContext is re-registered with the connection string of a SQL Server container, which runs outside the test process in Docker.</desc>
+<style>
+.ath-band { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
+.ath-ext { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.ath-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.ath-rep { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.ath-bl { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.ath-n { font-size: 12.5px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.ath-nr { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.ath-k { font-size: 10.5px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.ath-t { font-size: 11px; fill: var(--color-text, #1F2937); }
+.ath-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+</style>
+<defs>
+<marker id="ath-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+<rect class="ath-band" x="20" y="20" width="685" height="380" rx="8"/>
+<text class="ath-bl" x="36" y="44">Test process</text>
+<rect class="ath-box" x="40" y="70" width="140" height="64" rx="6"/>
+<text class="ath-n" x="110" y="95" text-anchor="middle">Test method</text>
+<text class="ath-k" x="110" y="113" text-anchor="middle">sends requests, asserts</text>
+<rect class="ath-box" x="205" y="70" width="150" height="64" rx="6"/>
+<text class="ath-n" x="280" y="95" text-anchor="middle">HttpClient</text>
+<text class="ath-k" x="280" y="113" text-anchor="middle">from CreateClient()</text>
+<rect class="ath-box" x="380" y="70" width="140" height="64" rx="6"/>
+<text class="ath-n" x="450" y="95" text-anchor="middle">TestServer</text>
+<text class="ath-k" x="450" y="113" text-anchor="middle">in memory, no socket</text>
+<rect class="ath-box" x="545" y="70" width="145" height="64" rx="6"/>
+<text class="ath-n" x="617" y="95" text-anchor="middle">The app</text>
+<text class="ath-k" x="617" y="113" text-anchor="middle">its own Program</text>
+<path class="ath-flow" d="M180,102 L203,102" marker-end="url(#ath-a)"/>
+<path class="ath-flow" d="M355,102 L378,102" marker-end="url(#ath-a)"/>
+<path class="ath-flow" d="M520,102 L543,102" marker-end="url(#ath-a)"/>
+<path class="ath-flow" d="M617,134 L617,188" marker-end="url(#ath-a)"/>
+<text class="ath-k" x="625" y="166">resolves</text>
+<rect class="ath-box" x="380" y="190" width="310" height="195" rx="6"/>
+<text class="ath-n" x="395" y="213">DI container</text>
+<text class="ath-k" x="395" y="231">production registrations, then</text>
+<text class="ath-k" x="395" y="246">ConfigureTestServices registrations</text>
+<rect class="ath-rep" x="395" y="260" width="280" height="50" rx="6"/>
+<text class="ath-nr" x="410" y="281">IExternalApiClient</text>
+<text class="ath-k" x="410" y="299">replaced by FakeExternalApiClient</text>
+<rect class="ath-rep" x="395" y="322" width="280" height="50" rx="6"/>
+<text class="ath-nr" x="410" y="343">ApiDbContext</text>
+<text class="ath-k" x="410" y="361">re-registered with the container's connection</text>
+<rect class="ath-ext" x="725" y="280" width="220" height="110" rx="8"/>
+<text class="ath-bl" x="740" y="302">Docker</text>
+<rect class="ath-box" x="745" y="322" width="185" height="50" rx="6"/>
+<text class="ath-n" x="837" y="343" text-anchor="middle">SQL Server</text>
+<text class="ath-k" x="837" y="361" text-anchor="middle">container, Testcontainers</text>
+<path class="ath-flow" d="M675,347 L743,347" marker-end="url(#ath-a)"/>
+<text class="ath-t" x="40" y="200">The app also runs its middleware,</text>
+<text class="ath-t" x="40" y="216">routing, authentication, and any</text>
+<text class="ath-t" x="40" y="232">hosted services the test keeps.</text>
+<rect class="ath-box" x="40" y="290" width="22" height="14" rx="3"/>
+<text class="ath-t" x="72" y="302">runs unchanged</text>
+<rect class="ath-rep" x="40" y="318" width="22" height="14" rx="3"/>
+<text class="ath-t" x="72" y="330">replaced by the test</text>
+<rect class="ath-ext" x="40" y="346" width="22" height="14" rx="3"/>
+<text class="ath-t" x="72" y="358">outside the test process</text>
+</g>
+</svg>

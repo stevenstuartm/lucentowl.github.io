@@ -27,6 +27,11 @@ figures:
   - aws-ec2-placement-groups
   - aws-asg-scaling-loop
   - aws-imdsv2-hop-limit
+  - aws-lambda-environment-reuse
+  - aws-lambda-invocation-models
+  - aws-lambda-vpc-access
+  - aws-ecs-service-anatomy
+  - aws-eks-control-data-plane
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -39,4 +44,6 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-privatelink-transit-gateway.html
   - /study-guides/infrastructure/aws/aws-direct-connect-vpn.html
   - /study-guides/infrastructure/aws/aws-ec2-fundamentals.html
+  - /study-guides/infrastructure/aws/aws-lambda-fundamentals.html
+  - /study-guides/infrastructure/aws/aws-container-services.html
 ---

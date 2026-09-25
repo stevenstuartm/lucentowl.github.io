@@ -1,0 +1,80 @@
+---
+title: "Execution Environments Over Time"
+kind: chart
+system: aws
+summary: "Three requests, two environments: cold starts, reuse, and the concurrency they add up to."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 340" role="img" aria-labelledby="awsj-title awsj-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsj-title">How Lambda serves three requests with two execution environments</title>
+<desc id="awsj-desc">Request 1 arrives with no environment available, so Environment 1 runs Init and then the handler: a cold start. Request 2 arrives while Environment 1 is still busy, so Lambda creates Environment 2, which also starts cold. After each invocation the environment is frozen and kept. Request 3 arrives after Request 1 finished and runs on the frozen Environment 1 with no Init: a warm start. The chart below counts busy environments over time, which is the function's concurrency: one, then two while both requests overlap, then one, zero, and one again.</desc>
+<style>
+.awsj-lane { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.awsj-init { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 2; }
+.awsj-inv { fill: var(--color-primary, #1A5F8A); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsj-frz { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsj-tw { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+.awsj-ta { font-size: 11px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsj-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsj-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.awsj-tick { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsj-grid { fill: none; stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.awsj-step { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+</style>
+<defs>
+<marker id="awsj-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<!-- Legend -->
+<rect class="awsj-init" x="130" y="14" width="26" height="14" rx="2"/>
+<text class="awsj-lab" x="162" y="25">Init (cold start)</text>
+<rect class="awsj-inv" x="270" y="14" width="26" height="14" rx="2"/>
+<text class="awsj-lab" x="302" y="25">handler running</text>
+<rect class="awsj-frz" x="410" y="14" width="26" height="14" rx="2"/>
+<text class="awsj-lab" x="442" y="25">frozen, kept for reuse</text>
+
+<!-- Environment 1 -->
+<text class="awsj-lane" x="20" y="86">Environment 1</text>
+<rect class="awsj-init" x="130" y="66" width="70" height="32" rx="3"/>
+<text class="awsj-ta" x="165" y="86" text-anchor="middle">Init</text>
+<rect class="awsj-inv" x="200" y="66" width="140" height="32" rx="3"/>
+<text class="awsj-tw" x="270" y="86" text-anchor="middle">Request 1</text>
+<rect class="awsj-frz" x="340" y="66" width="140" height="32" rx="3"/>
+<rect class="awsj-inv" x="480" y="66" width="100" height="32" rx="3"/>
+<text class="awsj-tw" x="530" y="86" text-anchor="middle">Request 3</text>
+<rect class="awsj-frz" x="580" y="66" width="200" height="32" rx="3"/>
+<text class="awsj-lab" x="790" y="86">may be removed</text>
+
+<!-- Environment 2 -->
+<text class="awsj-lane" x="20" y="156">Environment 2</text>
+<rect class="awsj-init" x="270" y="136" width="70" height="32" rx="3"/>
+<text class="awsj-ta" x="305" y="156" text-anchor="middle">Init</text>
+<rect class="awsj-inv" x="340" y="136" width="110" height="32" rx="3"/>
+<text class="awsj-tw" x="395" y="156" text-anchor="middle">Request 2</text>
+<rect class="awsj-frz" x="450" y="136" width="330" height="32" rx="3"/>
+<text class="awsj-lab" x="790" y="156">may be removed</text>
+
+<!-- Time axis with request arrivals -->
+<path class="awsj-axis" d="M120,200 L895,200" marker-end="url(#awsj-a)"/>
+<text class="awsj-lab" x="880" y="218" text-anchor="end">time</text>
+<path class="awsj-tick" d="M130,195 L130,205"/>
+<path class="awsj-tick" d="M270,195 L270,205"/>
+<path class="awsj-tick" d="M480,195 L480,205"/>
+<text class="awsj-lab" x="130" y="218" text-anchor="middle">Request 1 arrives</text>
+<text class="awsj-lab" x="270" y="218" text-anchor="middle">Request 2 arrives</text>
+<text class="awsj-lab" x="480" y="218" text-anchor="middle">Request 3 arrives</text>
+<text class="awsj-lab" x="130" y="232" text-anchor="middle">(cold)</text>
+<text class="awsj-lab" x="270" y="232" text-anchor="middle">(Environment 1 busy: cold)</text>
+<text class="awsj-lab" x="480" y="232" text-anchor="middle">(warm: no Init)</text>
+
+<!-- Concurrency step chart -->
+<text class="awsj-lane" x="20" y="292">Concurrency</text>
+<path class="awsj-grid" d="M120,260 L780,260"/>
+<path class="awsj-grid" d="M120,285 L780,285"/>
+<path class="awsj-axis" d="M120,310 L780,310"/>
+<text class="awsj-lab" x="110" y="264" text-anchor="end">2</text>
+<text class="awsj-lab" x="110" y="289" text-anchor="end">1</text>
+<text class="awsj-lab" x="110" y="314" text-anchor="end">0</text>
+<path class="awsj-step" d="M120,310 L130,310 L130,285 L270,285 L270,260 L340,260 L340,285 L450,285 L450,310 L480,310 L480,285 L580,285 L580,310 L780,310"/>
+</g>
+</svg>

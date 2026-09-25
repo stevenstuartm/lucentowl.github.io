@@ -1,0 +1,84 @@
+---
+title: "An ECS Service and Its Tasks"
+kind: structure
+system: aws
+summary: "How a task definition, a service, its tasks, and a load balancer relate."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 390" role="img" aria-labelledby="awsu-title awsu-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsu-title">The relationship between an ECS task definition, service, tasks, cluster, and load balancer</title>
+<desc id="awsu-desc">A task definition revision describes the containers: images, CPU, memory, ports, roles, and secrets. A service is configured with that revision and a desired count of four. The service starts four tasks from the revision inside a cluster, spread across two Availability Zones, on Fargate, EC2, or managed instance capacity, and replaces any task that stops or fails health checks. An Application Load Balancer's target group holds each task's IP address, health-checks the tasks, and routes requests to them.</desc>
+<style>
+.awsu-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 3; }
+.awsu-az { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 2 3; }
+.awsu-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsu-task { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.25; }
+.awsu-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.awsu-n { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsu-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsu-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsu-flow { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2; }
+.awsu-lb { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 1.5; }
+</style>
+<defs>
+<marker id="awsu-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-primary, #1A5F8A)"/></marker>
+<marker id="awsu-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-secondary, #2D5A85)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsu-box" x="30" y="50" width="200" height="96" rx="6"/>
+<text class="awsu-n" x="130" y="74" text-anchor="middle">Task definition</text>
+<text class="awsu-k" x="130" y="92" text-anchor="middle">[revision 7]</text>
+<text class="awsu-lab" x="130" y="114" text-anchor="middle">images, CPU, memory,</text>
+<text class="awsu-lab" x="130" y="130" text-anchor="middle">ports, roles, secrets</text>
+
+<rect class="awsu-box" x="30" y="222" width="200" height="56" rx="6"/>
+<text class="awsu-n" x="130" y="245" text-anchor="middle">Service</text>
+<text class="awsu-k" x="130" y="263" text-anchor="middle">[desired count: 4]</text>
+
+<path class="awsu-flow" d="M130,146 L130,220" marker-end="url(#awsu-a)"/>
+<text class="awsu-lab" x="140" y="188">used by</text>
+
+<rect class="awsu-box" x="480" y="18" width="260" height="56" rx="6"/>
+<text class="awsu-n" x="610" y="41" text-anchor="middle">Application Load Balancer</text>
+<text class="awsu-k" x="610" y="59" text-anchor="middle">[target group: task IPs]</text>
+
+<rect class="awsu-band" x="320" y="112" width="580" height="236" rx="8"/>
+<text class="awsu-t" x="334" y="132">Cluster</text>
+<rect class="awsu-az" x="340" y="145" width="265" height="150" rx="6"/>
+<text class="awsu-lab" x="352" y="163">AZ a</text>
+<rect class="awsu-az" x="620" y="145" width="265" height="150" rx="6"/>
+<text class="awsu-lab" x="632" y="163">AZ b</text>
+
+<rect class="awsu-task" x="360" y="185" width="105" height="46" rx="4"/>
+<text class="awsu-n" x="412" y="205" text-anchor="middle">Task</text>
+<text class="awsu-k" x="412" y="221" text-anchor="middle">[rev 7]</text>
+<rect class="awsu-task" x="480" y="185" width="105" height="46" rx="4"/>
+<text class="awsu-n" x="532" y="205" text-anchor="middle">Task</text>
+<text class="awsu-k" x="532" y="221" text-anchor="middle">[rev 7]</text>
+<rect class="awsu-task" x="640" y="185" width="105" height="46" rx="4"/>
+<text class="awsu-n" x="692" y="205" text-anchor="middle">Task</text>
+<text class="awsu-k" x="692" y="221" text-anchor="middle">[rev 7]</text>
+<rect class="awsu-task" x="760" y="185" width="105" height="46" rx="4"/>
+<text class="awsu-n" x="812" y="205" text-anchor="middle">Task</text>
+<text class="awsu-k" x="812" y="221" text-anchor="middle">[rev 7]</text>
+
+<text class="awsu-lab" x="472" y="265" text-anchor="middle">awsvpc: each task has its own IP</text>
+<text class="awsu-lab" x="752" y="265" text-anchor="middle">awsvpc: each task has its own IP</text>
+<text class="awsu-lab" x="610" y="330" text-anchor="middle">capacity: Fargate, EC2 instances, or ECS Managed Instances</text>
+
+<path class="awsu-flow" d="M230,250 L318,250" marker-end="url(#awsu-a)"/>
+<text class="awsu-lab" x="275" y="220" text-anchor="middle">starts and</text>
+<text class="awsu-lab" x="275" y="232" text-anchor="middle">replaces</text>
+<text class="awsu-lab" x="275" y="244" text-anchor="middle">tasks</text>
+
+<path class="awsu-lb" d="M610,74 L610,98"/>
+<path class="awsu-lb" d="M412,98 L812,98"/>
+<path class="awsu-lb" d="M412,98 L412,183" marker-end="url(#awsu-b)"/>
+<path class="awsu-lb" d="M532,98 L532,183" marker-end="url(#awsu-b)"/>
+<path class="awsu-lb" d="M692,98 L692,183" marker-end="url(#awsu-b)"/>
+<path class="awsu-lb" d="M812,98 L812,183" marker-end="url(#awsu-b)"/>
+<text class="awsu-lab" x="622" y="91">health checks, routes requests</text>
+
+<text class="awsu-lab" x="30" y="376">A new revision starts a deployment: the service launches tasks from it and stops the old ones.</text>
+</g>
+</svg>

@@ -1,0 +1,98 @@
+---
+title: "WebView2 Processes and User Data Folders"
+kind: deployment
+system: winui
+summary: "Which browser process each WebView2 control uses, grouped by user data folder."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="wwp-title wwp-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wwp-title">How WebView2 controls map to browser processes and user data folders</title>
+<desc id="wwp-desc">On the left is the app's own process, holding three WebView2 controls. Controls 1 and 2 were created with an environment that names user data folder A. Control 3 was created with an environment that names user data folder B. In the middle are two WebView2 process groups outside the app. The group for folder A has one browser process, which both control 1 and control 2 talk to, and which starts renderer processes for the sites being shown plus GPU and utility helper processes. The group for folder B has its own browser process, which only control 3 talks to. On the right, each browser process reads and writes its own user data folder, which holds cookies, local storage, the cache, and permissions. A note says another app run by the same user that names folder A joins group A rather than starting a new browser process.</desc>
+<defs>
+<marker id="wwp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+<marker id="wwp-arrow-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-text-light, #4A5568)"/>
+</marker>
+</defs>
+<style>
+.wwp-band { fill: var(--color-bg, #F7F9FC); stroke: var(--color-border, #CBD5E0); stroke-width: 1; }
+.wwp-grp { fill: var(--color-bg, #F7F9FC); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.wwp-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wwp-key { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wwp-flow { stroke: var(--color-accent, #C0392B); stroke-width: 2; fill: none; }
+.wwp-own { stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; fill: none; }
+.wwp-hd { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; fill: var(--color-text-light, #4A5568); }
+.wwp-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wwp-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wwp-lg { font-size: 11px; fill: var(--color-text, #1A202C); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="wwp-band" x="20" y="24" width="240" height="420" rx="6"/>
+<text class="wwp-hd" x="40" y="50">APP PROCESS</text>
+
+<rect class="wwp-box" x="40" y="70" width="200" height="48" rx="4"/>
+<text class="wwp-t" x="56" y="91">WebView2 control 1</text>
+<text class="wwp-k" x="56" y="108">environment: folder A</text>
+
+<rect class="wwp-box" x="40" y="150" width="200" height="48" rx="4"/>
+<text class="wwp-t" x="56" y="171">WebView2 control 2</text>
+<text class="wwp-k" x="56" y="188">environment: folder A</text>
+
+<rect class="wwp-box" x="40" y="340" width="200" height="48" rx="4"/>
+<text class="wwp-t" x="56" y="361">WebView2 control 3</text>
+<text class="wwp-k" x="56" y="378">environment: folder B</text>
+
+<rect class="wwp-grp" x="300" y="44" width="330" height="236" rx="6"/>
+<text class="wwp-hd" x="318" y="66">PROCESS GROUP A</text>
+
+<rect class="wwp-key" x="318" y="80" width="294" height="48" rx="4"/>
+<text class="wwp-t" x="334" y="101">Browser process</text>
+<text class="wwp-k" x="334" y="118">one per folder, started by the first control</text>
+
+<rect class="wwp-box" x="318" y="172" width="140" height="48" rx="4"/>
+<text class="wwp-t" x="334" y="193">Renderer</text>
+<text class="wwp-k" x="334" y="210">site 1</text>
+
+<rect class="wwp-box" x="472" y="172" width="140" height="48" rx="4"/>
+<text class="wwp-t" x="488" y="193">Renderer</text>
+<text class="wwp-k" x="488" y="210">site 2</text>
+
+<text class="wwp-k" x="318" y="252">plus GPU, audio, and utility helper processes</text>
+
+<path class="wwp-own" d="M388,128 L388,170" marker-end="url(#wwp-arrow-g)"/>
+<path class="wwp-own" d="M542,128 L542,170" marker-end="url(#wwp-arrow-g)"/>
+
+<rect class="wwp-grp" x="300" y="304" width="330" height="140" rx="6"/>
+<text class="wwp-hd" x="318" y="326">PROCESS GROUP B</text>
+
+<rect class="wwp-key" x="318" y="340" width="294" height="48" rx="4"/>
+<text class="wwp-t" x="334" y="361">Browser process</text>
+<text class="wwp-k" x="334" y="378">its own renderers and helpers</text>
+
+<rect class="wwp-box" x="670" y="80" width="210" height="48" rx="4"/>
+<text class="wwp-t" x="686" y="101">User data folder A</text>
+<text class="wwp-k" x="686" y="118">cookies, storage, cache</text>
+
+<rect class="wwp-box" x="670" y="340" width="210" height="48" rx="4"/>
+<text class="wwp-t" x="686" y="361">User data folder B</text>
+<text class="wwp-k" x="686" y="378">a separate profile</text>
+
+<path class="wwp-flow" d="M240,94 L278,94 L278,104 L316,104" marker-end="url(#wwp-arrow)"/>
+<path class="wwp-flow" d="M240,174 L278,174 L278,104"/>
+<path class="wwp-flow" d="M240,364 L316,364" marker-end="url(#wwp-arrow)"/>
+
+<line class="wwp-own" x1="612" y1="104" x2="668" y2="104" marker-end="url(#wwp-arrow-g)"/>
+<line class="wwp-own" x1="612" y1="364" x2="668" y2="364" marker-end="url(#wwp-arrow-g)"/>
+
+<text class="wwp-k" x="670" y="160">Another app, same user, naming</text>
+<text class="wwp-k" x="670" y="175">folder A with the same options,</text>
+<text class="wwp-k" x="670" y="190">joins group A.</text>
+
+<line class="wwp-flow" x1="20" y1="480" x2="60" y2="480" marker-end="url(#wwp-arrow)"/>
+<text class="wwp-lg" x="70" y="484">calls from the control, events and web messages both ways</text>
+<line class="wwp-own" x1="400" y1="480" x2="440" y2="480" marker-end="url(#wwp-arrow-g)"/>
+<text class="wwp-lg" x="450" y="484">starts or reads and writes</text>
+</g>
+</svg>

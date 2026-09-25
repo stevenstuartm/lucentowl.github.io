@@ -26,6 +26,9 @@ figures:
   - winui-island-focus
   - winui-runtime-deployment
   - winui-island-migration
+  - winui-composition-hand-in
+  - winui-webview2-processes
+  - winui-oauth2-redirect
 tags: [diagrams, xaml-layout, data-binding, mvvm, templated-controls, dispatcherqueue]
 related_guides:
   - /study-guides/dotnet/winui/winui-xaml-fundamentals.html
@@ -46,4 +49,7 @@ related_guides:
   - /study-guides/dotnet/winui/winui-win32-interop.html
   - /study-guides/dotnet/winui/winui-packaging-and-deployment.html
   - /study-guides/dotnet/winui/winui-migration-wpf-uwp.html
+  - /study-guides/dotnet/winui/winui-media-and-graphics.html
+  - /study-guides/dotnet/winui/winui-webview2.html
+  - /study-guides/dotnet/winui/winui-security.html
 ---

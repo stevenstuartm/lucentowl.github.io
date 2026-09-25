@@ -71,6 +71,8 @@ Resource lookup follows the element tree up to `Application.Resources` (with eve
 
 - **Some WinUI-looking Learn URLs redirect to UWP pages.** `/windows/apps/desktop/modernize/xaml-islands/xaml-islands` lands on the UWP XAML Islands page (`/windows/uwp/xaml-islands/`), which describes a different technology. Check the canonical URL of every fetched page. For WinUI 3 islands, use the `Microsoft.UI.Xaml.Hosting` API pages and the WindowsAppSDK-Samples Islands sample.
 
+- **Win2D's WinUI 3 reference pages lag its changelog.** The site is marked a work in progress, and the `CanvasAnimatedControl` page still says "currently unsupported for WinUI3" although the changelog restored it (stable since 1.3.1). For Win2D feature status, read `CHANGELOG.md` on the `winappsdk/main` branch.
+
 ## Cross-guide facts in force
 
 Verified during earlier rows; applies to every remaining guide that touches the topic.
@@ -122,7 +124,11 @@ Verified during earlier rows; applies to every remaining guide that touches the 
 
 - **Windowing APIs.** `AppWindow.SetIcon(".ico path")` sets the window icon (plus `SetTitleBarIcon`/`SetTaskbarIcon`). `AppWindow.Closing` with `args.Cancel` is the documented way to stop a close; `Window.Closed` is after the fact. `OverlappedPresenter.PreferredMinimum/MaximumWidth/Height` arrived in 1.7. Placement persistence (`PersistedStateId`, `SaveCurrentPlacement`) is experimental only. `CompactOverlayPresenter.InitialSize` takes `CompactOverlaySize`, about 5/15/25% of the work area. The `TitleBar` control shipped in 1.7, and 2.1 made its drag regions automatic. `MicaBackdrop` falls back to a solid color when inactive and below Windows 11, and Microsoft recommends Mica for long-lived windows, Mica Alt for tabbed title bars, and acrylic for transient surfaces. The window-management guide owns this; other guides use a clause. Sources: AppWindow, OverlappedPresenter, and CompactOverlaySize API pages; learn.microsoft.com/windows/apps/develop/title-bar, /develop/ui/controls/title-bar, /develop/ui/system-backdrops, /design/style/mica.
 
-- **Migration.** `DispatcherTimer` stays, in `Microsoft.UI.Xaml`. UWP's ASTA blocked reentrancy and the Windows App SDK's STA doesn't; reentrancy crashes often show as stowed exceptions (`0xc000027b`). `{x:Bind}` defaults to `OneTime`. `InkCanvas` is experimental only and `InkToolbar` isn't available on any channel. WPF `{x:Static}` maps to `{x:Bind}` on a static member. UWP apps lose AppContainer containment when they migrate (Win32 App Isolation restores it). A UWP app can't host WinUI 3 islands, but a WinUI 3 app can host UWP XAML Islands with UWP on modern .NET. WinUI 3 islands (`Microsoft.UI.Xaml.Hosting.DesktopWindowXamlSource`) need explicit host setup (dispatcher queue, WinUI `Application`, `WindowsXamlManager.InitializeForCurrentThread`); the legacy `Windows.UI.Xaml.Hosting` class shares the name, so don't mix their instructions.
+- **Migration.** `DispatcherTimer` stays, in `Microsoft.UI.Xaml`. UWP's ASTA blocked reentrancy and the Windows App SDK's STA doesn't; reentrancy crashes often show as stowed exceptions (`0xc000027b`). `{x:Bind}` defaults to `OneTime`. `InkCanvas`, `InkToolbar`, and `InkPresenter` are experimental only (all three in 2.4 experimental, 25 August 2026; Microsoft's what-is-supported page, dated July 2026, still says `InkToolbar` isn't available). WPF `{x:Static}` maps to `{x:Bind}` on a static member. UWP apps lose AppContainer containment when they migrate (Win32 App Isolation restores it). A UWP app can't host WinUI 3 islands, but a WinUI 3 app can host UWP XAML Islands with UWP on modern .NET. WinUI 3 islands (`Microsoft.UI.Xaml.Hosting.DesktopWindowXamlSource`) need explicit host setup (dispatcher queue, WinUI `Application`, `WindowsXamlManager.InitializeForCurrentThread`); the legacy `Windows.UI.Xaml.Hosting` class shares the name, so don't mix their instructions.
+
+- **Media, images, and composition.** Media-and-graphics owns image decode sizing and composition visuals and effects. XAML right-sizes image decodes automatically unless the source is set before the `BitmapImage` joins the live tree, the image is hidden, or it uses `Stretch="None"`, `NineGrid`, `BitmapCache`, or a non-rectangular brush. `DecodePixelWidth`/`Height` default to physical pixels (`DecodePixelType="Logical"` matches layout units). `PrintManager` works only on Windows 11. Win2D's `CanvasAnimatedControl` is stable again since Win2D 1.3.1. The figure `winui-composition-hand-in` exists for reuse. Sources: learn.microsoft.com/windows/apps/develop/performance/optimize-animations-and-media; /windows/apps/develop/composition/using-the-visual-layer-with-xaml; /windows/apps/windows-app-sdk/migrate-to-windows-app-sdk/what-is-supported; Win2D CHANGELOG.
+
+- **WebView2.** The webview2 guide owns WebView2: runtime distribution, the UDF and process model, navigation, local content, app-page messaging, and hosted-content security. The WinUI 3 control ships in the Windows App SDK, so apps don't add the `Microsoft.Web.WebView2` package. WinUI 3 uses WebView2's WinRT API, so host objects need the `wv2winrt` adapter. Custom environments (`EnsureCoreWebView2Async(environment[, controllerOptions])`) arrived in 1.5. The unpackaged default UDF sits next to the executable and fails under `Program Files`. Signing in inside a WebView2 is the blocked embedded-browser pattern. Other guides (security in particular) use a clause. The figure `winui-webview2-processes` exists for reuse. Sources: learn.microsoft.com/windows/apps/develop/ui/controls/webview2; /microsoft-edge/webview2/ (platforms/winui3-windows-app-sdk, concepts/distribution, user-data-folder, process-model, security, how-to/winrt-from-js).
 
 ## Open pre-flags
 
@@ -130,14 +136,13 @@ Leads for rows not yet done. **A pre-flag is a lead, not a finding.** Re-verify 
 
 | Target row | Lead |
 |---|---|
-| 27 webview2 | Seed only. Write from scratch: WebView2 control, runtime distribution (Evergreen vs fixed), user data folder, navigation events, host-to-web messaging and host objects, security of hosted content |
-| 26 media-and-graphics | InkCanvas/InkToolbar availability in WinUI 3 (row 20's reviewer reports `InkCanvas`, `InkToolbar`, `InkPresenter` arrived in WinAppSDK 2.4.1-experimental, 25 Aug 2026, not stable; check microsoft-ui-xaml releases); printing support status |
 | 28 security | `WebAuthenticationBroker` doesn't work in desktop apps (`OAuth2Manager` in 1.7+); MSAL cache "encrypted with DPAPI by default"; LocalSettings storage location |
 | 29 ai-integration | Namespaces moved (`Microsoft.Windows.AI.Text`, `Microsoft.Windows.AI.Imaging`); `IsAvailable/MakeAvailableAsync` replaced by `GetReadyState/EnsureReadyAsync`; tokens/sec and cold-start numbers unsourced |
 | 30 accessibility | ~line 189 uses attached `XYFocus.Right`/`XYFocus.Left` syntax, which doesn't exist (plain `XYFocusRight`); ~line 194 says `FocusVisualKind` is set "on Application or individual controls" (Application only); ~line 185 implies arrow keys use XYFocus without `XYFocusKeyboardNavigation="Enabled"`. Focus, accelerators, and access keys are owned by input-handling, so cut re-teaching to clauses. `FocusVisualKind.None` doesn't exist; `AccessibilitySettings` namespace in the snippet; `Microsoft.TestTools.UiAutomation`; legacy `SystemControl*` brushes; WCAG 2.2 is current |
 | 31 localization | Windows App SDK apps use MRT Core `Microsoft.Windows.ApplicationModel.Resources.ResourceLoader`; runtime language switching claims |
 | 32 performance | Lines ~188-192 re-teach `ISupportIncrementalLoading` with a hand-built collection; advanced-data-patterns owns incremental loading, so cut to a clause |
 | 32 performance | `ItemsVirtualizingStackPanel` doesn't exist; `x:Phase` and phased rendering missing; Native AOT support missing. Lines ~24-38 and ~134-138 re-teach UI virtualization and ItemsRepeater virtualization, which collection-controls owns: cut to clauses. |
+| 32 performance | "Image Optimization" (~line 216) says an image always decodes at full size unless `DecodePixelWidth/Height` are set, which ignores automatic right-sized decoding; media-and-graphics owns decode sizing, so cut the section to a clause |
 | 33 testing | WinAppDriver maintenance status; `WindowsDriver<WindowsElement>` removed in Appium.WebDriver 5 |
 
 ## Unverified, left standing
@@ -181,6 +186,8 @@ Claims on finished guides that could not be confirmed against a source. Each was
 
 - **25 migration-wpf-uwp.** No primary source found this pass for WPF bindings marshaling a scalar `PropertyChanged` from a worker thread; it's long-standing WPF behavior and the guide limits it to scalar properties. The WinUI Copilot plugin's command name differs between two Learn pages (`winui@awesome-copilot` with `winui-uwp-migration`, vs `/winui3-development:winui3-migration-guide`), so the guide describes the plugin without naming it. The `DesktopWindowXamlSource` API reference implies the source initializes the thread itself, while the hosting how-to (2026-09-02) requires explicit `InitializeForCurrentThread`; the guide follows the how-to.
 
+- **27 webview2.** The WinUI 3 page's runtime-check sample catches `WebView2RuntimeNotFoundException`, but that type appears only in the .NET SDK reference, not the WinRT reference WinUI 3 projects from. The guide catches `Exception` and also checks for a null or empty version string. The user-data-folder page contradicts itself on whether uninstalling a packaged app removes the UDF, so the guide doesn't say.
+
 ## Progress
 
 | # | Subcategory | Guide | Status |
@@ -210,8 +217,8 @@ Claims on finished guides that could not be confirmed against a source. Each was
 | 23 | Platform Integration | winui-win32-interop.md | Complete |
 | 24 | Platform Integration | winui-packaging-and-deployment.md | Complete |
 | 25 | Platform Integration | winui-migration-wpf-uwp.md | Complete |
-| 26 | Advanced Features | winui-media-and-graphics.md | Not started |
-| 27 | Advanced Features | winui-webview2.md | Not started |
+| 26 | Advanced Features | winui-media-and-graphics.md | Complete |
+| 27 | Advanced Features | winui-webview2.md | Complete |
 | 28 | Advanced Features | winui-security.md | Not started |
 | 29 | Advanced Features | winui-ai-integration.md | Not started |
 | 30 | Quality & Testing | winui-accessibility.md | Not started |

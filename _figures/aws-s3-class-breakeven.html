@@ -1,0 +1,65 @@
+---
+title: "Storage Class Break-Even"
+kind: chart
+system: aws
+summary: "Monthly cost of 1 TB by class as reads per month rise."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 410" role="img" aria-labelledby="awsy-title awsy-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="awsy-title">Monthly cost of storing 1 TB in S3 Standard, Standard-IA, and Glacier Instant Retrieval as the data is read more often</title>
+<desc id="awsy-desc">A line chart. The horizontal axis is how many times the whole terabyte is read per month, from 0 to 2. The vertical axis is monthly cost in dollars. S3 Standard is flat at 23 dollars because reads carry no retrieval fee. Standard-IA starts at 12.50 dollars and rises 10 dollars per full read, crossing Standard at about one read a month. Glacier Instant Retrieval starts at 4 dollars and rises 30 dollars per full read, crossing Standard at about 0.6 reads a month and reaching 64 dollars at two reads. Request charges are ignored.</desc>
+<style>
+.awsy-axis { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.5; }
+.awsy-grid { fill: none; stroke: var(--color-border, #E2E8F0); stroke-width: 1; }
+.awsy-std { fill: none; stroke: var(--color-primary, #1A5F8A); stroke-width: 2.5; }
+.awsy-ia { fill: none; stroke: var(--color-secondary, #2D5A85); stroke-width: 2.5; stroke-dasharray: 8 4; }
+.awsy-gir { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 2.5; }
+.awsy-dot { fill: var(--color-text, #1A202C); }
+.awsy-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsy-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.awsy-ls { font-size: 12px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsy-li { font-size: 12px; font-weight: 700; fill: var(--color-secondary, #2D5A85); }
+.awsy-lg { font-size: 12px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<path class="awsy-grid" d="M90,250 L820,250"/>
+<path class="awsy-grid" d="M90,170 L820,170"/>
+<path class="awsy-grid" d="M90,90 L820,90"/>
+<path class="awsy-axis" d="M90,40 L90,330 L820,330"/>
+
+<text class="awsy-lab" x="80" y="334" text-anchor="end">$0</text>
+<text class="awsy-lab" x="80" y="254" text-anchor="end">$20</text>
+<text class="awsy-lab" x="80" y="174" text-anchor="end">$40</text>
+<text class="awsy-lab" x="80" y="94" text-anchor="end">$60</text>
+
+<path class="awsy-axis" d="M272,330 L272,336"/>
+<path class="awsy-axis" d="M455,330 L455,336"/>
+<path class="awsy-axis" d="M637,330 L637,336"/>
+<path class="awsy-axis" d="M820,330 L820,336"/>
+<text class="awsy-lab" x="90" y="350" text-anchor="middle">0</text>
+<text class="awsy-lab" x="272" y="350" text-anchor="middle">0.5</text>
+<text class="awsy-lab" x="455" y="350" text-anchor="middle">1</text>
+<text class="awsy-lab" x="637" y="350" text-anchor="middle">1.5</text>
+<text class="awsy-lab" x="820" y="350" text-anchor="middle">2</text>
+<text class="awsy-t" x="455" y="372" text-anchor="middle">Full reads of the terabyte per month</text>
+<text class="awsy-t" x="20" y="24">Monthly cost for 1 TB</text>
+
+<path class="awsy-std" d="M90,238 L820,238"/>
+<path class="awsy-ia" d="M90,280 L820,200"/>
+<path class="awsy-gir" d="M90,314 L820,74"/>
+
+<circle class="awsy-dot" cx="321" cy="238" r="4"/>
+<circle class="awsy-dot" cx="473" cy="238" r="4"/>
+<text class="awsy-lab" x="300" y="226" text-anchor="end">Glacier IR costs more</text>
+<text class="awsy-lab" x="300" y="212" text-anchor="end">above ≈ 0.6 reads</text>
+<text class="awsy-lab" x="490" y="262">Standard-IA costs more</text>
+<text class="awsy-lab" x="490" y="276">above ≈ 1 read</text>
+
+<text class="awsy-ls" x="830" y="242">Standard</text>
+<text class="awsy-li" x="830" y="204">Standard-IA</text>
+<text class="awsy-lg" x="830" y="78">Glacier Instant</text>
+<text class="awsy-lg" x="830" y="92">Retrieval</text>
+
+<text class="awsy-lab" x="90" y="398">Storage plus per-GB retrieval fees, US East (N. Virginia). Request charges are ignored.</text>
+</g>
+</svg>

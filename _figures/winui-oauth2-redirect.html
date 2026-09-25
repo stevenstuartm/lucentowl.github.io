@@ -1,0 +1,74 @@
+---
+title: "OAuth2Manager Sign-In Through a Redirect"
+kind: dynamic
+system: winui
+summary: "How the browser's redirect gets back to the app instance that started sign-in."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 460" role="img" aria-labelledby="wor-title wor-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<title id="wor-title">The OAuth2Manager authorization code flow with a protocol redirect</title>
+<desc id="wor-desc">Four participants from left to right: the app instance that starts sign-in, the user's default browser, the identity provider, and a second app instance that Windows starts for the redirect. Step 1: the first instance calls RequestAuthWithParamsAsync, which opens the provider's authorize page in the browser. Step 2: the user signs in with the provider in the browser. Step 3: the provider redirects the browser to the app's own protocol, contoso-app, with an authorization code. Step 4: Windows handles that protocol by activating the app, which starts a second instance. Step 5: the second instance calls CompleteAuthRequest with the redirect URI, which hands it to the first instance, and the second instance exits. Step 6: the first instance, whose request has now returned, calls RequestTokenAsync with the code and the PKCE verifier and receives tokens from the provider.</desc>
+<defs>
+<marker id="wor-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="var(--color-accent, #C0392B)"/>
+</marker>
+</defs>
+<style>
+.wor-app { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.75; }
+.wor-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-text-light, #4A5568); stroke-width: 1.25; }
+.wor-life { stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 4 4; fill: none; }
+.wor-flow { stroke: var(--color-accent, #C0392B); stroke-width: 2; fill: none; }
+.wor-t { font-size: 12px; font-weight: 700; fill: var(--color-text, #1A202C); }
+.wor-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.wor-m { font-size: 11px; fill: var(--color-text, #1A202C); }
+.wor-n { font-size: 11px; font-weight: 700; fill: var(--color-accent, #C0392B); }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="wor-app" x="30" y="24" width="160" height="48" rx="4"/>
+<text class="wor-t" x="46" y="45">App instance 1</text>
+<text class="wor-k" x="46" y="62">starts sign-in</text>
+
+<rect class="wor-box" x="250" y="24" width="160" height="48" rx="4"/>
+<text class="wor-t" x="266" y="45">Default browser</text>
+<text class="wor-k" x="266" y="62">not embedded in the app</text>
+
+<rect class="wor-box" x="470" y="24" width="160" height="48" rx="4"/>
+<text class="wor-t" x="486" y="45">Identity provider</text>
+<text class="wor-k" x="486" y="62">authorize and token</text>
+
+<rect class="wor-app" x="690" y="24" width="180" height="48" rx="4"/>
+<text class="wor-t" x="706" y="45">App instance 2</text>
+<text class="wor-k" x="706" y="62">started for the redirect</text>
+
+<line class="wor-life" x1="110" y1="72" x2="110" y2="420"/>
+<line class="wor-life" x1="330" y1="72" x2="330" y2="420"/>
+<line class="wor-life" x1="550" y1="72" x2="550" y2="420"/>
+<line class="wor-life" x1="780" y1="72" x2="780" y2="340"/>
+
+<line class="wor-flow" x1="110" y1="120" x2="328" y2="120" marker-end="url(#wor-arrow)"/>
+<text class="wor-n" x="120" y="112">1</text>
+<text class="wor-m" x="132" y="112">RequestAuthWithParamsAsync</text>
+
+<line class="wor-flow" x1="330" y1="170" x2="548" y2="170" marker-end="url(#wor-arrow)"/>
+<text class="wor-n" x="340" y="162">2</text>
+<text class="wor-m" x="352" y="162">user signs in</text>
+
+<line class="wor-flow" x1="550" y1="220" x2="332" y2="220" marker-end="url(#wor-arrow)"/>
+<text class="wor-n" x="362" y="212">3</text>
+<text class="wor-m" x="374" y="212">redirect to contoso-app: ?code=</text>
+
+<line class="wor-flow" x1="330" y1="270" x2="778" y2="270" marker-end="url(#wor-arrow)"/>
+<text class="wor-n" x="580" y="262">4</text>
+<text class="wor-m" x="592" y="262">protocol activation</text>
+
+<line class="wor-flow" x1="780" y1="320" x2="112" y2="320" marker-end="url(#wor-arrow)"/>
+<text class="wor-n" x="580" y="312">5</text>
+<text class="wor-m" x="592" y="312">CompleteAuthRequest, then exit</text>
+
+<line class="wor-flow" x1="110" y1="380" x2="548" y2="380" marker-end="url(#wor-arrow)"/>
+<text class="wor-n" x="120" y="372">6</text>
+<text class="wor-m" x="132" y="372">RequestTokenAsync: code and PKCE verifier, tokens back</text>
+
+<text class="wor-k" x="30" y="448">Step 5 completes the request instance 1 started in step 1, so its await returns and step 6 runs there.</text>
+</g>
+</svg>
