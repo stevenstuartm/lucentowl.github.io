@@ -4,9 +4,9 @@ kind: dynamic
 system: aspnet-core
 summary: "When two hosted services start, run, and stop, relative to the server."
 ---
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" role="img" aria-labelledby="ahl-title ahl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 345" role="img" aria-labelledby="ahl-title ahl-desc" style="width:100%; min-width:680px; height:auto; display:block;">
 <title id="ahl-title">The lifetime of two hosted services, A and B, registered in that order in an ASP.NET Core app</title>
-<desc id="ahl-desc">At startup the host calls StartAsync on service A, then on service B, in registration order, and only then starts the server, which begins accepting requests. Each BackgroundService's ExecuteAsync starts when its StartAsync runs and keeps running while the app serves requests. When a stop signal arrives, the host raises ApplicationStopping, the server stops accepting new connections and drains in-flight requests, and the hosted services are stopped in reverse order, B then A, each seeing its stopping token cancelled. The host waits up to the shutdown timeout, 30 seconds by default, for all of this; work still running when the timeout expires is abandoned.</desc>
+<desc id="ahl-desc">At startup the host calls StartAsync on service A, then on service B, in registration order, and only then starts the server, which begins accepting requests. Each BackgroundService's ExecuteAsync starts when its StartAsync runs and keeps running while the app serves requests. When a stop signal arrives, the host raises ApplicationStopping and stops hosted services in reverse registration order. The server was registered last, so it stops first: it stops accepting new connections and drains in-flight requests. Only then is B stopped, then A, each seeing its stopping token cancelled. The host waits up to the shutdown timeout, 30 seconds by default, for all of this; work still running when the timeout expires is abandoned.</desc>
 <style>
 .ahl-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
 .ahl-bar { fill: var(--color-bg-alt, #F4F7FA); stroke: var(--color-secondary, #2D5A85); stroke-width: 1.2; }
@@ -38,22 +38,23 @@ summary: "When two hosted services start, run, and stop, relative to the server.
 <text class="ahl-t" x="325" y="88">and ApplicationStarted fires</text>
 <rect class="ahl-box" x="620" y="58" width="130" height="38" rx="5"/>
 <text class="ahl-n" x="685" y="81" text-anchor="middle">ApplicationStopping</text>
-<rect class="ahl-box" x="815" y="58" width="135" height="38" rx="5"/>
-<text class="ahl-n" x="882" y="81" text-anchor="middle">ApplicationStopped</text>
-<rect class="ahl-srv" x="320" y="128" width="420" height="28" rx="4"/>
+<rect class="ahl-box" x="836" y="58" width="119" height="38" rx="5"/>
+<text class="ahl-n" x="895" y="81" text-anchor="middle">ApplicationStopped</text>
+<rect class="ahl-srv" x="320" y="128" width="412" height="28" rx="4"/>
 <text class="ahl-t" x="340" y="146">accepting requests</text>
-<text class="ahl-k" x="630" y="146">drains in-flight</text>
-<rect class="ahl-bar" x="150" y="178" width="660" height="28" rx="4"/>
+<text class="ahl-k" x="620" y="146">1. drains, stops</text>
+<rect class="ahl-bar" x="150" y="178" width="680" height="28" rx="4"/>
 <text class="ahl-t" x="170" y="196">A.ExecuteAsync running</text>
-<text class="ahl-k" x="690" y="196">stops second</text>
-<rect class="ahl-bar" x="260" y="228" width="470" height="28" rx="4"/>
+<text class="ahl-k" x="785" y="196">3. stops</text>
+<rect class="ahl-bar" x="260" y="228" width="520" height="28" rx="4"/>
 <text class="ahl-t" x="280" y="246">B.ExecuteAsync running</text>
-<text class="ahl-k" x="625" y="246">stops first</text>
+<text class="ahl-k" x="735" y="246">2. stops</text>
 <line class="ahl-stop" x1="610" y1="40" x2="610" y2="270"/>
 <text class="ahl-em" x="560" y="34">stop signal</text>
-<path class="ahl-brk" d="M610,282 L610,292 L940,292 L940,282"/>
+<path class="ahl-brk" d="M610,282 L610,292 L950,292 L950,282"/>
 <text class="ahl-em" x="620" y="310">ShutdownTimeout, 30 s by default.</text>
 <text class="ahl-em" x="620" y="325">Work still running at the end is abandoned.</text>
 <text class="ahl-k" x="100" y="310">Services start in registration order and stop in reverse.</text>
+<text class="ahl-k" x="100" y="325">The server is registered last, so it starts last and stops first.</text>
 </g>
 </svg>

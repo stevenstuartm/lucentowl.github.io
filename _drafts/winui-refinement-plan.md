@@ -73,6 +73,8 @@ Resource lookup follows the element tree up to `Application.Resources` (with eve
 
 - **Win2D's WinUI 3 reference pages lag its changelog.** The site is marked a work in progress, and the `CanvasAnimatedControl` page still says "currently unsupported for WinUI3" although the changelog restored it (stable since 1.3.1). For Win2D feature status, read `CHANGELOG.md` on the `winappsdk/main` branch.
 
+- **OAuth2Manager's channel is contradicted between Microsoft pages.** The API reference (monikers 1.7, 1.8, 2.0, no Experimental attribute) and the migration page say stable since 1.7. The OAuth 2.0 how-to (`/windows/apps/develop/security/oauth2`, 2026-08-30) says experimental-only. Guides state both and tell the reader to check the package.
+
 ## Cross-guide facts in force
 
 Verified during earlier rows; applies to every remaining guide that touches the topic.
@@ -130,13 +132,14 @@ Verified during earlier rows; applies to every remaining guide that touches the 
 
 - **WebView2.** The webview2 guide owns WebView2: runtime distribution, the UDF and process model, navigation, local content, app-page messaging, and hosted-content security. The WinUI 3 control ships in the Windows App SDK, so apps don't add the `Microsoft.Web.WebView2` package. WinUI 3 uses WebView2's WinRT API, so host objects need the `wv2winrt` adapter. Custom environments (`EnsureCoreWebView2Async(environment[, controllerOptions])`) arrived in 1.5. The unpackaged default UDF sits next to the executable and fails under `Program Files`. Signing in inside a WebView2 is the blocked embedded-browser pattern. Other guides (security in particular) use a clause. The figure `winui-webview2-processes` exists for reuse. Sources: learn.microsoft.com/windows/apps/develop/ui/controls/webview2; /microsoft-edge/webview2/ (platforms/winui3-windows-app-sdk, concepts/distribution, user-data-folder, process-model, security, how-to/winrt-from-js).
 
+- **Security and credentials.** The security guide owns the desktop threat model (full-trust, no sandbox), the Credential Locker, DPAPI, the Windows API used for sign-in, and Windows Hello. `WebAuthenticationBroker` doesn't work in desktop apps. Sign-in goes through `OAuth2Manager` (channel disputed, see Domain gotchas) or MSAL with WAM. A full-trust app can read all of the user's lockers, and the 20-credential limit applies only to AppContainer apps. MSAL persists no cache in desktop apps without `Microsoft.Identity.Client.Extensions.Msal`. Desktop Windows Hello prompts use `UserConsentVerifierInterop.RequestVerificationForWindowAsync`, and the `KeyCredentialManager.RequestCreateForWindowAsync` / `KeyCredential.RequestSignForWindowAsync` variants arrived with SDK 26100. The figure `winui-oauth2-redirect` exists for reuse. Sources: learn.microsoft.com/windows/apps/develop/security/ (credential-locker, oauth2, windows-hello); UWP API reference for PasswordVault and KeyCredentialManager; /entra/msal/dotnet/ (wam, token-cache-serialization).
+
 ## Open pre-flags
 
 Leads for rows not yet done. **A pre-flag is a lead, not a finding.** Re-verify before acting. Delete the entry once its row is complete.
 
 | Target row | Lead |
 |---|---|
-| 28 security | `WebAuthenticationBroker` doesn't work in desktop apps (`OAuth2Manager` in 1.7+); MSAL cache "encrypted with DPAPI by default"; LocalSettings storage location |
 | 29 ai-integration | Namespaces moved (`Microsoft.Windows.AI.Text`, `Microsoft.Windows.AI.Imaging`); `IsAvailable/MakeAvailableAsync` replaced by `GetReadyState/EnsureReadyAsync`; tokens/sec and cold-start numbers unsourced |
 | 30 accessibility | ~line 189 uses attached `XYFocus.Right`/`XYFocus.Left` syntax, which doesn't exist (plain `XYFocusRight`); ~line 194 says `FocusVisualKind` is set "on Application or individual controls" (Application only); ~line 185 implies arrow keys use XYFocus without `XYFocusKeyboardNavigation="Enabled"`. Focus, accelerators, and access keys are owned by input-handling, so cut re-teaching to clauses. `FocusVisualKind.None` doesn't exist; `AccessibilitySettings` namespace in the snippet; `Microsoft.TestTools.UiAutomation`; legacy `SystemControl*` brushes; WCAG 2.2 is current |
 | 31 localization | Windows App SDK apps use MRT Core `Microsoft.Windows.ApplicationModel.Resources.ResourceLoader`; runtime language switching claims |
@@ -188,6 +191,8 @@ Claims on finished guides that could not be confirmed against a source. Each was
 
 - **27 webview2.** The WinUI 3 page's runtime-check sample catches `WebView2RuntimeNotFoundException`, but that type appears only in the .NET SDK reference, not the WinRT reference WinUI 3 projects from. The guide catches `Exception` and also checks for a null or empty version string. The user-data-folder page contradicts itself on whether uninstalling a packaged app removes the UDF, so the guide doesn't say.
 
+- **28 security.** Microsoft's pages conflict on whether `OAuth2Manager` is stable (the API reference and migration page) or experimental-only (the OAuth 2.0 how-to), so the guide states both. The Credential Locker lookups' error code (`ELEMENT_NOT_FOUND`, 0x80070490) isn't named on the reference pages, and the guide says so while filtering on it. The claim that `OAuth2Manager` carries the PKCE verifier itself rests on Microsoft's sample never setting `CodeChallenge`, since no page states the default. The status of Win32 app isolation isn't settled, so the guide says only that it has been in preview.
+
 ## Progress
 
 | # | Subcategory | Guide | Status |
@@ -219,7 +224,7 @@ Claims on finished guides that could not be confirmed against a source. Each was
 | 25 | Platform Integration | winui-migration-wpf-uwp.md | Complete |
 | 26 | Advanced Features | winui-media-and-graphics.md | Complete |
 | 27 | Advanced Features | winui-webview2.md | Complete |
-| 28 | Advanced Features | winui-security.md | Not started |
+| 28 | Advanced Features | winui-security.md | Complete |
 | 29 | Advanced Features | winui-ai-integration.md | Not started |
 | 30 | Quality & Testing | winui-accessibility.md | Not started |
 | 31 | Quality & Testing | winui-localization.md | Not started |

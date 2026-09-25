@@ -69,7 +69,7 @@ After `Build()`, the code works on `WebApplication`, which plays two roles. It i
 The host stops when it receives Ctrl+C or SIGTERM, which is the signal container orchestrators send, or when code calls `IHostApplicationLifetime.StopApplication()`. A graceful shutdown then runs in order:
 
 1. The `ApplicationStopping` event fires, so the app can react before anything closes.
-2. The server stops accepting new connections and waits for in-flight requests to finish, and hosted services are asked to stop.
+2. The server stops accepting new connections and waits for in-flight requests to finish. It is the last hosted service registered, so it stops first, and the app's own hosted services are asked to stop after it, in reverse registration order.
 3. The wait is bounded by the shutdown timeout, 30 seconds by default. Anything still running when it expires is stopped anyway.
 4. The `ApplicationStopped` event fires.
 

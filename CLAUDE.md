@@ -53,6 +53,17 @@ bundle exec jekyll build
 
 `jekyll serve` does not reload `_config.yml`. Restart it after changing collections, defaults, or any other config, or pages that depend on the change render as if it never happened.
 
+### Dependency Pinning
+
+Gems, Ruby, npm tools, and browser JS never upgrade without an intentional edit. GitHub's own actions are the deliberate exception:
+- **Gems:** `Gemfile.lock` is committed and is the pin; CI installs from it and refuses anything else. It lists both `x64-mingw-ucrt` and `x86_64-linux`. The `Gemfile` states acceptable ranges, not exact versions (except `github-pages`, which fixes the whole Jekyll stack).
+- **Ruby:** CI's `ruby-version` in `.github/workflows/jekyll.yml` must satisfy the locked gems. It need not match your local patch version.
+- **GitHub Actions:** GitHub's own `actions/*` use major tags (`@v4`) so they receive security and runtime fixes. Third-party actions (`ruby/setup-ruby`) are pinned to a commit SHA with the tag in a trailing comment.
+- **npm tools (via `npx`):** `package@x.y.z`, never a range or `latest`, in the workflow and in documented commands.
+- **Browser JS:** vendored into `assets/js/` with the version in the filename or header (D3 is `d3.v7.min.js`, v7.9.0), never loaded from a CDN.
+
+To upgrade, change the pin deliberately, run `bundle update <gem>` or `bundle lock` (or update the SHA/version), and build locally before pushing.
+
 ## Architecture
 
 ### Jekyll Structure

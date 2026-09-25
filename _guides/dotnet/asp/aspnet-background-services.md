@@ -35,7 +35,7 @@ public sealed class ExpiredSessionCleanup(
 
                 logger.LogInformation("Removed {Count} expired sessions", removed);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Session cleanup failed; retrying next tick");
             }
@@ -61,7 +61,7 @@ The host starts hosted services one at a time, in registration order, and calls 
 
 Since .NET 6, an exception that escapes `ExecuteAsync` is logged, and then the host stops, taking the web app down with it. That is the default `HostOptions.BackgroundServiceExceptionBehavior`, `StopHost`. Before .NET 6 the exception vanished and the service silently stopped working. Setting the behavior to `Ignore` restores that, which leaves a dead service in a running app.
 
-A service whose failures are transient, such as a database that is briefly unavailable, catches exceptions per unit of work, as the sample does, logs them, and carries on with the next tick or message. The filter lets `OperationCanceledException` through, so shutdown isn't logged as a failure. An exception that means the service can't work at all, such as missing configuration, is better left to stop the host, where the platform's restart and alerting notice it. A service that keeps running while failing every iteration is invisible without monitoring, so a health check reporting its last successful run belongs with it.
+A service whose failures are transient, such as a database that is briefly unavailable, catches exceptions per unit of work, as the sample does, logs them, and carries on with the next tick or message. The filter checks the stopping token rather than the exception type. At shutdown the cancellation passes through, and the host treats it as a normal stop rather than a failure. An `OperationCanceledException` from anything else, such as an `HttpClient` timeout, is caught like any other error, because the host only excuses a cancellation while the app is stopping, and would otherwise stop the app over it. An exception that means the service can't work at all, such as missing configuration, is better left to stop the host, where the platform's restart and alerting notice it. A service that keeps running while failing every iteration is invisible without monitoring, so a health check reporting its last successful run belongs with it.
 
 ## Scoped Services in a Hosted Service
 
@@ -75,15 +75,13 @@ For EF Core alone, `IDbContextFactory<T>`, registered with `AddDbContextFactory`
 
 Every instance of the app runs every hosted service. Scaled out to three instances, the cleanup above runs three times every 15 minutes. For idempotent work that is merely wasteful. For work that sends email or charges cards, it is a bug.
 
-There are three ways out. The work can be made safe to run concurrently, for example by claiming rows with an atomic update before processing them. It can move out of the web app into a single worker instance or a platform scheduler, such as a Kubernetes CronJob or a cloud function's timer trigger, that starts one run per occurrence. Or it can move to a job library that coordinates instances through shared storage, which the last sections cover.
+There are three ways out. The work can be made *idempotent*, safe to run twice, or safe to run concurrently, for example by having each instance claim a batch of rows with a single `UPDATE ... SET ClaimedBy = @instance WHERE ClaimedBy IS NULL` before processing only the rows it claimed. It can move out of the web app into a single worker instance or a platform scheduler, such as a Kubernetes CronJob or a cloud function's timer trigger, that starts one run per occurrence. Or it can move to a job library that coordinates instances through shared storage, which the last sections cover.
 
 ## Queuing Work from Endpoints
 
 An endpoint that starts slow work, such as generating a report or calling a slow third party, can queue it and return `202 Accepted` immediately. A `Channel<T>` makes the queue. Endpoints write to it, and a hosted service reads from it:
 
 ```csharp
-public sealed record ReportRequest(int ReportId, string RequestedBy);
-
 builder.Services.AddSingleton(_ => Channel.CreateBounded<ReportRequest>(
     new BoundedChannelOptions(capacity: 100) { FullMode = BoundedChannelFullMode.Wait }));
 builder.Services.AddHostedService<ReportWorker>();
@@ -94,6 +92,9 @@ app.MapPost("/reports/{id:int}", async (int id, ClaimsPrincipal user,
     await queue.Writer.WriteAsync(new ReportRequest(id, user.Identity!.Name!), ct);
     return Results.Accepted($"/reports/{id}");
 });
+
+// Types go after the top-level statements, or in their own files
+public sealed record ReportRequest(int ReportId, string RequestedBy);
 
 public sealed class ReportWorker(
     Channel<ReportRequest> queue,
@@ -110,7 +111,7 @@ public sealed class ReportWorker(
                 var generator = scope.ServiceProvider.GetRequiredService<ReportGenerator>();
                 await generator.GenerateAsync(request, stoppingToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Report {ReportId} failed", request.ReportId);
             }
@@ -127,7 +128,7 @@ The channel is memory, so everything in it is lost when the process stops, wheth
 
 ## Graceful Shutdown
 
-When the app is told to stop, by a deployment, `Ctrl+C`, or an orchestrator's `SIGTERM`, the host raises `ApplicationStopping`, the server stops accepting connections and drains in-flight requests, and the hosted services are stopped in reverse registration order. For a `BackgroundService`, stopping means cancelling the `stoppingToken` and waiting for `ExecuteAsync` to return. The host waits up to `HostOptions.ShutdownTimeout`, 30 seconds by default, and abandons whatever is still running when it expires.
+When the app is told to stop, by a deployment, `Ctrl+C`, or an orchestrator's `SIGTERM`, the host fires `ApplicationStopping`, one of the `IHostApplicationLifetime` tokens, and then stops the hosted services in reverse registration order. The web server is itself a hosted service, registered after all of the app's own, so it stops first. It stops accepting connections and drains in-flight requests before any `BackgroundService` hears about the shutdown. For a `BackgroundService`, stopping means cancelling the `stoppingToken` and waiting for `ExecuteAsync` to return. The host waits up to `HostOptions.ShutdownTimeout`, 30 seconds by default, for the whole sequence, drain included, and abandons whatever is still running when it expires. Slow requests at shutdown therefore leave less of the timeout for background work. `ServicesStopConcurrently` stops them all at once instead.
 
 A service that passes the token to every await, as the samples do, stops within moments. One that ignores the token keeps running until the timeout, and its work is cut off wherever it happens to be. Work that can't finish in time needs to be interruptible: process items in small transactions and mark each one done, so a restarted service picks up where the last one stopped instead of redoing or losing work. Raising the timeout buys time, but only up to the platform's own limit. An orchestrator that kills the process after its grace period, 30 seconds by default in Kubernetes, ends it regardless of what the host wanted.
 
@@ -140,26 +141,26 @@ Some hosts stop the process on their own schedule. IIS shuts down an app pool af
 
 ## Worker Services
 
-When background work needs more CPU or memory than the web app can spare, has a different release cadence, or must scale separately, it moves to a *worker service*: a separate process built on the same generic host, without the web server. The `dotnet new worker` template starts one:
+When background work needs more CPU or memory than the web app can spare, has a different release cadence, or must scale separately, it moves to a *worker service*: a separate process built on the same generic host, without the web server. The `dotnet new worker` template creates the project, and the `Microsoft.Extensions.Hosting.WindowsServices` or `.Systemd` package lets it run under a service manager:
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddHostedService<ReportWorker>();
+builder.Services.AddHostedService<ReportQueueConsumer>();   // reads report requests from a message broker
 builder.Services.AddWindowsService();   // or AddSystemd() on Linux; each does nothing outside a service manager
 
 builder.Build().Run();
 ```
 
-The hosted services, DI, configuration, and logging are identical, so code moves between the two hosts unchanged. What changes is how work arrives. A worker has no endpoints, so it reads from a queue, a database table, or a schedule. The web app's in-memory channel can't reach it, which usually means introducing a message broker. In exchange, a heavy job can't slow down requests, a crash takes down only the worker, and each side scales by its own measure, such as request rate for the web app and queue length for the worker.
+The hosted services, DI, configuration, and logging are identical, so code moves between the two hosts unchanged. What changes is how work arrives. A worker has no endpoints, so it reads from a queue, a database table, or a schedule. The web app's in-memory channel can't reach another process, which is why the consumer above reads from a message broker instead. In exchange, a heavy job can't slow down requests, a crash takes down only the worker, and each side scales by its own measure, such as request rate for the web app and queue length for the worker.
 
 ## Persistent Jobs
 
-An in-process queue loses work on restart, retries nothing, and shows no history. Job libraries store each job in a database, so it survives restarts, runs on whichever instance is free, and is retried on failure. The two established ones for .NET overlap but start from different ends. Hangfire is built around a job queue with scheduling added, and Quartz.NET around a scheduler with persistence added.
+An in-process queue loses work on restart, retries nothing, and shows no history. Job libraries backed by a database keep jobs across restarts and share them among instances. The two most established for .NET start from different ends. Hangfire is built around a persistent job queue with retries and scheduling added. Quartz.NET is built around a scheduler, which keeps its schedule in memory unless it is configured with a database store and clustering.
 
 ### Hangfire
 
-[Hangfire](https://www.hangfire.io){:target="_blank" rel="noopener noreferrer"} stores jobs in SQL Server, Redis, PostgreSQL, or other storage, and its server component, running inside the web app or a worker, fetches and executes them. A job is a method call recorded as an expression:
+[Hangfire](https://www.hangfire.io){:target="_blank" rel="noopener noreferrer"}, through the `Hangfire.AspNetCore` package and a storage package such as `Hangfire.SqlServer`, stores jobs in SQL Server, Redis, PostgreSQL, or other storage, and its server component, running inside the web app or a worker, fetches and executes them. A job is a method call recorded as an expression:
 
 ```csharp
 builder.Services.AddHangfire(config => config.UseSqlServerStorage(connectionString));
@@ -174,12 +175,14 @@ app.MapPost("/orders/{id:int}/confirm", (int id, IBackgroundJobClient jobs) =>
 app.Services.GetRequiredService<IRecurringJobManager>()
     .AddOrUpdate<SessionCleanup>("session-cleanup", job => job.RunAsync(CancellationToken.None), Cron.Hourly());
 
-app.MapHangfireDashboard();   // local requests only unless authorization is configured
+app.MapHangfireDashboard();
 ```
 
-Hangfire serializes the method's arguments into storage, so a job takes an order ID rather than an order object, and the job loads fresh data when it runs. The `OrderEmails` instance is created from the DI container when the job executes, with its own scope. Hangfire replaces a `CancellationToken` argument with one that fires at shutdown. Beyond immediate jobs, it supports delayed jobs, recurring jobs on a cron schedule, and continuations that run after another job succeeds.
+Hangfire serializes the method's arguments into storage, so a job takes an order ID rather than an order object, and the job loads fresh data when it runs. The `OrderEmails` instance is created from the DI container when the job executes, with its own scope. Hangfire replaces a `CancellationToken` argument with one that fires when the server shuts down or the job is deleted. Beyond immediate jobs, it supports delayed jobs, recurring jobs on a cron schedule, and continuations that run after another job succeeds.
 
-A job that throws is retried automatically, 10 times by default with growing delays, and then moves to the Failed state, where the dashboard can retry it by hand. Hangfire guarantees that a job runs at least once, not exactly once. A worker that dies mid-job, or a job that runs past its lock, can execute again elsewhere, so jobs have to be idempotent, for example by recording that the email was sent and checking before sending. The dashboard shows queued, running, failed, and succeeded jobs with their exceptions, and can trigger or delete them. It allows only local requests by default, and exposing it means adding an authorization filter.
+A job that throws is retried automatically, 10 times by default with growing delays, and then moves to the Failed state, where the dashboard can retry it by hand. Hangfire guarantees that a job runs at least once, not exactly once. Its docs warn that, since no distributed system detects failures perfectly, the same job can in corner cases be processed on two workers, so jobs have to be idempotent, for example by recording that the email was sent and checking before sending. A recurring job whose previous run is still going can also overlap with the next one. The `[DisableConcurrentExecution]` attribute prevents that on a best-effort basis.
+
+Enqueuing has its own gap. If the endpoint commits the order and the process dies before `Enqueue`, the email is never sent. Enqueuing first and committing second risks the opposite. Writing the job in the same transaction as the business change closes it. The usual way is an *outbox*: the endpoint inserts a row describing the job into a table in the same transaction as the order, and a background service enqueues each committed row and marks it sent. Relying on Hangfire's own enqueue to join the app's transaction is less dependable, since whether it enlists depends on the storage provider and how the connection is shared. The dashboard shows queued, running, failed, and succeeded jobs with their exceptions, and can trigger or delete them. It allows only local requests by default, and exposing it means adding an authorization filter.
 
 ### Quartz.NET
 
@@ -205,7 +208,11 @@ public sealed class NightlyCleanupJob(AppDbContext db) : IJob
 }
 ```
 
-Quartz cron expressions start with a seconds field and use `?` for "no specific value" in the day-of-month or day-of-week field, so they aren't interchangeable with five-field Unix cron. `[DisallowConcurrentExecution]` keeps a slow run from overlapping the next trigger, and `WaitForJobsToComplete` makes shutdown wait for running jobs within the host's timeout.
+Quartz cron expressions start with a seconds field and use `?` for "no specific value" in the day-of-month or day-of-week field, so they aren't interchangeable with five-field Unix cron. `[DisallowConcurrentExecution]` keeps a slow run from overlapping the next trigger, and `WaitForJobsToComplete` makes shutdown wait for running jobs within the host's timeout. Each run gets its own DI scope, so a job can take scoped services such as a `DbContext` in its constructor. A trigger whose time passes while the scheduler is down or busy has *misfired*, and its misfire instruction decides whether it fires once as soon as possible or skips to its next time.
+
+Quartz doesn't retry a failed job the way Hangfire does. A job that throws a `JobExecutionException` can ask to be re-fired immediately, and anything more, such as a delay between attempts, is the job's own code. Its official dashboard package, `Quartz.Dashboard`, is new and still marked as a work in progress, so run history and manual control are less mature than Hangfire's.
+
+Since Quartz.NET 4.0, `AddQuartzHostedService` ships in the main `Quartz` package. On 3.x it comes from `Quartz.Extensions.Hosting`, which in 4.x is an empty package kept for compatibility.
 
 By default Quartz keeps schedules in memory. With the ADO.NET job store and clustering enabled, several instances share one database, and each trigger fires on only one of them. If an instance dies mid-job, another re-runs the job only if the job was marked to request recovery. Clustered nodes need clocks synchronized to within a second, because they coordinate through timestamps in the database.
 
@@ -229,4 +236,4 @@ The in-process options add no infrastructure and cost nothing to run, and the pe
 - Hosted services are singletons. Create a scope per unit of work with `IServiceScopeFactory.CreateAsyncScope`, or use `IDbContextFactory<T>` when a `DbContext` is the only scoped dependency.
 - Every instance runs every hosted service, so periodic work that must run once needs coordination, a single worker, a platform scheduler, or a job library.
 - Queued work carries data, never the request's `HttpContext` or scoped services. An in-memory channel loses its contents on restart.
-- Hangfire and Quartz.NET make jobs durable and coordinate them across instances. Hangfire retries failed jobs and guarantees at-least-once execution, so its jobs must be idempotent, and its dashboard needs authorization before it is exposed.
+- Hangfire keeps jobs in storage and shares them across instances. Quartz.NET does the same only with a database job store and clustering. Hangfire retries failed jobs and guarantees at-least-once execution, so its jobs must be idempotent, and its dashboard needs authorization before it is exposed.

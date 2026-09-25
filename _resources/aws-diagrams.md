@@ -32,6 +32,7 @@ figures:
   - aws-lambda-vpc-access
   - aws-ecs-service-anatomy
   - aws-eks-control-data-plane
+  - aws-s3-class-breakeven
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -46,4 +47,5 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-ec2-fundamentals.html
   - /study-guides/infrastructure/aws/aws-lambda-fundamentals.html
   - /study-guides/infrastructure/aws/aws-container-services.html
+  - /study-guides/infrastructure/aws/aws-s3-fundamentals.html
 ---
