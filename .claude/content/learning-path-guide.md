@@ -6,7 +6,7 @@ This guide covers what qualifies as a learning path, its format, and the rules f
 
 ## What a Learning Path Is
 
-A learning path is an ordered route through existing content toward a goal. Each step is a guide, resource, case study, or essay the site already has, plus one line on why it comes where it does. The path adds order and reasoning. It never adds new teaching content.
+A learning path is an ordered route through existing content toward a goal. Each step is a guide, resource, case study, or essay the site already has, plus one line on why it comes where it does. The path adds order, reasoning, and practice. Each stage ends with a checkpoint that asks the reader to apply it. It never adds new teaching content.
 
 Category order in `study_guides_config.json` already teaches one topic from the ground up. A path exists for the reader whose goal crosses topics.
 
@@ -53,7 +53,7 @@ goal: "..."                   # what the reader will be able to do, one sentence
 audience: "..."               # who it's for, shown as "For:"
 assumes: "..."                # what the reader should already have, shown as "Assumes:"
 prerequisite: other-path-id   # optional; another path the reader should finish first
-last_reviewed: 2026-09-25     # unquoted; update on every review pass
+last_reviewed: 2026-09-25     # unquoted; update on every review pass; maintainer-only, not rendered
 stages:
   - level: Foundations        # Foundations | Basics | Intermediate | Advanced
     name: "What architecture is"
@@ -63,6 +63,10 @@ stages:
         why: "What this step enables later in the path."
     deeper:                   # optional, unnumbered, no "why"
       - /resources/architecture-characteristics-glossary.html
+    checkpoint:               # required on every stage
+      can: "tell an architectural decision from a design one, ..."   # follows "You can now"
+      try: "Pick a system you work on. List its top three ..."       # one task on the reader's own work
+      exit: true              # optional; stopping here leaves a complete skill
 ---
 ```
 
@@ -73,8 +77,8 @@ stages:
 ## Writing a Path
 
 - **Place content by its lesson, not its technology.** A case study built on SQS whose lesson is "the pattern didn't fit the problem" teaches architecture, not AWS. Before placing a step, read its lessons or conclusion and ask what it teaches.
-  - A **technology path** (Cloud Architect on AWS, Coding with AI Agents) keeps a step only if the step's lesson is about that technology's domain. Vendor-neutral material in the same domain is fine: DR patterns and IaC fundamentals belong in a cloud path.
-  - Lessons about architecture, organizations, decisions, or engineering practice go to the **theory paths** (Developer to Architect, Leading Software Delivery), even when the story is set on one vendor's stack.
+  - A **technology path** (Designing on AWS, Running AWS at Scale, Coding with AI Agents) keeps a step only if the step's lesson is about that technology's domain. Vendor-neutral material in the same domain is fine: DR patterns and IaC fundamentals belong in a cloud path.
+  - Lessons about architecture, organizations, decisions, or engineering practice go to the **theory paths** (Developer to Architect, Leading a Development Team), even when the story is set on one vendor's stack.
   - A technology path that depends on that theory says so in `assumes`, rather than borrowing the theory's steps.
 - **Order:** follow The Shape of a Path. Place every step by its level first, and by what it depends on second.
 - **Size:** a focused path, one skill or one kind of project, runs 10–20 main steps in 3–5 stages. A path that spans a role change (Developer to Architect) may run to 40 steps in up to 8 stages by repeating levels, because the role really has that much ground. Past 40, split it and link the halves with `prerequisite`. Length is never a goal: a long path still cuts every step that doesn't earn its place.
@@ -85,13 +89,23 @@ stages:
 - **At least one non-guide step:** a resource, case study, or essay. Paths are where the content types meet.
 - **`deeper` links** are for readers who want more on a stage: sibling styles, related case studies, reference tables. Keep them to about five per stage, and put the most useful first.
 
+## Checkpoints
+
+Every stage ends with a checkpoint. It tells the reader what the stage gave them, and asks them to use it once. Reading alone makes a path feel like homework. The checkpoint is where it turns into something the reader can do.
+
+- **`can` completes "You can now".** Start it lowercase and end it with a period. State one plain outcome, two at most, that the reader would recognize as worth having before reading the stage. It has to make sense to someone who closed the guides a week ago, so use no term the stage introduced and don't list the steps' topics. "Divide a system into parts based on what it does, not on how its data is stored" works. "Find components from journeys and the domain rather than tables" doesn't: it only makes sense while the guide is still open. Don't claim anything the steps don't cover.
+- **`try` is one task on the reader's own work.** It should take under an hour and produce something they can look at: a sketch, a list, a paragraph, an ADR, a deployed piece. Aim it at "a system you work on" or "an application you know", so a reader without the perfect project can still do it. Point at a template or resource from the stage when one fits. Later tasks may build on earlier ones ("the characteristics you listed in stage 1").
+- **A checkpoint is practice, not teaching.** It never explains a concept or summarizes a step. If a task needs an explanation to be doable, the explanation belongs in a guide.
+- **`exit: true` marks a stage where stopping still leaves the reader with a complete, usable skill.** The page labels it "a good place to stop". Use it so a long path reads as several finishable pieces, typically one or two per path. Never on the last stage, which is the end anyway.
+- **Nothing is tracked.** Checkpoints are static text. There are no checkboxes, answers, or saved progress.
+
 ## Validation
 
 ```bash
 python .pathcheck.py
 ```
 
-It resolves every step and `deeper` URL to a content file and checks required fields, that levels start at Foundations and only climb, step and stage counts, duplicate URLs, the non-guide rule, `prerequisite` targets, and pairwise overlap. A URL that doesn't resolve also renders as a visible "Missing step" on the path page.
+It resolves every step and `deeper` URL to a content file and checks required fields, a checkpoint on every stage, that levels start at Foundations and only climb, step and stage counts, duplicate URLs, the non-guide rule, `prerequisite` targets, and pairwise overlap. A URL that doesn't resolve also renders as a visible "Missing step" on the path page.
 
 **Run it after moving, renaming, or deleting any guide, resource, case study, or post.** A path that still names the old URL is broken, and nothing else catches that.
 

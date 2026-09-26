@@ -5,7 +5,7 @@ description: "A route for developers who code with AI assistants and agents: how
 goal: "Get reliable, reviewable work out of AI coding assistants and agents, and know where they fail."
 audience: "Developers using AI coding assistants and agents in daily work"
 assumes: "You write code professionally. No machine learning background needed."
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-26
 stages:
   - level: Foundations
     name: "What the model is, and what it changes"
@@ -17,6 +17,9 @@ stages:
         why: "The argument for the whole path: when code is cheap, judgment is what's left to be good at. The rest of the path is how to exercise it."
     deeper:
       - /resources/core-ai-concepts-diagrams.html
+    checkpoint:
+      can: "explain why an assistant gave a strange answer, instead of retrying until it gives a better one."
+      try: "Take a recent answer from your assistant that was wrong or strange. Decide whether missing context, an overfull context window, or sampling caused it, and what you'd change next time."
   - level: Basics
     name: "Working with an assistant"
     purpose: "Giving the model what it needs, and delegating on purpose."
@@ -27,6 +30,10 @@ stages:
         why: "Where the speedup really comes from, and why it depends on the specifying and verifying you do around the model."
     deeper:
       - /resources/prompt-engineering-technique-selection.html
+    checkpoint:
+      can: "give an assistant what it needs for a task, and know which parts of its work to check."
+      try: "Before your next delegated task, write down the context the model needs and how you'll verify the result. Afterward, compare what you checked with what actually went wrong."
+      exit: true
   - level: Intermediate
     name: "Real projects, real boundaries"
     purpose: "Discipline on a production rebuild, and the rules for what your tools may touch."
@@ -35,12 +42,14 @@ stages:
         why: "The basics on a real rebuild with no docs, no tests, and zero tolerance for regressions, including what went wrong before the discipline arrived."
       - url: /resources/plan-task-skill.html
         why: "The case study's assumptions-first discipline as a skill you can install. Copy it, or use it as the model for your own."
-      - url: /study-guides/ai/ai-security-for-organizations.html
-        why: "Written for security teams, and worth reading as a developer: it sets which code and data may reach which tool, before you connect any."
       - url: /study-guides/ai/model-context-protocol.html
         why: "Connecting your assistant to tools and data means trusting a server. This is what that trust covers, and where it ends."
     deeper:
+      - /study-guides/ai/ai-security-for-organizations.html
       - /resources/refine-prose-skill.html
+    checkpoint:
+      can: "use an assistant on production code without losing control of what it changes or what it can reach."
+      try: "Use the plan-task skill, or your own version of it, on your next task. Then list every tool and MCP server your assistant can reach, and what each one can read or change."
   - level: Advanced
     name: "Beyond one session"
     purpose: "Keeping long work, and many agents, on track."
@@ -55,4 +64,7 @@ stages:
       - /study-guides/ai/gas-city.html
       - /study-guides/ai/ai-agents.html
       - /study-guides/ai/tool-calling.html
+    checkpoint:
+      can: "keep an agent's work on track across many sessions, and run the same task many times with consistent results."
+      try: "Pick a task you'd hand an agent fifty times, such as a migration, a set of tests, or reference docs. Write its format reference and plan file from this stage's template, and run it on five items before scaling up."
 ---

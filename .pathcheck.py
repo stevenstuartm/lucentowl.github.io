@@ -87,6 +87,16 @@ for path in sorted(glob.glob("_learning_paths/*.md")):
             if url in seen:
                 problems.append(f"{where}: {url} appears twice")
             seen.add(url)
+        checkpoint = stage.get("checkpoint") or {}
+        if not (checkpoint.get("can") or "").strip() or not (checkpoint.get("try") or "").strip():
+            problems.append(f"{where}: needs a checkpoint with 'can' and 'try'")
+        unknown = set(checkpoint) - {"can", "try", "exit"}
+        if unknown:
+            problems.append(f"{where}: checkpoint has unknown keys {sorted(unknown)}")
+        if "exit" in checkpoint and checkpoint["exit"] is not True:
+            problems.append(f"{where}: checkpoint 'exit' is either true or left out")
+        if checkpoint.get("exit") and i == len(stages):
+            problems.append(f"{where}: the last stage is the end of the path, not an exit point")
         for url in stage.get("deeper") or []:
             if url not in urls:
                 problems.append(f"{where}: go-deeper URL resolves to nothing: {url}")

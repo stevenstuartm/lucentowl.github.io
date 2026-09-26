@@ -28,9 +28,11 @@
       url: /learning-paths/developer-to-architect.html
     - title: "Coding with AI Agents"
       url: /learning-paths/coding-with-ai-agents.html
-    - title: "Cloud Architect on AWS"
+    - title: "Designing on AWS"
       url: /learning-paths/cloud-architect-aws.html
-    - title: "Leading Software Delivery"
+    - title: "Running AWS at Scale"
+      url: /learning-paths/running-aws-at-scale.html
+    - title: "Leading a Development Team"
       url: /learning-paths/leading-software-delivery.html
 
 - id: site-search

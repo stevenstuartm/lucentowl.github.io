@@ -23,13 +23,16 @@ layout: default
             <dl class="path-facts">
                 <div><dt>For</dt><dd>{{ page.audience }}</dd></div>
                 <div><dt>Assumes</dt><dd>{{ page.assumes }}</dd></div>
+                {% if page.prerequisite %}
+                {% assign prereq_path = site.learning_paths | where: "slug", page.prerequisite | first %}
+                {% if prereq_path %}
+                <div><dt>Start with</dt><dd><a href="{{ prereq_path.url | relative_url }}">{{ prereq_path.title }}</a>, the path before this one</dd></div>
+                {% endif %}
+                {% endif %}
             </dl>
             <div class="header-badges" data-pagefind-ignore>
                 <span class="path-badge">{{ path_step_count }} steps in {{ page.stages.size }} stages</span>
                 <span class="path-badge">About {{ path_reading }} of reading</span>
-                {% if page.last_reviewed %}
-                <span class="path-badge">Reviewed <time datetime="{{ page.last_reviewed | date_to_xmlschema }}">{{ page.last_reviewed | date: "%B %d, %Y" }}</time></span>
-                {% endif %}
             </div>
         </div>
     </header>
@@ -88,6 +91,14 @@ layout: default
                 {% if doc %}<a href="{{ doc.url | relative_url }}" target="_blank" rel="noopener">{{ doc.title }}</a>{% else %}<code>Missing: {{ deeper_url }}</code>{% endif %}{% unless forloop.last %}<span class="path-deeper-sep" aria-hidden="true">·</span>{% endunless %}
                 {% endfor %}
             </p>
+            {% endif %}
+
+            {% if stage.checkpoint %}
+            <aside class="path-checkpoint{% if stage.checkpoint.exit %} path-checkpoint--exit{% endif %}" aria-label="Checkpoint for stage {{ forloop.index }}">
+                <p class="path-checkpoint-label">Checkpoint{% if stage.checkpoint.exit %}<span class="path-checkpoint-exit"> · a good place to stop</span>{% endif %}</p>
+                <p><strong>You can now</strong> {{ stage.checkpoint.can }}</p>
+                <p><strong>Try it.</strong> {{ stage.checkpoint.try }}</p>
+            </aside>
             {% endif %}
         </section>
         {% endfor %}

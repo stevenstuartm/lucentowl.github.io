@@ -8,7 +8,6 @@ date: 2023-01-01
 headline_metric: "Unified Auth Layer"
 headline_detail: "5 legacy systems → 1 abstracted service → seamless third-party migration path"
 category: "design"
-featured: true
 category_label: "Architecture & Design"
 technologies:
   - .NET

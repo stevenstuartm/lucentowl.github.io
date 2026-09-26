@@ -229,6 +229,41 @@
     margin: 0 0.4rem;
 }
 
+/* Checkpoint: what the stage gave the reader, and one task to apply it. Static; nothing is tracked. */
+.path-checkpoint {
+    margin: var(--spacing-sm) 0 0 calc(2.25rem + var(--spacing-sm));
+    padding: 0.75rem var(--spacing-sm);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    background: var(--color-card-bg);
+    font-size: 0.93rem;
+    line-height: 1.55;
+
+    p {
+        margin: 0.3rem 0 0;
+    }
+}
+
+.path-checkpoint--exit {
+    border-left-color: var(--color-gold);
+}
+
+.path-checkpoint-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    color: var(--color-text-light);
+
+    .path-checkpoint & {
+        margin-top: 0;
+    }
+}
+
+.path-checkpoint-exit {
+    color: var(--color-gold-text);
+}
+
 /* Listing page */
 .learning-paths-intro {
     max-width: 760px;
@@ -413,7 +448,8 @@
         gap: 0.6rem;
     }
 
-    .path-deeper {
+    .path-deeper,
+    .path-checkpoint {
         margin-left: 0;
     }
 

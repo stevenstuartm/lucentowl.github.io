@@ -242,6 +242,7 @@ For the Lookup Test (deciding whether content qualifies as a resource), quality 
 Ordered routes through existing content toward a goal, at `/learning-paths.html` and `/learning-paths/<id>.html`. Each step is a site URL plus a "why" line. Full rules: [`.claude/content/learning-path-guide.md`](.claude/content/learning-path-guide.md).
 
 - **Files:** `_learning_paths/<id>.md` (the whole path in front matter, sorted by `order`, no config file), `_layouts/learning-path.html`, `_layouts/learning-paths.html`, `_includes/learning-path-stats.html` (step count, reading time, categories crossed), `_sass/_learning-paths.scss`, `pages/learning-paths.md`.
+- **Every stage ends with a checkpoint** (`can`, `try`, optional `exit: true`): what the stage gave the reader and one task on their own work. `pathcheck` requires it. A `prerequisite` renders as a "Start with" link in the path header.
 - **Paths are isolated.** A path points to pages; no page points back. Never add path links, "part of this path" notes, or path-aware navigation to guide, resource, case study, or post layouts or content.
 - **Moving or deleting content means running `python .pathcheck.py`.** It resolves every step URL and checks the authoring rules. A step that doesn't resolve also renders as a visible "Missing step".
 - **No reader state.** The path page is the navigation, and its step links open in a new tab so it stays open while the reader wanders. Step anchors (`#step-7`) and the browser's own `:visited` color are the only "progress", and the site stores nothing.

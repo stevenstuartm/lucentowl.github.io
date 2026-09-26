@@ -8,7 +8,6 @@ date: 2026-06-03
 headline_metric: "4 Months"
 headline_detail: "Legacy rebuild, zero docs or tests, no institutional knowledge"
 category: "success"
-featured: true
 category_label: "AI-Assisted Delivery"
 technologies:
   - WinUI3

@@ -1,11 +1,11 @@
 ---
-title: "Cloud Architect on AWS"
+title: "Designing on AWS"
 order: 3
-description: "A route for developers and architects designing systems on AWS: the Well-Architected pillars, identity, networking, compute, and storage, data and integration services, infrastructure as code, security across accounts, and operating, recovering, and paying for it all."
-goal: "Design, secure, and run production systems on AWS, choosing each service for its trade-offs rather than its marketing."
+description: "A route for developers and architects designing their first production systems on AWS: the Well-Architected pillars, identity, networking, compute, and storage, then choosing data stores and connecting services with APIs, queues, and events."
+goal: "Design a production workload on AWS, choosing its compute, data, and integration services for their trade-offs rather than their marketing."
 audience: "Developers and architects designing systems on AWS"
 assumes: "You've built and deployed web applications, and know the architecture basics that Developer to Architect covers in its first three stages. No AWS experience needed."
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-26
 stages:
   - level: Foundations
     name: "Thinking in cloud trade-offs"
@@ -15,6 +15,9 @@ stages:
         why: "The six pillars are the cloud's architecture characteristics. Every service choice later in the path trades among them."
       - url: /study-guides/networking/networking.html
         why: "Subnets, routing, and load balancers all assume this. Cloud networking is ordinary networking with an API in front of it."
+    checkpoint:
+      can: "judge whether an AWS design is sound, and understand the networking every service is built on."
+      try: "Take an application you've deployed anywhere. For each of the six pillars, write one sentence on where the application is weakest."
   - level: Basics
     name: "Identity, network, compute, storage"
     purpose: "The four things every AWS workload is built on."
@@ -37,6 +40,10 @@ stages:
       - /study-guides/infrastructure/aws/aws-cloudfront.html
       - /study-guides/infrastructure/aws/aws-ebs-efs.html
       - /resources/aws-diagrams.html
+    checkpoint:
+      can: "put an application on AWS, and decide what runs it and who can reach it."
+      try: "Sketch the AWS version of an application you know, with its VPC and subnets, its load balancer, container or Lambda compute and why, and the IAM role each piece uses. If you have an account, deploy the smallest piece with a role that grants only what it needs."
+      exit: true
   - level: Intermediate
     name: "Data"
     purpose: "Where each workload's data lives, and designing for the store you chose."
@@ -47,9 +54,13 @@ stages:
         why: "What AWS manages for a relational database, what you still own, and when Aurora is worth it."
       - url: /study-guides/infrastructure/aws/aws-dynamodb.html
         why: "Designing around keys and access patterns instead of queries, which runs against relational habit."
+      - url: /resources/database-selection-matrix.html
+        why: "Access patterns mapped to store types, for the workloads that need more than one database. Keep it open for your next data decision."
     deeper:
       - /study-guides/infrastructure/aws/aws-elasticache.html
-      - /resources/database-selection-matrix.html
+    checkpoint:
+      can: "choose a database for a workload on AWS, and shape your data to fit the one you chose."
+      try: "List the access patterns for one feature in your sketch. Decide whether they fit RDS or DynamoDB, and if DynamoDB, design the partition and sort keys that serve them."
   - level: Intermediate
     name: "Integration"
     purpose: "Connecting services without coupling them: APIs, queues, and events."
@@ -64,58 +75,7 @@ stages:
         why: "Multi-step workflows with retries and error handling owned by the service, not written into your code."
     deeper:
       - /study-guides/infrastructure/aws/aws-kinesis.html
-  - level: Intermediate
-    name: "Infrastructure as code and delivery"
-    purpose: "Building every environment from code, and shipping changes safely."
-    steps:
-      - url: /study-guides/infrastructure/iac-fundamentals.html
-        why: "Desired state, plan and apply, and idempotence: the ideas every IaC tool shares."
-      - url: /blog/2025/10/11/avoid-localized-configs-favor-distributed-versioned-store.html
-        why: "An argument to settle before writing templates: configuration belongs in a versioned store, not beside the code."
-      - url: /study-guides/infrastructure/iac-tools-comparison.html
-        why: "CloudFormation, CDK, Terraform, and the rest, separated by the questions that actually distinguish them."
-      - url: /study-guides/infrastructure/aws/aws-cdk.html
-        why: "Infrastructure in a real programming language, and where that power helps or hurts."
-      - url: /study-guides/infrastructure/deployment-strategies.html
-        why: "Rolling, blue-green, and canary releases, which decide how much a bad deploy can break."
-    deeper:
-      - /study-guides/infrastructure/aws/cloudformation-fundamentals.html
-      - /study-guides/infrastructure/iac-environment-lifecycle.html
-      - /study-guides/infrastructure/aws/aws-codepipeline-codebuild.html
-      - /study-guides/infrastructure/aws/aws-systems-manager.html
-      - /resources/cloudformation-template-reference.html
-  - level: Advanced
-    name: "Security at scale"
-    purpose: "Identity, encryption, and audit across many accounts."
-    steps:
-      - url: /study-guides/infrastructure/aws/aws-organizations-control-tower.html
-        why: "Accounts are AWS's strongest boundary. This is how to structure many of them into one governed estate."
-      - url: /study-guides/infrastructure/aws/aws-kms-secrets-manager.html
-        why: "Keys and secrets managed and rotated centrally, instead of scattered through code and config."
-      - url: /study-guides/infrastructure/aws/aws-cloudtrail-config.html
-        why: "The record of every API call and configuration change, which detection and compliance both depend on."
-      - url: /study-guides/infrastructure/aws/aws-security-hub-guardduty.html
-        why: "Detection across every account: threats flagged from the logs you already collect, and findings gathered in one place."
-    deeper:
-      - /study-guides/infrastructure/aws/aws-cognito.html
-      - /study-guides/infrastructure/aws/aws-waf-shield.html
-      - /study-guides/infrastructure/iac-governance.html
-  - level: Advanced
-    name: "Running it"
-    purpose: "Operating, recovering, and paying for what you built."
-    steps:
-      - url: /study-guides/infrastructure/aws/aws-cloudwatch.html
-        why: "Metrics, logs, and alarms for everything above, and what collecting them costs."
-      - url: /study-guides/infrastructure/disaster-recovery-patterns.html
-        why: "RTO, RPO, and the four recovery strategies, decided from what the business can afford to lose."
-      - url: /study-guides/infrastructure/aws/disaster-recovery.html
-        why: "The same strategies built from AWS services, with what each costs to keep ready."
-      - url: /study-guides/infrastructure/aws/aws-cost-management.html
-        why: "Cost is a design characteristic on AWS. This is how to see it, budget it, and commit to it."
-      - url: /case-studies/cloud-cost-optimization.html
-        why: "An 80% cut found by one audit, which shows what happens when nobody owns the bill."
-    deeper:
-      - /study-guides/infrastructure/aws/aws-xray.html
-      - /study-guides/infrastructure/aws/multi-region-architecture.html
-      - /blog/2026/02/11/observability-is-authored-not-installed.html
+    checkpoint:
+      can: "connect services so that one can fail or slow down without breaking the others."
+      try: "Pick one synchronous call in your sketch that doesn't need an immediate answer. Redesign it with SQS, EventBridge, or Step Functions, and write down what happens when its consumer fails twice."
 ---
