@@ -1,0 +1,83 @@
+---
+title: "Security Findings Across an Organization"
+kind: deployment
+system: aws
+summary: "Findings from every account and Region collected in one home Region."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 450" role="img" aria-labelledby="awsfnd-title awsfnd-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsfnd-title">Organization-wide flow of security findings</title>
+<desc id="awsfnd-desc">In every Region, GuardDuty, Security Hub CSPM, Inspector, and Macie produce findings in each member account. In each Region, those findings go to Security Hub in a security account that the management account has made the delegated administrator, the same account in every Region. Security Hub CSPM is both a source of findings in each member account and, with Security Hub, a hub that collects them. Findings from linked Regions are replicated to one home Region, where the dashboards cover all accounts and Regions and where automation rules and ticketing are defined. From the home Region, findings are routed through EventBridge to notification and containment, and Security Hub opens Jira or ServiceNow tickets. GuardDuty also publishes its own findings to EventBridge in each Region, which the figure leaves out. Each service must still be enabled, and is still billed, in every Region; aggregation copies data but enables nothing.</desc>
+<style>
+.awsfnd-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsfnd-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsfnd-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsfnd-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsfnd-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsfnd-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsfnd-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsfnd-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsfnd-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsfnd-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awsfnd-h" x="285" y="30" text-anchor="middle">Every member account</text>
+<text class="awsfnd-h" x="610" y="30" text-anchor="middle">Security account (delegated administrator)</text>
+<text class="awsfnd-h" x="875" y="30" text-anchor="middle">Response</text>
+
+<rect class="awsfnd-pan" x="10" y="45" width="960" height="150" rx="8"/>
+<text class="awsfnd-h" x="24" y="115">Linked</text>
+<text class="awsfnd-h" x="24" y="131">Region</text>
+
+<rect class="awsfnd-pan" x="10" y="215" width="960" height="170" rx="8"/>
+<text class="awsfnd-h" x="24" y="292">Home</text>
+<text class="awsfnd-h" x="24" y="308">Region</text>
+
+<rect class="awsfnd-box" x="150" y="75" width="270" height="90" rx="6"/>
+<text class="awsfnd-n" x="285" y="105" text-anchor="middle">GuardDuty · Security Hub CSPM</text>
+<text class="awsfnd-n" x="285" y="124" text-anchor="middle">Inspector · Macie</text>
+<text class="awsfnd-k" x="285" y="148" text-anchor="middle">[findings in this account and Region]</text>
+
+<rect class="awsfnd-acc" x="490" y="75" width="240" height="90" rx="6"/>
+<text class="awsfnd-an" x="610" y="108" text-anchor="middle">Security Hub</text>
+<text class="awsfnd-k" x="610" y="128" text-anchor="middle">[and Security Hub CSPM]</text>
+<text class="awsfnd-lab" x="610" y="148" text-anchor="middle">all members, this Region</text>
+
+<path class="awsfnd-ln" d="M420,120 L488,120" marker-end="url(#awsfnd-a)"/>
+<text class="awsfnd-lab" x="428" y="112">findings</text>
+
+<rect class="awsfnd-box" x="150" y="250" width="270" height="90" rx="6"/>
+<text class="awsfnd-n" x="285" y="280" text-anchor="middle">GuardDuty · Security Hub CSPM</text>
+<text class="awsfnd-n" x="285" y="299" text-anchor="middle">Inspector · Macie</text>
+<text class="awsfnd-k" x="285" y="323" text-anchor="middle">[findings in this account and Region]</text>
+
+<rect class="awsfnd-acc" x="490" y="235" width="240" height="130" rx="6"/>
+<text class="awsfnd-an" x="610" y="262" text-anchor="middle">Security Hub</text>
+<text class="awsfnd-k" x="610" y="282" text-anchor="middle">[and Security Hub CSPM]</text>
+<text class="awsfnd-lab" x="610" y="306" text-anchor="middle">all members, all Regions</text>
+<text class="awsfnd-lab" x="610" y="326" text-anchor="middle">dashboards, automation rules,</text>
+<text class="awsfnd-lab" x="610" y="342" text-anchor="middle">ticketing</text>
+
+<path class="awsfnd-ln" d="M420,295 L488,295" marker-end="url(#awsfnd-a)"/>
+<text class="awsfnd-lab" x="428" y="287">findings</text>
+
+<path class="awsfnd-ln" d="M610,165 L610,233" marker-end="url(#awsfnd-a)"/>
+<text class="awsfnd-lab" x="620" y="209">replicated</text>
+
+<rect class="awsfnd-box" x="790" y="240" width="170" height="50" rx="6"/>
+<text class="awsfnd-n" x="875" y="262" text-anchor="middle">EventBridge</text>
+<text class="awsfnd-k" x="875" y="280" text-anchor="middle">[notify, contain]</text>
+
+<rect class="awsfnd-box" x="790" y="310" width="170" height="50" rx="6"/>
+<text class="awsfnd-n" x="875" y="332" text-anchor="middle">Jira / ServiceNow</text>
+<text class="awsfnd-k" x="875" y="350" text-anchor="middle">[Security Hub tickets]</text>
+
+<path class="awsfnd-ln" d="M730,265 L788,265" marker-end="url(#awsfnd-a)"/>
+<path class="awsfnd-ln" d="M730,335 L788,335" marker-end="url(#awsfnd-a)"/>
+
+<text class="awsfnd-lab" x="20" y="415">Aggregation copies data but enables nothing. Each service stays enabled, and billed, in every Region it monitors.</text>
+<text class="awsfnd-lab" x="20" y="433">The management account designates the delegated administrator, which must be the same account in every Region.</text>
+</g>
+</svg>

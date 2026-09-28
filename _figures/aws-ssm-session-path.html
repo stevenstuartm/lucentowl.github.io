@@ -1,0 +1,59 @@
+---
+title: "How a Session Manager Connection Is Made"
+kind: dynamic
+system: aws
+summary: "Both sides connect out to Systems Manager, so the node needs no inbound rule."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 380" role="img" aria-labelledby="awsssm-title awsssm-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsssm-title">Session Manager connection path</title>
+<desc id="awsssm-desc">An operator starts a session from the console or the AWS CLI, which calls Systems Manager over HTTPS. Systems Manager checks the operator's IAM permissions. SSM Agent on a managed node in a private subnet has already connected out to Systems Manager's ssm and ssmmessages endpoints over HTTPS on port 443, through interface VPC endpoints or a NAT gateway. Systems Manager relays the session between the two outbound connections, so the node's security group needs no inbound rule and the node needs no public IP address or SSH key. If session logging is configured, SSM Agent sends the session transcript from the node to S3 or CloudWatch Logs.</desc>
+<style>
+.awsssm-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsssm-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsssm-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsssm-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsssm-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsssm-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsssm-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsssm-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsssm-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsssm-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsssm-box" x="20" y="110" width="200" height="80" rx="6"/>
+<text class="awsssm-n" x="120" y="143" text-anchor="middle">Operator</text>
+<text class="awsssm-k" x="120" y="163" text-anchor="middle">[console or AWS CLI]</text>
+
+<rect class="awsssm-acc" x="370" y="100" width="250" height="100" rx="6"/>
+<text class="awsssm-an" x="495" y="130" text-anchor="middle">Systems Manager</text>
+<text class="awsssm-k" x="495" y="150" text-anchor="middle">[ssm and ssmmessages endpoints]</text>
+<text class="awsssm-lab" x="495" y="176" text-anchor="middle">checks IAM, relays the session</text>
+
+<rect class="awsssm-pan" x="690" y="30" width="275" height="300" rx="8"/>
+<text class="awsssm-h" x="705" y="52">VPC, private subnet</text>
+<rect class="awsssm-box" x="710" y="100" width="235" height="100" rx="6"/>
+<text class="awsssm-n" x="827" y="130" text-anchor="middle">Managed node</text>
+<text class="awsssm-k" x="827" y="150" text-anchor="middle">[SSM Agent]</text>
+<text class="awsssm-lab" x="827" y="176" text-anchor="middle">no inbound rule, no public IP</text>
+
+<path class="awsssm-ln" d="M220,140 L368,140" marker-end="url(#awsssm-a)"/>
+<text class="awsssm-lab" x="232" y="130">start session, HTTPS</text>
+
+<path class="awsssm-ln" d="M710,140 L622,140" marker-end="url(#awsssm-a)"/>
+<text class="awsssm-lab" x="682" y="62" text-anchor="end">agent connects out,</text>
+<text class="awsssm-lab" x="682" y="76" text-anchor="end">HTTPS 443, through</text>
+<text class="awsssm-lab" x="682" y="90" text-anchor="end">VPC endpoints or NAT</text>
+
+<rect class="awsssm-box" x="370" y="270" width="250" height="60" rx="6"/>
+<text class="awsssm-n" x="495" y="295" text-anchor="middle">S3 or CloudWatch Logs</text>
+<text class="awsssm-k" x="495" y="314" text-anchor="middle">[session logs, if configured]</text>
+
+<path class="awsssm-ln" d="M827,200 L827,300 L622,300" marker-end="url(#awsssm-a)"/>
+<text class="awsssm-lab" x="838" y="290">transcript</text>
+
+<text class="awsssm-lab" x="20" y="362">Arrows point from the side that opens each connection. Session data flows both ways over the two connections Systems Manager relays.</text>
+</g>
+</svg>

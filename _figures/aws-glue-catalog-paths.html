@@ -1,0 +1,75 @@
+---
+title: "Metadata and Data Paths in an S3 Data Lake"
+kind: structure
+system: aws
+summary: "Engines look up tables in the Data Catalog, then read S3 directly."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 380" role="img" aria-labelledby="awsglu-title awsglu-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsglu-title">Glue Data Catalog as the metadata layer over S3</title>
+<desc id="awsglu-desc">Four engines, Athena, Redshift Spectrum, Amazon EMR, and Glue ETL jobs, each look up a table in the AWS Glue Data Catalog, which returns the schema, format, partitions, and S3 location. Each engine then reads the files directly from the S3 data lake. Data never passes through the catalog. Crawlers read S3 and jobs that write data to S3, and both update table and partition definitions in the catalog. Lake Formation, when used, grants access at the table, column, and row level on the catalog and issues the credentials engines use for the S3 read.</desc>
+<style>
+.awsglu-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsglu-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsglu-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsglu-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsglu-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsglu-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsglu-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsglu-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsglu-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+.awsglu-dl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="awsglu-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awsglu-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsglu-pan" x="20" y="20" width="220" height="300" rx="8"/>
+<text class="awsglu-h" x="36" y="42">Engines</text>
+<rect class="awsglu-box" x="40" y="56" width="180" height="50" rx="6"/>
+<text class="awsglu-n" x="130" y="86" text-anchor="middle">Athena</text>
+<rect class="awsglu-box" x="40" y="118" width="180" height="50" rx="6"/>
+<text class="awsglu-n" x="130" y="148" text-anchor="middle">Redshift Spectrum</text>
+<rect class="awsglu-box" x="40" y="180" width="180" height="50" rx="6"/>
+<text class="awsglu-n" x="130" y="210" text-anchor="middle">Amazon EMR</text>
+<rect class="awsglu-box" x="40" y="242" width="180" height="50" rx="6"/>
+<text class="awsglu-n" x="130" y="272" text-anchor="middle">Glue ETL jobs</text>
+
+<rect class="awsglu-acc" x="420" y="40" width="260" height="96" rx="6"/>
+<text class="awsglu-an" x="550" y="66" text-anchor="middle">Glue Data Catalog</text>
+<text class="awsglu-k" x="550" y="86" text-anchor="middle">[Regional, metadata only]</text>
+<text class="awsglu-lab" x="550" y="108" text-anchor="middle">schema, format, partitions,</text>
+<text class="awsglu-lab" x="550" y="123" text-anchor="middle">S3 location</text>
+
+<rect class="awsglu-box" x="420" y="220" width="260" height="96" rx="6"/>
+<text class="awsglu-n" x="550" y="248" text-anchor="middle">S3 data lake</text>
+<text class="awsglu-k" x="550" y="268" text-anchor="middle">[Parquet, ORC, JSON, CSV files]</text>
+<text class="awsglu-lab" x="550" y="292" text-anchor="middle">Iceberg tables add metadata files</text>
+
+<rect class="awsglu-box" x="760" y="40" width="200" height="96" rx="6"/>
+<text class="awsglu-n" x="860" y="72" text-anchor="middle">Crawlers and</text>
+<text class="awsglu-n" x="860" y="90" text-anchor="middle">writing jobs</text>
+<text class="awsglu-lab" x="860" y="114" text-anchor="middle">touch S3, update the catalog</text>
+<path class="awsglu-ln" d="M760,88 L682,88" marker-end="url(#awsglu-a)"/>
+
+<rect class="awsglu-box" x="760" y="220" width="200" height="96" rx="6"/>
+<text class="awsglu-n" x="860" y="252" text-anchor="middle">Lake Formation</text>
+<text class="awsglu-k" x="860" y="272" text-anchor="middle">[optional]</text>
+<text class="awsglu-lab" x="860" y="294" text-anchor="middle">table, column, row grants</text>
+<path class="awsglu-dl" d="M860,220 L860,178 L650,178 L650,138" marker-end="url(#awsglu-b)"/>
+<text class="awsglu-lab" x="704" y="170">grants access</text>
+<path class="awsglu-dl" d="M760,268 L682,268" marker-end="url(#awsglu-b)"/>
+<text class="awsglu-lab" x="692" y="246">S3</text>
+<text class="awsglu-lab" x="692" y="259">credentials</text>
+
+<path class="awsglu-ln" d="M240,80 L418,80" marker-end="url(#awsglu-a)"/>
+<text class="awsglu-lab" x="256" y="70">1. look up the table</text>
+<path class="awsglu-ln" d="M240,260 L418,260" marker-end="url(#awsglu-a)"/>
+<text class="awsglu-lab" x="256" y="250">2. read the files</text>
+<path class="awsglu-dl" d="M470,138 L470,218" marker-end="url(#awsglu-b)"/>
+<text class="awsglu-lab" x="480" y="182">points to</text>
+
+<text class="awsglu-lab" x="20" y="356">Every engine takes both paths, and only metadata passes through the catalog.</text>
+</g>
+</svg>

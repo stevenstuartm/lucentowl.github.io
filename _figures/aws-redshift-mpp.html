@@ -1,0 +1,79 @@
+---
+title: "How Redshift Spreads a Query Across Slices"
+kind: structure
+system: aws
+summary: "A leader node plans, slices work in parallel, and managed storage sits beneath."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 480" role="img" aria-labelledby="awsrsm-title awsrsm-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsrsm-title">Redshift massively parallel processing architecture</title>
+<desc id="awsrsm-desc">A client sends SQL to the leader node and receives results from it. The leader node plans the query and sends steps to two compute nodes. Each compute node has two slices. The orders and order_lines tables are both distributed by order_id, so rows with the same order_id sit on the same slice and each slice joins its own rows without moving data. A table distributed on a different key would need its rows redistributed between nodes over the network before the join. Each compute node caches hot data on local SSD, and all table data is stored durably in Redshift Managed Storage, backed by S3, independent of the number of nodes. The leader node combines the slices' results and returns them to the client.</desc>
+<style>
+.awsrsm-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsrsm-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsrsm-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsrsm-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsrsm-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsrsm-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsrsm-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsrsm-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsrsm-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+.awsrsm-dl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="awsrsm-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awsrsm-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsrsm-box" x="40" y="30" width="150" height="56" rx="6"/>
+<text class="awsrsm-n" x="115" y="55" text-anchor="middle">Client</text>
+<text class="awsrsm-k" x="115" y="73" text-anchor="middle">[BI tool, SQL]</text>
+
+<rect class="awsrsm-acc" x="370" y="30" width="240" height="56" rx="6"/>
+<text class="awsrsm-an" x="490" y="55" text-anchor="middle">Leader node</text>
+<text class="awsrsm-lab" x="490" y="73" text-anchor="middle">plans, distributes, combines</text>
+
+<path class="awsrsm-ln" d="M192,58 L368,58" marker-start="url(#awsrsm-a)" marker-end="url(#awsrsm-a)"/>
+<text class="awsrsm-lab" x="206" y="50">query and results</text>
+
+<rect class="awsrsm-pan" x="40" y="120" width="440" height="200" rx="8"/>
+<text class="awsrsm-h" x="56" y="142">Compute node 1 (local SSD cache)</text>
+<rect class="awsrsm-box" x="60" y="156" width="190" height="148" rx="6"/>
+<text class="awsrsm-n" x="155" y="180" text-anchor="middle">Slice 1</text>
+<text class="awsrsm-lab" x="155" y="204" text-anchor="middle">orders: 3, 41, 77</text>
+<text class="awsrsm-lab" x="155" y="222" text-anchor="middle">order_lines: 3, 41, 77</text>
+<text class="awsrsm-k" x="155" y="250" text-anchor="middle">[joins its own rows]</text>
+<rect class="awsrsm-box" x="270" y="156" width="190" height="148" rx="6"/>
+<text class="awsrsm-n" x="365" y="180" text-anchor="middle">Slice 2</text>
+<text class="awsrsm-lab" x="365" y="204" text-anchor="middle">orders: 12, 19, 64</text>
+<text class="awsrsm-lab" x="365" y="222" text-anchor="middle">order_lines: 12, 19, 64</text>
+<text class="awsrsm-k" x="365" y="250" text-anchor="middle">[joins its own rows]</text>
+
+<rect class="awsrsm-pan" x="500" y="120" width="440" height="200" rx="8"/>
+<text class="awsrsm-h" x="516" y="142">Compute node 2 (local SSD cache)</text>
+<rect class="awsrsm-box" x="520" y="156" width="190" height="148" rx="6"/>
+<text class="awsrsm-n" x="615" y="180" text-anchor="middle">Slice 3</text>
+<text class="awsrsm-lab" x="615" y="204" text-anchor="middle">orders: 8, 33, 50</text>
+<text class="awsrsm-lab" x="615" y="222" text-anchor="middle">order_lines: 8, 33, 50</text>
+<text class="awsrsm-k" x="615" y="250" text-anchor="middle">[joins its own rows]</text>
+<rect class="awsrsm-box" x="730" y="156" width="190" height="148" rx="6"/>
+<text class="awsrsm-n" x="825" y="180" text-anchor="middle">Slice 4</text>
+<text class="awsrsm-lab" x="825" y="204" text-anchor="middle">orders: 25, 26, 91</text>
+<text class="awsrsm-lab" x="825" y="222" text-anchor="middle">order_lines: 25, 26, 91</text>
+<text class="awsrsm-k" x="825" y="250" text-anchor="middle">[joins its own rows]</text>
+
+<path class="awsrsm-ln" d="M430,88 L430,104 L260,104 L260,118" marker-start="url(#awsrsm-a)" marker-end="url(#awsrsm-a)"/>
+<path class="awsrsm-ln" d="M550,88 L550,104 L720,104 L720,118" marker-start="url(#awsrsm-a)" marker-end="url(#awsrsm-a)"/>
+<text class="awsrsm-lab" x="740" y="100">steps out, results back</text>
+
+<rect class="awsrsm-acc" x="40" y="370" width="900" height="60" rx="6"/>
+<text class="awsrsm-an" x="490" y="396" text-anchor="middle">Redshift Managed Storage</text>
+<text class="awsrsm-k" x="490" y="416" text-anchor="middle">[durable, S3-backed, grows independently of node count]</text>
+<path class="awsrsm-dl" d="M260,320 L260,368" marker-start="url(#awsrsm-b)" marker-end="url(#awsrsm-b)"/>
+<path class="awsrsm-dl" d="M720,320 L720,368" marker-start="url(#awsrsm-b)" marker-end="url(#awsrsm-b)"/>
+<text class="awsrsm-lab" x="272" y="350">blocks cached and written back</text>
+
+<text class="awsrsm-lab" x="40" y="452">Numbers are order_id values. Both tables use DISTKEY(order_id), so matching rows share a slice.</text>
+<text class="awsrsm-lab" x="40" y="468">A table distributed on another key would have its rows redistributed between nodes before the join.</text>
+</g>
+</svg>

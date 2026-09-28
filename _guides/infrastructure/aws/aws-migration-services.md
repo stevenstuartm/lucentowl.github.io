@@ -1,1226 +1,182 @@
 ---
-title: "AWS Application Migration Service & Database Migration Service"
+title: "AWS Migration Services: Transform MGN, DMS, and DataSync"
 layout: guide
 category: AWS
 subcategory: Migration & Hybrid Cloud
-description: "AWS MGN for application rehosting, AWS DMS for database migrations, homogeneous and heterogeneous migrations, and migration best practices"
-tags: [aws, migration, databases, rehosting, data-transfer, practical]
+description: "How servers, databases, and files are copied to AWS and cut over with little downtime: AWS Transform MGN's block replication, staging area, and test and cutover lifecycle; AWS DMS full load and change data capture, schema conversion, and DMS Serverless; AWS DataSync agents and task modes; and what each one costs."
+tags: [aws-transform-mgn, aws-dms, aws-datasync, change-data-capture, rehost, cutover, practical]
 ---
 
-## What Problems These Services Solve
+## One Pattern, Three Services
 
-**The Migration Execution Challenge**:
-After planning your cloud migration strategy, you need to actually move applications and databases to AWS. Manual migrations are time-consuming, error-prone, and require extended downtime. Organizations need automated tools that minimize downtime, reduce risk, and handle complex migration scenarios.
+A migration copies three kinds of thing: whole servers, the contents of databases, and files. AWS has a service for each, and all three follow the same pattern. They make a full copy while the source keeps running, keep the copy current with ongoing changes, and let the team switch over, or cut over, once the copy has caught up. Downtime shrinks to the minutes needed to stop the source, let the last changes land, and point users at the copy.
 
-**What AWS Provides**:
-- **AWS Application Migration Service (MGN)**: Automated lift-and-shift (rehost) for physical, virtual, or cloud servers to AWS
-- **AWS Database Migration Service (DMS)**: Migrate databases with minimal downtime, including homogeneous (Oracle→Oracle) and heterogeneous (Oracle→PostgreSQL) migrations
+| Service | Copies | How it keeps up | What the target is |
+|---|---|---|---|
+| **AWS Transform MGN** | Whole servers, disk by disk | Continuous replication of changed disk blocks | An EC2 instance booting the same operating system and application |
+| **AWS Database Migration Service** (DMS) | Rows in database tables | Change data capture (CDC) from the source database's transaction log | A database on the same or a different engine |
+| **AWS DataSync** | Files and objects | Repeated incremental runs that copy only what changed | S3, EFS, or an FSx file system |
 
-Both services use continuous replication to minimize downtime and enable testing before cutover.
-
----
-
-## AWS Application Migration Service (MGN)
-
-### What It Is
-
-AWS MGN is an automated lift-and-shift solution that replicates on-premises or cloud servers to AWS EC2 instances with minimal downtime.
-
-**Key features**:
-- Continuous block-level replication (sub-minute RPO)
-- Non-disruptive testing (test instances without affecting source)
-- Automated cutover (minutes of downtime)
-- Supports physical, virtual (VMware, Hyper-V), and cloud servers
-- Free for 90 days (no service charges, only pay for AWS resources)
-
-**How it works**:
-```
-Source Server → Replication Agent → Staging Area (AWS) → Test/Cutover Instance
-                (continuous sync)      (low-cost)           (production-ready)
-```
-
-### Installation and Setup
-
-**1. Install Replication Agent**
-
-The agent runs on the source server and continuously replicates data to AWS.
-
-**Linux installation**:
-```bash
-# Download installer
-wget -O ./aws-replication-installer-init.py \
-  https://aws-application-migration-service-us-east-1.s3.us-east-1.amazonaws.com/latest/linux/aws-replication-installer-init.py
-
-# Install agent (requires root)
-sudo python3 aws-replication-installer-init.py \
-  --region us-east-1 \
-  --aws-access-key-id AKIAIOSFODNN7EXAMPLE \
-  --aws-secret-access-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
-  --no-prompt
-
-# Agent automatically begins replication
-# Check status
-sudo systemctl status aws-replication-agent
-```
-
-**Windows installation**:
-```powershell
-# Download installer
-Invoke-WebRequest -Uri "https://aws-application-migration-service-us-east-1.s3.us-east-1.amazonaws.com/latest/windows/AwsReplicationWindowsInstaller.exe" -OutFile "C:\Temp\AwsReplicationInstaller.exe"
-
-# Install agent (requires Administrator)
-C:\Temp\AwsReplicationInstaller.exe `
-  --region us-east-1 `
-  --aws-access-key-id AKIAIOSFODNN7EXAMPLE `
-  --aws-secret-access-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY `
-  --no-prompt
-
-# Check service status
-Get-Service -Name "AWS Replication Agent"
-```
-
-**2. Configure Replication Settings**
-
-```python
-import boto3
-
-mgn = boto3.client('mgn', region_name='us-east-1')
-
-# Configure replication for a source server
-response = mgn.update_replication_configuration(
-    sourceServerID='s-1234567890abcdef0',
-    replicationServerInstanceType='t3.small',  # Staging server size
-    replicationServersSecurityGroupsIDs=['sg-0123456789abcdef0'],
-    subnetID='subnet-0123456789abcdef0',  # Staging subnet
-    ebsEncryption='DEFAULT',  # Encrypt staging volumes
-    dataPlaneRouting='PRIVATE_IP',  # Use private networking
-    defaultLargeStagingDiskType='GP3',  # Staging disk type
-    createPublicIP=False,  # Don't create public IPs for staging
-    useDedicatedReplicationServer=False  # Share replication servers
-)
-
-print(f"Replication configured for {response['sourceServerID']}")
-```
-
-**3. Monitor Replication Progress**
-
-```python
-# Check replication status
-source_servers = mgn.describe_source_servers(
-    filters={'isArchived': False}
-)
-
-for server in source_servers['items']:
-    server_id = server['sourceServerID']
-    replication_status = server.get('dataReplicationInfo', {}).get('dataReplicationState')
-    lag = server.get('dataReplicationInfo', {}).get('lagDuration', 'N/A')
-
-    print(f"Server: {server_id}")
-    print(f"  Hostname: {server.get('sourceProperties', {}).get('identificationHints', {}).get('hostname', 'Unknown')}")
-    print(f"  Replication Status: {replication_status}")
-    print(f"  Lag: {lag}")
-    print(f"  Total Storage: {server.get('sourceProperties', {}).get('disks', [{}])[0].get('bytes', 0) / (1024**3):.2f} GB")
-    print()
-
-# Expected output:
-# Server: s-1234567890abcdef0
-#   Hostname: web-server-01
-#   Replication Status: CONTINUOUS_REPLICATION
-#   Lag: PT2M30S (2 minutes 30 seconds)
-#   Total Storage: 100.00 GB
-```
-
-### Testing Before Cutover
-
-<div class="callout callout--warning">
-<p class="callout__title">Critical Practice</p>
-<p>Always test migrated instances before cutover. Cutover failures in production are preventable with proper testing validation.</p>
-</div>
-
-**Critical practice**: Always test migrated instances before cutover.
-
-**1. Launch Test Instance**
-
-```python
-# Launch test instance from replicated data
-response = mgn.start_test(
-    sourceServerIDs=['s-1234567890abcdef0']
-)
-
-job_id = response['job']['jobID']
-print(f"Test job started: {job_id}")
-
-# Monitor test job
-import time
-
-while True:
-    job = mgn.describe_jobs(
-        filters={'jobIDs': [job_id]}
-    )
-
-    status = job['items'][0]['status']
-    print(f"Test job status: {status}")
-
-    if status in ['COMPLETED', 'FAILED']:
-        break
-
-    time.sleep(30)
-
-# Get test instance details
-if status == 'COMPLETED':
-    launched_instance = mgn.describe_source_servers(
-        filters={'sourceServerIDs': ['s-1234567890abcdef0']}
-    )['items'][0]
-
-    test_instance_id = launched_instance.get('launchedInstance', {}).get('ec2InstanceID')
-    print(f"Test instance launched: {test_instance_id}")
-```
-
-**2. Validate Test Instance**
-
-```bash
-# Connect to test instance
-aws ssm start-session --target i-0abcdef1234567890
-
-# Run validation tests
-# 1. Check application is running
-systemctl status nginx
-
-# 2. Test application endpoints
-curl http://localhost:80/health
-
-# 3. Verify data integrity
-md5sum /var/www/html/index.html
-# Compare with source server checksum
-
-# 4. Check disk space
-df -h
-
-# 5. Verify network connectivity to dependencies
-ping -c 4 database.internal.company.com
-```
-
-**3. Terminate Test Instance (After Validation)**
-
-```python
-# Terminate test instance once validation complete
-mgn.terminate_target_instances(
-    sourceServerIDs=['s-1234567890abcdef0']
-)
-
-print("Test instance terminated")
-```
-
-### Cutover (Production Migration)
-
-**1. Launch Cutover Instance**
-
-```python
-# Configure launch template (optional, before cutover)
-mgn.update_launch_configuration(
-    sourceServerID='s-1234567890abcdef0',
-    name='web-server-01-prod',
-    targetInstanceTypeRightSizingMethod='BASIC',  # Auto right-size
-    copyPrivateIp=True,  # Keep same private IP
-    copyTags=True,
-    launchDisposition='STARTED',  # Start instance automatically
-    licensing={
-        'osByol': False  # Use AWS-provided licenses
-    }
-)
-
-# Start cutover
-response = mgn.start_cutover(
-    sourceServerIDs=['s-1234567890abcdef0']
-)
-
-cutover_job_id = response['job']['jobID']
-print(f"Cutover started: {cutover_job_id}")
-
-# Monitor cutover
-while True:
-    job = mgn.describe_jobs(filters={'jobIDs': [cutover_job_id]})
-    status = job['items'][0]['status']
-    print(f"Cutover status: {status}")
-
-    if status in ['COMPLETED', 'FAILED']:
-        break
-
-    time.sleep(30)
-```
-
-**2. Validate Cutover Instance**
-
-```python
-# Get cutover instance details
-source_server = mgn.describe_source_servers(
-    filters={'sourceServerIDs': ['s-1234567890abcdef0']}
-)['items'][0]
-
-cutover_instance_id = source_server['launchedInstance']['ec2InstanceID']
-cutover_instance_ip = source_server['launchedInstance']['firstBoot']['privateIp']
-
-print(f"Cutover instance: {cutover_instance_id}")
-print(f"Private IP: {cutover_instance_ip}")
-
-# Update DNS to point to new instance
-route53 = boto3.client('route53')
-
-route53.change_resource_record_sets(
-    HostedZoneId='Z1234567890ABC',
-    ChangeBatch={
-        'Changes': [{
-            'Action': 'UPSERT',
-            'ResourceRecordSet': {
-                'Name': 'web-server-01.internal.company.com',
-                'Type': 'A',
-                'TTL': 300,
-                'ResourceRecords': [{'Value': cutover_instance_ip}]
-            }
-        }]
-    }
-)
-
-print("DNS updated to point to cutover instance")
-```
-
-**3. Finalize Cutover**
-
-```python
-# Mark migration complete (stops replication)
-mgn.finalize_cutover(
-    sourceServerIDs=['s-1234567890abcdef0']
-)
-
-print("Migration finalized. Replication stopped.")
-
-# Archive source server (removes from active view)
-mgn.mark_as_archived(
-    sourceServerID='s-1234567890abcdef0'
-)
-
-print("Source server archived")
-```
-
-### Rollback Strategy
-
-**Always maintain ability to rollback**:
-
-```python
-# Rollback plan (if cutover fails)
-
-# 1. Keep source server running for 30 days post-cutover
-# 2. Maintain DNS flexibility
-
-def rollback_migration(source_server_id, original_ip):
-    """Rollback to on-premises server"""
-
-    # Terminate AWS instance
-    mgn.terminate_target_instances(
-        sourceServerIDs=[source_server_id]
-    )
-
-    # Revert DNS to on-premises
-    route53.change_resource_record_sets(
-        HostedZoneId='Z1234567890ABC',
-        ChangeBatch={
-            'Changes': [{
-                'Action': 'UPSERT',
-                'ResourceRecordSet': {
-                    'Name': 'web-server-01.internal.company.com',
-                    'Type': 'A',
-                    'TTL': 300,
-                    'ResourceRecords': [{'Value': original_ip}]
-                }
-            }]
-        }
-    )
-
-    print(f"Rolled back to on-premises: {original_ip}")
-
-# Use only if critical issues discovered post-cutover
-# rollback_migration('s-1234567890abcdef0', '192.168.1.100')
-```
+The three overlap. A database server can be rehosted, moved as is, with MGN, keeping its engine, version, and configuration. It can also be migrated with DMS into Amazon RDS or Aurora, which replatforms it onto a managed service or, across engines, changes the engine too. The first moves the server, and the second moves only the data.
 
 ---
 
-## AWS Database Migration Service (DMS)
-
-### What It Is
-
-AWS DMS migrates databases to AWS with minimal downtime using continuous replication.
-
-**Supported migration types**:
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Homogeneous Migrations</h4>
-<ul>
-<li>Same database engine (Oracle→Oracle, MySQL→MySQL)</li>
-<li>No schema conversion required</li>
-<li>Simpler setup and execution</li>
-<li>Lower risk of compatibility issues</li>
-<li>Use DMS only for data replication</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Heterogeneous Migrations</h4>
-<ul>
-<li>Different engines (Oracle→PostgreSQL, SQL Server→Aurora)</li>
-<li>Requires AWS Schema Conversion Tool (SCT)</li>
-<li>Schema conversion needed before data migration</li>
-<li>Manual intervention for engine-specific features</li>
-<li>Use SCT for schema, DMS for data replication</li>
-</ul>
-</div>
-</div>
-
-**Key features**:
-- Continuous replication (sub-second lag)
-- Schema conversion (using AWS Schema Conversion Tool for heterogeneous)
-- Minimal downtime (applications stay online during migration)
-- Supports 20+ source/target databases
-- Data validation (ensure data integrity)
-
-### Architecture
-
-```
-Source Database → DMS Replication Instance → Target Database (AWS)
-                  (continuous CDC)             (RDS, Aurora, Redshift, S3)
-```
-
-**Replication modes**:
-
-<div class="comparison">
-<div class="content-card content-card--accent">
-<h4>Full Load</h4>
-<ul>
-<li>Migrate existing data only (one-time)</li>
-<li>No ongoing replication</li>
-<li>Requires downtime during migration</li>
-<li>Use for offline migrations or test environments</li>
-</ul>
-</div>
-<div class="content-card content-card--accent-secondary">
-<h4>Full Load + CDC</h4>
-<ul>
-<li>Migrate existing data + replicate ongoing changes</li>
-<li>Continuous replication after initial load</li>
-<li>Minimal downtime (only during cutover)</li>
-<li>Recommended for production migrations</li>
-</ul>
-</div>
-<div class="content-card content-card--accent">
-<h4>CDC Only</h4>
-<ul>
-<li>Replicate ongoing changes only</li>
-<li>Assumes data already migrated</li>
-<li>Use for continuous replication or hybrid cloud</li>
-<li>Ideal for disaster recovery scenarios</li>
-</ul>
-</div>
-</div>
-
-### Homogeneous Migration (MySQL → RDS MySQL)
-
-**Example scenario**: Migrate on-premises MySQL 8.0 to Amazon RDS for MySQL 8.0.
-
-**1. Create Replication Instance**
-
-```python
-import boto3
-
-dms = boto3.client('dms', region_name='us-east-1')
-
-# Create replication instance
-response = dms.create_replication_instance(
-    ReplicationInstanceIdentifier='mysql-migration-instance',
-    ReplicationInstanceClass='dms.c5.large',  # 2 vCPU, 4GB RAM
-    AllocatedStorage=100,  # GB
-    VpcSecurityGroupIds=['sg-0123456789abcdef0'],
-    ReplicationSubnetGroupIdentifier='dms-subnet-group',
-    MultiAZ=False,  # Single-AZ for cost savings during migration
-    PubliclyAccessible=False,
-    EngineVersion='3.4.7'
-)
-
-replication_instance_arn = response['ReplicationInstance']['ReplicationInstanceArn']
-print(f"Replication instance created: {replication_instance_arn}")
-
-# Wait for instance to be available
-waiter = dms.get_waiter('replication_instance_available')
-waiter.wait(
-    Filters=[{'Name': 'replication-instance-id', 'Values': ['mysql-migration-instance']}]
-)
-print("Replication instance ready")
-```
-
-**2. Create Source and Target Endpoints**
-
-```python
-# Source endpoint (on-premises MySQL)
-source_endpoint = dms.create_endpoint(
-    EndpointIdentifier='mysql-source',
-    EndpointType='source',
-    EngineName='mysql',
-    ServerName='192.168.1.50',  # On-premises IP
-    Port=3306,
-    DatabaseName='production_db',
-    Username='dms_user',
-    Password='SecurePassword123!',
-    ExtraConnectionAttributes='initstmt=SET FOREIGN_KEY_CHECKS=0'  # Disable FK checks during migration
-)
-
-source_endpoint_arn = source_endpoint['Endpoint']['EndpointArn']
-print(f"Source endpoint created: {source_endpoint_arn}")
-
-# Target endpoint (RDS MySQL)
-target_endpoint = dms.create_endpoint(
-    EndpointIdentifier='rds-mysql-target',
-    EndpointType='target',
-    EngineName='mysql',
-    ServerName='prod-db.abc123.us-east-1.rds.amazonaws.com',
-    Port=3306,
-    DatabaseName='production_db',
-    Username='admin',
-    Password='AWSSecurePass456!',
-    ExtraConnectionAttributes='initstmt=SET FOREIGN_KEY_CHECKS=0;parallelLoadThreads=4'
-)
-
-target_endpoint_arn = target_endpoint['Endpoint']['EndpointArn']
-print(f"Target endpoint created: {target_endpoint_arn}")
-```
-
-**3. Test Endpoints**
-
-```python
-# Test source endpoint connectivity
-test_source = dms.test_connection(
-    ReplicationInstanceArn=replication_instance_arn,
-    EndpointArn=source_endpoint_arn
-)
-
-# Test target endpoint connectivity
-test_target = dms.test_connection(
-    ReplicationInstanceArn=replication_instance_arn,
-    EndpointArn=target_endpoint_arn
-)
-
-# Check test results
-import time
-time.sleep(30)  # Wait for tests to complete
-
-connections = dms.describe_connections(
-    Filters=[
-        {'Name': 'endpoint-arn', 'Values': [source_endpoint_arn, target_endpoint_arn]}
-    ]
-)
-
-for conn in connections['Connections']:
-    print(f"Endpoint: {conn['EndpointIdentifier']}, Status: {conn['Status']}")
-
-# Expected: Status = 'successful'
-```
-
-**4. Create Replication Task**
-
-```python
-# Define table mappings (which tables to migrate)
-table_mappings = {
-    "rules": [
-        {
-            "rule-type": "selection",
-            "rule-id": "1",
-            "rule-name": "include-all-tables",
-            "object-locator": {
-                "schema-name": "production_db",
-                "table-name": "%"  # All tables
-            },
-            "rule-action": "include"
-        },
-        {
-            "rule-type": "transformation",
-            "rule-id": "2",
-            "rule-name": "add-prefix",
-            "rule-target": "table",
-            "object-locator": {
-                "schema-name": "production_db",
-                "table-name": "%"
-            },
-            "rule-action": "add-prefix",
-            "value": "migrated_"  # Optional: prefix table names
-        }
-    ]
-}
-
-# Create replication task
-import json
-
-task_response = dms.create_replication_task(
-    ReplicationTaskIdentifier='mysql-full-load-cdc',
-    SourceEndpointArn=source_endpoint_arn,
-    TargetEndpointArn=target_endpoint_arn,
-    ReplicationInstanceArn=replication_instance_arn,
-    MigrationType='full-load-and-cdc',  # Full load + ongoing replication
-    TableMappings=json.dumps(table_mappings),
-    ReplicationTaskSettings=json.dumps({
-        "TargetMetadata": {
-            "SupportLobs": True,
-            "FullLobMode": False,
-            "LobChunkSize": 64,  # KB
-            "LimitedSizeLobMode": True,
-            "LobMaxSize": 32  # MB
-        },
-        "FullLoadSettings": {
-            "TargetTablePrepMode": "DROP_AND_CREATE",  # Drop target tables and recreate
-            "MaxFullLoadSubTasks": 8,  # Parallel threads
-            "TransactionConsistencyTimeout": 600
-        },
-        "Logging": {
-            "EnableLogging": True,
-            "LogComponents": [
-                {"Id": "SOURCE_CAPTURE", "Severity": "LOGGER_SEVERITY_DEFAULT"},
-                {"Id": "TARGET_APPLY", "Severity": "LOGGER_SEVERITY_INFO"}
-            ]
-        },
-        "ValidationSettings": {
-            "EnableValidation": True,  # Validate data integrity
-            "ValidationMode": "ROW_LEVEL",
-            "ThreadCount": 5
-        }
-    })
-)
-
-task_arn = task_response['ReplicationTask']['ReplicationTaskArn']
-print(f"Replication task created: {task_arn}")
-```
-
-**5. Start Migration**
-
-```python
-# Start replication task
-dms.start_replication_task(
-    ReplicationTaskArn=task_arn,
-    StartReplicationTaskType='start-replication'
-)
-
-print("Migration started")
-
-# Monitor progress
-while True:
-    task = dms.describe_replication_tasks(
-        Filters=[{'Name': 'replication-task-arn', 'Values': [task_arn]}]
-    )['ReplicationTasks'][0]
-
-    status = task['Status']
-    stats = task.get('ReplicationTaskStats', {})
-
-    print(f"Status: {status}")
-    print(f"  Full Load Progress: {stats.get('FullLoadProgressPercent', 0)}%")
-    print(f"  Tables Loaded: {stats.get('TablesLoaded', 0)}")
-    print(f"  Tables Loading: {stats.get('TablesLoading', 0)}")
-    print(f"  Tables Queued: {stats.get('TablesQueued', 0)}")
-    print(f"  CDC Latency: {stats.get('CDCLatencySource', 'N/A')} seconds")
-    print()
-
-    if status in ['stopped', 'failed']:
-        print(f"Migration {status}")
-        break
-
-    if status == 'running' and stats.get('FullLoadProgressPercent') == 100:
-        print("Full load complete. CDC replication ongoing.")
-        break
-
-    time.sleep(60)
-```
-
-**6. Cutover**
-
-```python
-# When ready to cutover:
-
-# 1. Stop application writes to source database
-# (Application downtime begins)
-
-# 2. Wait for CDC to catch up (zero lag)
-while True:
-    task = dms.describe_replication_tasks(
-        Filters=[{'Name': 'replication-task-arn', 'Values': [task_arn]}]
-    )['ReplicationTasks'][0]
-
-    cdc_latency = task.get('ReplicationTaskStats', {}).get('CDCLatencySource', 999999)
-
-    print(f"CDC Latency: {cdc_latency} seconds")
-
-    if cdc_latency < 5:  # Less than 5 seconds lag
-        print("CDC caught up. Safe to cutover.")
-        break
-
-    time.sleep(10)
-
-# 3. Update application connection string to RDS
-# DATABASE_HOST=prod-db.abc123.us-east-1.rds.amazonaws.com
-
-# 4. Start application (pointing to RDS)
-# (Application downtime ends - typically 2-5 minutes)
-
-# 5. Stop replication task
-dms.stop_replication_task(ReplicationTaskArn=task_arn)
-
-print("Migration complete")
-```
-
-### Heterogeneous Migration (Oracle → PostgreSQL)
-
-**Additional step**: Use AWS Schema Conversion Tool (SCT) to convert schema.
-
-**1. Install and Run SCT**
-
-```bash
-# Download SCT from AWS Console
-# https://docs.aws.amazon.com/SchemaConversionTool/latest/userguide/CHAP_Installing.html
-
-# Launch SCT (GUI application)
-# 1. Create new project
-# 2. Connect to source Oracle database
-# 3. Connect to target PostgreSQL database
-# 4. Analyze schema (SCT identifies conversion issues)
-# 5. Review Assessment Report
-#    - Automatic conversions (green)
-#    - Manual actions required (red/yellow)
-# 6. Convert schema
-# 7. Apply to target PostgreSQL database
-```
-
-**Assessment Report example**:
-```
-Schema Conversion Assessment
-
-Total Objects: 150
-Automatically Converted: 120 (80%)
-Require Manual Intervention: 30 (20%)
-
-Manual Actions Required:
-- Oracle-specific features:
-  - ROWNUM → Use ROW_NUMBER() window function in PostgreSQL
-  - CONNECT BY → Use recursive CTEs in PostgreSQL
-  - Oracle packages → Convert to PostgreSQL functions
-  - Oracle sequences → PostgreSQL sequences (auto-converted, verify)
-
-Storage Estimate:
-- Source: 500GB (Oracle)
-- Target: 480GB (PostgreSQL, compressed)
-```
-
-**2. Migrate Data with DMS**
-
-```python
-# After schema conversion, use DMS for data migration
-
-# Create endpoints (similar to homogeneous, but different engines)
-source_oracle = dms.create_endpoint(
-    EndpointIdentifier='oracle-source',
-    EndpointType='source',
-    EngineName='oracle',
-    ServerName='oracle-db.company.com',
-    Port=1521,
-    DatabaseName='PRODDB',
-    Username='dms_user',
-    Password='OraclePass123!',
-    ExtraConnectionAttributes='useLogminerReader=N;useBfile=Y'
-)
-
-target_postgres = dms.create_endpoint(
-    EndpointIdentifier='postgres-target',
-    EndpointType='target',
-    EngineName='postgres',
-    ServerName='prod-postgres.abc123.us-east-1.rds.amazonaws.com',
-    Port=5432,
-    DatabaseName='proddb',
-    Username='postgres',
-    Password='PostgresPass456!',
-    ExtraConnectionAttributes='captureDDLs=N;'
-)
-
-# Create replication task (full-load-and-cdc)
-# (Same as homogeneous example above)
-```
-
-### Data Validation
-
-<div class="callout callout--tip">
-<p class="callout__title">Best Practice</p>
-<p>Always enable validation for production migrations. DMS can perform row-level validation to ensure data integrity and detect discrepancies between source and target databases.</p>
-</div>
-
-**Enable validation to ensure data integrity**:
-
-```python
-# Check validation results
-table_stats = dms.describe_table_statistics(
-    ReplicationTaskArn=task_arn
-)
-
-print("Table Validation Results:")
-print(f"{'Table Name':<40} {'Rows Validated':<15} {'Validation Status':<20}")
-print("-" * 75)
-
-for table in table_stats['TableStatistics']:
-    table_name = table['TableName']
-    validated = table.get('ValidationState', 'N/A')
-    validation_pending = table.get('ValidationPendingRecords', 0)
-    validation_failed = table.get('ValidationFailedRecords', 0)
-
-    if validation_failed > 0:
-        status = f"⚠️ {validation_failed} FAILED"
-    elif validated == 'Validated':
-        status = "✅ Valid"
-    else:
-        status = f"🔄 Pending ({validation_pending})"
-
-    print(f"{table_name:<40} {table.get('FullLoadRows', 0):<15} {status:<20}")
-
-# Example output:
-# Table Name                               Rows Validated   Validation Status
-# ---------------------------------------------------------------------------
-# customers                                1,000,000        ✅ Valid
-# orders                                   5,000,000        ✅ Valid
-# products                                 50,000           ⚠️ 5 FAILED
-```
-
-**Investigate validation failures**:
-```python
-# Query DMS validation failure table (in target database)
-import psycopg2
-
-conn = psycopg2.connect(
-    host='prod-postgres.abc123.us-east-1.rds.amazonaws.com',
-    database='proddb',
-    user='postgres',
-    password='PostgresPass456!'
-)
-
-cur = conn.cursor()
-
-# DMS creates awsdms_validation_failures_v1 table
-cur.execute("""
-    SELECT table_name, key_type, key, failure_type, failure_time
-    FROM awsdms_validation_failures_v1
-    ORDER BY failure_time DESC
-    LIMIT 10
-""")
-
-failures = cur.fetchall()
-
-for failure in failures:
-    print(f"Table: {failure[0]}, Key: {failure[2]}, Type: {failure[3]}, Time: {failure[4]}")
-
-cur.close()
-conn.close()
-```
+## AWS Transform MGN: Rehosting Servers
+
+AWS Transform MGN, called AWS Application Migration Service until June 8, 2026, when AWS renamed it to match AWS Transform, its agentic migration service, rehosts physical servers, virtual machines, and servers in other clouds onto EC2. The APIs, CLI commands, and IAM actions still use `mgn`. MGN is a Regional service. Servers replicate into one account and Region, and the replicated data stays in that account's VPC.
+
+### How Replication Works
+
+{% include figure.html id="aws-mgn-replication" %}
+
+The **AWS Replication Agent** runs on each source server and reads its disks at the block level, below the file system. It sends the blocks, encrypted and compressed, over TCP 1500 to a **replication server**, a small EC2 instance that MGN launches in a **staging area subnet** you designate, usually a dedicated one. The replication server writes them to **staging EBS volumes**, one per source disk. The agent and the replication server also talk to the MGN service endpoint over TCP 443, and the staging subnet needs outbound access to the Regional EC2 endpoint and to several AWS-owned S3 buckets that hold the replication software and its Amazon Linux packages. In a private staging subnet that reaches S3 through a gateway endpoint, the endpoint policy has to allow those buckets, or replication and conversion servers fail to start. After an initial sync copies every block, the agent sends each change as it happens, so the staging volumes stay close behind the source.
+
+Launching a test or cutover instance takes a snapshot of the staging volumes. A **conversion server** then adjusts the copies so they boot on EC2, installing the drivers and boot configuration the hypervisor on the source never needed, and MGN starts the instance in the launch subnet. The source server never stops during any of this.
+
+The agent installer needs AWS credentials. MGN recommends temporary credentials from an IAM role carrying the `AWSApplicationMigrationAgentInstallationPolicy` managed policy, rather than an IAM user's access keys pasted into an install command.
+
+### Agentless Replication for vCenter
+
+When policy forbids installing an agent on every server, MGN can replicate VMware vCenter VMs without one. An **MGN vCenter Client** installed on a dedicated VM discovers VMs and replicates them by shipping snapshots, using VMware's changed block tracking to send only the changes since the last snapshot. MGN recommends the agent where possible, because agentless replication is periodic rather than continuous and so leaves a longer cutover window.
+
+### Templates, Applications, and Waves
+
+Three templates set the defaults for every server added: a **replication template** (staging subnet, replication server type, encryption, whether data travels over a private IP), a **launch template** (subnet, instance type, security groups, licensing), and a **post-launch template**. Each server can override them. With instance type right-sizing on, MGN launches the EC2 type that best matches the source's operating system, CPU, and memory, overriding the launch template. With it off, it launches the type the template sets. **Post-launch actions** run AWS Systems Manager documents on the launched instance, for example to convert the operating system or licenses, upgrade Windows on a clone of the instance, set up disaster recovery replication, or run your own scripts.
+
+Servers can be grouped into **applications** and applications into **waves**, and launch, cutover, and archive actions apply to a whole group at once. Default quotas shape how large a wave can be: 150 actively replicating servers per Region, 20 concurrent jobs, and 200 servers in a single launch job. Larger migrations ask Support for more.
+
+### The Test and Cutover Lifecycle
+
+Each source server moves through a fixed sequence of states, and the sequence is where the safety of a rehost comes from.
+
+1. **Not ready** while the initial sync copies every block.
+2. **Ready for testing** once replication is healthy.
+3. **Test in progress** after a test instance launches. Check the application on it, and launch fresh test instances as often as needed, since replication continues underneath.
+4. **Ready for cutover** once testing is marked complete, which is also when MGN offers to terminate the test instances.
+5. **Cutover in progress** after the cutover instance launches from the latest replicated state. The team stops the application on the source, waits for the last changes to replicate, and switches DNS or load balancer targets to the new instance.
+6. **Cutover complete** after **finalize cutover**, which stops replication, discards the replicated data, and terminates the replication resources. The server can then be archived.
+
+Until the cutover is finalized, the way back is short. The source server is untouched, replication is still running, and a cutover can be reverted to ready for cutover. Finalizing removes that path, and MGN has no way to replicate changes from EC2 back to the source. AWS Elastic Disaster Recovery, which shares MGN's replication technology, adds failback when that direction matters.
+
+Test instances deserve an isolated subnet. A server that is a domain controller, or that talks to one, can join or disrupt the production directory if its test copy has a route back to it. AWS warns specifically against launching domain controllers into a test VPC with connectivity to production.
+
+### What MGN Costs
+
+Each source server gets 2,160 hours of MGN use free, which is 90 days of continuous replication, starting when the agent is installed. After that, MGN charges per hour for each server still replicating. The AWS resources MGN creates are billed from the first hour, free period or not: replication servers, staging EBS volumes, snapshots, conversion servers during launches, and the test and cutover instances themselves. A server replicating for months before its wave arrives pays for its staging volumes the whole time, so install agents for a wave shortly before the wave, not for the whole portfolio at once.
 
 ---
 
-## Migration Patterns and Best Practices
+## AWS DMS: Migrating Databases
 
-### Pattern 1: Multi-Server Migration (Wave-Based)
+AWS DMS copies data between a source and a target database, which can run on the same engine or on different ones. It runs inside your VPC, typically reaches on-premises sources over a VPN or Direct Connect link, and stores source and target credentials in AWS Secrets Manager if you choose.
 
-**Scenario**: Migrate 20 servers in parallel.
+### Replication Instances and DMS Serverless
 
-```python
-# Automated wave migration
-servers_to_migrate = [
-    {'hostname': 'web-01', 'source_id': 's-1111111111111111'},
-    {'hostname': 'web-02', 'source_id': 's-2222222222222222'},
-    {'hostname': 'web-03', 'source_id': 's-3333333333333333'},
-    # ... 20 servers total
-]
+Both kinds of DMS copy data between a source and a target **endpoint**, which hold the connection details for each database. They differ in who sizes the compute.
 
-def migrate_wave(servers, wave_name):
-    """Migrate multiple servers in parallel"""
+| | Replication instance | DMS Serverless |
+|---|---|---|
+| **Unit of work** | **Tasks** on an instance, each copying a set of tables | A **replication**, which provisions its own compute |
+| **Sizing** | You choose an instance class and storage | You set minimum and maximum DMS capacity units (DCUs, 2 GB of memory each), and DMS scales between them |
+| **Billing** | Per instance-hour while the instance exists, whether or not a task runs | Per DCU-hour used |
+| **Engines** | Every source and target DMS supports | A subset, including Oracle, SQL Server, MySQL, PostgreSQL, MongoDB, and Db2 as sources |
+| **Limits to know** | Several busy tasks can overload one instance | No views, no custom CDC start points, and resources released if a stopped replication isn't resumed within 48 hours |
 
-    # 1. Launch test instances for all servers
-    source_ids = [s['source_id'] for s in servers]
+Data transferred into DMS is free, and Database Savings Plans cover DMS usage.
 
-    test_response = mgn.start_test(sourceServerIDs=source_ids)
-    test_job_id = test_response['job']['jobID']
+### Full Load, CDC, or Both
 
-    print(f"{wave_name}: Test instances launching for {len(servers)} servers")
+A task or replication runs in one of three modes. **Full load** copies the tables as they are at the start and stops, which suits data that can be frozen for the copy. **Full load and CDC** copies the tables and then applies every change captured from the source's transaction log while and after the load ran, which is the mode for a migration with a short cutover. **CDC only** applies changes from a chosen point, for example after a native backup and restore has done the bulk copy.
 
-    # 2. Wait for all tests to complete
-    wait_for_job_completion(test_job_id)
+CDC needs the source to log changes in a form DMS can read, such as row-based binary logging on MySQL or supplemental logging on Oracle. Those are settings to change and test on the source well before migration day. AWS is explicit that CDC isn't real-time replication. Latency is normally low but has no service level agreement, and it can climb to minutes during batch jobs, index rebuilds, or other bursts of log volume.
 
-    # 3. Validate all test instances
-    for server in servers:
-        validate_server(server['hostname'], test=True)
+For ongoing replication, AWS recommends Multi-AZ, which keeps a standby replication instance or serverless capacity in a second Availability Zone and bills at a higher hourly rate. The standby protects CDC. A failover during a full load still fails the load, and the task then restarts the tables it hadn't finished.
 
-    # 4. If all validations pass, proceed to cutover
-    print(f"{wave_name}: All tests passed. Starting cutover...")
+### What DMS Doesn't Copy
 
-    cutover_response = mgn.start_cutover(sourceServerIDs=source_ids)
-    cutover_job_id = cutover_response['job']['jobID']
+DMS creates tables and primary keys on the target if they don't exist, and nothing more. Secondary indexes, foreign keys, triggers, users, stored procedures, and most other schema objects have to come from somewhere else. The usual order is:
 
-    # 5. Wait for cutover
-    wait_for_job_completion(cutover_job_id)
+1. **Create the schema on the target first.** On the same engine, use the engine's own tools (a schema-only dump, MySQL Workbench, pgAdmin, Oracle SQL Developer). Across engines, use DMS Schema Conversion, described below.
+2. **Hold back what slows or breaks the load.** Drop or delay secondary indexes, foreign keys, and triggers during the full load, because DMS loads eight tables at a time by default and doesn't load them in dependency order.
+3. **Add secondary indexes before CDC starts.** Change data capture applies updates and deletes by key, and without indexes each one can scan the table. A task can pause between the full load and CDC for this step.
+4. **Enable foreign keys and triggers at cutover,** after the last changes have been applied.
 
-    # 6. Finalize all
-    for source_id in source_ids:
-        mgn.finalize_cutover(sourceServerIDs=[source_id])
+Large objects need a decision too. **Limited LOB mode**, the default, copies values up to a maximum size (32 KB unless changed) and truncates larger ones. **Full LOB mode** copies any size but slowly. **Inline LOB mode** sends small values inline and looks up large ones. Set the limit from the largest value actually in the data, and remember that DMS treats some types, such as JSON on PostgreSQL, as LOBs.
 
-    print(f"{wave_name}: Migration complete")
+### Validation and Cutover
 
-# Execute waves
-wave_1 = servers_to_migrate[0:5]
-wave_2 = servers_to_migrate[5:10]
-wave_3 = servers_to_migrate[10:15]
-wave_4 = servers_to_migrate[15:20]
+**Data validation**, turned on in the task settings, compares source and target rows after the full load and keeps comparing as changes apply, recording mismatches in a table on the target. It works for the common relational engines, including Oracle, SQL Server, MySQL, PostgreSQL, their Aurora forms, Db2 for Linux, Unix, and Windows, and Redshift. Data truncations and rows rejected for foreign key violations appear only in the task log, so send the log to CloudWatch and read it.
 
-migrate_wave(wave_1, "Wave 1")
-migrate_wave(wave_2, "Wave 2")
-migrate_wave(wave_3, "Wave 3")
-migrate_wave(wave_4, "Wave 4")
-```
+A database cutover then follows a short sequence. Stop writes to the source, wait until the task's CDC latency reaches zero and validation shows no pending records, enable constraints and triggers on the target, and point the application's connection string at the target. The source stays intact, so a failed cutover can switch back as long as nothing has written to the target yet.
 
-### Pattern 2: Database Migration with Zero Downtime
+### Schema Conversion Across Engines
 
-<div class="callout callout--note">
-<p class="callout__title">Zero Downtime Pattern</p>
-<p>Using Full Load + CDC replication, you can achieve database migrations with less than 1 minute of downtime. The key is continuous replication during the migration period, followed by a quick cutover when CDC lag reaches near-zero.</p>
-</div>
+**DMS Schema Conversion** converts schemas and code objects, such as tables, views, stored procedures, and functions, from one engine to another. It is managed and runs in the DMS console, built on the same conversion engine as the downloadable AWS Schema Conversion Tool (AWS SCT). A **migration project** ties together a source and a target **data provider** (connection details) and an **instance profile** (network and encryption settings). An **assessment report** shows what converts automatically and what needs manual work, which is the best early estimate of a cross-engine migration's effort.
 
-**Scenario**: Migrate production database with <1 minute downtime.
+Supported paths include Oracle, SQL Server, Db2, and SAP ASE to Aurora PostgreSQL or RDS for PostgreSQL, Oracle and SQL Server to MySQL targets, and Oracle to Redshift. On several PostgreSQL-target paths, generative AI converts objects the rules can't finish, for someone to review. An **extension pack** emulates source features the target lacks. Schema Conversion itself is free apart from the S3 storage it uses. AWS SCT remains available for paths or features the managed version doesn't cover.
 
-```
-Timeline:
-- Day 1-7: DMS replicates historical data (full load)
-- Day 7-30: DMS replicates ongoing changes (CDC)
-- Day 30: Cutover (1 minute downtime)
+Converting the schema is often the smaller part of a cross-engine move. Application SQL, stored procedure behavior, data type edge cases, and performance under the new engine all need testing, and the assessment report's manual-action list is where that work starts.
 
-Cutover process:
-1. Enable read-only mode on source database (30 seconds)
-2. Wait for CDC lag to reach zero (<30 seconds)
-3. Update application config to point to target database
-4. Deploy application update (30 seconds)
-5. Verify application functionality
-6. Total downtime: ~1 minute
-```
+### Homogeneous Data Migrations
 
-**Implementation**:
-```sql
--- On source database (MySQL)
+For MySQL, PostgreSQL, and MongoDB moving to the same engine on Amazon RDS, Aurora, or DocumentDB, DMS offers **homogeneous data migrations**. They run from a DMS migration project in a serverless environment DMS manages, dump and restore the data with the engine's own native tools, and support full load, ongoing replication, or both. Native tools carry over partitions, functions, stored procedures, and other secondary objects that DMS's row-by-row replication leaves behind, and the migration bills for the hours it runs. It has no built-in data validation, though, so the team checks row counts and checksums itself.
 
--- 1. Enable read-only mode
-SET GLOBAL read_only = ON;
-
--- Allow DMS user to continue replicating
-GRANT ALL ON *.* TO 'dms_user'@'%';
-FLUSH PRIVILEGES;
-
--- 2. Monitor DMS lag (via Python script)
--- (Wait for lag < 5 seconds)
-
--- 3. Update application connection string
--- DATABASE_HOST=new-rds-endpoint.amazonaws.com
-
--- 4. Deploy application
--- (kubectl rollout restart deployment/web-app)
-
--- 5. Disable read-only on source (rollback option)
--- SET GLOBAL read_only = OFF;
-```
-
-### Pattern 3: Hybrid Cloud (Continuous Replication)
-
-**Scenario**: Keep on-premises and AWS databases in sync for disaster recovery.
-
-```python
-# Create DMS task for continuous replication (no cutover)
-
-task = dms.create_replication_task(
-    ReplicationTaskIdentifier='dr-continuous-replication',
-    MigrationType='cdc',  # CDC only (not full-load)
-    # ... endpoints, table mappings
-)
-
-# Run indefinitely
-dms.start_replication_task(
-    ReplicationTaskArn=task_arn,
-    StartReplicationTaskType='start-replication'
-)
-
-# Monitor lag continuously
-# If primary fails, promote AWS database to primary
-
-# Cost: ~$150/month (dms.t3.medium instance) for DR protection
-```
+DMS Fleet Advisor, which inventoried database servers for planning, ended on May 20, 2026. For database assessment, AWS now recommends Migration Evaluator, its service for sizing and costing a move from discovery data.
 
 ---
 
-## Cost Optimization
+## AWS DataSync: Moving Files and Objects
 
-<div class="callout callout--tip">
-<p class="callout__title">Cost Optimization Tip</p>
-<p>MGN offers 90 days free from first server replication. Complete your migrations within this window to avoid service charges entirely. After migration, always delete replication instances and finalize cutover to prevent ongoing costs.</p>
-</div>
+AWS DataSync copies files and objects between on-premises storage (NFS, SMB, HDFS, and S3-compatible object storage), other clouds' object and file storage, and AWS storage (S3, EFS, and the FSx file systems). It encrypts data in transit and, by default, verifies integrity at the end of each run.
 
-### MGN Costs
+### When an Agent Is Needed
 
-**Free tier**: 90 days from first server replication (no MGN service charges).
+A **DataSync agent** is a VM appliance deployed next to storage that AWS can't reach directly. It runs on VMware ESXi, Hyper-V, or KVM on premises, or as an EC2 instance from an AWS image. Transfers from on-premises file servers need one, as do transfers between EFS or FSx and another cloud. Transfers between AWS storage services, and between S3 and other clouds' object storage, don't. Agents come in Basic mode and Enhanced mode versions, matching the task mode they serve. For very large datasets, several tasks each with their own agent run in parallel. Up to four agents can serve one location, but they add throughput, not availability, since all of them must be online for the task to run.
 
-**Costs after free tier**:
-- **Per hour**: $0.0237/hour per source server replicating
-- **Example**: 10 servers × 30 days × 24 hours × $0.0237 = $170.64/month
+### Task Modes
 
-**Optimization strategies**:
-1. **Complete migrations within 90 days** (avoid charges entirely)
-2. **Batch migrations** (migrate in waves, archive completed servers)
-3. **Right-size staging instances** (use t3.small instead of larger)
+Each **task** copies from a source **location** to a destination location, and its mode is fixed at creation.
 
-### DMS Costs
+| | Enhanced mode | Basic mode |
+|---|---|---|
+| **Locations** | S3, EFS, and FSx for Lustre, with each other, with NFS, SMB, or HDFS through an Enhanced mode agent, or with Azure Blob and object storage (no agent needed to or from S3) | Every location DataSync supports, including FSx for Windows File Server, OpenZFS, and ONTAP |
+| **Dataset size** | Virtually unlimited files or objects | Subject to per-task quotas on files and directories |
+| **Performance** | Lists, prepares, transfers, and verifies in parallel | Runs those steps one after another |
+| **Verification** | Verifies only what was transferred | Verifies all data by default |
+| **Price** | $0.015 per GB copied plus $0.55 per task execution | $0.0125 per GB copied |
 
-**Replication instance costs** (on-demand pricing, us-east-1):
-- **dms.t3.micro**: $0.0175/hour ($13/month) - POC/testing
-- **dms.t3.medium**: $0.140/hour ($102/month) - Small databases (<100GB)
-- **dms.c5.large**: $0.192/hour ($140/month) - Medium databases (100GB-500GB)
-- **dms.c5.xlarge**: $0.384/hour ($280/month) - Large databases (500GB-2TB)
-- **dms.c5.4xlarge**: $1.536/hour ($1,120/month) - Very large databases (2TB+)
+S3 request charges and destination storage are billed on top. Tasks can filter paths, run on a schedule, and cap their bandwidth so a transfer doesn't saturate the link it shares with production traffic.
 
-**Data transfer costs**:
-- **Data IN to AWS**: Free
-- **Data OUT from AWS**: Standard data transfer rates ($0.09/GB after 100GB/month)
+### Cutting Over a File Share
 
-**Optimization strategies**:
-1. **Right-size replication instance** (start small, scale up if needed)
-2. **Delete replication instance after migration** (don't leave running)
-3. **Use single-AZ** during migration (Multi-AZ adds 2x cost)
-4. **Compress data** (enable compression in table mappings)
+A task set to copy only changed data turns a file migration into a series of shrinking runs. The first run copies everything, later runs copy what changed since the one before, and the final run, after the share is made read-only, copies the last changes. Clients then remount from the new file system. The final run's length, not the share's size, sets the downtime.
 
-**Example cost calculation**:
-```
-Migration: 500GB MySQL database
-Timeline: 30 days
+For datasets too large for the network, physical transfer is the alternative. Snowball Edge devices closed to new customers on November 7, 2025, and AWS now points new customers to **AWS Data Transfer Terminal**, a facility where a team brings its own storage devices and uploads over high-speed connections to the AWS network, or to partner solutions.
 
-Costs:
-- Replication instance (dms.c5.large): $140
-- Data transfer IN: $0 (free)
-- Data transfer OUT: $0 (staying in AWS)
-- Total: $140 for entire migration
+---
 
-Post-migration: Delete replication instance = $0/month ongoing
-```
+## Network and Security
+
+All three services move data over whatever path you provide. A Direct Connect link or Site-to-Site VPN keeps replication traffic off the public internet and gives it predictable bandwidth. MGN can send replication data over private IP addresses, and it, DMS, and DataSync all support interface VPC endpoints for their control traffic. Size the link for the whole wave, not one server. Initial syncs for a wave's servers, databases, and file shares all compete for the same bandwidth, and production traffic still needs its share.
+
+Encryption at rest follows the account's KMS keys. MGN encrypts staging volumes with the EBS default key or a customer managed key set in the replication template. DMS encrypts replication storage and connection information with a KMS key, and DataSync writes to encrypted destinations. Give each service's IAM role access only to the buckets, file systems, and keys it needs, and create a dedicated database user for DMS with read and replication privileges on the source and write privileges on the target.
 
 ---
 
 ## Common Pitfalls
 
-### MGN Pitfalls
-
-**1. Not testing before cutover**
-
-**Problem**: Cutover fails because application doesn't work in AWS.
-
-**Solution**: Always launch test instances and validate.
-
-**2. Forgetting to finalize cutover**
-
-**Problem**: Replication continues indefinitely, incurring costs.
-
-**Solution**:
-```python
-# After successful cutover, always finalize
-mgn.finalize_cutover(sourceServerIDs=['s-1234567890abcdef0'])
-mgn.mark_as_archived(sourceServerID='s-1234567890abcdef0')
-```
-
-**3. Insufficient staging area storage**
-
-**Problem**: Replication fails due to disk space.
-
-**Solution**: Provision staging storage = 1.5× source server storage.
-
-**4. Not handling licensing**
-
-**Problem**: Windows/SQL Server migrations without proper licensing.
-
-**Solution**:
-```python
-# Configure BYOL (Bring Your Own License) or License Included
-mgn.update_launch_configuration(
-    sourceServerID='s-1234567890abcdef0',
-    licensing={
-        'osByol': True  # BYOL for Windows/SQL Server
-    }
-)
-```
-
-### DMS Pitfalls
-
-**1. Incompatible data types (heterogeneous migrations)**
-
-**Problem**: Oracle CLOB doesn't map cleanly to PostgreSQL TEXT.
-
-**Solution**: Use SCT to identify and manually convert incompatible types before migration.
-
-**2. Not enabling validation**
-
-**Problem**: Data corruption goes undetected.
-
-**Solution**:
-```python
-# Always enable validation for production migrations
-"ValidationSettings": {
-    "EnableValidation": True,
-    "ValidationMode": "ROW_LEVEL"
-}
-```
-
-**3. Running out of replication instance storage**
-
-**Problem**: DMS stores change logs; disk fills up.
-
-**Solution**:
-- Provision 2x source database size for replication instance storage
-- Monitor disk usage: CloudWatch metric `FreeStorageSpace`
-
-**4. Not handling LOBs correctly**
-
-**Problem**: Large objects (BLOBs, CLOBs) cause task failures.
-
-**Solution**:
-```python
-"TargetMetadata": {
-    "SupportLobs": True,
-    "LimitedSizeLobMode": True,
-    "LobMaxSize": 32  # MB, adjust based on data
-}
-```
-
-**5. Forgetting to delete replication instance after migration**
-
-**Problem**: $280/month ongoing costs for unused instance.
-
-**Solution**:
-```python
-# After migration complete, delete replication instance
-dms.delete_replication_instance(
-    ReplicationInstanceArn=replication_instance_arn
-)
-
-print("Replication instance deleted. $0/month ongoing cost.")
-```
-
----
-
-## Security Best Practices
-
-### 1. Use IAM Roles Instead of Access Keys
-
-```python
-# ❌ BAD: Hardcoded access keys
-mgn.install_agent(
-    access_key_id='AKIAIOSFODNN7EXAMPLE',
-    secret_access_key='wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
-)
-
-# ✅ GOOD: Use IAM role for EC2 instances running agent
-# Attach MGNSourceServerRole to source EC2 instances
-# Agent automatically uses instance role credentials
-```
-
-### 2. Encrypt Staging Area and Target Volumes
-
-```python
-# MGN: Encrypt staging volumes
-mgn.update_replication_configuration(
-    sourceServerID='s-1234567890abcdef0',
-    ebsEncryption='CUSTOM',
-    ebsEncryptionKeyArn='arn:aws:kms:us-east-1:123456789012:key/abcd1234'
-)
-
-# DMS: Encrypt target database
-rds.create_db_instance(
-    DBInstanceIdentifier='migrated-db',
-    StorageEncrypted=True,
-    KmsKeyId='arn:aws:kms:us-east-1:123456789012:key/abcd1234'
-)
-```
-
-### 3. Use VPN/Direct Connect for Data Transfer
-
-```python
-# Avoid transferring sensitive data over public internet
-# Configure DMS to use private IPs
-
-mgn.update_replication_configuration(
-    sourceServerID='s-1234567890abcdef0',
-    dataPlaneRouting='PRIVATE_IP',  # Use VPN/Direct Connect
-    createPublicIP=False
-)
-```
-
-### 4. Least Privilege Database Users
-
-```sql
--- Create DMS-specific user with minimal permissions
-
--- MySQL source
-CREATE USER 'dms_user'@'%' IDENTIFIED BY 'SecurePassword123!';
-GRANT SELECT ON production_db.* TO 'dms_user'@'%';
-GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'dms_user'@'%';
-FLUSH PRIVILEGES;
-
--- MySQL target
-CREATE USER 'dms_user'@'%' IDENTIFIED BY 'SecurePassword123!';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON production_db.* TO 'dms_user'@'%';
-FLUSH PRIVILEGES;
-```
+- **Finalizing an MGN cutover too early.** Finalize discards the replicated data, so keep the server in cutover until the application has run on EC2 long enough to trust it.
+- **A staging subnet that can't reach S3.** Replication and conversion servers download their software and packages from AWS-owned buckets. A locked-down subnet or a strict gateway endpoint policy stalls replication before it starts.
+- **Installing agents for the whole portfolio on day one.** Staging volumes and replication servers bill from the start, and the 2,160 free hours run out for servers whose wave is months away.
+- **Assuming validation everywhere.** DMS tasks validate rows when asked, but homogeneous data migrations don't validate at all. Plan row counts and checksums for those.
+- **Cutting over during the source's busiest hours.** A nightly batch job can push CDC latency to minutes and stretch the final catch-up. Schedule cutovers for the source's quiet periods.
 
 ---
 
 ## Key Takeaways
 
-**AWS Application Migration Service (MGN)**:
-1. **Automated lift-and-shift** with continuous replication and minimal downtime (<5 minutes)
-2. **Always test before cutover** using test instances to validate functionality
-3. **Free for 90 days** from first server replication (complete migrations within 90 days)
-4. **Finalize cutover** to stop replication and avoid ongoing costs
-5. **Right-size instances** post-migration using AWS Compute Optimizer
-
-**AWS Database Migration Service (DMS)**:
-6. **Supports homogeneous and heterogeneous** migrations (Oracle→Oracle, Oracle→PostgreSQL)
-7. **Use AWS SCT** for schema conversion in heterogeneous migrations (Oracle→PostgreSQL)
-8. **Enable validation** to ensure data integrity (row-level validation recommended)
-9. **Full-load + CDC** migration type for minimal downtime (applications stay online)
-10. **Delete replication instance** after migration to avoid ongoing costs
-
-**Migration Patterns**:
-11. **Wave-based migrations** for multiple servers (batch 5-10 servers per wave)
-12. **Zero-downtime database migrations** using CDC with <1 minute cutover window
-13. **Hybrid cloud continuous replication** for disaster recovery scenarios
-14. **Test-cutover-finalize workflow** for both MGN and DMS migrations
-
-**Cost Optimization**:
-15. MGN is **free for 90 days** (plan migrations to complete within free period)
-16. DMS replication instances cost **$100-1,000/month** depending on size
-17. **Delete resources after migration**: Replication instances, staging servers, test instances
-18. **Right-size replication instances**: Start with smaller instances, scale up if needed
-
-**Common Pitfalls**:
-19. **Not testing before cutover** leads to production failures (always launch test instances)
-20. **Forgetting to finalize cutover** causes ongoing replication costs
-21. **Incompatible data types** in heterogeneous migrations (use SCT assessment report)
-22. **Running out of storage** on replication instances (provision 2x source size)
-
-**Security Best Practices**:
-23. **Use IAM roles** instead of access keys for agent installation
-24. **Encrypt staging and target volumes** using AWS KMS
-25. **Use private connectivity** (VPN/Direct Connect) for sensitive data transfer
-26. **Least privilege database users** for DMS replication (SELECT for source, DML for target)
-
-**Validation & Monitoring**:
-27. **Enable DMS validation** to detect data discrepancies (row-level validation)
-28. **Monitor CDC lag** before cutover (wait for <5 seconds lag)
-29. **Check validation failure tables** in target database for data integrity issues
-30. **Archive source servers** in MGN after finalization to clean up console view
-
-AWS MGN and DMS provide automated, low-risk migration paths for applications and databases. The key to successful migrations is thorough testing, validation, and following the test-cutover-finalize workflow to minimize downtime and ensure data integrity.
+- All three services copy while the source keeps running, keep the copy current, and cut over once it has caught up, so downtime is the final catch-up and switch.
+- AWS Transform MGN replicates disk blocks to a staging subnet and converts them into EC2 instances at launch. Test as often as needed, and finalize only when there is no going back. Each server gets 2,160 free hours, but replication infrastructure bills from the start.
+- AWS DMS copies rows with full load and CDC on replication instances or DMS Serverless. It creates only tables and primary keys, so build the schema first and add indexes before CDC. CDC latency is usually low but not guaranteed.
+- DMS Schema Conversion converts schemas across engines and estimates the manual work, and homogeneous data migrations use native tools for same-engine moves.
+- AWS DataSync copies files and objects, with an agent for on-premises storage. Incremental runs and a final run after writes stop keep file-share downtime short.

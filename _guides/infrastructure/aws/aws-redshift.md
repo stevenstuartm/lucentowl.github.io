@@ -1,530 +1,181 @@
 ---
-title: "AWS Redshift for System Architects"
+title: "Amazon Redshift for System Architects"
 layout: guide
 category: AWS
 subcategory: Analytics & Data Processing
-description: "Comprehensive guide to AWS Redshift covering Serverless vs provisioned clusters, RA3 node types, distribution and sort keys, Redshift Spectrum, cost optimization, and data warehousing best practices"
-tags: [aws, redshift, data-warehousing, analytics, sql, cost-optimization, fundamentals]
+description: "How Amazon Redshift works as a data warehouse and how to run it: massively parallel processing and managed storage, Serverless versus RG and RA3 clusters, distribution and sort keys, loading with COPY and streaming ingestion, querying S3, data sharing, workload management and concurrency scaling, materialized views, security and recovery, and what drives cost."
+tags: [redshift, data-warehouse, redshift-serverless, distribution-keys, sort-keys, workload-management, fundamentals]
 ---
 
-## What Is Amazon Redshift?
-
-Amazon Redshift is a fully managed, petabyte-scale data warehouse service that uses SQL to analyze structured and semi-structured data. Redshift uses massively parallel processing (MPP) and columnar storage to deliver fast query performance on large datasets.
-
-**What Problems Redshift Solves**:
-- **Analytical query performance**: Traditional databases struggle with complex analytical queries; Redshift handles petabyte-scale analytics with sub-second latency
-- **Data warehouse cost**: On-premises data warehouses are expensive to scale; Redshift offers pay-as-you-go pricing starting at $0.25/hour
-- **Data lake integration**: Querying S3 data lakes requires complex ETL; Redshift Spectrum queries S3 directly without loading
-- **Scalability bottlenecks**: Vertical scaling limits constrain growth; Redshift scales horizontally to petabytes
-- **Operational overhead**: Managing data warehouse infrastructure is complex; Redshift is fully managed with automated backups, patching, and scaling
-
-**When to use Redshift**:
-- You need a data warehouse for OLAP (Online Analytical Processing) workloads
-- You have large datasets (>100 GB) requiring complex analytical queries
-- You want to query data in S3 without ETL (Redshift Spectrum)
-- You need BI tool integration (Tableau, PowerBI, Looker, QuickSight)
-- You require sub-second query performance on aggregations and joins
-
-## Redshift Serverless vs Provisioned Clusters
-
-Redshift offers two deployment models with distinct cost and operational characteristics.
-
-### Redshift Serverless
-
-Zero-configuration data warehouse that auto-scales compute capacity.
-
-**How It Works**:
-- Capacity measured in Redshift Processing Units (RPUs)
-- Minimum 8 RPUs (base capacity), scales automatically based on workload
-- Per-second billing (60-second minimum)
-- No cluster management required
-
-**Pricing (us-east-1, 2024)**:
-- **$0.375/RPU-hour** (minimum 8 RPUs = $3/hour when active)
-- Storage: $0.024/GB/month (Redshift Managed Storage)
-- **Free credits**: None (pay only when queries run)
-- **Serverless Reservations**: Up to 24% discount for 1-year or 3-year commitments
-
-**Cost Example**:
-- 8 RPUs base capacity running 2 hours/day × 30 days = 60 hours
-- Compute: 60 hours × 8 RPUs × $0.375 = $180/month
-- Storage: 500 GB × $0.024 = $12/month
-- **Total**: $192/month
-
-**When to Use Serverless**:
-- Unpredictable or spiky workloads (ad-hoc analytics, BI dashboards)
-- Development and testing environments
-- Infrequent usage (<8 hours/day)
-- Workloads with idle periods (no charges when not querying)
-- Teams wanting zero operational overhead
-
-<div class="callout callout--tip">
-<p class="callout__title">Serverless Savings</p>
-<p>40-65% cost reduction vs provisioned for variable workloads (AWS customer reports). No charges when not querying.</p>
-</div>
-
-### Provisioned Clusters
-
-Node-based clusters with configurable instance types and node counts.
-
-**Architecture**:
-- **Leader node**: Receives queries, develops query plans, distributes work
-- **Compute nodes**: Store data and execute queries in parallel (2-128 nodes)
-- **RA3 nodes**: Separate compute and storage (recommended)
-
-**Pricing (us-east-1, 2024)**:
-- **ra3.xlplus**: $1.235/hour (4 vCPUs, 32 GB memory)
-- **ra3.4xlarge**: $3.26/hour (12 vCPUs, 96 GB memory)
-- **ra3.16xlarge**: $13.04/hour (48 vCPUs, 384 GB memory)
-- **Storage (RA3)**: $0.024/GB/month (Redshift Managed Storage, separate from compute)
-- **Reserved Instances**: Up to 64% discount (3-year commitment)
-
-**Cost Example** (2-node ra3.4xlarge cluster):
-- Compute: 2 nodes × $3.26/hour × 730 hours = $4,760/month
-- Storage: 500 GB × $0.024 = $12/month
-- **Total**: $4,772/month
-- **Reserved (3-year)**: $1,718/month (64% savings)
-
-**When to Use Provisioned**:
-- Predictable, steady workloads (>8 hours/day)
-- Cost optimization with Reserved Instances
-- Performance-sensitive applications requiring dedicated resources
-- Workloads requiring specific node configurations
-
-**Breakeven Analysis**:
-- Serverless at 8 RPUs: $3/hour active time
-- Provisioned ra3.4xlarge (2 nodes): $6.52/hour (always running)
-- **Breakeven**: Serverless is cheaper if active <50% of the time (12 hours/day)
-
-### Decision Framework: Serverless vs Provisioned
-
-| Dimension | Serverless | Provisioned |
-|-----------|------------|-------------|
-| **Cost Model** | Pay-per-use (RPU-hours) | Pay for provisioned capacity (always running) |
-| **Best For** | Variable workloads | Steady, predictable workloads |
-| **Cost Savings** | Cheaper for <50% utilization | Cheaper for >50% utilization + Reserved Instances |
-| **Setup** | Zero configuration | Manual cluster sizing |
-| **Scaling** | Automatic (seconds) | Manual (add/remove nodes) |
-| **Performance** | Auto-tuned | Configurable (node type, count) |
-| **Use Case** | Ad-hoc queries, dev/test, BI dashboards | Production analytics, 24/7 workloads |
-
-## RA3 Node Types and Architecture
+## What Redshift Is For
 
-RA3 nodes (recommended for new clusters) separate compute and storage for independent scaling.
+Amazon Redshift is a data warehouse, a SQL database built for analytical queries that scan, join, and aggregate millions or billions of rows, such as revenue by region by month or a cohort's retention over a year. It is the engine a BI tool points at when dashboards need consistent, fast answers over large, structured data that many people query at once.
 
-### RA3 Instance Types
+It differs from a transactional database such as Aurora in how it stores and runs work. Rows are stored by column, so a query that reads 4 columns of a 100-column table reads only those 4. Queries run in parallel across many machines, each working on its share of the data. Both choices make large scans fast and single-row lookups and frequent small updates slow, which is why Redshift sits beside an application's database rather than replacing it. Data arrives from operational databases, event streams, and files, in batches or continuously.
 
-| Node Type | vCPUs | Memory | Local Storage | Price/Hour (us-east-1) | Use Case |
-|-----------|-------|--------|---------------|------------------------|----------|
-| **ra3.xlplus** | 4 | 32 GB | Managed Storage | $1.235 | Small-medium workloads |
-| **ra3.4xlarge** | 12 | 96 GB | Managed Storage | $3.26 | General production |
-| **ra3.16xlarge** | 48 | 384 GB | Managed Storage | $13.04 | Large analytical workloads |
+Compared with Athena, which queries files in S3 on demand and bills per byte scanned, Redshift keeps data in its own optimized storage and runs on capacity you size or let it scale. That buys lower and steadier latency for repeated, concurrent queries, at the cost of loading data and paying for compute.
 
-**Managed Storage** (separate pricing):
-- $0.024/GB/month
-- Automatically scales from 0 GB to 8 PB per cluster
-- Pay only for data stored (not reserved capacity)
-- Backed by Amazon S3 (99.999999999% durability)
+---
 
-### Why RA3 vs Legacy Node Types
+## How a Query Runs
 
-**RA3 Advantages**:
-- **Independent scaling**: Scale compute (add nodes) and storage (automatic) separately
-- **Cost efficiency**: Pay only for storage used, not reserved capacity
-- **Performance**: Enhanced I/O and network performance
-- **Flexibility**: Upgrade compute without data migration
+Redshift is a **massively parallel processing (MPP)** system. A **leader node** receives each query, plans it, and sends compiled steps to **compute nodes**. Each compute node is divided into **slices**, and every table's rows are spread across all slices, so each slice scans and processes its own part of every table at the same time. The leader combines the results.
 
-**Legacy Node Types** (DC2, DS2):
-- Tightly coupled compute and storage
-- Storage capacity limited by node type
-- Cannot scale storage without changing node type (requires data migration)
-- Being phased out (AWS recommends RA3 for new clusters)
+Storage is separate from compute. **Redshift Managed Storage (RMS)** keeps table data durably in S3-backed storage, with hot data cached on the compute nodes' local SSDs. Because compute and storage scale independently, a warehouse can hold far more data than its nodes have disk, and adding compute doesn't require moving data. Redshift Serverless and the current node families, RG and RA3, all use RMS.
 
-### Cluster Sizing Guidance
+{% include figure.html id="aws-redshift-mpp" %}
 
-**Small Cluster** (ra3.xlplus):
-- 2 nodes: 8 vCPUs, 64 GB memory
-- Use case: Dev/test, small analytical workloads (<1 TB)
-- Cost: $1,810/month (on-demand) or $652/month (3-year reserved)
+How rows are spread across slices matters for joins. When two tables being joined have matching rows on the same slice, each slice joins its own rows. When they don't, Redshift has to redistribute or broadcast rows between nodes over the network before joining, which is often the slowest part of a query. Distribution keys, below, control that placement.
 
-**Medium Cluster** (ra3.4xlarge):
-- 2-4 nodes: 24-48 vCPUs, 192-384 GB memory
-- Use case: Production analytics, BI dashboards (1-10 TB)
-- Cost: $4,760-$9,520/month (on-demand) or $1,718-$3,436/month (3-year reserved)
+---
 
-**Large Cluster** (ra3.16xlarge):
-- 2-16 nodes: 96-768 vCPUs, 768-6,144 GB memory
-- Use case: Enterprise data warehousing, petabyte-scale analytics
-- Cost: $19,083-$152,666/month (on-demand)
+## Serverless or Provisioned
 
-## Distribution Keys and Sort Keys
+| | Redshift Serverless | Provisioned cluster |
+|---|---|---|
+| **Capacity unit** | Redshift Processing Units (RPUs), each 16 GB of memory | Nodes of a chosen type and count |
+| **Scaling** | Automatic from a base capacity, up to a maximum you set | Resize by changing node count or type, or let concurrency scaling (below) add temporary capacity for bursts |
+| **Idle cost** | No compute charge when no queries run | Nodes bill every hour they run. A paused cluster bills only for storage and backups |
+| **Compute price** (US East, N. Virginia) | $0.375 per RPU-hour, per second with a 60-second minimum | Per node-hour, such as $3.04 for rg.4xlarge or $3.26 for ra3.4xlarge |
+| **Commitments** | Serverless Reservations, up to 24% off for 1 year and 50% for 3 years paid all upfront | Reserved nodes, 1 or 3 years |
 
-Redshift's performance depends on how data is distributed across nodes and how it's sorted within nodes.
+**Serverless** runs as a **workgroup** of compute with a **base capacity** from 4 to 1,024 RPUs (128 by default), and a **namespace** that holds the databases and users. It scales above the base as queries demand, and a **price-performance target**, set to Balanced by default, lets its AI-driven scaling decide how aggressively to add RPUs for a given workload. **Max capacity** and **max RPU-hours** limits cap what it can spend in a day, week, or month. Suppose a team's queries keep an 8 RPU warehouse busy about 2 hours a day. That's roughly 60 hours a month × 8 RPUs × $0.375, or about $180 a month for compute.
 
-### Distribution Keys (DISTKEY)
+A **provisioned cluster** runs a fixed set of nodes. The current families are:
 
-Distribution keys determine how rows are distributed across compute nodes.
+| Family | Sizes | Notes |
+|---|---|---|
+| **RG** (May 2026) | rg.large, rg.xlarge, rg.4xlarge, rg.12xlarge | AWS Graviton, AWS's Arm-based processors. About 30% lower price per vCPU than RA3, and an integrated engine that queries data in S3 on the cluster itself |
+| **RA3** | ra3.large, ra3.xlplus, ra3.4xlarge, ra3.16xlarge | The previous generation, still current. Queries S3 through Redshift Spectrum, a separate scanning layer billed per TB |
+| **DC2** | dc2.large, dc2.8xlarge | Deprecated since April 2025. Local storage only, with no managed storage, data sharing, or zero-ETL. Migrate to RG, RA3, or Serverless |
 
-**Three Distribution Styles**:
+Two rg.4xlarge nodes running all month cost about $4,440, before storage. The same cluster paused outside a 10-hour working day costs about $1,850, roughly 40% of that, and less again if it stays paused at weekends. Workgroups and namespaces exist only in Serverless, and pausing only for provisioned clusters.
 
-1. **KEY Distribution**:
-   - Rows with same distribution key value stored on same node
-   - **Use when**: Joining large tables on the same key (co-locates data, avoids network shuffling)
-   - **Example**: Distribute `orders` and `order_items` by `order_id`
+Serverless fits workloads with idle periods, unpredictable load, and teams that don't want to size clusters. Provisioned clusters fit steady, heavy load, where nodes stay busy and reserved nodes cut the price, and cases that need a cluster-only feature. As a rough guide, a warehouse busy most hours of the day is usually cheaper provisioned, and one busy a few hours a day is usually cheaper on Serverless.
 
-2. **EVEN Distribution** (default):
-   - Rows distributed in round-robin fashion across all nodes
-   - **Use when**: Table not frequently joined or no single join key
-   - **Example**: Staging tables, tables with many different join patterns
+Storage in RMS costs $0.024 per GB-month for Serverless, RG, and RA3, billed separately from compute. Automated snapshots are free and kept for up to 35 days, and Serverless recovery points younger than 24 hours are free. Manual snapshots are billed, as backup storage at S3 rates on RA3 and by unique data blocks on RG and Serverless.
 
-3. **ALL Distribution**:
-   - Full copy of table on every node
-   - **Use when**: Small dimension tables (<1M rows) frequently joined with fact tables
-   - **Example**: `product_categories`, `countries`, lookup tables
+---
 
-**Performance Impact**:
-- Correct distribution key: Avoids data shuffling during joins (10-100x faster)
-- Incorrect distribution key: Requires network shuffling (kills performance)
+## Designing Tables
 
-**Best Practices**:
-- Choose distribution key based on most frequent join columns
-- Avoid columns with few unique values (creates data skew)
-- Monitor data skew: `SELECT slice, COUNT(*) FROM table GROUP BY slice` (ideally even distribution)
+Redshift has no indexes in the transactional sense. Performance comes from where rows live and how they're ordered.
 
-### Sort Keys (SORTKEY)
+### Distribution styles
 
-Sort keys define the physical order of data stored on disk.
+| Style | Places rows | Fits |
+|---|---|---|
+| **AUTO** (the default) | Starts small tables as ALL, and moves them to KEY or EVEN as they grow | Most tables. Redshift changes the style in the background and records recommendations |
+| **KEY** | By the value of one column, so equal values land on the same slice | Large tables joined on the same column, such as `orders` and `order_lines` on `order_id` |
+| **EVEN** | Round-robin across slices | Tables that aren't joined, or have no single dominant join column |
+| **ALL** | A full copy on every node | Slowly changing tables joined often. Multiplies storage and slows writes, and AUTO already applies it to small tables when it helps |
 
-**Two Sort Key Types**:
+A distribution key needs many distinct values spread evenly. A column with few values, or one value that dominates, such as a `status` column or a null-heavy foreign key, puts most rows on a few slices, and those slices do most of the work while the rest wait. The system view `SVV_TABLE_INFO` reports skew for each table.
 
-1. **Compound Sort Key** (default):
-   - Sorts by first column, then second, then third (like phone book: last name, first name)
-   - **Use when**: Queries filter on prefix of sort key columns
-   - **Example**: SORTKEY(date, region, product_id) — efficient for queries filtering on date, date+region, or date+region+product_id
+### Sort keys
 
-2. **Interleaved Sort Key**:
-   - Gives equal weight to all columns in sort key
-   - **Use when**: Queries filter on different columns in different queries
-   - **Trade-off**: Slower writes (more overhead maintaining interleaved sort), not recommended unless queries have highly variable filters
+A **sort key** orders a table's rows on disk. Redshift stores the minimum and maximum value of each column for every 1 MB block, called a **zone map**, and skips blocks whose range can't match a filter. A table of a year's events sorted by `event_time` answers a query for the last 7 days by reading about 2% of its blocks.
 
-**AUTO SORTKEY** (recommended):
-- Redshift automatically chooses sort key based on query patterns
-- Continuously optimizes as workload changes
-- Eliminates guesswork
+- **Compound** sort keys order by the first column, then the second, and help queries that filter on a leading prefix of the key.
+- **AUTO**, the default, lets Redshift choose and change the sort key from observed query patterns.
+- **Interleaved** sort keys weight several columns equally. They cost more to maintain, and queries on tables with them can't use concurrency scaling, so AWS steers toward compound or AUTO.
 
-**Performance Impact**:
-- Correct sort key: Query scans only relevant blocks (zone maps), 10-1000x faster
-- Example: 1 TB table sorted by date, query filters last 7 days → scans <1% of blocks
+**Automatic table optimization** applies distribution and sort key changes itself when a table uses AUTO. Explicit keys make sense where the join and filter patterns are known and stable.
 
-**Best Practices**:
-- Choose sort key columns frequently used in WHERE, JOIN, or ORDER BY clauses
-- Use timestamps or dates as first sort key column (time-series data)
-- Use AUTO SORTKEY unless you have specific requirements
+---
 
-## Redshift Spectrum
+## Getting Data In
 
-Redshift Spectrum queries data in Amazon S3 without loading it into Redshift.
+### COPY from S3
 
-**How It Works**:
-- Redshift cluster delegates S3 scanning to Spectrum compute layer
-- Spectrum layer scales independently (thousands of nodes)
-- Results returned to Redshift for final processing (joins, aggregations)
+`COPY` loads files from S3 in parallel, with each slice loading its own files. It's far faster than individual `INSERT` statements, which don't load in parallel across slices.
 
-**Use Cases**:
-- **Data lake queries**: Query petabytes in S3 without ETL
-- **Historical data**: Keep infrequently accessed data in S3 (cheaper storage)
-- **Mixed queries**: Join Redshift tables with S3 data in single query
+```sql
+COPY analytics.orders
+FROM 's3://lake/exports/orders/2026-09-28/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/RedshiftLoad'
+FORMAT AS PARQUET;
+```
 
-**Pricing**:
-- **$5 per TB scanned** in S3 (us-east-1)
-- No additional cluster costs (uses existing Redshift cluster)
+Load speed depends on the files. Parquet, ORC, and uncompressed CSV files of 128 MB or more are split into chunks automatically, so slices share the work. Gzipped CSV and JSON files can't be split, so split them yourself into files of similar size, between 1 MB and 1 GB after compression, in a number that's a multiple of the slice count. An **auto-copy job** (`COPY ... JOB CREATE ... AUTO ON`) watches an S3 prefix in the same Region through an S3 event integration and loads new files as they arrive, remembering which files it has loaded. `UNLOAD` goes the other way, writing query results to S3 as Parquet or text.
 
-**Performance Optimization**:
+### Continuous and replicated data
 
-1. **Use Parquet format**:
-   - Columnar format: Only scans queried columns
-   - 92% faster than JSON, 90% cheaper (less data scanned)
-   - Example: 1 TB JSON → $5, 1 TB Parquet (10% of columns queried) → $0.50
+- **Streaming ingestion** reads Kinesis Data Streams, Amazon MSK, Confluent Cloud, or self-managed Kafka into a **materialized view**, a stored query result covered below, in near real time when the view refreshes automatically, with no staging in S3.
+- **Zero-ETL integrations** replicate Aurora, RDS, DynamoDB, and some SaaS applications into Redshift continuously, without pipelines to build.
+- **Upserts** use `MERGE`, or a staging table followed by delete-and-insert in one transaction.
 
-2. **Partition data**:
-   - Partition by time (year/month/day) or region
-   - Partition pruning skips irrelevant partitions
-   - Example: Query last 7 days → scans 7 partitions instead of 365
+### Keeping tables healthy
 
-3. **Optimize file sizes**:
-   - Target 64 MB - 1 GB per file (compressed)
-   - Multiple files enable parallel processing
-   - Avoid small files (<1 MB) — increases overhead
+Deleted and updated rows leave space behind, and new rows are appended outside the table's sort order, leaving unsorted regions. Redshift runs **automatic vacuum** and **automatic analyze** in the background during quiet periods, which covers most tables. After very large loads or deletes, a manual `VACUUM` or `ANALYZE` brings a table back to shape sooner, and `SVV_TABLE_INFO` shows how unsorted a table is and how stale its statistics are.
 
-4. **Compress data**:
-   - GZIP, Snappy, or LZO compression
-   - Reduces data scanned (lower costs)
+---
 
-**Cost Example**:
-- 10 TB S3 data lake (Parquet, partitioned by date)
-- Query filters last 30 days (330 GB) and 5 columns (50 GB actual scan)
-- **Cost**: 0.05 TB × $5 = $0.25/query
+## Querying S3 and Sharing Data
 
-**vs Loading into Redshift**:
-- Spectrum: Query without loading, $5/TB scanned
-- COPY into Redshift: $0.024/GB/month storage + COPY time + storage capacity
+**Redshift Spectrum** lets RA3 clusters and Serverless query tables defined in the Glue Data Catalog, the shared registry of table definitions over files in S3, and join them with warehouse tables in one statement. What those queries cost depends on the deployment, as the cost section below describes. The same rules that cut Athena's cost apply: columnar formats, partitioning, and reasonably sized files. A common layout keeps recent, heavily queried data in the warehouse and older history in S3, queried only when needed.
 
-**When to Use Spectrum**:
-- Data queried infrequently (<once per month)
-- Exploratory analysis on raw data
-- Data lake already in S3
-- Avoid storage costs in Redshift
+**Data sharing** gives another Redshift warehouse live access to tables without copying them, read-only by default and with writes allowed where the producer grants them. A **producer** creates a datashare, and **consumers** in the same account, other accounts, or other Regions query it with their own compute. That lets one team load and own a dataset while others query it on warehouses sized and billed separately, and it separates heavy ETL from dashboards. Data sharing works on RG, RA3, and Serverless. Consumers in another Region pay cross-Region data transfer.
 
-**When to Load into Redshift**:
-- Data queried frequently (>once per day)
-- Complex joins and aggregations
-- Sub-second query latency required
+---
 
-## Data Loading Best Practices
+## Workload Management and Concurrency
 
-### COPY Command
+Many users and jobs share a warehouse, and a long ETL statement shouldn't block dashboards. On provisioned clusters, **workload management (WLM)** assigns queries to queues with their own share of memory and concurrency. **Automatic WLM**, the default for new clusters, sizes concurrency and memory itself, and **query priorities** let dashboards outrank batch work. **Short query acceleration** runs quick queries on a dedicated path so they don't wait behind long ones. **Query monitoring rules** log, move, or cancel queries that exceed limits such as runtime or rows scanned. Serverless manages concurrency and memory itself, and since January 2026 it offers query queues per workgroup, each with monitoring rules that log or abort queries, but not priorities or short query acceleration.
 
-The COPY command is the most efficient way to load data into Redshift.
+**Concurrency scaling** adds temporary clusters when queued queries pile up on a provisioned cluster, runs eligible reads and common writes such as `COPY`, `INSERT`, and `UPDATE` there, and removes them when the queue clears. Each cluster earns up to one hour of free concurrency scaling credit per day, and usage beyond that is billed per second at the cluster's on-demand rate. It's available to RG, RA3, and DC2 clusters, and for RG and RA3 only to clusters of 32 nodes or fewer. Serverless scales on its own and doesn't use it.
 
-**Supported Sources**:
-- Amazon S3 (CSV, JSON, Parquet, Avro, ORC)
-- Amazon DynamoDB
-- Amazon EMR
-- Remote host (SSH)
+**Materialized views** store the result of a query, such as a daily revenue rollup, and refresh on demand or, with `AUTO REFRESH`, automatically when Redshift has spare capacity. A refresh is incremental where the query allows and full where it uses outer joins, window functions, and similar constructs. Dashboards that run the same aggregation repeatedly read the stored result instead of recomputing it. Redshift can also rewrite queries to use a matching materialized view automatically.
 
-**Best Practices**:
+---
 
-1. **Split data into multiple files**:
-   - Target 1 MB - 1 GB per file (compressed)
-   - Number of files = multiple of cluster slice count
-   - Example: 16-slice cluster → 16, 32, or 64 files (evenly distributed)
+## Security, Availability, and Access
 
-2. **Compress data**:
-   - GZIP or LZOP compression
-   - Reduces I/O, faster loading
-   - Redshift auto-detects compression
+A cluster or Serverless workgroup runs in your VPC, reachable through its subnets and security groups. Since January 2025, new provisioned clusters have public access off, encryption at rest on with an AWS-managed key unless you choose a KMS key, and a parameter group that requires TLS connections. Inside the database, access is managed with database users and roles, or with IAM identities mapped to database roles, and row-level security and dynamic data masking restrict what each role sees. `COPY`, `UNLOAD`, and Spectrum reach S3 with IAM roles associated with the cluster or namespace.
 
-3. **Load in sort key order**:
-   - Pre-sort data by sort key before loading
-   - Avoids VACUUM operation (saves time)
-   - Example: Sort by timestamp before loading time-series data
+Applications connect through JDBC and ODBC drivers, through the **Redshift Data API**, which runs SQL over HTTPS without managing connections and suits Lambda and other short-lived callers, or through Query Editor v2 in the console.
 
-4. **Use STATUPDATE OFF for large loads**:
-   - Skips automatic statistics update during COPY
-   - Run manual ANALYZE after all loads complete
-   - 20-50% faster bulk loads
+Provisioned RG and RA3 clusters can run **Multi-AZ**, with compute in two Availability Zones and a 99.99% availability SLA, and a single-AZ cluster can be relocated to another zone. Automated snapshots, and recovery points on Serverless, restore a warehouse to an earlier point, and snapshots can be copied to another Region for disaster recovery.
 
-5. **Parallel loading**:
-   - Use manifest file to load multiple files in parallel
-   - Leverage Redshift's MPP architecture
-   - Example: 64 files loaded in parallel across 16 slices
+---
 
-**COPY Performance**:
-- 1 TB compressed data: 10-30 minutes (depending on cluster size)
-- Scales linearly with cluster size
+## What Drives Cost
 
-### VACUUM and ANALYZE
+- **Compute is most of the bill.** Serverless charges for RPU time while queries run, and provisioned clusters charge for every running node-hour. The waste to look for is a Serverless base set higher than the workload needs, and a provisioned cluster running idle overnight.
+- **Commitments** fit the steady part of the load. Reserved nodes cover provisioned clusters, and Serverless Reservations cover RPUs across the accounts in an organization.
+- **Storage** is cheap next to compute, but snapshots, long history, and copies from ALL-distributed tables add up.
+- **S3 queries** on RA3 add $5 per TB scanned through Spectrum, rounded to the megabyte with a 10 MB minimum. Serverless bills them as RPU time, and RG clusters run them on their own nodes with no per-TB charge, which makes RG attractive when much of the workload reads the data lake.
+- **Concurrency scaling** beyond the daily free credit, and cross-Region data sharing, appear as separate lines.
 
-**VACUUM**:
-- Reclaims space from deleted rows
-- Re-sorts rows based on sort key
-- **When to run**: After large deletes or updates
-- **Automatic**: Redshift auto-vacuums in background (usually sufficient)
+Suppose a warehouse is busy 12 hours a day. On Serverless at an average of 32 RPUs, that's about 360 hours × 32 × $0.375, or $4,320 a month. Two rg.4xlarge nodes cost about $4,440 a month running around the clock, less with reserved nodes, and would also serve the other 12 hours. At that level of use the choice turns on whether the load fits two nodes, and on how spiky it is.
 
-**ANALYZE**:
-- Updates table statistics for query planner
-- **When to run**: After bulk loads or significant data changes
-- **Automatic**: Redshift auto-analyzes, but manual ANALYZE recommended after large loads
+---
 
-## Concurrency Scaling
+## When Redshift Is the Wrong Engine
 
-Automatically adds compute capacity during peak query loads.
+- **Occasional queries over data that already lives in S3.** Athena costs nothing when idle and needs no loading.
+- **Serving an application's reads and writes.** Single-row lookups and frequent small transactions belong in Aurora, RDS, or DynamoDB.
+- **Search and log exploration.** Free-text search, and investigating recent logs by keyword, fit OpenSearch Service or CloudWatch Logs Insights.
+- **Small data.** Tens of gigabytes that one PostgreSQL instance handles comfortably don't need a warehouse, though Serverless at 4 RPUs has narrowed the gap.
 
-**How It Works**:
-- Queues enabled for concurrency scaling route queries to additional clusters
-- Clusters added in seconds, removed when load decreases
-- Users experience consistent performance (no queuing delays)
-
-**Pricing**:
-- **1 hour free credits per day** (sufficient for 97% of customers)
-- After free credits: $6.52/hour per concurrency scaling cluster (us-east-1, based on ra3.4xlarge pricing)
-
-**When to Use**:
-- Unpredictable query spikes (end-of-month reports, ad-hoc analysis)
-- Peak business hours with higher concurrency
-- Mixed workloads (batch ETL + interactive BI)
-
-**Configuration**:
-- Enable in Workload Management (WLM) queues
-- Set max_concurrency_scaling_clusters limit (prevent runaway costs)
-
-## Materialized Views
-
-Pre-computed query results for faster repeated queries.
-
-**How It Works**:
-- Materialized view stores query result as table
-- Queries against materialized view return instantly (no re-computation)
-- Refreshed manually or automatically
-
-**Auto-Refresh** (2024 feature):
-- Redshift auto-refreshes based on base table changes
-- Incremental refresh: Only updates changed data (faster than full refresh)
-- Prioritizes user queries over refresh (no performance impact)
-
-**Use Cases**:
-- Dashboard queries (same query runs repeatedly)
-- Complex aggregations (SUM, AVG, COUNT over large tables)
-- Join-heavy queries (pre-join tables in materialized view)
-
-**Performance**:
-- 10-100x faster queries (pre-computed vs re-executing)
-- Example: Complex join + aggregation (30 seconds) → materialized view (<1 second)
-
-**Best Practices**:
-- Partition base tables to speed up incremental refresh
-- Monitor refresh frequency (balance freshness vs cost)
-- Use AUTO REFRESH for frequently changing data
-
-## Cost Optimization
-
-### Reserved Instances
-
-Purchase 1-year or 3-year capacity reservations for predictable workloads.
-
-**Savings**:
-- **1-year no upfront**: 20-25% discount
-- **1-year partial upfront**: 35-40% discount
-- **3-year all upfront**: 60-64% discount
-
-**Example** (2-node ra3.4xlarge cluster):
-- On-demand: $4,760/month
-- Reserved (3-year all upfront): $1,718/month
-- **Savings**: $3,042/month (64%)
-
-**When to Use**: Stable baseline capacity running >50% of the time.
-
-### Pause and Resume
-
-Pause provisioned clusters when not in use (Serverless does this automatically).
-
-**Use Cases**:
-- Development and testing environments (pause overnight, weekends)
-- Non-production workloads with idle periods
-
-**Cost Savings**:
-- Paused cluster: Pay only for storage ($0.024/GB/month)
-- Example: 2-node ra3.4xlarge cluster (500 GB), paused 50% of time
-  - Compute savings: $2,380/month
-  - Storage cost: $12/month
-  - **Total savings**: $2,368/month (50%)
-
-### Right-Sizing Clusters
-
-Monitor utilization and resize clusters to match workload.
-
-**Metrics to Monitor**:
-- **CPUUtilization**: Target 50-70% (scale up if sustained >80%, scale down if <30%)
-- **Query throughput**: Queries per hour
-- **Disk space used**: Percentage of managed storage
-
-**Elastic Resize**:
-- Add/remove nodes in minutes (not hours)
-- No downtime for reads during resize
-
-**Example**:
-- 4-node ra3.4xlarge cluster at 30% CPU utilization
-- Downsize to 2-node cluster
-- **Savings**: $4,760/month (50%)
-
-### Serverless for Variable Workloads
-
-Switch from provisioned to Serverless for workloads with idle periods.
-
-**Cost Comparison** (usage: 4 hours/day, 20 days/month = 80 hours/month):
-- **Provisioned** (2-node ra3.4xlarge): $4,760/month (always running)
-- **Serverless** (8 RPUs): 80 hours × 8 RPUs × $0.375 = $240/month
-- **Savings**: $4,520/month (95%)
+---
 
 ## Common Pitfalls
 
-| Pitfall | Impact | Solution |
-|---------|--------|----------|
-| **1. Wrong distribution key** | 10-100x slower queries (data shuffling) | Distribute by most frequent join columns; monitor data skew |
-| **2. No sort key** | Full table scans, 10-1000x slower | Use AUTO SORTKEY or manually choose timestamp/frequently filtered columns |
-| **3. Loading with INSERT** | 100x slower than COPY | Always use COPY for bulk loads (parallel, compressed) |
-| **4. Not compressing data** | Higher storage costs, slower queries | Use GZIP/LZO compression for S3 files |
-| **5. Using Spectrum on Parquet** | 10x higher costs | Use Parquet format (90% cost reduction vs JSON) |
-| **6. Not partitioning Spectrum data** | Scanning entire dataset | Partition by date/region (only scan relevant partitions) |
-| **7. Provisioned cluster always running** | Paying for idle time | Pause clusters or use Serverless for variable workloads |
-| **8. Not using Reserved Instances** | 64% higher costs | Purchase Reserved Instances for stable workloads |
-| **9. Small files in S3** | Slow Spectrum queries | Combine into `64 MB−1 GB` files |
-| **10. Skipping VACUUM/ANALYZE** | Degraded query performance | Run VACUUM after large deletes, ANALYZE after bulk loads |
-| **11. ALL distribution for large tables** | Wastes storage (copied to every node) | Use ALL only for small dimension tables (<1M rows) |
-| **12. Not monitoring query performance** | Unoptimized queries waste resources | Use Query Monitoring Rules (QMR) and System Tables (STL, STV) |
-| **13. Interleaved sort keys** | Slow writes, complex maintenance | Use compound sort keys or AUTO SORTKEY |
-| **14. Overloading single WLM queue** | Query queuing, slow performance | Configure multiple WLM queues for different workload types |
-| **15. Not using concurrency scaling** | Query queuing during peaks | Enable concurrency scaling (1 free hour/day) |
+- **Skew nobody checked.** A distribution key with one dominant value makes every query wait on a few slices. `SVV_TABLE_INFO` shows it, and AUTO avoids choosing such a key.
+- **A development cluster that never sleeps.** Pause it on a schedule, or run development on Serverless.
+- **Serverless without limits.** A runaway query or a new workload can scale spend far past budget. Set max capacity and max RPU-hours on every workgroup.
+- **Manual snapshots kept forever.** Automated snapshots are free, but manual ones accumulate charges long after the data they protected is gone. Give them a retention policy.
+- **Python user-defined functions.** Redshift ended support for Python UDFs after June 30, 2026 and is enforcing it in phases. Rewrite them as SQL UDFs or Lambda UDFs.
 
-**Cost Impact Examples**:
-- **Pitfall #7** (always-on cluster): 2-node ra3.4xlarge paused 50% = **$2,368/month savings**
-- **Pitfall #8** (no Reserved Instances): 3-year reserved = **$3,042/month savings (64%)**
-- **Pitfall #5** (JSON vs Parquet): 10 TB Spectrum queries = **$45/month savings (90%)**
-
-## When to Use Redshift vs Other AWS Databases
-
-| Dimension | Redshift | RDS/Aurora | DynamoDB | Athena |
-|-----------|----------|------------|----------|--------|
-| **Workload** | OLAP (analytical) | OLTP (transactional) | NoSQL key-value | Ad-hoc S3 queries |
-| **Query Type** | Complex aggregations, joins | Simple CRUD operations | Key-based lookups | SQL on S3 data lake |
-| **Data Size** | Petabytes | Gigabytes to terabytes | Unlimited | Petabytes (S3) |
-| **Latency** | Sub-second (analytical) | Milliseconds (transactional) | Single-digit milliseconds | Seconds to minutes |
-| **Cost** | $0.25/hour to $13/hour per node | $0.12-$0.50/hour per instance | $0.25 per million reads | $5 per TB scanned |
-| **Use Case** | Data warehouse, BI, analytics | Web apps, APIs, transactions | Session storage, IoT, gaming | One-time S3 queries |
-
-**Decision Framework**:
-- **Redshift**: Analytical workloads, BI dashboards, data warehousing (OLAP)
-- **RDS/Aurora**: Transactional workloads, web applications (OLTP)
-- **DynamoDB**: High-scale key-value access, sub-millisecond latency
-- **Athena**: Ad-hoc S3 queries without infrastructure (serverless SQL)
+---
 
 ## Key Takeaways
 
-**Deployment Options**:
-- **Serverless**: Zero management, pay-per-use, ideal for variable workloads (<50% utilization), 40-65% cost savings
-- **Provisioned**: Reserved Instances for stable workloads (>50% utilization), 64% savings with 3-year commitment
-- **Breakeven**: Serverless cheaper if active <12 hours/day
-
-**RA3 Node Types**:
-- **ra3.xlplus**: $1.235/hour, small-medium workloads
-- **ra3.4xlarge**: $3.26/hour, general production (most common)
-- **ra3.16xlarge**: $13.04/hour, large analytical workloads
-- **Managed Storage**: $0.024/GB/month, scales independently (0-8 PB)
-
-**Distribution and Sort Keys**:
-- Distribution key: Co-locate data for joins (avoid network shuffling)
-- Sort key: Physical ordering on disk (10-1000x faster queries with zone maps)
-- Use AUTO SORTKEY for automatic optimization
-
-**Redshift Spectrum**:
-- Query S3 data without loading ($5/TB scanned)
-- Use Parquet format (90% cost savings vs JSON)
-- Partition data for query pruning (only scan relevant partitions)
-- Cheaper for infrequently accessed data (<once per month)
-
-**Data Loading**:
-- Use COPY command (100x faster than INSERT)
-- Split into 1 MB - 1 GB files, compress with GZIP
-- Load in sort key order (avoid VACUUM)
-
-**Cost Optimization**:
-- Reserved Instances: 64% savings (3-year)
-- Pause clusters: 50% savings for dev/test
-- Serverless for variable workloads: 95% savings vs always-on provisioned
-- Right-size clusters: Monitor CPU utilization (target 50-70%)
-
-**Performance**:
-- Concurrency scaling: 1 free hour/day
-- Materialized views: 10-100x faster repeated queries
-- Auto-refresh: Incremental updates (2024 feature)
-- Monitor query performance with System Tables (STL, STV)
+- Redshift is a columnar, massively parallel warehouse. A leader node plans queries, compute node slices run them in parallel, and managed storage keeps data independent of compute.
+- Serverless bills RPU time at $0.375 per RPU-hour with no charge when idle, and scales from a base of 4 to 1,024 RPUs. Provisioned RG and RA3 clusters bill per node-hour. DC2 is deprecated.
+- Distribution style decides which rows share a slice for joins, and sort keys let zone maps skip blocks. AUTO for both is the default and usually right.
+- Load with `COPY` from evenly split files, stream from Kinesis or MSK, or replicate operational databases with zero-ETL.
+- Spectrum queries S3 at $5 per TB on RA3, RG clusters query S3 with no per-TB charge, and data sharing gives other warehouses live access without copies.
+- New clusters are private, encrypted, and TLS-only by default. Multi-AZ, automated snapshots, and cross-Region snapshot copies cover availability and recovery.
+- Workload management, short query acceleration, and concurrency scaling keep mixed workloads responsive, and materialized views serve repeated aggregations.

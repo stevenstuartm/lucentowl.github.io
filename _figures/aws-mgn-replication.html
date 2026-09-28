@@ -1,0 +1,71 @@
+---
+title: "Server Replication with AWS Transform MGN"
+kind: deployment
+system: aws
+summary: "Blocks flow to a staging subnet; launch converts them into an EC2 instance."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="awsmgn-title awsmgn-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsmgn-title">AWS Transform MGN replication path from a source server to a launched EC2 instance</title>
+<desc id="awsmgn-desc">A source server in a data center or another cloud runs the AWS Replication Agent. The agent talks to the AWS Transform MGN service endpoint over TCP 443 for control and sends replicated disk blocks over TCP 1500 to a replication server, a small EC2 instance in a staging area subnet in your VPC in the target Region. The replication server writes the blocks to staging EBS volumes and also reports to the service over TCP 443. When a test or cutover instance is launched, MGN snapshots the staging volumes and a conversion server prepares copies to boot on AWS, and the instance starts in a separate launch subnet.</desc>
+<style>
+.awsmgn-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsmgn-sub { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 5 4; }
+.awsmgn-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsmgn-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsmgn-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsmgn-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsmgn-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsmgn-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsmgn-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsmgn-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsmgn-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsmgn-pan" x="20" y="60" width="200" height="300" rx="8"/>
+<text class="awsmgn-h" x="36" y="82">Source environment</text>
+<text class="awsmgn-k" x="36" y="98">[data center or other cloud]</text>
+<rect class="awsmgn-box" x="40" y="180" width="160" height="70" rx="6"/>
+<text class="awsmgn-n" x="120" y="208" text-anchor="middle">Source server</text>
+<text class="awsmgn-k" x="120" y="228" text-anchor="middle">[AWS Replication Agent]</text>
+
+<rect class="awsmgn-pan" x="300" y="20" width="660" height="390" rx="8"/>
+<text class="awsmgn-h" x="316" y="42">AWS, target Region</text>
+
+<rect class="awsmgn-acc" x="420" y="60" width="190" height="56" rx="6"/>
+<text class="awsmgn-an" x="515" y="84" text-anchor="middle">AWS Transform MGN</text>
+<text class="awsmgn-k" x="515" y="102" text-anchor="middle">[service endpoint]</text>
+
+<rect class="awsmgn-sub" x="330" y="140" width="300" height="252" rx="8"/>
+<text class="awsmgn-h" x="346" y="162">Staging area subnet, your VPC</text>
+<rect class="awsmgn-box" x="350" y="176" width="260" height="56" rx="6"/>
+<text class="awsmgn-n" x="480" y="200" text-anchor="middle">Replication server</text>
+<text class="awsmgn-k" x="480" y="218" text-anchor="middle">[small EC2 instance]</text>
+<rect class="awsmgn-box" x="350" y="252" width="260" height="44" rx="6"/>
+<text class="awsmgn-n" x="480" y="279" text-anchor="middle">Staging EBS volumes</text>
+<rect class="awsmgn-box" x="350" y="316" width="260" height="56" rx="6"/>
+<text class="awsmgn-n" x="480" y="340" text-anchor="middle">Conversion server</text>
+<text class="awsmgn-k" x="480" y="358" text-anchor="middle">[runs at each launch]</text>
+
+<rect class="awsmgn-sub" x="670" y="140" width="270" height="252" rx="8"/>
+<text class="awsmgn-h" x="686" y="162">Launch subnet, your VPC</text>
+<rect class="awsmgn-acc" x="690" y="309" width="230" height="70" rx="6"/>
+<text class="awsmgn-an" x="805" y="337" text-anchor="middle">Test or cutover instance</text>
+<text class="awsmgn-k" x="805" y="357" text-anchor="middle">[EC2, boots natively]</text>
+
+<path class="awsmgn-ln" d="M200,222 L348,222" marker-end="url(#awsmgn-a)"/>
+<text class="awsmgn-lab" x="228" y="240">TCP 1500</text>
+<text class="awsmgn-lab" x="228" y="254">disk blocks</text>
+<path class="awsmgn-ln" d="M200,196 L272,196 L272,88 L418,88" marker-end="url(#awsmgn-a)"/>
+<text class="awsmgn-lab" x="226" y="150">TCP 443</text>
+<path class="awsmgn-ln" d="M580,176 L580,118" marker-end="url(#awsmgn-a)"/>
+<text class="awsmgn-lab" x="588" y="133">TCP 443</text>
+<path class="awsmgn-ln" d="M480,232 L480,250" marker-end="url(#awsmgn-a)"/>
+<path class="awsmgn-ln" d="M480,296 L480,314" marker-end="url(#awsmgn-a)"/>
+<text class="awsmgn-lab" x="490" y="309">snapshot</text>
+<path class="awsmgn-ln" d="M610,344 L688,344" marker-end="url(#awsmgn-a)"/>
+
+</g>
+</svg>

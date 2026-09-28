@@ -1,0 +1,84 @@
+---
+title: "A Call Through ECS Service Connect"
+kind: dynamic
+system: aws
+summary: "A short name, resolved by the caller's proxy, to a healthy task's proxy."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" role="img" aria-labelledby="awsscn-title awsscn-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsscn-title">A request between two ECS services through Service Connect</title>
+<desc id="awsscn-desc">Two ECS services, checkout and orders, belong to the same Service Connect namespace, an AWS Cloud Map namespace. Every task has an application container and a Service Connect proxy container. The orders service publishes the endpoint http://orders:8080 in the namespace, and the namespace tells each proxy which tasks back that endpoint. The checkout application calls http://orders:8080, which goes to the proxy in its own task. That proxy picks a healthy orders task and sends the request to the proxy in that task, retrying or ejecting tasks that fail. The receiving proxy passes the request to the orders application in the same task. Both proxies send request metrics to CloudWatch.</desc>
+<style>
+.awsscn-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsscn-task { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; stroke-dasharray: 5 4; }
+.awsscn-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsscn-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsscn-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsscn-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsscn-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsscn-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsscn-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsscn-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+.awsscn-dl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 4 3; }
+</style>
+<defs>
+<marker id="awsscn-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awsscn-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsscn-pan" x="20" y="20" width="940" height="330" rx="8"/>
+<text class="awsscn-h" x="36" y="42">Service Connect namespace (an AWS Cloud Map namespace)</text>
+
+<rect class="awsscn-acc" x="380" y="56" width="220" height="56" rx="6"/>
+<text class="awsscn-an" x="490" y="80" text-anchor="middle">Cloud Map namespace</text>
+<text class="awsscn-k" x="490" y="99" text-anchor="middle">[orders:8080 → orders tasks]</text>
+
+<text class="awsscn-h" x="40" y="146">checkout service</text>
+<rect class="awsscn-task" x="40" y="156" width="330" height="170" rx="6"/>
+<text class="awsscn-lab" x="52" y="174">task</text>
+<rect class="awsscn-box" x="60" y="190" width="130" height="62" rx="6"/>
+<text class="awsscn-n" x="125" y="215" text-anchor="middle">checkout app</text>
+<text class="awsscn-k" x="125" y="234" text-anchor="middle">[container]</text>
+<rect class="awsscn-box" x="220" y="190" width="130" height="62" rx="6"/>
+<text class="awsscn-n" x="285" y="215" text-anchor="middle">Proxy</text>
+<text class="awsscn-k" x="285" y="234" text-anchor="middle">[Service Connect]</text>
+
+<text class="awsscn-h" x="610" y="146">orders service</text>
+<rect class="awsscn-task" x="610" y="156" width="330" height="80" rx="6"/>
+<text class="awsscn-lab" x="622" y="172">task 1</text>
+<rect class="awsscn-box" x="630" y="176" width="130" height="50" rx="6"/>
+<text class="awsscn-n" x="695" y="206" text-anchor="middle">Proxy</text>
+<rect class="awsscn-box" x="790" y="176" width="130" height="50" rx="6"/>
+<text class="awsscn-n" x="855" y="206" text-anchor="middle">orders app</text>
+
+<rect class="awsscn-task" x="610" y="246" width="330" height="80" rx="6"/>
+<text class="awsscn-lab" x="622" y="262">task 2</text>
+<rect class="awsscn-box" x="630" y="266" width="130" height="50" rx="6"/>
+<text class="awsscn-n" x="695" y="296" text-anchor="middle">Proxy</text>
+<rect class="awsscn-box" x="790" y="266" width="130" height="50" rx="6"/>
+<text class="awsscn-n" x="855" y="296" text-anchor="middle">orders app</text>
+
+<path class="awsscn-ln" d="M190,221 L218,221" marker-end="url(#awsscn-a)"/>
+<text class="awsscn-lab" x="60" y="280">1. calls http://orders:8080,</text>
+<text class="awsscn-lab" x="60" y="295">which reaches its own proxy</text>
+
+<path class="awsscn-ln" d="M350,210 L490,210 L490,201 L628,201" marker-end="url(#awsscn-a)"/>
+<text class="awsscn-lab" x="392" y="232">2. picks a healthy task,</text>
+<text class="awsscn-lab" x="392" y="247">retries or ejects failures</text>
+
+<path class="awsscn-ln" d="M760,201 L788,201" marker-end="url(#awsscn-a)"/>
+<path class="awsscn-ln" d="M760,291 L788,291" marker-end="url(#awsscn-a)"/>
+<text class="awsscn-lab" x="930" y="262" text-anchor="end">3. hands the request to its app</text>
+
+<path class="awsscn-dl" d="M440,112 L440,150 L285,150 L285,188" marker-end="url(#awsscn-b)"/>
+<path class="awsscn-dl" d="M540,112 L540,150 L695,150 L695,174" marker-end="url(#awsscn-b)"/>
+<text class="awsscn-lab" x="296" y="140">endpoints</text>
+
+<rect class="awsscn-box" x="380" y="372" width="220" height="44" rx="6"/>
+<text class="awsscn-n" x="490" y="399" text-anchor="middle">CloudWatch metrics</text>
+<path class="awsscn-dl" d="M285,252 L285,394 L378,394" marker-end="url(#awsscn-b)"/>
+<path class="awsscn-dl" d="M695,316 L695,394 L602,394" marker-end="url(#awsscn-b)"/>
+<path class="awsscn-dl" d="M630,216 L596,216 L596,370" marker-end="url(#awsscn-b)"/>
+<text class="awsscn-lab" x="296" y="386">metrics</text>
+</g>
+</svg>

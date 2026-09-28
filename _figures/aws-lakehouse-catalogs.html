@@ -1,0 +1,78 @@
+---
+title: "One Catalog Over Lake, Tables, and Warehouse"
+kind: structure
+system: aws
+summary: "Engines read every store through one catalog, with Lake Formation checking access."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="awslhc-title awslhc-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awslhc-title">Lakehouse architecture of Amazon SageMaker</title>
+<desc id="awslhc-desc">Query and processing engines, Athena, Redshift, Spark on EMR and Glue, and other Apache Iceberg engines connecting through an Iceberg REST endpoint, all look up tables in one catalog layer built on the AWS Glue Data Catalog, with AWS Lake Formation checking permissions and vending credentials. Beneath the catalog layer sit four kinds of catalog: an S3 data lake of files in general purpose buckets, S3 table buckets holding managed Iceberg tables, tables stored in Redshift Managed Storage, and federated sources such as other databases that are queried in place. Engines read each store directly after the catalog lookup, so one copy of each table serves every engine.</desc>
+<style>
+.awslhc-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awslhc-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awslhc-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awslhc-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awslhc-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awslhc-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awslhc-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awslhc-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awslhc-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+.awslhc-dl { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 5 4; }
+</style>
+<defs>
+<marker id="awslhc-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+<marker id="awslhc-b" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text-light, #4A5568)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awslhc-h" x="20" y="24">Engines</text>
+<rect class="awslhc-box" x="20" y="34" width="220" height="56" rx="6"/>
+<text class="awslhc-n" x="130" y="67" text-anchor="middle">Athena</text>
+<rect class="awslhc-box" x="260" y="34" width="220" height="56" rx="6"/>
+<text class="awslhc-n" x="370" y="67" text-anchor="middle">Redshift</text>
+<rect class="awslhc-box" x="500" y="34" width="220" height="56" rx="6"/>
+<text class="awslhc-n" x="610" y="58" text-anchor="middle">Spark</text>
+<text class="awslhc-k" x="610" y="76" text-anchor="middle">[EMR, Glue]</text>
+<rect class="awslhc-box" x="740" y="34" width="220" height="56" rx="6"/>
+<text class="awslhc-n" x="850" y="58" text-anchor="middle">Other Iceberg engines</text>
+<text class="awslhc-k" x="850" y="76" text-anchor="middle">[Iceberg REST endpoint]</text>
+
+<rect class="awslhc-acc" x="20" y="150" width="940" height="80" rx="8"/>
+<text class="awslhc-an" x="490" y="178" text-anchor="middle">Catalog layer: AWS Glue Data Catalog + AWS Lake Formation</text>
+<text class="awslhc-lab" x="490" y="200" text-anchor="middle">table definitions for every store, grants down to rows and cells, credentials vended for S3 data</text>
+
+<path class="awslhc-ln" d="M130,90 L130,148" marker-end="url(#awslhc-a)"/>
+<path class="awslhc-ln" d="M370,90 L370,148" marker-end="url(#awslhc-a)"/>
+<path class="awslhc-ln" d="M610,90 L610,148" marker-end="url(#awslhc-a)"/>
+<path class="awslhc-ln" d="M850,90 L850,148" marker-end="url(#awslhc-a)"/>
+<text class="awslhc-lab" x="140" y="124">1. look up, authorize</text>
+<path class="awslhc-ln" d="M20,70 L10,70 L10,327 L18,327" marker-end="url(#awslhc-a)"/>
+<text class="awslhc-lab" x="16" y="258">2. read directly</text>
+
+<text class="awslhc-h" x="146" y="266">Catalogs over each store</text>
+<rect class="awslhc-box" x="20" y="282" width="220" height="90" rx="6"/>
+<text class="awslhc-n" x="130" y="308" text-anchor="middle">S3 data lake</text>
+<text class="awslhc-k" x="130" y="326" text-anchor="middle">[general purpose buckets]</text>
+<text class="awslhc-lab" x="130" y="350" text-anchor="middle">Parquet files, Iceberg</text>
+<rect class="awslhc-box" x="260" y="282" width="220" height="90" rx="6"/>
+<text class="awslhc-n" x="370" y="308" text-anchor="middle">S3 Tables</text>
+<text class="awslhc-k" x="370" y="326" text-anchor="middle">[table buckets]</text>
+<text class="awslhc-lab" x="370" y="350" text-anchor="middle">managed Iceberg tables</text>
+<rect class="awslhc-box" x="500" y="282" width="220" height="90" rx="6"/>
+<text class="awslhc-n" x="610" y="308" text-anchor="middle">Redshift</text>
+<text class="awslhc-k" x="610" y="326" text-anchor="middle">[Redshift Managed Storage]</text>
+<text class="awslhc-lab" x="610" y="350" text-anchor="middle">warehouse tables</text>
+<rect class="awslhc-box" x="740" y="282" width="220" height="90" rx="6"/>
+<text class="awslhc-n" x="850" y="308" text-anchor="middle">Federated sources</text>
+<text class="awslhc-k" x="850" y="326" text-anchor="middle">[other databases]</text>
+<text class="awslhc-lab" x="850" y="350" text-anchor="middle">queried in place</text>
+
+<path class="awslhc-dl" d="M130,230 L130,280" marker-end="url(#awslhc-b)"/>
+<path class="awslhc-dl" d="M370,230 L370,280" marker-end="url(#awslhc-b)"/>
+<path class="awslhc-dl" d="M610,230 L610,280" marker-end="url(#awslhc-b)"/>
+<path class="awslhc-dl" d="M850,230 L850,280" marker-end="url(#awslhc-b)"/>
+<text class="awslhc-lab" x="620" y="258">catalog describes each store</text>
+
+<text class="awslhc-lab" x="20" y="404">Every engine takes the same two steps shown for Athena, so one copy of each table serves every engine.</text>
+</g>
+</svg>

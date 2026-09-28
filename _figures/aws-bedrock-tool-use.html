@@ -1,0 +1,56 @@
+---
+title: "The Client-Side Tool-Use Loop"
+kind: dynamic
+system: aws
+summary: "The model asks, your code runs the tool, and the loop repeats until an answer."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 410" role="img" aria-labelledby="awsbtu-title awsbtu-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsbtu-title">Tool use between an application and a Bedrock model</title>
+<desc id="awsbtu-desc">Your application sends the Bedrock Converse API a request containing the user's message and a list of tools, each described with a name and a JSON schema. The model responds with a tool-use request naming a tool and its arguments instead of an answer. Your application runs the tool, such as calling an orders API or a Lambda function, under its own permissions, and sends the tool result back in the next request along with the conversation so far. The model either asks for another tool or returns the final answer. The loop repeats until the model stops asking for tools. With client-side tool use the model never calls the tool itself, and your code decides whether and how each call runs.</desc>
+<style>
+.awsbtu-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsbtu-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsbtu-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsbtu-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsbtu-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsbtu-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsbtu-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsbtu-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsbtu-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsbtu-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsbtu-box" x="40" y="40" width="240" height="300" rx="6"/>
+<text class="awsbtu-n" x="160" y="68" text-anchor="middle">Your application</text>
+<text class="awsbtu-k" x="160" y="86" text-anchor="middle">[holds tools and permissions]</text>
+
+<rect class="awsbtu-acc" x="660" y="40" width="280" height="300" rx="6"/>
+<text class="awsbtu-an" x="800" y="68" text-anchor="middle">Model on Bedrock</text>
+<text class="awsbtu-k" x="800" y="86" text-anchor="middle">[Converse API]</text>
+
+<rect class="awsbtu-box" x="60" y="250" width="200" height="70" rx="6"/>
+<text class="awsbtu-n" x="160" y="278" text-anchor="middle">Tool</text>
+<text class="awsbtu-k" x="160" y="298" text-anchor="middle">[orders API, Lambda]</text>
+
+<path class="awsbtu-ln" d="M280,120 L658,120" marker-end="url(#awsbtu-a)"/>
+<text class="awsbtu-lab" x="300" y="112">1. messages + tool schemas</text>
+
+<path class="awsbtu-ln" d="M658,160 L280,160" marker-end="url(#awsbtu-a)"/>
+<text class="awsbtu-lab" x="440" y="152">2. tool-use request: name, arguments</text>
+
+<path class="awsbtu-ln" d="M160,172 L160,248" marker-end="url(#awsbtu-a)"/>
+<text class="awsbtu-lab" x="168" y="236">3. run the tool</text>
+
+<path class="awsbtu-ln" d="M280,215 L658,215" marker-end="url(#awsbtu-a)"/>
+<text class="awsbtu-lab" x="300" y="207">4. tool result + conversation so far</text>
+
+<path class="awsbtu-ln" d="M658,300 L282,300" marker-end="url(#awsbtu-a)"/>
+<text class="awsbtu-lab" x="300" y="278">5. another tool-use request (back to 3),</text>
+<text class="awsbtu-lab" x="300" y="292">or the final answer</text>
+
+<text class="awsbtu-lab" x="40" y="376">In client-side tool use the model never calls the tool. Your code decides whether each call runs, with what permissions.</text>
+</g>
+</svg>

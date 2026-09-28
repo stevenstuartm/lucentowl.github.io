@@ -1,912 +1,195 @@
 ---
-title: "AWS Athena: Serverless SQL Analytics"
+title: "Amazon Athena: Serverless SQL on S3"
 layout: guide
 category: AWS
 subcategory: Analytics & Data Processing
-description: "Serverless SQL queries on S3 data lakes with partition optimization, cost control, and performance tuning strategies"
-tags: [aws, data-architecture, analytics, cost-analysis, performance, sql]
+description: "How Amazon Athena runs SQL over data in S3: what drives the bytes it bills, columnar formats, partitioning and partition projection, CTAS and INSERT INTO, Iceberg tables with updates and deletes, workgroups and scan limits, query result reuse, Capacity Reservations, federated queries, and where Athena stops being the right engine."
+tags: [athena, serverless-sql, data-lake, partitioning, partition-projection, iceberg, practical]
 ---
 
-## What Problems AWS Athena Solves
+## What Athena Does
 
-AWS Athena eliminates the infrastructure complexity and upfront cost of running SQL analytics on large datasets stored in S3.
+Amazon Athena runs SQL against data where it already sits, mostly files in S3, with no cluster or database to provision. It reads table definitions from the AWS Glue Data Catalog, plans the query, reads the files it needs from S3 in parallel, and writes the result. Its SQL engine, **Athena engine version 3**, is based on the open-source Trino engine, so the SQL dialect and functions are Trino's.
 
-**Traditional analytics challenges**:
-- Organizations spend weeks provisioning and tuning database clusters for ad-hoc analytics
-- Analysts need data engineering support to load data from S3 into databases before querying
-- Query performance degrades unpredictably as data volume grows
-- Teams pay for 24/7 database capacity even when running queries 2 hours per day
-- Schema changes require ETL pipeline updates and data reloads
+{% include figure.html id="aws-glue-catalog-paths" %}
 
-**Concrete scenario**: Your product analytics team needs to query 5 TB of clickstream data stored in S3 to answer questions about user behavior. The existing approach loads subsets into Redshift for analysis, but this process takes 4 hours per dataset and requires dedicated data engineering time. When analysts ask new questions, they wait days for data engineers to prepare the dataset. The Redshift cluster costs $15,000/month but sits idle 18 hours per day. Simple queries work fine, but complex joins and aggregations time out unpredictably.
+The same table definitions serve other engines too: Redshift Spectrum, which lets a Redshift warehouse query S3 tables, Amazon EMR, which runs Spark and other open-source engines on clusters, and AWS Glue's Spark jobs. Athena and its tables are Regional. Queries in a Region read that Region's catalog, and while Athena can read buckets in other Regions, doing so adds cross-Region transfer charges and latency. Queries run inside a **workgroup**, which is where result settings, engine version, limits, and cost tracking live.
 
-**What Athena provides**: A serverless query engine that runs SQL directly against S3 data without loading or transforming it first. You define table schemas in the Glue Data Catalog, write standard SQL queries, and Athena scans S3 files in parallel. You pay only for data scanned ($5 per TB), not for servers or idle capacity.
+Athena suits ad hoc analysis, investigation of logs such as CloudTrail, VPC Flow Logs, and load balancer logs, scheduled reports, and serving a BI tool over a data lake. With the default per-query billing, nothing runs between queries, so an idle Athena costs nothing beyond the S3 storage and catalog it reads.
 
-**Real-world impact**: After migrating to Athena, the analytics team eliminated the Redshift cluster and data loading pipelines entirely. Analysts query S3 data directly using SQL they already know. Query costs dropped from $15,000/month to $800/month (160 GB scanned daily × 30 days × $5/TB). Analysts get answers in seconds instead of days because they don't wait for data loading. The team converted raw JSON to Parquet with partitioning, reducing scan volume by 90% and query costs to $80/month.
+---
 
-## Service Fundamentals
+## What a Query Costs
 
-AWS Athena is built on Presto (now Trino), a distributed SQL query engine designed for fast analytics across large datasets. Athena runs as a fully managed service. You submit SQL via console, CLI, JDBC/ODBC drivers, or API, and AWS handles all infrastructure provisioning and scaling.
+By default Athena charges **$5 per TB of data scanned**, rounded up to the nearest megabyte with a 10 MB minimum per query. DDL statements such as `CREATE TABLE` and `ALTER TABLE ADD PARTITION` are free, and so are failed queries. A cancelled query is billed for what it scanned before it stopped.
 
-### Core Architecture
+Bytes scanned is what the query engine reads from S3, not the size of the result, so the cost of a query comes down to how much of the table it has to read. The S3 requests and data transfer a query causes, the storage of its results, and Glue Data Catalog requests are billed separately at those services' rates, and many small files raise the S3 request count along with the time. Four things decide how much a query reads.
 
-**How Athena works**:
-1. Define table schemas in Glue Data Catalog (column names, types, S3 location, file format, partitions)
-2. Submit SQL query via Athena interface
-3. Athena query planner reads table metadata from catalog
-4. Athena allocates compute resources automatically
-5. Workers read S3 files in parallel, filter/aggregate data
-6. Results written to S3 results bucket (or streamed to client)
-7. Resources deallocated after query completes
+### Columnar formats
 
-**No persistent infrastructure**: Unlike Redshift or EMR, Athena doesn't maintain running clusters. Every query starts fresh workers, executes, and tears down. This eliminates idle costs but introduces cold-start overhead (typically 1-3 seconds per query).
+Parquet and ORC store each column separately, with statistics for each block of rows. A query that selects 3 columns from a 60-column table reads only those 3 columns, and Athena can skip row groups whose minimum and maximum values rule out a filter. JSON and CSV store whole rows, so every query reads every byte of every file it touches.
 
-**Pricing model**:
-- **Standard Athena**: $5.00 per TB scanned
-- **Query result caching**: Repeat identical queries within 24 hours = free (reads from cache)
-- **Failed queries**: No charge if query fails before scanning data
-- **DDL operations**: CREATE TABLE, ALTER TABLE, DROP TABLE = free
+Consider a year of event data, 2 TB as gzipped JSON, stored in one folder per day so a query can read a single day. A query that reads 3 of its 60 columns for one day scans that day's whole JSON, about 5.5 GB, for roughly $0.03. As Parquet with Snappy compression, the same data is typically a fraction of the size, and the query reads only the three columns it needs, often well under 1 GB. Across thousands of queries a month from a dashboard, that difference is most of the bill. Compression helps every format, and Athena reads gzip, Snappy, and Zstandard files directly.
 
-**Example cost calculation**: Query scans 500 GB across Parquet files.
-- Cost: 500 GB ÷ 1,024 GB/TB × $5.00 = $2.44 per query
-- Run query 100 times/day: $244/day = $7,320/month
-- Enable result caching, 90 queries hit cache: 10 × $2.44 = $24.40/day = $732/month (90% savings)
+### Partitioning
 
-### Supported Data Formats
+A **partitioned** table stores its files under folders named for a column's values, such as `dt=2026-09-28/`, and the catalog records each folder as a partition. A query that filters on the partition column reads only the matching folders:
 
-Athena reads multiple file formats with varying cost and performance characteristics.
-
-| Format | Compression | Query Performance | Cost Efficiency | Best For |
-|--------|-------------|-------------------|-----------------|----------|
-| **Parquet** | Columnar + Snappy/Gzip | Excellent | Excellent | Most analytics workloads |
-| **ORC** | Columnar + Zlib/Snappy | Excellent | Excellent | Hive-compatible workflows |
-| **Avro** | Row-based + Snappy | Good | Moderate | Schema evolution, streaming ingestion |
-| **JSON** | Text-based, optionally Gzip | Poor | Poor | Raw data ingestion, ad-hoc exploration |
-| **CSV** | Text-based, optionally Gzip | Poor | Poor | Data exchange, legacy compatibility |
-| **Parquet (Snappy)** | Columnar + Snappy | Excellent | Best | **Recommended default** |
-
-**Why columnar formats matter**: Athena queries often select a few columns from wide tables (e.g., "SELECT event_type, user_id FROM events" selecting 2 of 50 columns). Columnar formats store each column separately, allowing Athena to read only needed columns. Row-based formats (JSON, CSV) require reading entire rows.
-
-**Example cost comparison**: Query selects 2 columns from 50-column table with 1 TB total size.
-- **Parquet**: Reads 2 columns = 40 GB scanned = $0.20
-- **JSON**: Reads all columns = 1 TB scanned = $5.00
-- **Savings**: 96% cost reduction
-
-<div class="callout callout--tip">
-<p class="callout__title">Compression Best Practice</p>
-<p>Always compress files. Athena decompresses automatically. Snappy provides good balance of compression ratio and query performance.</p>
-</div>
-
-### Partitioning Strategy
-
-Partitioning divides tables into chunks based on column values, allowing Athena to skip reading irrelevant data.
-
-**How partitioning works**: Organize S3 files into directories based on partition keys (commonly date-based).
-
-**Example S3 structure with partitions**:
-```
-s3://my-bucket/events/
-  year=2024/
-    month=11/
-      day=01/
-        events-001.parquet
-        events-002.parquet
-      day=02/
-        events-001.parquet
-    month=12/
-      day=01/
-        events-001.parquet
-```
-
-**Table definition with partitions**:
 ```sql
-CREATE EXTERNAL TABLE events (
-  event_id STRING,
-  user_id STRING,
-  event_type STRING,
-  timestamp BIGINT,
-  properties STRING
-)
-PARTITIONED BY (
-  year INT,
-  month INT,
-  day INT
-)
-STORED AS PARQUET
-LOCATION 's3://my-bucket/events/'
-```
-
-**Register partitions**: After creating partitioned table, add partition metadata.
-
-**Option 1: Automatic (using Glue crawler)**:
-```bash
-aws glue start-crawler --name events-crawler
-```
-
-Crawler discovers partitions and updates catalog.
-
-**Option 2: Manual (using MSCK REPAIR)**:
-```sql
-MSCK REPAIR TABLE events;
-```
-
-Scans S3 and registers partitions matching the Hive pattern (key=value).
-
-**Option 3: Explicit (using ALTER TABLE)**:
-```sql
-ALTER TABLE events ADD PARTITION (year=2024, month=11, day=15)
-LOCATION 's3://my-bucket/events/year=2024/month=11/day=15/';
-```
-
-**Query with partition pruning**:
-```sql
-SELECT event_type, COUNT(*) as count
+SELECT event_type, count(*) AS events
 FROM events
-WHERE year = 2024
-  AND month = 11
-  AND day BETWEEN 1 AND 7
+WHERE dt BETWEEN '2026-09-01' AND '2026-09-07'
 GROUP BY event_type;
 ```
 
-Athena reads only the specified partitions (7 days), skipping all other data.
+Filtering on a timestamp column that isn't the partition key, such as `event_time > timestamp '2026-09-01'`, has to consider every partition and open files in each, because Athena can't know from folder names which ones hold matching rows. Queries need a predicate on the partition column itself, even when it's redundant with another filter.
 
-**Cost impact**: Without partitioning, query scans entire table (1 year = 365 TB). With daily partitions, query scans 7 days = 7 TB. Cost reduction: $1,825 → $35 (98% savings).
+Partition on what queries filter by, usually a date, and keep each partition large enough that skipping it saves a meaningful amount of reading. Partitioning by a high-cardinality column, one with millions of distinct values such as a user ID, creates millions of tiny partitions, and planning time grows with partition count. Athena reads at most 1 million partitions in a single scan of a table. For lookups on a high-cardinality key, **bucketing** is the alternative. CTAS can write a table bucketed by user ID into a fixed number of files, and a query for one user reads only the file that can hold that ID.
 
-**Partition design guidelines**:
-- ✅ Partition by time (year, month, day, hour) when queries filter by date ranges
-- ✅ Use multiple partition keys for common query patterns (e.g., year/month/day/region)
-- ✅ Target partition sizes of 100 MB - 1 GB (balance between granularity and metadata overhead)
-- ❌ Avoid over-partitioning (millions of tiny partitions create catalog performance issues)
-- ❌ Avoid partitioning by high-cardinality columns (user_id with millions of values = millions of partitions)
+Declare partition columns as `STRING`, which lets Athena push partition filters down to the catalog, and cast them to dates in queries. Prefixing a query with `EXPLAIN` lists the partition values it will read, which confirms the filter prunes what you expect.
 
-### Query Result Reuse and Caching
+### File sizes
 
-Athena caches query results automatically for 24 hours. If you run identical queries within that window, Athena returns cached results instantly without scanning S3.
+Athena parallelizes across files and chunks of files. Thousands of kilobyte-sized files spend more time opening objects than reading them, so avoid files much smaller than 128 MB, Parquet's default row-group size. At the other extreme, a few huge gzipped JSON or CSV files can't be split between workers, because most compression formats must be read from the start. Streaming ingestion is the usual source of small files, and rewriting them into larger files with a Glue job or the writing statements below fixes it.
 
-**How caching works**:
-- Athena computes hash of query text and table metadata
-- If hash matches previous query within 24 hours, return cached results
-- If source data changes (new partitions added, files modified), cache invalidated
-- Manual cache refresh: Run query again (cache expires after 24 hours)
+### Query shape
 
-**Example caching scenario**: Dashboard refreshes every 5 minutes running same aggregation query.
-- First execution: Scans 100 GB = $0.49
-- Next 287 executions (24 hours ÷ 5 minutes): $0.00 (cached)
-- Daily cost: $0.49 instead of $140.63 (287 × $0.49)
+Select named columns instead of `SELECT *`. For large distinct counts and percentiles where an exact answer isn't needed, `approx_distinct` and `approx_percentile` use far less memory than `count(DISTINCT ...)` and exact percentiles. Filters in `WHERE` reduce what a query processes, and the optimizer pushes them down to the scan, but they reduce bytes scanned only when they hit partition columns or columnar statistics.
 
-**When caching doesn't help**:
-- Queries with non-deterministic functions (NOW(), RAND(), UUID())
-- Queries filtering by "last N hours" where N changes (filter values differ)
-- Parameterized queries with different parameters each run
+---
 
-**Maximize cache hits**: Standardize query text exactly (whitespace, comments, capitalization matter for hash calculation).
+## Keeping Partitions Registered
 
-### Workgroups
+For a Hive-style partitioned table, a partition only exists to Athena once it is registered in the catalog. Iceberg tables, covered below, track their own partitions and need none of this. New data written to a new folder is invisible until someone adds it, which is the most common reason a query "misses" recent data. There are four ways to keep up:
 
-Workgroups provide query isolation, cost tracking, and resource management for different teams or use cases.
+| Method | How it works | Fits |
+|---|---|---|
+| `ALTER TABLE ADD PARTITION` | Registers named partitions, one statement for many | The job that writes the data, right after writing it |
+| `MSCK REPAIR TABLE` | Lists the table's S3 location and adds any Hive-style (`key=value`) folders it doesn't know | Occasional catch-up. Slow on large tables, because it lists everything |
+| Glue crawler | Discovers folders and schema changes on a schedule or from S3 events | Data from producers you don't control |
+| **Partition projection** | Athena computes partitions from rules in the table properties and never reads the catalog's partition list | Predictable, high-cardinality partitions, such as dates or hours |
 
-**What workgroups offer**:
-- **Cost tracking**: Tag queries by team/project, track spending per workgroup
-- **Query result location**: Each workgroup writes results to separate S3 bucket
-- **Data usage limits**: Enforce per-query or per-workgroup scan limits
-- **Execution parameters**: Set query timeout, encryption settings, engine version
-- **IAM integration**: Control which users can submit queries to which workgroups
+**Partition projection** replaces the lookup entirely. The table's properties say, for example, that `dt` is a date from `2020-01-01` to `NOW` in daily steps and where each value's files live, and Athena works out the partitions a query needs in memory:
 
-**Example workgroup configuration**:
-```json
-{
-  "Name": "analytics-team",
-  "Description": "Analytics team ad-hoc queries",
-  "Configuration": {
-    "ResultConfigurationUpdates": {
-      "OutputLocation": "s3://analytics-results/",
-      "EncryptionConfiguration": {
-        "EncryptionOption": "SSE_S3"
-      }
-    },
-    "EnforceWorkGroupConfiguration": true,
-    "BytesScannedCutoffPerQuery": 10737418240,  // 10 GB limit
-    "EngineVersion": {
-      "SelectedEngineVersion": "Athena engine version 3"
-    }
-  },
-  "Tags": [
-    {"Key": "Team", "Value": "Analytics"},
-    {"Key": "CostCenter", "Value": "12345"}
-  ]
-}
+```sql
+ALTER TABLE events SET TBLPROPERTIES (
+  'projection.enabled' = 'true',
+  'projection.dt.type' = 'date',
+  'projection.dt.range' = '2020-01-01,NOW',
+  'projection.dt.format' = 'yyyy-MM-dd',
+  'projection.dt.interval' = '1',
+  'projection.dt.interval.unit' = 'DAYS',
+  'storage.location.template' = 's3://lake/events/dt=${dt}/'
+);
 ```
 
-**Use cases**:
-- **Multi-tenant environments**: Separate workgroups for each customer/team
-- **Cost control**: Set per-query scan limits to prevent runaway queries
-- **Environment isolation**: Development vs production workgroups with different result locations
-- **Compliance**: Enforce encryption and audit settings per workgroup
+Projection replaces the catalog's partition list for Athena. Nothing has to register new days, and planning stays fast with hundreds of thousands of possible partitions. Three limits come with it. Athena ignores any partitions registered in the catalog once projection is on. Only Athena uses projection, so Redshift Spectrum, EMR, and Glue jobs reading the same table see only registered partitions. And a projected partition with no files returns nothing rather than an error, so tables with mostly empty projected ranges plan slower than they would with registered partitions.
 
-## Performance Optimization Strategies
+For very large registered partition lists, **partition indexes** in the Glue Data Catalog are the alternative. Athena uses them once the table property `partition_filtering.enabled` is set to `true`.
 
-Athena performance depends on data organization, query structure, and resource allocation. Apply these techniques systematically.
+---
 
-### File Size Optimization
+## Writing Data with Athena
 
-**Problem**: Many small files or few giant files both degrade performance.
+Athena writes as well as reads, which makes it a lightweight transformation engine for data already in S3.
 
-**Why small files hurt**: Athena parallelizes across files. With 10,000 × 1 MB files, Athena can't fully parallelize (overhead of opening 10,000 S3 objects). With 10 × 1 GB files, Athena achieves better parallelism.
+- **CREATE TABLE AS SELECT (CTAS)** runs a query and writes the result as a new table, in the format, compression, and partitioning you choose. It's the quickest way to convert JSON to partitioned Parquet or to build a smaller summary table for a dashboard.
+- **INSERT INTO** appends a query's results to an existing table.
 
-**Why giant files hurt**: Athena splits large files internally but can't split optimally across workers.
+Each CTAS or INSERT INTO statement can write at most 100 partitions, so converting a table with years of daily partitions takes a CTAS for the first 100 and a series of INSERT INTO statements for the rest, each covering a non-overlapping range. A CTAS `external_location` must be empty, so rerunning the statement means deleting its output first.
 
-**Optimal file size**: `128 MB − 1 GB` per file (Parquet/ORC).
-
-**Compaction strategy**: Use Glue ETL job or CTAS (CREATE TABLE AS SELECT) to rewrite small files into larger files.
-
-**Example CTAS compaction**:
 ```sql
-CREATE TABLE events_compacted
+CREATE TABLE curated.daily_events
 WITH (
   format = 'PARQUET',
-  parquet_compression = 'SNAPPY',
-  partitioned_by = ARRAY['year', 'month', 'day'],
-  bucketed_by = ARRAY['user_id'],
-  bucket_count = 10
-)
-AS SELECT *
-FROM events
-WHERE year = 2024 AND month = 11;
+  write_compression = 'SNAPPY',
+  external_location = 's3://lake/curated/daily_events/',
+  partitioned_by = ARRAY['dt']
+) AS
+SELECT user_id, event_type, event_time, dt
+FROM raw.events
+WHERE dt BETWEEN '2026-06-01' AND '2026-08-31';
 ```
 
-This query reads small fragmented files from `events` and writes compacted Parquet files to `events_compacted`.
-
-### Partition Pruning
+Through Athena, a plain Parquet or JSON table only takes appends with `INSERT INTO`. Replacing a partition means deleting its files in S3 and inserting again. **Apache Iceberg** tables, an open table format that tracks a table's files through metadata snapshots, support `UPDATE`, `DELETE`, and `MERGE INTO`, so late-arriving corrections and upserts become SQL statements. Iceberg tracks partitions in its own metadata, so there is nothing to register and filters prune without partition columns in the query. A CTAS creates one with `table_type = 'ICEBERG'` in its `WITH` clause, and uses `location` and `partitioning` in place of the `external_location` and `partitioned_by` properties in the example above.
 
-**Ensure queries filter on partition keys** to limit data scanned.
-
-**Inefficient query** (scans all partitions):
-```sql
-SELECT COUNT(*)
-FROM events
-WHERE timestamp > 1699747200;  -- Unix timestamp for 2024-11-01
-```
-
-**Efficient query** (scans only November 2024):
-```sql
-SELECT COUNT(*)
-FROM events
-WHERE year = 2024
-  AND month = 11
-  AND timestamp > 1699747200;
-```
-
-Always include partition key predicates even if they're redundant with other filters.
-
-### Columnar Projection
-
-**Select only needed columns** instead of `SELECT *`.
-
-**Inefficient**:
-```sql
-SELECT *
-FROM events
-WHERE year = 2024 AND month = 11;
-```
-
-Scans all 50 columns even if you only need 2.
-
-**Efficient**:
-```sql
-SELECT event_type, user_id
-FROM events
-WHERE year = 2024 AND month = 11;
-```
-
-Scans only 2 columns (96% data reduction in this example).
-
-### Predicate Pushdown
-
-**Apply filters early** to reduce data Athena processes.
-
-**Inefficient** (filter after aggregation):
-```sql
-SELECT event_type, COUNT(*) as count
-FROM events
-WHERE year = 2024 AND month = 11
-GROUP BY event_type
-HAVING event_type = 'purchase';
-```
+Iceberg keeps every snapshot until told otherwise, which enables **time travel**, querying a table as of an earlier snapshot, and costs storage. Tables need regular maintenance: `OPTIMIZE` compacts the small files that updates and streaming leave behind, and `VACUUM` expires old snapshots and removes files nothing references. Athena reads and writes Iceberg format version 2, so tables written as version 3 by newer Spark engines, such as Glue 6.0, can't be read by Athena SQL.
 
-**Efficient** (filter before aggregation):
-```sql
-SELECT event_type, COUNT(*) as count
-FROM events
-WHERE year = 2024
-  AND month = 11
-  AND event_type = 'purchase'
-GROUP BY event_type;
-```
+---
 
-Moving `event_type = 'purchase'` from HAVING to WHERE reduces data processed before grouping.
+## Workgroups and Cost Controls
 
-### Join Optimization
+A **workgroup** separates users, applications, or teams, and holds the settings their queries run with:
 
-**Broadcast joins** work well when one table is small (<1 GB) and the other is large.
+- **Query result location and encryption.** Athena writes every query's result to S3. A workgroup can use a bucket you own, or **managed query results**, where Athena stores results itself at no charge for 24 hours and then deletes them, with access controlled by IAM permissions on the workgroup rather than a bucket policy.
+- **Engine version.** Workgroups upgrade automatically by default. Pinning a version lets you test a new one in a separate workgroup first.
+- **Per-query scan limit.** A query that would scan more than the limit is cancelled, which stops an unfiltered query against a large table from costing tens of dollars.
+- **Workgroup data usage alarms.** Thresholds on total bytes scanned per period send alerts through CloudWatch and SNS when a team's usage climbs.
+- **Enforcement.** With workgroup settings enforced, users can't override them per query.
 
-**Example**: Join 10 TB fact table with 100 MB dimension table.
-```sql
-SELECT f.user_id, d.user_name, COUNT(*) as event_count
-FROM events f
-INNER JOIN users d ON f.user_id = d.user_id
-WHERE f.year = 2024 AND f.month = 11
-GROUP BY f.user_id, d.user_name;
-```
+Tag workgroups for cost allocation, and grant users `athena:StartQueryExecution` on specific workgroups in IAM, so each team's queries land in its own workgroup and its own line in Cost Explorer. Queries also need permission to read the catalog tables and the S3 data. For tables registered with **AWS Lake Formation**, the service that manages table, column, and row permissions over the catalog, Athena enforces those grants at query time and reads the data with credentials Lake Formation issues.
 
-Athena broadcasts small `users` table to all workers processing `events`. Each worker performs local join without shuffling large table across network.
+---
 
-**Partition-wise joins**: When both tables are large and partitioned on join key, filter both tables on partition keys.
+## Reusing Results
 
-```sql
-SELECT a.user_id, COUNT(*) as total
-FROM events a
-INNER JOIN sessions b ON a.session_id = b.session_id
-WHERE a.year = 2024 AND a.month = 11 AND a.day = 15
-  AND b.year = 2024 AND b.month = 11 AND b.day = 15
-GROUP BY a.user_id;
-```
+**Query result reuse** returns a previous result instead of running the query again. It is off unless a query asks for it, by enabling it in the console or API with a maximum age from 60 minutes (the default) up to 7 days. It applies within one workgroup, to `SELECT` and `EXECUTE` statements whose text matches, ignoring whitespace and comments for queries under 100 KB.
 
-Both tables filtered to same partition before join, reducing shuffle volume.
+Reuse doesn't check whether the source data changed within the maximum age, so a result can be stale by up to that age. It doesn't apply to tables with Lake Formation row or column filters, to sources outside S3 reached through connectors, to non-deterministic queries such as `LIMIT` without `ORDER BY`, or to workgroups using managed query results. It fits dashboards that refresh often over data that changes hourly or daily.
 
-### Approximate Aggregations
+---
 
-**Use approximate functions** for large datasets when exact precision isn't required.
+## Capacity Reservations
 
-**Exact count distinct** (scans all data):
-```sql
-SELECT COUNT(DISTINCT user_id)
-FROM events
-WHERE year = 2024 AND month = 11;
-```
+Per-TB pricing makes cost follow data volume, and it gives no control over how many queries run at once. **Capacity Reservations** instead buy dedicated query capacity in **DPUs** (data processing units, each about 4 vCPU and 16 GB) at $0.30 per DPU-hour, billed per minute, from 4 DPUs upward in steps of 4. Queries in workgroups assigned to the reservation don't pay per TB scanned, and they run only on the reserved capacity, queuing when it is busy.
 
-**Approximate count distinct** (much faster, ~2% error):
-```sql
-SELECT APPROX_DISTINCT(user_id)
-FROM events
-WHERE year = 2024 AND month = 11;
-```
+Athena gives each DML query between 4 and 124 DPUs depending on its complexity, and each DDL statement 4, so a small reservation runs only a few queries at a time and queues the rest, for up to 10 hours. A reservation of 24 DPUs costs about $7.20 an hour whether queries run or not, the same as scanning 1.44 TB an hour on demand.
 
-**Approximate percentiles**:
-```sql
-SELECT APPROX_PERCENTILE(response_time, 0.95) as p95
-FROM api_logs
-WHERE year = 2024 AND month = 11;
-```
+A reservation belongs to one account and Region. Up to 20 workgroups can share one, and a workgroup uses at most one. Queries on a reservation don't count against the account's active query quotas, which keeps interactive on-demand queries from being throttled by scheduled work. Capacity requests aren't guaranteed and can take up to 30 minutes, so add capacity ahead of a known peak rather than during it. A reservation makes sense when heavy, steady query volume would cost more per TB than the DPUs would, or when one workload must not be slowed by others, and reservations and per-query billing can run side by side in one account.
 
-Faster than exact percentile calculation on TBs of data.
+---
 
-### Query Execution Optimization
+## Querying Beyond S3
 
-**Athena engine versions**: Always use Athena engine version 3 (latest as of 2024). Version 3 includes Trino 400+ with significant performance improvements, better memory management, and additional SQL functions.
-
-**Set engine version in workgroup**:
-```json
-"EngineVersion": {
-  "SelectedEngineVersion": "Athena engine version 3"
-}
-```
+- **Federated queries** reach sources outside S3, such as DynamoDB, RDS and Aurora, Redshift, OpenSearch, CloudWatch Logs, and third-party databases, through data source connectors that run as Lambda functions in your account. A query can join S3 tables with them. Connector Lambda invocations are billed separately, and pushing filters down to the source matters, because the connector pulls whatever it reads over the network.
+- **S3 Tables**, S3's managed Iceberg table buckets, are queryable through the catalog that integrates them with the Glue Data Catalog.
+- **Apache Spark in Athena** runs PySpark code in notebooks or through Spark Connect, billed at $0.35 per DPU-hour, for analysis and transformation that needs more than SQL.
 
-**Query hints**: Athena supports some query hints for advanced optimization.
+---
 
-**Force broadcast join**:
-```sql
-SELECT /*+ BROADCAST(d) */ f.user_id, d.user_name
-FROM events f
-INNER JOIN users d ON f.user_id = d.user_id;
-```
+## Limits That Shape Designs
 
-Forces Athena to broadcast `users` table even if optimizer would choose different strategy.
+- A DML query (`SELECT`, CTAS, `INSERT INTO`) times out after 30 minutes by default, raisable to 240. Queries that need longer are usually scanning far more than they should.
+- The number of active DML queries per account is a quota that varies by Region and counts queued queries too. Exceeding it returns a throttling error to the caller, so applications that fire many concurrent queries need retries or a Capacity Reservation.
+- On-demand queries can wait in a queue before running when the service is busy, which makes their latency variable. Capacity Reservations make it predictable, since queries wait only for your own reserved capacity.
 
-## Cost Optimization Strategies
+---
 
-Athena cost is purely data scanned. Every optimization that reduces bytes scanned reduces cost proportionally.
+## When Athena Is the Wrong Engine
 
-### Convert to Columnar Formats
+- **Many concurrent dashboard queries with steady, predictable load.** A warehouse such as Amazon Redshift, with data loaded into its own storage, gives consistent latency and caching for repeated queries. Athena Capacity Reservations are the middle ground.
+- **Point lookups and operational queries.** Fetching one customer's record in milliseconds is a database's job, such as DynamoDB, Aurora, or ElastiCache.
+- **Transformations that need code.** Joins and aggregations are SQL, and CTAS handles them. Parsing irregular files, calling APIs, or custom logic fits Spark, in Athena itself, Glue, or EMR, or small functions in Lambda.
+- **High-frequency small writes.** Athena writes in batches through CTAS, `INSERT INTO`, and Iceberg DML. Streams belong in Kinesis or Firehose, landing in S3 for Athena to query.
 
-**Most impactful cost reduction**: Convert JSON/CSV to Parquet with compression.
-
-**Cost comparison** (1 TB raw data, select 10% of columns):
-
-| Format | Compression | File Size | Data Scanned | Cost per Query |
-|--------|-------------|-----------|--------------|----------------|
-| JSON | None | 1,000 GB | 1,000 GB | $5.00 |
-| JSON | Gzip | 200 GB | 200 GB | $1.00 |
-| Parquet | None | 400 GB | 40 GB (10% columns) | $0.20 |
-| Parquet | Snappy | 250 GB | 25 GB (10% columns) | $0.12 |
-
-**ROI calculation**: One-time Glue job to convert 1 TB JSON to Parquet costs $5 (1 hour, 10 DPUs). Querying JSON 100 times = $500. Querying Parquet 100 times = $12. Savings: $488. Break-even: 2 queries.
-
-### Implement Aggressive Partitioning
-
-**Partition by query patterns** to maximize pruning.
-
-**Example**: Queries typically filter by date range and region.
-
-**Partitioning scheme**:
-```
-s3://data/events/year=2024/month=11/region=us-east-1/
-s3://data/events/year=2024/month=11/region=eu-west-1/
-```
-
-**Query filtering by region**:
-```sql
-SELECT event_type, COUNT(*) as count
-FROM events
-WHERE year = 2024
-  AND month = 11
-  AND region = 'us-east-1'
-GROUP BY event_type;
-```
-
-Scans only `us-east-1` partition, skipping other regions entirely.
-
-**Cost impact**: Table has 10 regions, query filters to 1 region. Cost reduction: 90%.
-
-### Use CTAS for Derived Tables
-
-**CTAS (CREATE TABLE AS SELECT)** materializes frequently-queried results to avoid re-scanning raw data.
-
-**Example**: Dashboard queries aggregate daily metrics from raw events.
-
-**Without CTAS** (query raw table every dashboard refresh):
-```sql
--- This query runs every 5 minutes, scans 500 GB each time
-SELECT event_date, event_type, COUNT(*) as count
-FROM raw_events
-WHERE year = 2024 AND month = 11
-GROUP BY event_date, event_type;
-```
-
-Daily cost: 288 queries × 500 GB × $5/TB = $720.
-
-**With CTAS** (materialize aggregates once daily):
-```sql
--- Run once per day via scheduled query
-CREATE TABLE daily_metrics
-WITH (
-  format = 'PARQUET',
-  external_location = 's3://my-bucket/daily-metrics/'
-)
-AS
-SELECT event_date, event_type, COUNT(*) as count
-FROM raw_events
-WHERE year = 2024 AND month = 11
-GROUP BY event_date, event_type;
-
--- Dashboard queries the pre-aggregated table (scans 1 GB)
-SELECT event_date, event_type, count
-FROM daily_metrics
-WHERE event_date >= DATE '2024-11-01';
-```
-
-Daily cost: 1 × 500 GB (materialization) + 288 × 1 GB (dashboard) = 788 GB × $5/TB = $3.85.
-
-Savings: $716/day = $21,480/month.
-
-### Enforce Query Limits
-
-**Set per-query scan limits** in workgroups to prevent runaway costs.
-
-**Example workgroup limit**: 100 GB per query.
-```json
-"BytesScannedCutoffPerQuery": 107374182400  // 100 GB in bytes
-```
-
-Query exceeding limit fails with error:
-```
-Query exhausted resources at this scale factor.
-Data scanned: 120.5 GB.
-Limit: 100 GB.
-```
-
-**Use case**: Prevent accidental full-table scans by analysts forgetting WHERE clauses.
-
-### Leverage Result Caching
-
-**Enable result caching** by default (enabled automatically, no configuration required).
-
-**Best practices for cache hits**:
-- Use exact same query text (parameterize queries in application code)
-- Avoid non-deterministic functions (RAND(), UUID(), NOW())
-- Understand cache invalidation (adding new partitions invalidates cache for queries on that table)
-
-**Example**: BI dashboard runs same 20 queries every hour.
-- First run: 20 queries × 100 GB each = 2 TB scanned = $10
-- Next 23 hours: 20 queries × 23 runs = 460 cached queries = $0
-- Daily cost: $10 instead of $230
-
-### Monitor Query Costs
-
-**CloudWatch metrics**: Athena publishes metrics per workgroup and per query.
-
-**Key metrics**:
-- `DataScannedInBytes`: Total data scanned (multiply by $5/TB for cost)
-- `QueryExecutionTime`: Query duration
-- `EngineExecutionTime`: Time spent processing (vs queue time)
-
-**Cost allocation tags**: Tag workgroups by team/project, view costs in Cost Explorer.
-
-**Cost anomaly detection**: Set CloudWatch alarms for unexpected cost spikes.
-
-**Example alarm**: Alert if daily scanned data exceeds 5 TB (expected: 2 TB).
-```json
-{
-  "AlarmName": "athena-high-data-scan",
-  "MetricName": "DataScannedInBytes",
-  "Namespace": "AWS/Athena",
-  "Statistic": "Sum",
-  "Period": 86400,  // 1 day
-  "Threshold": 5497558138880,  // 5 TB
-  "ComparisonOperator": "GreaterThanThreshold"
-}
-```
-
-## Security Best Practices
-
-### Data Encryption
-
-**Encryption at rest**: S3 source data and query results should be encrypted.
-
-**S3 encryption options**:
-- **SSE-S3**: AWS-managed keys (default, easiest)
-- **SSE-KMS**: Customer-managed KMS keys (audit key usage, rotate keys)
-- **SSE-C**: Customer-provided keys (full control, more complexity)
-
-**Query result encryption**: Configure per workgroup.
-```json
-"EncryptionConfiguration": {
-  "EncryptionOption": "SSE_KMS",
-  "KmsKey": "arn:aws:kms:us-east-1:123456789012:key/abc-123"
-}
-```
-
-Athena encrypts query results before writing to S3.
-
-**Encryption in transit**: Athena uses TLS 1.2+ for all API calls and JDBC/ODBC connections automatically.
-
-### IAM Permissions
-
-**Principle of least privilege**: Grant only necessary permissions.
-
-**Example policy for analyst role**:
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "athena:GetQueryExecution",
-        "athena:GetQueryResults",
-        "athena:StartQueryExecution",
-        "athena:StopQueryExecution"
-      ],
-      "Resource": "arn:aws:athena:us-east-1:123456789012:workgroup/analytics-team"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::my-data-bucket/*",
-        "arn:aws:s3:::my-data-bucket"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject"
-      ],
-      "Resource": "arn:aws:s3:::analytics-results/*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "glue:GetDatabase",
-        "glue:GetTable",
-        "glue:GetPartitions"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-**Permissions required**:
-- Athena: Start queries, get results
-- S3 (source data): Read data files
-- S3 (results): Write query results
-- Glue: Read catalog metadata
-
-### Lake Formation Integration
-
-**Fine-grained access control**: Use Lake Formation to grant column-level and row-level permissions.
-
-**Column-level filtering**: Hide sensitive columns from specific users.
-
-**Example**: Grant analysts access to `users` table but exclude PII columns.
-```
-Table: users
-Columns: user_id, email, name, created_at, last_login
-Grant to analytics_team: SELECT on user_id, created_at, last_login
-Exclude: email, name
-```
-
-When analysts query `users`, they see filtered view without `email` and `name` columns.
-
-**Row-level filtering**: Filter data by attribute.
-
-**Example**: Restrict regional teams to their region's data.
-```sql
--- Lake Formation filter expression
-region = 'us-east-1'
-```
-
-Users in US East team see only rows where `region = 'us-east-1'` regardless of their WHERE clause.
-
-### Query Result Lifecycle
-
-**Automatically delete old query results** to reduce storage costs and minimize data exposure.
-
-**S3 lifecycle policy** on results bucket:
-```json
-{
-  "Rules": [{
-    "Id": "delete-old-athena-results",
-    "Status": "Enabled",
-    "Prefix": "",
-    "Expiration": {
-      "Days": 30
-    }
-  }]
-}
-```
-
-Query results older than 30 days are deleted automatically.
-
-**Consideration**: Cached queries reference results in S3. If result files are deleted before cache expires (24 hours), cache becomes invalid. Set expiration > 1 day.
-
-## When to Use AWS Athena
-
-**Strong fit**:
-- ✅ Ad-hoc SQL analytics on S3 data lakes
-- ✅ Infrequent queries where paying per query beats paying for 24/7 database
-- ✅ Log analysis and exploration (CloudTrail, VPC Flow Logs, ALB logs)
-- ✅ Serverless architectures avoiding operational overhead
-- ✅ Data lake queries integrated with Glue Data Catalog
-- ✅ Cost-sensitive workloads where optimizing file format and partitioning yields major savings
-- ✅ Multi-tenant analytics where workgroups provide cost isolation
-
-**Consider alternatives when**:
-- ❌ **Sub-second query latency required** → ElastiCache, DynamoDB, or in-memory databases for hot data
-- ❌ **Continuous high-frequency queries** → Redshift provides better TCO when query volume is predictable and constant
-- ❌ **Complex ETL transformations** → Glue or EMR for batch processing, Kinesis for streaming
-- ❌ **Transactional workloads (INSERT/UPDATE/DELETE)** → RDS, Aurora, or DynamoDB for OLTP
-- ❌ **Real-time dashboards refreshing every second** → Redshift with materialized views or OpenSearch for real-time analytics
-
-## Athena vs Alternatives
-
-### Athena vs Redshift
-
-| Aspect | Athena | Redshift |
-|--------|--------|----------|
-| **Pricing** | $5/TB scanned (pay per query) | $0.25/hour per node (pay for cluster) |
-| **Infrastructure** | Serverless, zero management | Managed clusters, resize/pause manually |
-| **Query latency** | 1-30 seconds (cold start + execution) | Sub-second to seconds (warm cluster) |
-| **Concurrency** | High (isolated queries) | Limited by cluster size (max 500 concurrent) |
-| **Data format** | Parquet/ORC/JSON/CSV on S3 | Proprietary columnar storage |
-| **Use case** | Sporadic ad-hoc analytics | Continuous BI dashboards, predictable workloads |
-
-**Cost crossover**: Athena cheaper if you scan <5 TB/month. Redshift cheaper for high-frequency queries on same datasets.
-
-**Example**: Scan 100 TB/month.
-- Athena: 100 TB × $5 = $500/month
-- Redshift: 2-node dc2.large cluster = $0.25/hour × 2 × 730 hours = $365/month
-
-Redshift wins on cost, but requires managing cluster (pausing when idle, resizing for growth).
-
-### Athena vs Redshift Spectrum
-
-Redshift Spectrum runs queries from Redshift cluster against S3 data (similar to Athena).
-
-**When to use Spectrum over Athena**:
-- Already have Redshift cluster for hot data
-- Join S3 data with Redshift tables frequently
-- Want single SQL interface for both Redshift and S3
-
-**Pricing**: Spectrum charges $5/TB scanned (same as Athena) plus Redshift cluster costs.
-
-### Athena vs EMR
-
-EMR provides full control over Spark/Presto/Hive clusters.
-
-| Aspect | Athena | EMR |
-|--------|--------|-----|
-| **Management** | Fully serverless | Self-managed clusters |
-| **Startup time** | 1-3 seconds per query | 5-10 minutes to launch cluster |
-| **Pricing** | $5/TB scanned | EC2 costs + EMR fee ($0.096/hour + instance cost) |
-| **Use case** | SQL analytics, no custom code | Complex Spark jobs, custom transformations, ML |
-
-**When to choose EMR**:
-- Need custom Spark/PySpark code
-- Use Spark libraries not available in Athena (MLlib, GraphX)
-- Run long-running batch jobs where per-TB pricing exceeds cluster cost
-- Need specific Spark/Presto versions
-
-### Athena vs BigQuery / Snowflake
-
-Cloud-native data warehouses with similar serverless query capabilities.
-
-**BigQuery** (Google Cloud):
-- Pricing: $5/TB scanned (same as Athena)
-- Better: Streaming inserts, real-time analytics, more SQL functions
-- Worse: Requires Google Cloud, less integration with AWS ecosystem
-
-**Snowflake** (multi-cloud):
-- Pricing: Per-second compute billing (more granular than Redshift)
-- Better: Instant elastic scaling, time travel, data sharing
-- Worse: Higher cost for light workloads, additional vendor lock-in
-
-**Athena advantages**: Native AWS integration (IAM, S3, Glue), no vendor lock-in (standard Parquet/ORC on S3), lowest cost for infrequent queries.
+---
 
 ## Common Pitfalls
 
-### Querying Uncompressed JSON
+- **`HIVE_TOO_MANY_OPEN_PARTITIONS`.** A CTAS or INSERT INTO tried to write more than 100 partitions. Split it into statements over non-overlapping ranges.
+- **`TooManyRequestsException` from Athena.** The account hit its active query quota, queued queries included. Add retries with backoff, spread scheduled queries out, or move steady workloads to a Capacity Reservation.
+- **`SlowDown` errors from S3.** Queries are reading so many small files under one prefix that they exceed S3's request rate. Compact the files, and stagger concurrent queries over the same data.
+- **Partitions that outlive their data.** `MSCK REPAIR TABLE` only adds partitions. When lifecycle rules delete old files, remove their partitions too, or every query that matches them still lists empty folders.
+- **Ungoverned result buckets.** Results in your own bucket persist until a lifecycle rule deletes them, and they can contain sensitive query output. Use managed query results, or a lifecycle rule and encryption on the bucket.
 
-**Symptom**: High query costs despite small result sets.
-
-**Root cause**: JSON files are uncompressed text, and Athena must scan entire files regardless of how many columns you select.
-
-**Example**: 1 TB of uncompressed JSON, query selects 2 columns.
-- Cost: 1 TB × $5 = $5.00 per query
-- With Parquet (Snappy): 25 GB × $5 = $0.12 per query
-
-**Solution**: Convert to Parquet using Glue ETL job or CTAS query (one-time effort, ongoing savings).
-
-### Missing Partition Filters
-
-**Symptom**: Queries take minutes and scan TBs when you expect GBs.
-
-**Root cause**: Query doesn't filter on partition keys, so Athena scans all partitions.
-
-**Example query**:
-```sql
--- Missing year/month/day filters
-SELECT COUNT(*)
-FROM events
-WHERE timestamp > 1699747200;  -- Date in timestamp column, not partition
-```
-
-Athena scans all partitions (entire table history).
-
-**Solution**: Always include partition key predicates.
-```sql
-SELECT COUNT(*)
-FROM events
-WHERE year = 2024
-  AND month = 11
-  AND day >= 1
-  AND timestamp > 1699747200;
-```
-
-### SELECT * in Production Queries
-
-**Symptom**: Costs 10× higher than expected for simple queries.
-
-**Root cause**: `SELECT *` reads all columns, even when application only displays 3 columns.
-
-**Solution**: Always specify exact columns needed.
-
-**Before**:
-```sql
-SELECT * FROM events WHERE year = 2024 AND month = 11;
-```
-
-**After**:
-```sql
-SELECT event_id, event_type, user_id
-FROM events
-WHERE year = 2024 AND month = 11;
-```
-
-### Schema Mismatch Between Files
-
-**Symptom**: Query succeeds but returns NULL for some rows or columns.
-
-**Root cause**: S3 contains files with different schemas (column added/removed over time).
-
-**Example**: Early files have columns `[user_id, event_type]`, later files added `session_id`.
-
-**Query**:
-```sql
-SELECT user_id, session_id FROM events;
-```
-
-Rows from old files show `NULL` for `session_id`.
-
-**Solution**: Use schema evolution-friendly formats (Parquet with schema merging, Avro) or enforce schema validation at ingestion.
-
-### Not Registering New Partitions
-
-**Symptom**: Query returns incomplete results, missing recent data.
-
-**Root cause**: New S3 data uploaded but partitions not registered in Glue catalog.
-
-**Example**: ETL job writes new partition `year=2024/month=11/day=15/` to S3 but doesn't update catalog. Athena doesn't know partition exists.
-
-**Solution**: Register partitions after uploading data.
-
-**Option 1: MSCK REPAIR (scans all prefixes)**:
-```sql
-MSCK REPAIR TABLE events;
-```
-
-**Option 2: Explicit ADD PARTITION (faster, targeted)**:
-```sql
-ALTER TABLE events ADD PARTITION (year=2024, month=11, day=15)
-LOCATION 's3://my-bucket/events/year=2024/month=11/day=15/';
-```
-
-**Option 3: Glue crawler (automatic, scheduled)**:
-Schedule crawler to run after ETL job completes.
-
-### Query Timeout Due to Large Scans
-
-**Symptom**: Query fails with timeout error after 30 minutes.
-
-**Root cause**: Query scans TBs of data without sufficient optimization.
-
-**Solution**: Apply multiple optimizations together:
-1. Add partition filters to reduce data scanned
-2. Convert to columnar format (Parquet) to read only needed columns
-3. Use approximate aggregations (APPROX_DISTINCT instead of COUNT DISTINCT)
-4. Split large query into smaller CTAS materialization + final query
-
-**Example refactor**:
-
-**Original (times out)**:
-```sql
-SELECT user_id, COUNT(DISTINCT session_id) as sessions
-FROM events
-WHERE timestamp > 1699747200
-GROUP BY user_id;
-```
-
-**Optimized**:
-```sql
--- Step 1: Materialize filtered data once
-CREATE TABLE events_nov_2024
-WITH (format = 'PARQUET', partitioned_by = ARRAY['day'])
-AS SELECT user_id, session_id, DAY(from_unixtime(timestamp)) as day
-FROM events
-WHERE year = 2024 AND month = 11 AND timestamp > 1699747200;
-
--- Step 2: Query materialized table (much faster)
-SELECT user_id, APPROX_DISTINCT(session_id) as sessions
-FROM events_nov_2024
-GROUP BY user_id;
-```
+---
 
 ## Key Takeaways
 
-**AWS Athena provides serverless SQL analytics on S3 data lakes** with pay-per-query pricing that eliminates idle infrastructure costs. You pay $5 per TB scanned, and cost directly correlates with data volume processed.
-
-**Cost optimization is achieved through format and partitioning**. Converting JSON to Parquet reduces costs by 90-98% by enabling columnar scans and compression. Partitioning by query patterns (date, region) reduces scanned data by skipping irrelevant partitions. These two optimizations combined can reduce costs from $10,000/month to $200/month for typical workloads.
-
-**Performance depends on data organization, not infrastructure tuning**. Athena auto-scales workers per query. Improve performance by optimizing file sizes (`128 MB − 1 GB`), using columnar formats, applying partition pruning, and selecting only needed columns. Query execution time is dominated by S3 scan time, not compute.
-
-**Use Athena for ad-hoc and infrequent analytics** where serverless simplicity and pay-per-query pricing outweigh Redshift's constant cluster costs. For high-frequency dashboards querying the same datasets repeatedly, Redshift or Redshift Spectrum may provide better TCO despite operational overhead.
-
-**Security is handled through IAM and Lake Formation integration**. Control access at table and column level, encrypt data at rest and in transit, and isolate costs and permissions using workgroups. Lake Formation adds row-level filtering and cross-account data sharing without copying data.
-
-**Common pitfalls involve forgetting optimizations that reduce scanned data**. Always filter on partition keys, avoid `SELECT *`, convert to Parquet, and register new partitions after data uploads. Enable query result caching to reuse identical queries, and set per-query scan limits to prevent runaway costs.
-
-**Integrate with Glue Data Catalog for centralized metadata** that works across Athena, Redshift Spectrum, EMR, and QuickSight. Define schemas once, query from multiple services, and share catalogs across AWS accounts for governed data access.
+- Athena runs Trino-based SQL over S3 through the Glue Data Catalog, with no infrastructure and, on per-query billing, no query charges while idle.
+- On-demand queries cost $5 per TB scanned with a 10 MB minimum, so format, partitioning, file size, and column selection decide the bill.
+- Partitions must be registered to be visible. Partition projection computes them instead, for Athena only.
+- CTAS and INSERT INTO write up to 100 partitions per statement, and plain tables only take appends. Iceberg tables add updates, deletes, `MERGE`, time travel, and their own partition tracking, and need regular `OPTIMIZE` and `VACUUM`.
+- Workgroups hold result settings, engine version, scan limits, and cost tags. Managed query results remove the result bucket.
+- Result reuse is opt-in with a maximum age of up to 7 days. Capacity Reservations trade per-TB billing for dedicated DPUs at $0.30 per DPU-hour.
+- Use a warehouse for steady high-concurrency BI, a database for point lookups, and Spark engines for transformation that needs code.

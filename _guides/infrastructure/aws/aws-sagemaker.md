@@ -1,667 +1,210 @@
 ---
-title: "AWS SageMaker: ML Platform Essentials"
+title: "SageMaker AI: Training and Hosting Your Own Models"
 layout: guide
 category: AWS
 subcategory: Machine Learning & AI
-description: "ML model training, deployment, endpoints, SageMaker Studio, cost optimization, and service selection for production ML workloads"
-tags: [aws, machine-learning, data-architecture, cost-analysis, infrastructure, automation]
+description: "How Amazon SageMaker AI trains and hosts custom models: where people work, training jobs with managed spot and HyperPod, choosing real-time, serverless, asynchronous, or batch inference, several models on one endpoint, safe rollouts, MLflow, Model Registry, and Pipelines, and the security and cost controls that matter."
+tags: [sagemaker, model-training, model-inference, inference-components, mlflow, hyperpod, practical]
 ---
 
-## What Problems AWS SageMaker Solves
-
-AWS SageMaker eliminates the infrastructure complexity and operational burden of building, training, and deploying machine learning models at scale.
-
-**Traditional ML infrastructure challenges**:
-- Data scientists spend 80% of time on infrastructure (provisioning GPU instances, installing libraries, managing dependencies) instead of modeling
-- Training large models requires manually orchestrating distributed training across multiple GPU instances
-- Deploying models to production requires building custom serving infrastructure with auto-scaling, monitoring, and A/B testing
-- Experimenting with different model versions creates versioning nightmares (which dataset, which hyperparameters, which code produced this model?)
-- Scaling inference from 10 requests/day to 10,000 requests/second requires re-architecting serving infrastructure
-
-**Concrete scenario**: Your ML team built a product recommendation model using TensorFlow on local laptops. Training takes 2 days on a single GPU. To deploy, you manually set up an EC2 instance with TensorFlow Serving, write custom Flask endpoints, configure an ALB, and implement monitoring. When the model needs retraining weekly with fresh data, the process is entirely manual. The team wants to A/B test model versions, but that requires duplicating the entire infrastructure. Scaling inference during Black Friday requires manually adding EC2 instances. Total ML infrastructure cost: $8,000/month (dedicated GPU instances running 24/7). Data scientists spend 60% of their time managing infrastructure instead of improving models.
-
-**What SageMaker provides**: Managed infrastructure for the entire ML lifecycle. This includes notebooks for exploration, distributed training jobs that auto-provision GPU clusters, one-click model deployment to auto-scaling endpoints, built-in A/B testing, and automatic model versioning. You pay per training hour and per inference request, not for idle infrastructure.
-
-**Real-world impact**: After migrating to SageMaker, training time dropped from 2 days to 4 hours (distributed training on 4× GPUs). Deployment became one API call instead of manual infrastructure setup. A/B testing is built-in (70% traffic to model v1, 30% to v2). Inference auto-scales from 1 to 100 instances based on load. Cost dropped from $8,000/month to $1,200/month (pay only during training and inference, no idle GPU instances). Data scientists spend 90% of time on modeling, 10% on infrastructure.
-
-## Service Fundamentals
-
-AWS SageMaker is a fully managed ML platform with four core capabilities like Build (notebooks and data prep), Train (distributed training jobs), Deploy (managed endpoints), and Govern (model registry and monitoring).
-
-### SageMaker Studio
-
-**What it is**: Web-based IDE for ML development that replaces Jupyter notebooks with collaborative, version-controlled workspace.
-
-**Key features**:
-- **Unified environment**: Code, train, deploy, monitor all in one interface
-- **Kernel flexibility**: Switch between Python, R, TensorFlow, PyTorch kernels without reconfiguring environment
-- **Git integration**: Clone repos, commit code, push directly from Studio
-- **Experiment tracking**: Automatic logging of training runs, hyperparameters, metrics
-- **Shared workspaces**: Team members collaborate on same notebooks
-
-**Studio vs traditional notebooks**:
-
-| Aspect | SageMaker Notebook Instances | SageMaker Studio |
-|--------|------------------------------|------------------|
-| **Launch time** | 5-10 minutes (EC2 boot) | 1-2 minutes (container launch) |
-| **Cost** | Pay for instance 24/7 | Pay per kernel-hour |
-| **Collaboration** | Manual sharing via S3 | Built-in team workspaces |
-| **Experiment tracking** | Manual logging | Automatic via SageMaker Experiments |
-| **Kernel switching** | Requires instance restart | Instant kernel change |
-
-<div class="callout callout--tip">
-<p class="callout__title">Cost Optimization</p>
-<p>Studio charges per kernel-hour, not per instance. If notebook sits idle, you pay $0. With notebook instances, idle ml.t3.medium = $0.05/hour × 730 hours/month = $36.50/month wasted.</p>
-</div>
-
-### Training Jobs
-
-**What they are**: Managed infrastructure for model training that auto-provisions compute, runs training code, saves model artifacts to S3, and tears down resources.
-
-**Training job workflow**:
-1. Specify training code (Python script or container)
-2. Specify instance type and count (e.g., 4× ml.p3.8xlarge with 4 V100 GPUs each = 16 GPUs total)
-3. Specify input data location (S3)
-4. SageMaker provisions instances, downloads data, runs training script
-5. Model artifacts uploaded to S3
-6. Instances terminated
-
-**Example training job** (Python SDK):
-```python
-from sagemaker.pytorch import PyTorch
-
-estimator = PyTorch(
-    entry_point='train.py',  # Your training script
-    role='arn:aws:iam::123456789012:role/SageMakerRole',
-    instance_type='ml.p3.2xlarge',  # Single GPU instance
-    instance_count=1,
-    framework_version='2.0',
-    py_version='py310',
-    hyperparameters={
-        'epochs': 50,
-        'batch-size': 64,
-        'learning-rate': 0.001
-    }
-)
-
-estimator.fit({'training': 's3://my-bucket/training-data/'})
-```
-
-**Distributed training**: Scale training across multiple instances/GPUs automatically.
-
-**Data parallelism** (split data across GPUs):
-```python
-from sagemaker.pytorch import PyTorch
-
-estimator = PyTorch(
-    entry_point='train.py',
-    instance_type='ml.p3.8xlarge',  # 4 GPUs per instance
-    instance_count=4,  # 4 instances = 16 GPUs total
-    distribution={
-        'pytorchddp': {  # Distributed Data Parallel
-            'enabled': True
-        }
-    }
-)
-```
-
-**Model parallelism** (split large model across GPUs when model doesn't fit in single GPU memory):
-```python
-from sagemaker.pytorch import PyTorch
-
-estimator = PyTorch(
-    entry_point='train.py',
-    instance_type='ml.p4d.24xlarge',  # 8× A100 GPUs (40 GB each)
-    instance_count=2,
-    distribution={
-        'smdistributed': {
-            'modelparallel': {
-                'enabled': True,
-                'parameters': {
-                    'partitions': 4  # Split model across 4 GPUs
-                }
-            }
-        }
-    }
-)
-```
-
-**Spot instances for training**: Use spot instances for 70% cost savings on training.
-
-```python
-estimator = PyTorch(
-    entry_point='train.py',
-    instance_type='ml.p3.2xlarge',
-    instance_count=4,
-    use_spot_instances=True,
-    max_wait=7200,  # Max time to wait for spot capacity (seconds)
-    max_run=3600  # Max training time (seconds)
-)
-```
-
-**Cost comparison** (4 hours training on ml.p3.2xlarge):
-- On-demand: $3.825/hour × 4 hours = $15.30
-- Spot (70% discount): $1.15/hour × 4 hours = $4.60
-- Savings: $10.70 (70%)
-
-Risk: Spot instances can be interrupted. Use checkpointing to resume from last checkpoint if interrupted.
-
-### Model Registry
-
-**What it is**: Centralized repository for model versions with approval workflows and deployment tracking.
-
-**Model registry workflow**:
-1. Training job completes, model artifacts saved to S3
-2. Register model version in registry with metadata (accuracy, F1 score, training data version)
-3. Approval workflow: Data science lead reviews metrics, approves for production
-4. Approved models deployed to endpoints
-5. Track which model version serves each endpoint
-
-**Example model registration**:
-```python
-from sagemaker.model import Model
-
-model = Model(
-    image_uri='763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:2.0-cpu',
-    model_data='s3://my-bucket/model.tar.gz',
-    role='arn:aws:iam::123456789012:role/SageMakerRole'
-)
-
-model_package = model.register(
-    content_types=['application/json'],
-    response_types=['application/json'],
-    inference_instances=['ml.t2.medium', 'ml.m5.large'],
-    transform_instances=['ml.m5.large'],
-    model_package_group_name='product-recommendations',
-    model_metrics={
-        'accuracy': {'value': 0.92},
-        'f1_score': {'value': 0.88}
-    },
-    approval_status='PendingManualApproval'
-)
-```
-
-### Inference Endpoints
-
-**What they are**: Managed HTTPS endpoints that serve model predictions with auto-scaling, monitoring, and A/B testing.
-
-**Endpoint types**:
-
-1. **Real-time endpoints**: Always-on, low-latency (<100ms) inference
-   - Use case: Product recommendations, fraud detection, personalization
-   - Pricing: Pay for instance hours (ml.t2.medium = $0.065/hour)
-
-2. **Serverless endpoints**: Auto-scale from zero, pay per inference request
-   - Use case: Sporadic inference, cost-sensitive applications
-   - Pricing: $0.20 per million requests + $0.0024/hour per GB memory
-
-3. **Batch transform**: Process large batches of data asynchronously
-   - Use case: Nightly batch scoring, offline analytics
-   - Pricing: Same as training (pay per instance-hour)
-
-4. **Asynchronous endpoints**: Queue requests, process asynchronously (15-minute timeout)
-   - Use case: Long-running inference (video processing, large document analysis)
-   - Pricing: Same as real-time endpoints
-
-**Real-time endpoint deployment**:
-```python
-from sagemaker.predictor import Predictor
-
-predictor = model.deploy(
-    initial_instance_count=2,
-    instance_type='ml.m5.large',
-    endpoint_name='product-recommendations-prod'
-)
-
-# Make prediction
-result = predictor.predict({
-    'user_id': 12345,
-    'context': {'time_of_day': 'evening', 'device': 'mobile'}
-})
-```
-
-**Auto-scaling configuration**:
-```python
-import boto3
-
-autoscaling = boto3.client('application-autoscaling')
-
-# Register endpoint as scalable target
-autoscaling.register_scalable_target(
-    ServiceNamespace='sagemaker',
-    ResourceId='endpoint/product-recommendations-prod/variant/AllTraffic',
-    ScalableDimension='sagemaker:variant:DesiredInstanceCount',
-    MinCapacity=2,
-    MaxCapacity=10
-)
-
-# Define scaling policy: scale on invocations per instance
-autoscaling.put_scaling_policy(
-    PolicyName='scale-on-invocations',
-    ServiceNamespace='sagemaker',
-    ResourceId='endpoint/product-recommendations-prod/variant/AllTraffic',
-    ScalableDimension='sagemaker:variant:DesiredInstanceCount',
-    PolicyType='TargetTrackingScaling',
-    TargetTrackingScalingPolicyConfiguration={
-        'TargetValue': 1000.0,  # Target 1000 invocations per instance
-        'PredefinedMetricSpecification': {
-            'PredefinedMetricType': 'SageMakerVariantInvocationsPerInstance'
-        },
-        'ScaleInCooldown': 300,
-        'ScaleOutCooldown': 60
-    }
-)
-```
-
-**A/B testing (multi-variant endpoints)**:
-```python
-from sagemaker.model import Model
-
-# Model v1 (current production)
-model_v1 = Model(
-    image_uri='...',
-    model_data='s3://my-bucket/model-v1.tar.gz',
-    role=role
-)
-
-# Model v2 (new candidate)
-model_v2 = Model(
-    image_uri='...',
-    model_data='s3://my-bucket/model-v2.tar.gz',
-    role=role
-)
-
-# Deploy both models to same endpoint with traffic split
-from sagemaker.multidatamodel import MultiDataModel
-from sagemaker.predictor import Predictor
-
-endpoint_name = 'product-recommendations-ab-test'
-
-# Deploy with 70% v1, 30% v2
-predictor_v1 = model_v1.deploy(
-    initial_instance_count=2,
-    instance_type='ml.m5.large',
-    endpoint_name=endpoint_name,
-    variant_name='model-v1',
-    traffic_weight=70
-)
-
-model_v2.deploy(
-    initial_instance_count=1,
-    instance_type='ml.m5.large',
-    endpoint_name=endpoint_name,
-    variant_name='model-v2',
-    traffic_weight=30
-)
-```
-
-SageMaker routes 70% of requests to model-v1, 30% to model-v2. Monitor metrics (latency, error rate, business KPIs) to determine winner.
-
-### Serverless Inference
-
-**When to use**: Inference traffic is intermittent (not 24/7) or unpredictable.
-
-**Pricing comparison** (100,000 requests/month, 512 MB memory, 2 seconds per inference):
-
-**Real-time endpoint** (ml.t2.medium, $0.065/hour):
-- Instance hours: 730 hours/month × $0.065 = $47.45/month
-- Requests: Free (included in instance cost)
-- Total: $47.45/month
-
-**Serverless endpoint**:
-- Memory-hours: 100,000 requests × 2 seconds × 512 MB = 28.4 GB-hours = $0.068
-- Requests: 100,000 ÷ 1,000,000 × $0.20 = $0.02
-- Total: $0.09/month
-
-Serverless wins by 99.8% for low-traffic endpoints.
-
-**Break-even point**: ~40,000 requests/hour continuous (960,000/day). Above this, real-time endpoints cheaper.
-
-**Serverless endpoint deployment**:
-```python
-from sagemaker.serverless import ServerlessInferenceConfig
-
-serverless_config = ServerlessInferenceConfig(
-    memory_size_in_mb=2048,  # 1024, 2048, 3072, 4096, 5120, 6144 MB
-    max_concurrency=10  # Max concurrent invocations
-)
-
-predictor = model.deploy(
-    serverless_inference_config=serverless_config,
-    endpoint_name='product-recommendations-serverless'
-)
-```
-
-**Cold start latency**: First request after idle period incurs ~3-10 seconds cold start. Subsequent requests <100ms. Not suitable for latency-sensitive applications with infrequent traffic.
-
-## Cost Optimization Strategies
-
-SageMaker costs have three components: training (instance-hours), inference (instance-hours or requests), and storage (model artifacts, data). Optimize each independently.
-
-### Training Cost Optimization
-
-**1. Use Spot instances** (70% cost savings):
-```python
-estimator = PyTorch(
-    entry_point='train.py',
-    instance_type='ml.p3.2xlarge',
-    instance_count=4,
-    use_spot_instances=True,
-    max_wait=7200,
-    checkpoint_s3_uri='s3://my-bucket/checkpoints/'  # Save checkpoints for resumption
-)
-```
-
-**2. Right-size instance types**: Don't over-provision GPUs.
-
-| Model Size | Instance Type | GPUs | Cost/hour | Use Case |
-|------------|---------------|------|-----------|----------|
-| Small (<1 GB) | ml.g4dn.xlarge | 1× T4 (16 GB) | $0.736 | Prototyping, small models |
-| Medium (1-10 GB) | ml.p3.2xlarge | 1× V100 (16 GB) | $3.825 | Standard deep learning |
-| Large (10-40 GB) | ml.p3.8xlarge | 4× V100 (64 GB total) | $14.688 | Distributed training |
-| Very Large (>40 GB) | ml.p4d.24xlarge | 8× A100 (320 GB total) | $37.688 | Largest models, model parallelism |
-
-**3. Use managed data parallelism**: Train faster with multiple instances instead of single large instance.
-
-**Example**: Train model in 1 hour on ml.p3.8xlarge (4 GPUs, $14.69/hour) vs 4 hours on ml.p3.2xlarge (1 GPU, $3.83/hour).
-- ml.p3.8xlarge: 1 hour × $14.69 = $14.69
-- ml.p3.2xlarge: 4 hours × $3.83 = $15.32
-
-Single large instance cheaper when training scales well across GPUs (distributed training overhead <10%).
-
-**4. Use SageMaker Training Compiler**: Optimize training code for 50% faster training (Python/TensorFlow/PyTorch).
-
-```python
-estimator = PyTorch(
-    entry_point='train.py',
-    instance_type='ml.p3.2xlarge',
-    compiler_config={  # Enable SageMaker Training Compiler
-        'enabled': True
-    }
-)
-```
-
-Training time: 4 hours → 2 hours. Cost: 4 × $3.83 = $15.32 → 2 × $3.83 = $7.66 (50% savings).
-
-**5. Use Pipe mode for large datasets**: Stream data from S3 instead of downloading entire dataset to instance.
-
-**File mode** (default): Download 100 GB dataset to instance before training (15 minutes download, costs $1 in instance time).
-
-**Pipe mode**: Stream data during training (0 download time, start training immediately).
-
-```python
-from sagemaker.inputs import TrainingInput
-
-estimator.fit({
-    'training': TrainingInput(
-        's3://my-bucket/training-data/',
-        input_mode='Pipe'  # Stream data instead of download
-    )
-})
-```
-
-### Inference Cost Optimization
-
-**1. Use serverless endpoints for low traffic** (<40,000 requests/hour):
-
-**Example**: 10,000 requests/day.
-- Real-time endpoint: ml.t2.medium = $0.065/hour × 730 hours = $47.45/month
-- Serverless: 10,000 × 30 days × $0.20/million + minimal GB-hours = $0.10/month
-- Savings: $47.35/month (99.8%)
-
-**2. Use instance families optimized for inference** (not training):
-
-| Instance Family | Use Case | Cost/hour (ml.c5.xlarge) |
-|-----------------|----------|--------------------------|
-| **ml.c5** | CPU inference (general purpose) | $0.238 |
-| **ml.g4dn** | GPU inference (image/video models) | $0.94 |
-| **ml.inf1** | AWS Inferentia (custom chip for inference) | $0.368 |
-
-ml.inf1 provides GPU-like performance at 60% lower cost for supported frameworks (TensorFlow, PyTorch).
-
-**3. Use multi-model endpoints**: Host multiple models on single endpoint to share infrastructure.
-
-```python
-from sagemaker.multidatamodel import MultiDataModel
-
-multi_model = MultiDataModel(
-    name='multi-model-endpoint',
-    model_data_prefix='s3://my-bucket/models/',  # Folder with multiple model.tar.gz files
-    image_uri='...',
-    role=role
-)
-
-predictor = multi_model.deploy(
-    initial_instance_count=2,
-    instance_type='ml.m5.large'
-)
-
-# Invoke specific model
-result = predictor.predict(data, target_model='model-123.tar.gz')
-```
-
-**Cost savings**: Host 100 models on 2× ml.m5.large instances ($0.134/hour × 2 = $0.268/hour) instead of 100 separate endpoints (100 × $0.134 = $13.40/hour). Savings: 98%.
-
-**Limitation**: Works best when models invoked infrequently. Frequent model switching incurs model load time (~1 second per model).
-
-**4. Right-size auto-scaling**: Don't over-provision minimum instances.
-
-**Bad configuration**:
-```python
-MinCapacity=10,  # 10 instances always running
-MaxCapacity=50
-```
-
-10 instances × ml.m5.large × $0.134/hour × 730 hours = $978/month minimum cost, even if traffic only requires 2 instances.
-
-**Good configuration**:
-```python
-MinCapacity=2,  # Start with 2 instances
-MaxCapacity=50  # Scale up to 50 during peak
-```
-
-2 instances × $0.134/hour × 730 hours = $196/month minimum. Savings: $782/month (80%).
-
-**5. Use batch transform for offline inference**: Don't run real-time endpoint for nightly batch jobs.
-
-**Bad**: Real-time endpoint running 24/7, used only for 1-hour nightly batch job.
-- Cost: ml.m5.large × $0.134/hour × 730 hours = $97.82/month
-
-**Good**: Batch transform job runs 1 hour/night.
-- Cost: ml.m5.large × $0.134/hour × 30 hours = $4.02/month
-- Savings: $93.80/month (96%)
-
-### Storage Cost Optimization
-
-**Model artifacts** in S3 incur storage costs. Delete old model versions.
-
-**Example**: 100 model versions × 5 GB each = 500 GB × $0.023/GB = $11.50/month.
-
-**S3 lifecycle policy**: Delete model artifacts older than 90 days.
+## What SageMaker AI Is
+
+Amazon SageMaker AI is AWS's managed service for training machine learning models on your data and hosting them for predictions. It was called Amazon SageMaker until December 3, 2024, when AWS gave that name to a broader platform for data, analytics, and AI. The platform groups SageMaker AI with Redshift, the lakehouse and catalog, data processing, Bedrock, and **SageMaker Unified Studio**, a single workspace where data engineers, analysts, and ML practitioners share projects. The rename touched only names. APIs, CLI commands, IAM actions, managed policies, and CloudFormation resource types all still say `sagemaker`.
+
+This guide covers SageMaker AI itself. Deciding whether a workload needs a custom model at all, rather than a prebuilt AI service or a foundation model on Bedrock, is a separate decision made before any of this. The practice around models, such as versioning data, retraining, and watching for drift, belongs to [MLOps](/study-guides/ai/mlops.html). What follows is how SageMaker AI implements the pieces.
+
+| Piece | What it does | How it bills |
+|---|---|---|
+| **Studio** and notebook instances | Where people explore data and write code, in JupyterLab, Code Editor, or RStudio | Per instance-hour while a space or notebook runs |
+| **Processing and training jobs** | Run a container against data in S3 on instances that exist only for the job | Per instance-second for the job's duration |
+| **HyperPod** | Persistent, self-healing clusters for training and serving very large models | Per instance-hour while the cluster exists |
+| **Endpoints and batch transform** | Serve predictions in real time, on demand, from a queue, or over a whole dataset | Per instance-hour, or per second of compute for serverless |
+| **MLflow, Model Registry, Pipelines** | Track experiments, version and approve models, and automate the steps between them | MLflow tracking servers per hour; Pipelines only for the jobs it runs |
+| **JumpStart and Canvas** | Deploy and fine-tune pretrained models, or build models without code | Instance-hours for JumpStart; session-hours and training for Canvas |
+
+Several older features no longer accept new customers. Since July 30, 2026, Ground Truth (labeling), Augmented AI (human review), Model Monitor, Clarify, Debugger, GeoSpatial, Role Manager, and Studio Lab are closed to accounts that weren't already using them, and Profiler is in sunset. Existing users keep them. A new account plans labeling, bias checks, and drift monitoring with other tools.
+
+---
+
+## Where People Work
+
+A **domain** is the unit an administrator sets up. It holds user profiles, shared settings, an Amazon EFS volume for home directories, and the VPC and IAM role defaults. Inside it, **Studio** is the web interface for jobs, models, and endpoints, and each person runs one or more **spaces**. A space is an IDE, JupyterLab, Code Editor (based on open-source VS Code), or RStudio, running on an ML instance you choose. The previous interface, now called Studio Classic, is still supported and available as an app inside Studio, but new work starts in Studio.
+
+A space bills for its instance for every hour it runs, whether anyone is typing. In US East (N. Virginia), an `ml.t3.medium` costs $0.05 an hour and an `ml.m5.large` $0.115, so small instances are cheap. A GPU space costs far more, and an `ml.g5.xlarge` left running over a month costs about $1,029. Turn on idle shutdown for the domain, and do heavy work in training jobs rather than on a large notebook instance.
+
+**Notebook instances** are the older model, a single managed instance running Jupyter and billed while it is in service. They still work, but they give each person a server to remember to stop, and Studio spaces are the better default.
+
+**SageMaker Unified Studio** is a separate entry point. It suits organizations that want data preparation, SQL, and ML in one project with shared data access and governance. It uses SageMaker AI's training and hosting underneath, so the rest of this guide applies to both.
+
+---
+
+## Training Jobs
+
+A training job is SageMaker AI's core unit of compute. Most teams launch one from the SageMaker Python SDK, pointing a prebuilt AWS framework image (PyTorch, TensorFlow, XGBoost, scikit-learn) at their training script, and the SDK calls the same `CreateTrainingJob` API shown below. The job needs a container image with your training code, an IAM role, input channels in S3 (or EFS or FSx for Lustre), an instance type and count, and an S3 path for output. SageMaker AI launches the instances, runs the container, writes the trained model to S3 as `model.tar.gz`, and terminates the instances. You pay per second of the job, at the instance's training rate: $0.115 an hour for `ml.m5.large`, $1.408 for `ml.g5.xlarge`, and $63.296 for an eight-GPU `ml.p5.48xlarge`.
+
+The input mode decides how data reaches the container. **File** mode, the default, copies the whole dataset to the instance before training starts, so the instance's storage must hold it. **FastFile** mode presents the S3 prefix as local files and streams them as the code reads, so training starts at once and the dataset can be larger than the disk. **Pipe** mode is an older streaming mode that FastFile has largely replaced.
+
+### Managed spot training
+
+Managed spot training runs the job on spare EC2 capacity for up to 90% less than on-demand. SageMaker AI handles interruptions. It waits for capacity, restarts the job, and, if you configure checkpointing, copies your checkpoint files from the instance to S3 and back so the job resumes where it stopped instead of starting over. Your training code has to write checkpoints to the local checkpoint path (`/opt/ml/checkpoints` by default) and load the latest one on start.
+
 ```json
 {
-  "Rules": [{
-    "Id": "delete-old-models",
-    "Filter": {"Prefix": "models/"},
-    "Status": "Enabled",
-    "Expiration": {"Days": 90}
-  }]
+  "TrainingJobName": "churn-xgb-2026-09-28",
+  "RoleArn": "arn:aws:iam::111122223333:role/SageMakerTrainingRole",
+  "AlgorithmSpecification": {
+    "TrainingImage": "111122223333.dkr.ecr.us-east-1.amazonaws.com/churn-train:1.4",
+    "TrainingInputMode": "FastFile"
+  },
+  "InputDataConfig": [{
+    "ChannelName": "train",
+    "DataSource": { "S3DataSource": { "S3DataType": "S3Prefix", "S3Uri": "s3://ml-data/churn/train/" } }
+  }],
+  "OutputDataConfig": { "S3OutputPath": "s3://ml-artifacts/churn/" },
+  "ResourceConfig": { "InstanceType": "ml.g5.xlarge", "InstanceCount": 1 },
+  "EnableManagedSpotTraining": true,
+  "CheckpointConfig": { "S3Uri": "s3://ml-artifacts/churn/checkpoints/" },
+  "StoppingCondition": { "MaxRuntimeInSeconds": 14400, "MaxWaitTimeInSeconds": 28800 }
 }
 ```
 
-Keep only latest 10 versions in model registry, delete rest.
+Submit it with `aws sagemaker create-training-job --cli-input-json file://job.json`. `MaxRuntimeInSeconds` caps the time spent training, and `MaxWaitTimeInSeconds`, which must be larger, caps training plus time spent waiting for spot capacity. When the job ends, `DescribeTrainingJob` reports `TrainingTimeInSeconds` and `BillableTimeInSeconds`, and one minus billable over training time is your saving. A job billed for 100 of its 500 seconds saved 80%. Built-in algorithms that don't checkpoint are limited to a one-hour wait, so spot suits them only for short jobs. Automatic model tuning, which runs many training jobs to search hyperparameters, can use spot too. `ResourceConfig` omits `VolumeSizeInGB` here because GPU families such as `ml.g5` train on fixed local NVMe storage (250 GB on `ml.g5.xlarge`), and the setting applies only to instances that use EBS.
 
-## When to Use AWS SageMaker
+Before a first GPU job, check the account's service quotas. SageMaker AI sets a separate quota per instance type for training, spot training, and endpoints, and the defaults for large GPU instances are often too low to launch anything.
 
-**Strong fit**:
-- ✅ Production ML workloads requiring scalable training and inference
-- ✅ Teams already using Python ML libraries (TensorFlow, PyTorch, scikit-learn, XGBoost)
-- ✅ Distributed training requirements (models too large for single GPU, datasets >100 GB)
-- ✅ MLOps maturity goals (model versioning, A/B testing, monitoring)
-- ✅ Cost optimization through spot instances and serverless inference
-- ✅ Need for managed infrastructure (no DevOps team to maintain ML clusters)
+### Larger training: distributed jobs and HyperPod
 
-**Consider alternatives when**:
-- ❌ **Simple inference on pre-trained models** → Lambda with container images (cheaper for <10,000 requests/day)
-- ❌ **No custom model training** → Use AWS AI services (Rekognition, Comprehend, Textract) for pre-built models
-- ❌ **Existing Kubernetes ML infrastructure** → Keep using Kubeflow, selectively adopt SageMaker for training only
-- ❌ **Real-time inference <1ms latency** → Deploy models on EC2 with GPU optimization or Lambda@Edge
-- ❌ **Ultra-low cost priority, can manage infra** → Self-managed EC2 Spot instances with MLflow/Kubeflow
+A training job can span several instances, with SageMaker AI's distributed training libraries or a framework's own, such as PyTorch's distributed data parallel. The job still starts, runs, and ends as one unit, which suits training measured in hours.
 
-## SageMaker vs Alternatives
+**SageMaker HyperPod** is for work measured in weeks on hundreds or thousands of accelerators, such as pretraining or large-scale fine-tuning of foundation models. It provisions a persistent cluster orchestrated by Slurm, an open-source job scheduler common in high-performance computing, or by Amazon EKS, watches the nodes, replaces failed hardware, and resumes jobs from checkpoints. Because the cluster persists, you pay for its instances until you delete it. **Training plans** reserve GPU or Trainium capacity for a window up to eight weeks ahead, paid up front and non-refundable, when on-demand accelerators are scarce. Each plan targets one kind of resource, whether training jobs, a HyperPod cluster, inference endpoints, or Studio apps.
 
-### SageMaker vs Self-Managed (EC2 + MLflow/Kubeflow)
+---
 
-| Aspect | SageMaker | Self-Managed |
-|--------|-----------|--------------|
-| **Training cost** | Pay per training hour | Pay for cluster 24/7 |
-| **Inference cost** | Pay per endpoint hour or request (serverless) | Pay for cluster 24/7 |
-| **Setup time** | Minutes (API call) | Days-weeks (infrastructure setup) |
-| **Distributed training** | Built-in (data/model parallelism) | Manual setup (Horovod, DeepSpeed) |
-| **Spot instances** | One parameter | Manual spot fleet management |
-| **A/B testing** | Built-in multi-variant endpoints | Custom routing logic |
-| **Model registry** | Built-in with approval workflows | MLflow Model Registry (self-hosted) |
+## Choosing an Inference Option
 
-**Cost example** (4 hours training/day on ml.p3.2xlarge):
-- SageMaker: 4 hours/day × $3.83 × 30 days = $459/month
-- Self-managed: p3.2xlarge 24/7 = $2,795/month (even if used only 4 hours/day)
-- Savings: $2,336/month (84%)
+Hosting a trained model takes three objects. A **model** pairs the artifact in S3 with an inference container image and an IAM role. The image can be one of AWS's prebuilt framework containers or your own, which must answer HTTP requests on port 8080 at `/invocations` for predictions and `/ping` for health checks. An **endpoint configuration** holds one or more **production variants**, each naming a model with an instance type and count, or a serverless or asynchronous setting instead. An **endpoint** deploys a configuration, and changing what it serves means pointing it at a new configuration.
 
-### SageMaker vs Vertex AI (Google Cloud)
+A trained model serves predictions in one of four ways, and the choice follows from payload size, how long a prediction takes, and whether traffic is steady.
 
-| Aspect | SageMaker | Vertex AI |
-|--------|-----------|-----------|
-| **Ecosystem** | AWS-native (S3, IAM, CloudWatch) | GCP-native (GCS, IAM, Cloud Monitoring) |
-| **Training pricing** | $3.06/hour (n1-standard-4 + V100) | $2.90/hour (n1-standard-4 + V100) |
-| **Managed notebooks** | SageMaker Studio | Vertex AI Workbench |
-| **AutoML** | SageMaker Autopilot | Vertex AI AutoML |
-| **Pre-built algorithms** | 17 built-in algorithms | Vertex AI pre-built containers |
+| Option | Request limits | Scales to zero | Pay for | Fits |
+|---|---|---|---|---|
+| **Real-time endpoint** | 6 MB payload; the container must respond within 60 seconds | Only when models are deployed as inference components, described below | Instance-hours while in service, plus $0.016/GB processed | Interactive, steady traffic; GPUs; VPC access |
+| **Serverless endpoint** | 4 MB payload, 60 seconds, up to 6 GB memory, no GPU | Yes, automatically | Compute per millisecond by memory size, plus $0.016/GB | Spiky or light traffic that tolerates cold starts |
+| **Asynchronous endpoint** | Payload up to 1 GB in S3, up to one hour per request | Yes, with an auto scaling minimum of zero | Instance-hours while running | Large inputs or slow models, with results collected later |
+| **Batch transform** | Mini-batches up to 100 MB from S3 | Instances exist only for the job | Instance-hours for the job | Scoring a whole dataset on a schedule |
 
-Both platforms comparable in features and pricing. Choose based on existing cloud provider.
+A **real-time endpoint** runs instances that stay up until you delete the endpoint. An `ml.m5.large` host costs $0.115 an hour, about $84 a month, and AWS recommends at least two instances for a production endpoint so it keeps serving if an Availability Zone fails. Real-time endpoints support GPUs, VPC placement, several variants, and streaming responses through `InvokeEndpointWithResponseStream`, which returns tokens as a language model generates them.
 
-### SageMaker vs Databricks ML
+A **serverless endpoint** runs on capacity SageMaker AI manages, with memory from 1 GB to 6 GB and CPU in proportion. It costs $0.00004 per second at 2 GB. At 200,000 requests a month that each take 300 milliseconds, that is 60,000 seconds, or $2.40, against about $84 for one always-on instance. The crossover is near 2.1 million seconds of compute a month, which is close to a request running at every moment of the day. The first requests after an idle period, or after concurrency rises, hit a cold start while the endpoint adds capacity, and the delay lasts as long as it takes to download the model and start the container. Provisioned concurrency keeps a set number of workers warm for a per-second charge. Each endpoint can run at most 200 concurrent requests. All serverless endpoints in an account also share a Regional concurrency quota. AWS's documentation gives it as 1,000 in the largest Regions and 500 in others, but its quota table lists a default of 10, so check the account's value in Service Quotas before setting a high maximum.
 
-| Aspect | SageMaker | Databricks ML |
-|--------|-----------|---------------|
-| **Strength** | End-to-end ML platform | Unified data + ML platform (Spark + ML) |
-| **Training** | Managed training jobs | Notebooks on Databricks clusters |
-| **Inference** | Managed endpoints | MLflow Model Serving (beta) |
-| **Data prep** | SageMaker Data Wrangler | Native Spark integration |
-| **Cost** | Training + inference separate | Cluster costs (all-in-one) |
+The limits often decide before the price does. Serverless endpoints have no GPUs, no VPC configuration, no network isolation, no request data capture, and no multi-model hosting or multiple variants. A serverless endpoint can be converted to real time later, but a real-time endpoint can't be converted to serverless.
 
-**Databricks wins** if your primary workload is big data processing (Spark) with ML as secondary. **SageMaker wins** if ML is primary workload.
+An **asynchronous endpoint** is called through the `InvokeEndpointAsync` API with a pointer to an input object in S3. The endpoint queues the request and writes the result to S3, with an optional SNS notification on success or error. In the .NET SDK that API's method is `InvokeEndpointAsyncAsync`, because the SDK already uses `InvokeEndpointAsync` for the Task-based real-time call. It suits video, long documents, and slow models, and with an auto scaling minimum of zero it costs nothing while the queue is empty.
 
-### SageMaker Training vs AWS Batch + EC2
+**Batch transform** starts instances, runs every record in an S3 prefix through the model, writes an output file per input file, and shuts down. Scoring a table nightly with batch transform costs an hour of instance time instead of a month of it.
 
-**AWS Batch**: Run containerized training jobs on EC2/Spot with custom job orchestration.
+---
 
-**When to use AWS Batch instead of SageMaker Training**:
-- ✅ Need full control over container environment (custom libraries, system dependencies)
-- ✅ Want to manage Spot instance bidding strategies manually
-- ✅ Already have Batch infrastructure for other workloads
+## Hosting Several Models on One Endpoint
 
-**When to use SageMaker Training**:
-- ✅ Want managed distributed training without configuring MPI/Horovod
-- ✅ Need automatic model versioning and experiment tracking
-- ✅ Prefer declarative training API over custom Docker containers
+An endpoint running one model on one instance wastes whatever capacity the model doesn't use. **Inference components** fix that. Each component names a model and reserves the CPU cores, GPUs, and memory it needs, and you set how many copies of it run. SageMaker AI places copies wherever an instance has room, and managed instance scaling adds or removes instances to fit them. Each component scales its own copy count with Application Auto Scaling, and callers choose a model by naming its component in the request.
 
-**Cost**: Comparable. Both use same underlying EC2/Spot instances. SageMaker adds 10-15% overhead for managed features.
+{% include figure.html id="aws-sagemaker-inference-components" %}
+
+Inference components are also the only way a real-time endpoint scales to zero. Set the variant's minimum instance count to zero and each component's minimum copies to zero, and the endpoint releases its instances when idle. Scaling back out needs a step scaling policy triggered by a CloudWatch alarm on the `NoCapacityInvocationFailures` metric, and provisioning takes several minutes, during which requests fail. That trade suits internal or batch-like callers that retry, not a user waiting on a page.
+
+**Multi-model endpoints** solve a different problem, serving thousands of similar small models, such as one per customer, from one container. The endpoint loads a model from S3 on its first request, caches it in memory, and evicts the least used when memory fills. The first request for a cold model is slow and can return `ModelNotReadyException`, so callers must retry. Use inference components when a few models need guaranteed resources, and multi-model endpoints when many models share one framework and most sit idle.
+
+---
+
+## Calling an Endpoint from an Application
+
+Endpoints aren't public URLs. Every call is signed with AWS credentials and authorized by IAM (`sagemaker:InvokeEndpoint`), so external callers reach a model through your own API, such as an API Gateway route or a service that calls the endpoint. With the AWS SDK for .NET (`AWSSDK.SageMakerRuntime`):
+
+```csharp
+using System.Text;
+using Amazon.SageMakerRuntime;
+using Amazon.SageMakerRuntime.Model;
+
+var client = new AmazonSageMakerRuntimeClient(new AmazonSageMakerRuntimeConfig
+{
+    // The container has 60 seconds to respond; give the socket a margin beyond that.
+    Timeout = TimeSpan.FromSeconds(70)
+});
+
+var request = new InvokeEndpointRequest
+{
+    EndpointName = "churn-prod",
+    InferenceComponentName = "churn-model", // only when the endpoint hosts inference components
+    ContentType = "application/json",
+    Accept = "application/json",
+    Body = new MemoryStream(Encoding.UTF8.GetBytes(
+        """{"tenure_months": 14, "plan": "pro", "tickets_90d": 3}"""))
+};
+
+InvokeEndpointResponse response = await client.InvokeEndpointAsync(request);
+using var reader = new StreamReader(response.Body);
+string prediction = await reader.ReadToEndAsync();
+```
+
+Three errors deserve handling. `ModelError` (HTTP 424) means your container returned an error, and its CloudWatch log stream has the detail. `ModelNotReadyException` (429) means a serverless endpoint is still provisioning or a multi-model endpoint is still loading the model, so retry with backoff. Throttling means you've hit an endpoint's concurrency or the account's limit of 10,000 invocations per second per Region.
+
+---
+
+## Rolling Out and Scaling Endpoints
+
+Updating the configuration of a live endpoint uses **deployment guardrails**, SageMaker AI's managed versions of the release strategies covered in [Deployment Strategies](/study-guides/infrastructure/deployment-strategies.html). A blue/green update builds a new fleet and shifts traffic to it all at once, as a canary slice then the rest, or in linear steps, while CloudWatch alarms you choose watch a baking period and roll back automatically if one fires. A rolling update replaces capacity in batches instead of doubling it. Guardrails apply to real-time and asynchronous endpoints. On an endpoint built from inference components, you update one model at a time by updating its component, which rolls out new copies in batches without touching the others. To compare two models on live traffic, deploy them as **production variants** of one endpoint with traffic weights, and let a caller pin a variant with `TargetVariant` when it needs one.
+
+Auto scaling uses Application Auto Scaling. The usual policy is target tracking on invocations per instance (`SageMakerVariantInvocationsPerInstance`), or per copy for inference components. Load-test to find how many invocations one instance handles within your latency target, then set the target below that. The minimum capacity is the part you always pay for, so set it to baseline traffic, not to the peak.
+
+---
+
+## Tracking, Registering, and Automating
+
+**Managed MLflow** records experiments: parameters, metrics, artifacts, and, for generative AI applications, traces of each step. SageMaker AI offers it two ways. **MLflow Apps** are the newer option, which AWS recommends over tracking servers for faster startup, cross-account sharing, and tighter integration. The older **MLflow tracking servers** run in Small, Medium, or Large sizes, billed per hour while running ($0.60 an hour for Small) plus $0.10 per GB-month of metadata. Check the pricing page for Apps before choosing. Either way, artifacts live in an S3 bucket in your account.
+
+**Model Registry** is the catalog of models headed for production. A model group holds the versions trained for one problem, each with its metrics, lineage, and an approval status of `PendingManualApproval`, `Approved`, or `Rejected`. Changing the status emits an EventBridge event, which is the usual trigger for a deployment pipeline, so approving a version is what deploys it. Models registered in MLflow can register themselves in Model Registry, and model groups can be shared with other accounts for a separate production account.
+
+**Pipelines** chains processing, training, tuning, evaluation, conditions, registration, and deployment into a versioned workflow defined in the Python SDK, JSON, or Studio's visual editor. Steps can cache results so a rerun skips unchanged work. The orchestration itself is free, and you pay for the jobs it runs.
+
+Drift detection is where the closures bite. With Model Monitor closed to new customers, AWS's documented replacement is a set of open-source sample solutions that run in your account. They capture requests and responses from a real-time endpoint to S3, compare them with the training data using the Evidently AI library on a schedule, log results to MLflow, alert through SNS or CloudWatch, and can feed QuickSight dashboards that track drift and delayed ground truth over time. Data capture is an endpoint setting that serverless endpoints don't support.
+
+---
+
+## Lower-Code Paths: JumpStart and Canvas
+
+**JumpStart** is a catalog of pretrained models, including open-weight foundation models whose trained parameters anyone can host. It deploys them to endpoints in your account and fine-tunes them with training jobs, so you choose the instance, control the network, and pay instance-hours whether or not requests arrive. It fits when you need a model or a level of control that Bedrock doesn't offer.
+
+**SageMaker Canvas** builds models from tabular, time-series, image, and text data through a point-and-click interface. It absorbed Autopilot, SageMaker AI's automated machine learning, which tries algorithms and hyperparameters and ranks the resulting models, and Autopilot's AutoML API remains for code. Canvas bills $1.90 per session-hour while the workspace is open, whether or not anyone is using it, plus model building at $30 per million cells for the first 10 million cells of each model. Log out when you finish, or an idle workspace keeps billing.
+
+---
+
+## Security and Cost Controls
+
+Every job, endpoint, and space runs as an **execution role**, and that role, not the person who started it, decides what data it can read. Give training, processing, and hosting separate roles, each scoped to the S3 prefixes and ECR repositories it needs.
+
+Training jobs, processing jobs, and real-time endpoints can run in your VPC subnets, so they reach private data sources and nothing else. **Network isolation** goes further and blocks the container from making any outbound calls, which stops a compromised or careless training script from sending data out. Interface VPC endpoints for the SageMaker API, the runtime, and Studio keep traffic off the internet. Encrypt training volumes, model artifacts, and endpoint storage with a KMS key, customer managed where you need to control access to the key.
+
+For cost, **Savings Plans for SageMaker AI** take up to 64% off in exchange for a one- or three-year hourly commitment. They cover Studio and notebook instances, processing, Data Wrangler (the visual data preparation tool), training, real-time endpoints, and batch transform, but not serverless inference. For an account's first two months, the free tier covers 250 hours of `ml.t3.medium` notebooks, 50 hours of training and 125 hours of real-time hosting on `m4.xlarge` or `m5.xlarge`, and 150,000 seconds of serverless inference. Tag domains, jobs, and endpoints by team so the bill can be split.
+
+---
 
 ## Common Pitfalls
 
-### Running Real-Time Endpoints 24/7 for Batch Inference
+- **Idle GPUs in notebooks.** A GPU space or notebook instance runs all month because nobody stopped it. Turn on idle shutdown and train in jobs, which end on their own.
+- **A real-time endpoint for nightly scoring.** An endpoint that serves one hour of work a day bills for 24. Use batch transform, or an asynchronous endpoint that scales to zero.
+- **Spot without checkpoints.** An interrupted job restarts from the beginning and can cost more than on-demand. Write checkpoints and load the latest one on start.
+- **Serverless for a model that outgrows it.** A model that later needs a GPU, VPC access, or data capture forces a move to a real-time endpoint, and the conversion is one way. Check the exclusions before choosing.
+- **Scale to zero in front of users.** An endpoint at zero instances fails requests for several minutes while it provisions. Keep one instance for interactive traffic.
+- **Treating an endpoint as a public API.** Endpoints accept only signed IAM requests. Put your own API in front for outside callers.
 
-**Symptom**: Endpoint used only 1 hour/day for nightly batch scoring, but runs 24/7.
-
-**Cost**: ml.m5.large × $0.134/hour × 730 hours = $97.82/month.
-
-**Solution**: Use batch transform instead.
-- Cost: ml.m5.large × $0.134/hour × 30 hours = $4.02/month
-- Savings: $93.80/month (96%)
-
-### Not Using Spot Instances for Training
-
-**Symptom**: All training jobs use on-demand instances, paying full price.
-
-**Solution**: Enable spot instances for 70% savings.
-
-```python
-use_spot_instances=True,
-max_wait=7200,
-checkpoint_s3_uri='s3://my-bucket/checkpoints/'
-```
-
-**Consideration**: Implement checkpointing to handle spot interruptions. SageMaker resumes from last checkpoint automatically.
-
-### Over-Provisioning Endpoint Min Capacity
-
-**Symptom**: Auto-scaling min capacity set to 10 instances, but traffic only requires 2 instances most of the time.
-
-**Cost impact**: 8 unnecessary instances × ml.m5.large × $0.134/hour × 730 hours = $782/month wasted.
-
-**Solution**: Set min capacity to actual baseline traffic, rely on auto-scaling for peaks.
-
-### Not Monitoring Model Performance Drift
-
-**Symptom**: Model accuracy degrades over months, but no one notices until business metrics drop.
-
-**Root cause**: No monitoring of model predictions vs ground truth.
-
-**Solution**: Use SageMaker Model Monitor to detect drift.
-
-```python
-from sagemaker.model_monitor import DataCaptureConfig
-
-data_capture_config = DataCaptureConfig(
-    enable_capture=True,
-    sampling_percentage=100,  # Capture 100% of requests
-    destination_s3_uri='s3://my-bucket/data-capture'
-)
-
-predictor = model.deploy(
-    initial_instance_count=2,
-    instance_type='ml.m5.large',
-    data_capture_config=data_capture_config
-)
-```
-
-Model Monitor compares recent predictions against baseline distribution, alerts on drift.
-
-### Storing Notebooks on Expensive Instance Storage
-
-**Symptom**: SageMaker notebook instance (ml.t3.medium) runs 24/7 even when not in use, costing $36.50/month.
-
-**Solution**: Use SageMaker Studio (pay per kernel-hour) or stop notebook instances when idle.
-
-**Studio cost**: If notebook used 20 hours/month, pay only for those 20 hours (vs 730 hours/month with always-on instance).
-
-### Not Using Managed Spot Training Checkpoints
-
-**Symptom**: Spot instance interrupted during training, entire training job restarts from scratch, wasting hours of compute.
-
-**Solution**: Enable checkpointing so training resumes from interruption point.
-
-```python
-checkpoint_s3_uri='s3://my-bucket/checkpoints/',
-use_spot_instances=True
-```
-
-SageMaker saves checkpoints every N minutes, resumes from last checkpoint after spot interruption.
+---
 
 ## Key Takeaways
 
-**AWS SageMaker provides managed infrastructure for the full ML lifecycle** from experimentation in Studio notebooks to distributed training on spot instances to auto-scaling inference endpoints. This eliminates the operational burden of managing GPU clusters, implementing distributed training, and building serving infrastructure.
-
-**Cost optimization comes from spot instances and right-sizing**. Use spot instances for 70% training cost savings, serverless endpoints for infrequent inference (99% cheaper than always-on endpoints), and multi-model endpoints to host dozens of models on shared infrastructure.
-
-**Distributed training is built-in** via data parallelism (split dataset across GPUs) and model parallelism (split model across GPUs). This scales training from 1 GPU to 100+ GPUs with minimal code changes, reducing training time from days to hours.
-
-**Model registry and A/B testing enable MLOps maturity**. Version models automatically, implement approval workflows before production deployment, and A/B test model versions by routing traffic splits to different variants on the same endpoint.
-
-**Choose SageMaker when ML is your primary workload** and you want managed infrastructure. Use AWS AI services (Rekognition, Comprehend) for pre-built models without custom training. Use self-managed EC2 if you need absolute cost minimization and have DevOps resources to manage clusters.
-
-**Common pitfalls involve not using cost-saving features**. Enable spot instances for training, use serverless endpoints for low-traffic inference, implement auto-scaling with appropriate min capacity, and stop unused notebook instances. Monitor model performance drift to detect when retraining is needed.
-
-**SageMaker vs Databricks**: Choose SageMaker for pure ML workloads, Databricks if you're primarily doing Spark-based big data processing with ML as a secondary concern. Both provide similar ML capabilities, but differ in data processing integration.
-
-**Serverless inference is the default for new endpoints** unless you have >40,000 requests/hour continuous traffic. Below that threshold, serverless costs 95-99% less than always-on real-time endpoints with comparable latency (excluding cold starts).
+- SageMaker AI is the ML service within the broader Amazon SageMaker platform, and its APIs, CLI, and IAM actions still use the `sagemaker` name.
+- Training jobs create instances for the job and bill by the second. Managed spot training takes up to 90% off when the code checkpoints, and HyperPod runs persistent, self-healing clusters for foundation-model scale.
+- Choose real-time endpoints for steady interactive traffic, serverless for light or spiky traffic within 4 MB, 60 seconds, 6 GB, and no GPU or VPC, asynchronous for large or slow requests, and batch transform for whole datasets.
+- Inference components pack several models onto shared instances with their own resources and scaling, and they let a real-time endpoint scale to zero at the cost of minutes of failed requests when it scales out.
+- MLflow tracks experiments, Model Registry approvals trigger deployments through EventBridge, and Pipelines charges only for the jobs it runs. With Model Monitor, Clarify, and Ground Truth closed to new customers, new accounts build monitoring and labeling with other tools.
+- Execution roles, VPC placement, network isolation, and KMS keys secure the data path, and Savings Plans, idle shutdown, and right-sized minimums control the bill.

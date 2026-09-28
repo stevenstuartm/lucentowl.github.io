@@ -1,0 +1,71 @@
+---
+title: "Pulling an Image from a Private Subnet"
+kind: deployment
+system: aws
+summary: "Token and manifest through two interface endpoints, layers through S3."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 390" role="img" aria-labelledby="awsecr-title awsecr-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsecr-title">Private image pull path from a private subnet to Amazon ECR</title>
+<desc id="awsecr-desc">A task or node in a private subnet with no NAT gateway pulls an image in three kinds of request. It calls the ecr.api interface VPC endpoint for an authorization token and other ECR API calls. It calls the ecr.dkr interface VPC endpoint, with private DNS enabled, to read the image manifest from the registry. It then downloads each image layer from an Amazon S3 bucket owned by ECR, through an S3 gateway endpoint attached to the subnet's route table. All three services are in the same Region as the VPC.</desc>
+<style>
+.awsecr-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsecr-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsecr-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsecr-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsecr-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsecr-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsecr-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsecr-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsecr-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsecr-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsecr-pan" x="20" y="20" width="520" height="350" rx="8"/>
+<text class="awsecr-h" x="36" y="42">VPC, private subnet (no NAT gateway)</text>
+
+<rect class="awsecr-box" x="40" y="155" width="170" height="80" rx="6"/>
+<text class="awsecr-n" x="125" y="187" text-anchor="middle">Task or node</text>
+<text class="awsecr-k" x="125" y="207" text-anchor="middle">[ECS, EKS, CodeBuild]</text>
+
+<rect class="awsecr-box" x="330" y="60" width="190" height="64" rx="6"/>
+<text class="awsecr-n" x="425" y="86" text-anchor="middle">ecr.api endpoint</text>
+<text class="awsecr-k" x="425" y="106" text-anchor="middle">[interface endpoint]</text>
+
+<rect class="awsecr-box" x="330" y="163" width="190" height="64" rx="6"/>
+<text class="awsecr-n" x="425" y="189" text-anchor="middle">ecr.dkr endpoint</text>
+<text class="awsecr-k" x="425" y="209" text-anchor="middle">[interface, private DNS on]</text>
+
+<rect class="awsecr-box" x="330" y="266" width="190" height="64" rx="6"/>
+<text class="awsecr-n" x="425" y="292" text-anchor="middle">S3 gateway endpoint</text>
+<text class="awsecr-k" x="425" y="312" text-anchor="middle">[route table entry]</text>
+
+<rect class="awsecr-acc" x="640" y="40" width="320" height="200" rx="8"/>
+<text class="awsecr-an" x="800" y="66" text-anchor="middle">Amazon ECR</text>
+<text class="awsecr-k" x="800" y="84" text-anchor="middle">[same Region as the VPC]</text>
+<rect class="awsecr-box" x="660" y="100" width="280" height="50" rx="6"/>
+<text class="awsecr-n" x="800" y="122" text-anchor="middle">ECR API</text>
+<text class="awsecr-lab" x="800" y="140" text-anchor="middle">authorization token, API calls</text>
+<rect class="awsecr-box" x="660" y="170" width="280" height="50" rx="6"/>
+<text class="awsecr-n" x="800" y="192" text-anchor="middle">Registry</text>
+<text class="awsecr-lab" x="800" y="210" text-anchor="middle">image manifest</text>
+
+<rect class="awsecr-acc" x="640" y="266" width="320" height="64" rx="6"/>
+<text class="awsecr-an" x="800" y="292" text-anchor="middle">Amazon S3</text>
+<text class="awsecr-k" x="800" y="312" text-anchor="middle">[layer bucket owned by ECR]</text>
+
+<path class="awsecr-ln" d="M210,175 L270,175 L270,92 L328,92" marker-end="url(#awsecr-a)"/>
+<text class="awsecr-lab" x="222" y="120">1. token</text>
+<path class="awsecr-ln" d="M210,195 L328,195" marker-end="url(#awsecr-a)"/>
+<text class="awsecr-lab" x="222" y="188">2. manifest</text>
+<path class="awsecr-ln" d="M210,215 L270,215 L270,298 L328,298" marker-end="url(#awsecr-a)"/>
+<text class="awsecr-lab" x="222" y="262">3. layers</text>
+
+<path class="awsecr-ln" d="M520,92 L580,92 L580,125 L658,125" marker-end="url(#awsecr-a)"/>
+<path class="awsecr-ln" d="M520,195 L658,195" marker-end="url(#awsecr-a)"/>
+<path class="awsecr-ln" d="M520,298 L638,298" marker-end="url(#awsecr-a)"/>
+
+</g>
+</svg>

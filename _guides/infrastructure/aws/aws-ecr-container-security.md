@@ -1,1520 +1,343 @@
 ---
-title: "AWS ECR & Container Security for System Architects"
+title: "Amazon ECR & Container Image Security for System Architects"
 layout: guide
 category: AWS
 subcategory: Containers in Production
-description: "Comprehensive guide to AWS Elastic Container Registry and container security covering image scanning, lifecycle policies, replication, runtime security, and secrets management"
-tags: [aws, containers, security, docker, kubernetes, devops, infrastructure, practical]
+description: "How Amazon ECR stores and distributes container images and how to trust what runs: registry and repository permissions, private pulls through VPC endpoints, tag immutability, lifecycle rules and archive, replication and pull through cache, basic and Inspector scanning, image signing and verification, and least-privilege container settings."
+tags: [ecr, container-images, image-scanning, amazon-inspector, image-signing, supply-chain-security, practical]
 ---
 {% raw %}
 
-## What Problems ECR & Container Security Solve
+## What ECR Does and Where It Lives
 
-**Container registries and security address critical production challenges**:
+Amazon Elastic Container Registry (ECR) stores container images and serves them to whatever runs them: ECS tasks, EKS pods, Lambda functions packaged as images, CodeBuild jobs, or a developer's laptop. It also stores other artifacts in the same format, such as Helm charts, and the signatures and software bills of materials (SBOMs) that describe an image. The format is the Open Container Initiative (OCI) standard, so any Docker or OCI client can push and pull.
 
-**Image Distribution Challenges**:
-- **Slow deployments**: Pulling images from external registries (Docker Hub) over the internet adds latency, especially for multi-GB images
-- **Rate limiting**: Docker Hub free tier limits to 100 pulls per 6 hours from anonymous IPs, 200 pulls for authenticated users - production deployments can exhaust this quickly
-- **Supply chain risk**: External registries introduce dependency on third-party availability; Docker Hub outages have blocked production deployments
-- **Network costs**: Pulling images from internet sources incurs data transfer charges ($0.09/GB from AWS to internet)
+Three levels of containment decide where settings live:
 
-**Security & Compliance Challenges**:
-- **Vulnerability management**: Without scanning, vulnerabilities in base images and dependencies go undetected until runtime exploitation
-- **Image provenance**: Cannot verify image authenticity or track who built what image when
-- **Secrets exposure**: Hardcoded credentials in images or passed via environment variables create security risks
-- **Compliance requirements**: Regulations (PCI-DSS, HIPAA, SOC 2) require vulnerability scanning, image signing, and audit trails
+| Level | What it is | Settings that live here |
+|---|---|---|
+| **Registry** | One per account per Region, addressed as `123456789012.dkr.ecr.us-east-1.amazonaws.com` | Registry permissions policy, scanning configuration, replication rules, pull through cache rules, repository creation templates, signing rules, blob mounting |
+| **Repository** | A named collection of images, such as `orders/api` | Repository policy, tag mutability, encryption, lifecycle policy |
+| **Image** | A manifest and its layers, identified by a **digest** (a SHA-256 hash of the manifest) and optionally by one or more **tags**. A multi-platform image is a **manifest list** pointing to one image per processor architecture or operating system | Storage class (standard or archive) |
 
-**Operational Challenges**:
-- **Image sprawl**: Old, unused images accumulate, consuming storage and complicating security scanning
-- **Multi-region deployments**: Deploying globally requires image availability in multiple regions; pulling cross-region adds latency and cost
-- **Access control**: Fine-grained control over who can push/pull which images across teams and environments
+The registry is Regional. An image pushed in `us-east-1` exists only there until something copies it to another Region, and every registry-level setting has to be configured once per Region the account uses. Encryption is fixed when a repository is created. The default is AES-256 with S3-managed keys, and a repository can instead use a KMS key, either the AWS managed key for ECR or a customer managed key.
 
-**ECR and container security solve these problems**:
+**Amazon ECR Public** is a separate service for images anyone can pull, at `public.ecr.aws`. It includes 50 GB a month of free storage, and pulls to AWS compute in any Region are free without limit. Private repositories are the subject of the rest of this guide.
 
-1. **AWS ECR (Elastic Container Registry)**: Fully managed Docker registry with native AWS integration
-2. **Image Scanning**: Automated vulnerability detection in container images
-3. **Lifecycle Policies**: Automated cleanup of old images based on age or count
-4. **Replication**: Cross-region and cross-account image distribution
-5. **Runtime Security**: Protection against container escape, lateral movement, and runtime threats
-6. **Secrets Management**: Secure injection of credentials into containers without hardcoding
+---
 
-## ECR Fundamentals
+## Controlling Who Pushes and Pulls
 
-### ECR Architecture
+### Authentication
 
-**Registry hierarchy**:
-- **Registry**: AWS account-specific registry (e.g., `123456789012.dkr.ecr.us-east-1.amazonaws.com`)
-- **Repository**: Named collection of related images (e.g., `my-app/backend`)
-- **Image**: Specific version identified by tag or digest (e.g., `my-app/backend:v1.2.3` or `sha256:abc123...`)
+Docker clients don't speak IAM, so ECR issues an **authorization token**, valid for 12 hours, that a client uses as a registry password. `aws ecr get-login-password` fetches one with the caller's credentials. ECS, EKS nodes, and CodeBuild fetch tokens themselves using the role they run with. On ECS, that is the task execution role. On EKS, it is the node's IAM role, or the Fargate pod execution role.
 
-**Key characteristics**:
-- **Regional service**: Each region has separate ECR endpoint (replicate for multi-region)
-- **Private by default**: Requires IAM authentication to push/pull (no public access like Docker Hub)
-- **Public option**: ECR Public for open-source projects (public.ecr.aws/... namespace)
-- **OCI-compliant**: Supports Docker images and OCI (Open Container Initiative) artifacts
+The token carries the caller's permissions, and it grants nothing by itself. `ecr:GetAuthorizationToken` applies to the whole registry, so it takes `"Resource": "*"`, and the actions that read or write images are granted per repository. The AWS managed policy `AmazonEC2ContainerRegistryPullOnly` grants only the pull actions, which suits compute roles. Build pipelines need the push actions as well.
 
-### Authentication & Access Control
+### Repository and registry policies
 
-**Docker authentication**:
-
-```bash
-# Get login token (valid 12 hours)
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin \
-  123456789012.dkr.ecr.us-east-1.amazonaws.com
-
-# Push image
-docker tag my-app:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
-```
-
-**IAM policies for ECR**:
+A **repository policy** is a resource policy on one repository. It is how another account gets access. Pulling across accounts needs an allow in both accounts. The repository policy in the registry account names the other account, and an identity policy in that account grants the role the pull actions. A common pattern keeps images in a shared tooling account and lets every account in the organization pull:
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "OrgPull",
       "Effect": "Allow",
+      "Principal": "*",
       "Action": [
-        "ecr:GetAuthorizationToken"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage"
-      ],
-      "Resource": "arn:aws:ecr:us-east-1:123456789012:repository/my-app"
-    }
-  ]
-}
-```
-
-**Push permissions** (for CI/CD):
-
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "ecr:PutImage",
-    "ecr:InitiateLayerUpload",
-    "ecr:UploadLayerPart",
-    "ecr:CompleteLayerUpload"
-  ],
-  "Resource": "arn:aws:ecr:us-east-1:123456789012:repository/my-app"
-}
-```
-
-**Repository policies** (cross-account access):
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllowPull",
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::999999999999:root"
-      },
-      "Action": [
-        "ecr:BatchCheckLayerAvailability",
         "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
-      ]
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchCheckLayerAvailability"
+      ],
+      "Condition": {
+        "StringEquals": { "aws:PrincipalOrgID": "o-a1b2c3d4e5" }
+      }
     }
   ]
 }
 ```
 
-### Tagging Strategies
+A **registry permissions policy** covers registry-level operations. The destination account of cross-account replication needs one that lets the source account replicate into it, and it can scope what principals do with pull through cache. Repository creation templates can also stamp a repository policy onto every repository ECR creates on your behalf.
 
-**Effective tagging practices**:
+---
 
-1. **Semantic versioning** (production releases):
-   - `my-app:1.2.3` (immutable release)
-   - `my-app:1.2` (minor version alias, updated on patch releases)
-   - `my-app:1` (major version alias)
-   - `my-app:latest` (points to latest stable release)
+## Pulling Images from Private Subnets
 
-2. **Git-based tags** (CI/CD):
-   - `my-app:main-abc123f` (branch + short commit SHA)
-   - `my-app:pr-456` (pull request number)
-   - `my-app:build-789` (build number)
+A pull makes three kinds of request. The client calls the ECR API for an authorization token, calls the registry endpoint to read the image manifest, then downloads each layer from an S3 bucket that ECR owns. A task or node in a private subnet with no NAT gateway needs a private route for all three:
 
-3. **Environment tags** (deployment tracking):
-   - `my-app:staging-2024-11-15` (environment + date)
-   - `my-app:prod-current` (currently deployed to production)
+- An interface endpoint for `com.amazonaws.<region>.ecr.api`, for the token and API calls.
+- An interface endpoint for `com.amazonaws.<region>.ecr.dkr`, for Docker and OCI registry calls. Its private DNS name must be enabled, so the registry hostname resolves to the endpoint.
+- A gateway endpoint for S3, attached to the subnets' route tables, for the layers.
 
-**Tag immutability**:
+{% endraw %}
+{% include figure.html id="aws-ecr-private-pull" %}
+{% raw %}
+
+The S3 gateway endpoint is the one teams forget, because the image name never mentions S3. Without it, the token and manifest calls succeed and the layer downloads fail or leave through a NAT gateway, which bills every gigabyte of image data it processes. The endpoint's security group must allow HTTPS from the subnets. A task that also sends logs with the `awslogs` driver needs a CloudWatch Logs endpoint, and an ECS task on EC2 instances also needs the ECS endpoints for the agent.
+
+Endpoint policies can narrow what the endpoints allow, such as pulls only, or pulls only by named roles. The S3 endpoint's policy can be limited to `s3:GetObject` on ECR's layer bucket for the Region, `prod-<region>-starport-layer-bucket`.
+
+---
+
+## Tags, Digests, and Immutability
+
+A digest names exact content and never changes. A tag is a movable pointer to a digest, so `orders/api:v1.4.2` can point at one image today and another tomorrow if someone pushes over it. Anything that must run a known image, such as a production deployment or a rollback, should resolve the tag to a digest when it deploys, and record the digest.
+
+When a push moves a tag, the image it used to point at stays in the repository with no tag, as an **untagged** image. **Tag immutability** stops a push from moving an existing tag. With it on, pushing `v1.4.2` a second time fails, which protects release tags from an accidental or malicious overwrite. Since July 2025 a repository can set exclusion filters of up to five wildcard patterns, so tags like `latest` or `dev-*` stay movable while every release tag is locked:
 
 ```bash
-# Enable immutable tags (prevents overwriting tags)
 aws ecr put-image-tag-mutability \
-  --repository-name my-app \
-  --image-tag-mutability IMMUTABLE
+  --repository-name orders/api \
+  --image-tag-mutability IMMUTABLE_WITH_EXCLUSION \
+  --image-tag-mutability-exclusion-filters filter=latest,filterType=WILDCARD
 ```
 
-**Why immutability matters**: Prevents accidental overwrites of `latest` tag mid-deployment, ensures reproducible builds, and provides clear audit trail.
+Two interactions catch people. A pull through cache repository must stay mutable, because ECR refreshes cached images under the same tag. And when replication brings in an image whose tag already exists in an immutable destination repository, the image arrives without that tag, so it may land untagged.
 
-## Image Scanning & Vulnerability Management
+A tagging scheme matters mostly because lifecycle rules select images by tag. Release versions, commit SHAs, and environment-specific tags each need a distinct pattern, so a rule can keep releases and expire builds.
 
-### Scanning Types
+---
 
-**ECR offers two scanning options**:
+## Keeping the Registry Small
 
-1. **Basic scanning** (Amazon ECR with Clair):
-   - Uses open-source Clair scanner
-   - Scans on push or on-demand
-   - Limited to OS package vulnerabilities (not application dependencies)
-   - Free (included in ECR pricing)
+### Lifecycle policies
 
-2. **Enhanced scanning** (Amazon Inspector integration):
-   - Continuous scanning (rescans as new CVEs discovered)
-   - OS packages AND application dependencies (Java, Python, Node.js, .NET, Go, Ruby)
-   - CVSS scores, exploitability data, remediation guidance
-   - $0.09 per image scan (first scan per image per repo per month)
+Every push adds an image, and CI pipelines push on every commit. A **lifecycle policy** on a repository expires or archives images automatically, within 24 hours of an image meeting a rule's criteria. Each rule selects images by tag status (`tagged`, `untagged`, or `any`) and by tag pattern, then applies a count or age:
 
-### Enabling Enhanced Scanning
+| `countType` | Selects | Allowed action |
+|---|---|---|
+| `imageCountMoreThan` | Everything beyond the newest N matching images | Expire or archive |
+| `sinceImagePushed` | Images pushed more than N days ago | Expire or archive |
+| `sinceImagePulled` | Images not pulled in N days (or pushed N days ago, if never pulled) | Archive only |
+| `sinceImageTransitioned` | Images archived more than N days ago, with `"storageClass": "archive"` in the selection | Expire only, and N must be at least 90 |
 
-```bash
-# Enable enhanced scanning for repository
-aws ecr put-image-scanning-configuration \
-  --repository-name my-app \
-  --image-scanning-configuration scanOnPush=true
+The evaluation rules explain most surprises. All rules are evaluated together, then applied in priority order, lowest number first. An image is acted on by at most one rule, and an image that matches a higher-priority rule's tag selection can't be expired by a lower-priority rule even when the higher rule leaves it alone. A rule with `tagStatus: any` must have the highest priority number. An image referenced by a manifest list can't be expired until the list is. Signatures and SBOMs are stored as separate artifacts that refer to an image, and when that image is deleted or archived, they follow within 24 hours.
 
-# Enable Inspector enhanced scanning (registry-wide)
-aws ecr put-registry-scanning-configuration \
-  --scan-type ENHANCED \
-  --rules '[
-    {
-      "scanFrequency": "CONTINUOUS_SCAN",
-      "repositoryFilters": [{"filter": "*", "filterType": "WILDCARD"}]
-    }
-  ]'
-```
-
-### Interpreting Scan Results
-
-**Findings structure**:
-
-```json
-{
-  "findings": [
-    {
-      "name": "CVE-2024-1234",
-      "severity": "HIGH",
-      "packageName": "openssl",
-      "packageVersion": "1.1.1k",
-      "fixedInVersion": "1.1.1m",
-      "cvss": {
-        "score": 7.5,
-        "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
-      },
-      "exploitAvailable": false,
-      "description": "OpenSSL denial of service vulnerability..."
-    }
-  ]
-}
-```
-
-**Severity interpretation**:
-- **CRITICAL** (CVSS 9.0-10.0): Remote code execution, privilege escalation - block deployment
-- **HIGH** (CVSS 7.0-8.9): High-impact vulnerabilities - require remediation plan
-- **MEDIUM** (CVSS 4.0-6.9): Moderate risk - address in next sprint
-- **LOW** (CVSS 0.1-3.9): Minimal risk - address during maintenance windows
-- **INFORMATIONAL**: Not a vulnerability, but security best practice recommendation
-
-### Vulnerability Management Workflow
-
-**1. Scan on push (CI/CD integration)**:
-
-```yaml
-# GitHub Actions example
-- name: Build and scan image
-  run: |
-    docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-    docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-- name: Wait for scan results
-  run: |
-    aws ecr wait image-scan-complete \
-      --repository-name $ECR_REPOSITORY \
-      --image-id imageTag=$IMAGE_TAG
-
-- name: Get scan findings
-  run: |
-    aws ecr describe-image-scan-findings \
-      --repository-name $ECR_REPOSITORY \
-      --image-id imageTag=$IMAGE_TAG \
-      --query 'imageScanFindings.findingSeverityCounts'
-```
-
-**2. Policy enforcement** (fail builds on critical findings):
-
-```bash
-#!/bin/bash
-# fail-on-critical.sh
-
-CRITICAL_COUNT=$(aws ecr describe-image-scan-findings \
-  --repository-name my-app \
-  --image-id imageTag=latest \
-  --query 'imageScanFindings.findingSeverityCounts.CRITICAL' \
-  --output text)
-
-if [ "$CRITICAL_COUNT" != "None" ] && [ "$CRITICAL_COUNT" -gt 0 ]; then
-  echo "❌ Found $CRITICAL_COUNT critical vulnerabilities. Blocking deployment."
-  exit 1
-fi
-
-echo "✅ No critical vulnerabilities found. Proceeding."
-```
-
-**3. Remediation workflow**:
-
-```dockerfile
-# Before (vulnerable base image)
-FROM node:16.14.0
-
-# After (patched base image)
-FROM node:16.19.1  # Updated to patch CVE-2024-1234
-```
-
-**4. Exception handling** (for false positives):
-
-```json
-{
-  "suppressions": [
-    {
-      "cve": "CVE-2024-5678",
-      "reason": "False positive - package not used in production code path",
-      "approvedBy": "security-team@company.com",
-      "expiresAt": "2025-01-01T00:00:00Z"
-    }
-  ]
-}
-```
-
-### Continuous Scanning
-
-**Why continuous scanning matters**:
-- **New CVEs discovered daily**: Zero-day vulnerabilities announced after image built
-- **Aging images**: Images deployed months ago may accumulate vulnerabilities
-- **Compliance**: Regulations require ongoing vulnerability management, not just point-in-time
-
-**Continuous scan configuration**:
-
-```bash
-# Configure continuous scanning for critical repositories
-aws ecr put-registry-scanning-configuration \
-  --scan-type ENHANCED \
-  --rules '[
-    {
-      "scanFrequency": "CONTINUOUS_SCAN",
-      "repositoryFilters": [
-        {"filter": "prod-*", "filterType": "WILDCARD"}
-      ]
-    },
-    {
-      "scanFrequency": "SCAN_ON_PUSH",
-      "repositoryFilters": [
-        {"filter": "*", "filterType": "WILDCARD"}
-      ]
-    }
-  ]'
-```
-
-**Cost consideration**: Continuous scanning rescans images when new CVE data available. With enhanced scanning at $0.09 per scan, a repository with 100 active images might cost $9/month if each rescanned once. Budget accordingly.
-
-## Lifecycle Policies & Image Management
-
-### Why Lifecycle Policies Matter
-
-**Image sprawl consequences**:
-- **Storage costs**: ECR charges $0.10/GB/month. A 2GB image with 50 old tags = $10/month wasted
-- **Scan costs**: Enhanced scanning scans all images (including unused ones) = $0.09 × 50 = $4.50/month
-- **Security noise**: Vulnerability findings in unused images distract from real risks
-- **Operational overhead**: Developers scroll through hundreds of old tags to find the right one
-
-**Lifecycle policies automate cleanup**:
-
-### Lifecycle Policy Rules
-
-**Rule types**:
-
-1. **Count-based** (keep last N images):
-   - Keep last 10 images tagged with "prod-*"
-   - Keep last 100 images overall
-
-2. **Age-based** (expire after X days):
-   - Delete images older than 30 days
-   - Delete untagged images older than 1 day
-
-**Rule priority**: Rules evaluated in priority order (1 = highest). First matching rule applies.
-
-### Example Lifecycle Policies
-
-**Policy 1: Keep production images, clean up dev**:
+Because a higher-priority match shields an image, a release rule at priority 1 protects every release tag from the rules after it. This policy expires release images beyond the newest 20, so older releases are deleted and the 20 newest are safe from every later rule. It also expires untagged images after a week and main-branch builds after 14 days:
 
 ```json
 {
   "rules": [
     {
       "rulePriority": 1,
-      "description": "Keep last 10 production images",
+      "description": "Expire releases beyond the newest 20",
       "selection": {
         "tagStatus": "tagged",
-        "tagPrefixList": ["prod-"],
+        "tagPatternList": ["v*"],
         "countType": "imageCountMoreThan",
-        "countNumber": 10
+        "countNumber": 20
       },
-      "action": {
-        "type": "expire"
-      }
+      "action": { "type": "expire" }
     },
     {
       "rulePriority": 2,
-      "description": "Keep last 5 staging images",
-      "selection": {
-        "tagStatus": "tagged",
-        "tagPrefixList": ["staging-"],
-        "countType": "imageCountMoreThan",
-        "countNumber": 5
-      },
-      "action": {
-        "type": "expire"
-      }
-    },
-    {
-      "rulePriority": 3,
-      "description": "Expire dev images older than 14 days",
-      "selection": {
-        "tagStatus": "tagged",
-        "tagPrefixList": ["dev-", "feature-"],
-        "countType": "sinceImagePushed",
-        "countUnit": "days",
-        "countNumber": 14
-      },
-      "action": {
-        "type": "expire"
-      }
-    },
-    {
-      "rulePriority": 4,
-      "description": "Delete untagged images after 1 day",
+      "description": "Expire untagged images after 7 days",
       "selection": {
         "tagStatus": "untagged",
         "countType": "sinceImagePushed",
         "countUnit": "days",
-        "countNumber": 1
+        "countNumber": 7
       },
-      "action": {
-        "type": "expire"
-      }
-    }
-  ]
-}
-```
-
-**Applying the policy**:
-
-```bash
-aws ecr put-lifecycle-policy \
-  --repository-name my-app \
-  --lifecycle-policy-text file://lifecycle-policy.json
-```
-
-**Testing before applying** (dry run):
-
-```bash
-# Preview what would be deleted
-aws ecr preview-lifecycle-policy \
-  --repository-name my-app \
-  --lifecycle-policy-text file://lifecycle-policy.json
-```
-
-**Policy 2: Semantic versioning retention**:
-
-```json
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Keep all semantic version tags (1.2.3)",
-      "selection": {
-        "tagStatus": "tagged",
-        "tagPrefixList": ["v", "[0-9]"],
-        "countType": "imageCountMoreThan",
-        "countNumber": 999999
-      },
-      "action": {
-        "type": "expire"
-      }
+      "action": { "type": "expire" }
     },
     {
-      "rulePriority": 2,
-      "description": "Keep last 20 branch builds",
+      "rulePriority": 3,
+      "description": "Expire main-branch builds after 14 days",
       "selection": {
         "tagStatus": "tagged",
-        "tagPrefixList": ["main-", "develop-"],
-        "countType": "imageCountMoreThan",
-        "countNumber": 20
+        "tagPatternList": ["main-*"],
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 14
       },
-      "action": {
-        "type": "expire"
-      }
+      "action": { "type": "expire" }
     }
   ]
 }
 ```
 
-### Lifecycle Policy Best Practices
+A `tagPatternList` with more than one pattern selects only images carrying tags that match every pattern. Alternatives such as `main-*` and `pr-*` therefore go in separate rules. `aws ecr start-lifecycle-policy-preview` shows what a policy would act on before it is applied, and every action it takes is recorded in CloudTrail.
 
-**Tag strategy alignment**:
-- Use consistent tag prefixes (`prod-`, `staging-`, `dev-`)
-- Separate release tags (semantic versions) from build tags (commit SHAs)
-- Never delete semantic version releases (keep indefinitely for rollback)
+### The archive storage class
 
-**Testing strategy**:
-- Always run `preview-lifecycle-policy` before applying
-- Start conservative (keep more images), tighten gradually
-- Monitor deleted images for 30 days to catch unintended cleanup
+Since November 2025 ECR has two storage classes. **Standard** is the default. **Archive** is for images that must be kept, for compliance or for a rare rollback, but aren't pulled. An archived image can't be pulled or scanned. Restoring it back to standard takes up to 20 minutes and costs $0.03 per GB retrieved, and archive storage has a 90-day minimum charge.
 
-**Cost-benefit analysis**:
-- Calculate storage saved: (deleted images × avg size × $0.10/GB/month)
-- Calculate scan costs saved: (deleted images × rescan frequency × $0.09)
-- Example: Deleting 50 × 2GB images saves $10/month storage + potential scan costs
+In US East (N. Virginia) archive costs the same $0.10 per GB-month as standard for an account's first 150 TB, and $0.07 above that, so below that volume it saves nothing on storage and adds retrieval charges. What it does at any size is take images out of the active set. Archived images don't count against the per-repository image quota, and they drop out of vulnerability scanning and its findings. At very large volumes it is also cheaper storage.
 
-## ECR Replication
+A lifecycle rule moves images to archive with `"action": { "type": "transition", "targetStorageClass": "archive" }`. Pull history can only drive archiving, never deletion, so deleting what nobody uses takes two rules: archive what nothing has pulled in 90 days with `sinceImagePulled`, then expire archived images after a retention period of at least 90 days with `sinceImageTransitioned`.
 
-### Why Replication Matters
+---
 
-**Multi-region deployments**:
-- **Latency**: ECS in `us-west-2` pulling from ECR in `us-east-1` adds ~60ms per layer pull
-- **Cross-region data transfer**: $0.02/GB from `us-east-1` to `us-west-2` (for 5GB image = $0.10 per pull)
-- **Availability**: Regional ECR outage blocks deployments if images not replicated
-- **Compliance**: Data residency requirements (GDPR, data sovereignty) may require in-region images
+## Getting Images to Where They Run
 
-**Cross-account deployments**:
-- **Centralized CI/CD**: Build in central account, deploy to workload accounts
-- **Multi-tenant architectures**: Different customer accounts need same images
-- **Security isolation**: Prevent production accounts from pushing images (only pull)
+### Replication
 
-### Replication Configuration
+**Replication** copies images to other Regions, other accounts, or both, as a registry-level configuration of up to 25 rules, each filtering repositories by name prefix. It copies only content pushed or restored after replication is configured, and most images arrive within 30 minutes. Each push replicates once, so replication doesn't chain. An image replicated from Region A to B doesn't continue on to C through a B-to-C rule. Replication never deletes or archives anything in the destination, so each destination repository needs its own lifecycle policy.
 
-**Cross-region replication**:
-
-```json
-{
-  "rules": [
-    {
-      "destinations": [
-        {
-          "region": "us-west-2",
-          "registryId": "123456789012"
-        },
-        {
-          "region": "eu-west-1",
-          "registryId": "123456789012"
-        }
-      ],
-      "repositoryFilters": [
-        {
-          "filter": "prod-*",
-          "filterType": "PREFIX_MATCH"
-        }
-      ]
-    }
-  ]
-}
-```
-
-```bash
-aws ecr put-replication-configuration \
-  --replication-configuration file://replication-config.json
-```
-
-**Cross-account replication**:
-
-```json
-{
-  "rules": [
-    {
-      "destinations": [
-        {
-          "region": "us-east-1",
-          "registryId": "999999999999"
-        }
-      ],
-      "repositoryFilters": [
-        {
-          "filter": "*",
-          "filterType": "PREFIX_MATCH"
-        }
-      ]
-    }
-  ]
-}
-```
-
-**Destination account policy** (allow replication):
+Replicating to the Regions where workloads run keeps pulls local, which is faster and avoids cross-Region transfer charges on every pull. It also keeps a Region's deployments independent of ECR in another Region. For cross-account replication, only the destination account needs a policy, a registry permissions policy granting the source account `ecr:ReplicateImage` and `ecr:CreateRepository`:
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AllowReplication",
+      "Sid": "AllowReplicationFromBuildAccount",
       "Effect": "Allow",
-      "Principal": {
-        "Service": "ecr.amazonaws.com"
-      },
-      "Action": [
-        "ecr:CreateRepository",
-        "ecr:ReplicateImage"
-      ],
-      "Condition": {
-        "StringEquals": {
-          "aws:SourceAccount": "123456789012"
-        }
-      }
+      "Principal": { "AWS": "arn:aws:iam::111122223333:root" },
+      "Action": ["ecr:ReplicateImage", "ecr:CreateRepository"],
+      "Resource": "*"
     }
   ]
 }
 ```
 
-### Replication Behavior
+Without `ecr:CreateRepository`, replication succeeds only into repositories that already exist in the destination.
 
-**Key characteristics**:
-- **Automatic**: Replication triggers on image push to source repository
-- **Asynchronous**: Images replicate within minutes (not instant)
-- **Filter-based**: Only images matching filters replicate (reduce costs)
-- **Repository creation**: ECR automatically creates destination repositories if they don't exist
-- **Tag preservation**: Tags and manifests replicated exactly
+### Repository creation templates
 
-**Replication costs**:
-- **Data transfer**: $0.02/GB cross-region within US (varies by region pair)
-- **Storage**: Pay for storage in each region ($0.10/GB/month per region)
-- **No replication fee**: ECR doesn't charge for replication itself (only data transfer + storage)
+ECR creates repositories on your behalf in three cases: the first pull through a pull through cache rule, replication into a repository that doesn't exist yet, and, since December 2025, **create on push**, a push to a repository that doesn't exist. A **repository creation template** sets what those repositories get. It matches by name prefix (`ROOT` matches everything else) and sets tag mutability, encryption, repository policy, lifecycle policy, and resource tags. When no template matches, pull through cache and replication fall back to defaults, which are mutable tags, AES-256 encryption, and no repository or lifecycle policy, and create on push doesn't create the repository at all. A template that sets a KMS key or resource tags needs a role for ECR to assume.
 
-**Example cost**:
-- 10 images × 2GB each = 20GB
-- Replicate from `us-east-1` to `us-west-2`: 20GB × $0.02 = $0.40 one-time
-- Store in both regions: 20GB × $0.10 × 2 regions = $4/month
+Templates apply only at creation. They don't update existing repositories, so a changed template affects only repositories created after the change.
 
-## Runtime Security
+### Pull through cache
 
-### Container Runtime Threats
+A **pull through cache rule** maps a prefix in your registry to an upstream registry, such as Docker Hub, the Kubernetes registry, Quay, GitHub Container Registry, ECR Public, or another ECR registry. Pulling `<registry>/docker-hub/library/nginx:1.27` fetches the image from Docker Hub the first time, stores it in a private repository, and serves it from ECR afterward. ECR checks upstream for a newer image under that tag at most once every 24 hours.
 
-**Common runtime attack vectors**:
+This removes a runtime dependency on the upstream registry and its rate limits (Docker Hub limits anonymous pulls to 100 per 6 hours per IP address), keeps pulls inside AWS, and puts third-party images under the same scanning as your own. Upstreams that require authentication, such as Docker Hub, need their credentials in a Secrets Manager secret named with the `ecr-pullthroughcache/` prefix. The first pull of an image needs a route to the internet even when ECR is reached through VPC endpoints. The pulling principal needs `ecr:BatchImportUpstreamImage`, which `AmazonEC2ContainerRegistryPullOnly` includes, and `ecr:CreateRepository` if the cached repository doesn't exist yet, which that policy doesn't include. Either create the repositories ahead of time or grant creation for the cache prefix in the registry policy. Since April 2026 the cache also brings along an upstream image's signatures and SBOMs. Lambda can't pull through a cache rule.
 
-1. **Container escape**:
-   - Exploiting kernel vulnerabilities to break out of container namespace
-   - Accessing host filesystem via misconfigured volume mounts
-   - Example: `docker run -v /:/host` mounts entire host filesystem
+### Sharing layers across repositories
 
-2. **Privilege escalation**:
-   - Running containers as root unnecessarily
-   - Granting excessive capabilities (e.g., `CAP_SYS_ADMIN`)
-   - Example: Container with `privileged: true` has full host access
+Services built from the same base image push the same base layers into different repositories. **Blob mounting** (January 2026), a registry setting, stores such a layer once and references it from every repository that uses it, which saves storage and makes pushes faster. Replication can mount layers that already exist in the destination, which needs blob mounting on in both registries when they differ.
 
-3. **Lateral movement**:
-   - Compromised container scanning internal network
-   - Exploiting vulnerable services on other containers/hosts
-   - Example: Container with overly permissive security group accessing internal databases
+---
 
-4. **Data exfiltration**:
-   - Malicious code sending sensitive data to external endpoints
-   - Example: Compromised web app container uploading customer data to attacker-controlled S3 bucket
+## Scanning Images for Vulnerabilities
 
-### Runtime Security Best Practices
+### Basic and enhanced scanning
 
-**1. Use minimal base images**:
+A registry uses one of two scanning types, set per Region:
 
-```dockerfile
-# ❌ Bad: Full OS image (1.2GB, hundreds of packages)
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y python3 python3-pip
+| | Basic scanning | Enhanced scanning |
+|---|---|---|
+| **Engine** | ECR, with AWS native technology since the Clair-based scanner was retired on February 2, 2026 | Amazon Inspector |
+| **Finds** | Operating system package vulnerabilities | Operating system and programming language package vulnerabilities |
+| **When** | On push for repositories matching a filter, or manually, at most once per image per 24 hours | On push, or continuously, rescanning when Inspector adds a relevant CVE (a published vulnerability) |
+| **Findings go to** | ECR, and an EventBridge event per completed scan | ECR, Inspector, EventBridge, and Security Hub |
+| **Cost** | No charge | Inspector pricing: $0.09 per image on first scan, $0.01 per continuous rescan |
 
-# ✅ Good: Distroless image (50MB, minimal attack surface)
-FROM python:3.11-slim
-# Even better: gcr.io/distroless/python3-debian12
-```
+With enhanced scanning on, repositories that match no scan filter aren't scanned at all, and manual scans aren't available. When it is first turned on, Inspector picks up only images pushed in the last 14 days, and older images show `SCAN_ELIGIBILITY_EXPIRED` until they are pushed again. Continuous scanning keeps monitoring an image while it was pushed or last in use within a configurable window, 14 days by default for accounts created since May 16, 2025, so long-deployed images stay covered while images nobody runs drop out. Inspector also maps each image to the ECS tasks and EKS pods running it, which turns a finding list into a priority list. A critical CVE in an image on 40 running tasks outranks one in an image nothing runs. Archived images aren't scanned, and their findings close.
 
-**Why distroless**:
-- No shell (prevents reverse shell attacks)
-- No package manager (can't install malicious tools)
-- Minimal libraries (reduces vulnerability count from 500+ to <50)
+When Security Hub is enabled, Inspector's container image scanning is billed inside Security Hub Essentials, per resource unit, rather than per scan.
 
-**2. Run as non-root user**:
+### Gating deployments on findings
 
-```dockerfile
-# Create non-root user
-RUN useradd -m -u 1000 appuser
-USER appuser
+Scanning finds problems. It stops nothing unless something reads the results. Two places to act:
 
-# Copy files owned by appuser
-COPY --chown=appuser:appuser . /app
-WORKDIR /app
-```
+- **Before the image is pushed.** The Inspector `ScanSbom` API, driven by the `inspector-sbomgen` tool or the Inspector plugins for CI systems such as Jenkins and TeamCity, scans an image inside the pipeline at $0.03 per image. The build fails on the findings the team won't ship, before the image reaches the registry.
+- **After it is pushed.** `aws ecr describe-image-scan-findings` returns counts by severity once the scan completes, which a pipeline stage can check before deploying. For continuous scanning, EventBridge rules on Inspector finding events route new critical findings on already-deployed images to a ticket or an alert.
 
-**ECS task definition**:
+A gate that blocks on every critical finding stalls delivery on CVEs with no fix available. Gate on findings that have a fixed version, and track the rest with an owner and a date.
 
-```json
-{
-  "containerDefinitions": [
-    {
-      "name": "my-app",
-      "user": "1000",
-      "readonlyRootFilesystem": true
-    }
-  ]
-}
-```
+Fixing a finding usually means rebuilding on a patched base image and redeploying, not patching a running container. A rebuild cadence for base images, even with no application change, is what keeps continuously scanned images from accumulating findings.
 
-**3. Drop unnecessary capabilities**:
+---
+
+## Signing and Verifying Images
+
+A scan says what's inside an image. A **signature** says who produced it and that it hasn't changed since. Without verification at deploy time, anyone with push access, or a compromised pipeline, can put an image in a repository and have it run.
+
+ECR signs with **AWS Signer**, which holds the signing keys and certificates, and stores each signature in the same repository as the image, as an OCI artifact that refers to it. Signing happens under a **signing profile**, the Signer resource that sets how long signatures stay valid and that can later be revoked. The signatures follow the Notary Project's format, and **Notation**, that project's open-source CLI, signs and verifies them. There are two ways to sign:
+
+- **Managed signing** (November 2025) is a registry setting of up to 10 signing rules, each naming a Signer signing profile and repository filters. ECR signs every matching image as it is pushed, using the pushing principal's identity, which needs `signer:SignPayload` on the profile. It costs $0.02 per signature. The signing profile must be in the same Region as the registry, and it can be in another account, so a security account can own the profiles.
+- **Manual signing** uses the Notation CLI with the AWS Signer plugin in the pipeline, for signing outside the push or with more control over when.
+
+Signatures count against the per-repository image quota, and lifecycle policies clean them up after their image goes.
+
+Verification is where signing pays off, and it happens in the cluster or deployment path, not in ECR:
+
+- **On EKS**, an admission controller, a webhook Kubernetes calls before accepting each pod, rejects pods whose images lack a valid signature from a trusted profile. The documented options are Kyverno with the Notation AWS Signer extension, and Gatekeeper with Ratify.
+- **On ECS**, a service deployment lifecycle hook can call a Lambda function before new tasks scale up. The function verifies each image in the task definition with Notation and returns success or failure, which blocks or allows the deployment.
+
+Revoking a signing profile takes an effective time in the past, and verification then rejects every signature the profile made after that time. The effective time can be moved earlier but never later, so it can be set to when a pipeline credential was stolen. Revoke the profile, then re-sign known-good images with a new one. Revocation can't be undone.
+
+---
+
+## Running Containers with Least Privilege
+
+Scanning and signing decide which images run. The container's configuration decides how much a compromised process inside it can do. These settings live in the ECS task definition's container definitions, or in a pod's `securityContext` on EKS:
+
+| Setting | ECS parameter | Effect |
+|---|---|---|
+| **Run as a non-root user** | `user`, such as `"1000"`, or `USER` in the Dockerfile | A process that escapes the application doesn't start as root |
+| **Read-only root file system** | `readonlyRootFilesystem: true` | Nothing can write binaries or modify files in the image. Mount a volume for paths the app must write, such as `/tmp`. Not supported for Windows containers |
+| **Drop Linux capabilities** | `linuxParameters.capabilities.drop: ["ALL"]` | Removes the privileges Docker grants by default, such as changing file ownership or opening raw sockets |
+| **No privileged mode** | leave `privileged` unset | A privileged container has near-host-level access. Fargate doesn't support it |
 
 ```json
 {
-  "containerDefinitions": [
-    {
-      "name": "my-app",
-      "linuxParameters": {
-        "capabilities": {
-          "drop": ["ALL"],
-          "add": ["NET_BIND_SERVICE"]
-        }
-      }
-    }
-  ]
-}
-```
-
-**4. Enable read-only root filesystem**:
-
-```json
-{
-  "containerDefinitions": [
-    {
-      "name": "my-app",
-      "readonlyRootFilesystem": true,
-      "mountPoints": [
-        {
-          "sourceVolume": "tmp",
-          "containerPath": "/tmp"
-        }
-      ]
-    }
-  ],
-  "volumes": [
-    {
-      "name": "tmp",
-      "host": {}
-    }
-  ]
-}
-```
-
-**5. Network segmentation**:
-
-```json
-{
-  "taskDefinition": {
-    "networkMode": "awsvpc"
+  "name": "api",
+  "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/orders/api@sha256:9f86d0...",
+  "user": "1000",
+  "readonlyRootFilesystem": true,
+  "linuxParameters": {
+    "capabilities": { "drop": ["ALL"] }
   },
-  "networkConfiguration": {
-    "awsvpcConfiguration": {
-      "securityGroups": ["sg-app-only"],
-      "subnets": ["subnet-private-1a"]
-    }
-  }
+  "mountPoints": [{ "sourceVolume": "tmp", "containerPath": "/tmp" }]
 }
 ```
 
-**Security group principle of least privilege**:
-- **Inbound**: Only ALB security group on port 8080
-- **Outbound**: Only database security group on port 5432, HTTPS to internet for external APIs
+On Fargate, `capabilities.add` accepts only `SYS_PTRACE`, so a non-root container can't be given `NET_BIND_SERVICE` to listen on a port below 1024. The simplest route is a high port such as 8080, with the load balancer's listener on 443. On EKS, the Kubernetes **restricted** Pod Security Standard, enforced per namespace, requires most of the same settings.
 
-### Runtime Detection & Response
+Smaller images help too. A slim or distroless base image carries fewer packages, so it has fewer findings and gives an attacker fewer tools. A distroless image has no shell or package manager, which also means no `curl` for a container health check and no shell to open with ECS Exec. A multi-stage build keeps compilers and build tools out of the final image.
 
-**AWS GuardDuty for ECS/EKS**:
+The rest of a container's defenses sit outside this guide's scope. Detecting malicious behavior in running containers is GuardDuty Runtime Monitoring, which runs an agent in each task or on each node. Secrets reach an ECS container through the task definition's `secrets` field, fetched with the execution role at startup, or reach a pod through an EKS secrets integration. They never belong in an image, where anyone who can pull it can read every layer.
 
-GuardDuty Runtime Monitoring detects:
-- Suspicious process execution (e.g., shell spawned in container)
-- Unexpected network connections (e.g., connection to known C2 server)
-- File system access anomalies (e.g., reading /etc/shadow)
-- Privilege escalation attempts
-
-**Enabling GuardDuty Runtime Monitoring**:
-
-```bash
-aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES
-
-aws guardduty update-detector \
-  --detector-id <detector-id> \
-  --features '[
-    {
-      "Name": "ECS_RUNTIME_MONITORING",
-      "Status": "ENABLED",
-      "AdditionalConfiguration": [
-        {
-          "Name": "ECS_FARGATE_AGENT_MANAGEMENT",
-          "Status": "ENABLED"
-        }
-      ]
-    }
-  ]'
-```
-
-**Fargate runtime monitoring** (automatic agent injection):
-- GuardDuty automatically injects security agent sidecar into Fargate tasks
-- No code changes required (enable via detector configuration)
-- Agent monitors process, network, and file system activity
-
-**EC2-based ECS/EKS** (manual agent installation):
-
-```bash
-# Install GuardDuty agent via SSM
-aws ssm send-command \
-  --document-name "AWS-ConfigureAWSPackage" \
-  --targets "Key=tag:Environment,Values=production" \
-  --parameters '{"action":["Install"],"name":["AmazonGuardDutyAgent"]}'
-```
-
-## Secrets Management for Containers
-
-### Why Secrets Management Matters
-
-**Common anti-patterns**:
-
-1. **Hardcoded in Dockerfile**:
-```dockerfile
-# ❌ NEVER DO THIS
-ENV DATABASE_PASSWORD=supersecret123
-```
-- Credentials in image layers (visible to anyone with pull access)
-- Exposed in `docker history` and ECR
-- Credentials can't rotate without rebuilding image
-
-2. **Passed via environment variables**:
-```bash
-# ❌ Risky: Visible in process list, logs, crash dumps
-docker run -e DATABASE_PASSWORD=supersecret123 my-app
-```
-- Visible in `docker inspect`
-- Logged by orchestrators (ECS task events, Kubernetes events)
-- Leaked in application logs if printed
-
-3. **Stored in config files**:
-```yaml
-# ❌ Bad: Config file baked into image
-database:
-  password: supersecret123
-```
-- Same issues as hardcoding in Dockerfile
-
-### AWS Secrets Manager Integration
-
-**Store secrets in Secrets Manager**:
-
-```bash
-aws secretsmanager create-secret \
-  --name prod/myapp/database \
-  --secret-string '{
-    "username": "admin",
-    "password": "randomly-generated-password-here",
-    "host": "mydb.cluster-xyz.us-east-1.rds.amazonaws.com",
-    "port": 5432,
-    "dbname": "production"
-  }'
-```
-
-**ECS task definition** (inject at runtime):
-
-```json
-{
-  "family": "my-app",
-  "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
-  "containerDefinitions": [
-    {
-      "name": "app",
-      "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:latest",
-      "secrets": [
-        {
-          "name": "DATABASE_URL",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/myapp/database:username::"
-        },
-        {
-          "name": "DATABASE_PASSWORD",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/myapp/database:password::"
-        }
-      ]
-    }
-  ]
-}
-```
-
-**IAM permissions** (task execution role):
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:GetSecretValue"
-      ],
-      "Resource": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/myapp/*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "kms:Decrypt"
-      ],
-      "Resource": "arn:aws:kms:us-east-1:123456789012:key/abc-123-def-456"
-    }
-  ]
-}
-```
-
-**How it works**:
-1. ECS fetches secret from Secrets Manager at task startup
-2. Secrets injected as environment variables into container
-3. Application reads from environment variables (no code changes)
-4. Secrets never stored in image or visible in ECR
-
-### SSM Parameter Store Integration
-
-**For non-sensitive config** (free tier, simpler):
-
-```bash
-aws ssm put-parameter \
-  --name /prod/myapp/api-endpoint \
-  --value "https://api.example.com" \
-  --type String
-
-aws ssm put-parameter \
-  --name /prod/myapp/database-password \
-  --value "supersecret123" \
-  --type SecureString \
-  --key-id alias/aws/ssm
-```
-
-**ECS task definition**:
-
-```json
-{
-  "secrets": [
-    {
-      "name": "API_ENDPOINT",
-      "valueFrom": "arn:aws:ssm:us-east-1:123456789012:parameter/prod/myapp/api-endpoint"
-    },
-    {
-      "name": "DATABASE_PASSWORD",
-      "valueFrom": "arn:aws:ssm:us-east-1:123456789012:parameter/prod/myapp/database-password"
-    }
-  ]
-}
-```
-
-**Secrets Manager vs Parameter Store**:
-
-| Feature | Secrets Manager | Parameter Store (Standard) | Parameter Store (Advanced) |
-|---------|----------------|---------------------------|---------------------------|
-| **Cost** | $0.40/secret/month + $0.05/10K API calls | Free | $0.05/parameter/month |
-| **Rotation** | Built-in Lambda rotation | Manual | Manual |
-| **Value size** | 64KB | 4KB | 8KB |
-| **Versioning** | Automatic | Manual | Automatic |
-| **Cross-region replication** | Built-in | Manual | Manual |
-| **Use case** | Database credentials, API keys | Application config | Large config, frequent changes |
-
-**Decision framework**:
-- Use **Secrets Manager** for: Database passwords, API keys, OAuth tokens (anything requiring rotation)
-- Use **Parameter Store** for: Static config (endpoints, feature flags, non-sensitive settings)
-
-### Kubernetes Secrets (EKS)
-
-**External Secrets Operator** (sync from Secrets Manager):
-
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: SecretStore
-metadata:
-  name: aws-secretsmanager
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: us-east-1
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets-sa
 ---
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: database-credentials
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: aws-secretsmanager
-  target:
-    name: database-secret
-  data:
-    - secretKey: password
-      remoteRef:
-        key: prod/myapp/database
-        property: password
-```
 
-**Pod consumes secret**:
+## What ECR Costs
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: my-app
-spec:
-  containers:
-    - name: app
-      image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
-      env:
-        - name: DATABASE_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: database-secret
-              key: password
-```
+In US East (N. Virginia):
 
-## Cost Optimization Strategies
+| Item | Price |
+|---|---|
+| Standard storage | $0.10 per GB-month |
+| Archive storage | $0.10 per GB-month for the first 150 TB, $0.07 above, with a 90-day minimum and $0.03 per GB retrieved |
+| Data transfer to AWS compute in the same Region | Free |
+| Data transfer to another Region or the internet | Internet data transfer out rates. Replication is charged at the source Region's rate |
+| Basic scanning | Free |
+| Enhanced scanning | Inspector pricing (see above), or Security Hub Essentials when Security Hub is enabled |
+| Managed signing | $0.02 per signature |
+| Pull through cache, replication, repository creation | Billed only as the storage and data transfer they cause |
 
-### ECR Pricing Model
+Storage is usually the line that grows, because it accumulates quietly. A repository holding 500 images of 1.5 GB each costs about $75 a month, and a lifecycle policy keeping the newest 30 cuts that to about $4.50. Layers shared between images in one repository are stored once, so real sizes are often smaller than image sizes suggest, and blob mounting extends that sharing across repositories. Replication multiplies storage by the number of destinations, so replicate the repositories that run in each Region, not the whole registry.
 
-**Charges**:
-- **Storage**: $0.10/GB/month (amount of data stored)
-- **Data transfer**: Standard AWS data transfer pricing
-  - Free: Within same region
-  - $0.02/GB: Cross-region (e.g., us-east-1 to us-west-2)
-  - $0.09/GB: To internet
-- **Enhanced scanning**: $0.09 per image scan (first scan per image per repo per month)
+Transfer is the line that surprises. Pulls from another Region pay cross-Region transfer on every pull, and pulls from private subnets without the S3 gateway endpoint pay NAT gateway processing on every layer.
 
-### Cost Optimization Techniques
-
-**1. Lifecycle policies** (reduce storage):
-
-```bash
-# Before: 100 images × 2GB = 200GB × $0.10 = $20/month
-# After (lifecycle policy keeps 20): 20 images × 2GB = 40GB × $0.10 = $4/month
-# Savings: $16/month (80%)
-```
-
-**2. Multi-stage builds** (reduce image size):
-
-```dockerfile
-# ❌ Before: 1.5GB image (includes build tools)
-FROM node:18
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-# ✅ After: 200MB image (only runtime dependencies)
-FROM node:18 AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-FROM node:18-slim
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 3000
-CMD ["node", "dist/server.js"]
-```
-
-**Savings**: 1.5GB → 200MB = 1.3GB saved per image × 20 images = 26GB × $0.10 = $2.60/month
-
-**3. Layer caching** (reduce data transfer):
-
-```dockerfile
-# ✅ Good: Copy dependency files first (rarely change)
-COPY package.json package-lock.json ./
-RUN npm install
-
-# Then copy source code (changes frequently)
-COPY . .
-RUN npm run build
-```
-
-**Why this matters**: Docker caches layers. When source code changes but dependencies don't, Docker reuses cached dependency layer, reducing upload size from 1.5GB to 10MB (only source code).
-
-**4. Regional replication strategy**:
-
-```bash
-# ❌ Wasteful: Replicate all images to all regions
-# Cost: 100 images × 2GB × 3 regions = 600GB × $0.10 = $60/month
-
-# ✅ Strategic: Replicate only production images to active regions
-# Cost: 10 prod images × 2GB × 2 regions = 40GB × $0.10 = $4/month
-```
-
-**5. Basic vs enhanced scanning**:
-
-```bash
-# Enhanced scanning cost: 100 images × $0.09 = $9/month (if rescanned)
-# Basic scanning cost: $0 (included)
-
-# Strategy: Use enhanced scanning for production repos, basic for dev/test
-# Savings: ~$5-7/month for typical workload
-```
-
-### Cost Monitoring
-
-**CloudWatch metric filters**:
-
-```bash
-aws cloudwatch put-metric-alarm \
-  --alarm-name ecr-storage-high \
-  --alarm-description "Alert when ECR storage exceeds 500GB" \
-  --metric-name RepositoryStorageSize \
-  --namespace AWS/ECR \
-  --statistic Average \
-  --period 86400 \
-  --threshold 500000000000 \
-  --comparison-operator GreaterThanThreshold
-```
-
-**Cost allocation tags**:
-
-```bash
-aws ecr tag-resource \
-  --resource-arn arn:aws:ecr:us-east-1:123456789012:repository/my-app \
-  --tags Key=CostCenter,Value=Engineering Key=Environment,Value=Production
-```
-
-## Integration Patterns
-
-### CI/CD Pipeline Integration
-
-**GitHub Actions workflow**:
-
-```yaml
-name: Build and Push to ECR
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: arn:aws:iam::123456789012:role/GithubActionsRole
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build, tag, and push image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: my-app
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-      - name: Wait for scan
-        run: |
-          aws ecr wait image-scan-complete \
-            --repository-name my-app \
-            --image-id imageTag=${{ github.sha }}
-
-      - name: Check scan results
-        run: |
-          CRITICAL=$(aws ecr describe-image-scan-findings \
-            --repository-name my-app \
-            --image-id imageTag=${{ github.sha }} \
-            --query 'imageScanFindings.findingSeverityCounts.CRITICAL' \
-            --output text)
-
-          if [ "$CRITICAL" != "None" ] && [ "$CRITICAL" -gt 0 ]; then
-            echo "❌ Critical vulnerabilities found"
-            exit 1
-          fi
-```
-
-### ECS Deployment Integration
-
-**ECS task definition** (reference ECR image):
-
-```json
-{
-  "family": "my-app",
-  "taskRoleArn": "arn:aws:iam::123456789012:role/ecsTaskRole",
-  "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
-  "containerDefinitions": [
-    {
-      "name": "app",
-      "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:prod-v1.2.3",
-      "cpu": 256,
-      "memory": 512,
-      "portMappings": [
-        {
-          "containerPort": 8080,
-          "protocol": "tcp"
-        }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/my-app",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
-        }
-      }
-    }
-  ]
-}
-```
-
-**Blue/green deployment** (CodeDeploy):
-
-```yaml
-# appspec.yaml
-version: 0.0
-Resources:
-  - TargetService:
-      Type: AWS::ECS::Service
-      Properties:
-        TaskDefinition: "arn:aws:ecs:us-east-1:123456789012:task-definition/my-app:2"
-        LoadBalancerInfo:
-          ContainerName: "app"
-          ContainerPort: 8080
-        PlatformVersion: "LATEST"
-Hooks:
-  - BeforeInstall: "LambdaFunctionToValidateBeforeInstall"
-  - AfterInstall: "LambdaFunctionToValidateAfterInstall"
-  - BeforeAllowTraffic: "LambdaFunctionToValidateBeforeTrafficShift"
-  - AfterAllowTraffic: "LambdaFunctionToValidateAfterTrafficShift"
-```
-
-### EKS Deployment Integration
-
-**Kubernetes deployment**:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-app
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: my-app
-  template:
-    metadata:
-      labels:
-        app: my-app
-    spec:
-      containers:
-        - name: app
-          image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:v1.2.3
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-      imagePullSecrets:
-        - name: ecr-registry-secret
-```
-
-**ECR pull secret** (for private images):
-
-```bash
-kubectl create secret docker-registry ecr-registry-secret \
-  --docker-server=123456789012.dkr.ecr.us-east-1.amazonaws.com \
-  --docker-username=AWS \
-  --docker-password=$(aws ecr get-login-password --region us-east-1)
-```
-
-**IRSA (IAM Roles for Service Accounts)** (Better approach):
-
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: my-app-sa
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/MyAppECRAccessRole
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-app
-spec:
-  template:
-    spec:
-      serviceAccountName: my-app-sa
-      containers:
-        - name: app
-          image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-app:v1.2.3
-```
-
-No explicit pull secret needed; EKS automatically uses IRSA role to authenticate.
-
-## When to Use ECR vs Alternatives
-
-### ECR vs Docker Hub
-
-| Consideration | AWS ECR | Docker Hub |
-|--------------|---------|------------|
-| **Pull rate limits** | Unlimited | 100/6h (anonymous), 200/6h (free), 5000/day (Pro) |
-| **Private images** | Unlimited private repositories | 1 free private repo (free), unlimited (Pro $5/month) |
-| **Cost** | $0.10/GB storage + data transfer | Free (public), $5-9/month (private) |
-| **AWS integration** | Native (IAM, VPC endpoints, GuardDuty) | Requires credentials management |
-| **Performance** | Low latency from AWS regions | Variable (internet-dependent) |
-| **Scanning** | Built-in (basic free, enhanced $0.09/scan) | Paid feature (Pro+) |
-| **Use case** | AWS-hosted workloads | Public open-source projects, non-AWS environments |
-
-**Decision**: Use ECR for production AWS workloads; Docker Hub for public images or multi-cloud.
-
-### ECR vs Self-Hosted Registry (Harbor, Artifactory)
-
-| Consideration | AWS ECR | Self-Hosted (Harbor) |
-|--------------|---------|---------------------|
-| **Management overhead** | Fully managed (zero ops) | Requires HA setup, upgrades, backups |
-| **Cost** | $0.10/GB + scanning | EC2/RDS costs + licensing (if commercial) |
-| **Customization** | Limited (AWS features only) | Full control (plugins, custom auth) |
-| **Multi-cloud** | AWS-only | Works anywhere |
-| **Air-gapped environments** | Not suitable | Works offline |
-| **Use case** | AWS-native architectures | Multi-cloud, on-prem, air-gapped, custom workflows |
-
-**Decision**: Use ECR unless you need multi-cloud, air-gapped, or highly customized workflows.
-
-### ECR Public vs Docker Hub
-
-| Consideration | ECR Public | Docker Hub |
-|--------------|------------|------------|
-| **Pull rate limits** | Unlimited | 100/6h (anonymous), 5000/day (Pro) |
-| **Bandwidth** | Free (AWS CloudFront) | Free (for reasonable use) |
-| **Discoverability** | Lower (newer platform) | Higher (established community) |
-| **AWS integration** | Native | Requires credentials |
-| **Use case** | Open-source projects targeting AWS users | General open-source projects |
 
 ## Common Pitfalls
 
-### 1. Not Enabling Tag Immutability for Production
+- **Private subnets without the S3 gateway endpoint.** Token and manifest calls succeed through the interface endpoints, then layers fail to download, or flow through a NAT gateway at per-GB cost.
+- **Deploying mutable tags.** A task definition that references `:latest` runs whatever that tag points at when each task starts, so tasks in one service can run different images. Deploy by digest, or by immutable tags.
+- **Lifecycle rules that expire what matters.** A branch rule written before the release rule, a pattern list that needs every pattern to match, or an untagged rule that removes images still referenced by a deployment all delete more or less than intended. Preview before applying, and give release images a high-priority rule of their own.
+- **Assuming replication covers everything.** Only images pushed after it is configured replicate, repository policies and lifecycle policies don't replicate at all, and destination repositories get default settings unless a creation template matches.
+- **Scanning with nobody reading.** Findings pile up in ECR while the same images keep running. Route critical findings on in-use images to an owner, and gate the pipeline on fixable ones.
+- **Signing without verifying.** A signature nothing checks protects nothing. Add the admission controller or deployment hook in the same change that turns on signing.
+- **Credentials in image layers.** A secret added in one layer and deleted in the next is still in the first layer, readable by anyone who can pull the image.
 
-**Problem**: Developer accidentally overwrites `prod-v1.2.3` tag with different image, breaking deployments.
-
-**Solution**:
-```bash
-aws ecr put-image-tag-mutability \
-  --repository-name my-app \
-  --image-tag-mutability IMMUTABLE
-```
-
-Prevents tag overwrites. Use immutable tags for production, mutable for dev/staging if needed.
-
-### 2. Missing Lifecycle Policies
-
-**Problem**: Hundreds of old images accumulate, costing $50+/month in storage and scanning.
-
-**Solution**: Implement lifecycle policies from day one:
-```json
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Keep last 10 production, 5 staging, 3 dev",
-      "selection": {...},
-      "action": {"type": "expire"}
-    }
-  ]
-}
-```
-
-### 3. Hardcoding Secrets in Dockerfiles
-
-**Problem**:
-```dockerfile
-ENV DATABASE_PASSWORD=supersecret123
-```
-Credentials visible in image history and ECR.
-
-**Solution**: Use Secrets Manager or Parameter Store:
-```json
-{
-  "secrets": [
-    {
-      "name": "DATABASE_PASSWORD",
-      "valueFrom": "arn:aws:secretsmanager:us-east-1:123456789012:secret:prod/db"
-    }
-  ]
-}
-```
-
-### 4. Not Replicating Production Images
-
-**Problem**: ECR outage in `us-east-1` blocks deployments globally.
-
-**Solution**: Replicate production images to DR region:
-```json
-{
-  "rules": [{
-    "destinations": [{"region": "us-west-2"}],
-    "repositoryFilters": [{"filter": "prod-*"}]
-  }]
-}
-```
-
-### 5. Running Containers as Root
-
-**Problem**: Container escape grants root access to host.
-
-**Solution**:
-```dockerfile
-RUN useradd -m -u 1000 appuser
-USER appuser
-```
-
-And in ECS:
-```json
-{
-  "user": "1000",
-  "readonlyRootFilesystem": true
-}
-```
-
-### 6. Large Base Images
-
-**Problem**: `FROM ubuntu` creates 1.2GB image, consuming storage and slowing deployments.
-
-**Solution**: Use slim/distroless images:
-```dockerfile
-FROM python:3.11-slim  # 200MB vs 1.2GB
-# Or: FROM gcr.io/distroless/python3-debian12
-```
-
-### 7. Not Monitoring Scan Results
-
-**Problem**: Critical vulnerabilities in production images go undetected for months.
-
-**Solution**: Implement automated checks in CI/CD:
-```bash
-CRITICAL_COUNT=$(aws ecr describe-image-scan-findings ... | jq '.criticalCount')
-if [ "$CRITICAL_COUNT" -gt 0 ]; then exit 1; fi
-```
-
-And enable EventBridge alerting:
-```json
-{
-  "source": ["aws.ecr"],
-  "detail-type": ["ECR Image Scan"],
-  "detail": {
-    "finding-severity-counts": {
-      "CRITICAL": [{"exists": true}]
-    }
-  }
-}
-```
-
-### 8. Forgetting Cross-Account Permissions
-
-**Problem**: Replication fails silently because destination account doesn't allow `ecr:CreateRepository`.
-
-**Solution**: Add registry policy in destination account:
-```json
-{
-  "Sid": "AllowReplication",
-  "Effect": "Allow",
-  "Principal": {"Service": "ecr.amazonaws.com"},
-  "Action": ["ecr:CreateRepository", "ecr:ReplicateImage"]
-}
-```
-
-### 9. Not Using VPC Endpoints for ECR
-
-**Problem**: Containers in private subnets pull images via NAT Gateway, incurring data transfer costs ($0.045/GB).
-
-**Solution**: Create VPC endpoints for ECR:
-```bash
-aws ec2 create-vpc-endpoint \
-  --vpc-id vpc-12345 \
-  --service-name com.amazonaws.us-east-1.ecr.dkr \
-  --route-table-ids rtb-12345
-
-aws ec2 create-vpc-endpoint \
-  --vpc-id vpc-12345 \
-  --service-name com.amazonaws.us-east-1.ecr.api \
-  --route-table-ids rtb-12345
-```
-
-Eliminates NAT Gateway costs for ECR traffic.
+---
 
 ## Key Takeaways
 
-**ECR Fundamentals**:
-- ECR is a fully managed Docker registry with native AWS integration (IAM, VPC, CloudWatch)
-- Private by default (requires IAM authentication); ECR Public available for open-source
-- Charges: $0.10/GB storage, $0.02/GB cross-region transfer, $0.09/scan (enhanced)
-
-**Image Scanning**:
-- **Basic scanning**: Free, OS packages only, Clair-based
-- **Enhanced scanning**: $0.09/scan, continuous rescanning, OS + application dependencies, CVSS scores
-- Integrate scanning into CI/CD; fail builds on CRITICAL findings; remediate HIGH+ within SLAs
-
-**Lifecycle Policies**:
-- Automate cleanup with count-based (keep last N) or age-based (delete after X days) rules
-- Typical policy: Keep 10 production, 5 staging, 3 dev; delete untagged after 1 day
-- Saves 80%+ on storage and scanning costs for typical workloads
-
-**Replication**:
-- Cross-region: Low latency, high availability, compliance (data residency)
-- Cross-account: Centralized CI/CD, multi-tenant architectures
-- Cost: $0.02/GB data transfer + storage in each region
-
-**Runtime Security**:
-- Use distroless/slim base images to minimize attack surface
-- Run as non-root, drop capabilities, read-only root filesystem
-- Enable GuardDuty Runtime Monitoring for threat detection
-- Segment networks with security groups (principle of least privilege)
-
-**Secrets Management**:
-- Never hardcode secrets in Dockerfiles or pass via environment variables
-- Use Secrets Manager ($0.40/secret/month) for credentials requiring rotation
-- Use Parameter Store (free) for static configuration
-- Inject secrets at runtime via ECS task definition or Kubernetes External Secrets Operator
-
-**Cost Optimization**:
-- Lifecycle policies: Reduce storage 80% (e.g., $20/month → $4/month)
-- Multi-stage builds: Reduce image size 85% (1.5GB → 200MB)
-- Strategic replication: Replicate only production to active regions
-- VPC endpoints: Eliminate NAT Gateway costs for ECR traffic
-
-**Integration**:
-- CI/CD: Authenticate with `aws ecr get-login-password`, scan on push, fail on critical vulnerabilities
-- ECS: Reference images by digest for immutability; use task execution role for ECR pull permissions
-- EKS: Use IRSA for authentication (no explicit pull secrets); integrate with External Secrets Operator
-
-**When to Use ECR**:
-- **Choose ECR** for: AWS-native workloads, unlimited pull rate, native IAM integration, production deployments
-- **Consider alternatives** for: Multi-cloud (Harbor), air-gapped (self-hosted), public open-source projects (Docker Hub)
+- An ECR registry is per account and per Region. Scanning, replication, pull through cache, templates, and signing are registry settings configured in each Region. Tag mutability, encryption, and lifecycle policies are set per repository.
+- Cross-account pulls need an allow in the repository policy and in the pulling account. `aws:PrincipalOrgID` shares a repository with a whole organization.
+- A private pull needs `ecr.api` and `ecr.dkr` interface endpoints and an S3 gateway endpoint for layers.
+- Deploy by digest or immutable tag. Immutability exclusions keep convenience tags movable.
+- Lifecycle policies expire images by count or age, and archive them by count, age, or last pull. One rule acts on each image, in priority order. Archive takes images out of the image quota and scanning, costs the same as standard below 150 TB, and makes them unpullable until restored.
+- Replication copies new pushes to other Regions and accounts, and creation templates give the repositories ECR creates the right settings. Pull through cache takes the runtime dependency off public registries.
+- Basic scanning is free and covers OS packages. Enhanced scanning uses Inspector for OS and language packages, rescans continuously, and shows which images are running.
+- Managed signing signs on push through AWS Signer, and verification happens at admission on EKS or in a deployment hook on ECS.
+- Run containers as non-root with a read-only root file system and all capabilities dropped. Detection at runtime and secret delivery belong to GuardDuty and the task definition.
 {% endraw %}

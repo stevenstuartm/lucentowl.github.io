@@ -4,7 +4,7 @@ layout: resource
 type: reference
 category: "AWS"
 description: "The diagrams behind the AWS study guides: how identity, account structure, and network layout decide what a request can do and where it can go."
-last_updated: 2026-09-25
+last_updated: 2026-09-28
 figures:
   - aws-iam-policy-evaluation
   - aws-iam-cross-account-role
@@ -55,6 +55,25 @@ figures:
   - aws-kms-envelope
   - aws-waf-evaluation
   - aws-org-audit-logging
+  - aws-security-findings-flow
+  - aws-cw-cross-account
+  - aws-xray-trace-waterfall
+  - aws-ssm-session-path
+  - aws-savings-plan-coverage
+  - aws-ecr-private-pull
+  - aws-ecs-service-connect
+  - aws-eks-pod-identity
+  - aws-glue-catalog-paths
+  - aws-redshift-mpp
+  - aws-quicksight-embedding
+  - aws-lakehouse-catalogs
+  - aws-bedrock-tool-use
+  - aws-sagemaker-inference-components
+  - aws-migration-move-groups
+  - aws-mgn-replication
+  - aws-outposts-service-link
+  - aws-multi-region-write-patterns
+  - aws-backup-isolation
 tags: [iam, policy-evaluation, cross-account, vpc, diagrams]
 related_guides:
   - /study-guides/infrastructure/aws/aws-iam-fundamentals.html
@@ -88,4 +107,23 @@ related_guides:
   - /study-guides/infrastructure/aws/aws-kms-secrets-manager.html
   - /study-guides/infrastructure/aws/aws-waf-shield.html
   - /study-guides/infrastructure/aws/aws-cloudtrail-config.html
+  - /study-guides/infrastructure/aws/aws-security-hub-guardduty.html
+  - /study-guides/infrastructure/aws/aws-cloudwatch.html
+  - /study-guides/infrastructure/aws/aws-xray.html
+  - /study-guides/infrastructure/aws/aws-systems-manager.html
+  - /study-guides/infrastructure/aws/aws-cost-management.html
+  - /study-guides/infrastructure/aws/aws-ecr-container-security.html
+  - /study-guides/infrastructure/aws/advanced-container-patterns.html
+  - /study-guides/infrastructure/aws/aws-glue.html
+  - /study-guides/infrastructure/aws/aws-athena.html
+  - /study-guides/infrastructure/aws/aws-redshift.html
+  - /study-guides/infrastructure/aws/aws-quicksight.html
+  - /study-guides/infrastructure/aws/aws-data-architecture.html
+  - /study-guides/infrastructure/aws/aws-bedrock.html
+  - /study-guides/infrastructure/aws/aws-sagemaker.html
+  - /study-guides/infrastructure/aws/aws-migration-strategy.html
+  - /study-guides/infrastructure/aws/aws-migration-services.html
+  - /study-guides/infrastructure/aws/aws-hybrid-cloud-architecture.html
+  - /study-guides/infrastructure/aws/multi-region-architecture.html
+  - /study-guides/infrastructure/aws/disaster-recovery.html
 ---

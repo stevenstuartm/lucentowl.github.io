@@ -1,0 +1,59 @@
+---
+title: "Backups Kept Out of Reach"
+kind: deployment
+system: aws
+summary: "Backups copied to a locked vault in another account and Region, restored into a recovery account."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 360" role="img" aria-labelledby="awsbi-title awsbi-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsbi-title">AWS Backup copies isolated across accounts and Regions</title>
+<desc id="awsbi-desc">In the primary Region, a backup plan in the workload account backs up production resources into a backup vault protected by Vault Lock. A copy job copies the recovery points to a logically air-gapped vault owned by a separate backup account in the recovery Region, where they are locked in compliance mode and encrypted with an AWS-owned key by default or a customer managed key. The air-gapped vault is shared through AWS Resource Access Manager with a recovery account in the same Region, which restores directly from it and deploys the rest of the stack from infrastructure as code.</desc>
+<style>
+.awsbi-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsbi-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsbi-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsbi-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsbi-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsbi-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsbi-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsbi-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsbi-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsbi-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsbi-pan" x="20" y="20" width="440" height="320" rx="8"/>
+<text class="awsbi-h" x="36" y="42">Primary Region</text>
+
+<rect class="awsbi-box" x="40" y="80" width="180" height="70" rx="6"/>
+<text class="awsbi-n" x="130" y="108" text-anchor="middle">Production resources</text>
+<text class="awsbi-k" x="130" y="128" text-anchor="middle">[workload account]</text>
+
+<rect class="awsbi-box" x="260" y="80" width="180" height="70" rx="6"/>
+<text class="awsbi-n" x="350" y="108" text-anchor="middle">Backup vault</text>
+<text class="awsbi-k" x="350" y="128" text-anchor="middle">[workload account, Vault Lock]</text>
+
+<path class="awsbi-ln" d="M220,115 L258,115" marker-end="url(#awsbi-a)"/>
+<text class="awsbi-lab" x="130" y="176" text-anchor="middle">backup plan runs on schedule</text>
+
+<rect class="awsbi-pan" x="520" y="20" width="440" height="320" rx="8"/>
+<text class="awsbi-h" x="536" y="42">Recovery Region</text>
+
+<rect class="awsbi-acc" x="560" y="80" width="360" height="70" rx="6"/>
+<text class="awsbi-an" x="740" y="108" text-anchor="middle">Logically air-gapped vault</text>
+<text class="awsbi-k" x="740" y="128" text-anchor="middle">[dedicated backup account, locked]</text>
+
+<rect class="awsbi-box" x="560" y="240" width="360" height="70" rx="6"/>
+<text class="awsbi-n" x="740" y="268" text-anchor="middle">Restored resources and stack</text>
+<text class="awsbi-k" x="740" y="288" text-anchor="middle">[recovery account, stack from infrastructure as code]</text>
+
+<path class="awsbi-ln" d="M440,115 L558,115" marker-end="url(#awsbi-a)"/>
+<text class="awsbi-lab" x="470" y="107">copy job</text>
+
+<path class="awsbi-ln" d="M740,150 L740,238" marker-end="url(#awsbi-a)"/>
+<text class="awsbi-lab" x="750" y="192">restore through a</text>
+<text class="awsbi-lab" x="750" y="207">Resource Access Manager share</text>
+
+</g>
+</svg>

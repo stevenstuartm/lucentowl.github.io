@@ -1,0 +1,67 @@
+---
+title: "One Trace as a Timeline"
+kind: dynamic
+system: aws
+summary: "Segments and subsegments of one request across two services, over time."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="awsxw-title awsxw-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsxw-title">An X-Ray trace shown as a timeline of segments and subsegments</title>
+<desc id="awsxw-desc">A timeline from 0 to 640 milliseconds. API Gateway records a segment for the whole request. The orders service records its own segment, containing subsegments for a DynamoDB GetItem call, an HTTP POST to the payments service, and an SQS SendMessage call. DynamoDB, SQS, and the card network API send no segments, so X-Ray infers their nodes from the callers' subsegments. The payments service records its own segment, which starts shortly after the orders service's POST subsegment begins and ends shortly before it ends; the difference is time in transit. Inside the payments segment, a subsegment times the call to an external card network API.</desc>
+<style>
+.awsxw-seg { fill: var(--color-primary, #1A5F8A); }
+.awsxw-sub { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsxw-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsxw-k { font-size: 12px; fill: var(--color-text, #2D3748); }
+.awsxw-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsxw-it { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsxw-ax { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsxw-gap { fill: none; stroke: var(--color-accent, #A5486E); stroke-width: 1.2; stroke-dasharray: 3 3; }
+</style>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<text class="awsxw-n" x="20" y="75">API Gateway</text>
+<rect class="awsxw-seg" x="260" y="60" width="680" height="22" rx="3"/>
+
+<text class="awsxw-n" x="20" y="115">orders</text>
+<rect class="awsxw-seg" x="276" y="100" width="653" height="22" rx="3"/>
+
+<text class="awsxw-k" x="36" y="155">DynamoDB GetItem</text>
+<rect class="awsxw-sub" x="292" y="140" width="64" height="22" rx="3"/>
+
+<text class="awsxw-k" x="36" y="195">POST /payments</text>
+<rect class="awsxw-sub" x="366" y="180" width="489" height="22" rx="3"/>
+
+<text class="awsxw-n" x="52" y="235">payments</text>
+<rect class="awsxw-seg" x="388" y="220" width="446" height="22" rx="3"/>
+
+<text class="awsxw-k" x="68" y="275">card network API</text>
+<rect class="awsxw-sub" x="419" y="260" width="372" height="22" rx="3"/>
+
+<text class="awsxw-k" x="36" y="315">SQS SendMessage</text>
+<rect class="awsxw-sub" x="866" y="300" width="42" height="22" rx="3"/>
+
+<path class="awsxw-gap" d="M366,176 L366,246"/>
+<path class="awsxw-gap" d="M388,176 L388,246"/>
+<path class="awsxw-gap" d="M834,176 L834,246"/>
+<path class="awsxw-gap" d="M855,176 L855,246"/>
+<text class="awsxw-it" x="864" y="235">in transit</text>
+<text class="awsxw-it" x="300" y="235">in transit</text>
+
+<path class="awsxw-ax" d="M260,345 L940,345"/>
+<path class="awsxw-ax" d="M260,345 L260,351 M366,345 L366,351 M473,345 L473,351 M579,345 L579,351 M685,345 L685,351 M791,345 L791,351 M898,345 L898,351"/>
+<text class="awsxw-lab" x="260" y="365" text-anchor="middle">0 ms</text>
+<text class="awsxw-lab" x="366" y="365" text-anchor="middle">100</text>
+<text class="awsxw-lab" x="473" y="365" text-anchor="middle">200</text>
+<text class="awsxw-lab" x="579" y="365" text-anchor="middle">300</text>
+<text class="awsxw-lab" x="685" y="365" text-anchor="middle">400</text>
+<text class="awsxw-lab" x="791" y="365" text-anchor="middle">500</text>
+<text class="awsxw-lab" x="898" y="365" text-anchor="middle">600</text>
+
+<rect class="awsxw-seg" x="20" y="383" width="28" height="12" rx="2"/>
+<text class="awsxw-lab" x="56" y="393">segment, sent by the service itself</text>
+<rect class="awsxw-sub" x="300" y="383" width="28" height="12" rx="2"/>
+<text class="awsxw-lab" x="336" y="393">subsegment, a call timed by its caller</text>
+<text class="awsxw-lab" x="590" y="393">DynamoDB, SQS, and the card API send no segments,</text>
+<text class="awsxw-lab" x="590" y="409">so X-Ray infers their nodes from these subsegments</text>
+</g>
+</svg>

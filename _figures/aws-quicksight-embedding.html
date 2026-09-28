@@ -1,0 +1,66 @@
+---
+title: "Embedding a Dashboard for Anonymous Users"
+kind: dynamic
+system: aws
+summary: "Your backend vouches for the viewer; Quick Sight applies its tags as row filters."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="awsqse-title awsqse-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsqse-title">Anonymous embedding flow for an Amazon Quick Sight dashboard</title>
+<desc id="awsqse-desc">A user signs in to your application through its own authentication. The browser asks your application's backend for a dashboard. The backend, using an IAM role, calls the Quick Sight GenerateEmbedUrlForAnonymousUser API with the dashboard and session tags derived from its own authenticated session, such as the tenant ID. Quick Sight returns a short-lived embed URL. The backend passes the URL to the browser, which loads the dashboard in a frame through the embedding SDK from an allowlisted domain. Quick Sight serves the dashboard and applies the session tags as row-level security filters on the dataset, so the viewer sees only their tenant's rows. Each 30-minute session draws on capacity pricing.</desc>
+<style>
+.awsqse-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsqse-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsqse-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsqse-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsqse-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsqse-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsqse-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsqse-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsqse-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsqse-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsqse-box" x="20" y="60" width="200" height="250" rx="6"/>
+<text class="awsqse-n" x="120" y="88" text-anchor="middle">Browser</text>
+<text class="awsqse-k" x="120" y="106" text-anchor="middle">[your app's frontend]</text>
+<text class="awsqse-lab" x="120" y="236" text-anchor="middle">dashboard in a frame,</text>
+<text class="awsqse-lab" x="120" y="251" text-anchor="middle">allowlisted domain</text>
+
+<rect class="awsqse-pan" x="340" y="40" width="260" height="290" rx="8"/>
+<text class="awsqse-h" x="356" y="62">Your application</text>
+<rect class="awsqse-box" x="360" y="80" width="220" height="110" rx="6"/>
+<text class="awsqse-n" x="470" y="106" text-anchor="middle">Backend</text>
+<text class="awsqse-k" x="470" y="124" text-anchor="middle">[IAM role]</text>
+<text class="awsqse-lab" x="470" y="150" text-anchor="middle">authenticates the user,</text>
+<text class="awsqse-lab" x="470" y="165" text-anchor="middle">derives tags: tenant = acme</text>
+
+<rect class="awsqse-acc" x="720" y="60" width="240" height="250" rx="6"/>
+<text class="awsqse-an" x="840" y="88" text-anchor="middle">Amazon Quick Sight</text>
+<text class="awsqse-k" x="840" y="106" text-anchor="middle">[Enterprise edition]</text>
+<text class="awsqse-lab" x="840" y="236" text-anchor="middle">applies tags as row-level</text>
+<text class="awsqse-lab" x="840" y="251" text-anchor="middle">security on the dataset</text>
+
+<path class="awsqse-ln" d="M220,120 L358,120" marker-end="url(#awsqse-a)"/>
+<text class="awsqse-lab" x="228" y="100">1. signed-in</text>
+<text class="awsqse-lab" x="228" y="112">request</text>
+
+<path class="awsqse-ln" d="M580,110 L718,110" marker-end="url(#awsqse-a)"/>
+<text class="awsqse-lab" x="608" y="90">2. embed URL</text>
+<text class="awsqse-lab" x="608" y="102">request + tags</text>
+
+<path class="awsqse-ln" d="M718,160 L580,160" marker-end="url(#awsqse-a)"/>
+<text class="awsqse-lab" x="608" y="178">3. short-lived</text>
+<text class="awsqse-lab" x="608" y="190">URL</text>
+
+<path class="awsqse-ln" d="M358,170 L220,170" marker-end="url(#awsqse-a)"/>
+<text class="awsqse-lab" x="228" y="188">4. embed URL</text>
+
+<path class="awsqse-ln" d="M120,312 L120,356 L840,356 L840,312" marker-start="url(#awsqse-a)" marker-end="url(#awsqse-a)"/>
+<text class="awsqse-lab" x="330" y="374">5. load the dashboard, filtered to tenant = acme</text>
+
+<text class="awsqse-lab" x="20" y="404">Quick Sight trusts the tags the backend sends, so they must come from the backend's own authenticated session.</text>
+</g>
+</svg>

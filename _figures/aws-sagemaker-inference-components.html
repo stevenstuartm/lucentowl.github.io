@@ -1,0 +1,71 @@
+---
+title: "Several Models on One SageMaker AI Endpoint"
+kind: structure
+system: aws
+summary: "Each inference component reserves its own CPU, GPU, and memory and scales its own copies."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 500" role="img" aria-labelledby="awssic-title awssic-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awssic-title">Inference components sharing a SageMaker AI endpoint</title>
+<desc id="awssic-desc">An application calls InvokeEndpoint and names the inference component it wants. The endpoint has one production variant with managed instance scaling, running two ml.g5.xlarge instances, each with four vCPUs, one GPU, and 16 GB of memory. A ranker component needs one GPU, so each instance holds one of its two copies. A churn-model component needs one vCPU and 2 GB, and its three copies sit where capacity is free, two on the first instance and one on the second, which leaves spare capacity on the second instance. A third component on the same endpoint, fraud-model, is scaled to zero copies and uses no capacity until it is scaled out again. Each component scales its own copy count, and managed instance scaling adds or removes instances to fit the copies.</desc>
+<style>
+.awssic-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awssic-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awssic-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awssic-free { fill: none; stroke: var(--color-text-light, #4A5568); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.awssic-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awssic-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awssic-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awssic-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awssic-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awssic-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awssic-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awssic-box" x="40" y="140" width="170" height="70" rx="6"/>
+<text class="awssic-n" x="125" y="170" text-anchor="middle">Application</text>
+<text class="awssic-k" x="125" y="188" text-anchor="middle">[InvokeEndpoint]</text>
+<path class="awssic-ln" d="M210,175 L298,175" marker-end="url(#awssic-a)"/>
+<text class="awssic-lab" x="40" y="232">Each request names the</text>
+<text class="awssic-lab" x="40" y="246">inference component to call</text>
+
+
+<rect class="awssic-pan" x="300" y="30" width="640" height="400" rx="8"/>
+<text class="awssic-h" x="320" y="54">Endpoint: one production variant</text>
+<text class="awssic-k" x="320" y="72">[managed instance scaling adds or removes instances to fit the copies]</text>
+
+<rect class="awssic-box" x="320" y="90" width="295" height="250" rx="6"/>
+<text class="awssic-n" x="467" y="114" text-anchor="middle">Instance 1: ml.g5.xlarge</text>
+<text class="awssic-k" x="467" y="132" text-anchor="middle">[4 vCPU, 1 GPU, 16 GB]</text>
+<rect class="awssic-acc" x="340" y="148" width="255" height="48" rx="5"/>
+<text class="awssic-an" x="467" y="168" text-anchor="middle">ranker, copy 1</text>
+<text class="awssic-k" x="467" y="186" text-anchor="middle">[1 GPU, 8 GB]</text>
+<rect class="awssic-box" x="340" y="208" width="255" height="48" rx="5"/>
+<text class="awssic-n" x="467" y="228" text-anchor="middle">churn-model, copy 1</text>
+<text class="awssic-k" x="467" y="246" text-anchor="middle">[1 vCPU, 2 GB]</text>
+<rect class="awssic-box" x="340" y="268" width="255" height="48" rx="5"/>
+<text class="awssic-n" x="467" y="288" text-anchor="middle">churn-model, copy 2</text>
+<text class="awssic-k" x="467" y="306" text-anchor="middle">[1 vCPU, 2 GB]</text>
+
+<rect class="awssic-box" x="625" y="90" width="295" height="250" rx="6"/>
+<text class="awssic-n" x="772" y="114" text-anchor="middle">Instance 2: ml.g5.xlarge</text>
+<text class="awssic-k" x="772" y="132" text-anchor="middle">[4 vCPU, 1 GPU, 16 GB]</text>
+<rect class="awssic-acc" x="645" y="148" width="255" height="48" rx="5"/>
+<text class="awssic-an" x="772" y="168" text-anchor="middle">ranker, copy 2</text>
+<text class="awssic-k" x="772" y="186" text-anchor="middle">[1 GPU, 8 GB]</text>
+<rect class="awssic-box" x="645" y="208" width="255" height="48" rx="5"/>
+<text class="awssic-n" x="772" y="228" text-anchor="middle">churn-model, copy 3</text>
+<text class="awssic-k" x="772" y="246" text-anchor="middle">[1 vCPU, 2 GB]</text>
+<rect class="awssic-free" x="645" y="268" width="255" height="48" rx="5"/>
+<text class="awssic-lab" x="772" y="296" text-anchor="middle">spare capacity for another copy</text>
+
+<rect class="awssic-free" x="320" y="356" width="600" height="56" rx="6"/>
+<text class="awssic-an" x="620" y="380" text-anchor="middle">fraud-model, 0 copies</text>
+<text class="awssic-k" x="620" y="398" text-anchor="middle">[a component scaled to zero stays on the endpoint and uses no capacity]</text>
+
+<text class="awssic-lab" x="40" y="462">Each inference component sets its model's CPU, GPU, and memory and scales its own copy count. With every component at zero</text>
+<text class="awssic-lab" x="40" y="478">copies, the endpoint can scale to zero instances, and the next request fails until an instance starts, which takes several minutes.</text>
+</g>
+</svg>

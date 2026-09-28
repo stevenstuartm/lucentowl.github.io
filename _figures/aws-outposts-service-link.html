@@ -1,0 +1,65 @@
+---
+title: "An Outpost and Its Parent Region"
+kind: deployment
+system: aws
+summary: "Local traffic stays on site; the service link carries management and VPC traffic."
+---
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 400" role="img" aria-labelledby="awsop-title awsop-desc" style="width:100%; min-width:740px; height:auto; display:block;">
+<title id="awsop-title">An AWS Outpost at a customer site connected to its parent AWS Region</title>
+<desc id="awsop-desc">An AWS Outpost at the customer's site is an extension of one Availability Zone in its parent Region. Its subnet belongs to the same VPC as subnets in that Availability Zone and runs EC2 instances, EBS volumes, S3 on Outposts, and services such as ECS, EKS nodes, and RDS. Traffic between the Outpost and the on-premises network goes through the local gateway and stays on site. The service link connects the Outpost to the parent Region, carrying VPC traffic to subnets in the Region and management traffic to the Regional control plane, which handles EC2 and EBS APIs, IAM, and CloudWatch. Launching or stopping instances needs the control plane.</desc>
+<style>
+.awsop-pan { fill: var(--color-bg, #F7F9FC); stroke: var(--color-text-light, #4A5568); stroke-width: 1; }
+.awsop-box { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-primary, #1A5F8A); stroke-width: 1.5; }
+.awsop-acc { fill: var(--color-card-bg, #FFFFFF); stroke: var(--color-accent, #A5486E); stroke-width: 1.5; }
+.awsop-h { font-size: 12px; font-weight: 700; fill: var(--color-text-light, #4A5568); }
+.awsop-n { font-size: 13px; font-weight: 700; fill: var(--color-primary, #1A5F8A); }
+.awsop-an { font-size: 13px; font-weight: 700; fill: var(--color-accent, #A5486E); }
+.awsop-k { font-size: 11px; font-style: italic; fill: var(--color-text-light, #4A5568); }
+.awsop-lab { font-size: 11px; fill: var(--color-text-light, #4A5568); }
+.awsop-ln { fill: none; stroke: var(--color-text, #2D3748); stroke-width: 1.4; }
+</style>
+<defs>
+<marker id="awsop-a" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto-start-reverse"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--color-text, #2D3748)"/></marker>
+</defs>
+<g font-family="'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+<rect class="awsop-pan" x="20" y="20" width="420" height="360" rx="8"/>
+<text class="awsop-h" x="36" y="42">Your site</text>
+
+<rect class="awsop-acc" x="40" y="60" width="240" height="190" rx="8"/>
+<text class="awsop-an" x="160" y="84" text-anchor="middle">AWS Outpost</text>
+<text class="awsop-k" x="160" y="102" text-anchor="middle">[extension of one Availability Zone]</text>
+<rect class="awsop-box" x="60" y="116" width="200" height="118" rx="6"/>
+<text class="awsop-n" x="160" y="140" text-anchor="middle">Outpost subnet</text>
+<text class="awsop-lab" x="160" y="162" text-anchor="middle">EC2 instances, EBS volumes</text>
+<text class="awsop-lab" x="160" y="182" text-anchor="middle">S3 on Outposts</text>
+<text class="awsop-lab" x="160" y="202" text-anchor="middle">ECS, EKS nodes, RDS</text>
+<text class="awsop-k" x="160" y="222" text-anchor="middle">[same VPC as the Region subnets]</text>
+
+<rect class="awsop-box" x="40" y="300" width="240" height="64" rx="6"/>
+<text class="awsop-n" x="160" y="326" text-anchor="middle">On-premises network</text>
+<text class="awsop-k" x="160" y="346" text-anchor="middle">[local systems and users]</text>
+
+<path class="awsop-ln" d="M160,252 L160,298" marker-start="url(#awsop-a)" marker-end="url(#awsop-a)"/>
+<text class="awsop-lab" x="170" y="280">local gateway</text>
+
+<rect class="awsop-pan" x="540" y="20" width="420" height="360" rx="8"/>
+<text class="awsop-h" x="556" y="42">Parent AWS Region</text>
+
+<rect class="awsop-box" x="560" y="80" width="380" height="80" rx="6"/>
+<text class="awsop-n" x="750" y="110" text-anchor="middle">VPC subnets in the parent Availability Zone</text>
+<text class="awsop-k" x="750" y="132" text-anchor="middle">[instances and services in the Region]</text>
+
+<rect class="awsop-acc" x="560" y="210" width="380" height="96" rx="6"/>
+<text class="awsop-an" x="750" y="240" text-anchor="middle">Regional control plane</text>
+<text class="awsop-lab" x="750" y="262" text-anchor="middle">EC2 and EBS APIs, IAM, CloudWatch</text>
+<text class="awsop-k" x="750" y="284" text-anchor="middle">[launching or stopping instances needs it]</text>
+
+<text class="awsop-h" x="490" y="80" text-anchor="middle">service link</text>
+<path class="awsop-ln" d="M282,120 L558,120" marker-start="url(#awsop-a)" marker-end="url(#awsop-a)"/>
+<text class="awsop-lab" x="452" y="112">VPC traffic</text>
+<path class="awsop-ln" d="M282,200 L490,200 L490,258 L558,258" marker-start="url(#awsop-a)" marker-end="url(#awsop-a)"/>
+<text class="awsop-lab" x="298" y="192">management traffic</text>
+
+</g>
+</svg>
